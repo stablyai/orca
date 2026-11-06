@@ -17,8 +17,8 @@ import {
 import { findIndexedReviewRepository } from '@/lib/repository-owner-index'
 import {
   findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwners
-} from '@/lib/worktree-runtime-owner-index'
+  findIndexedWorktrees as findIndexedWorktreeOwners
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
 import {
   resolveWorktreeOperationRoute,

@@ -10,7 +10,7 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 import {
   structuredAgentSessionOptionModels,
   type StructuredAgentSessionLiveOptions
-} from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
+} from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 

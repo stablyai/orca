@@ -21,8 +21,8 @@ import {
   buildAgentLaunchRouteInput,
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
-import { structuredAgentLaunchSupport } from '@/lib/agent-launch-routing'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { structuredAgentLaunchSupport } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { AutomationCreateDestinationResolution } from './automation-create-destination'
 

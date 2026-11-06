@@ -1,6 +1,6 @@
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
+import type { LaunchAgentInNewTabArgs } from './agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { getDefaultSettings } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
@@ -101,15 +101,15 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
-vi.mock('@/lib/github-work-item-workspace-attachment', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: mocks.findGithubPrWorkspaceAttachment
 }))
 
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
 }))
 
-vi.mock('@/lib/launch-work-item-direct', () => ({
+vi.mock('@/lib/workspace/creation/work-item/launch-work-item-direct', () => ({
   launchWorkItemDirect: mocks.launchWorkItemDirect
 }))
 
@@ -132,7 +132,7 @@ vi.mock('@/lib/execution-host-facts', async () => {
   }
 })
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 

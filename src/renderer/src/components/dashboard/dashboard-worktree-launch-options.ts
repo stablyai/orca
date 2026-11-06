@@ -13,7 +13,10 @@ import {
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import { worktreeLaunchWorkspace, type AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import {
+  worktreeLaunchWorkspace,
+  type AgentLaunchRouteView
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 

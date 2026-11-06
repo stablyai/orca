@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
@@ -19,7 +19,7 @@ import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { setBrowserPageAgentViewportSize } from '../host-guest/browser-page-viewport'
 
 type BrowserToolbarMenuProps = {

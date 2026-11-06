@@ -100,7 +100,7 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
 
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', async () => {
   const { structuredSessionSelectionController } =
-    await import('@/lib/structured-agent-session-selection-controller')
+    await import('@/lib/agent-session/options/structured-agent-session-selection-controller')
   const actual = await vi.importActual<typeof LaunchOptions>(
     '@/lib/agent-session/launch/structured-agent-session-launch-options'
   )

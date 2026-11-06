@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
+import { shouldPersistWorkspaceSession } from '@/lib/workspace/persistence/workspace-session'
 import { canAutoSaveOpenFile } from './editor-autosave'
 import { flushPendingEditorBuffer } from '../save/flush/editor-pending-flush'
 import { getDuplicateDirtySavePaths, restartSaveTargets } from './editor-autosave-state-projections'

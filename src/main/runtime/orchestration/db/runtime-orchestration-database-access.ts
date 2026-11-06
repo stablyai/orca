@@ -1,4 +1,4 @@
-import { getWorkerTerminalAutoReleaseScheduler } from '../worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'

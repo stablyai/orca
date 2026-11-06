@@ -4,7 +4,7 @@ import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settin
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import { waitsForCodexTurnOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-message-options'
+import { waitsForCodexTurnOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 
 const THREAD = 'thread-1'
 

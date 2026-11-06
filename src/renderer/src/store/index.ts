@@ -1,5 +1,5 @@
-import { registerStructuredSelectionCatalogStore } from '@/lib/structured-agent-session-selection-controller'
-import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
+import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
+import { canOfferHttpLinkGroupAction } from '@/lib/browser/navigation/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -59,8 +59,8 @@ import {
   registerHttpLinkStoreAccessor,
   registerHttpLinkGroupActionAvailability,
   registerWorkspaceHttpLinkBrowserOpener
-} from '@/lib/http-link-routing'
-import { registerAppHttpLinkStateAccessor } from '@/lib/app-http-link-open'
+} from '@/lib/browser/navigation/http-link-routing'
+import { registerAppHttpLinkStateAccessor } from '@/lib/browser/navigation/app-http-link-open'
 import { installStoreListenerCensus } from './store-listener-census'
 import { installSettledSortEpoch } from './settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
@@ -168,7 +168,7 @@ attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   const { openWorkspaceBrowserTab, openWorkspaceBrowserTabForLink } =
-    await import('@/lib/workspace-browser-tab-open')
+    await import('@/lib/browser/workspace/workspace-browser-tab-open')
   if (request.linkContext) {
     const outcome = await openWorkspaceBrowserTabForLink({
       ...request,
@@ -178,7 +178,8 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
       outcome.status === 'failed' ||
       (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)
     ) {
-      const { intentPresentation } = await import('@/lib/workspace-browser-tab-presentation')
+      const { intentPresentation } =
+        await import('@/lib/browser/workspace/workspace-browser-tab-presentation')
       throw new Error(intentPresentation(request.intent, request.url).error)
     }
     if (
@@ -186,7 +187,7 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
       (outcome.status === 'refused' || outcome.status === 'unsupported')
     ) {
       const { showOpenInGroupRefusedToast } =
-        await import('@/components/terminal-pane/terminal-file-open-in-group-toast')
+        await import('@/components/terminal-pane/links/files/terminal-file-open-in-group-toast')
       showOpenInGroupRefusedToast(request.url)
     }
     return outcome.status === 'opened' ? outcome.result.browserPageId : null

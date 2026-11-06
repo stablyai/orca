@@ -18,7 +18,7 @@ import { act, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { structuredAgentSessionMessageSelection } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import {
   resetHostModelCatalogSnapshotsForTests,
   recordHostModelCatalogSnapshot

@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
-} from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+} from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { RpcRequest } from '../rpc/core'
 
 import { RpcDispatcher } from '../rpc/dispatcher'
@@ -18,7 +18,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
 
 vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
@@ -27,8 +27,8 @@ vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (impo
   resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-const { AI_VAULT_METHODS } = await import('../rpc/methods/ai-vault')
-await import('../rpc/methods/agent-launch-replay')
+const { AI_VAULT_METHODS } = await import('../rpc/methods/history/ai-vault')
+await import('../rpc/methods/agent-launch/agent-launch-replay')
 
 let stateDirectory: string
 let heldChanges: boolean[]

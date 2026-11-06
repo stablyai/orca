@@ -1,5 +1,5 @@
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'

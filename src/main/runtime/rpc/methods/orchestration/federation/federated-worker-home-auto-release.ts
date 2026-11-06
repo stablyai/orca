@@ -1,4 +1,4 @@
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { resolvePinnedFederatedServer } from '../worker/worker-observation'
 import { releaseFederatedWorker } from './federated-worker-release'
 

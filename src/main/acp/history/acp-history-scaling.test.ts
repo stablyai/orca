@@ -12,12 +12,12 @@ import {
   openProviderTimelineRig,
   providerTurnItemId
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import '../../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import '../../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import '../../native-chat/agent-session-timeline/provider-timeline-history'
-import '../../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import '../../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
-import '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import '../../native-chat/agent-session-wire/termination/testing/structured-agent-session-observed-exit.test-fixture'
+import '../../native-chat/agent-session-wire/termination/structured-agent-session-unfinished-work'
+import '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import './acp-history-scaling-counts.test-fixture'
 import './acp-history-scaling-operations.test-fixture'
 import './acp-history-catch-up'
@@ -32,8 +32,8 @@ import { matchAcpHistoryTurns } from './acp-history-turn-matching'
 import { acpNamedTextKey } from '../acp-turn-messages'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import '../acp-dialects/grok-dialect'
-import '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 
 afterEach(closeProviderTimelineRigs)
 const scope: AcpHistoryScope = {

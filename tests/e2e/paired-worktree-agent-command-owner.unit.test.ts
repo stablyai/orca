@@ -1,5 +1,5 @@
 import { WorktreeCreate } from '../../src/shared/rpc-contract/worktree-create-params'
-import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/worktree-create-args'
+import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/workspaces/worktree-create-args'
 import { resolveManagedWorktreeCreateStartup } from '../../src/main/runtime/workspaces/startup/managed-worktree-create-startup'
 import { buildWorktreeStartupForAgent } from '../../src/main/runtime/workspaces/startup/runtime-worktree-agent-startup'
 import { getDefaultSettings } from '../../src/shared/constants'

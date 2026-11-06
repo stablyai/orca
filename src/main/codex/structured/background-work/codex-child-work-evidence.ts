@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation

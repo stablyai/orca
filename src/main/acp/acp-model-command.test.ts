@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import type { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { AcpAgentError } from './acp-errors'
 import { acpLaunchSpecFor } from './acp-launch-specs'
@@ -54,7 +54,10 @@ const event = (update: SessionUpdate): AcpSessionEvent => ({
 function rig(updates: SessionUpdate[], version = '18.15.0') {
   const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
   options.adoptSession({ configOptions: config('p/a', 'low') }, 'loaded')
-  const lane = { translator: { sessionEvent: vi.fn(() => []) }, apply: vi.fn() }
+  const lane = {
+    translator: { providerSessionId: 'omp-1', sessionEvent: vi.fn(() => []) },
+    apply: vi.fn()
+  }
   const prompt = vi.fn(async () => {
     for (const update of updates) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only the lane's translator and apply, which this fake provides.

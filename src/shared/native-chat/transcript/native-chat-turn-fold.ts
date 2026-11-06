@@ -34,8 +34,23 @@ export type NativeChatTurnFoldRow = {
   sendsBack: boolean
 }
 
+const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
+
 /** How the fold reads a transcript row, with the same derivation the row renders from. */
 export function nativeChatTurnFoldRow(
+  message: NativeChatMessage,
+  turnKey: string | undefined,
+  hasReceipt: boolean
+): NativeChatTurnFoldRow {
+  let facts = rowFacts.get(message)
+  if (!facts) {
+    facts = deriveTurnFoldRow(message, undefined, false)
+    rowFacts.set(message, facts)
+  }
+  return { ...facts, turnKey, draws: hasReceipt || facts.draws }
+}
+
+function deriveTurnFoldRow(
   message: NativeChatMessage,
   turnKey: string | undefined,
   hasReceipt: boolean

@@ -8,7 +8,7 @@ import {
   providerExitObserved,
   providerStartupFailureFact,
   startupAcquisitionRefusal
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
 import {
   claudeSessionHasTurnWork,
@@ -16,7 +16,7 @@ import {
 } from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
 import { ClaudePluginInputError } from '../claude-plugin-ui'
-import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
 import {
   closeClaudePublishedSessionForDeps,
@@ -27,7 +27,7 @@ import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
-} from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
+} from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,

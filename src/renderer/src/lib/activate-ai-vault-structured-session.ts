@@ -12,7 +12,7 @@ import {
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
 import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
 export {
