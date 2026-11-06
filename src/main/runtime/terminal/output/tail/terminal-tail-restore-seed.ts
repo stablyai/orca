@@ -4,7 +4,7 @@ import { appendCompletedTerminalTranscript, buildPreview } from './terminal-tail
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
 // Multi-MB restore payloads retain only a tail; cap spawn-path parsing to the relevant suffix.
-const MAX_RESTORE_TAIL_SEED_CHARS = 256 * 1024
+export const MAX_RESTORE_TAIL_SEED_CHARS = 256 * 1024
 
 export type RestoredTerminalTailSeed = {
   lines: string[]

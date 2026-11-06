@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeTerminalChunk } from '../terminal-ansi-normalization'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
+import {
+  buildRestoredTerminalTailSeed,
+  MAX_RESTORE_TAIL_SEED_CHARS
+} from './terminal-tail-restore-seed'
 
 import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
 import {
@@ -68,11 +71,13 @@ describe('terminal tail CRLF chunk boundaries', () => {
   })
 
   it('restores without a blank first row when the cut lands before CR CR LF', () => {
-    // 256 KiB restore window: the kept suffix starts exactly at CR CR LF.
-    const suffix = `\r\r\nx${'line\n'.repeat(52_428)}`
-    expect(suffix).toHaveLength(256 * 1024)
+    // The kept suffix starts exactly at CR CR LF.
+    const lineCount = Math.floor((MAX_RESTORE_TAIL_SEED_CHARS - 3) / 5)
+    const filler = 'x'.repeat(MAX_RESTORE_TAIL_SEED_CHARS - 3 - lineCount * 5)
+    const suffix = `\r\r\n${filler}${'line\n'.repeat(lineCount)}`
+    expect(suffix).toHaveLength(MAX_RESTORE_TAIL_SEED_CHARS)
     const seed = buildRestoredTerminalTailSeed(`earlier output${suffix}`)
-    expect(seed?.linesTotal).toBe(52_428)
+    expect(seed?.linesTotal).toBe(lineCount)
   })
 
   it('does not erase the final partial line on process exit', async () => {
