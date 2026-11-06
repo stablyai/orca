@@ -4,7 +4,10 @@ import {
   type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import type { IBufferLine } from '@xterm/xterm'
-import { findTerminalFileLinksAtBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
+import {
+  findTerminalFileLinksAtBufferPosition,
+  findTerminalHttpLinkAtBufferPosition
+} from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal/links/terminal-osc-link-cells'
 import {
   getTerminalFileContext,
@@ -56,6 +59,10 @@ export function openFilePathLinkAtBufferPosition(
   deps: FileLinkHitTestDeps
 ): boolean {
   const gesture = ++latestClickGesture
+  // Why: URL fragments can parse as paths (a wrapped row has no scheme); the URL fallback owns these cells.
+  if (findTerminalHttpLinkAtBufferPosition(buffer, position, terminalColumns)) {
+    return false
+  }
   const host: FileLinkHost = {
     ...deps,
     cwd: deps.startupCwd,
