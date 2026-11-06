@@ -30,6 +30,12 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import { findAgentSwitchBlocker } from '../integrations/git/branch-switch-agent-blocker'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
+  HOSTED_REVIEW_LINK_KEYS
+} from '../../../shared/worktree/hosted-review-links'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
@@ -201,8 +207,56 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         return
       }
       store.setWorktreeMeta(target, { pushTarget })
+    },
+    getAgentSwitchBlocker: async (checkoutPath) => {
+      const worktreePaths = new Map(
+        (await this.listResolvedWorktrees()).map((worktree) => [worktree.id, worktree.path])
+      )
+      const store = this.store
+      const probe = this.checkHookAgentPresenceFn
+      return findAgentSwitchBlocker({
+        checkoutPath,
+        readRows: () => this.getAgentStatusSnapshotFn?.() ?? [],
+        pathOfWorktree: (worktreeId) => {
+          const scope = parseWorkspaceKey(worktreeId)
+          return scope?.type === 'folder'
+            ? store?.getFolderWorkspace?.(scope.folderWorkspaceId)?.folderPath
+            : worktreePaths.get(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
+        },
+        hasLiveTerminal: (row) =>
+          [...this.ptysById.values()].some((pty) => {
+            if (!pty.connected) {
+              return false
+            }
+            const pane = this.paneOfPty(pty)
+            return pane.paneKey === row.paneKey || (!!row.tabId && pane.tabId === row.tabId)
+          }),
+        probeProcess: probe ? (paneKey) => probe(paneKey) : null
+      })
+    },
+    // Watchers only cover desktop-hosted local repos, so Orca's own switch updates every client itself;
+    // the user's choice also ends first-work automatic branch naming.
+    recordBranchSwitched: (worktree) => {
+      const store = this.store
+      const target = store ? worktreeRowTarget(store, worktree) : undefined
+      const meta = store?.getWorktreeMeta?.(worktree.id)
+      const hasBranchScopedLinks =
+        meta !== undefined &&
+        (HOSTED_REVIEW_LINK_KEYS.some((key) => meta[key] != null) || meta.pushTarget !== undefined)
+      if (store && target && !isWslMoveWorktreeBlocked(target.id, target.hostId)) {
+        store.setWorktreeMeta(target, {
+          ...(hasBranchScopedLinks ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : {}),
+          branchNameIsUserChosen: true
+        })
+      } else {
+        // The switch already landed; a missing meta owner only leaves first-work naming as before.
+        console.warn('[branch-switch] could not record the user-chosen branch for', worktree.id)
+      }
+      this.notifyBranchRenamed(worktree.repoId)
     }
   })
+
+  abstract notifyBranchRenamed(repoId: string): void
 
   /** Remote views consume raw bytes even with a hidden desktop; resync daemon marks so those streams are never thinned. */
   onRemoteTerminalViewPresenceChanged: ((ptyId: string) => void) | null = null
