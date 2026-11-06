@@ -33,14 +33,9 @@ export function createOpenConflictFile(
       set((s) => {
         const contentOwner = editorOpenOwner(s, worktreeId, options)
         const { runtimeEnvironmentId } = contentOwner
-        const id = resolveEditorFileIdForOwner(
-          s,
-          absolutePath,
-          worktreeId,
-          runtimeEnvironmentId,
-          ['edit'],
-          contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
-        )
+        const id = resolveEditorFileIdForOwner(s, absolutePath, worktreeId, runtimeEnvironmentId, [
+          'edit'
+        ])
         conflictFileId = id
         intent.register(id)
         const conflict = toOpenConflictMetadata(entry)

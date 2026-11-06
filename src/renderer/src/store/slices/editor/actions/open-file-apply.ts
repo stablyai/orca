@@ -77,12 +77,7 @@ export function applyOpenFileToState(
   const existing = s.openFiles.find(
     (f) =>
       matchesEditorMode(f, reusableOpenFileModes) &&
-      isSameEditorOwner(
-        f,
-        worktreeId,
-        runtimeEnvironmentId,
-        operationProvenance?.generation.route.executionHostId ?? options?.executionHostId
-      ) &&
+      isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
       (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
   )
   // Already-open owner tabs outrank stale reopenId shapes; bare/namespaced drift otherwise points selection at no OpenFile.
@@ -95,8 +90,7 @@ export function applyOpenFileToState(
           file.filePath,
           worktreeId,
           runtimeEnvironmentId,
-          reusableOpenFileModes,
-          operationProvenance?.generation.route.executionHostId ?? options?.executionHostId
+          reusableOpenFileModes
         )
   const linkPlacement =
     linkIntent && resolveEditorLinkOpenPlacement(s, worktreeId, linkIntent, id, file.mode)

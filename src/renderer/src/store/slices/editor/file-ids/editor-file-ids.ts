@@ -1,7 +1,3 @@
-import {
-  getOpenFileExecutionHostId,
-  hasOpenFileExecutionHostEvidence
-} from '@/lib/unified-tab-host-ownership'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
@@ -18,18 +14,11 @@ export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined)
 }
 
 export function isSameEditorOwner(
-  file: Pick<
-    OpenFile,
-    'worktreeId' | 'runtimeEnvironmentId' | 'operationProvenance' | 'externalSshTargetId'
-  >,
+  file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId'>,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined,
-  executionHostId?: string
+  runtimeEnvironmentId: string | null | undefined
 ): boolean {
   return (
-    (!executionHostId ||
-      !hasOpenFileExecutionHostEvidence(file) ||
-      getOpenFileExecutionHostId(file) === executionHostId) &&
     file.worktreeId === worktreeId &&
     runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
   )
@@ -74,12 +63,9 @@ export function canReuseLocalWslAlias(
 export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined,
-  executionHostId?: string
+  runtimeEnvironmentId: string | null | undefined
 ): string {
-  const runtimeKey = executionHostId?.startsWith('ssh:')
-    ? executionHostId
-    : (runtimeOwnerKey(runtimeEnvironmentId) ?? 'local')
+  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
@@ -123,10 +109,9 @@ export function isEditorFileIdOccupiedByOtherOwner(
   >,
   filePath: string,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined,
-  executionHostId?: string
+  runtimeEnvironmentId: string | null | undefined
 ): boolean {
-  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId, executionHostId)) {
+  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)) {
     return false
   }
   return file.id === filePath || file.markdownPreviewSourceFileId === filePath
@@ -149,14 +134,13 @@ export function resolveEditorFileIdForOwner(
   filePath: string,
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined,
-  modes?: readonly OpenFile['mode'][],
-  executionHostId?: string
+  modes?: readonly OpenFile['mode'][]
 ): string {
   const existing = state.openFiles.find(
     (file) =>
       file.filePath === filePath &&
       matchesEditorMode(file, modes) &&
-      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId, executionHostId)
+      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)
   )
   if (existing) {
     return existing.id
@@ -171,15 +155,9 @@ export function resolveEditorFileIdForOwner(
   }
   // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>
-    isEditorFileIdOccupiedByOtherOwner(
-      file,
-      filePath,
-      worktreeId,
-      runtimeEnvironmentId,
-      executionHostId
-    )
+    isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
   )
-    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId, executionHostId)
+    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
     : filePath
 }
 

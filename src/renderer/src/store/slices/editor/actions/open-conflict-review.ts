@@ -41,8 +41,7 @@ export function createOpenConflictReview(
           absolutePath,
           worktreeId,
           runtimeEnvironmentId,
-          ['edit'],
-          contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+          ['edit']
         )
         conflictFileId = fileId
         intent.register(fileId)
