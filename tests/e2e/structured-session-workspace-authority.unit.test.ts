@@ -563,7 +563,7 @@ it('fences actual folder-extra teardown through forget without denying its survi
   const cleanup = rig.runtime.removeWorktreeMetadataAndHistory.bind(rig.runtime)
   vi.spyOn(rig.runtime, 'removeWorktreeMetadataAndHistory').mockImplementation((...args) => {
     expect(() => beginWatcherInstall(root)).toThrow()
-    cleanup(...args)
+    return cleanup(...args)
   })
   expect(await rig.runtime.removeManagedWorktree(`id:${workspace}`)).toEqual({})
   expect(await reveal(rig)).toMatchObject({

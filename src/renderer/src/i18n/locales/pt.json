@@ -1799,7 +1799,9 @@
         "cb4d287238": "Nome do servidor",
         "3affe7de3a": "Cole uma URL de pareamento de um servidor Orca que este navegador possa acessar.",
         "e3bcd082ac": "Conectar ao Orca",
-        "mobileScopeRejected": "Este código QR concede acesso limitado (mobile). Para usar o app web completo, abra o link de acesso do navegador em Configurações → Ambientes de Execução → Compartilhar este servidor Orca → Novo Link."
+        "mobileScopeRejected": "Este código QR concede acesso limitado (mobile). Para usar o app web completo, abra o link de acesso do navegador em Configurações → Ambientes de Execução → Compartilhar este servidor Orca → Novo Link.",
+        "replaceSavedServer": "Este link conecta a um servidor diferente de \"{{name}}\" ({{endpoint}}). Conecte-se apenas se confiar no endpoint abaixo.",
+        "keepSavedServer": "Manter servidor salvo"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "O Histórico de Sessões do Agente não está disponível para este host de execução.",
@@ -14904,7 +14906,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Precisa de revisão",
         "7698af5263": "Meus",
         "94f0339621": "Atribuído a mim",
         "c2268a9982": "Todos",
@@ -21039,6 +21040,13 @@
         "hostUnavailable": "O host do anexo está indisponível. Reconecte-se e tente novamente.",
         "connectionChanged": "A conexão mudou. Feche este anexo e abra-o novamente.",
         "readFailed": "Não foi possível ler este anexo no host. Reconecte-se e tente novamente. O arquivo pode ter sido removido ou alterado."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Falha ao copiar",
+        "copyIdentity": "Copiar {{value0}}",
+        "folder": "Pasta",
+        "mainCheckout": "Checkout principal",
+        "worktree": "Worktree"
       }
     },
     "tab": {

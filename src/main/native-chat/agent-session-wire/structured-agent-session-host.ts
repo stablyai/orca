@@ -199,6 +199,8 @@ export class StructuredAgentSessionHost {
     clientDelivery: this.clientDelivery
   }))
 
+  serializeCreateIntent = this.tasks.serializeCreateIntent.bind(this.tasks)
+
   supportsCreate = this.reads.supportsCreate
   agentDefinitions = this.reads.agentDefinitions
   knownAgentIds = this.reads.knownAgentIds

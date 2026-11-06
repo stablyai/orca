@@ -30,3 +30,4 @@ Antigravity in [Chat UI](/docs/agents/native-chat) uses its own sign-in, separat
 
 - Accounts belong to the machine that runs `agy`. On a [Remote Orca Server](/docs/remote-servers), save and select them on that server.
 - On Windows, Orca manages the Windows `agy` login. Account management for a WSL distro selected in Orca is not supported yet; sign in with `agy` inside that distro instead.
+- On Linux desktops, `agy` keeps its login in the system keyring (Secret Service). Orca needs `secret-tool` (from `libsecret-tools` or your distribution's equivalent) and an unlocked keyring to switch it. Headless hosts without a session bus, containers, and SSH sessions use `agy`'s credential file instead.

@@ -268,6 +268,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   if (registration.released) {
     return
   }
+  args.onEstablished?.()
   activateTerminalSubscribeBinaryLive(args, state)
   await streamClosed
 }

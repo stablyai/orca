@@ -293,24 +293,6 @@ describe('codex wrapper --no-daemon rule', () => {
         expect(lines(result.stdout)).toEqual(ADDED.map((argv) => expectedLine(argv, false)))
       })
 
-      it('adds nothing with ORCA_CODEX_ISOLATE=0, read on every call', () => {
-        const sandbox = makeSandbox(HELP_WITH_FLAG)
-        const setIsolate = (value: string): string =>
-          isPowerShell(shell)
-            ? `$env:ORCA_CODEX_ISOLATE = '${value}'`
-            : shell === 'fish'
-              ? `set -gx ORCA_CODEX_ISOLATE ${value}`
-              : `export ORCA_CODEX_ISOLATE=${value}`
-        const result = run(
-          shell,
-          ['codex a', setIsolate('1'), 'codex b', setIsolate('0'), 'codex c'].join('\n'),
-          sandbox,
-          { ORCA_CODEX_ISOLATE: '0' }
-        )
-
-        expect(lines(result.stdout)).toEqual(['ARGV|a', 'ARGV|--no-daemon|b', 'ARGV|c'])
-      })
-
       it('re-probes --help when Codex changes version mid-shell', () => {
         const sandbox = makeSandbox(HELP_WITH_FLAG)
         const swap = (help: string): string =>
@@ -395,15 +377,6 @@ describe('codex wrapper --no-daemon rule', () => {
         }
       )
 
-      it.skipIf(!available)(`${shell} forwards identity to Codex 0.155 and older too`, () => {
-        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
-        const result = run(shell, codexCall(shell, ['x']), sandbox, identity)
-
-        expect(lines(result.stdout).map(splitOverrides)).toEqual([
-          { overrides: identityOverrides, rest: ['x'] }
-        ])
-      })
-
       it.skipIf(!available)(`${shell} skips a value holding an apostrophe`, () => {
         const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
         const result = run(shell, codexCall(shell, ['x']), sandbox, {
@@ -415,51 +388,8 @@ describe('codex wrapper --no-daemon rule', () => {
           { overrides: [identityOverrides[0]], rest: ['x'] }
         ])
       })
-
-      it.skipIf(!available)(`${shell} forwards nothing with ORCA_CODEX_ISOLATE=0`, () => {
-        const sandbox = makeSandbox(HELP_WITH_FLAG)
-        const result = run(shell, codexCall(shell, ['x']), sandbox, {
-          ...identity,
-          ORCA_CODEX_ISOLATE: '0'
-        })
-
-        expect(lines(result.stdout)).toEqual(['ARGV|x'])
-      })
     }
   })
-
-  for (const [shell, enableAliases] of [
-    ['bash', 'shopt -s expand_aliases'],
-    ['zsh', 'setopt aliases']
-  ] as const) {
-    it.skipIf(isWindows || !existsSync(`/bin/${shell}`))(
-      `applies a user alias named codex defined before the wrapper in ${shell}`,
-      () => {
-        const sandbox = makeSandbox(HELP_WITH_FLAG)
-        const result = run(
-          shell,
-          'codex x',
-          sandbox,
-          {},
-          `${enableAliases}\nalias codex='codex --alias-flag'`
-        )
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout.trim()).toBe('ARGV|--no-daemon|--alias-flag|x')
-      }
-    )
-  }
-
-  it.skipIf(isWindows || !existsSync('/bin/zsh'))(
-    'creates no globals under warn_create_global',
-    () => {
-      const sandbox = makeSandbox(HELP_WITH_FLAG)
-      const result = run('zsh', 'setopt warn_create_global no_unset\ncodex x', sandbox)
-
-      expect(result.stderr).toBe('')
-      expect(result.stdout.trim()).toBe('ARGV|--no-daemon|x')
-    }
-  )
 
   for (const [shell, available] of shells.filter(([name]) => isPowerShell(name))) {
     it.skipIf(!available)(

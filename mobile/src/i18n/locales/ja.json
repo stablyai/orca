@@ -2045,6 +2045,8 @@
       "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
       "managedAccountUnsupported": "WSL に Claude アカウントが追加されていますが、Claude チャットには Windows の Claude アカウントが必要です。",
       "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+      "modelUnavailableUpdate": "{{agent}} は {{detail}} を使用できませんでした。再起動後も維持するには {{agent}} を {{minimumVersion}} 以降に更新するか、別のモデルを選択して、もう一度送信してください。",
+      "modelNotSelected": "{{agent}} でモデルが選択されていません。モデルの選択と {{agent}} のサインインを確認して、もう一度送信してください。",
       "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
       "notDelivered": "このメッセージは配信されませんでした。",
       "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",

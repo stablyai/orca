@@ -23,6 +23,7 @@ import { useTaskPageGitHubDetail } from './github/use-task-page-github-detail'
 import { useTaskPageGitHubCacheReconciliation } from './github/use-task-page-github-cache-reconciliation'
 import { useTaskPageSourceDisplay } from './use-task-page-source-display'
 import { TaskPageGitHubFilters } from './github/Filters'
+import { useTaskPageSearchActions } from './use-task-page-search-actions'
 import { TaskPageGitHubList } from './github/List'
 import { useTaskPageGitHubListProjection } from './github/use-task-page-github-list-projection'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
@@ -127,8 +128,13 @@ export function Harness({
   useLayoutEffect(() => {
     view = model
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter actions read the store bindings, search state and kind mounted here; modal and dialog fields only gate the find shortcut.
+  const searchInput = { ...model } as unknown as Parameters<typeof useTaskPageSearchActions>[0]
+  const searchActions = useTaskPageSearchActions(searchInput)
   const filtersFields = {
     ...model,
+    applyPRFilterChange: searchActions.applyPRFilterChange,
+    handleSetDefaultTaskPreset: searchActions.handleSetDefaultTaskPreset,
     setIssueSourcePreference: runRequests
       ? useAppStore.getState().setIssueSourcePreference
       : setIssueSourcePreference,

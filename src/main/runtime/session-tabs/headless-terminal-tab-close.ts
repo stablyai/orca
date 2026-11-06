@@ -11,7 +11,7 @@ import type {
 } from '../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { buildHeadlessMobileSessionTabGroups } from '../terminal/surface/mobile-session-layout-projection'
+import { retireMobileSessionTabSelection } from './mobile-session-tab-selection'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
 import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-layout/terminal-retirement-proof-ledger'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
@@ -119,29 +119,28 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       }
       return false
     })
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     // Close is no handover: retain the publisher epoch or clients fence the renderer's next frame.
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: active?.id ?? null,
-      activeTabType: active?.type ?? null,
-      tabGroups: buildHeadlessMobileSessionTabGroups(
-        worktreeId,
-        nextTabs,
-        active,
-        snapshot.tabGroups
-      ),
-      ...(retirementProofs.length > 0
-        ? {
-            retiredTerminalSurfaces: appendRetiredTerminalSurfaceProofs(
-              snapshot.retiredTerminalSurfaces,
-              retirementProofs
-            )
-          }
-        : {}),
-      tabs: nextTabs
-    }
+    const nextSnapshot = retireMobileSessionTabSelection(
+      {
+        ...snapshot,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        ...(retirementProofs.length > 0
+          ? {
+              retiredTerminalSurfaces: appendRetiredTerminalSurfaceProofs(
+                snapshot.retiredTerminalSurfaces,
+                retirementProofs
+              )
+            }
+          : {})
+      },
+      nextTabs,
+      new Set([
+        closedParentTabId,
+        ...snapshot.tabs
+          .filter((tab) => tab.type === 'terminal' && tab.parentTabId === closedParentTabId)
+          .map((tab) => tab.id)
+      ])
+    )
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
