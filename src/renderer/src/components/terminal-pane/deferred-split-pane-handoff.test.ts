@@ -3,7 +3,7 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
   PTY_PRECONNECT_INPUT_MAX_ENTRIES
-} from './pty-preconnect-input-buffer'
+} from './pty-transport/input/pty-preconnect-input-buffer'
 import {
   appendDeferredSplitPaneInput,
   beginDeferredSplitPaneHandoff,

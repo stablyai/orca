@@ -73,7 +73,40 @@ describe("the row writer's order from main (layout-owner build)", () => {
 
     const ordered = withMainTabOrder(written(rows), MAIN)
 
-    expect(ordered.tabs.find((tab) => tab.id === 'a::1')).toEqual(rows[0])
+    expect(ordered.tabs.find((tab) => tab.id === 'a::1')).toMatchObject({
+      id: 'a::1',
+      parentTabId: 'a',
+      leafId: '1',
+      ptyId: 'pty-new',
+      isActive: true
+    })
     expect(ordered).toMatchObject({ activeTabId: 'a::1', activeGroupId: 'right' })
   })
 })
+
+it('transfers legacy selection through main topology instead of selecting the saved tab', () => {
+  const input = written([terminal('a::1'), terminal('c::1')])
+  delete input.tabGroups
+  const ordered = withMainTabOrder(input, MAIN)
+  expect(ordered.activeGroupId).toBe('right')
+  expect(ordered.activeTabId).toBe('a::1')
+  expect(ordered.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual(['a::1'])
+})
+
+it.each(['null', 'missing', 'empty'] as const)(
+  'does not derive navigation from main inventory for strict grouped %s',
+  (kind) => {
+    const input = written([terminal('a::1'), terminal('c::1')])
+    input.tabGroups![0]!.activeTabId = null
+    if (kind === 'missing') {
+      input.activeGroupId = 'missing'
+    }
+    if (kind === 'empty') {
+      input.tabGroups = []
+    }
+    const ordered = withMainTabOrder(input, MAIN)
+    expect(ordered.activeTabId).toBeNull()
+    expect(ordered.activeTabType).toBeNull()
+    expect(ordered.tabs.filter((tab) => tab.isActive)).toEqual([])
+  }
+)

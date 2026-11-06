@@ -31,6 +31,12 @@ export type NativeChatLiveSession = NativeChatSession & {
   olderHistoryGeneration: number
   /** Resolve after page publication; concurrent calls share the in-flight read. */
   loadEarlier: () => Promise<NativeChatOlderPageResult>
+  /** A parked view keeps shared history until it returns or unmounts. */
+  /** Shared source initial autofill ends after a deliberate return; browsing stays per view. */
+  initialHistoryAutoLoad?: boolean
+  retainHistory?: () => () => void
+  /** Release browsed pages at the reader's own return to the newest reply. */
+  trimHistory?: () => void
   /** Use raw read phase for history decisions; a working hook can hide loading in session status. */
   readPhase: ReadState['phase']
   /** True only when caught up to host state; terminal-backed reads cannot prove what arrived while hidden. */

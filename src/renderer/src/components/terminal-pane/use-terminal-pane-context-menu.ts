@@ -1,21 +1,21 @@
 import { useCallback, useRef } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
-import type { TerminalPasteSource } from './terminal-paste-model'
+import type { TerminalPasteSource } from './input/paste/terminal-paste-model'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
-import { pasteTerminalPaneMenuClipboard } from './terminal-pane-menu-paste'
+import { pasteTerminalPaneMenuClipboard } from './input/paste/terminal-pane-menu-paste'
 import {
   copyTerminalPaneMenuAgentSessionId,
   copyTerminalPaneMenuPaneId,
   copyTerminalPaneMenuSelection,
   copyTerminalPaneMenuTerminalId
-} from './terminal-pane-menu-copy-actions'
+} from './clipboard/terminal-pane-menu-copy-actions'
 import {
   continueAgentSessionFromMenuPane,
   copyAgentSessionContextFromMenuPane,
@@ -112,8 +112,7 @@ export function useTerminalPaneContextMenu({
     }
     const panes = manager.getPanes()
     if (contextPaneIdRef.current !== null) {
-      const clickedPane = panes.find((pane) => pane.id === contextPaneIdRef.current) ?? null
-      return clickedPane
+      return panes.find((pane) => pane.id === contextPaneIdRef.current) ?? null
     }
     return manager.getActivePane() ?? panes[0] ?? null
   }, [managerRef])
@@ -127,6 +126,7 @@ export function useTerminalPaneContextMenu({
         paneTransportsRef,
         tabId,
         worktreeId,
+        cwd: fallbackCwd,
         forceBracketedMultilineTextPaste,
         onPasteError
       },

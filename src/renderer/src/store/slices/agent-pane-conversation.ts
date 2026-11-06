@@ -7,7 +7,7 @@ import type {
   AgentType
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '../types'
 import { findAgentPaneWorktreeId } from './agent-status/agent-status-pane-key-tab-binding'
 

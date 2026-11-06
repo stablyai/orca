@@ -91,7 +91,7 @@ describe('useIpcEvents browser tab close routing', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
@@ -217,6 +217,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -321,7 +322,7 @@ describe('useIpcEvents browser tab close routing', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
@@ -447,6 +448,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -546,7 +548,7 @@ describe('useIpcEvents browser tab close routing', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
@@ -672,6 +674,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {

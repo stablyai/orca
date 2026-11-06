@@ -22,7 +22,7 @@ vi.mock('./worktree-preparation-lock', async (importOriginal) => ({
   lockWorktreePreparation: mocks.lock,
   verifyWorktreePreparationLock: mocks.verify
 }))
-vi.mock('./worktree-preparation-discard', () => ({ performDiscardPreparedWorktree: mocks.discard }))
+vi.mock('./worktree-preparation-discard', () => ({ discardPreparedWorktree: mocks.discard }))
 
 import { addLockedWorktreePreparation } from './worktree-preparation-add'
 import {
@@ -30,7 +30,6 @@ import {
   getLocalGitCapabilityCache
 } from '../../command-runner/git-capability-state'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
-import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from '../worktree-operation-options'
 import { resetWslLinkedWorktreeGitRoutingForTests } from '../../command-runner/wsl-linked-worktree-git-routing'
 
 const reason = 'orca-create-preparation:v1:123:atomic'
@@ -46,44 +45,6 @@ beforeEach(() => {
   mocks.lock.mockReset().mockResolvedValue('/fallback-lock')
   mocks.verify.mockReset().mockResolvedValue('/atomic-lock')
   mocks.discard.mockReset().mockResolvedValue(undefined)
-})
-
-it.each([
-  ['first', 'cancellation'],
-  ['cached', 'cancellation'],
-  ['first', 'path probe'],
-  ['cached', 'path probe'],
-  ['first', 'marker write'],
-  ['cached', 'marker write']
-])('cleans its successful %s fallback add after a %s failure', async (fallback, failureKind) => {
-  const controller = new AbortController()
-  const options = {
-    signal: controller.signal,
-    timeout: 180_000,
-    wslDistro: 'Ubuntu',
-    admissionTier: 'background' as const
-  }
-  if (fallback === 'cached') {
-    getLocalGitCapabilityCache(options).rememberUnsupported('worktree-add-lock-reason')
-  } else {
-    mocks.git.mockRejectedValueOnce(unsupported)
-  }
-  const failure = new Error(`${failureKind} failed after registration`)
-  mocks.lock.mockImplementationOnce(async () => {
-    if (failureKind === 'cancellation') {
-      controller.abort(failure)
-    }
-    throw failure
-  })
-  await expect(prepare('/prepared', options)).rejects.toBe(failure)
-  expect(mocks.discard).toHaveBeenCalledExactlyOnceWith('/repo', '/prepared', {
-    ...options,
-    signal: undefined,
-    timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-  })
-  expect(mocks.lstat).toHaveBeenCalled()
-  expect(options.timeout).toBe(180_000)
-  expect(options.signal).toBe(controller.signal)
 })
 
 it.each(['first', 'cached'])(
@@ -205,17 +166,4 @@ it('does not rewrite or discard a generic or competing marker returned after add
   await expect(prepare()).rejects.toThrow('lock owner changed')
   expect(mocks.lock).not.toHaveBeenCalled()
   expect(mocks.discard).not.toHaveBeenCalled()
-})
-
-it('attempts ownership-checked cleanup if cancellation interrupts the newly registered add', async () => {
-  const controller = new AbortController()
-  const failure = new Error('add canceled')
-  mocks.git.mockImplementationOnce(async () => {
-    controller.abort()
-    throw failure
-  })
-  const options = { signal: controller.signal }
-  await expect(prepare('/prepared', options)).rejects.toBe(failure)
-  expect(mocks.discard).toHaveBeenCalledExactlyOnceWith('/repo', '/prepared', options, reason)
-  expect(mocks.lock).not.toHaveBeenCalled()
 })

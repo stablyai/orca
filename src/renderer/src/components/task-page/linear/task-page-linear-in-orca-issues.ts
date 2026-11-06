@@ -12,7 +12,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../../shared/task-source-context'
-import { normalizeLinearIdentifier } from '../../../lib/linear-issue-workspace-attachment'
+import { normalizeLinearIdentifier } from '../../../lib/work-items/linear/linear-issue-workspace-attachment'
 
 export type LinkedLinearIssueRef = {
   identifier: string

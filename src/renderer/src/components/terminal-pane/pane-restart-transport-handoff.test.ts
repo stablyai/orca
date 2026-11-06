@@ -14,7 +14,7 @@ describe('releasePaneTransportForRestart', () => {
   })
 
   async function attachedTransport(ptyId: string) {
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     const transport = createIpcPtyTransport({})
     transport.attach({ existingPtyId: ptyId, callbacks: {} })
     return transport
@@ -29,7 +29,7 @@ describe('releasePaneTransportForRestart', () => {
     expect(window.api.pty.kill).not.toHaveBeenCalled()
     expect(replacesPtyId).toBe('wt1@@old')
 
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     await createIpcPtyTransport({ command: 'codex', worktreeId: 'wt1' }).connect({
       url: '',
       claimReplacedPtyId: () => 'wt1@@old',
@@ -41,7 +41,7 @@ describe('releasePaneTransportForRestart', () => {
   })
 
   it('leaves the replaced PTY with its owner when the connect stands down before spawning', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     const claimReplacedPtyId = vi.fn(() => 'wt1@@old')
 
     await createIpcPtyTransport({ command: 'codex', worktreeId: 'wt1' }).connect({
@@ -64,7 +64,7 @@ describe('releasePaneTransportForRestart', () => {
   })
 
   it('never sends a replace field on a session reattach', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     vi.mocked(window.api.pty.spawn).mockResolvedValue({ id: 'wt1@@live', isReattach: true })
 
     await createIpcPtyTransport({}).connect({

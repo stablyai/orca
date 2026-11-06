@@ -21,6 +21,8 @@ export type MultiplexEmit = (result: unknown) => void
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
   connectionId: string
+  // The authenticated device, whose departure ends this connection's views.
+  viewerDeviceId: string | undefined
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']

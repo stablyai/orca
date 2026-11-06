@@ -12,12 +12,12 @@ import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from './orca-runtime'
 import { createMobileCreateTestNotifier } from './orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
+import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs/session-tabs'
 import {
   clearStructuredHostStub,
   hostCalls,
   installStructuredHostStub
-} from './rpc/methods/structured-agent-session-rpc.test-fixture'
+} from './rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-session-contracts'
 import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 

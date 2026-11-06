@@ -19,11 +19,9 @@ import {
   isRenewableGrantError,
   pinTerminalArtifactGrantTarget,
   renewTerminalArtifactGrant,
+  TERMINAL_ARTIFACT_WRITE_MAX_BYTES,
   type TerminalArtifactGrantTarget
 } from './runtime-terminal-artifact-grant'
-
-// Why: hosts cap a grant write at their mobile read budget; refuse before sending the bytes.
-const TERMINAL_ARTIFACT_WRITE_MAX_BYTES = 512 * 1024
 
 type GrantTarget = TerminalArtifactGrantTarget
 

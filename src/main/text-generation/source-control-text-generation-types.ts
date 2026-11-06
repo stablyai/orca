@@ -128,4 +128,5 @@ export type LocalSourceControlPlanInput = {
   operation: TextGenerationOperation
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent
+  timeoutMs?: number
 }

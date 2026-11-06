@@ -1,7 +1,7 @@
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import React from 'react'
 import { useAppStore } from '@/store'
-import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import {
   automationChatSupport,

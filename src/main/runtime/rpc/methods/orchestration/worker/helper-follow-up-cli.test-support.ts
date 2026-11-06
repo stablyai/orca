@@ -5,16 +5,16 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type MockInstance } from 'vitest'
 import { z } from 'zod'
 import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { STATUS_METHODS } from '../../status'
+import { ORCHESTRATION_METHODS } from '../orchestration'
+import { STATUS_METHODS } from '../../host-management/status'
 import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
-} from '../../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

@@ -123,6 +123,9 @@ export function useMobileSessionTerminalSubscription(
         }
       })
 
+      // A path switch replays this listener on a new stream whose snapshot covers output the old one never delivered.
+      let snapshotStreamId: unknown
+
       const adoptDisplayMode = (displayMode: unknown) => {
         if (displayMode !== 'auto' && displayMode !== 'phone' && displayMode !== 'desktop') {
           return
@@ -190,7 +193,7 @@ export function useMobileSessionTerminalSubscription(
           }
           if (data.type === 'scrollback') {
             diagnostics.streamScrollback(handle, seq, eventSeq, data)
-            if (initializedHandlesRef.current.has(handle)) {
+            if (data.streamId === snapshotStreamId && initializedHandlesRef.current.has(handle)) {
               return
             }
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
@@ -214,6 +217,7 @@ export function useMobileSessionTerminalSubscription(
             const kittyFlags = data.kittyKeyboardFlags
             ref.init({ cols, rows, initialData, preserveScroll: true, oscLinks, kittyFlags, frame })
             initializedHandlesRef.current.add(handle)
+            snapshotStreamId = data.streamId
             adoptDisplayMode(data.displayMode)
             // Refit after DOM settles because init can see transient scrollWidth.
             lifetime.scheduleSettledFit(ref)

@@ -15,7 +15,7 @@ import type {
   CrewRecipientRun,
   DispatchInput
 } from './crew-recipient-owner-queries'
-import type { createLineageRunningSessionResolver } from '../structured-session-lineage'
+import type { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import type { selectBareRecipientOwner } from '../../rpc/methods/orchestration/messaging/recipient-routing'
 import type { CrewRecipientKey as Key } from './crew-recipient-worker-facts'
 import type { CrewRecipientTerminal, Recipient } from './crew-recipient-inputs'

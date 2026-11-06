@@ -8,7 +8,7 @@ import {
   fitAndRefreshDesktopPane
 } from './desktop-fit-fallback'
 import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 export type MobileOverlayTickDeps = {
   managerRef: { current: PaneManager | null }

@@ -2,7 +2,7 @@ import {
   RuntimeAgentSenderAssociations,
   type AgentSenderHandleReads
 } from '../runtime-agent-sender-associations'
-import { fingerprintOrchestrationPeer } from '../orchestration/environment-transport'
+import { fingerprintOrchestrationPeer } from '../orchestration/federation/environment-transport'
 import {
   RuntimeAgentOrchestrationProjection,
   type RuntimeAgentOrchestrationDependencies

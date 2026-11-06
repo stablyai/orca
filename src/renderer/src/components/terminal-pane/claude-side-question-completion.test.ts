@@ -17,7 +17,7 @@ import {
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
+import type { AgentCompletionStatusSnapshot } from './agent-completion/agent-completion-coordinator-types'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
 import { reduceHostTurnEnd } from '../../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'

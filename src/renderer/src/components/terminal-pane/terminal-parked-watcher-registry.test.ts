@@ -6,7 +6,7 @@ import {
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit,
   hasPreHandlerPtyExit
-} from './pty-pre-handler-buffer'
+} from './pty-transport/delivery/pty-pre-handler-buffer'
 import {
   capturedPanesByTabId,
   parkedWatchersByTabId,
