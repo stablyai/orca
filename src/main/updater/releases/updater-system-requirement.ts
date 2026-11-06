@@ -37,6 +37,6 @@ export function getUnsupportedSystemUpdate(
   if (!minimum || !current || !isDarwinOlder(current, minimum)) {
     return undefined
   }
-  const minimumMacosVersion = macosVersionForDarwinFloor(info.minimumSystemVersion)
+  const minimumMacosVersion = macosVersionForDarwinFloor(minimum)
   return minimumMacosVersion === null ? undefined : { version: info.version, minimumMacosVersion }
 }

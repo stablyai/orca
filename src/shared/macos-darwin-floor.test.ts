@@ -9,6 +9,6 @@ describe('darwinVersionForMacos', () => {
 
   it('gates macOS 13.4 on Darwin 22.5.0 so 13.3.x (Darwin 22.4) is held back', () => {
     expect(darwinVersionForMacos('13.4')).toBe('22.5.0')
-    expect(macosVersionForDarwinFloor('22.5.0')).toBe('13.4')
+    expect(macosVersionForDarwinFloor([22, 5, 0])).toBe('13.4')
   })
 })
