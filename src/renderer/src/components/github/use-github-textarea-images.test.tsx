@@ -148,7 +148,7 @@ it.each([2, 20])(
     const originalReplace = String.prototype.replace
     const replace = vi.spyOn(String.prototype, 'replace').mockImplementation(function (
       this: string,
-      pattern: string | RegExp,
+      pattern: Parameters<typeof originalReplace>[0],
       replacement: Parameters<typeof originalReplace>[1]
     ) {
       if (pattern instanceof RegExp && pattern.source.startsWith('!\\[Uploading ')) {
