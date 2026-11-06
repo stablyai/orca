@@ -4,6 +4,7 @@ import { journalSqlScalarSchema } from './journal-sql-scalars'
 import { journalSqlItemSchema } from './journal-sql-item-schema'
 import { journalSqlQuerySchema } from './journal-sql-query-schema'
 import { journalSqlPauseSchema } from './journal-sql-pause-marks'
+import { journalSqlMetaSchema } from './journal-sql-meta'
 
 export function journalSqlProjectionSchema(): string {
   return (
@@ -12,6 +13,7 @@ export function journalSqlProjectionSchema(): string {
     journalSqlScalarSchema() +
     journalSqlItemSchema() +
     journalSqlQuerySchema() +
-    journalSqlPauseSchema()
+    journalSqlPauseSchema() +
+    journalSqlMetaSchema()
   )
 }

@@ -17,10 +17,6 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
   ) {
     this.domains = new JournalSqlDomainIndex(scope, `${indexId}:released-at`)
     this.fallback = new JournalSqlDomainIndex(scope, `${indexId}:released-fallback`)
-    scope.db
-      .prepare(`INSERT OR IGNORE INTO journal_proj_release_state
-        (session_id, generation, index_id) VALUES (?, ?, ?)`)
-      .run(...this.prefix)
   }
 
   private get prefix(): [string, string, string] {
@@ -29,9 +25,11 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
 
   pause(cut: number): void {
     this.scope.db
-      .prepare(`UPDATE journal_proj_release_state SET floor=?, pause_gen=pause_gen+1
-        WHERE session_id=? AND generation=? AND index_id=?`)
-      .run(cut, ...this.prefix)
+      .prepare(`INSERT INTO journal_proj_release_state
+        (session_id, generation, index_id, floor, pause_gen) VALUES (?, ?, ?, ?, 1)
+        ON CONFLICT(session_id, generation, index_id) DO UPDATE
+        SET floor=excluded.floor, pause_gen=pause_gen+1`)
+      .run(...this.prefix, cut)
   }
 
   delete(prior: JournalIndexedInputCard): void {
@@ -56,6 +54,10 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
       return
     }
     this.scope.db
+      .prepare(`INSERT OR IGNORE INTO journal_proj_release_state
+        (session_id, generation, index_id) VALUES (?, ?, ?)`)
+      .run(...this.prefix)
+    this.scope.db
       .prepare(`INSERT OR REPLACE INTO journal_proj_releases
         (session_id, generation, index_id, id, introduced, position, pause_gen)
         SELECT session_id, generation, index_id, ?, ?, ?, pause_gen
@@ -69,7 +71,7 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
         WHERE session_id=? AND generation=? AND index_id=?`)
       .get(...this.prefix)
     if (!state) {
-      throw new Error('Missing released-position state')
+      return { position: -Infinity }
     }
     this.scope.examined(state)
     const floor = state.floor === null ? -Infinity : Number(state.floor)

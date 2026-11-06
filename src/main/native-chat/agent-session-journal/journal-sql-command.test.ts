@@ -1,0 +1,230 @@
+import { seedJournalSqlCommands } from './journal-sql-command.test-fixture'
+import { afterEach, expect, it } from 'vitest'
+import Database from '../../sqlite/sync-database'
+import { ensureJournalOutcomeTables } from './journal-outcome-format'
+import { persistJournalOutcomeRows } from './journal-outcome-table'
+import { createJournalReducerState } from './journal-reducer'
+import { JournalSqlReducer } from './journal-sql-reducer'
+import { JournalSqlScope } from './journal-sql-scope'
+import { JournalSqlCommand } from './journal-sql-command'
+import { JournalSqlBatch } from './journal-sql-batch'
+import { planJournalWriterRows } from './journal-writer-plan'
+import type { JournalWriterCommand, JournalWriterOperation } from './journal-writer-command'
+import { journalInputOrder } from './journal-input-order'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { CommandReceipt } from './command-receipt-schema'
+import { readCommandReceipt } from './command-receipt-table'
+
+const databases: Database.Database[] = []
+afterEach(() => {
+  for (const db of databases.splice(0)) {
+    db.close()
+  }
+})
+const target = { sessionId: 'session', epoch: 'epoch', ownerToken: 'open-token' }
+const identity = { provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 } as const
+const itemId = agentJournalItemKey(identity)
+const item = (text: string, fence = 1): JournalWriterOperation => ({
+  kind: 'item',
+  identity,
+  body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+  options: { fence, turnScope: { kind: 'thread' } }
+})
+const command = (operation: JournalWriterOperation): JournalWriterCommand => ({ target, operation })
+
+function fixture() {
+  const db = new Database(':memory:')
+  databases.push(db)
+  const { source, initial } = seedJournalSqlCommands(db)
+  return {
+    db,
+    source,
+    initial,
+    engine: new JournalSqlCommand(db, '/unused'),
+    batch: new JournalSqlBatch(db)
+  }
+}
+
+it('assigns revisions after preceding successes and rolls back failed command projections and receipts', () => {
+  const { db, engine, batch } = fixture()
+  db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('session', '{}')
+  const receipt: CommandReceipt = {
+    operationId: 'send',
+    sessionId: 'session',
+    callerKey: 'caller',
+    method: 'agentSession.send',
+    fingerprint: 'fingerprint',
+    acceptedAt: 100,
+    status: 'accepted',
+    result: { kind: 'journal-row', epoch: 'unassigned', sequence: 1 }
+  }
+  const accepted: JournalWriterCommand = {
+    ...command(item('first')),
+    effects: [{ kind: 'receipt', scope: { kind: 'global' }, receipt, row: 'last' }]
+  }
+  const duplicate: JournalWriterCommand = {
+    ...command(item('must roll back')),
+    effects: [{ kind: 'receipt', scope: { kind: 'global' }, receipt, row: 'last' }]
+  }
+  const results = batch.run(
+    [accepted, duplicate, command(item('second')), command(item('stale', 0))].map((entry) => ({
+      command: entry,
+      normal: engine.streamed(entry)
+    })),
+    (entry) => engine.apply(entry, 100)
+  )
+  expect(results.outcomes.map((result) => result.committed)).toEqual([true, false, true, false])
+  const committed = results.outcomes.flatMap((result) => (result.committed ? [result.value] : []))
+  expect(committed.map((result) => result.cursor.sequence)).toEqual([2, 3])
+  expect(committed.map((result) => result.items)).toEqual([
+    [{ itemId, deleted: false, revision: 1, sequence: 2, sequenceIndex: 0 }],
+    [{ itemId, deleted: false, revision: 2, sequence: 2, sequenceIndex: 0 }]
+  ])
+  const loaded = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch')
+  expect(loaded.state.items.get(itemId)?.body).toEqual({
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'second' }]
+  })
+  expect(db.prepare('SELECT through_seq FROM journal_proj_meta').get()?.through_seq).toBe(3)
+  expect(db.prepare('SELECT MAX(seq) AS seq FROM journal_outcomes').get()?.seq).toBe(3)
+  expect(readCommandReceipt(db, { kind: 'global' }, 'send')).toMatchObject({
+    verdict: 'readable',
+    receipt: { result: { kind: 'journal-row', epoch: 'epoch', sequence: 2 } }
+  })
+})
+
+it('keeps exact saved records across command shells and publishes metadata without item bodies', () => {
+  const { db, source, initial, engine, batch } = fixture()
+  const oracle = new Database(':memory:')
+  databases.push(oracle)
+  ensureJournalOutcomeTables(oracle)
+  let memory = persistJournalOutcomeRows(
+    oracle,
+    createJournalReducerState('session', 'epoch'),
+    source,
+    [initial],
+    100,
+    true,
+    (state) => journalInputOrder(state).cards.ensure(state)
+  ).adopt()
+  const operations: JournalWriterOperation[] = [
+    item('one'),
+    item('two'),
+    {
+      kind: 'lifecycle',
+      input: {
+        settlementId: 'settled',
+        fence: 1,
+        mutations: [
+          { kind: 'tombstone', identity },
+          {
+            kind: 'item',
+            identity,
+            turnScope: { kind: 'thread' },
+            body: {
+              kind: 'message',
+              role: 'assistant',
+              blocks: [{ type: 'text', text: 'recreated' }]
+            }
+          }
+        ]
+      }
+    },
+    { kind: 'stop', fence: 1, event: { reason: 'user-stop' } },
+    { kind: 'queue-resume', fence: 1 },
+    { kind: 'queue-reopen', fence: 1, since: 2 },
+    { kind: 'tombstone', identity, fence: 1 }
+  ]
+  for (const operation of operations) {
+    const rows = planJournalWriterRows(memory, operation).map((build, index) =>
+      build(memory.lastSequence + index + 1, 100)
+    )
+    memory = persistJournalOutcomeRows(oracle, memory, source, rows, 100, false, (state) =>
+      journalInputOrder(state).cards.ensure(state)
+    ).adopt()
+    const result = batch.run([{ command: command(operation), normal: false }], (entry) =>
+      engine.apply(entry, 100)
+    ).outcomes[0]!
+    expect(result.committed).toBe(true)
+  }
+  const records = (connection: Database.Database) =>
+    connection
+      .prepare(`SELECT seq, field, entry_key,
+    format, ordinal, value_json, deleted FROM journal_outcomes ORDER BY seq, field, entry_key`)
+      .all()
+  expect(records(db)).toEqual(records(oracle))
+  const final = batch.run([{ command: command(item('after deletion')), normal: false }], (entry) =>
+    engine.apply(entry, 100)
+  ).outcomes[0]!
+  expect(final).toMatchObject({
+    committed: true,
+    value: { items: [{ itemId, revision: 6, deleted: false }] }
+  })
+  expect(JSON.stringify(final)).not.toContain('after deletion')
+})
+
+it('chooses NORMAL only for proven text revisions and retains FULL for settlements and effects', () => {
+  const { db, engine, batch } = fixture()
+  expect(engine.streamed(command(item('first')))).toBe(false)
+  batch.run([{ command: command(item('first')), normal: false }], (entry) =>
+    engine.apply(entry, 100)
+  )
+  const revision = command(item('next'))
+  db.pragma('query_only = ON')
+  try {
+    expect(engine.streamed(revision)).toBe(true)
+  } finally {
+    db.pragma('query_only = OFF')
+  }
+  expect(
+    engine.streamed({
+      ...revision,
+      effects: [{ kind: 'queue-delete', sessionId: 'session', messageIds: [] }]
+    })
+  ).toBe(false)
+  expect(engine.streamed(command({ kind: 'queue-resume', fence: 1 }))).toBe(false)
+  let synchronous = -1
+  batch.run([{ command: revision, normal: engine.streamed(revision) }], (entry) => {
+    synchronous = Number(db.pragma('synchronous', { simple: true }))
+    return engine.apply(entry, 100)
+  })
+  expect(synchronous).toBe(1)
+  expect(Number(db.pragma('synchronous', { simple: true }))).toBe(2)
+})
+
+it('refuses stale ownership, changed epochs and log coverage even for an empty plan', () => {
+  const { db, engine, batch } = fixture()
+  const noOp = command({
+    kind: 'dispatch',
+    input: { clientMessageId: 'missing', state: 'unknown', fence: 1 },
+    onlyIfUnsettled: true
+  })
+  const run = (entry = noOp) =>
+    batch.run([{ command: entry, normal: false }], (value) => engine.apply(value, 100)).outcomes[0]!
+  expect(
+    run({
+      ...noOp,
+      effects: [
+        {
+          kind: 'store',
+          insertOperationsIfAbsent: false,
+          writes: {
+            records: { upsert: [], remove: [] },
+            operations: { upsert: [['ignored', '{}']], remove: [] },
+            retiredClaimKeys: null,
+            sessionTabs: null
+          }
+        }
+      ]
+    })
+  ).toMatchObject({ committed: true, value: { inputChanged: false, effects: [] } })
+  expect(db.prepare('SELECT 1 FROM agent_session_operations').get()).toBeUndefined()
+  expect(run({ ...noOp, target: { ...target, ownerToken: 'old' } }).committed).toBe(false)
+  db.prepare('UPDATE journal_sessions SET epoch=?').run('another-epoch')
+  expect(run().committed).toBe(false)
+  db.prepare('UPDATE journal_sessions SET epoch=?').run('epoch')
+  db.prepare('UPDATE journal_outcome_epochs SET through_seq=2').run()
+  expect(run().committed).toBe(false)
+  expect(db.prepare('SELECT through_seq FROM journal_proj_meta').get()?.through_seq).toBe(1)
+})
