@@ -9,41 +9,94 @@ import {
 /** Browser clamps also scroll; only a reader's movement may release browsed history. */
 export function useNativeChatReaderReturn(
   scrollRef: React.RefObject<HTMLElement | null>,
-  followingRef: React.RefObject<boolean>
+  followingRef: React.RefObject<boolean>,
+  previousGeometryRef: React.RefObject<ScrollGeometry | null>
 ) {
-  const input = useRef<ScrollGeometry | null>(null)
+  const input = useRef(false)
   const recordReaderScroll = useCallback(() => {
-    input.current = scrollRef.current ? geometryOf(scrollRef.current) : null
-  }, [scrollRef])
+    input.current = true
+  }, [])
+  const observeGeometry = useCallback(
+    (geometry: ScrollGeometry, programmatic: boolean): ScrollGeometry | null => {
+      const previous = previousGeometryRef.current
+      previousGeometryRef.current = geometry
+      if (
+        !previous ||
+        geometry.clientHeight !== previous.clientHeight ||
+        (!programmatic && geometry.scrollHeight < previous.scrollHeight)
+      ) {
+        input.current = false
+        return null
+      }
+      return previous
+    },
+    [previousGeometryRef]
+  )
+  const observeVisibility = useCallback(
+    (isVisible: boolean, revealed: boolean) => {
+      if (!isVisible) {
+        input.current = false
+        previousGeometryRef.current = null
+      } else if (revealed || previousGeometryRef.current === null) {
+        input.current = false
+        const element = scrollRef.current
+        previousGeometryRef.current = hasMeasurableViewport(element) ? geometryOf(element) : null
+      }
+    },
+    [previousGeometryRef, scrollRef]
+  )
+  const observeResize = useCallback(
+    (geometry: ScrollGeometry): boolean => {
+      const previous = previousGeometryRef.current
+      // A moved offset still owes its classified scroll event, including measurement compensation.
+      if (previous && geometry.scrollTop !== previous.scrollTop) {
+        return false
+      }
+      observeGeometry(geometry, false)
+      return (
+        previous !== null &&
+        (geometry.clientHeight !== previous.clientHeight ||
+          geometry.scrollHeight !== previous.scrollHeight)
+      )
+    },
+    [observeGeometry, previousGeometryRef]
+  )
+  const observeApplicationScroll = useCallback(() => {
+    const element = scrollRef.current
+    if (hasMeasurableViewport(element)) {
+      observeGeometry(geometryOf(element), true)
+    }
+  }, [observeGeometry, scrollRef])
   const readerReturned = (geometry: ScrollGeometry, programmatic: boolean): boolean => {
-    const start = input.current
-    if (!start) {
+    const start = observeGeometry(geometry, programmatic)
+    if (
+      !start ||
+      !input.current ||
+      programmatic ||
+      !followingRef.current ||
+      geometry.scrollTop <= start.scrollTop
+    ) {
       return false
     }
-    if (geometry.clientHeight !== start.clientHeight) {
-      input.current = null
-      return false
-    }
-    // Keep reader evidence in the coordinate frame produced by measurements and earlier movement.
-    input.current = geometry
-    if (programmatic) {
-      return false
-    }
-    if (geometry.scrollHeight < start.scrollHeight) {
-      input.current = null
-      return false
-    }
-    if (!followingRef.current || geometry.scrollTop <= start.scrollTop) {
-      return false
-    }
-    input.current = null
+    input.current = false
     return true
   }
-  const readerAtEnd = useCallback(() => {
-    const element = scrollRef.current
-    return (
-      followingRef.current || (hasMeasurableViewport(element) && isNearBottom(geometryOf(element)))
-    )
-  }, [followingRef, scrollRef])
-  return { recordReaderScroll, readerReturned, readerAtEnd }
+  const readerAtEnd = useCallback(
+    (threshold?: number) => {
+      const element = scrollRef.current
+      return (
+        followingRef.current ||
+        (hasMeasurableViewport(element) && isNearBottom(geometryOf(element), threshold))
+      )
+    },
+    [followingRef, scrollRef]
+  )
+  return {
+    recordReaderScroll,
+    readerReturned,
+    readerAtEnd,
+    observeVisibility,
+    observeResize,
+    observeApplicationScroll
+  }
 }

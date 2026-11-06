@@ -10,7 +10,10 @@ it('requires reader movement and rejects a geometry-only clamp', () => {
     clientHeight: { value: 600, writable: true },
     scrollHeight: { value: 1000, writable: true }
   })
-  const view = renderHook(() => useNativeChatReaderReturn({ current: element }, { current: true }))
+  const previous = { current: { scrollTop: 360, clientHeight: 600, scrollHeight: 1000 } }
+  const view = renderHook(() =>
+    useNativeChatReaderReturn({ current: element }, { current: true }, previous)
+  )
   const geometry = { scrollTop: 320, clientHeight: 680, scrollHeight: 1000 }
   expect(view.result.current.readerReturned(geometry, false)).toBe(false)
   view.result.current.recordReaderScroll()
@@ -39,7 +42,10 @@ it('rebases a continuing reader gesture across compensation without crediting a 
     scrollHeight: { value: 2000, writable: true }
   })
   const following = { current: false }
-  const view = renderHook(() => useNativeChatReaderReturn({ current: element }, following))
+  const previous = { current: { scrollTop: 1400, clientHeight: 600, scrollHeight: 2000 } }
+  const view = renderHook(() =>
+    useNativeChatReaderReturn({ current: element }, following, previous)
+  )
   const observe = (scrollTop: number, scrollHeight: number, programmatic = false) =>
     view.result.current.readerReturned({ scrollTop, clientHeight: 600, scrollHeight }, programmatic)
   view.result.current.recordReaderScroll()
@@ -50,6 +56,7 @@ it('rebases a continuing reader gesture across compensation without crediting a 
 
   // A scrollbar drag or touch momentum can continue without a second input callback.
   following.current = false
+  view.result.current.observeVisibility(true, true)
   view.result.current.recordReaderScroll()
   expect(observe(1380, 2000)).toBe(false)
   expect(observe(1580, 2200, true)).toBe(false)
@@ -61,6 +68,7 @@ it('rebases a continuing reader gesture across compensation without crediting a 
 
   // A smaller measured row is a known compensation, not an ambiguous browser clamp.
   following.current = false
+  view.result.current.observeVisibility(true, true)
   view.result.current.recordReaderScroll()
   expect(observe(1380, 2000)).toBe(false)
   expect(observe(1260, 1880, true)).toBe(false)

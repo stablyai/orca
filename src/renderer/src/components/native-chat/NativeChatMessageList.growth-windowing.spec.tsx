@@ -372,6 +372,33 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
   })
 
+  it('releases browsed history when passive wheel input arrives after the browser moved', () => {
+    const release = vi.fn()
+    const { container } = render(
+      <NativeChatMessageList
+        session={{ ...session(transcript), retainHistory: () => release }}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    scrollTranscript(container, scroller.scrollHeight - scroller.clientHeight - 20)
+    paint(container)
+    expect(release).not.toHaveBeenCalled()
+
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+    fireEvent.wheel(scroller, { deltaY: 20 })
+    // ResizeObserver can notify before the pending native scroll, without changing the content.
+    act(() => {
+      deliverResizes()
+    })
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+  })
+
   it.each([false, true])(
     'keeps reader-return evidence current after compensation (tail clamps: %s)',
     (clamps) => {
