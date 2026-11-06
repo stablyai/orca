@@ -25,6 +25,7 @@ import type {
   TerminalInitialOscLink
 } from './document-terminal-shape'
 import type { TerminalMouseGesture } from './mouse-click-drag'
+import type { TerminalResizeHoldState } from './resize-repaint-hold'
 import type { TerminalTouchState } from './surface-touch-gestures'
 import type { TerminalTouchDispatch } from './tap-dispatch'
 import type { TerminalDocumentThemeMessage } from './terminal-theme'
@@ -106,6 +107,7 @@ export type TerminalDocumentState = {
   provisionalTerm: TerminalDocumentTerminal | null
   committedSurface: HTMLElement | null
   pendingSurface: HTMLElement | null
+  resizeHold: TerminalResizeHoldState | null
   scrollIndicator: HTMLElement | null
   scrollThumb: HTMLElement | null
   terminalDataRepliesEnabled: boolean
@@ -231,6 +233,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     provisionalTerm: null,
     committedSurface: null,
     pendingSurface: null,
+    resizeHold: null,
     scrollIndicator: null,
     scrollThumb: null,
     terminalDataRepliesEnabled: false,

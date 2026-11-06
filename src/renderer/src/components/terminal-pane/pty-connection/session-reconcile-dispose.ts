@@ -244,6 +244,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why: the pane's fact consumer must be gone before a parked-tab watcher takes over this PTY's facts in the same effect flush.
       session.dropSideEffectFactConsumer()
       session.clearPanePtyFitBinding()
+      session.resizeRepaintHold?.dispose()
       discardTerminalOutput(session.pane.terminal)
       session.unregisterE2ePtyDataInjection()
       if (session.agentTaskCompleteSettingsUnsubscribe !== null) {

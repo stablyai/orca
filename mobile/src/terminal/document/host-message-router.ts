@@ -5,6 +5,7 @@ import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
 import { reflow } from './reflow'
+import { releaseResizeRepaintSurface } from './resize-repaint-hold'
 import { resumeTerminalDataReplyAuthority } from './query-reply'
 import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-mode'
@@ -95,6 +96,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       scope.term?.scrollToBottom()
     }
   } else if (msg.type === 'clear') {
+    releaseResizeRepaintSurface(scope, false)
     scope.pendingReplayScrollAnchorRows = null
     scope.terminalGeneration++
     resetWriteQueue(scope)
