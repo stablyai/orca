@@ -1,8 +1,8 @@
-import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestPreparation,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
 
@@ -92,6 +92,7 @@ export function executeSupportRoutedCall(args: {
   expectedRuntimeId?: string
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
+  prepareRequest?: RuntimeRequestPreparation
 }): Promise<RuntimeRpcResponse<unknown>> {
   return routeRuntimeEnvironmentCallBySupport({
     userDataPath: args.userDataPath,
@@ -111,7 +112,8 @@ export function executeSupportRoutedCall(args: {
             args.params,
             args.timeoutMs,
             args.envelope,
-            args.signal
+            args.signal,
+            args.prepareRequest
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined
@@ -123,7 +125,8 @@ export function executeSupportRoutedCall(args: {
             args.timeoutMs,
             args.envelope,
             args.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            args.prepareRequest
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
@@ -300,14 +303,4 @@ function subscriptionCallbacks(
       args.callbacks.onClose()
     }
   }
-}
-
-export function shouldUseSharedControlEnvelope(
-  method: string,
-  params: unknown,
-  envelope: RuntimeOrchestrationEnvelope | undefined
-): RuntimeOrchestrationEnvelope | undefined {
-  return envelope && method.startsWith('orchestration.') && !isOrchestrationMutation(method, params)
-    ? envelope
-    : undefined
 }

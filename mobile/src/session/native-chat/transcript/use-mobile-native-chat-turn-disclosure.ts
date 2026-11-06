@@ -224,6 +224,7 @@ export function useMobileNativeChatTurnDisclosure({
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
+        ...(turnKey === message.id ? { opensTurn: true as const } : {}),
         ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // Without a user boundary, session working state remains authoritative; bridge chat knows only its synthetic stream row is live.
         activeTurnIsWorking: enabled

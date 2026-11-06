@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { parseDocPreviewUrl } from '../../../shared/doc-preview-scheme'
 
 export type DocPreviewOwner =
   | { kind: 'ssh'; connectionId: string }
@@ -137,6 +138,17 @@ export function resolveDocPreviewCandidatePath(
   const flavor = pathFlavorFor(grant.requestBase)
   const resolved = flavor.normalize(flavor.join(grant.requestBase, ...segments))
   return isInsideRoot(grant.requestBase, resolved, flavor) ? resolved : null
+}
+
+/** Host path a live preview document URL names, or null outside a live grant. */
+export function resolveDocPreviewUrlFilePath(url: string): string | null {
+  const target = parseDocPreviewUrl(url)
+  const grant = target ? getDocPreviewGrant(target.grantId) : null
+  if (!target || !grant) {
+    return null
+  }
+  // The protocol serves the entry document for the preview root.
+  return resolveDocPreviewCandidatePath(grant, target.relativePath || grant.entryRelativePath)
 }
 
 function isInsideRoot(

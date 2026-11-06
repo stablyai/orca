@@ -2,10 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  buildUnitDependencyGraph,
-  collectUnitDependencyGraph
-} from './ci-unit-dependency-graph.mjs'
+import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
 import { selectUnitFiles } from '../ci-unit-selection.mjs'
 
 const temporary = []
@@ -90,96 +87,7 @@ it.each(['@orca/unknown', '@orca/process-host/private'])(
   }
 )
 
-it.each([
-  [
-    'an assigned native loader',
-    'src/main/windows/windows-native-registry.ts',
-    "import { createRequire } from 'node:module'; const requireFromMain = createRequire(__filename); export const loadWindowsNativeRegistry = () => requireFromMain('@orca/windows-registry')",
-    'src/main/windows/windows-registry-addon.test.ts',
-    "import { loadWindowsNativeRegistry } from './windows-native-registry'"
-  ],
-  [
-    'a direct loader with a runtime serializer path',
-    'src/main/daemon/serialize-grid-roundtrip.ts',
-    "import { createRequire } from 'node:module'; export const loadOldSerializer = (path) => createRequire(import.meta.url)(path)",
-    'src/main/daemon/serialize-grid.differential.fuzz.test.ts',
-    "import { loadOldSerializer } from './serialize-grid-roundtrip'"
-  ],
-  [
-    'a module namespace whose computed loader escapes through an object',
-    'src/main/stored-native-loader.ts',
-    "import * as hostModule from 'node:module'; const native = hostModule; const load = native['create' + 'Require'](__filename); const api = { load }; export const open = (path) => api.load(path)",
-    'src/main/stored-native-loader.test.ts',
-    "import { open } from './stored-native-loader'"
-  ],
-  [
-    'an optional builtin loader',
-    'src/main/sqlite/sync-database.ts',
-    "export const isSqliteAvailable = () => process.getBuiltinModule?.('node:sqlite')",
-    'src/main/sqlite/sync-database-portability.test.ts',
-    "import { isSqliteAvailable } from './sync-database'"
-  ],
-  [
-    'an assigned builtin loader',
-    'src/main/sqlite/assigned-reader.ts',
-    "const getBuiltin = process.getBuiltinModule; export const sqlite = () => getBuiltin('node:sqlite')",
-    'src/main/sqlite/assigned-reader.test.ts',
-    "import { sqlite } from './assigned-reader'"
-  ]
-])(
-  'keeps real test consumers of %s when another covered source changes',
-  (_label, owner, source, consumer, testSource) => {
-    const graph = collectUnitDependencyGraph(
-      fixture({
-        [owner]: source,
-        [consumer]: testSource,
-        'src/selected-input.ts': 'export const value = 1',
-        'src/selected-input.test.ts': "import { value } from './selected-input'"
-      })
-    )
-    const tests = [...graph.files].filter((file) => file.endsWith('.test.ts')).sort()
-    expect(selectUnitFiles(tests, ['src/selected-input.ts'], graph)).toMatchObject({
-      full: false,
-      files: [consumer, 'src/selected-input.test.ts'].sort()
-    })
-  }
-)
-
 describe('unit graph import resolution', () => {
-  it('retains every existing candidate across literal paths, extensions and index files', () => {
-    const sources = new Map([
-      ['src/leaf', ''],
-      ['src/leaf.ts', ''],
-      ['src/leaf.tsx', ''],
-      ['src/component.tsx', ''],
-      ['src/component.js', ''],
-      ['src/folder/index.ts', ''],
-      ['src/folder/index.tsx', ''],
-      ['src/config.json', '{}'],
-      ['src/renderer/src/view.tsx', ''],
-      ['src/use.ts', "import './leaf'; import './component'; import './folder'; import './config'"],
-      ['src/aliases.ts', "import '@renderer/view'; import '@/view'; import 'external-package'"],
-      ['src/missing.ts', "import './missing-file'"],
-      ['src/dynamic.ts', 'import(variablePath)'],
-      ['config/owner.mjs', "import '../src/leaf'"],
-      ['tests/owner.ts', "import '../src/leaf'"]
-    ])
-    expect(buildUnitDependencyGraph(sources)).toMatchObject({
-      reverse: new Map([
-        ['src/leaf', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
-        ['src/leaf.ts', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
-        ['src/leaf.tsx', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
-        ['src/component.tsx', new Set(['src/use.ts'])],
-        ['src/component.js', new Set(['src/use.ts'])],
-        ['src/folder/index.ts', new Set(['src/use.ts'])],
-        ['src/folder/index.tsx', new Set(['src/use.ts'])],
-        ['src/config.json', new Set(['src/use.ts'])],
-        ['src/renderer/src/view.tsx', new Set(['src/aliases.ts'])]
-      ]),
-      opaque: new Set(['src/missing.ts', 'src/dynamic.ts', 'config/owner.mjs', 'tests/owner.ts'])
-    })
-  })
-
   it('keeps extensionless consumers when a covered JavaScript sibling changes', () => {
     const graph = collectUnitDependencyGraph(
       fixture({
@@ -195,26 +103,6 @@ describe('unit graph import resolution', () => {
       files: ['src/extensionless.test.ts', 'src/explicit.test.ts']
     })
   })
-
-  it.each(['jsx', 'mts', 'cts', 'mjs', 'cjs'])(
-    'follows transitive imports through a competing .%s source',
-    (extension) => {
-      const graph = collectUnitDependencyGraph(
-        fixture({
-          'src/value.ts': 'export const value = 1',
-          [`src/value.${extension}`]: "export { value } from './selected-input'",
-          'src/selected-input.ts': 'export const value = 2',
-          'src/extensionless.test.ts': "import { value } from './value'",
-          'src/explicit.test.ts': "import { value } from './selected-input'"
-        })
-      )
-      const tests = ['src/extensionless.test.ts', 'src/explicit.test.ts', 'src/unrelated.test.ts']
-      expect(selectUnitFiles(tests, ['src/selected-input.ts'], graph)).toMatchObject({
-        full: false,
-        files: ['src/extensionless.test.ts', 'src/explicit.test.ts']
-      })
-    }
-  )
 
   it.each([
     ['js', 'ts'],

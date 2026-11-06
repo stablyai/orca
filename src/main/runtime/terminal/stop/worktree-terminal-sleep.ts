@@ -2,12 +2,14 @@ import { OrcaRuntimeWithAgentGeneratedTabTitles } from '../layout/agent-generate
 import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
-} from '../../runtime-worktree-path-identity'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-types'
-import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from '../../orca-runtime-postlude'
-import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+
+import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
+// Renderer waits 15s; release the spawn fence and return verified failure before its deadline.
+const WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS = 12_000
 
 export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithAgentGeneratedTabTitles {
   protected async sleepResolvedWorktreeTerminals(

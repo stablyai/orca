@@ -1,5 +1,5 @@
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
-import type { RemoveManagedWorktreeOptions } from './runtime-worktree-selection'
+import type { RemoveManagedWorktreeOptions } from './workspaces/catalog/runtime-worktree-selection'
 
 type RemovalRuntimePrototype = {
   removeManagedWorktree: (

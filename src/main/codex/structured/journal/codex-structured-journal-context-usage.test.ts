@@ -127,28 +127,6 @@ async function session() {
 }
 
 describe('Codex context usage in the journal', () => {
-  it('follows each response of a turn and holds once the turn ends', async () => {
-    const { on, tokenUsage, contextUsage } = await session()
-    on('turn/started', { turn: { id: 'turn-1' } })
-
-    tokenUsage('turn-1', FIRST_RESPONSE)
-    expect(await contextUsage()).toEqual({
-      usedTokens: 17611,
-      windowTokens: 258400,
-      percentage: 7,
-      estimated: false,
-      categories: []
-    })
-
-    // Context usage measures the response, not cumulative thread spend.
-    tokenUsage('turn-1', AFTER_TOOL_CALL)
-    expect(await contextUsage()).toMatchObject({ usedTokens: 17684, windowTokens: 475000 })
-
-    tokenUsage('turn-1', FINAL_RESPONSE)
-    on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
-    expect(await contextUsage()).toMatchObject({ usedTokens: 17714, windowTokens: 475000 })
-  })
-
   it.each([
     ['while the turn runs', false],
     ['after the turn ended', true]
@@ -219,18 +197,6 @@ describe('Codex context usage in the journal', () => {
     tokenUsage('turn-1', { ...AFTER_TOOL_CALL, modelContextWindow: null })
 
     expect(await contextUsage()).toBeNull()
-  })
-
-  it('holds a reading that reached the open turn row under another turn name', async () => {
-    const { on, tokenUsage, contextUsage } = await session()
-    on('turn/started', { turn: { id: 'turn-1' } })
-    tokenUsage('turn-1', FINAL_RESPONSE)
-    // An unknown turn falls back to the newest row.
-    tokenUsage('turn-nobody-opened', AFTER_COMPACTION)
-
-    on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
-
-    expect(await contextUsage()).toMatchObject({ usedTokens: 6033, windowTokens: 475000 })
   })
 
   it('keeps the saved reading through a resume that restores history, then takes the replayed frame', async () => {

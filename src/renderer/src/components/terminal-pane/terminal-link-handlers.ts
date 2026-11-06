@@ -2,7 +2,7 @@ import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { extractTerminalFileLinkReadings } from '../../../../shared/terminal/links/terminal-links'
-import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
+import { preferLongestNonOverlappingMatches } from '../../../../shared/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
@@ -120,7 +120,8 @@ export function createFilePathLinkProvider(
             worktreeId,
             worktreePath,
             runtimeEnvironmentId,
-            wslDistro: deps.wslDistro
+            wslDistro: deps.wslDistro,
+            homeOnHost: true
           })
           if (!target) {
             return null

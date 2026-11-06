@@ -1,4 +1,4 @@
-import type { Code, List, PhrasingContent, RootContent, Table } from 'mdast'
+import type { Code, List, Nodes, PhrasingContent, RootContent, Table } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
 import {
   Pressable,
@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
+import { mobileMathMeasureText } from './mobile-markdown-math-nodes'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'
 import { mobileMarkdownVisualPlaceholderIndex } from './mobile-markdown-visual-lines'
 import {
@@ -19,9 +20,12 @@ import {
 } from './mobile-markdown-inline'
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
 import { MarkdownText } from './mobile-markdown-text'
-import { codeFenceClosed, plainText } from './mobile-markdown-tree'
+import { codeFenceClosed } from './mobile-markdown-code-nodes'
+import { plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
+import { MobileMarkdownDetails } from './MobileMarkdownDetails'
+import { MobileMarkdownMath } from './MobileMarkdownMath'
 import { translate } from '../i18n/mobile-i18n'
 import { pressedStyle } from '../theme/mobile-theme'
 
@@ -63,6 +67,7 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
       code={node.value}
       language={node.lang ?? undefined}
       textScale={ctx.textScale}
+      sourceLine={node.position?.start.line}
     />
   )
 }
@@ -91,11 +96,19 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
   )
 }
 
+/** What a cell draws, with each formula as wide as it typesets rather than as its TeX. */
+function cellText(node: Nodes): string {
+  if (node.type === 'inlineMath') {
+    return mobileMathMeasureText(node.value)
+  }
+  return 'children' in node ? node.children.map(cellText).join('') : plainText(node)
+}
+
 function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): ReactNode {
   const rows = node.children.map((row) => row.children)
   // Rows lay out independently, so a shared width per column is what lines them up.
   const columnWidths = mobileMarkdownTableColumnWidths(
-    rows.map((cells) => cells.map((cell) => plainText(cell))),
+    rows.map((cells) => cells.map(cellText)),
     ctx.textScale
   )
   // A table keeps its own dark surface, so its spans keep the default palette.
@@ -241,7 +254,7 @@ function renderBlock(
           <Pressable
             key={key}
             style={({ pressed }) => [styles.imageFrame, pressed && pressedStyle]}
-            onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
+            onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
             <NativeText style={styles.link}>
@@ -297,12 +310,38 @@ function renderBlock(
       )
     case 'code':
       return renderCode(node, key, ctx)
+    case 'math':
+      return (
+        <MobileMarkdownMath
+          key={key}
+          value={node.value}
+          source={node.source}
+          display
+          githubSizes={!ctx.chatMath}
+          style={text.style}
+        />
+      )
     case 'list':
       return renderList(node, key, ctx, depth)
     case 'table':
       return renderTable(node, key, ctx)
     case 'thematicBreak':
       return <View key={key} style={styles.rule} />
+    case 'details':
+      return (
+        <MobileMarkdownDetails
+          key={key}
+          open={node.open}
+          summaryStyle={text.style}
+          summary={
+            node.summary.length > 0
+              ? renderInline(node.summary, ctx)
+              : translate('pullRequest.markdownBlocks.details', 'Details')
+          }
+        >
+          {renderBlocks(node.children, ctx, text, depth + 1)}
+        </MobileMarkdownDetails>
+      )
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
@@ -326,6 +365,7 @@ function renderBlock(
     case 'image':
     case 'imageReference':
     case 'inlineCode':
+    case 'inlineMath':
     case 'link':
     case 'linkReference':
     case 'strong':

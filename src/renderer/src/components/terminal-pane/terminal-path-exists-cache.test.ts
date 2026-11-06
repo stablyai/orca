@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { RECENT_PATH_ANSWERS_MAX } from '../../../../shared/recent-path-answers'
 import {
-  TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES,
   getTerminalPathExistsCacheKey,
   readTerminalPathExistence,
   startTerminalPathExistsProbe,
@@ -71,13 +71,13 @@ describe('terminal path-exists cache', () => {
 
   it('bounds the cache to the max entry count, evicting the oldest', () => {
     const cache: TerminalPathExistsCache = new Map()
-    for (let i = 0; i < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; i++) {
+    for (let i = 0; i < RECENT_PATH_ANSWERS_MAX; i++) {
       writeTerminalPathExistence(cache, `k-${i}`, true, startTerminalPathExistsProbe(1))
     }
-    expect(cache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
+    expect(cache.size).toBe(RECENT_PATH_ANSWERS_MAX)
     expect(readTerminalPathExistence(cache, 'k-0', 2)).toBe(true)
     writeTerminalPathExistence(cache, 'k-fresh', true, startTerminalPathExistsProbe(2))
-    expect(cache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
+    expect(cache.size).toBe(RECENT_PATH_ANSWERS_MAX)
     expect(cache.has('k-0')).toBe(true)
     expect(cache.has('k-1')).toBe(false)
     expect(cache.has('k-fresh')).toBe(true)

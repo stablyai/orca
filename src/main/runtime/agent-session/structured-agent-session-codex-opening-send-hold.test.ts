@@ -32,7 +32,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 // Drive the real host/journal/adapter and client projection with fake Codex 0.157; sends behind an unopened turn wait to steer into it.
 
 import type * as CodexTurnOpenWait from '../../codex/structured/turns/codex-structured-turn-open-wait'

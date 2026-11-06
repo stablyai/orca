@@ -8,7 +8,7 @@ import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
-} from '../../../../structured-worker-authority'
+} from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */

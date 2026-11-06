@@ -2,13 +2,16 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
-import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { installDaemonProvider, replaceDaemonProvider } from '../daemon/daemon-provider-state'
-import type { DaemonIdleRetirementResult } from '../daemon/daemon-pty-runtime-state'
-import { PROTOCOL_VERSION } from '../daemon/types'
+import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
+import {
+  installDaemonProvider,
+  replaceDaemonProvider
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import type { DaemonIdleRetirementResult } from '../daemon/providers/adapter/daemon-pty-runtime-state'
+import { PROTOCOL_VERSION } from '../daemon/protocol/daemon-protocol-version'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
-import { restartDaemon } from '../daemon/daemon-provider-restart'
+import { restartDaemon } from '../daemon/providers/lifecycle/daemon-provider-restart'
 import { bindOrcadIdleShutdown, beginOrcadIdleExit } from './orcad-managed-idle-exit-host'
 import { installOrcadManagedIdleExit } from './orcad-managed-idle-exit'
 import type * as ManagedIdleExit from './orcad-managed-idle-exit'
@@ -18,7 +21,7 @@ const { hasLoadedProviders } = vi.hoisted(() => ({ hasLoadedProviders: vi.fn(() 
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({ hasLoadedProviders })
 }))
-vi.mock('../daemon/daemon-provider-restart', () => ({ restartDaemon: vi.fn() }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-restart', () => ({ restartDaemon: vi.fn() }))
 vi.mock('./orcad-idle-stop-record', () => ({
   consumeOrcadIdleStopRecord: vi.fn(() => null),
   discardOrcadIdleStopRecord: vi.fn(),

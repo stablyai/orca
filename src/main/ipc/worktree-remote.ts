@@ -1,5 +1,5 @@
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
-import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
+import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
 import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
@@ -46,11 +46,11 @@ import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
-  OrcaRuntimeService,
   RemoteFetchResult,
   RemoteTrackingBase
-} from '../runtime/orca-runtime'
+} from '../runtime/repositories/runtime-remote-fetch-controller'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
 import {
@@ -94,6 +94,12 @@ import {
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
+import { assertParentInAnotherStore } from '../runtime/workspaces/lineage/cross-store-parent-store-check'
+import {
+  crossStoreManualLineage,
+  recordCreatedWorktreeLineage
+} from '../runtime/workspaces/lineage/runtime-worktree-lineage-recording'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -228,6 +234,7 @@ export function assertAttachableParentWorkspace(
 type CreatedWorktreeLineageRecords = {
   lineage: CreateWorktreeResult['lineage']
   workspaceLineage: CreateWorktreeResult['workspaceLineage']
+  crossStoreLineage?: CreateWorktreeResult['crossStoreLineage']
 }
 
 const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
@@ -241,6 +248,17 @@ export function recordWorkspaceLineageForCreatedWorktree(
   worktree: Worktree,
   createdAt: number
 ): CreatedWorktreeLineageRecords {
+  if (args.crossStoreParent) {
+    const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      crossStoreManualLineage(args.crossStoreParent)
+    )
+    for (const warning of warnings) {
+      console.warn(`[worktree-create] ${warning.message}`)
+    }
+    return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
+  }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
   }
@@ -319,6 +337,18 @@ export function recordWorkspaceLineageForCreatedWorktree(
     createdAt
   })
   return { lineage, workspaceLineage }
+}
+
+/** Same refusal as the RPC create, before any checkout exists: a well-formed ref from another store. */
+async function assertCreatableCrossStoreParent(
+  runtime: OrcaRuntimeService,
+  parent: NonNullable<CreateWorktreeArgs['crossStoreParent']>
+): Promise<void> {
+  // IPC args are unchecked.
+  if (!CrossStoreParentRefSchema.safeParse(parent).success) {
+    throw new Error('The parent on another machine is malformed.')
+  }
+  await assertParentInAnotherStore(parent, () => runtime.readStoreInstallationId())
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
@@ -958,6 +988,10 @@ async function performLocalWorktreeCreate(
   pathClaim: WorktreeCreatePathClaim,
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
+  // Why: no await without a ref, so the common create keeps its synchronous probe start.
+  if (args.crossStoreParent !== undefined) {
+    await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
+  }
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,
@@ -1622,12 +1656,11 @@ async function performLocalWorktreeCreate(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   onWorkspaceCreated?.(worktreeId)
-  const { lineage: worktreeLineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
-    store,
-    args,
-    worktree,
-    now
-  )
+  const {
+    lineage: worktreeLineage,
+    workspaceLineage,
+    crossStoreLineage
+  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
   // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
     registerWorktreeRootsForRepo(
@@ -1772,6 +1805,7 @@ async function performLocalWorktreeCreate(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
+    ...(crossStoreLineage ? { crossStoreLineage } : {}),
     ...(provisionedByHost
       ? {}
       : {

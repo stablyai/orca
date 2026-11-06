@@ -10,7 +10,7 @@ import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS,
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS
-} from '../../src/main/runtime/mobile-session-tabs-agent-status-heartbeat'
+} from '../../src/main/runtime/session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { applyFreshWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'

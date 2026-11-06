@@ -1,12 +1,12 @@
 import { createPaneBindingStore } from './pty-launch-race-test-fixture'
-import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   SessionNotFoundError,
   TerminalSessionOwnerUnverifiedError
-} from '../../daemon/daemon-errors'
+} from '../../daemon/protocol/daemon-errors'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './register-handlers'

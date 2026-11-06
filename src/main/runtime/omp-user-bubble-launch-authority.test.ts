@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
-import { committingSpawn } from './bind-first-pane.test-fixture'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 // #10923: OMP user bubbles emit OSC 133 B C D;0; treating it as shell completion retires live hook/session authority.
 const OMP_TRANSCRIPT = readFileSync(

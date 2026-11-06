@@ -4401,7 +4401,10 @@
             "fallbackServerName": "the server",
             "connectionLostTitle": "Reconnecting to {{server}}",
             "connectionLostBody": "The connection to the server dropped. Orca is retrying automatically, and terminals resume when it returns.",
-            "reattachingBody": "Orca is reattaching this terminal to {{server}} automatically."
+            "reattachingBody": "Orca is reattaching this terminal to {{server}} automatically.",
+            "serverReplacedTitle": "This host runs a different Orca server",
+            "serverReplacedBody": "Orca connects to the host as a different SSH user, or its server was reinstalled, so reconnecting can’t restore this terminal. Forget this server in Settings, then connect the SSH host to pair with its current server.",
+            "serverReplacedButton": "Open server settings"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Host unavailable",
@@ -5164,7 +5167,11 @@
             "update_required": "Update required",
             "update_required_summary": "Orca versions are not compatible",
             "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
-            "repair": "Re-pair…"
+            "repair": "Re-pair…",
+            "open_settings": "Open settings…",
+            "server_replaced": "Different server",
+            "server_replaced_summary": "This host now runs a different Orca server than the one this computer paired with",
+            "server_replaced_explanation": "Orca connects to the host as a different SSH user, or its server was reinstalled. In Settings › Remote Orca Servers, open the ⋯ menu on this server and choose Forget…, then connect the SSH host to pair with its current server."
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "Open interrupted chats available to resume",
@@ -6475,7 +6482,9 @@
         },
         "SidebarHeader": {
           "92154beb7e": "New workspace",
-          "addProject": "Add project"
+          "addProject": "Add project",
+          "expandAllProjects": "Expand all projects",
+          "collapseAllProjects": "Collapse all projects"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -6753,6 +6762,7 @@
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
+          "newChildWorktree": "New Child Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
           "deleteWorktree": "Delete Worktree",
@@ -6800,7 +6810,16 @@
           "childCount_one": "{{count}} child",
           "childCount_other": "{{count}} children",
           "groupProjectsRemained_one": "{{remaining}} of {{count}} contained project remained after deleting the group.",
-          "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group."
+          "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
+          "projectGroupRefreshScanFailed": "Could not scan this project group",
+          "projectGroupRefreshNoProjects": "No new projects found",
+          "projectGroupRefreshPartial": "Some new projects could not be added to the group",
+          "projectGroupRefreshIncomplete": "The folder scan stopped early; some new projects may not have been found",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
+          "projectGroupRefreshing": "Refreshing {{group}}…",
+          "refreshProjectGroup": "Refresh projects",
+          "hostServerReplaced": "Different server: forget it, then connect"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -9069,7 +9088,8 @@
           "pairedTwice": "Same server as {{value0}}, paired twice. Remove one so its projects can be edited.",
           "removeDefaultServerDescription": "This server is the default host for new projects. Choose another one under New projects open on before removing it. Existing host sessions are left alone.",
           "connectedNewProjectsHint": "Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.",
-          "removeDefaultServerBlocked": "This server is the default host for new projects. Choose another one under New projects open on before removing it."
+          "removeDefaultServerBlocked": "This server is the default host for new projects. Choose another one under New projects open on before removing it.",
+          "serverReplaced": "{{value0}} is not the Orca server this computer paired with: Orca connects to the host as a different SSH user, or its server was reinstalled. Open the ⋯ menu here and choose Forget…, then connect the SSH host to pair with its current server."
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -12918,6 +12938,9 @@
           "unsupportedUnknown": "This host isn’t supported by this version of Orca. To keep using it, install an older version of Orca.",
           "tunnelUnsupported": "This host isn’t supported by this version of Orca: its SSH server doesn’t allow port forwarding, and Orca couldn’t reach its server through the SSH session either. To keep using it, install an older version of Orca.",
           "setupRetry": "Orca couldn’t start its server on this host. Try connecting again.",
+          "setupFreeHostSpace": "This host doesn’t have enough free disk space for Orca to keep a backup of its server data while starting it. Free up space on the host, then connect again.",
+          "setupStopUnmanagedRuntime": "An Orca server this app didn’t start still appears to be using this host’s Orca data. Stop it on the host, then connect again. This host’s Details, in Settings > SSH Hosts, names its process.",
+          "setupSeeDetails": "Orca couldn’t start its server on this host. The cause is in this host’s Details, in Settings > SSH Hosts.",
           "moveHeld": "Orca paused moving this host’s projects to its Orca server because it couldn’t confirm the server’s copy. Nothing is lost: the host keeps its projects and stays locked until the move finishes. Connect again to resume. If the server can’t come back, stop or forget it in Settings > Orca on your SSH hosts.",
           "olderTerminalsBridged": "Orca isn’t set up on this host yet: terminals started by an older version of Orca are still running in this host’s projects. They keep working here. Close them or end them on the host, then reconnect.",
           "olderTerminalsUncounted": "Terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.",
@@ -17516,6 +17539,8 @@
               "25349b66fc": "New Markdown File",
               "784812ca24": "Open a browser tab in the active workspace.",
               "892bfa9339": "New Browser Tab",
+              "splitChatRight": "Split Chat Right",
+              "splitChatDown": "Split Chat Down",
               "verbs": {
                 "newBrowser": "new browser",
                 "newBrowserTab": "new browser tab",
@@ -17529,6 +17554,10 @@
                 "newTerminal": "new terminal",
                 "newTerminalTab": "new terminal tab",
                 "newShell": "new shell",
+                "splitChatRight": "split chat right",
+                "splitChatDown": "split chat down",
+                "chatPaneRight": "chat pane right",
+                "chatPaneBelow": "chat pane below",
                 "terminalTab": "terminal tab",
                 "createWorktree": "create worktree",
                 "addWorktree": "add worktree",
@@ -17539,20 +17568,10 @@
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
                 "newQuickCommand": "new quick command",
-                "splitChatRight": "split chat right",
-                "newChatRight": "new chat right",
-                "chatPaneRight": "chat pane right",
-                "splitChatDown": "split chat down",
-                "newChatBelow": "new chat below",
-                "chatPaneBelow": "chat pane below",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
                 "browserSplit": "browser split"
               },
-              "splitChatRight": "Split Chat Right",
-              "splitChatRightDescription": "Open a new chat in a split pane to the right.",
-              "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open a new chat in a split pane below.",
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
               "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
             }
@@ -19245,6 +19264,7 @@
         "promptCopyFailed": "Failed to copy prompt"
       },
       "prCheckCounts": {
+        "noCheckDetails": "No check details available",
         "noChecksFound": "No checks found",
         "checksFailing_one": "{{count}} check failing",
         "checksFailing_other": "{{count}} checks failing",
@@ -20300,7 +20320,6 @@
         "unnamedSender": "an agent",
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
-        "showMore": "Show more",
         "startedWorker": "Started worker",
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",
@@ -20603,7 +20622,26 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
-      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
+      "usage": {
+        "description": "Show usage for this chat’s Codex account",
+        "loading": "Loading Codex usage…",
+        "failed": "Codex usage couldn’t be loaded. Try again.",
+        "codexVersion": "This Codex version doesn’t report usage. Update Codex.",
+        "apiKeyAuth": "Codex usage isn’t available with an API key. Sign in to Codex with a ChatGPT account to view usage.",
+        "title": "Codex usage",
+        "account": "Account used by this chat",
+        "retry": "Retry",
+        "resetFailed": "Codex limits couldn’t be reset. Try again.",
+        "confirmReset": "This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.",
+        "sharedAccount": "Current shared account",
+        "outcome": {
+          "reset": "Codex limits were reset.",
+          "nothingToReset": "Nothing to reset right now.",
+          "noCredit": "No Codex reset credit is left on this account.",
+          "alreadyRedeemed": "That reset credit was already used."
+        }
+      }
     },
     "tab": {
       "bar": {
@@ -21018,7 +21056,7 @@
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message, and with nothing typed steers the first waiting card into the running turn. Messages with images wait as cards too.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -21237,13 +21275,20 @@
           "body": "Click + to start an agent, a terminal, or a browser tab."
         },
         "splitChat": {
-          "title": "Run two chats side by side",
           "body": "Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.",
-          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs.",
-          "action": "Split chat"
+          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs."
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
+        }
+      },
+      "badgeNew": "New",
+      "projectsCollapseAll": {
+        "intro": {
+          "title": "Collapse all projects at once",
+          "body": "Press {sidebar.projects.toggleCollapse}, click this button, or {{modifier}}-click any project header.",
+          "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
+          "action": "Got it"
         }
       }
     }
@@ -23126,7 +23171,8 @@
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
-      "viewPlugins": "Open Plugins"
+      "viewPlugins": "Open Plugins",
+      "sidebarProjectsToggleCollapse": "Collapse / Expand All Projects"
     },
     "group": {
       "global": "Global",
@@ -23317,7 +23363,8 @@
       "disconnected": "Disconnected",
       "error": "Needs attention",
       "repair": "Re-pair needed",
-      "update": "Update needed"
+      "update": "Update needed",
+      "serverReplaced": "Different server"
     },
     "compat": {
       "compatible": "Runtime client and server are compatible.",
@@ -23896,5 +23943,25 @@
   },
   "checks": {
     "rerunUnsuccessful": "Rerun unsuccessful"
+  },
+  "macosUpdateRequirement": {
+    "title": "Orca updates now need macOS {{macos}}",
+    "description": "Orca {{version}} requires macOS {{macos}} or later. This version keeps working, but it won’t get new updates on this Mac.",
+    "checking": "Checking whether this Mac can upgrade…",
+    "upgradeDescription": "Your Mac can upgrade. Update macOS to get the latest Orca.",
+    "unsupportedDescription": "Apple doesn’t support macOS {{macos}} on this Mac.",
+    "unknownDescription": "We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.",
+    "whyTitle": "Why is this changing?",
+    "whyIntro": "We updated Electron, the foundation Orca runs on, to bring:",
+    "whySecurity": "Ongoing security fixes from Electron and Chromium.",
+    "whyPerformance": "Faster startup and more efficient native API calls.",
+    "whySystemApis": "Support for current macOS notification APIs and secure Keychain storage.",
+    "whyRequirement": "That newer foundation requires macOS {{macos}} or later.",
+    "dismiss": "Got it",
+    "checkingAction": "Checking your Mac…",
+    "updateAction": "How to update macOS",
+    "discussionAction": "Join the discussion",
+    "checkAction": "Check compatibility",
+    "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
   }
 }
