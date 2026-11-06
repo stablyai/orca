@@ -11,6 +11,7 @@ type Props = {
   embedded: boolean
   worktreeLabel: string
   ioBusy: boolean
+  refreshing: boolean
   onBack: () => void
   // Dock dismissal does not pop a route; keep it separate from Back.
   onClose: () => void
@@ -28,6 +29,7 @@ export function MobileSourceControlHeader({
   embedded,
   worktreeLabel,
   ioBusy,
+  refreshing,
   onBack,
   onClose,
   onRefresh,
@@ -88,6 +90,7 @@ export function MobileSourceControlHeader({
         title={t('sourceControl.header.title', 'Source Control')}
         subtitle={worktreeLabel}
         accessory={accessory}
+        refreshing={refreshing}
         trailing={
           <NavBarButton
             ref={moreRef}

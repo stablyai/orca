@@ -34,6 +34,11 @@ const PULSE: Keyframe[] = [
   { opacity: 1 }
 ]
 const PULSE_TIMING: KeyframeAnimationOptions = { duration: 2000 }
+const SWEEP: Keyframe[] = [{ transform: 'translateX(-100%)' }, { transform: 'translateX(360%)' }]
+const SWEEP_TIMING: KeyframeAnimationOptions = {
+  duration: 1400,
+  easing: 'cubic-bezier(0.45, 0, 0.55, 1)'
+}
 
 export function useWorkingRingRotation(active: boolean): WorkingMotion<never> {
   return { ref: useElementLoop(active, SPIN, SPIN_TIMING), style: undefined }
@@ -41,4 +46,9 @@ export function useWorkingRingRotation(active: boolean): WorkingMotion<never> {
 
 export function useWorkingPulse(active: boolean): WorkingMotion<never> {
   return { ref: useElementLoop(active, PULSE, PULSE_TIMING), style: undefined }
+}
+
+// Percent keyframes follow the segment's own width, so the page needs no layout pass.
+export function useWorkingSweep(active: boolean): WorkingMotion<never> & { onLayout: undefined } {
+  return { ref: useElementLoop(active, SWEEP, SWEEP_TIMING), style: undefined, onLayout: undefined }
 }

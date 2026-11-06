@@ -9,6 +9,18 @@ export const CALM_STATUS_MIN_VISIBLE_MS = 2_000
 // A quick redrop remains part of the same outage.
 export const CALM_STATUS_HEALTHY_HOLD_MS = 1_000
 
+export type CalmStatusSchedule = {
+  revealDelayMs: number
+  minVisibleMs: number
+  healthyHoldMs: number
+}
+
+const CALM_STATUS_SCHEDULE: CalmStatusSchedule = {
+  revealDelayMs: CALM_STATUS_REVEAL_DELAY_MS,
+  minVisibleMs: CALM_STATUS_MIN_VISIBLE_MS,
+  healthyHoldMs: CALM_STATUS_HEALTHY_HOLD_MS
+}
+
 export type CalmStatusReveal = {
   downSince: number | null
   shownAt: number | null
@@ -36,18 +48,19 @@ export function stepCalmStatusReveal(
     now: number
     /** An outage start another observer already saw; the clock continues from it. */
     since?: number | null
-  }
+  },
+  schedule: CalmStatusSchedule = CALM_STATUS_SCHEDULE
 ): CalmStatusStep {
   const { now } = input
   if (input.down) {
     const downSince = previous.downSince ?? Math.min(input.since ?? now, now)
     const shownAt =
       previous.shownAt ??
-      (input.immediate || now - downSince >= CALM_STATUS_REVEAL_DELAY_MS ? now : null)
+      (input.immediate || now - downSince >= schedule.revealDelayMs ? now : null)
     return {
       next: { downSince, shownAt, healthySince: null },
       visible: shownAt !== null,
-      recheckInMs: shownAt === null ? downSince + CALM_STATUS_REVEAL_DELAY_MS - now : null
+      recheckInMs: shownAt === null ? downSince + schedule.revealDelayMs - now : null
     }
   }
   if (previous.downSince === null) {
@@ -55,8 +68,8 @@ export function stepCalmStatusReveal(
   }
   const healthySince = previous.healthySince ?? now
   const hideAt = Math.max(
-    healthySince + CALM_STATUS_HEALTHY_HOLD_MS,
-    previous.shownAt === null ? 0 : previous.shownAt + CALM_STATUS_MIN_VISIBLE_MS
+    healthySince + schedule.healthyHoldMs,
+    previous.shownAt === null ? 0 : previous.shownAt + schedule.minVisibleMs
   )
   if (now >= hideAt) {
     return { next: CALM_STATUS_IDLE, visible: false, recheckInMs: null }

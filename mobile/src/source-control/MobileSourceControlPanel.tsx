@@ -45,6 +45,7 @@ import {
   type MobilePrTabOpeners
 } from './use-mobile-source-control-pr-tab'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
+import { useHostRefreshHint } from '../query/host-refresh-hint'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -273,11 +274,14 @@ export function MobileSourceControlPanel({
       : null
   const prWebNumber =
     prController.prSidebarState.kind === 'ready' ? prController.prSidebarState.data.pr.number : null
+  // Only Changes reads through the query layer so far; the PR tab keeps its own loading UI.
+  const changesRefreshing = useHostRefreshHint(hostId, { worktree: worktreeId })
   const header = (
     <MobileSourceControlHeader
       embedded={embedded}
       worktreeLabel={worktreeLabel}
       ioBusy={ioBusy}
+      refreshing={activeTab === 'changes' && changesRefreshing}
       onBack={onBack}
       onClose={onClose}
       onRefresh={onRefresh}
