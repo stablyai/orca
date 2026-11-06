@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remot
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { getEagerPtyBufferHandle } from '../pty-dispatcher'
+import { getEagerPtyBufferHandle } from '../pty-transport/delivery/pty-dispatcher'
 
 import {
   pendingSpawnByPaneKey,

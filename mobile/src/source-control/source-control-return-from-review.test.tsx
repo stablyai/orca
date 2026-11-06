@@ -2,16 +2,16 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  documentQueryClient,
+  settleQueryNotifications
+} from '../test-support/rpc-recording/hook-mount'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 
 const focus = vi.hoisted(() => ({ current: true }))
 vi.mock('expo-router', () => ({
-  useFocusEffect: (effect: () => void) =>
-    useEffect(() => {
-      if (focus.current) {
-        effect()
-      }
-    }, [effect, focus.current])
+  useFocusEffect: (effect: () => (() => void) | void) =>
+    useEffect(() => (focus.current ? effect() : undefined), [effect, focus.current])
 }))
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
@@ -32,8 +32,11 @@ it('refreshes the staging area when returning from review without remounting the
   const read: { loaders: ReturnType<typeof useMobileSourceControlLoaders> | null } = {
     loaders: null
   }
+  const queries = documentQueryClient()
+  const screen = () => queries.wrap(createElement(Screen))
   function Screen() {
     read.loaders = useMobileSourceControlLoaders({
+      hostId: 'host',
       client,
       connState: 'connected',
       statusIdentityKey: 'host:wt',
@@ -52,10 +55,11 @@ it('refreshes the staging area when returning from review without remounting the
         rpcSuccess('status', { entries: [{ path: 'app.ts', status: 'modified', area }] })
       )
     )
+    await settleQueryNotifications()
   }
   try {
     await act(async () => {
-      tree = create(createElement(Screen))
+      tree = create(screen())
     })
     await resolveStatus('unstaged')
     expect(read.loaders?.screenState).toMatchObject({
@@ -64,12 +68,12 @@ it('refreshes the staging area when returning from review without remounting the
     })
     focus.current = false
     await act(async () => {
-      tree?.update(createElement(Screen))
+      tree?.update(screen())
     })
     const beforeReturn = client.requests.filter((request) => request.method === 'git.status').length
     focus.current = true
     await act(async () => {
-      tree?.update(createElement(Screen))
+      tree?.update(screen())
     })
     expect(client.requests.filter((request) => request.method === 'git.status')).toHaveLength(
       beforeReturn + 1

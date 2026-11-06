@@ -28,7 +28,7 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activate(...args)
 }))
 vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({

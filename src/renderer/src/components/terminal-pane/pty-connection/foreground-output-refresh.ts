@@ -10,12 +10,12 @@ import {
 import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
-import { registerPtyModelRestoreNeededHandler } from '../pty-model-restore-channel'
+import { registerPtyModelRestoreNeededHandler } from '../pty-transport/delivery/pty-model-restore-channel'
 import type { PtyModelRestoreNeededEvent } from '../../../../../shared/terminal/replay/pty-model-restore-marker'
 import {
   acquireHiddenRendererPtyDeliveryClaim,
   declareRendererPtyDeliveryVisible
-} from '../pty-renderer-delivery-claims'
+} from '../pty-transport/delivery/pty-renderer-delivery-claims'
 
 import { HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS } from './hidden-output-restore-limits'
 import {

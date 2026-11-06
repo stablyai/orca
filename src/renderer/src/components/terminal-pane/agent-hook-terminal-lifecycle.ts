@@ -1,4 +1,4 @@
-import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
+import type { AgentCompletionStatusSnapshot } from './agent-completion/agent-completion-coordinator-types'
 
 type AgentHookTerminalLifecycleHandler = (payload: AgentCompletionStatusSnapshot) => void
 

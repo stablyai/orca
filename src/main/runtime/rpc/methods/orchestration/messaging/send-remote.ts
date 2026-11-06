@@ -1,16 +1,20 @@
-import type { MessageType, OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerDispatchState } from '../../../../orchestration/types'
+import type {
+  MessageType,
+  WorkerDispatchState
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation-lifecycle-settlement'
-import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
+import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation/federation-lifecycle-settlement'
+import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
 import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
-import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
 
 type SendParamsInput = z.infer<typeof SendParams>
 

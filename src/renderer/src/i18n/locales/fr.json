@@ -629,7 +629,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
       "defaultSurfaceSetAllChat": "Tout mettre en Chat",
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
-      "sameAsChoice": "Identique à {{agent}} · {{choice}}"
+      "sameAsChoice": "Identique à {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat n’est pas encore disponible sous Windows : {{value0}} s’ouvre donc dans un terminal sur cet hôte. Les chats sur un hôte macOS ou Linux fonctionnent toujours."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -725,7 +726,7 @@
         "parakeetV2": "Anglais uniquement. Plus rapide que v3 avec une précision similaire. Ponctuation, majuscules et minuscules.",
         "zipformerBilingual": "Chinois + anglais avec alternance de langues. Streaming en temps réel à faible latence.",
         "paraformerBilingual": "Chinois (mandarin + dialectes) + anglais. Performant avec les accents et les variantes régionales du chinois.",
-        "zipformerStreamingEn": "Anglais uniquement. Modèle léger de 20 millions de paramètres, bon équilibre entre vitesse et taille.",
+        "zipformerStreamingEnRetired": "N’est plus proposé : il omet le début des phrases. Supprimez-le pour libérer de l’espace.",
         "zipformerStreamingZh": "Chinois uniquement. Modèle ultraléger de 14 millions de paramètres, idéal pour les appareils aux ressources limitées.",
         "zipformerStreamingKo": "Coréen uniquement. Streaming en temps réel à faible latence.",
         "parakeetJa": "Japonais uniquement. Entraîné sur plus de 35 000 heures de parole naturelle. Ponctuation incluse.",
@@ -933,7 +934,9 @@
         "cb4d287238": "Nom du serveur",
         "3affe7de3a": "Collez une URL d'appairage provenant d'un serveur Orca accessible depuis ce navigateur.",
         "e3bcd082ac": "Se connecter à Orca",
-        "mobileScopeRejected": "Ce code QR accorde un accès limité (mobile). Pour utiliser l'application web complète, ouvrez le lien d'accès navigateur depuis Paramètres → Environnements d'exécution → Partager ce serveur Orca → Nouveau lien."
+        "mobileScopeRejected": "Ce code QR accorde un accès limité (mobile). Pour utiliser l'application web complète, ouvrez le lien d'accès navigateur depuis Paramètres → Environnements d'exécution → Partager ce serveur Orca → Nouveau lien.",
+        "replaceSavedServer": "Ce lien se connecte à un autre serveur que « {{name}} » ({{endpoint}}). Connectez-vous uniquement si vous faites confiance au point de terminaison ci-dessous.",
+        "keepSavedServer": "Garder le serveur enregistré"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "L'historique des sessions d'agent n'est pas disponible pour cet hôte d'exécution.",
@@ -2111,6 +2114,7 @@
         "cb55b0390f": "Gérer",
         "4f9313984d": "Reviewers",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Impossible de charger cet élément. Actualisez pour réessayer.",
         "be3d291837": "Fichiers",
         "c996e2962c": "Conversation",
         "b3c156dd51": "Actualiser",
@@ -2779,7 +2783,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "En attente de relecture",
         "7698af5263": "À moi",
         "94f0339621": "Assignés à moi",
         "c2268a9982": "Tous",
@@ -4024,7 +4027,8 @@
             "chatNotInWsl": "Chat indisponible dans WSL",
             "agentsLoading": "Chargement des agents",
             "terminalListNeedsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de terminal",
-            "terminalListFailed": "Impossible de lister les agents de terminal de cet espace de travail"
+            "terminalListFailed": "Impossible de lister les agents de terminal de cet espace de travail",
+            "chatNotOnWindows": "Pas encore de chat sous Windows"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
@@ -8163,7 +8167,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Laisser les agents de codage contrôler l'émulateur mobile actif avec des commandes CLI Orca.",
           "f2f8d97bb6": "Contrôle de l'émulateur mobile par les agents",
-          "143961d031": "Appareil par défaut",
           "8aec2f99a0": "Actualiser la disponibilité des émulateurs",
           "ae1612c58c": "Disponibilité",
           "f9af91ea26": "Affiche l'action Nouvel émulateur mobile et permet aux agents de se rattacher à l'émulateur actif.",
@@ -8176,9 +8179,7 @@
           "d704fb5023": "Configuration requise",
           "06b06429c6": "Vérification de la prise en charge du SDK Android et du simulateur iOS.",
           "6d1483d4a0": "1 appareil émulateur détecté.",
-          "0a452d4d3b": "{{value0}} appareils émulateur détectés.",
-          "f62a1bb759": "Orca sélectionnera automatiquement un appareil émulateur une fois les appareils détectés.",
-          "b2fd62ea75": "Appareil par défaut pour les nouveaux onglets d'émulateur et les commandes d'attachement des agents. La sélection automatique privilégie un appareil déjà démarré."
+          "0a452d4d3b": "{{value0}} appareils émulateur détectés."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Aucune interface trouvée"
@@ -11782,7 +11783,7 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes.",
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
           "uiWarning": "Exécute le code de l’éditeur dans Orca pour afficher sa vue. Orca indique ce à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {
@@ -15853,7 +15854,6 @@
                 "06e10d7356": "Éteindre l'émulateur",
                 "e7a0d1897e": "Home",
                 "6bd8dff42a": "Pivoter",
-                "3d836b879c": "Choisir un émulateur",
                 "81b3571a07": "Se connecter",
                 "868c0f2938": "Traitement…"
               }
@@ -17587,6 +17587,8 @@
           "noRunUsageYet": "Aucune utilisation d'exécution pour l'instant",
           "noWorkspace": "Aucun espace de travail",
           "latestSavedOutput": "Dernière sortie enregistrée",
+          "fullOutputUnavailable": "Impossible de charger la sortie complète.",
+          "retryFullOutput": "Réessayer",
           "backToList": "Toutes les automatisations",
           "tableName": "Nom",
           "tableProject": "Projet",
@@ -19284,6 +19286,7 @@
         "notDoneGoalChangeIncomplete": "Impossible de terminer la modification de l’objectif. Consultez le chat."
       },
       "composer": {
+        "planMode": "Planifier",
         "imageUnavailable": "Aperçu indisponible",
         "send": "Envoyer",
         "alternateSteerHint": "{{shortcut}} pour envoyer maintenant",
@@ -20113,7 +20116,15 @@
         "hostUnavailable": "L’hôte de la pièce jointe est indisponible. Reconnectez-vous et réessayez.",
         "connectionChanged": "La connexion a changé. Fermez cette pièce jointe et rouvrez-la.",
         "readFailed": "Impossible de lire cette pièce jointe sur son hôte. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié."
-      }
+      },
+      "composerWorkspace": {
+        "copyFailed": "Échec de la copie",
+        "copyIdentity": "Copier {{value0}}",
+        "folder": "Dossier",
+        "mainCheckout": "Copie principale",
+        "worktree": "Worktree"
+      },
+      "explicitChatWindows": "Le chat de cet agent n’est pas encore disponible sous Windows. Ouvrez-le plutôt dans un terminal."
     },
     "tab": {
       "bar": {

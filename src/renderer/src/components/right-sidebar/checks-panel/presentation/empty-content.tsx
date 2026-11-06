@@ -8,7 +8,7 @@ import {
 } from './checks-panel-empty-state'
 import { openChecksPanelHostedReviewUrl } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { isRateLimitRefresh } from '../checks-panel-review-state-model'
-import { isMacPlatform } from '../../../terminal-pane/terminal-link-open-hints'
+import { isMacPlatform } from '../../../terminal-pane/links/terminal-link-open-hints'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'

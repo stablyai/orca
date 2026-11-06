@@ -234,6 +234,7 @@ export function AutomationsPageSurface({
         <AutomationRunDetailsPage
           automation={selected}
           run={selectedAutomationRunPage}
+          history={local.selectedAutomationRuns}
           relativeNow={relativeNow}
           workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
           viewState={runPage.selectedAutomationRunPageViewState}

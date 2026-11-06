@@ -10,6 +10,7 @@ import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 
 type DiffLoadingInput = {
+  hostId: string
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -22,9 +23,9 @@ type DiffLoadingInput = {
 // Retain loaded same-item diffs through transport blips so reconnect cannot erase the reader’s context.
 export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewDiffState {
   useMobileTranslation()
-  const { client, connState, worktreeId, currentItem, screenState, snapshotVersion } = input
+  const { hostId, client, connState, worktreeId, currentItem, screenState, snapshotVersion } = input
   const [diffState, setDiffState] = useState<ReviewDiffState>({ kind: 'idle' })
-  const { diffShowWhitespace } = useMobileSourceControlSettings(client, connState).settings
+  const { diffShowWhitespace } = useMobileSourceControlSettings(hostId, client, connState).settings
   // Depend on fields read, not screen-state identity, to avoid duplicate diff requests.
   const screenReady = screenState.kind === 'ready'
   const branchCompare = screenState.kind === 'ready' ? screenState.branchCompare : null

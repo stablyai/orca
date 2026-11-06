@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   executionHostId: 'local' as string
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
 

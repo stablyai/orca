@@ -10,7 +10,7 @@ import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-ab
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
+import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { CODEX_STRUCTURED_AGENT } from '../launch/codex-structured-agent-definition'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {
@@ -118,8 +118,8 @@ export async function renameCodexProviderSession(input: {
 export async function runCodexProviderAppServer<T>(
   record: AgentSessionRecord,
   invocation: CodexProviderInvocationDeps,
-  options: { timeoutMs: number; signal?: AbortSignal },
-  body: (rpc: CodexAppServerRpc) => Promise<T>
+  options: { timeoutMs: number; signal?: AbortSignal; experimentalApi?: boolean },
+  body: (rpc: CodexAppServerRpc, cwd: string) => Promise<T>
 ): Promise<T> {
   const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
   const cwd = await codexProviderProbeCwd(record, invocation)
@@ -144,6 +144,6 @@ export async function runCodexProviderAppServer<T>(
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
       ...options
     },
-    body
+    (rpc) => body(rpc, cwd)
   )
 }

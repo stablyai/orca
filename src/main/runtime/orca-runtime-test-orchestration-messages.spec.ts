@@ -1,5 +1,9 @@
 import { CrewChanges } from './orchestration/crew/crew-changes'
-import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
+import type {
+  MessagePriority,
+  MessageRow,
+  MessageType
+} from './orchestration/db/orchestration-records'
 
 // Test message semantics in memory to avoid unrelated SQLite native ABI failures.
 export class InMemoryOrchestrationMessages {

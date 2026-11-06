@@ -35,27 +35,30 @@ import {
   type StructuredAgentSessionState
 } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/journal-open'
-import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
-import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-journal.test-fixture'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/replay/journal-open'
+import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format'
+import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-write'
+import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import {
+  hostTestAttachParams,
+  HOST_TEST_SESSION as SESSION
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-legacy-journal.test-fixture'
 import {
   createRestTestRig,
-  REST_TEST_CALLER,
-  REST_TEST_SESSION as SESSION,
-  type RestTestRig
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+  REST_TEST_CALLER
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import type { RestTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
 import {
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
-} from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc-client.test-fixture'
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import { MAX_TIMER_DELAY_MS } from '../../src/shared/timer-delay'
 import {
   buildMobileNativeChatTransientData,

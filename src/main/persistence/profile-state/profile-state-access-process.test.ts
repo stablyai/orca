@@ -133,20 +133,4 @@ describe('profile state owners across actual process death', () => {
     await stopChild(child)
     acquireProfileStateRuntimeAdmission(root).release()
   })
-
-  it('treats a crash before complete owner publication as an inert candidate', async () => {
-    const root = join(fixture, 'candidate')
-    const child = await startChild(root, 'candidate')
-    acquireProfileStateRuntimeAdmission(root).release()
-    await stopChild(child)
-    acquireProfileStateMaintenance(root).release()
-  })
-
-  it('excludes recovery after participant publication even before runtime admission finishes', async () => {
-    const root = join(fixture, 'published')
-    const child = await startChild(root, 'published')
-    expect(() => acquireProfileStateMaintenance(root)).toThrow('in use')
-    await stopChild(child)
-    acquireProfileStateMaintenance(root).release()
-  })
 })

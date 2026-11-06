@@ -7,10 +7,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { PtyTransport } from '../terminal-pane/pty-transport-types'
+import type { PtyTransport } from '../terminal-pane/pty-transport/pty-transport-types'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
+import { createIpcPtyTransport } from '../terminal-pane/pty-transport/ipc/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
 
 // Exercise dormant panel interactions independently of the suspension gate.
