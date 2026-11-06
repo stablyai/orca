@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
@@ -252,7 +251,18 @@ it('creates a selected SSH-folder terminal through its paired server', async () 
   try {
     const store = createTestStore()
     seedStore(store, {
-      runtimeEnvironments: [{ id: 'paired-server' } as PublicKnownRuntimeEnvironment],
+      runtimeEnvironments: [
+        {
+          id: 'paired-server',
+          name: 'Paired server',
+          createdAt: 0,
+          updatedAt: 0,
+          lastUsedAt: null,
+          runtimeId: null,
+          preferredEndpointId: 'ws',
+          endpoints: []
+        }
+      ],
       activeWorktreeId: 'another-workspace',
       activeWorkspaceExecutionHostId: 'local',
       folderWorkspaces: [{ ...MIXED_FOLDER, connectionId: 'box', executionHostId: 'ssh:box' }],
