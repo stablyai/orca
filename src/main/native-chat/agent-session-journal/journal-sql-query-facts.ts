@@ -3,7 +3,6 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { JournalDispatchRow } from './journal-row-schema'
 import type { JournalInputSource } from './journal-input-source-schema'
 import type { JournalInputEntry } from './journal-input-lineage'
@@ -88,10 +87,6 @@ export class JournalSqlQueryFacts {
     const { scope } = context
     const send = context.read<AgentJournalSubmission>('submissions', key, false)
     if (!send) {
-      scope.db
-        .prepare(`DELETE FROM journal_proj_submissions
-        WHERE session_id=? AND generation=? AND entry_key=?`)
-        .run(...scope.prefix, key)
       return
     }
     const itemId = agentJournalSubmissionKey(send.clientMessageId)
@@ -106,30 +101,16 @@ export class JournalSqlQueryFacts {
       context.read<number>('evidence.ordinals', key, false) ??
       Number(context.header('submissions', key)?.ordinal)
     scope.db
-      .prepare(`INSERT INTO journal_proj_submissions
-      (session_id, generation, entry_key, item_key, input_ordinal, fingerprint, submitted_at,
-       accepted_seq, dispatch_state, write_failure, echo_claimed, item_present, item_sequence, item_unscoped)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(session_id, generation, entry_key) DO UPDATE SET
-      item_key=excluded.item_key, input_ordinal=excluded.input_ordinal,
-      fingerprint=excluded.fingerprint, submitted_at=excluded.submitted_at,
-      accepted_seq=excluded.accepted_seq, dispatch_state=excluded.dispatch_state,
-      write_failure=excluded.write_failure, echo_claimed=excluded.echo_claimed,
-      item_present=excluded.item_present, item_sequence=excluded.item_sequence, item_unscoped=excluded.item_unscoped`)
+      .prepare(`UPDATE journal_proj_submissions SET input_ordinal=?, echo_claimed=?, item_present=?,
+        item_sequence=?, item_unscoped=? WHERE session_id=? AND epoch=? AND client_message_id=? AND current=1`)
       .run(
-        ...scope.prefix,
-        key,
-        journalSqlEntryKey(itemId),
         ordinal,
-        send.payloadFingerprint ?? null,
-        send.submittedAt,
-        send.acceptedSequence ?? null,
-        send.dispatchState,
-        Number(isWriteFailureSubmission(send)),
         Number(!!context.header('inputs.echoes', journalSqlEntryKey(itemId))),
         Number(!!item),
         Number(item?.sequence ?? 0),
-        Number(!item?.turn_item_id)
+        Number(!item?.turn_item_id),
+        ...scope.prefix,
+        String(JSON.parse(key))
       )
   }
 

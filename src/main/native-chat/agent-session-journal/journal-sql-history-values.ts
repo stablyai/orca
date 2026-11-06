@@ -81,16 +81,13 @@ export class JournalSqlHistoryValues {
 
   loadSubmissions(keys: string[]): void {
     const rows = this.db
-      .prepare(`SELECT v.entry_key, v.incarnation, v.value_json, s.input_ordinal
+      .prepare(`SELECT s.client_message_id, s.incarnation, s.payload_json, s.input_ordinal
       FROM json_each(?) wanted CROSS JOIN journal_proj_submissions s INDEXED BY journal_proj_submissions_item
-      CROSS JOIN journal_proj_values v
-      WHERE s.session_id=? AND s.generation=? AND s.item_key=wanted.value
-      AND v.session_id=s.session_id AND v.generation=s.generation
-      AND v.collection='submissions' AND v.entry_key=s.entry_key
+      WHERE s.session_id=? AND s.epoch=? AND s.current=1 AND s.item_key=wanted.value
       ORDER BY s.submitted_at, s.input_ordinal`)
       .all(JSON.stringify(keys), ...this.scope.prefix)
     for (const row of rows) {
-      const key = String(row.entry_key)
+      const key = JSON.stringify(row.client_message_id)
       if (!this.submissions.has(key)) {
         this.submissionOrder.set(key, Number(row.input_ordinal))
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the submissions collection owns these typed values.
@@ -98,7 +95,7 @@ export class JournalSqlHistoryValues {
           key,
           this.values.load(
             { collection: 'submissions', key, incarnation: Number(row.incarnation), path: [] },
-            row.value_json
+            row.payload_json
           ) as AgentJournalSubmission
         )
       }

@@ -6,6 +6,7 @@ import { JournalInputReleasedPositions } from './journal-input-released-position
 import { JournalInputCandidates } from './journal-input-candidates'
 import { JournalSubmissionIndex } from './journal-submission-index'
 import { MemoryJournalTurnSources } from './journal-memory-turn-sources'
+import { memoryJournalMap } from './journal-memory-collections'
 
 /** Restored fields the export leaves alone: item content keeps its own projection, and query
  *  procedures and back-references are the reducer's wiring, not saved facts. */
@@ -36,8 +37,26 @@ export function exportJournalControlState(
   sql: JournalReducerState,
   options: { items: boolean }
 ): void {
+  if (options.items) {
+    for (const [key, item] of memoryJournalMap(memory.items)) {
+      sql.items.set(key, item)
+    }
+  }
+  for (const [key, send] of memoryJournalMap(memory.submissions)) {
+    sql.submissions.set(key, send)
+  }
+  for (const [key, receipt] of memoryJournalMap(memory.receipts)) {
+    sql.receipts.set(key, receipt)
+  }
+  for (const [key, card] of memoryJournalMap(memory.queue.cards)) {
+    sql.queue.cards.set(key, card)
+  }
   for (const { path, value, container } of journalControlStateEntries(memory)) {
-    if (!options.items && path[0] === 'state' && path[1] === 'items') {
+    if (
+      ['state.items', 'state.submissions', 'state.receipts', 'state.queue.cards'].includes(
+        path.join('.')
+      )
+    ) {
       continue
     }
     let target: object = path[0] === 'state' ? sql : journalInputOrder(sql)

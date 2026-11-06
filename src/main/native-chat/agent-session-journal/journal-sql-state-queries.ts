@@ -59,7 +59,7 @@ export function sqlJournalStateQueries(
       const clear = latestClear()
       const rows = scope.db
         .prepare(`SELECT s.item_key, s.accepted_seq FROM journal_proj_submissions s
-        WHERE s.session_id=? AND s.generation=? AND s.fingerprint=?
+        WHERE s.session_id=? AND s.epoch=? AND s.current=1 AND s.fingerprint=?
         AND s.dispatch_state<>'rejected' AND s.write_failure=0 AND s.echo_claimed=0 AND s.item_present=1
         ${clear ? 'AND s.accepted_seq IS NOT NULL' : ''}
         ORDER BY s.submitted_at, s.input_ordinal`)
@@ -113,7 +113,7 @@ export function sqlJournalStateQueries(
       facts.flush()
       const latest = scope.db
         .prepare(`SELECT item_key FROM journal_proj_submissions
-        WHERE session_id=? AND generation=? AND dispatch_state='accepted' AND item_present=1 AND item_unscoped=1
+        WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='accepted' AND item_present=1 AND item_unscoped=1
         ORDER BY item_sequence DESC, input_ordinal DESC LIMIT 1`)
         .get(...scope.prefix)
       if (!latest) {

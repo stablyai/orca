@@ -14,6 +14,7 @@ import { JournalSqlValueReferences } from './journal-sql-value-references'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
 import { JournalSqlValueBulkLoad } from './journal-sql-value-bulk-load'
 import { JournalSqlValueChanges } from './journal-sql-value-changes'
+import { JournalSqlInputEntities } from './journal-sql-input-entities'
 
 /** One command owns these objects; SAVEPOINT rollback discards the context, never adopts a mirror. */
 export class JournalSqlValueContext {
@@ -25,10 +26,12 @@ export class JournalSqlValueContext {
 
   private readonly references: JournalSqlValueReferences
   private bulk?: JournalSqlValueBulkLoad
+  readonly entities: JournalSqlInputEntities
   constructor(
     readonly scope: JournalSqlScope,
     readonly items?: JournalSqlItemValues
   ) {
+    this.entities = new JournalSqlInputEntities(scope)
     this.reader = new JournalSqlValueReader(scope, this.objects, items)
     this.references = new JournalSqlValueReferences(
       scope,
@@ -83,7 +86,7 @@ export class JournalSqlValueContext {
   }
 
   collection(name: string): void {
-    if (this.collections.has(name)) {
+    if (this.entities.for(name) || this.collections.has(name)) {
       return
     }
     this.scope.db
@@ -102,26 +105,12 @@ export class JournalSqlValueContext {
     if (this.bulk) {
       return this.bulk.size(collection)
     }
-    const row = this.scope.db
-      .prepare(`SELECT size FROM journal_proj_collections
-      WHERE session_id=? AND generation=? AND collection=?`)
-      .get(...this.scope.prefix, collection)
-    if (row) {
-      this.scope.examined(row)
-    }
-    return Number(row?.size ?? 0)
+    return this.reader.size(collection)
   }
 
   header(collection: string, key: string): SqliteRow | undefined {
     this.access(collection)
-    if (this.bulk) {
-      return this.bulk.header(collection, key)
-    }
-    const row = this.scope.db
-      .prepare(`SELECT ordinal, incarnation FROM journal_proj_values
-      WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
-      .get(...this.scope.prefix, collection, key)
-    return row && this.scope.examined(row)
+    return this.bulk ? this.bulk.header(collection, key) : this.reader.header(collection, key)
   }
 
   read<V>(collection: string, key: string, observe = true): V | undefined {
@@ -158,11 +147,14 @@ export class JournalSqlValueContext {
     const source =
       typeof value === 'object' && value !== null ? this.objects.locations.get(value) : undefined
     const same = previous && source && this.reader.load(previous) === this.reader.load(source)
-    const counters = this.scope.db
-      .prepare(`UPDATE journal_proj_collections SET
+    const entity = this.entities.for(collection)
+    const counters = entity
+      ? entity.counters(!before, !same)
+      : this.scope.db
+          .prepare(`UPDATE journal_proj_collections SET
       size=size+?, next_ordinal=next_ordinal+?, next_incarnation=next_incarnation+?
       WHERE session_id=? AND generation=? AND collection=? RETURNING next_ordinal, next_incarnation`)
-      .get(Number(!before), Number(!before), Number(!same), ...this.scope.prefix, collection)
+          .get(Number(!before), Number(!before), Number(!same), ...this.scope.prefix, collection)
     if (!counters) {
       throw new Error('Missing journal projection collection')
     }
@@ -188,27 +180,37 @@ export class JournalSqlValueContext {
         this.references.drop(previous)
       }
     }
-    this.scope.db
-      .prepare(`INSERT INTO journal_proj_values
+    if (entity) {
+      entity.store(
+        location,
+        encoded.json,
+        value,
+        true,
+        Number(before?.ordinal ?? counters.next_ordinal)
+      )
+    } else {
+      this.scope.db
+        .prepare(`INSERT INTO journal_proj_values
       (session_id, generation, collection, entry_key, ordinal, incarnation, value_json)
       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(session_id, generation, collection, entry_key)
       DO UPDATE SET incarnation=excluded.incarnation, value_json=excluded.value_json`)
-      .run(
-        ...this.scope.prefix,
-        collection,
-        key,
-        Number(before?.ordinal ?? counters.next_ordinal),
-        location.incarnation,
-        location.collection === 'items' && this.items
-          ? this.items.store(
-              location,
-              encoded.json,
-              value,
-              true,
-              Number(before?.ordinal ?? counters.next_ordinal)
-            )
-          : encoded.json
-      )
+        .run(
+          ...this.scope.prefix,
+          collection,
+          key,
+          Number(before?.ordinal ?? counters.next_ordinal),
+          location.incarnation,
+          location.collection === 'items' && this.items
+            ? this.items.store(
+                location,
+                encoded.json,
+                value,
+                true,
+                Number(before?.ordinal ?? counters.next_ordinal)
+              )
+            : encoded.json
+        )
+    }
     this.references.replace(location, encoded.refs)
     const stored = source ? this.reader.load(source) : this.objects.track(value, location)
     this.reader.loaded.set(journalSqlLocationKey(location), stored)
@@ -235,14 +237,19 @@ export class JournalSqlValueContext {
     } else {
       this.references.drop(location)
     }
-    this.scope.db
-      .prepare(`DELETE FROM journal_proj_values
+    const entity = this.entities.for(collection)
+    if (entity) {
+      entity.delete(key)
+    } else {
+      this.scope.db
+        .prepare(`DELETE FROM journal_proj_values
       WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
-      .run(...this.scope.prefix, collection, key)
-    this.scope.db
-      .prepare(`UPDATE journal_proj_collections SET size=size-1
+        .run(...this.scope.prefix, collection, key)
+      this.scope.db
+        .prepare(`UPDATE journal_proj_collections SET size=size-1
       WHERE session_id=? AND generation=? AND collection=?`)
-      .run(...this.scope.prefix, collection)
+        .run(...this.scope.prefix, collection)
+    }
     if (collection === 'items') {
       this.items?.delete(key)
     }
@@ -297,22 +304,14 @@ export class JournalSqlValueContext {
             Number(header?.ordinal ?? 0)
           )
         : encoded.json
-    const updated = this.scope.db
-      .prepare(`UPDATE journal_proj_values SET value_json=?
-      WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-      .run(json, ...this.scope.prefix, location.collection, location.key, location.incarnation)
-    if (!updated.changes) {
-      const snapshot = this.scope.db
-        .prepare(`UPDATE journal_proj_value_snapshots SET value_json=?
-        WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-        .run(json, ...this.scope.prefix, location.collection, location.key, location.incarnation)
-      if (!snapshot.changes) {
-        if (location.collection === 'items') {
-          this.items?.forget(location)
-        }
-        return
+    const updated = this.references.update(location, json, node.raw)
+    if (!updated.stored) {
+      if (location.collection === 'items') {
+        this.items?.forget(location)
       }
-    } else {
+      return
+    }
+    if (updated.current) {
       // A write through an alias changes its source's query columns even without a source read.
       this.changed?.(location.collection, location.key)
     }

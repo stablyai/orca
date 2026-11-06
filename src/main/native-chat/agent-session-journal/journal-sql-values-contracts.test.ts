@@ -2,6 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlValueSchema } from './journal-sql-value-schema'
+import { journalSqlInputEntitySchema } from './journal-sql-input-entity-schema'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { JournalSqlKeyedMap, JournalSqlKeyedSet } from './journal-sql-keyed-values'
 import { journalSqlIndexSchema } from './journal-sql-index-schema'
@@ -18,7 +19,7 @@ afterEach(() => {
 function fixture() {
   const db = new Database(':memory:')
   databases.push(db)
-  db.exec(journalSqlValueSchema())
+  db.exec(journalSqlValueSchema() + journalSqlInputEntitySchema())
   const context = () => new JournalSqlValueContext(new JournalSqlScope(db, 'session', 'generation'))
   return { db, context }
 }
@@ -28,7 +29,7 @@ const send = (status: string): Send => ({ status, flags: { recovered: false } })
 
 function maps(context: JournalSqlValueContext) {
   return {
-    source: new JournalSqlKeyedMap<string, Send>(context, 'submissions'),
+    source: new JournalSqlKeyedMap<string, Send>(context, 'fixture.sends'),
     alias: new JournalSqlKeyedMap<string, Send>(context, 'inputs.candidates')
   }
 }
@@ -62,7 +63,7 @@ it.each([false, true])(
     command.flush()
     expect(command.changes().map((change) => change.path)).toEqual([
       'inputs.candidates',
-      'submissions'
+      'fixture.sends'
     ])
 
     command = f.context()

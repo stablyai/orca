@@ -2,6 +2,7 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
 import { encodeJournalSqlValue, type JournalSqlValueLocation } from './journal-sql-value-codec'
+import { JournalSqlInputEntities } from './journal-sql-input-entities'
 
 type Entry = { value: unknown; ordinal: number; incarnation: number }
 
@@ -9,11 +10,13 @@ type Entry = { value: unknown; ordinal: number; incarnation: number }
 export class JournalSqlValueBulkLoad {
   private readonly collections = new Map<string, Map<string, Entry>>()
   private readonly locations = new WeakMap<object, JournalSqlValueLocation>()
+  private readonly entities: JournalSqlInputEntities
 
   constructor(
     private readonly scope: JournalSqlScope,
     private readonly items: JournalSqlItemValues | undefined
   ) {
+    this.entities = new JournalSqlInputEntities(scope)
     if (
       scope.db
         .prepare(`SELECT collection FROM journal_proj_collections
@@ -59,20 +62,25 @@ export class JournalSqlValueBulkLoad {
         }
       }
     )
-    this.scope.db
-      .prepare(`INSERT INTO journal_proj_values
+    const entity = this.entities.for(collection)
+    if (entity) {
+      entity.store(location, encoded.json, value, true, ordinal)
+    } else {
+      this.scope.db
+        .prepare(`INSERT INTO journal_proj_values
       (session_id, generation, collection, entry_key, ordinal, incarnation, value_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(
-        ...this.scope.prefix,
-        collection,
-        key,
-        ordinal,
-        ordinal,
-        collection === 'items' && this.items
-          ? this.items.store(location, encoded.json, value, true, ordinal)
-          : encoded.json
-      )
+        .run(
+          ...this.scope.prefix,
+          collection,
+          key,
+          ordinal,
+          ordinal,
+          collection === 'items' && this.items
+            ? this.items.store(location, encoded.json, value, true, ordinal)
+            : encoded.json
+        )
+    }
     for (const { source } of encoded.refs) {
       this.scope.db
         .prepare(`INSERT OR IGNORE INTO journal_proj_value_refs
@@ -96,7 +104,12 @@ export class JournalSqlValueBulkLoad {
       (session_id, generation, collection, size, next_ordinal, next_incarnation)
       VALUES (?, ?, ?, ?, ?, ?)`)
     for (const [collection, entries] of this.collections) {
-      insert.run(...this.scope.prefix, collection, entries.size, entries.size, entries.size)
+      const entity = this.entities.for(collection)
+      if (entity) {
+        entity.importCounters(entries.size)
+      } else {
+        insert.run(...this.scope.prefix, collection, entries.size, entries.size, entries.size)
+      }
     }
   }
 }

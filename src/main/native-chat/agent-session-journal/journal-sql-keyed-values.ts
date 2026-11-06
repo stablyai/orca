@@ -13,6 +13,13 @@ export function clearJournalSqlCollection(
   collection: string
 ): void {
   const { scope } = context
+  const entity = context.entities.for(collection)
+  if (entity) {
+    for (const key of entity.keys()) {
+      context.delete(collection, key)
+    }
+    return
+  }
   const rows = scope.db
     .prepare(`SELECT entry_key FROM journal_proj_values
     WHERE session_id=? AND generation=? AND collection=? ORDER BY ordinal`)
@@ -85,6 +92,15 @@ export function* journalSqlOrderedKeys(
   limit = -1
 ): Generator<string> {
   const { scope } = context
+  const entity = context.entities.for(collection)
+  if (entity) {
+    for (const key of entity.keys(limit)) {
+      if (limit === 1 || context.header(collection, key)) {
+        yield key
+      }
+    }
+    return
+  }
   const rows = scope.db
     .prepare(`SELECT entry_key FROM journal_proj_values
     WHERE session_id=? AND generation=? AND collection=? ORDER BY ordinal LIMIT ?`)

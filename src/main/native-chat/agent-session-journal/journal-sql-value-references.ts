@@ -1,4 +1,5 @@
 import type { JournalSqlScope } from './journal-sql-scope'
+import { JournalSqlInputEntities } from './journal-sql-input-entities'
 import type {
   JournalSqlValueLocation,
   JournalSqlValueReference,
@@ -6,6 +7,7 @@ import type {
 } from './journal-sql-value-codec'
 
 export class JournalSqlValueReferences {
+  private readonly entities: JournalSqlInputEntities
   constructor(
     private readonly scope: JournalSqlScope,
     private readonly detached: (
@@ -16,9 +18,14 @@ export class JournalSqlValueReferences {
       json
     ) => json,
     private readonly forget: (location: JournalSqlValueLocation) => void = () => undefined
-  ) {}
+  ) {
+    this.entities = new JournalSqlInputEntities(scope)
+  }
 
   retain(location: JournalSqlValueLocation): void {
+    if (this.entities.for(location.collection)) {
+      return
+    }
     this.scope.db
       .prepare(`INSERT OR IGNORE INTO journal_proj_value_snapshots
       (session_id, generation, collection, entry_key, incarnation, value_json)
@@ -28,6 +35,10 @@ export class JournalSqlValueReferences {
   }
 
   private current(location: JournalSqlValueLocation) {
+    const entity = this.entities.for(location.collection)
+    if (entity) {
+      return entity.header(location.key)
+    }
     const row = this.scope.db
       .prepare(`SELECT incarnation FROM journal_proj_values
       WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
@@ -73,28 +84,37 @@ export class JournalSqlValueReferences {
     if (Number(active?.incarnation) === location.incarnation) {
       return
     }
-    const snapshot = this.scope.db
-      .prepare(`SELECT incarnation FROM journal_proj_value_snapshots
+    const entity = this.entities.for(location.collection)
+    const snapshot = entity
+      ? entity.load(location)
+      : this.scope.db
+          .prepare(`SELECT incarnation FROM journal_proj_value_snapshots
       WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-      .get(...this.scope.prefix, location.collection, location.key, location.incarnation)
+          .get(...this.scope.prefix, location.collection, location.key, location.incarnation)
     if (snapshot) {
-      this.scope.examined(snapshot)
+      if (!entity) {
+        this.scope.examined(snapshot)
+      }
       return
     }
     const encoded = this.detached(location)
     if (!encoded) {
       throw new Error('Missing journal projection object incarnation')
     }
-    this.scope.db
-      .prepare(`INSERT INTO journal_proj_value_snapshots
+    if (entity) {
+      entity.store(location, encoded.json, undefined, false, 0)
+    } else {
+      this.scope.db
+        .prepare(`INSERT INTO journal_proj_value_snapshots
       (session_id, generation, collection, entry_key, incarnation, value_json) VALUES (?, ?, ?, ?, ?, ?)`)
-      .run(
-        ...this.scope.prefix,
-        location.collection,
-        location.key,
-        location.incarnation,
-        this.payload(location, encoded.json)
-      )
+        .run(
+          ...this.scope.prefix,
+          location.collection,
+          location.key,
+          location.incarnation,
+          this.payload(location, encoded.json)
+        )
+    }
     this.replace(location, encoded.refs)
   }
 
@@ -126,7 +146,33 @@ export class JournalSqlValueReferences {
     const previous = this.references(location)
     this.removeReferences(location)
     this.forget(location)
+    this.entities.for(location.collection)?.remove(location)
     this.prune(previous)
+  }
+
+  update(location: JournalSqlValueLocation, json: string, value: unknown) {
+    const entity = this.entities.for(location.collection)
+    if (entity) {
+      return {
+        stored: entity.update(location, json, value),
+        current: Number(entity.header(location.key)?.incarnation) === location.incarnation
+      }
+    }
+    const key = [...this.scope.prefix, location.collection, location.key, location.incarnation]
+    const updated = this.scope.db
+      .prepare(`UPDATE journal_proj_values SET value_json=?
+        WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
+      .run(json, ...key)
+    const snapshot =
+      !updated.changes &&
+      this.scope.db
+        .prepare(`UPDATE journal_proj_value_snapshots SET value_json=?
+        WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
+        .run(json, ...key)
+    return {
+      stored: !!(updated.changes || (snapshot && snapshot.changes)),
+      current: !!updated.changes
+    }
   }
 
   private prune(locations: JournalSqlValueLocation[]): void {
@@ -135,10 +181,13 @@ export class JournalSqlValueReferences {
       if (Number(active?.incarnation) === location.incarnation || this.referenced(location)) {
         continue
       }
-      const removed = this.scope.db
-        .prepare(`DELETE FROM journal_proj_value_snapshots
+      const entity = this.entities.for(location.collection)
+      const removed = entity
+        ? { changes: entity.remove(location) }
+        : this.scope.db
+            .prepare(`DELETE FROM journal_proj_value_snapshots
         WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-        .run(...this.scope.prefix, location.collection, location.key, location.incarnation)
+            .run(...this.scope.prefix, location.collection, location.key, location.incarnation)
       if (removed.changes) {
         this.forget(location)
         locations.push(...this.references(location))

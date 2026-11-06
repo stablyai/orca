@@ -11,6 +11,7 @@ import { journalSqlScalarSchema } from './journal-sql-scalars'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { journalSqlValueSchema } from './journal-sql-value-schema'
+import { journalSqlInputEntitySchema } from './journal-sql-input-entity-schema'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -23,7 +24,12 @@ afterEach(() => {
 function sqlCommands() {
   const db = new Database(':memory:')
   databases.push(db)
-  db.exec(journalSqlValueSchema() + journalSqlIndexSchema() + journalSqlScalarSchema())
+  db.exec(
+    journalSqlValueSchema() +
+      journalSqlInputEntitySchema() +
+      journalSqlIndexSchema() +
+      journalSqlScalarSchema()
+  )
   return (): { storage: JournalIndexStorageFactory; finish: () => void } => {
     const context = new JournalSqlValueContext(new JournalSqlScope(db, 'session', 'generation'))
     return {
@@ -42,10 +48,13 @@ function send(id: string, fence = 1): AgentJournalSubmission {
     clientMessageId: id,
     fence,
     dispatchState: 'pending',
+    payloadFingerprint: 'fingerprint',
+    providerItemId: null,
+    reason: null,
+    resolvedAt: null,
     submittedAt: 1,
-    origin: 'client',
-    body: { kind: 'message', role: 'user', blocks: [] }
-  } as unknown as AgentJournalSubmission
+    origin: 'client'
+  }
 }
 
 const ids = (values: Iterable<AgentJournalSubmission>) => [...values].map((v) => v.clientMessageId)
