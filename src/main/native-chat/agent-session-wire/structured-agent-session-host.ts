@@ -153,6 +153,7 @@ export class StructuredAgentSessionHost {
     conversation: (id) => this.lifetime.conversation(id)
   }))
   sessionAgent = this.reads.sessionAgent
+  sessionNeverSent = this.reads.sessionNeverSent
   attentionReads = this.reads.attentionReads
   readModelCatalog = this.reads.readModelCatalog
   childAccountHome = this.reads.childAccountHome
@@ -301,9 +302,7 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
-    ...args
-  ) => this.sessions.observeConversationPublications(...args)
+  observeConversationPublications = this.reads.observeConversationPublications
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer

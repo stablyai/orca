@@ -26,14 +26,15 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         throw new Error('stub model/list rejected')
       }
     })
-    const adapter = adapterFor(codex)
+    const adapter = adapterFor(codex, { codexHome: '/selected-codex-home' })
 
-    await acquireReadyCodexForTest(adapter, {
+    const receipt = await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
       options: { model: 'gpt-live', effort: 'medium' }
     })
+    expect(receipt.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/selected-codex-home' })
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',

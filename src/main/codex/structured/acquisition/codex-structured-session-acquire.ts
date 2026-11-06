@@ -279,7 +279,10 @@ export async function acquireCodexStructuredSession(input: {
         },
         openInput
       )
-    return { process, acquisitionGeneration }
+    const accountHome = launch.codexHome
+      ? { variable: 'CODEX_HOME' as const, path: launch.codexHome }
+      : undefined
+    return { process, acquisitionGeneration, ...(accountHome ? { accountHome } : {}) }
   } catch (error) {
     acquisitions.endings.retire(sessionId, acquisitionGeneration)
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
