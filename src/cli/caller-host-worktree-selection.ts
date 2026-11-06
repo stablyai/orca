@@ -270,6 +270,27 @@ export function selectWorktreeIdOnHost(
   return match ? worktreeSelections([match], catalog)[0]!.selector : undefined
 }
 
+/** The workspace an Orca terminal names, scoped to its host; native folders are not in the catalog. */
+export function selectCallerTerminalWorkspace(
+  catalog: readonly CatalogRow[],
+  hostId: ExecutionHostId,
+  env: Readonly<Record<string, string | undefined>> = process.env
+): string | undefined {
+  const worktreeId = env.ORCA_WORKTREE_ID
+  const trimmed = worktreeId?.trim()
+  if (worktreeId && trimmed && !trimmed.startsWith('folder:')) {
+    const scoped = selectWorktreeIdOnHost(catalog, worktreeId, hostId)
+    if (!scoped) {
+      throw new RuntimeClientError(
+        'selector_not_found',
+        `This terminal's workspace ${worktreeId} is no longer an Orca workspace on this host. Pass --worktree <selector>, or --worktree all for the workspace focused in Orca.`
+      )
+    }
+    return scoped
+  }
+  return [trimmed, env.ORCA_WORKSPACE_ID?.trim()].find((id) => id?.startsWith('folder:'))
+}
+
 export async function resolveCallerPaneWorktreeSelector(
   worktreeId: string,
   client: RuntimeClient

@@ -13,7 +13,7 @@ import {
   resolveCallerPaneWorktreeSelector,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
-  selectWorktreeIdOnHost,
+  selectCallerTerminalWorkspace,
   selectorPurpose,
   type WorkspaceSelectionPurpose,
   type HostScopedWorktreeSelection
@@ -206,27 +206,15 @@ export async function getBrowserWorktreeSelector(
     return undefined
   }
   const hostId = getCallerExecutionHostId()
-  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
   const enclosing = selectEnclosingWorktreeSelectionOnHost(
     catalog,
     cwd,
     hostId,
-    terminalWorktreeId,
+    process.env.ORCA_WORKTREE_ID,
     purpose
   )
-  if (enclosing) {
-    return enclosing.selector
-  }
   // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
-  const terminalWorktree =
-    terminalWorktreeId?.trim() && selectWorktreeIdOnHost(catalog, terminalWorktreeId, hostId)
-  if (terminalWorktree) {
-    return terminalWorktree
-  }
-  // Native folder workspaces are not in worktree.list.
-  return [terminalWorktreeId?.trim(), process.env.ORCA_WORKSPACE_ID?.trim()].find((id) =>
-    id?.startsWith('folder:')
-  )
+  return enclosing?.selector ?? selectCallerTerminalWorkspace(catalog, hostId)
 }
 
 export async function getTerminalHandle(

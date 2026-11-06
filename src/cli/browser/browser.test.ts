@@ -369,6 +369,23 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it("refuses instead of using the focused worktree when the terminal's worktree is gone", async () => {
+    queueFixtures(callMock, worktreeListFixture([buildWorktree('/tmp/repo/other', 'other')]))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', 'repo::/tmp/repo/deleted')
+
+    await main(['tab', 'create', '--url', 'https://example.com'], '/tmp/scratch')
+
+    expect(callMock).not.toHaveBeenCalledWith(
+      'browser.tabCreate',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(errorSpy).toHaveBeenCalledWith(
+      "This terminal's workspace repo::/tmp/repo/deleted is no longer an Orca workspace on this host. Pass --worktree <selector>, or --worktree all for the workspace focused in Orca."
+    )
+  })
+
   it.each(['ORCA_WORKTREE_ID', 'ORCA_WORKSPACE_ID'])(
     'creates a tab in the SSH folder workspace named by %s when cwd is outside it',
     async (envName) => {
