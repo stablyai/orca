@@ -7,6 +7,7 @@ import {
 } from './native-browser-popup-windows'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
 import { describeCommittedPopupOrigin } from './popup-committed-origin'
+import { attachNativePopupQuitNotice } from './popup-hold-quit-notice'
 
 const rejectedNativePopups = new WeakSet<BrowserWindow>()
 // The latest script admission belongs to the next child the opener shows.
@@ -197,10 +198,12 @@ export function prepareNativeBrowserPopup(
     rejectNativeBrowserPopup(window)
     return popup
   }
+  const quitNotice = attachNativePopupQuitNotice(window, contents)
   const updateOrigin = (): void => {
     if (!window.isDestroyed()) {
       window.setTitle(describeCommittedPopupOrigin(contents).label)
     }
+    quitNotice.refreshOrigin()
   }
   window.on('page-title-updated', (event) => event.preventDefault())
   // A blocked/uncommitted redirect must never lend its origin to the old document.

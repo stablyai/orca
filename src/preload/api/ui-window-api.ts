@@ -5,8 +5,11 @@ import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
+import type { HoldQuitNotice } from '../../shared/mac-hold-quit'
 
 export type UiWindowApi = {
+  onHoldQuitNotice?: (callback: (notice: HoldQuitNotice) => void) => () => void
+  setHoldQuitActivity?: (busy: boolean) => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {

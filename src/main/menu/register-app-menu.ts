@@ -11,6 +11,7 @@ import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
+import { createMacApplicationMenu } from './mac-application-menu'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -126,22 +127,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
-  const macAppMenu: Electron.MenuItemConstructorOptions = {
+  const macAppMenu = createMacApplicationMenu({
     label: options.appMenuLabel ?? app.name,
-    submenu: [
-      { role: 'about' },
-      checkForUpdatesItem,
-      settingsItem,
-      { type: 'separator' },
-      { role: 'services' },
-      { type: 'separator' },
-      { role: 'hide' },
-      { role: 'hideOthers' },
-      { role: 'unhide' },
-      { type: 'separator' },
-      ...createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
-    ]
-  }
+    checkForUpdates: checkForUpdatesItem,
+    settings: settingsItem,
+    quit: createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
+  })
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
