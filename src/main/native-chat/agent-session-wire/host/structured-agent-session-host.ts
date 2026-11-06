@@ -14,7 +14,6 @@ import type { StructuredAgentSessionLifetimeContext } from '../termination/struc
 import * as agentStart from '../startup/structured-agent-session-agent-start'
 import * as mutationWiring from './structured-agent-session-host-mutation-wiring'
 import * as lifetime from '../termination/structured-agent-session-conversation-lifetime'
-import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
 import { flushStructuredAgentSessionHost } from '../termination/structured-agent-session-host-teardown'
@@ -59,7 +58,7 @@ export class StructuredAgentSessionHost {
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
   private readonly startup: ReturnType<typeof createStartupRecovery>
   readonly reconcileRestartLeases = () => this.startup.reconcileRestartLeases()
-  private readonly lifetime: StructuredAgentSessionConversationLifetime
+  private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: BackgroundTasks
@@ -186,7 +185,7 @@ export class StructuredAgentSessionHost {
     openConversation: this.conversationDelivery.open
   })
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
-  close: StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause, admit) =>
+  close: typeof this.lifetime.close = (sessionId, cause, admit) =>
     this.lifetime.close(sessionId, cause, admit)
 
   /** Stop hidden children too, using one bounded host snapshot. */
@@ -199,6 +198,8 @@ export class StructuredAgentSessionHost {
     runtimeState: this.runtimeState,
     clientDelivery: this.clientDelivery
   }))
+
+  serializeCreateIntent = this.tasks.serializeCreateIntent.bind(this.tasks)
 
   supportsCreate = this.reads.supportsCreate
   agentDefinitions = this.reads.agentDefinitions

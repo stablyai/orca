@@ -1,3 +1,5 @@
+import { createImportedForkTip, observeOmpForkTip } from '../imported-fork-tip'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   adoptedTranscriptSourceObserver,
   validateAdoptedOpenCodeSource,
@@ -12,7 +14,6 @@ import type { AgentJournalItemBody } from '../../../../shared/agent-session/jour
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../session-file-resolver'
-import '../../transcript-line-decoders'
 import { decodeClaudeTranscriptLine } from '../../transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from '../../transcript-line-decoders-codex'
 import { decodeGrokTranscriptLine } from '../../transcript-line-decoders-grok'
@@ -64,7 +65,7 @@ export type LegacyImportResult =
   | { ok: false; error: string }
 
 type PreparedLegacyImport =
-  | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean }
+  | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
   | { ok: false; error: string }
 
 export async function importLegacyTranscriptIntoJournal(input: {
@@ -109,7 +110,7 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    const { items, consumedBytes } = await decodeReplacementItems({
+    const { items, consumedBytes, forkTipItemIds } = await decodeReplacementItems({
       filePath,
       transcriptAgent,
       agent: input.agent,
@@ -122,7 +123,7 @@ export async function prepareLegacyTranscriptImport(input: {
       decodedMessageIdentities: options.decodedMessageIdentities,
       limits
     })
-    return { ok: true, items, sourceEmpty: consumedBytes === 0 }
+    return { ok: true, items, sourceEmpty: consumedBytes === 0, forkTipItemIds }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -160,7 +161,19 @@ async function prepareOpenCodeImport(input: {
     recordId: message.id
   }))
   const items = replacementItems(read.messages, identities, input.limits)
-  return { ok: true, items, sourceEmpty: read.sourceEmpty === true }
+  return {
+    ok: true,
+    items,
+    sourceEmpty: read.sourceEmpty === true,
+    forkTipItemIds: read.forkTipItemIds?.map((recordId) =>
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: input.agent,
+        sessionId: input.sessionId,
+        recordId
+      })
+    )
+  }
 }
 
 function replacementItems(
@@ -211,7 +224,7 @@ async function decodeReplacementItems(input: {
   codexSessionsDirs?: string[]
   signal?: AbortSignal
   limits: JournalPayloadLimits
-}): Promise<{ items: JournalReplacementItem[]; consumedBytes: number }> {
+}): Promise<{ items: JournalReplacementItem[]; consumedBytes: number; forkTipItemIds: string[] }> {
   const source = input.source
     ? adoptedTranscriptSourceObserver({
         agent: input.agent,
@@ -233,6 +246,7 @@ async function decodeReplacementItems(input: {
     input.agent === 'pi'
       ? createPiTranscriptCollector(toItem, (line, lineIndex) => tracker.identify(line, lineIndex))
       : null
+  const forkTip = createImportedForkTip()
   let lineIndex = 0
   try {
     const { consumedBytes } = await readLegacyImportTranscript(
@@ -252,19 +266,19 @@ async function decodeReplacementItems(input: {
         }
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
         if (message) {
-          retained.push(
-            toItem(
-              message,
-              recordId || input.decodedMessageIdentities
-                ? {
-                    provider: 'legacy',
-                    agent: input.agent,
-                    sessionId: input.sessionId,
-                    recordId: recordId ?? message.id
-                  }
-                : tracker.identify(line, currentLineIndex)
-            )
-          )
+          const identity =
+            recordId || input.decodedMessageIdentities
+              ? {
+                  provider: 'legacy' as const,
+                  agent: input.agent,
+                  sessionId: input.sessionId,
+                  recordId: recordId ?? message.id
+                }
+              : tracker.identify(line, currentLineIndex)
+          retained.push(toItem(message, identity))
+        }
+        if (input.transcriptAgent === 'omp') {
+          observeOmpForkTip(forkTip, line, tracker.identify(line, currentLineIndex))
         }
         return null
       }
@@ -275,7 +289,7 @@ async function decodeReplacementItems(input: {
     if (pi) {
       await pi.project(retained.push)
     }
-    return { items: retained.items(), consumedBytes }
+    return { items: retained.items(), consumedBytes, forkTipItemIds: forkTip.settledItems() }
   } finally {
     pi?.close()
   }

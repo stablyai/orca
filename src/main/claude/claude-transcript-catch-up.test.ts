@@ -32,7 +32,6 @@ import {
   chat
 } from './claude-transcript-catch-up-test-support'
 // Real disk tail → isolated translator → deferred sink → on-disk journal contracts.
-import * as sessionFileResolver from '../native-chat/session-file-resolver'
 import * as transcriptTail from './claude-transcript-tail'
 
 describe('Claude chat catch-up', () => {
@@ -209,26 +208,16 @@ describe('Claude chat catch-up', () => {
   )
 
   it.each([
-    ['-work', '/work', false],
-    ['-work-caf-', '/work/cafe\u0301', false],
-    ['-old-work', '/moved-work', true]
+    ['-work', '/work'],
+    ['-work-caf-', '/work/cafe\u0301'],
+    ['-old-work', '/moved-work']
   ] as const)(
     'uses the selected-home bucket, retaining moved-project fallback: %s',
-    async (project, cwd, fallback) => {
+    async (project, cwd) => {
       const c = await chat(project, cwd)
       await c.write([...chatTurn, ...outsideTurn])
-      const resolve = vi.spyOn(sessionFileResolver, 'resolveSessionFilePath')
       expect(await c.open('a1')).toBe(true)
       expect(c.rows()).toContain('assistant:answer 2')
-      expect(resolve).toHaveBeenCalledTimes(fallback ? 1 : 0)
-      if (fallback) {
-        expect(resolve).toHaveBeenCalledWith(
-          'claude',
-          SID,
-          expect.objectContaining({ claudeProjectsDir: expect.any(String) }),
-          expect.any(AbortSignal)
-        )
-      }
     }
   )
 

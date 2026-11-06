@@ -7,6 +7,7 @@ import { assertAgentPromptRequestActive } from '../../terminal/input/agent-promp
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   refuse,
+  agentSessionRefusalError,
   AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
@@ -55,6 +56,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: string
+  forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -68,6 +70,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       worktree: params.worktree,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
+      forkFrom: params.forkFrom,
       tabId: params.tabId,
       firstMessage: params.firstMessage,
       optionsMode: params.optionsMode,
@@ -85,6 +88,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
+  forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
@@ -95,6 +99,12 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
+  const fork = args.forkFrom
+  if (fork && (args.resumeFrom || args.options || args.optionsMode || args.atRest !== true)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
   const structuredAgentCliSourceEvidence =
     args.structuredAgentCliSourceEvidence ??
     (args.resumeFrom?.cliSource
@@ -105,14 +115,15 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
         )
       : undefined)
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
-  let host = args.resumeFrom ? await args.ensureHost() : null
+  let host = args.resumeFrom || args.forkFrom ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,
     agent: args.agent,
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
@@ -166,10 +177,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     ...(atRest ? { atRest: args.firstMessage ? { firstMessage: args.firstMessage } : {} } : {}),
-    tab: {
-      workspaceId: resolved.location.workspaceId,
-      agent: resolved.agent
-    }
+    tab: { workspaceId: resolved.location.workspaceId, agent: resolved.agent }
   }
 }
 

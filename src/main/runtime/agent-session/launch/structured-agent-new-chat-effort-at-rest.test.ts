@@ -46,7 +46,8 @@ const ADAPTER = {
   compact: unused,
   changeThreadGoal: unused,
   rewind: unused,
-  recoverRewind: unused
+  recoverRewind: unused,
+  copyConversation: unused
 } as unknown as StructuredAgentSessionAdapter
 
 const AGENTS = new StructuredAgentRegistry(

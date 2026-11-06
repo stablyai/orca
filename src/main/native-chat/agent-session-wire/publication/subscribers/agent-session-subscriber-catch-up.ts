@@ -24,7 +24,7 @@ import {
   subscriberQueuedMessagesChanged,
   type SubscriberFieldHooks
 } from './agent-session-subscriber-frame-fields'
-import type { Subscriber } from './structured-agent-session-subscribers'
+import type { Subscriber } from './agent-session-subscribe-input'
 
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {

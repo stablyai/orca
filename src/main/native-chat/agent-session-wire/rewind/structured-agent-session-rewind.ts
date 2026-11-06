@@ -8,9 +8,10 @@ import type {
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { runWithReadyStructuredAgentSessionOperation } from '../operations/structured-agent-session-ready-operation'
-
-import { openWithReadyStructuredAgentSessionChild } from '../operations/structured-agent-session-operation-child'
-import type { ReadyOperationSelection } from '../operations/structured-agent-session-operation-child'
+import {
+  openWithReadyStructuredAgentSessionChild,
+  type ReadyOperationSelection
+} from '../operations/structured-agent-session-operation-child'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from '../operations/structured-agent-session-mutation-admission'
@@ -188,13 +189,14 @@ export async function rewindStructuredAgentSession(
             journal,
             fence,
             undefined,
-            (rewind, currentFence, cursor, cancel) => {
+            (rewind, currentFence, cursor, cancel, childBoundary) => {
               completionReceipt = store.conversationReceipts.rewind(
                 sessionId,
                 currentFence,
                 rewind,
                 cursor,
-                cancel
+                cancel,
+                childBoundary
               )
               return ctx.operationReceipt!
             }

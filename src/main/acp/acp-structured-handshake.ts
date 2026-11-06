@@ -1,3 +1,4 @@
+import { observeAcpForkSupport } from './acp-fork-support'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the
 // agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
@@ -61,6 +62,7 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   const initialized = await connection.initialize()
   assertStarting()
+  observeAcpForkSupport(spec.agent, initialized)
   options.adoptInitialize(initialized)
   // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({

@@ -1,3 +1,5 @@
+import { checkAcpLaunchVersion } from './acp-launch-version'
+export { checkAcpLaunchVersion } from './acp-launch-version'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -18,11 +20,7 @@ import {
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import {
-  checkAgentCliVersion,
-  type AgentCliVersionCheck,
-  type AgentCliVersionReader
-} from '../agent-launch/preflight/agent-cli-version-probe'
+import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,
@@ -130,22 +128,6 @@ export function resolveAcpLaunchCommand(
   const { command } = resolve(pathEnv)
   const pinned = command !== spec.command && copyBesidePinnedMembers(command, pin)
   return { command: pinned || spec.command, prefixArgs: [] }
-}
-
-export async function checkAcpLaunchVersion(
-  spec: AcpLaunchSpec,
-  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
-  wantVersion: boolean,
-  read?: AgentCliVersionReader
-): Promise<AgentCliVersionCheck> {
-  if (!spec.minimumVersions && !wantVersion) {
-    return { status: 'unknown', version: null }
-  }
-  return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
-    spec.minimumVersions ?? [],
-    read
-  )
 }
 
 /** Resolve chats and probes consistently; optionally refresh once after a missing-program lookup. */

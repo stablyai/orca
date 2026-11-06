@@ -78,6 +78,7 @@ export function runAcpSessionDiscovery<T>(
 export async function readAcpSessionCommands(input: {
   connection: AcpDiscoveryConnection
   dialect: AcpDialect
+  onInitialize?: (initialized: Awaited<ReturnType<AcpDiscoveryConnection['initialize']>>) => void
   cwd: string
   signal: AbortSignal
   check: () => void
@@ -114,6 +115,7 @@ export async function readAcpSessionCommands(input: {
   })
   try {
     const initialized = await awaitAcpDiscovery(connection.initialize(), signal)
+    input.onInitialize?.(initialized)
     options.adoptInitialize(initialized)
     check()
     const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)

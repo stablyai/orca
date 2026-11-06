@@ -41,7 +41,13 @@ const NO_METHODS = {} as StructuredAgentSessionAdapter
 const declaring = (definition: typeof CLAUDE_STRUCTURED_AGENT) => ({
   definition: {
     ...definition,
-    capabilities: { ...definition.capabilities, compact: false, threadGoal: false, rewind: false }
+    capabilities: {
+      ...definition.capabilities,
+      compact: false,
+      threadGoal: false,
+      rewind: false,
+      fork: undefined
+    }
   },
   adapter: NO_METHODS
 })

@@ -52,6 +52,7 @@ export function opensAtAction(args: ProvisionalLaunchArgs): boolean {
     (args.focusIntent !== undefined &&
       args.activate !== false &&
       !plan.resumeFrom &&
+      !plan.forkFrom &&
       (!plan.prompt?.trim() || plan.promptDelivery === 'draft'))
   )
 }
