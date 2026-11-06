@@ -78,9 +78,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           }
           value={liveInputCapture}
           onChange={(event) => {
-            // A ctrl/alt/shift held on the Duo rail turns the next typed letter into a combo, while the rail shows it.
+            // A held Shift, Ctrl or Alt on the key row or the Duo rail turns the next typed letter into a combo.
             if (
-              !rail.keysInRail ||
               !dockKeys.interceptTypedCharacter(
                 liveInputCapture,
                 event.nativeEvent.text,
