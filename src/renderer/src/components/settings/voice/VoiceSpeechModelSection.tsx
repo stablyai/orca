@@ -81,6 +81,10 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
+            // Retired models stay listed only while downloaded, so their files can be deleted.
+            if (manifest.replacedBy && !isReady) {
+              return null
+            }
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
@@ -93,7 +97,9 @@ export function VoiceSpeechModelSection({
                 key={manifest.id}
                 disabled={isDownloading}
                 onSelect={(event) => {
-                  if (isReady) {
+                  if (manifest.replacedBy) {
+                    event.preventDefault()
+                  } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)

@@ -904,7 +904,7 @@
         "parakeetV2": "僅限英文。準確度與 v3 相近，速度更快。支援標點符號及大小寫。",
         "zipformerBilingual": "中文 + 英文，支援語言混用。低延遲即時串流。",
         "paraformerBilingual": "中文（國語 + 方言）+ 英文。擅長辨識各地口音與方言。",
-        "zipformerStreamingEn": "僅限英文。2,000 萬個參數的輕量模型，兼顧速度與大小。",
+        "zipformerStreamingEnRetired": "已不再提供：它會遺漏句子開頭。刪除它以釋放空間。",
         "zipformerStreamingZh": "僅限中文。1,400 萬個參數的超輕量模型，適合資源有限的裝置。",
         "zipformerStreamingKo": "僅限韓文。低延遲即時串流。",
         "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",

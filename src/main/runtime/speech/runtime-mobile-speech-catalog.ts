@@ -7,6 +7,7 @@ import { getDefaultVoiceSettings } from '../../../shared/constants'
 import {
   getCatalogModel,
   isLocalSpeechModel,
+  isOfferedSpeechModel,
   SPEECH_MODEL_CATALOG
 } from '../../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
@@ -38,9 +39,11 @@ export class RuntimeMobileSpeechCatalog {
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
     // Omit unsupported status variants; older phones could treat them as pickable models.
-    const runnable = hasLocalSpeechRecognizer()
-      ? SPEECH_MODEL_CATALOG
-      : SPEECH_MODEL_CATALOG.filter((manifest) => !isLocalSpeechModel(manifest))
+    const localRunnable = hasLocalSpeechRecognizer()
+    const runnable = SPEECH_MODEL_CATALOG.filter(
+      (manifest) =>
+        isOfferedSpeechModel(manifest) && (localRunnable || !isLocalSpeechModel(manifest))
+    )
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
@@ -100,8 +103,11 @@ export class RuntimeMobileSpeechCatalog {
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
-    if (params.modelId !== undefined && params.modelId !== '' && !getCatalogModel(params.modelId)) {
-      throw new Error('voice_model_unknown')
+    if (params.modelId !== undefined && params.modelId !== '') {
+      const manifest = getCatalogModel(params.modelId)
+      if (!manifest || !isOfferedSpeechModel(manifest)) {
+        throw new Error('voice_model_unknown')
+      }
     }
     const nextVoice: VoiceSettings = {
       ...current,
