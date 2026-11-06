@@ -90,6 +90,7 @@ export type ToolSnapshot = {
   hasToolUpdate?: boolean
   hasToolInputField?: boolean
   lastAssistantMessage?: string
+  lastAssistantMessageTruncated?: boolean
   /** Tool output remains visible in status cards but must not render as assistant prose in chat. */
   lastAssistantMessageIsToolOutput?: boolean
   clearLastAssistantMessage?: boolean

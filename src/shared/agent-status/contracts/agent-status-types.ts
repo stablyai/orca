@@ -15,7 +15,7 @@ import {
   AGENT_TYPE_MAX_LENGTH,
   normalizeInteractivePromptField,
   normalizeOptionalField,
-  normalizeOptionalMultilineField,
+  normalizeMultilineFieldWithTruncation,
   normalizePromptField,
   normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
@@ -102,10 +102,12 @@ export type AgentStatusEntry = {
   interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
+  lastAssistantMessageTruncated?: boolean
   /** Dashboard may show tool output, but native-chat streaming must not present tool stdout as assistant prose. */
   lastAssistantMessageIsToolOutput?: boolean
   /** Retain the last completed non-boundary output across working: batched done→working publication may already clear lastAssistantMessage. */
   lastCompletedAssistantMessage?: string
+  lastCompletedAssistantMessageTruncated?: boolean
   /** True when this `done` was reached via interrupt, not normal completion
    *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
@@ -153,6 +155,7 @@ export type AgentStatusPayload = {
    *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
   interactivePrompt?: string
   lastAssistantMessage?: string
+  lastAssistantMessageTruncated?: boolean
   /** See the AgentStatusEntry field for semantics. */
   lastAssistantMessageIsToolOutput?: boolean
   interrupted?: boolean
@@ -190,6 +193,9 @@ export function pickParsedAgentStatusPayload(
     ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
     ...(row.lastAssistantMessage !== undefined
       ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.lastAssistantMessageTruncated !== undefined
+      ? { lastAssistantMessageTruncated: row.lastAssistantMessageTruncated }
       : {}),
     ...(row.lastAssistantMessageIsToolOutput !== undefined
       ? { lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput }
@@ -280,6 +286,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   if (!VALID_STATES.has(state)) {
     return null
   }
+  const assistantMessage = normalizeMultilineFieldWithTruncation(
+    obj.lastAssistantMessage,
+    AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+  )
   return {
     state: state as AgentStatusState,
     workingMode: state === 'working' && obj.workingMode === 'monitoring' ? 'monitoring' : undefined,
@@ -296,10 +306,11 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
       obj.interactivePrompt,
       AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
     ),
-    lastAssistantMessage: normalizeOptionalMultilineField(
-      obj.lastAssistantMessage,
-      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
-    ),
+    lastAssistantMessage: assistantMessage.text || undefined,
+    ...(assistantMessage.text &&
+    (assistantMessage.truncated || obj.lastAssistantMessageTruncated === true)
+      ? { lastAssistantMessageTruncated: true }
+      : {}),
     // Only explicit true means known tool output; absent/false retain older-host behavior without suppressing prose.
     lastAssistantMessageIsToolOutput:
       obj.lastAssistantMessageIsToolOutput === true ? true : undefined,
