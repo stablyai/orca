@@ -23,6 +23,7 @@ import { isAutomaticTabActivation } from '../../../../shared/tab-activation-inte
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
+import { recordShownTerminalUserOpen } from '../../run-terminal-client-use'
 import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract toMobileSessionTabsResult(
@@ -173,10 +174,6 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       )
       // Serve-created/restored tabs may lack renderer adoption; materialize locally even when phone-only navigation suppresses desktop focus.
       const automatic = isAutomaticTabActivation(opts.intent)
-      if (!automatic && tab.ptyId) {
-        // Finished-run cleanup keeps a terminal someone opened after it started.
-        this.terminalRunFacts.recordUserOpen(tab.ptyId)
-      }
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
@@ -235,6 +232,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           }
           throw err
         }
+        if (!automatic) {
+          recordShownTerminalUserOpen(this, worktreeId, tab.id)
+        }
         const activated = this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
             includeAgentSenders: opts.includeAgentSenders
@@ -265,6 +265,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
                 candidate.isActive
             )
       const targetTab = activeSibling ?? tab
+      if (!automatic) {
+        recordShownTerminalUserOpen(this, worktreeId, targetTab.id)
+      }
       if (targetsHost && !this.notifier?.focusTerminal) {
         if (
           !targetTab.isActive &&

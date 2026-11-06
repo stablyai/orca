@@ -1,12 +1,11 @@
 // Skip coalescing requires a fixed, byte-identical sentence for each refusal reason.
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import {
-  isFinalAutomationRunStatus,
-  type Automation,
-  type AutomationDispatchRequest,
-  type AutomationDispatchResult,
-  type AutomationRun
+import type {
+  Automation,
+  AutomationDispatchRequest,
+  AutomationDispatchResult,
+  AutomationRun
 } from '../../shared/automations-types'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
@@ -99,8 +98,7 @@ export async function recordRefusedAutomationRun(input: {
   })
 }
 
-/** Fold broken schedules into one retained skip without interrupting the scheduler tick. */
-/** Record a detached launch's failure; a cancelled launch or a final row is left as it is. */
+/** Record a detached launch's failure; a cancelled or already-launched run is left as it is. */
 export async function recordFailedLaunch(input: {
   store: Pick<Store, 'listAutomationRuns'>
   run: AutomationRun
@@ -116,7 +114,8 @@ export async function recordFailedLaunch(input: {
     if (
       error instanceof AutomationDispatchCancelledError ||
       !current ||
-      isFinalAutomationRunStatus(current.status) ||
+      // A failed flush after the launch must not rewrite a launched run.
+      (current.status !== 'pending' && current.status !== 'dispatching') ||
       !input.isActive()
     ) {
       return
@@ -131,6 +130,7 @@ export async function recordFailedLaunch(input: {
   }
 }
 
+/** Fold broken schedules into one retained skip without interrupting the scheduler tick. */
 export async function recordUnevaluableAutomation(input: {
   runs: AutomationRunWriter
   automation: Automation

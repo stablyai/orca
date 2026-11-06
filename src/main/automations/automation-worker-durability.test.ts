@@ -112,6 +112,29 @@ describe('automation background writer durability', () => {
     }
   })
 
+  it('keeps a launched run dispatched when its dispatched write fails to flush', async () => {
+    const { store, automation } = await fixture()
+    const flush = store.flushPendingOrThrowAsync.bind(store)
+    let calls = 0
+    // Flushes: pending row, dispatching claim, then the dispatched write.
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementation(async (options) => {
+      calls += 1
+      if (calls === 3) {
+        throw new Error('disk full')
+      }
+      await flush(options)
+    })
+    const service = new AutomationService(store, { headlessDispatcher: async () => launch })
+    try {
+      const run = await runNowSettled(service, store, automation.id)
+      expect(
+        store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)
+      ).toMatchObject({ status: 'dispatched', terminalSessionId: 'run-tab' })
+    } finally {
+      service.stop()
+    }
+  })
+
   it.each([
     ['dispatching', 1],
     ['dispatched', 1],

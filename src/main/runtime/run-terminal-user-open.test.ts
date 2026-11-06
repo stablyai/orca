@@ -45,4 +45,31 @@ describe('run terminal client use after a tab open', () => {
     await activate('user')
     expect(runtime.readTerminalClientUse('run-pty')).toBe('used')
   })
+
+  it('keeps the open mark on the process a user open starts', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      // What main's spawn path does before the spawn returns.
+      spawn: vi.fn(async () => {
+        runtime.terminalRunFacts.recordSpawnCommit({ id: 'run-pty' })
+        return { id: 'run-pty' }
+      }),
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
+      notifyClients: false,
+      navigation: 'caller',
+      intent: 'user'
+    })
+    expect(runtime.readTerminalClientUse('run-pty')).toBe('used')
+  })
 })
