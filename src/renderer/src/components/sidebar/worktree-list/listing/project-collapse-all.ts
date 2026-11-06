@@ -1,4 +1,4 @@
-import { isProjectSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 export function getRenderedProjectCollapseKeys(rows: readonly HostSectionRow[]): string[] {
@@ -8,7 +8,7 @@ export function getRenderedProjectCollapseKeys(rows: readonly HostSectionRow[]):
       continue
     }
     const key = row.collapseKey ?? row.key
-    if (isProjectSectionGroupKey(key)) {
+    if (isProjectOrPinnedSectionGroupKey(key)) {
       keys.add(key)
     }
   }
@@ -22,7 +22,7 @@ export function areAllProjectsCollapsed(
   return projectKeys.length > 0 && projectKeys.every((key) => collapsedGroups.has(key))
 }
 
-// Expanding clears every project key, including nested ones hidden under a collapsed parent.
+// Expanding clears pinned and every project key, including hidden nested projects.
 export function setAllProjectsCollapsed(
   collapsedGroups: ReadonlySet<string>,
   projectKeys: readonly string[],
@@ -30,5 +30,5 @@ export function setAllProjectsCollapsed(
 ): Set<string> {
   return collapsed
     ? new Set([...collapsedGroups, ...projectKeys])
-    : new Set([...collapsedGroups].filter((key) => !isProjectSectionGroupKey(key)))
+    : new Set([...collapsedGroups].filter((key) => !isProjectOrPinnedSectionGroupKey(key)))
 }
