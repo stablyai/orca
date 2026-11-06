@@ -1,9 +1,5 @@
-import {
-  readsGitGraph,
-  GIT_GRAPH_PLACEMENT_COMMANDS,
-  createGitGraphFrameProjection,
-  translateGitGraphLayoutCommand
-} from '../git-graph-layout-projection'
+import { withoutGitGraph } from '../../../../shared/workspace-layout/workspace-layout-client-visibility'
+import { readsGitGraph, createGitGraphFrameProjection } from '../git-graph-layout-projection'
 // Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
 
 import {
@@ -106,21 +102,9 @@ export const LAYOUT_APPLY_METHODS = [
     permission: 'workspace',
     params: LayoutApplyParams,
     handler: async (params, { runtime, clientCapabilities }) => {
-      const command = params.command
-      if (
-        readsGitGraph(clientCapabilities) ||
-        !GIT_GRAPH_PLACEMENT_COMMANDS.has(command.type) ||
-        !('workspace' in command)
-      ) {
-        return runtime.applyLayoutCommand(command)
-      }
-      const { snapshot, unsubscribe } = runtime.subscribeWorkspaceLayouts(() => {})
-      unsubscribe()
-      const workspace =
-        command.type === 'moveTabToWorkspace' ? command.toWorkspace : command.workspace
-      const layout = snapshot.find((entry) => entry.key === workspace)?.layout
       return runtime.applyLayoutCommand(
-        layout ? translateGitGraphLayoutCommand(params.command, layout) : params.command
+        params.command,
+        readsGitGraph(clientCapabilities) ? undefined : { visibility: withoutGitGraph }
       )
     }
   }),

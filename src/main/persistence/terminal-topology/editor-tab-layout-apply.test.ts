@@ -1,3 +1,4 @@
+import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -172,21 +173,51 @@ describe('a window moveTabToWorkspace between a local and an SSH workspace', () 
       routes[from]!
     ])
     const newId = `editor:${to}:${path}`
+    const held = store.getWorkspaceSession(routes[to]).tabGroups?.[to]?.[0]?.id
+    await store.applyLayoutCommand(
+      {
+        type: 'openEditorTab',
+        workspace: to,
+        tabId: 'graph',
+        fileId: 'graph',
+        contentType: 'git-graph',
+        view: {
+          view: { mode: 'git-graph' },
+          file: { filePath: 'graph', relativePath: 'graph', language: 'plaintext' }
+        },
+        groupId: 'hidden',
+        ...(held ? { split: { besideGroupId: held, direction: 'right' as const } } : {})
+      },
+      [routes[to]!]
+    )
+    const destination = held ?? 'hidden'
 
     await expect(
-      applyWindowLayoutCommand(store, hostIdsFor, {
-        type: 'moveTabToWorkspace',
-        workspace: from,
-        toWorkspace: to,
-        tabs: [{ tabId: 'e1', newTabId: 'e1', newEntityId: newId }],
-        groupId: `group-${to}`,
-        file: { filePath: path, relativePath: 'readme.md', language: 'markdown' }
-      })
-    ).resolves.toEqual({ ok: true, result: { tabId: 'e1', groupId: `group-${to}` } })
+      applyWindowLayoutCommand(
+        store,
+        hostIdsFor,
+        {
+          type: 'moveTabToWorkspace',
+          workspace: from,
+          toWorkspace: to,
+          tabs: [{ tabId: 'e1', newTabId: 'e1', newEntityId: newId }],
+          groupId: `group-${to}`,
+          file: { filePath: path, relativePath: 'readme.md', language: 'markdown' }
+        },
+        undefined,
+        { visibility: withoutGitGraph }
+      )
+    ).resolves.toEqual({ ok: true, result: { tabId: 'e1', groupId: destination } })
 
     // Inspect before reload: this fixture lacks the SSH repo needed to retain its workspace.
     const source = store.getWorkspaceSession(routes[from])
     const target = store.getWorkspaceSession(routes[to])
+    expect(target.tabGroups?.[to]?.find((group) => group.id === destination)?.tabOrder).toEqual(
+      held ? [TAB, 'e1'] : ['graph', 'e1']
+    )
+    expect(target.unifiedTabs?.[to]?.find((tab) => tab.id === 'graph')?.contentType).toBe(
+      'git-graph'
+    )
     expect(source.unifiedTabs?.[from]?.some((tab) => tab.id === 'e1') ?? false).toBe(false)
     expect(source.openFilesByWorktree?.[from] ?? []).toEqual([])
     expect(target.unifiedTabs?.[to]?.find((tab) => tab.id === 'e1')).toMatchObject({
