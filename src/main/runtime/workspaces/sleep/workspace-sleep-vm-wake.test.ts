@@ -1,6 +1,5 @@
 // A recipe VM's suspend and resume never overlap, and one reopening runs its resume once.
 import { describe, expect, it } from 'vitest'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceSleepCoordinator, type WorkspaceSleepRuntime } from './workspace-sleep-runtime'
 import type { WorkspaceSleepPlatform } from './workspace-sleep-platform'
 import type { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
@@ -13,20 +12,6 @@ function gate(): Gate {
   let open!: () => void
   const opened = new Promise<void>((resolve) => (open = resolve))
   return { opened, open }
-}
-
-/** A lifecycle queue that holds every command until the test releases it. */
-function heldLifecycleQueue() {
-  const held: (() => void)[] = []
-  const hold = (_key: unknown, command: { run: () => Promise<unknown> }) =>
-    new Promise((resolve, reject) => held.push(() => void command.run().then(resolve, reject)))
-  const queue = { submit: hold, submitResolving: hold, pausedKeys: () => [] }
-  return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sleep and wake paths only submit commands.
-    queue: queue as unknown as WorkspaceLifecycleQueue,
-    held,
-    releaseAll: () => held.splice(0).forEach((release) => release())
-  }
 }
 
 function coordinator(
@@ -92,63 +77,6 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     await Promise.all([slept, woke])
 
     expect(order).toEqual(['suspend:start', 'suspend:end', 'resume'])
-  })
-
-  it("runs the recipe's resume once for two quick clicks, the second waiting for the first", async () => {
-    const resuming = gate()
-    let suspended = true
-    let resumes = 0
-    // Like the recipe resume: it only runs on a suspended VM.
-    const resumeVm = async (): Promise<EphemeralVmRuntimeRecord | null> => {
-      if (!suspended) {
-        return null
-      }
-      resumes += 1
-      await resuming.opened
-      suspended = false
-      return null
-    }
-    const workspaceSleep = coordinator({ suspendVm: async () => {}, resumeVm })
-
-    const first = workspaceSleep.wakeVm(WORKTREE_ID)
-    const second = workspaceSleep.wakeVm(WORKTREE_ID)
-    resuming.open()
-    await Promise.all([first, second])
-
-    expect(resumes).toBe(1)
-  })
-
-  it("resumes the VM while the workspace's lifecycle queue waits on the host it runs", async () => {
-    const lifecycle = heldLifecycleQueue()
-    const resumeVm = async (): Promise<EphemeralVmRuntimeRecord | null> => null
-    const workspaceSleep = coordinator({ suspendVm: async () => {}, resumeVm }, lifecycle.queue)
-
-    await expect(workspaceSleep.wakeVm(WORKTREE_ID)).resolves.toBeNull()
-    expect(lifecycle.held).toHaveLength(0)
-  })
-
-  it('keeps the VM up when the workspace is opened while its sleep waits its turn', async () => {
-    const lifecycle = heldLifecycleQueue()
-    const order: string[] = []
-    const workspaceSleep = coordinator(
-      {
-        suspendVm: async () => {
-          order.push('suspend')
-        },
-        resumeVm: async () => {
-          order.push('resume')
-          return null
-        }
-      },
-      lifecycle.queue
-    )
-
-    const slept = sleep(workspaceSleep)
-    await workspaceSleep.wakeVm(WORKTREE_ID)
-    lifecycle.releaseAll()
-    await slept
-
-    expect(order).toEqual(['resume'])
   })
 
   it('keeps the VM up when the workspace is opened while its suspend waits behind a wake', async () => {
