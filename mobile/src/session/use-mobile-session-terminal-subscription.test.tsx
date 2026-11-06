@@ -527,7 +527,7 @@ describe('two visible terminal subscriptions', () => {
 describe('terminal output credit', () => {
   function creditedTerminal() {
     const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
-    const parsed: Array<() => void> = []
+    const parsed: (() => void)[] = []
     harness.replaceTerminal({
       ...harness.terminal,
       writeWithParseAck: vi.fn((_data: string, onParsed: () => void) => {
