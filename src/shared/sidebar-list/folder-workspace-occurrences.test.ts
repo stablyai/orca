@@ -1,0 +1,165 @@
+import { describe, expect, it } from 'vitest'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../project-group-types'
+import type { Repo } from '../repo-types'
+import type { WorkspaceLineage } from '../worktree/lineage-types'
+import type { Worktree } from '../worktree/types'
+import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { cloneDefaultWorkspaceStatuses } from '../workspace-statuses'
+import { getFolderWorkspaceWorktree } from '../folder-workspaces/folder-workspace-worktree'
+import { planSidebarRows } from './sidebar-row-plan'
+import { resolveSidebarLineageParentIdentities } from './worktree-lineage-projection'
+import type { Row, WorktreeGroupBy } from './row-types'
+
+const group: ProjectGroup = {
+  id: 'group-1',
+  name: 'Multi repo',
+  parentPath: '/work/multi',
+  parentGroupId: null,
+  createdFrom: 'manual',
+  tabOrder: 0,
+  isCollapsed: false,
+  color: null,
+  createdAt: 0,
+  updatedAt: 0
+}
+const repo: Repo = {
+  id: 'repo-1',
+  path: '/work/multi/api',
+  displayName: 'api',
+  badgeColor: '#000000',
+  addedAt: 0,
+  projectGroupId: group.id
+}
+const folder: FolderWorkspace = {
+  id: 'f-1',
+  projectGroupId: group.id,
+  name: 'Release',
+  folderPath: '/work/multi',
+  linkedTask: null,
+  comment: '',
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 0,
+  createdAt: 0,
+  updatedAt: 0
+}
+const row = (id: string): Worktree => ({
+  id,
+  instanceId: `${id}#instance`,
+  repoId: repo.id,
+  path: `/work/multi/${id}`,
+  branch: `refs/heads/${id}`,
+  head: 'abc',
+  isBare: false,
+  isMainWorktree: false,
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  comment: '',
+  isUnread: false,
+  isPinned: false,
+  displayName: id,
+  sortOrder: 0,
+  lastActivityAt: 0
+})
+const nested = row('nested')
+const other = row('other')
+const folderRecord: WorkspaceLineage = {
+  childWorkspaceKey: `worktree:${nested.id}`,
+  childInstanceId: nested.instanceId,
+  parentWorkspaceKey: 'folder:f-1',
+  parentInstanceId: 'f-1',
+  origin: 'manual',
+  capture: { source: 'manual-action', confidence: 'explicit' },
+  createdAt: 1
+}
+
+function plan(groupBy: WorktreeGroupBy, record: WorkspaceLineage | undefined): Row[] {
+  const worktrees = [nested, other]
+  const rows = new Map(
+    [...worktrees, getFolderWorkspaceWorktree(folder)].map((entry) => [
+      getWorktreeHostIdentity(entry),
+      entry
+    ])
+  )
+  return planSidebarRows({
+    groupBy,
+    sortBy: 'name',
+    worktrees,
+    repoMap: new Map([[repo.id, repo]]),
+    prGroupOf: () => 'in-progress',
+    workspaceStatuses: cloneDefaultWorkspaceStatuses(),
+    projectOrderBy: 'manual',
+    lineageById: {},
+    lineageParentIdentities: resolveSidebarLineageParentIdentities({}, rows, undefined, (entry) =>
+      entry.id === nested.id ? record : undefined
+    ),
+    worktreeMap: new Map(worktrees.map((entry) => [entry.id, entry])),
+    nestLineage: true,
+    projectGroups: [group],
+    placeholderRepoIds: new Set(),
+    importedWorktreesByRepo: new Map(),
+    newExternalWorktreesInboxByRepo: new Map(),
+    pendingCreations: [],
+    folderWorkspaces: [folder],
+    defaultHostId: 'local',
+    pinnedDisplayPolicy: 'single-location',
+    filterRepoIds: []
+  }).render(new Set())
+}
+
+function shape(rows: Row[]): string[] {
+  return rows.flatMap((entry) =>
+    entry.type === 'header'
+      ? [`header ${entry.label ?? entry.key} ${entry.count}`]
+      : entry.type === 'folder-workspace'
+        ? [`folder ${entry.folderWorkspace.name} children=${entry.lineageChildCount ?? 0}`]
+        : entry.type === 'item'
+          ? [`${'  '.repeat(entry.depth)}${entry.worktree.id}`]
+          : []
+  )
+}
+
+describe('folder workspaces as sidebar parents', () => {
+  it('nests a folder child under the folder in its project group, header counts unchanged', () => {
+    expect(shape(plan('repo', folderRecord))).toEqual([
+      'header Multi repo 2',
+      'folder Release children=1',
+      '  nested',
+      'header api 1',
+      'other'
+    ])
+  })
+
+  it('leaves the child in its project when it has no folder parent', () => {
+    expect(shape(plan('repo', undefined))).toEqual([
+      'header Multi repo 2',
+      'folder Release children=0',
+      'header api 2',
+      'nested',
+      'other'
+    ])
+  })
+
+  it('nests under the folder without grouping', () => {
+    expect(shape(plan('none', folderRecord))).toEqual([
+      'header all 3',
+      'other',
+      'folder Release children=1',
+      '  nested'
+    ])
+  })
+
+  it('ignores a record saved for an earlier workspace at the same path', () => {
+    expect(shape(plan('none', { ...folderRecord, childInstanceId: 'old#instance' }))).toEqual([
+      'header all 3',
+      'nested',
+      'other',
+      'folder Release children=0'
+    ])
+  })
+})

@@ -9,6 +9,7 @@ import {
   type CrossStoreLineageView
 } from './cross-store-lineage-resolution'
 import type { Worktree } from './types'
+import { resolveFolderLineageParents, type FolderLineageRecordOf } from './folder-lineage-parents'
 
 export type WorktreeWithInlineLineage = Worktree & { lineage?: WorktreeLineage | null }
 
@@ -44,18 +45,28 @@ export function getSameStoreLineageParent(
     : undefined
 }
 
-/** Every parent the viewer can see, by child host identity: same-store edges from saved lineage merged
- * with cross-store records (a valid same-store edge wins), cycles dropped. Rows may include folder
- * workspace rows; their identity is lineageInstanceIdOfRow. Pass every visible store's unfiltered rows:
- * a filtered-out twin must still make a parent ambiguous. */
+/** Every parent the viewer can see, by child host identity, one pick per child: a valid same-store
+ * worktree edge, else a same-store folder workspace record (with `folderRecordOf`), else a cross-store
+ * record; cycles dropped. Rows may include folder workspace rows; their identity is
+ * lineageInstanceIdOfRow. Pass every visible store's unfiltered rows: a filtered-out twin must still
+ * make a parent ambiguous. */
 export function resolveWorkspaceLineageParents(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   rowsByHostIdentity: ReadonlyMap<string, Worktree>,
-  crossStoreLineage?: CrossStoreLineageView
+  crossStoreLineage?: CrossStoreLineageView,
+  folderRecordOf?: FolderLineageRecordOf
 ): Map<string, Worktree> {
   const parentByIdentity = crossStoreLineage
     ? resolveCrossStoreLineageParents(rowsByHostIdentity, crossStoreLineage)
     : new Map<string, Worktree>()
+  if (folderRecordOf) {
+    for (const [identity, folder] of resolveFolderLineageParents(
+      rowsByHostIdentity,
+      folderRecordOf
+    )) {
+      parentByIdentity.set(identity, folder)
+    }
+  }
   for (const [identity, row] of rowsByHostIdentity) {
     const parent = getSameStoreLineageParent(row, lineageById, rowsByHostIdentity)
     if (parent) {
