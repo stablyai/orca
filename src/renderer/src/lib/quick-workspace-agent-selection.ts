@@ -6,7 +6,7 @@ import {
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
+import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   isTuiAgentEnabled,
   pickTuiAgent,

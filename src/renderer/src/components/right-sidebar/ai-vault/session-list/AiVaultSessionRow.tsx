@@ -8,7 +8,7 @@ import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
-} from '@/lib/ai-vault-session-drag'
+} from '@/lib/agent-session/resume/history/ai-vault-session-drag'
 import type {
   AiVaultScope,
   AiVaultSession

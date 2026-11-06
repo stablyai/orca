@@ -20,7 +20,7 @@ vi.mock('./parked-terminal-byte-watcher', () => ({
 
 type ExitCallback = (code: number, context: { hadPrimary: boolean }) => void
 const exitCallbacksByPtyId = new Map<string, ExitCallback>()
-vi.mock('./pty-dispatcher', () => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', () => ({
   subscribeToPtyExit: (ptyId: string, callback: ExitCallback) => {
     exitCallbacksByPtyId.set(ptyId, callback)
     return vi.fn()
@@ -29,7 +29,7 @@ vi.mock('./pty-dispatcher', () => ({
 
 const consumePreHandlerPtyState = vi.fn()
 const discardPreHandlerPtyState = vi.fn()
-vi.mock('./pty-pre-handler-buffer', () => ({
+vi.mock('./pty-transport/delivery/pty-pre-handler-buffer', () => ({
   consumePreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId),
   discardPreHandlerPtyState: (ptyId: string) => discardPreHandlerPtyState(ptyId),
   hasPreHandlerPtyExit: () => false

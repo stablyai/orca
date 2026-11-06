@@ -1,4 +1,4 @@
-import type { PtyDataMeta } from './pty-dispatcher'
+import type { PtyDataMeta } from './pty-transport/delivery/pty-dispatcher'
 
 const CAN = '\x18'
 

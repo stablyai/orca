@@ -13,7 +13,7 @@ import {
 import { useAppStore } from '@/store'
 import { capturePRCheckContract, type PRCheckContract } from '@/lib/pr-check-observation-contract'
 import { getGitHubSourceRuntimeTarget } from '@/lib/github-source-runtime-context'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
   acceptPRCheckObservation,

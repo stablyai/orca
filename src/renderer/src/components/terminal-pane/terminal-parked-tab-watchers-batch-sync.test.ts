@@ -44,11 +44,11 @@ vi.mock('./parked-terminal-byte-watcher', () => ({
     startParkedTerminalByteWatcher(options)
 }))
 
-vi.mock('./pty-dispatcher', () => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', () => ({
   subscribeToPtyExit: () => () => {}
 }))
 
-vi.mock('./pty-pre-handler-buffer', () => ({
+vi.mock('./pty-transport/delivery/pty-pre-handler-buffer', () => ({
   discardPreHandlerPtyState: (ptyId: string) => {
     events.push({ kind: 'discard', ptyId })
   },

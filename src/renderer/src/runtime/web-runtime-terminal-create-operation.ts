@@ -6,7 +6,7 @@ import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 import {
   createAgentSessionCreateOperation,

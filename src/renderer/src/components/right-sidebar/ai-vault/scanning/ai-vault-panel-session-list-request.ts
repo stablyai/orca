@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { getProjectHostSetupProjectionFromState } from '@/store/selectors'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { resolveAiVaultHostScopeDefaults } from '../scope/ai-vault-host-scope'

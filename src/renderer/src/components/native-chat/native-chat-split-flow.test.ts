@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import type * as importCreation from '@/runtime/web-runtime-terminal-creation'
-import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
+import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type * as WorktreeOperationRoute from '@/lib/worktree-operation-route'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
@@ -27,7 +27,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi
 vi.mock('@/components/tab-bar/request-active-terminal-pane-split', () => ({
   requestActiveTerminalPaneSplit: requestSplit
 }))
-vi.mock('@/lib/worktree-runtime-owner', async (original) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (original) => ({
   ...(await original<typeof WorktreeRuntimeOwner>()),
   runtimeEnvironmentIdOrLocalUnlessTwin: (_state: unknown, worktreeId: string) =>
     runtimeOwners.get(worktreeId) ?? null

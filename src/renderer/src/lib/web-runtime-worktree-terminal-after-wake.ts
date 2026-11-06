@@ -1,4 +1,4 @@
-import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { useAppStore } from '@/store'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
@@ -9,8 +9,8 @@ import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'

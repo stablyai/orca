@@ -3,7 +3,6 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
-import { NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID } from './native-chat-opened-pull-requests-setting-target'
 
 export const getChatBehaviorTitle = (): string =>
   translate('components.settings.nativeChat.behaviorTitle', 'Behavior')
@@ -88,21 +87,6 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     keywords: [
       translate('components.settings.nativeChat.linkPreviewsSearchUnfurl', 'unfurl'),
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
-    ]
-  },
-  openedPullRequests: {
-    targetSectionId: NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID,
-    title: translate(
-      'components.settings.nativeChat.openedPullRequestsTitle',
-      'Show pull requests the agent opens'
-    ),
-    description: translate(
-      'components.settings.nativeChat.openedPullRequestsCopy',
-      'A card under the turn that opened a pull request, with its title and changed lines.'
-    ),
-    keywords: [
-      translate('components.settings.nativeChat.openedPullRequestsSearchPr', 'PR'),
-      translate('components.settings.nativeChat.openedPullRequestsSearchCard', 'pull request card')
     ]
   },
   shellEnvironment: {

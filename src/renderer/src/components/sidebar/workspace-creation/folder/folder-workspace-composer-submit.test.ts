@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', async (importOriginal) => {
+vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
 })

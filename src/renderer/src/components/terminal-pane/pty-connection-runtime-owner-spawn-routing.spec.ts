@@ -62,8 +62,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -111,8 +112,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks2 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -143,7 +145,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks3 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport('remote:owner-runtime@@terminal-1')
       transportFactoryQueue.push(transport)
 
@@ -196,8 +199,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks4 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport('pty-local-1')
       transportFactoryQueue.push(transport)
 

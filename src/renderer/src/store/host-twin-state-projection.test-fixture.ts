@@ -9,7 +9,7 @@ import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktre
 import {
   clearHugeRepoWarningDismissalsForTests,
   hasDismissedHugeRepoWarning
-} from '@/lib/source-control-huge-repo-warning-dismissals'
+} from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import type { HostTwinFixture, HostTwinSide } from './host-twin.test-fixture'
 
 export function resetHostTwinModuleStores(fixture: HostTwinFixture): void {

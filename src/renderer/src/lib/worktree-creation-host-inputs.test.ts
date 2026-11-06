@@ -7,8 +7,8 @@ import { quickWorkspacePickerInputs } from './quick-workspace-agent-selection'
 import { createWorktreeOnRuntimeHost } from '@/store/slices/worktrees/create/host-planned-agent-launch'
 import type { WorktreeCreateRequest } from '@/store/slices/worktrees/create/worktree-create-payload'
 import { prepareQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
-import { worktreeCreationAgentLaunchOptions } from './worktree-creation-host-agent-launch'
-import type { WorktreeCreationRequest } from './pending-worktree-creation'
+import { worktreeCreationAgentLaunchOptions } from '@/lib/workspace/creation/worktree-creation-host-agent-launch'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(), cached: vi.fn() }))

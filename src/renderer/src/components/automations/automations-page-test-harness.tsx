@@ -171,7 +171,7 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
   ensureHooksConfirmed: vi.fn(async () => 'inherit')
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 

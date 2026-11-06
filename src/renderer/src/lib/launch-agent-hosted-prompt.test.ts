@@ -4,7 +4,7 @@ import type * as HostSettings from '@/runtime/agent-launch-settings/agent-launch
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
 import type { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
-import { launchAgentInWebHostTab } from './launch-agent-web-host-tab'
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn<typeof createWebRuntimeSessionTerminalResult>(),

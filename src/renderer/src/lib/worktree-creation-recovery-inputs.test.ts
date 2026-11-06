@@ -2,11 +2,11 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { buildQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
-import type { WorktreeCreationRequest } from './pending-worktree-creation'
-import { buildWorktreeCreationStartupOpt } from './worktree-creation-flow-startup'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
+import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
-import { openBackgroundDeclinedTerminal } from './worktree-creation-background-mount'
-import { seedAgentTabStateAfterWorktreeCreate } from './worktree-creation-agent-seeds'
+import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
+import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 
 const mocks = vi.hoisted(
@@ -22,8 +22,10 @@ const mocks = vi.hoisted(
     agent: 'claude'
   })
 )
-vi.mock('@/lib/launch-agent-web-host-tab', () => ({ launchAgentInWebHostTab: mocks.launch }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
+  launchAgentInWebHostTab: mocks.launch
+}))
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => 'host'
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -32,7 +34,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: mocks.seedOptions
 }))
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   seedNativeChatLaunchDraftForAgentTab: mocks.seedDraft
 }))
 vi.mock('@/store', () => ({

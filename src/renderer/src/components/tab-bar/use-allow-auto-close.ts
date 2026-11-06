@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import {
   readWorkerAutoClose,

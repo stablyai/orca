@@ -6,7 +6,7 @@ import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { mainStartsPane } from './main-starts-pane'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
-import type { IpcPtyTransportOptions } from '../pty-transport-types'
+import type { IpcPtyTransportOptions } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** A split waiting on its inherited cwd, or remounted with handed-off keys; it holds keys as before. */

@@ -96,8 +96,9 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
     expect(quick.startupPlan?.launchCommand).not.toContain('desktop')
     expect(quick.startupPlan?.launchCommand).not.toContain("'low'")
     const { prepareDirectWorkItemAgentLaunch } =
-      await import('@/lib/launch-work-item-direct-route-preparation')
-    const { planAgentSessionLaunch } = await import('@/lib/agent-session-launch-plan')
+      await import('@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation')
+    const { planAgentSessionLaunch } =
+      await import('@/lib/agent-session/launch/routing/agent-session-launch-plan')
     const direct = await prepareDirectWorkItemAgentLaunch({
       worktreeId: 'wt',
       worktreePath: '/repo',

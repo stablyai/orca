@@ -2,8 +2,8 @@ import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import type { DirectWorkItemSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
