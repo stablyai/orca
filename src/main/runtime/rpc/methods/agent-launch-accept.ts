@@ -11,8 +11,12 @@ import {
   AgentLaunchStatus,
   type AgentLaunchAcceptParams,
   type AgentLaunchAcceptResult,
+  type AgentLaunchReleasePhaseStatusResult,
   type AgentLaunchStatusResult
 } from '../../../../shared/rpc-contract/agent-launch-accept-params'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchAcceptance } from '../../../agent-launch/agent-launch-acceptance'
+import type { AgentLaunchReleaseGate } from '../../../agent-launch/agent-launch-release-gate'
 import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requirement'
 import { defineMethod, type RpcContext } from '../core'
 import { joinReplaySafeAgentLaunch } from './agent-launch'
@@ -51,7 +55,7 @@ export const AGENT_LAUNCH_ACCEPT_METHODS = [
     name: 'agent.launchStatus',
     permission: 'workspace',
     params: AgentLaunchStatus,
-    handler: (params, context): Promise<AgentLaunchStatusResult> =>
+    handler: (params, context): Promise<AgentLaunchReleasePhaseStatusResult> =>
       readAgentLaunchStatus(params, context)
   })
 ]
@@ -60,11 +64,6 @@ async function acceptAgentLaunch(
   { terminalStartup, setupReceipt, prompt, ...params }: AgentLaunchAcceptParams,
   context: RpcContext
 ): Promise<AgentLaunchAcceptResult> {
-  if (!supportsAgentLaunch(context)) {
-    throw new Error('agent_launch_unsupported')
-  }
-  assertAgentLaunchTargetAuthorized(params.target, context)
-  const { operationId } = params
   const launch = {
     ...params,
     ...(prompt ? { prompt: { text: prompt.text, delivery: prompt.delivery } } : {})
@@ -76,6 +75,34 @@ async function acceptAgentLaunch(
     ...(terminalStartup ? { terminalStartup } : {}),
     setupReceipt
   })
+  return answerAcceptedAgentLaunch(launch, context, fingerprint, {
+    setupReceipt,
+    ...(terminalStartup ? { terminalStartup } : {}),
+    ...(prompt ? { clientMessageId: prompt.clientMessageId } : {})
+  })
+}
+
+/** An accepted or prepared launch: admitted, then run by the host in the background. A prepared one's
+ *  `release` makes its wait for final input, which only this execution consumes. */
+export async function answerAcceptedAgentLaunch(
+  launch: AgentLaunchParams & {
+    operationId: string
+    target: { kind: 'existing'; worktree: string }
+  },
+  context: RpcContext,
+  fingerprint: string,
+  {
+    release,
+    ...acceptance
+  }: Pick<AgentLaunchAcceptance, 'setupReceipt' | 'terminalStartup' | 'clientMessageId'> & {
+    release?: (closed: AbortSignal) => AgentLaunchReleaseGate
+  }
+): Promise<AgentLaunchAcceptResult> {
+  if (!supportsAgentLaunch(context)) {
+    throw new Error('agent_launch_unsupported')
+  }
+  assertAgentLaunchTargetAuthorized(launch.target, context)
+  const { operationId } = launch
   const key = agentSessionOperationKey(agentLaunchOperationCallerKey(context), operationId)
   // Joined or started before any await: an overlapping accept shares this one's admission.
   let active = activeAgentLaunchesFor(context.runtime).get(key)
@@ -84,22 +111,40 @@ async function acceptAgentLaunch(
   }
   if (!active) {
     const closed = new AbortController()
-    const unsubscribe = params.sessionId
-      ? subscribeStructuredAgentSessionClose(params.sessionId, () => closed.abort())
+    const unsubscribe = launch.sessionId
+      ? subscribeStructuredAgentSessionClose(launch.sessionId, () => closed.abort())
       : () => {}
+    // An authoritative removal of its workspace ends it as a close does: nothing it owes starts there.
+    let workspaceId: string | undefined
+    void context.runtime.showTerminalWorkspaceLaunchScope(launch.target.worktree).then(
+      (scope) => (workspaceId = scope.id),
+      () => {}
+    )
+    const stopRemoval = context.runtime.onWorktreeLifecycle((event) => {
+      if (event.kind === 'removed' && event.worktreeId === workspaceId) {
+        closed.abort()
+      }
+    })
+    const gate = release?.(closed.signal)
     active = joinReplaySafeAgentLaunch(launch, context, fingerprint, {
-      setupReceipt,
+      ...acceptance,
       // Read only once admitted: a recorded answer never waits on this host's Setup registry.
       readSetupRun: async () =>
         context.runtime.getSetupRun(
-          (await context.runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)).id
+          (await context.runtime.showTerminalWorkspaceLaunchScope(launch.target.worktree)).id
         ),
-      ...(terminalStartup ? { terminalStartup } : {}),
-      ...(prompt ? { clientMessageId: prompt.clientMessageId } : {}),
-      closed: closed.signal
+      closed: closed.signal,
+      ...(gate ? { release: gate } : {})
     })
     // Detached: the ledger records how it ends, and a claimed row left unsettled reads as unknown.
-    void active.promise.catch(() => {}).finally(unsubscribe)
+    // Its end also ends any input wait, timer and close listener it still holds.
+    void active.promise
+      .catch(() => {})
+      .finally(() => {
+        unsubscribe()
+        stopRemoval()
+        gate?.finish()
+      })
   }
   const admission = await active.admitted
   if (!admission) {
@@ -117,9 +162,13 @@ async function acceptAgentLaunch(
 }
 
 async function readAgentLaunchStatus(
-  { operationId, waitMs }: { operationId: string; waitMs?: number },
+  {
+    operationId,
+    waitMs,
+    includeReleasePhase
+  }: { operationId: string; waitMs?: number; includeReleasePhase?: true },
   context: RpcContext
-): Promise<AgentLaunchStatusResult> {
+): Promise<AgentLaunchReleasePhaseStatusResult> {
   if (!supportsAgentLaunch(context)) {
     throw new Error('agent_launch_unsupported')
   }
@@ -127,9 +176,35 @@ async function readAgentLaunchStatus(
   const active = activeAgentLaunchesFor(context.runtime).get(
     agentSessionOperationKey(callerKey, operationId)
   )
-  if (active && !(waitMs && (await settlesWithin(active.promise, waitMs, context.signal)))) {
-    return { state: 'running' }
+  const gate = includeReleasePhase ? active?.release : undefined
+  if (gate?.awaitingRelease) {
+    return { state: 'awaiting-release' }
   }
+  if (active) {
+    // A prepared launch still in Setup wakes its reader when it becomes ready as well as when it ends.
+    const wake = gate?.preparing ? gate.phaseSignal : active.promise
+    if (!(waitMs && (await settlesWithin(wake, waitMs, context.signal)))) {
+      return { state: 'running' }
+    }
+    if (wake !== active.promise) {
+      if (gate?.awaitingRelease) {
+        return { state: 'awaiting-release' }
+      }
+      const key = agentSessionOperationKey(callerKey, operationId)
+      if (activeAgentLaunchesFor(context.runtime).get(key) === active) {
+        return { state: 'running' }
+      }
+    }
+  }
+  return readRecordedAgentLaunchStatus(context, callerKey, operationId)
+}
+
+/** The launch's recorded answer, with nothing running for it here. */
+export async function readRecordedAgentLaunchStatus(
+  context: RpcContext,
+  callerKey: string,
+  operationId: string
+): Promise<AgentLaunchStatusResult> {
   const store = await context.runtime.openAgentSessionRecordStore()
   const row = store.getOperationRow(callerKey, operationId)
   if (!row) {

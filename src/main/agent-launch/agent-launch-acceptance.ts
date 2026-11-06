@@ -15,6 +15,7 @@ import type {
   AgentLaunchTerminalStartupParams
 } from '../../shared/rpc-contract/agent-launch-accept-params'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
+import type { AgentLaunchReleaseGate } from './agent-launch-release-gate'
 
 export type AgentLaunchAcceptance = {
   /** What the workspace's creation reported about the Setup this launch waits for. */
@@ -27,6 +28,16 @@ export type AgentLaunchAcceptance = {
   clientMessageId?: string
   /** Aborts when the user closes the reserved chat; every owner checks it before it commits. */
   closed: AbortSignal
+  /** A prepared launch: after Setup it waits here for its final input, whose choices replace the
+   *  absent ones above and compile its terminal alternative. */
+  release?: AgentLaunchReleaseGate
+}
+
+/** The caller's terminal alternative: as sent, or a prepared launch's recipe compiled with its input. */
+export function acceptedTerminalStartup(
+  acceptance: AgentLaunchAcceptance | undefined
+): AgentLaunchTerminalStartupParams | undefined {
+  return acceptance?.release ? acceptance.release.terminalStartup() : acceptance?.terminalStartup
 }
 
 /** Before either surface and after every wait: a closed chat starts nothing. */
@@ -44,11 +55,13 @@ export async function awaitAcceptedLaunchSetup(
   assertAcceptedLaunchOpen(acceptance)
   const receipt = acceptance.setupReceipt
   if (!receipt.required) {
+    acceptance.release?.setupSucceeded()
     return
   }
   const run =
     receipt.runId === null ? undefined : await acceptance.readSetupRun().catch(() => undefined)
   assertAcceptedLaunchOpen(acceptance)
+  acceptance.release?.assertWaiting()
   if (!run || run.id !== receipt.runId) {
     // A restarted host, an evicted or replaced run: the required run's success can no longer be shown.
     throw new AgentLaunchSetupNotCompletedError(
@@ -56,17 +69,20 @@ export async function awaitAcceptedLaunchSetup(
       agent
     )
   }
+  // A prepared launch's wait can end first, at its horizon, while Setup still runs.
+  const ends = [signal, acceptance.closed, acceptance.release?.endedSignal].filter(
+    (end): end is AbortSignal => end !== undefined
+  )
   try {
-    await awaitSetupRunSuccess(
-      run,
-      agent,
-      signal ? AbortSignal.any([signal, acceptance.closed]) : acceptance.closed
-    )
+    await awaitSetupRunSuccess(run, agent, ends.length === 1 ? ends[0] : AbortSignal.any(ends))
   } catch (error) {
     assertAcceptedLaunchOpen(acceptance)
+    acceptance.release?.assertWaiting()
     throw error
   }
   assertAcceptedLaunchOpen(acceptance)
+  acceptance.release?.assertWaiting()
+  acceptance.release?.setupSucceeded()
 }
 
 /** Where the caller's plan puts the held message. The plan's own draft owns the agent's input, so a
@@ -88,7 +104,7 @@ export function acceptedTerminalIntent(
   intent: AgentLaunchIntent,
   acceptance: AgentLaunchAcceptance | undefined
 ): AgentLaunchIntent {
-  const plan = acceptedHeldMessagePlan(acceptance?.terminalStartup)
+  const plan = acceptedHeldMessagePlan(acceptedTerminalStartup(acceptance))
   if ((plan !== 'submit' && plan !== 'draft') || !intent.prompt) {
     return intent
   }
@@ -100,7 +116,7 @@ export function assertAcceptedTerminalAlternative(
   acceptance: AgentLaunchAcceptance | undefined,
   agent: string
 ): void {
-  if (acceptance && !acceptance.terminalStartup) {
+  if (acceptance && !acceptedTerminalStartup(acceptance)) {
     const name = formatAgentTypeLabel(agent)
     throw new AgentLaunchSurfaceUnavailableError(
       `${name} can't open as a chat here, so it was not started. Start it in a terminal instead.`

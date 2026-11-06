@@ -140,7 +140,8 @@ function envPatchPlan(method: string, params: Record<string, unknown>): EnvPatch
   if (
     method === 'agent.launch' ||
     method === 'agent.launchReplay' ||
-    method === 'agent.launchAccept'
+    method === 'agent.launchAccept' ||
+    method === 'agent.launchPrepare'
   ) {
     // A reused terminal starts no process, so it has no home to choose.
     return params.reuseTerminal ? null : { field: 'accountEnv', agent: tuiAgentOf(params.agent) }

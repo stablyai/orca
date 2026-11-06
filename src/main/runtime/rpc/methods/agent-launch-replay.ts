@@ -56,6 +56,8 @@ export type AgentLaunchAdmission =
       /** Distinct from the launch id: the inner attach reserves in this same ledger. */
       attachOperationId: string
       callerKey: string
+      /** When this launch's record expires; a prepared launch's input wait ends there. */
+      expiresAt: number
     }
   /** Already run under this id; hand back what it produced rather than producing it again. */
   | { decision: 'replay'; result: AgentLaunchResult }
@@ -236,6 +238,7 @@ export async function admitAgentLaunchOperation(
     decision: 'execute',
     attachOperationId,
     callerKey,
+    expiresAt: claim.row.expiresAt,
     // The same row shape twice: a build that predates the first write reads either one.
     record: succeeded,
     settle: succeeded,

@@ -29,18 +29,24 @@ export type AgentLaunchFingerprintInput = {
   terminalStartup?: Readonly<Record<string, unknown>>
   /** In: the creation's Setup receipt decides what an accepted launch waits for. */
   setupReceipt?: Readonly<Record<string, unknown>>
+  /** In: a prepared launch's terminal recipe is what its released choices compile into. */
+  terminalAlternative?: Readonly<Record<string, unknown>>
   /** Exclude launchSource, placement and presentation: they change attribution/view, not execution. Replays truthfully retain the first launch's attribution. */
 }
 
-/** Compute on the host; trusting a caller digest permits false matches. */
-export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput): string {
+/** Compute on the host; trusting a caller digest permits false matches. A prepared launch digests under
+ *  its own method, so it never matches an accept or ordinary launch reusing its id. */
+export function computeAgentLaunchFingerprint(
+  input: AgentLaunchFingerprintInput,
+  method: 'agent.launch' | 'agent.launchPrepare' = 'agent.launch'
+): string {
   let target = input.target
   if (target.kind === 'create-worktree') {
     const { cwdParentAmbiguous: _observation, ...create } = target.create
     target = { ...target, create }
   }
   return canonicalAgentSessionDigest({
-    method: 'agent.launch',
+    method,
     agent: input.agent,
     target,
     prompt: input.prompt,
@@ -54,20 +60,25 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     sessionId: input.sessionId,
     surface: input.surface,
     terminalStartup: input.terminalStartup,
-    setupReceipt: input.setupReceipt
+    setupReceipt: input.setupReceipt,
+    terminalAlternative: input.terminalAlternative
   })
 }
 
 const OPERATION_ID_ENTROPY_LENGTH = 32
 
-/** Derive a stable child attach ID distinct from its parent: the ledger keys callerKey+operationId without method, so reusing the parent conflicts. Keep its timestamp for equal expiry. */
-export function deriveAgentLaunchChildOperationId(operationId: string): string | null {
+/** Derive a stable child ID distinct from its parent: the ledger keys callerKey+operationId without method, so reusing the parent conflicts. Keep its timestamp so the child ages with its parent.
+ *  `attach` names the chat the launch founds; `release` names the final input a prepared launch was handed. */
+export function deriveAgentLaunchChildOperationId(
+  operationId: string,
+  child: 'attach' | 'release' = 'attach'
+): string | null {
   const timestamp = parseAgentSessionOperationTimestamp(operationId)
   if (timestamp === null) {
     return null
   }
   const entropy = canonicalAgentSessionDigest({
-    child: 'agent.launch:attach',
+    child: `agent.launch:${child}`,
     operationId
   }).slice(0, OPERATION_ID_ENTROPY_LENGTH)
   return `${timestamp}-${entropy}`

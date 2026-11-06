@@ -1,12 +1,15 @@
 import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { AgentLaunchAdmission } from './agent-launch-replay'
+import type { AgentLaunchReleaseGate } from '../../../agent-launch/agent-launch-release-gate'
 
 export type ActiveAgentLaunch = {
   fingerprint: string
   promise: Promise<AgentLaunchResult>
   /** Its admission, shared with every request that joins it; null when the launch failed before one. */
   admitted: Promise<AgentLaunchAdmission | null>
+  /** Present only for a prepared launch: its wait for final input, which only its caller may end. */
+  release?: AgentLaunchReleaseGate
 }
 
 const activeAgentLaunchesByRuntime = new WeakMap<
@@ -31,7 +34,8 @@ export function joinOrStartActiveAgentLaunch(
   runtime: OrcaRuntimeService,
   key: string,
   fingerprint: string,
-  start: (onAdmitted: (admission: AgentLaunchAdmission) => void) => Promise<AgentLaunchResult>
+  start: (onAdmitted: (admission: AgentLaunchAdmission) => void) => Promise<AgentLaunchResult>,
+  release?: AgentLaunchReleaseGate
 ): ActiveAgentLaunch {
   const activeAgentLaunches = activeAgentLaunchesFor(runtime)
   const active = activeAgentLaunches.get(key)
@@ -49,7 +53,12 @@ export function joinOrStartActiveAgentLaunch(
       activeAgentLaunches.delete(key)
     }
   })
-  const launch = { fingerprint, promise, admitted: admitted.promise }
+  const launch = {
+    fingerprint,
+    promise,
+    admitted: admitted.promise,
+    ...(release ? { release } : {})
+  }
   activeAgentLaunches.set(key, launch)
   return launch
 }

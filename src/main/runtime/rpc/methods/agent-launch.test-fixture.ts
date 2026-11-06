@@ -2,6 +2,7 @@ import type { SetupRun } from '../../setup/setup-run'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
+import type { RuntimeWorktreeLifecycleEvent } from '../../workspaces/lifecycle/worktree-lifecycle-event'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
@@ -69,6 +70,15 @@ let launchRecordStore: AgentSessionRecordStore | null = null
 /** The ledger every stub's `openAgentSessionRecordStore` opens, as a process opens its one store. */
 export function setAgentLaunchRecordStore(store: AgentSessionRecordStore | null): void {
   launchRecordStore = store
+}
+
+// The runtime's workspace lifecycle stream, as an authoritative removal announces itself.
+const worktreeLifecycleListeners = new Set<(event: RuntimeWorktreeLifecycleEvent) => void>()
+
+export function emitWorktreeRemovedForTests(worktreeId: string): void {
+  for (const listener of worktreeLifecycleListeners) {
+    listener({ kind: 'removed', worktreeId, path: '/tmp/wt-7' })
+  }
 }
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
@@ -157,6 +167,10 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       })
     ),
     ensureStructuredAgentSessionHost: vi.fn(async () => {}),
+    onWorktreeLifecycle: vi.fn((listener: (event: RuntimeWorktreeLifecycleEvent) => void) => {
+      worktreeLifecycleListeners.add(listener)
+      return () => worktreeLifecycleListeners.delete(listener)
+    }),
     openAgentSessionRecordStore: vi.fn(async (): Promise<AgentSessionRecordStore> => {
       if (!launchRecordStore) {
         throw new Error('agent_session_record_store_unavailable')

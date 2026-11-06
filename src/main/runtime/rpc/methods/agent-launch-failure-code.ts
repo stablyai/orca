@@ -22,6 +22,7 @@ import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folde
 import { WorktreeCreateSetupChoiceRefusedError } from '../../workspaces/creation/worktree-create-setup-choice-refusal'
 import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
 import { AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
+import { AgentLaunchInputExpiredError } from '../../../agent-launch/agent-launch-release-gate'
 import {
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AgentLaunchClosedBeforeDispatchError
@@ -100,6 +101,10 @@ export function launchFailureWithoutEffectsCode(
   }
   if (error instanceof AgentLaunchClosedBeforeDispatchError) {
     return AGENT_LAUNCH_TAB_CLOSED_CODE
+  }
+  // A prepared launch whose final input never arrived reaches no surface at all.
+  if (error instanceof AgentLaunchInputExpiredError) {
+    return error.code
   }
   if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
     return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE

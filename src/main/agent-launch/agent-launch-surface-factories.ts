@@ -26,6 +26,11 @@ export type AgentLaunchSurfaceFactory = {
     agent: StructuredAgentId
     chatOptions?: Readonly<Record<string, string>>
     options?: Readonly<Record<string, unknown>>
+    /** A prepared launch's final choices: exactly these create options and mode, never derived. */
+    releasedOptions?: {
+      options: Readonly<Record<string, string>>
+      optionsMode?: 'replace-model-selection'
+    }
     /** Caller-minted ID; reject with AgentLaunchSessionAlreadyExistsError if taken. */
     sessionId?: string
     /** Caller-reserved tab ID; omit to use the ID clients derive. */

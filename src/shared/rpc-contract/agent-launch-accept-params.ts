@@ -50,6 +50,13 @@ export const AgentLaunchSetupReceipt = z.discriminatedUnion('required', [
 
 export type AgentLaunchSetupReceipt = z.infer<typeof AgentLaunchSetupReceipt>
 
+/** The held message, under the id its chat founds it with, so every reader names one message. */
+export const AgentLaunchHeldPrompt = z.object({
+  text: z.string(),
+  delivery: z.enum(['submit', 'draft']),
+  clientMessageId: Identifier('Invalid client message id')
+})
+
 /** agent.launchReplay's request for a workspace that already exists; a reused terminal has no Setup to wait for. */
 export const AgentLaunchAccept = AgentLaunchFields.omit({ reuseTerminal: true })
   .extend({
@@ -57,14 +64,7 @@ export const AgentLaunchAccept = AgentLaunchFields.omit({ reuseTerminal: true })
       kind: z.literal('existing'),
       worktree: z.string().min(1, 'Missing worktree selector')
     }),
-    /** The held message, under the id its chat founds it with, so every reader names one message. */
-    prompt: z
-      .object({
-        text: z.string(),
-        delivery: z.enum(['submit', 'draft']),
-        clientMessageId: Identifier('Invalid client message id')
-      })
-      .optional(),
+    prompt: AgentLaunchHeldPrompt.optional(),
     terminalStartup: AgentLaunchTerminalStartup.optional(),
     /** Required: a missing receipt is uncertainty, never proof that nothing must be waited for. */
     setupReceipt: AgentLaunchSetupReceipt
@@ -82,7 +82,10 @@ export const AgentLaunchStatus = z.object({
       'Malformed launch operation id'
     ),
   /** Hold the reply until the launch settles, at most this long; absent answers at once. */
-  waitMs: z.number().int().min(0).max(AGENT_LAUNCH_STATUS_MAX_WAIT_MS).optional()
+  waitMs: z.number().int().min(0).max(AGENT_LAUNCH_STATUS_MAX_WAIT_MS).optional(),
+  /** Read `awaiting-release` for a prepared launch waiting on its final input, and wake on it. Only a
+   *  caller that sends agent.launchRelease asks; every other reader still sees `running`. */
+  includeReleasePhase: z.literal(true).optional()
 })
 
 /** `unknown`: the launch was accepted but no execution survives to finish it, so it is never run again. */
@@ -92,6 +95,12 @@ export type AgentLaunchStatusResult =
   | { state: 'failed'; code: string; message?: string }
   | { state: 'unknown' }
   | { state: 'absent' }
+
+/** What a reader that asked for the release phase may see: a prepared launch whose Setup succeeded and
+ *  that runs nothing until its final input arrives. */
+export type AgentLaunchReleasePhaseStatusResult =
+  | AgentLaunchStatusResult
+  | { state: 'awaiting-release' }
 
 export type AgentLaunchAcceptResult = { operationId: string } & Exclude<
   AgentLaunchStatusResult,

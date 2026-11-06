@@ -55,6 +55,7 @@ import {
   awaitAcceptedLaunchSetup
 } from './agent-launch-acceptance'
 import { createTerminalSurface } from './agent-launch-terminal-surface'
+import { agentSessionExecutionOptionsRecord } from '../../shared/agent-session/options/agent-session-execution-options'
 
 export type { AgentLaunchExecution } from './agent-launch-execution'
 
@@ -161,6 +162,8 @@ export async function executeAgentLaunch(
             settlement
           )
 
+    // A prepared launch starts nothing on either surface until its final input arrives.
+    await acceptance?.release?.finalInput()
     execution.onStage?.('surface_create')
     recoverableWorktreeId = placed.worktreeId
     assertAgentPromptRequestActive(execution.signal)
@@ -280,14 +283,29 @@ async function createSurface(
   const { intent, surfaces } = execution
   if (settled.mode === 'structured') {
     const reservedTabId = intent.paneKey ? parsePaneKey(intent.paneKey)?.tabId : undefined
+    // A prepared launch's released choices are the create's options and its first message's.
+    const released = execution.acceptance?.release?.releasedInput()
     const session = await surfaces.createStructuredSession({
       worktreeId: workspace.worktreeId,
       agent: intent.agent,
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
       ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
+      ...(released
+        ? {
+            releasedOptions: {
+              options: released.options,
+              ...(released.optionsMode ? { optionsMode: released.optionsMode } : {})
+            }
+          }
+        : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
-      ...launchPromptCreateInputs(intent, execution.signal, execution.acceptance?.clientMessageId),
+      ...launchPromptCreateInputs(
+        intent,
+        execution.signal,
+        execution.acceptance?.clientMessageId,
+        released ? agentSessionExecutionOptionsRecord(released.selection) : undefined
+      ),
       ...(intent.prompt ? {} : { withoutPrompt: true as const }),
       ...(execution.acceptance ? { closed: execution.acceptance.closed } : {})
     })

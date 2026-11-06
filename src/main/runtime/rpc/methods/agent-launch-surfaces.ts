@@ -59,6 +59,7 @@ export function agentLaunchSurfaceFactory(
       agent,
       options,
       chatOptions,
+      releasedOptions,
       sessionId: requested,
       tabId,
       withoutPrompt,
@@ -73,7 +74,14 @@ export function agentLaunchSurfaceFactory(
           definition?.restingOptions.acceptsKey(key)
         )
       )
-      const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
+      const seeded = releasedOptions
+        ? releasedOptions.options
+        : (chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined))
+      const optionsMode = releasedOptions
+        ? releasedOptions.optionsMode
+        : chatOptions?.model
+          ? ('replace-model-selection' as const)
+          : undefined
       // A client that creates chats without starting them starts this one on its first message.
       const atRest =
         firstMessage !== undefined ||
@@ -99,7 +107,7 @@ export function agentLaunchSurfaceFactory(
         },
         worktree: `id:${worktreeId}`,
         agent,
-        ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
+        ...(optionsMode ? { optionsMode } : {}),
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),

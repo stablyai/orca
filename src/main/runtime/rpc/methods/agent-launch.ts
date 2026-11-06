@@ -150,6 +150,10 @@ async function executeReplaySafeAgentLaunch(
     throw error
   }
   onAdmitted(admission)
+  if (admission.decision === 'execute') {
+    // A prepared launch waits for its input no longer than its own record lives.
+    acceptance?.release?.arm(admission.expiresAt)
+  }
   if (admission.decision !== 'execute') {
     // No effect runs on refusal; remove only this request's empty tab, never a pane that survived for replay.
     early?.finish(
@@ -242,8 +246,13 @@ export function joinReplaySafeAgentLaunch(
   acceptance?: AgentLaunchAcceptance
 ): ActiveAgentLaunch {
   const key = agentSessionOperationKey(agentLaunchOperationCallerKey(context), params.operationId)
-  return joinOrStartActiveAgentLaunch(context.runtime, key, fingerprint, (onAdmitted) =>
-    executeReplaySafeAgentLaunch(params, context, fingerprint, onAdmitted, acceptance)
+  return joinOrStartActiveAgentLaunch(
+    context.runtime,
+    key,
+    fingerprint,
+    (onAdmitted) =>
+      executeReplaySafeAgentLaunch(params, context, fingerprint, onAdmitted, acceptance),
+    acceptance?.release
   )
 }
 

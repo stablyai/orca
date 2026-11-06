@@ -2,8 +2,10 @@ import { argvLaunchPrompt } from './agent-launch-prompt-delivery'
 import {
   acceptedHeldMessagePlan,
   acceptedTerminalIntent,
+  acceptedTerminalStartup,
   assertAcceptedTerminalAlternative
 } from './agent-launch-acceptance'
+import { releasedTerminalChoices } from './agent-launch-release-gate'
 import { terminalLaunchInputs } from './agent-launch-surface-factories'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { CreatedSurface } from './agent-launch-executor'
@@ -17,7 +19,7 @@ export async function createTerminalSurface(
 ): Promise<CreatedSurface> {
   const { surfaces, acceptance } = execution
   assertAcceptedTerminalAlternative(acceptance, execution.intent.agent)
-  const plan = acceptance?.terminalStartup
+  const plan = acceptedTerminalStartup(acceptance)
   const held = acceptedHeldMessagePlan(plan)
   const intent = acceptedTerminalIntent(execution.intent, acceptance)
   // Only the host's own launcher is offered the text: a caller's command carries what its planner put there.
@@ -32,6 +34,10 @@ export async function createTerminalSurface(
     agent: intent.agent,
     ...(startupPrompt ? { startupPrompt } : {}),
     ...terminalLaunchInputs(intent),
+    // A prepared launch's own launcher starts with the released choices, as its chat would.
+    ...(acceptance?.release
+      ? { options: releasedTerminalChoices(acceptance.release.releasedInput()) }
+      : {}),
     ...(plan?.kind === 'command' ? { startup: callerCommand(plan) } : {}),
     ...(draft ? { draft } : {}),
     ...(acceptance ? { closed: acceptance.closed } : {}),
