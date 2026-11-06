@@ -213,7 +213,7 @@ function openCodeLaunchSpec(
     ...row,
     // No bypass flag; full access approves permission requests individually.
     args: () => ['acp'],
-    // Disable unsupported question forms: 1.x waits forever; 2.x drops them.
+    // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,

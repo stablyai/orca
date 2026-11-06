@@ -7,6 +7,10 @@ import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat/input/native-chat-question-auto-advance'
+import { structuredQuestionCard } from '../../../../shared/structured-agent-question-card'
+import { acpFormElicitationPresentation } from '../../../../main/acp/acp-form-elicitation'
+import { recordedOmpAskForm } from '../../../../main/acp/acp-omp-ask-form.test-fixture'
+import openCodeForms from '../../../../main/acp/fixtures/opencode-v2-question-forms.json'
 
 // Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
 
@@ -59,6 +63,38 @@ function passAutoAdvanceBeat(): void {
 function cardTitle(): string | null | undefined {
   return container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent
 }
+
+it.each([
+  { form: openCodeForms.single, title: 'Storage', description: 'Which storage?' },
+  { form: openCodeForms.batch, title: 'Storage', description: 'Which storage?' },
+  { form: recordedOmpAskForm, title: 'Which database?', description: 'DB' },
+  {
+    form: {
+      ...recordedOmpAskForm,
+      requestedSchema: {
+        properties: {
+          q0: recordedOmpAskForm.requestedSchema.properties.q0,
+          q0__other: recordedOmpAskForm.requestedSchema.properties.q0__other
+        }
+      }
+    },
+    title: 'Which database?',
+    description: 'DB'
+  }
+])(
+  'shows the form message and full field instructions on the card: $title',
+  ({ form, title, description }) => {
+    const presentation = acpFormElicitationPresentation(form)
+    if (presentation.body.kind !== 'question') {
+      throw new Error('expected a question')
+    }
+    const card = structuredQuestionCard(presentation.body.questions!)
+    render(card.prompt, () => {}, card.allowOther)
+    expect(cardTitle()).toContain(form.message)
+    expect(cardTitle()).toContain(title)
+    expect(cardTitle()).toContain(description)
+  }
+)
 
 function click(button: Element | undefined, describe: string): void {
   if (!button) {
