@@ -38,13 +38,16 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   )
   const graphWidth = useMemo(
     () =>
-      rows.reduce(
-        (width, row) =>
-          Math.max(
-            width,
-            (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length) + 1) * 11
-          ),
-        44
+      Math.min(
+        132,
+        rows.reduce(
+          (width, row) =>
+            Math.max(
+              width,
+              (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length) + 1) * 11
+            ),
+          44
+        )
       ),
     [rows]
   )
@@ -59,7 +62,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     getItemKey: (index) => rows[index]!.historyItem.id
   })
   const { selectedId, revealId, controller } = history
-  const selected = result?.items.find((item) => item.id === selectedId) ?? result?.items[0]
+  const selected = result?.items.find((item) => item.id === selectedId)
   useLayoutEffect(() => {
     if (scroll.current) {
       scroll.current.scrollTop = controller.scrollOffset
@@ -168,7 +171,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                             currentRefId={result?.currentRef?.id}
                           />
                         </div>
-                        <GitHistoryGraphSvg viewModel={viewModel} />
+                        <div className="min-w-0 overflow-hidden">
+                          <GitHistoryGraphSvg viewModel={viewModel} />
+                        </div>
                         <button
                           className="min-w-0 truncate pr-3 text-left"
                           title={item.message}

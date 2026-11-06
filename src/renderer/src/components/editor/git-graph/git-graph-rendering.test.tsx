@@ -195,6 +195,101 @@ it('recovers silently after each later token expiry and ignores refreshes for ot
   expect(getHistory.mock.calls.at(-1)?.[1].wakeWslDistro).toBe(false)
 })
 
+it('keeps an older selection, loaded depth and scroll through refresh', async () => {
+  const items = Array.from({ length: 150 }, (_, index) => ({
+    id: `commit-${index}`,
+    subject: `Commit ${index}`,
+    message: `Commit ${index}`,
+    parentIds: index < 149 ? [`commit-${index + 1}`] : []
+  }))
+  const page = (skip: number): GitHistoryResult => ({
+    ...result,
+    refs: 'all',
+    historyToken: 'before-refresh',
+    items: items.slice(skip, skip + 50),
+    hasMore: skip < 100
+  })
+  getHistory.mockReset().mockResolvedValueOnce(page(0))
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+  const controller = gitGraphHistoryForTab(workspaceId)
+  getHistory.mockResolvedValueOnce(page(50)).mockResolvedValueOnce(page(100))
+  await act(async () => {
+    await controller.loadMore()
+    await controller.loadMore()
+  })
+  const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
+  await act(async () => {
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Commit 110')!
+      .click()
+    scroll.scrollTop = 2400
+    scroll.dispatchEvent(new Event('scroll'))
+  })
+  const refreshed = [
+    { id: 'new-tip', subject: 'New commit', message: 'New commit', parentIds: ['commit-0'] },
+    ...items
+  ]
+  const refreshedPage = (skip: number): GitHistoryResult => ({
+    ...result,
+    refs: 'all',
+    historyToken: 'after-refresh',
+    items: refreshed.slice(skip, skip + 50),
+    hasMore: true
+  })
+  let finish!: (page: GitHistoryResult) => void
+  getHistory
+    .mockResolvedValueOnce(refreshedPage(0))
+    .mockImplementationOnce(
+      () =>
+        new Promise<GitHistoryResult>((resolve) => {
+          finish = resolve
+        })
+    )
+    .mockResolvedValueOnce(refreshedPage(100))
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('button[aria-label="Refresh commits"]')!.click()
+  })
+  expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  await act(async () => {
+    finish(refreshedPage(50))
+    await controller.loadMore()
+  })
+  expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(scroll.scrollTop).toBe(2400)
+
+  getHistory
+    .mockResolvedValueOnce(refreshedPage(0))
+    .mockResolvedValueOnce(refreshedPage(50))
+    .mockResolvedValueOnce(refreshedPage(100))
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent('orca:git-graph-refresh', { detail: workspaceId }))
+    await controller.loadMore()
+  })
+  expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(scroll.scrollTop).toBe(2400)
+
+  getHistory
+    .mockResolvedValueOnce({ ...result, items: [], historyChanged: true })
+    .mockResolvedValueOnce(refreshedPage(0))
+    .mockResolvedValueOnce(refreshedPage(50))
+    .mockResolvedValueOnce(refreshedPage(100))
+  await act(async () => {
+    await controller.loadMore()
+  })
+  expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(scroll.scrollTop).toBe(2400)
+})
+
 it.each(['local', 'ssh:A'] as const)(
   'retains %s twin history across workspace switches, then follows its tab owner move',
   async (hostId) => {

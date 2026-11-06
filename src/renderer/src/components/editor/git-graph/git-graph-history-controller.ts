@@ -191,7 +191,7 @@ export class GitGraphHistoryController {
     if (this.pending) {
       return this.pending
     }
-    const previous = this.view.getState().result
+    const { result: previous, selectedId } = this.view.getState()
     if (append && !previous?.hasMore) {
       return Promise.resolve(previous)
     }
@@ -200,6 +200,9 @@ export class GitGraphHistoryController {
       return Promise.resolve(undefined)
     }
     const generation = this.generation
+    const requestedNavigation = navigation ?? this.navigation
+    const targetId = revealId ?? selectedId
+    const targetDepth = previous?.items.length ?? 0
     const filter = this.filter
     const current = () => !this.disposed && generation === this.generation
     this.initial = false
@@ -255,9 +258,8 @@ export class GitGraphHistoryController {
           }
           accumulated = { ...page, items }
           if (
-            !revealId ||
-            navigation !== this.navigation ||
-            ids.has(revealId) ||
+            requestedNavigation !== this.navigation ||
+            ((!targetId || ids.has(targetId)) && items.length >= targetDepth) ||
             !page.hasMore ||
             items.length === count
           ) {
@@ -273,11 +275,18 @@ export class GitGraphHistoryController {
       if (!current()) {
         return undefined
       }
+      const selection = this.view.getState().selectedId ?? accumulated?.items[0]?.id
+      const selectionGone =
+        !error &&
+        accumulated?.hasMore === false &&
+        requestedNavigation === this.navigation &&
+        selection !== undefined &&
+        !ids.has(selection)
       this.view.setState({
         result: accumulated ?? previous,
         error,
         loading: false,
-        selectedId: this.view.getState().selectedId ?? accumulated?.items[0]?.id
+        selectedId: selectionGone ? accumulated?.items[0]?.id : selection
       })
       if (
         Array.isArray(filter) &&

@@ -46,9 +46,18 @@ function CommitFileRow({
         className: 'size-3.5 shrink-0',
         style: { color: STATUS_COLORS[status] }
       })}
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        <span className="min-w-0 truncate text-left text-foreground" dir="rtl">
+          <bdi>{fileName}</bdi>
+        </span>
+        {dirPath && (
+          <span
+            className="min-w-0 flex-1 truncate text-left text-2xs text-muted-foreground"
+            dir="rtl"
+          >
+            <bdi>{dirPath}</bdi>
+          </span>
+        )}
       </span>
       <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-added)]">
         {entry.added !== undefined ? `+${entry.added}` : ''}
