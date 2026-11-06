@@ -435,7 +435,13 @@ it.each(['worker-release', 'retry-of'] as const)(
       'transcript'
     ])
     expect(read.code, read.stdout + read.stderr).toBe(0)
-    expect(read.stdout).toContain('Refused fixture task')
+    expect(resultOf(read.output)).toMatchObject({
+      dispatchId,
+      status: { worker: 'failed' },
+      transcript: {
+        messages: [{ role: 'user', from: { orchestration: { dispatchId } } }]
+      }
+    })
     if (cleanup === 'worker-release') {
       const released = await cli(['orchestration', 'worker-release', '--dispatch', dispatchId])
       expect(released.code, released.stdout + released.stderr).toBe(0)
