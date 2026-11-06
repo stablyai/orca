@@ -20,7 +20,12 @@ describe('OMP ask forms', () => {
           ],
           freeTextQuestionId: 'q1'
         },
-        { id: 'q2', question: 'Which features?', multiSelect: true, freeTextQuestionId: 'q2' },
+        {
+          id: 'q2',
+          question: 'Answer 3 questions\n\nWhich features?',
+          multiSelect: true,
+          freeTextQuestionId: 'q2'
+        },
         {
           id: 'q3',
           question: 'Answer 3 questions\n\nOther (type your own)',

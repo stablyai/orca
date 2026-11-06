@@ -79,7 +79,11 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
   const required = new Set(requestedSchema.required)
   const otherKeys = new Map<string, string>()
   for (const [key, property] of Object.entries(properties)) {
-    if (required.has(key) || !(property.enum || property.oneOf || property.type === 'array')) {
+    if (
+      required.has(key) ||
+      (property.type !== 'string' && property.type !== 'array') ||
+      !(property.enum || property.oneOf || property.type === 'array')
+    ) {
       continue
     }
     const otherKey = OTHER_SUFFIXES.map((suffix) => key + suffix).find((candidate) => {
@@ -181,7 +185,11 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         const otherKey = otherKeys.get(key)
         if (otherKey) {
           content[otherKey] = NOT_SHOWN_ANSWER
-        } else if (properties[key]!.type === 'string' && !fieldChoices(properties[key]!, false)) {
+        } else if (
+          properties[key]!.type === 'string' &&
+          !properties[key]!.enum &&
+          !properties[key]!.oneOf
+        ) {
           content[key] = NOT_SHOWN_ANSWER
         }
       }

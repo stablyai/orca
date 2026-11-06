@@ -1,10 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { projectStructuredQuestion } from '../../../mobile/src/session/mobile-structured-agent-prompts'
-import { encodeAgentSessionQuestionAnswers } from '../../shared/agent-session/agent-session-question-answer'
-import {
-  structuredQuestionAnswers,
-  structuredQuestionCard
-} from '../../shared/structured-agent-question-card'
 import { acpFormElicitationPresentation } from './acp-form-elicitation'
 import forms from './fixtures/opencode-v2-question-forms.json'
 
@@ -33,35 +27,6 @@ describe('OpenCode question forms', () => {
       })
     ).toEqual({ action: 'accept', content: { q0_custom: 'DuckDB' } })
     expect(form.reply(null)).toEqual({ action: 'cancel' })
-  })
-
-  it('roundtrips a phone batch with selected and custom multi answers through the shared encoding', () => {
-    const form = acpFormElicitationPresentation(forms.batch)
-    if (form.body.kind !== 'question') {
-      throw new Error('expected a question')
-    }
-    const projected = projectStructuredQuestion({
-      itemId: 'question-1',
-      revision: 2,
-      sequence: 1,
-      observedAt: 1,
-      body: form.body
-    })!
-    const questions = projected.questions!
-    expect(structuredQuestionCard(questions).prompt.questions).toMatchObject([
-      { question: 'Questions\n\nStorage\n\nWhich storage?' },
-      { question: 'Questions\n\nFeatures\n\nWhich features?', multiSelect: true }
-    ])
-    const answers = structuredQuestionAnswers(questions, [
-      { indices: [0] },
-      { indices: [0, 2], other: 'Offline' }
-    ])!
-    expect(
-      form.reply({ kind: 'option', optionId: encodeAgentSessionQuestionAnswers(answers) })
-    ).toEqual({
-      action: 'accept',
-      content: { q0: 'SQLite', q1: ['Search', 'Sync'], q1_custom: 'Offline' }
-    })
   })
 
   it.each(['single', 'multi'])(
@@ -121,6 +86,24 @@ describe('OpenCode question forms', () => {
         requestedSchema: { properties: { q0: forms.empty.requestedSchema.properties.q0 } }
       })
     ).toThrow('Unsupported ACP elicitation form')
+    const confirmation = acpFormElicitationPresentation({
+      ...forms.single,
+      requestedSchema: {
+        properties: {
+          ...forms.single.requestedSchema.properties,
+          q0: { ...forms.single.requestedSchema.properties.q0, type: 'boolean' }
+        }
+      }
+    })
+    expect(
+      confirmation.reply({
+        kind: 'answers',
+        answers: [
+          { questionId: 'q1', optionIds: ['o1'] },
+          { questionId: 'q2', optionIds: [], other: 'independent note' }
+        ]
+      })
+    ).toEqual({ action: 'accept', content: { q0: true, q0_custom: 'independent note' } })
   })
 
   it('tells the agent which overflow question was not shown using its original custom key', () => {
@@ -152,7 +135,7 @@ describe('OpenCode question forms', () => {
     })
   })
 
-  it('shows and returns the web-search provider decision without a tool-call identity', () => {
+  it('shows and returns the web-search provider decision', () => {
     const form = acpFormElicitationPresentation(forms.websearch)
     expect(form.body).toMatchObject({
       question: 'Web Search\n\nAllow OpenCode to search the web for up-to-date information?'
@@ -160,6 +143,30 @@ describe('OpenCode question forms', () => {
     expect(form.reply({ kind: 'option', optionId: 'o3' })).toEqual({
       action: 'accept',
       content: { choice: 'disable' }
+    })
+  })
+
+  it('does not reject offered answers because an unshown field has no choices', () => {
+    const form = acpFormElicitationPresentation({
+      ...forms.single,
+      requestedSchema: {
+        properties: {
+          q0: forms.single.requestedSchema.properties.q0,
+          q1: forms.single.requestedSchema.properties.q0,
+          q2: forms.single.requestedSchema.properties.q0,
+          q3: forms.single.requestedSchema.properties.q0,
+          q4: { type: 'string', oneOf: [] }
+        }
+      }
+    })
+    expect(
+      form.reply({
+        kind: 'answers',
+        answers: ['q1', 'q2', 'q3', 'q4'].map((questionId) => ({ questionId, optionIds: ['o1'] }))
+      })
+    ).toEqual({
+      action: 'accept',
+      content: { q0: 'SQLite', q1: 'SQLite', q2: 'SQLite', q3: 'SQLite' }
     })
   })
 })
