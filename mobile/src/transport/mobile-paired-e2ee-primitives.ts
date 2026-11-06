@@ -15,7 +15,7 @@ export const MOBILE_PAIRED_E2EE_PRIMITIVES: PairedE2EEPrimitives = {
   deriveSharedKey: (ourSecretKey, peerPublicKey) =>
     e2ee.deriveSharedKey(ourSecretKey, peerPublicKey),
   randomBytes: (length) => e2ee.randomBytes(length),
-  encodeBase64: encodeBase64Bytes,
+  encodeBase64: (bytes) => pairedE2EENativeCodec()?.encodeBase64(bytes) ?? encodeBase64Bytes(bytes),
   decodeBase64: decodeBase64Bytes,
   publicKeyFromBase64: (value) => e2ee.publicKeyFromBase64(value),
   publicKeyToBase64: (key) => e2ee.publicKeyToBase64(key),
@@ -26,6 +26,10 @@ export const MOBILE_PAIRED_E2EE_PRIMITIVES: PairedE2EEPrimitives = {
   openSecretbox: (box, nonce, key) => {
     const native = pairedE2EENativeCodec()
     return native ? native.openSecretbox(box, nonce, key) : nacl.secretbox.open(box, nonce, key)
+  },
+  sealSecretbox: (message, nonce, key) => {
+    const native = pairedE2EENativeCodec()
+    return native ? native.sealSecretbox(message, nonce, key) : nacl.secretbox(message, nonce, key)
   },
   decodeCanonicalBase64: (value) => {
     const native = pairedE2EENativeCodec()

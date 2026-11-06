@@ -1,4 +1,15 @@
+import { decodeBase64Bytes } from './base64-byte-codec'
+import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
+
+// Our react-native patch hands such a socket's binary messages over as `{ base64 }`, skipping base64-js.
+export function receiveBinaryAsBase64(socket: WebSocket): WebSocket {
+  return Object.assign(socket, { orcaBinaryAsBase64: true })
+}
+
 export async function websocketPayloadToUint8(value: unknown): Promise<Uint8Array | null> {
+  if (isBase64Binary(value)) {
+    return decodeNativeBase64(value.base64)
+  }
   if (value instanceof Uint8Array) {
     return value
   }
@@ -24,4 +35,25 @@ export async function websocketPayloadToUint8(value: unknown): Promise<Uint8Arra
     })
   }
   return null
+}
+
+function isBase64Binary(value: unknown): value is { base64: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'base64' in value &&
+    typeof value.base64 === 'string'
+  )
+}
+
+function decodeNativeBase64(value: string): Uint8Array | null {
+  const decoded = pairedE2EENativeCodec()?.decodeBase64(value)
+  if (decoded) {
+    return decoded
+  }
+  try {
+    return decodeBase64Bytes(value)
+  } catch {
+    return null
+  }
 }
