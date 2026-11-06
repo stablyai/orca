@@ -3,6 +3,8 @@ import { Terminal } from '@xterm/headless'
 import { describe, expect, it, vi } from 'vitest'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { declarePendingPaneSerializer, settlePendingPaneSerializer } from './serializer-state'
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 
 async function rowsAfter(seed: string, liveOutput: string, rows: number): Promise<string[]> {
@@ -39,5 +41,30 @@ describe('seeding the host copy from a cold restore', () => {
       'user@host:~/p8/deep$',
       'user@host:~/p8/deep$'
     ])
+  })
+})
+
+describe('seeding while the window declared its own serializer', () => {
+  it('still seeds a cold restore, since a hidden pane repaints from the host copy when revealed', () => {
+    const seedHeadlessTerminal = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seed reads only seedHeadlessTerminal from the runtime.
+    const runtime = { seedHeadlessTerminal } as unknown as OrcaRuntimeService
+    const paneKey = makePaneKey('tab-cold-restore', '44444444-4444-4444-8444-444444444444')
+    const generation = declarePendingPaneSerializer(paneKey, undefined)
+    try {
+      seedHeadlessTerminalFromSpawnResult(
+        runtime,
+        {
+          id: 'cold-pty',
+          coldRestore: { scrollback: 'restored history\r\n', cwd: '/tmp', cols: 40, rows: 6 }
+        },
+        paneKey
+      )
+    } finally {
+      settlePendingPaneSerializer(paneKey, generation)
+    }
+
+    expect(seedHeadlessTerminal).toHaveBeenCalledTimes(1)
+    expect(seedHeadlessTerminal.mock.calls[0]![1]).toContain('restored history')
   })
 })
