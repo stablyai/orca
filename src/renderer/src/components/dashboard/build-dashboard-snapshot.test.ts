@@ -131,6 +131,39 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('routes structured previews to the tab session and its recorded runtime', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        unifiedTabsByWorktree: {
+          w1: [
+            {
+              id: TAB_ID,
+              entityId: 'chat-1',
+              groupId: 'group',
+              worktreeId: 'w1',
+              executionHostId: 'runtime:server-a',
+              contentType: 'agent-session',
+              agentSessionAgent: 'claude',
+              label: 'Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        ptyIdsByTabId: { [TAB_ID]: [] }
+      }),
+      NOW
+    )
+    expect(snapshot.cards[0]?.chatSession).toEqual({
+      sessionId: 'chat-1',
+      target: { kind: 'environment', environmentId: 'server-a' }
+    })
+    expect(snapshot.cards[0]?.ptyId).toBeNull()
+  })
+
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
     const snapshot = buildDashboardSnapshot(

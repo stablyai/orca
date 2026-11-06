@@ -2,6 +2,8 @@ import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecyc
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
   type DashboardCard,
@@ -210,10 +212,23 @@ export function buildDashboardSnapshot(
         : undefined
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+      const chatTab = includeCardDetails
+        ? state.unifiedTabsByWorktree?.[worktreeId]?.find(
+            (tab) => tab.id === tabId && isStructuredTab(tab)
+          )
+        : undefined
+      const chatTarget = chatTab
+        ? structuredAgentSessionTargetForHost(
+            chatTab.executionHostId ?? hostMetadata?.executionHostId
+          )
+        : null
 
       cards.push({
         paneKey: row.paneKey,
         ptyId,
+        ...(chatTab && chatTarget
+          ? { chatSession: { sessionId: chatTab.entityId, target: chatTarget } }
+          : {}),
         agentType: row.agentType,
         bucket,
         dotState,

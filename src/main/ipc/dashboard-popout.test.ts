@@ -153,12 +153,21 @@ describe('registerDashboardPopoutHandlers', () => {
   })
 
   // Invalid cards must not silently freeze the rest of the board.
-  it('keeps publishing the board when one card is invalid, and says so', () => {
+  it.each([
+    { conversationName: 'x'.repeat(1_025) },
+    { chatSession: { sessionId: '', target: { kind: 'local' } } },
+    { chatSession: { sessionId: 'chat', target: { kind: 'environment', environmentId: '' } } },
+    { chatSession: { sessionId: 'chat', target: { kind: 'unknown' } } }
+  ])('keeps publishing the board when one card is invalid (%j), and says so', (invalid) => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const good = { ...CARD, paneKey: 'tab-1:leaf-1' }
-    const bad = { ...CARD, paneKey: 'tab-2:leaf-2', conversationName: 'x'.repeat(1_025) }
+    const good = {
+      ...CARD,
+      paneKey: 'tab-1:leaf-1',
+      chatSession: { sessionId: 'chat', target: { kind: 'local' } }
+    }
+    const bad = { ...CARD, paneKey: 'tab-2:leaf-2', ...invalid }
 
     handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
       generatedAt: 2,
