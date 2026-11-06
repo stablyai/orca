@@ -289,9 +289,13 @@ function renderBlock(
           selectable
           style={[
             styles.heading,
-            node.depth <= 2 ? styles.headingLarge : null,
+            node.depth === 1 ? styles.headingTitle : node.depth === 2 ? styles.headingLarge : null,
             scaledMarkdownText(
-              node.depth <= 2 ? styles.headingLarge : styles.heading,
+              node.depth === 1
+                ? styles.headingTitle
+                : node.depth === 2
+                  ? styles.headingLarge
+                  : styles.heading,
               ctx.textScale
             ),
             ctx.tone.text
