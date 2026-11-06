@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitHubApiRepositoryModule from '../../github-api-repository'
 
 const { ghExecFileAsyncMock } = vi.hoisted(() => ({ ghExecFileAsyncMock: vi.fn() }))
 
@@ -14,7 +15,7 @@ vi.mock('../../github-repository-identity', () => ({
 }))
 vi.mock('../../github-read-execution-scope', () => ({ githubReadExecutionScope: () => 'local' }))
 vi.mock('../../github-api-repository', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../github-api-repository')>()),
+  ...(await importOriginal<typeof GitHubApiRepositoryModule>()),
   resolveGitHubRepoExecution: async () => ({
     ownerRepo: { owner: 'acme', repo: 'widgets' },
     ghOptions: { cwd: '/repo' }
