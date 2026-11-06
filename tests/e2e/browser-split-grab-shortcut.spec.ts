@@ -8,7 +8,13 @@ import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 import {
   browserOverlay,
   createBrowserSplit,
@@ -68,7 +74,9 @@ async function expectToolbarCopyChordArmsGrab(page: Page, browserTabId: string):
 
 async function enableNativeChat(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
+    const nextSettings = await window.api.settings.set({
+      nativeChatProviders: { claude: true, codex: true }
+    })
     window.__store?.setState({ settings: nextSettings })
   })
 }
@@ -207,12 +215,72 @@ test.describe('browser split grab shortcut', () => {
     await expect(annotateBanner(orcaPage, fixture.secondBrowserTabId)).toBeHidden()
   })
 
+  test('escape typed in the page exits grab, the copy toast and find', async ({ orcaPage }) => {
+    const fixture = await createBrowserSplit(orcaPage, {
+      first: server.pageUrl('a', 1),
+      second: server.pageUrl('b', 1, 'localhost')
+    })
+    await waitForGuestUrl(orcaPage, fixture.firstBrowserTabId, server.pageUrl('a', 1))
+    const overlay = browserOverlay(orcaPage, fixture.firstBrowserTabId)
+    const pressInGuest = (keyCode: string, modifiers: GuestModifier[] = []): Promise<void> =>
+      pressKeyInBrowserGuest(
+        orcaPage,
+        fixture.firstBrowserTabId,
+        fixture.firstBrowserPageId,
+        keyCode,
+        modifiers
+      )
+
+    await pressInGuest('C', [guestModifier])
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await pressInGuest('Escape')
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeHidden()
+
+    // Why: a click-copy rearms the picker when its toast closes; outlasting the toast proves Escape ended it.
+    await pressInGuest('C', [guestModifier])
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await orcaPage.evaluate(async (browserTabId) => {
+      const webview = document.querySelector<Electron.WebviewTag>(
+        `[data-browser-overlay-tab-id="${browserTabId}"] webview`
+      )
+      await webview?.sendInputEvent({ type: 'mouseMove', x: 60, y: 30 })
+      await webview?.sendInputEvent({
+        type: 'mouseDown',
+        x: 60,
+        y: 30,
+        button: 'left',
+        clickCount: 1
+      })
+      await webview?.sendInputEvent({
+        type: 'mouseUp',
+        x: 60,
+        y: 30,
+        button: 'left',
+        clickCount: 1
+      })
+    }, fixture.firstBrowserTabId)
+    await expect(overlay.getByText('Copied').first()).toBeVisible()
+    await pressInGuest('Escape')
+    await expect(overlay.getByText('Copied').first()).toBeHidden()
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeHidden()
+
+    await pressInGuest('F', [guestModifier])
+    const findInput = overlay.getByPlaceholder('Find in page...')
+    await expect(findInput).toBeVisible()
+    await pressInGuest('Escape')
+    await expect(findInput).toBeHidden()
+  })
+
   test('copy chord with native chat text selected copies instead of arming grab', async ({
     electronApp,
     orcaPage
   }) => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const fixture = await createTerminalBrowserSplit(orcaPage, server.pageUrl('a', 1))
     await waitForGuestUrl(orcaPage, fixture.browserTabId, server.pageUrl('a', 1))
     const reply = `Selectable transcript reply ${randomUUID()}`
@@ -243,5 +311,10 @@ test.describe('browser split grab shortcut', () => {
     await expect(grabBanner(orcaPage, fixture.browserTabId)).toBeHidden()
 
     await expectToolbarCopyChordArmsGrab(orcaPage, fixture.browserTabId)
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
   })
 })

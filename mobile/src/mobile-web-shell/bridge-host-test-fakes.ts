@@ -32,7 +32,15 @@ export type FakeRpcClient = RpcClient & {
 type ClientGetters = Partial<
   Pick<
     RpcClient,
-    'getState' | 'getReconnectAttempt' | 'getLastConnectedAt' | 'getLastInboundAt' | 'getGeneration'
+    | 'getState'
+    | 'getReconnectAttempt'
+    | 'getLastConnectedAt'
+    | 'getLastInboundAt'
+    | 'getGeneration'
+    | 'getActivePath'
+    | 'getPendingPath'
+    | 'getRelayHostReachability'
+    | 'onConnectionPathChange'
   >
 >
 

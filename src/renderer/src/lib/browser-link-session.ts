@@ -5,6 +5,7 @@ import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/e
 import { ORCA_BROWSER_PARTITION } from '../../../shared/constants'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../shared/orca-profiles'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/browser-new-tab-profile'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
 import { getManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
 
 function createPartitionResolver(
@@ -44,7 +45,7 @@ export function resolveBrowserLinkSession(
       : null
   const profile = owner
     ? resolveNewBrowserTabProfile(state, worktreeId, hostId)
-    : { sessionProfileId: state.defaultBrowserSessionProfileIdByHostId[hostId] ?? null }
+    : { sessionProfileId: getDefaultBrowserProfileForHost(state, hostId) }
   return {
     sessionProfileId: profile.sessionProfileId,
     sessionPartition: createPartitionResolver(state, hostId)(

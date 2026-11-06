@@ -130,6 +130,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ statusBarCompactChangeNoticeDismissed: true }).catch(console.error)
         return { statusBarCompactChangeNoticeDismissed: true }
       }),
+    pluginsAlphaNoticeDismissed: false,
+    dismissPluginsAlphaNotice: () =>
+      set((s) => {
+        if (s.pluginsAlphaNoticeDismissed) {
+          return s
+        }
+        window.api.ui.set({ pluginsAlphaNoticeDismissed: true }).catch(console.error)
+        return { pluginsAlphaNoticeDismissed: true }
+      }),
     usageEmptyStateDismissed: false,
     dismissUsageEmptyState: () =>
       set((s) => {

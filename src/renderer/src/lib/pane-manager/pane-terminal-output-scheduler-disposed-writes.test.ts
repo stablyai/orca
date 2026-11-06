@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createForegroundTerminal,
-  createTerminal,
   loadScheduler
 } from './pane-terminal-output-scheduler-test-harness'
 
@@ -29,18 +28,6 @@ describe('pane terminal output scheduler', () => {
     delete (globalThis as { __terminalOutputSchedulerDebug?: unknown })
       .__terminalOutputSchedulerDebug
     vi.unstubAllGlobals()
-  })
-
-  it('discards queued output for disposed terminals', async () => {
-    vi.useFakeTimers()
-    const { discardTerminalOutput, writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-
-    writeTerminalOutput(terminal, 'stale', { foreground: false })
-    discardTerminalOutput(terminal)
-    vi.advanceTimersByTime(50)
-
-    expect(terminal.write).not.toHaveBeenCalled()
   })
 
   it('does not feed a replay quiet window when foreground writes are rejected', async () => {

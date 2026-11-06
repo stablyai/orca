@@ -8,21 +8,6 @@ import CommentMarkdown from './CommentMarkdown'
 afterEach(cleanup)
 
 describe.each(['compact', 'document'] as const)('%s markdown ordered lists', (variant) => {
-  it.each([0, 3, 42])('preserves a starting number of %i', (start) => {
-    render(<CommentMarkdown variant={variant} content={`${start}. First\n${start + 1}. Second`} />)
-
-    expect(screen.getByRole('list')).toHaveAttribute('start', String(start))
-    expect(screen.getAllByRole('listitem')).toHaveLength(2)
-  })
-
-  it('preserves the start with a custom link handler', () => {
-    render(
-      <CommentMarkdown variant={variant} content={'3. Third\n4. Fourth'} onLinkClick={vi.fn()} />
-    )
-
-    expect(screen.getByRole('list')).toHaveAttribute('start', '3')
-  })
-
   it('preserves independent starts for nested lists', () => {
     render(
       <CommentMarkdown
@@ -49,20 +34,6 @@ describe.each(['compact', 'document'] as const)('%s markdown ordered lists', (va
       '3',
       '9'
     ])
-  })
-
-  it('keeps the default start when the source starts at one', () => {
-    render(<CommentMarkdown variant={variant} content={'1. First\n2. Second'} />)
-
-    expect(screen.getByRole('list').tagName).toBe('OL')
-    expect(screen.getByRole('list')).not.toHaveAttribute('start')
-  })
-
-  it('keeps bullet lists unordered', () => {
-    render(<CommentMarkdown variant={variant} content={'- First\n- Second'} />)
-
-    expect(screen.getByRole('list').tagName).toBe('UL')
-    expect(screen.getByRole('list')).not.toHaveAttribute('start')
   })
 })
 

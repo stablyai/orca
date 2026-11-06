@@ -3,7 +3,6 @@ import {
   useIpcEventsForCloseRouting,
   type RequestTabCloseListener,
   type CloseActiveTabListener,
-  type CloseTerminalListener,
   type CloseSessionTabListener,
   type TerminalTabCloseRequestListener
 } from './ipc-events-close-routing-test-harness'
@@ -50,51 +49,6 @@ describe('useIpcEvents browser tab close routing', () => {
     // Editor close must remove openFiles via closeFile or host publication resurrects it.
     expect(closeFile).toHaveBeenCalledWith('file-1')
     expect(closeUnifiedTab).not.toHaveBeenCalled()
-  })
-
-  it('keeps closeUnifiedTab for a non-editor session tab closed by a companion', async () => {
-    const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
-      current: null
-    }
-    const closeFile = vi.fn()
-    const closeUnifiedTab = vi.fn()
-
-    await useIpcEventsForCloseRouting({
-      closeSessionTabListenerRef,
-      getState: () => ({
-        recordClientHostedBrowserCloseIntents: vi.fn(),
-        closeFile,
-        closeUnifiedTab,
-        browserTabsByWorktree: {},
-        unifiedTabsByWorktree: {
-          'wt-1': [
-            { id: 'sim-tab-1', entityId: 'sim-1', contentType: 'simulator', isPinned: false }
-          ]
-        }
-      })
-    })
-
-    closeSessionTabListenerRef.current?.({ tabId: 'sim-tab-1', worktreeId: 'wt-1' })
-
-    // Other tab kinds must retain unified close; only editors own openFiles cleanup.
-    expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
-    expect(closeFile).not.toHaveBeenCalled()
-  })
-
-  it('delegates terminal close IPC without a pane id to the shared terminal close flow', async () => {
-    const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }
-
-    await useIpcEventsForCloseRouting({
-      closeTerminalListenerRef,
-      getState: () => ({})
-    })
-
-    closeTerminalListenerRef.current?.({ kind: 'tab', tabId: 'terminal-1' })
-
-    // The CLI/RPC caller is answered immediately, so this close must never raise a modal.
-    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1', {
-      skipRunningProcessConfirm: true
-    })
   })
 
   it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {

@@ -9,14 +9,17 @@ import type {
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
-import WorktreeCard from '../../WorktreeCard'
+
+import {
+  type FolderWorkspacePathStatus,
+  isConfirmedStaleFolderPathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getFolderWorkspaceRowGeometry } from './indentation'
-import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-display'
+import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
@@ -45,8 +48,6 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree
   ) => readonly Worktree[]
   onImmediateActivate: (worktreeId: string, rowKey: string | undefined) => void
-  /** False while the workspace board is open, where a press may start a drag onto the board. */
-  activateOnPress: boolean
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (
     event: React.PointerEvent<HTMLDivElement>,
@@ -127,15 +128,6 @@ export function renderFolderWorkspaceVirtualRow(args: {
           flushSurface
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          // A press inside a multi-selection starts a group drag; only the click may collapse it.
-          activateOnPress={
-            ctx.activateOnPress &&
-            !activationDisabled &&
-            !(
-              ctx.selectedWorktreeIds.has(folderWorktreeIdentity) &&
-              ctx.selectedWorktreeIds.size > 1
-            )
-          }
           activationRowKey={folderWorktreeIdentity}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}

@@ -1,4 +1,4 @@
-import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import type { AiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { sessionSearchDatabasePath } from './session-search-database-path'
 import type { SessionSearchIndexerOptions } from './session-search-indexer-options'
 import { SessionSearchInstance } from './session-search-instance'

@@ -1,10 +1,13 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
-import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
+import type {
+  CreateHostedReviewInput,
+  CreateHostedReviewResult
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../shared/hosted-review-refs'
+} from '../../shared/source-control/hosted-review/hosted-review-refs'
 import {
   HostedReviewApiRequestError,
   requestHostedReviewJson
@@ -155,7 +158,8 @@ export async function createGiteaPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: base branch, head branch, and title are required.'
+      error: 'Create PR failed: base branch, head branch, and title are required.',
+      reason: 'base_head_title_required'
     }
   }
   if (head.toLowerCase() === base.toLowerCase()) {

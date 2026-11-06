@@ -4,6 +4,7 @@ import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
 import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
 import { hardenExistingSecureFile } from './secure-file'
+import { toCleanupLastErrorFields, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 import {
   featureEntryFromRuntime,
   featureIdentity,
@@ -49,6 +50,20 @@ export function getEphemeralVmRuntimeStorePath(userDataPath: string): string {
 
 export function listEphemeralVmRuntimes(userDataPath: string): EphemeralVmRuntimeRecord[] {
   return readEphemeralVmRuntimeStore(userDataPath).store.runtimes
+}
+
+/** The live recipe VM behind a workspace, if it has one its recipe can suspend and resume. */
+export function findWorkspaceEphemeralVmRuntime(
+  userDataPath: string,
+  workspaceId: string
+): (EphemeralVmRuntimeRecord & { repoId: string }) | undefined {
+  const runtime = listEphemeralVmRuntimes(userDataPath).find(
+    (entry) =>
+      entry.workspaceId === workspaceId &&
+      entry.status !== 'cleaned' &&
+      entry.status !== 'cleanup_pending'
+  )
+  return runtime?.repoId ? { ...runtime, repoId: runtime.repoId } : undefined
 }
 
 export function upsertEphemeralVmRuntime(
@@ -118,7 +133,8 @@ export function updateEphemeralVmRuntimeStatus(
     status?: EphemeralVmRuntimeStatus
     cleanupStatus?: EphemeralVmCleanupStatus
     cleanupLastAttemptAt?: number
-    cleanupLastError?: string | null
+    /** A string clears any stored code; null clears both. */
+    cleanupLastError?: string | EphemeralVmFailure | null
     workspaceId?: string
     workspaceName?: string
     connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
@@ -143,11 +159,13 @@ export function updateEphemeralVmRuntimeStatus(
     ...(args.cleanupLastAttemptAt !== undefined
       ? { cleanupLastAttemptAt: args.cleanupLastAttemptAt }
       : {}),
-    ...(args.cleanupLastError === null
-      ? { cleanupLastError: undefined }
-      : args.cleanupLastError
-        ? { cleanupLastError: args.cleanupLastError }
-        : {}),
+    ...(args.cleanupLastError === null || args.cleanupLastError
+      ? toCleanupLastErrorFields(
+          typeof args.cleanupLastError === 'string'
+            ? { error: args.cleanupLastError }
+            : args.cleanupLastError
+        )
+      : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
     // null explicitly clears the field (e.g. terminal cleanup); undefined leaves it unchanged.

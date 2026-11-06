@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import { buildPdfJsDocumentOptions } from './pdf-js-document-options'
 import { createOrcaMediaRangeTransport } from './pdf-orca-media-range-transport'
+import { translate } from '@/i18n/i18n'
 
 type PdfLoadingTask = ReturnType<typeof pdfjsLib.getDocument>
 
@@ -32,8 +33,11 @@ export function createPdfDocumentLoader({
   const fail = (error: unknown): void => {
     onError(
       error instanceof Error && error.name === 'PasswordException'
-        ? 'This PDF is password-protected'
-        : 'Failed to load PDF preview'
+        ? translate(
+            'auto.components.editor.PdfViewer.passwordProtected',
+            'This PDF is password-protected'
+          )
+        : pdfLoadFailedMessage()
     )
   }
 
@@ -68,7 +72,7 @@ export function createPdfDocumentLoader({
                 )
               }
             : // orca-media refuses fetch, so a URL is only readable through its sized range transport.
-              'Failed to load PDF preview'
+              pdfLoadFailedMessage()
           : decodePdfBase64(source.base64)
       if (typeof documentSource === 'string') {
         onError(documentSource)
@@ -143,15 +147,22 @@ export function createPdfDocumentLoader({
   }
 }
 
+function pdfLoadFailedMessage(): string {
+  return translate('auto.components.editor.PdfViewer.loadFailed', 'Failed to load PDF preview')
+}
+
 function decodePdfBase64(content: string): { data: Uint8Array } | string {
   if (!content) {
-    return 'Failed to load PDF preview'
+    return pdfLoadFailedMessage()
   }
   let binary: string
   try {
     binary = window.atob(content)
   } catch {
-    return 'Failed to decode PDF content'
+    return translate(
+      'auto.components.editor.PdfViewer.decodeFailed',
+      'Failed to decode PDF content'
+    )
   }
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {

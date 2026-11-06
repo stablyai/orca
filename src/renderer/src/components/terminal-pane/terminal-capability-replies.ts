@@ -5,9 +5,10 @@ import {
   terminalOscColorQueryReplies,
   terminalOscColorQuerySlotsForBody,
   type TerminalOscColorQuerySlot
-} from '../../../../shared/terminal-osc-color-reply'
+} from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { installProgramStatusQueryResponder } from '../../../../shared/program-status/query-responder'
+import { terminalThemeColorSchemeReport } from './terminal-view-attributes-publisher'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 
@@ -163,6 +164,19 @@ export function installTerminalCapabilityReplyHandlers(
           return true
         })
       )
+    ),
+    // Panes disable xterm's colorSchemeQuery so mode 2031 has one owner; answer ?996n here instead.
+    deps.parser.registerCsiHandler(
+      { prefix: '?', final: 'n' },
+      guardParserHandler('csi-color-scheme-query', (params) => {
+        if (params[0] !== 996) {
+          return false
+        }
+        if (!deps.isReplaying()) {
+          deps.sendInput(terminalThemeColorSchemeReport(deps.terminal.options.theme))
+        }
+        return true
+      })
     ),
     deps.parser.registerOscHandler(
       10,

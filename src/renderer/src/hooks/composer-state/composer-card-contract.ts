@@ -82,7 +82,9 @@ export type ComposerCardActionProps = {
   smartNameJiraSourceContext?: ComposerModel['smartNameJiraSourceContext']
   onBaseBranchMrSelect?: ComposerModel['handleBaseBranchMrSelect']
   onClearSmartNameSelection: ComposerModel['handleClearSmartNameSelection']
+  reuseEligibleBranch?: ComposerModel['reuseEligibleBranch']
   canReuseSelectedBranch: boolean
+  onOpenSelectedBranchWorkspace?: () => void
   onReuseSelectedBranchChange: ComposerModel['handleReuseSelectedBranchChange']
   showCreateMultiple: boolean
   onCreateMultipleChange: ComposerModel['setCreateMultiple']

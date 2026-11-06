@@ -3,10 +3,10 @@
 import {
   isAgentSessionRefusalError,
   refuse,
-  type AgentSessionRefusalDetailsByCode,
   type AgentSessionWireRefusalCode
-} from '../../../shared/agent-session-wire-refusals'
-import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalDetailsByCode } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import { terminalOwnerRefusalMessage } from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from './structured-agent-session-provider-support'
@@ -74,10 +74,7 @@ export function structuredAgentSessionStartParams(
           )
   }
   const startupOptions = startedFor
-    ? context.sessions
-        .get(sessionId)
-        ?.journal.submissions()
-        .find((submission) => submission.clientMessageId === startedFor)?.options
+    ? context.sessions.get(sessionId)?.journal.submission(startedFor)?.options
     : undefined
   return { ok: true, params, ...(startupOptions ? { startupOptions } : {}) }
 }

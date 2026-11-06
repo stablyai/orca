@@ -123,6 +123,7 @@ export function installBrowserExtensionNativeMessaging(
 
   const endPort = (id: string, entry: PortState, error: string | null): void => {
     entry.state = 'closed'
+    entry.queued.length = 0
     ports.delete(id)
     if (error !== null && entry.onDisconnect.size === 0) {
       console.error(`Unchecked runtime.lastError: ${error}`)
@@ -197,6 +198,7 @@ export function installBrowserExtensionNativeMessaging(
           return
         }
         entry.state = 'closed'
+        entry.queued.length = 0
         ports.delete(id)
         if (wasOpen) {
           void bridge.call(namespace, 'disconnect', [id])

@@ -12,7 +12,8 @@ import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import {
   nativeChatScrollOffsetWithin,
-  useNativeChatViewportAlign
+  useNativeChatViewportAlign,
+  type NativeChatAlignEdge
 } from './use-native-chat-viewport-align'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
@@ -31,11 +32,12 @@ export type NativeChatTranscriptWindow = {
   sizerRef: (node: HTMLDivElement | null) => void
   measureRow: (node: HTMLElement | null) => void
   /** Scroll so this element's top meets the top of the viewport. */
-  alignToViewportTop: (element: HTMLElement) => void
+  alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** Whether a jump is still settling as its target row is measured. */
   isAlignPending: () => boolean
   /** A reader gesture releases the jump's target. */
   cancelAlign: () => void
+  releaseEndPin: () => void
   /** Pin through the virtualizer’s scroll owner to avoid competing writes; its last-row end includes trailing chrome. */
   scrollToEnd: () => void
   /** Restore a detached reader offset through the virtualizer's scroll owner. */
@@ -51,7 +53,6 @@ export function useNativeChatTranscriptWindow({
   slots,
   isVisible,
   revealIndex,
-  newRowsMarkerIndex,
   typography = DEFAULT_ROW_TYPOGRAPHY
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -59,8 +60,6 @@ export function useNativeChatTranscriptWindow({
   isVisible: boolean
   /** Slot the transcript was asked to reveal, or -1. */
   revealIndex: number
-  /** Slot drawing the "New" marker, or -1. */
-  newRowsMarkerIndex?: number
   /** Chat text scale; gap scales with the text size. */
   typography?: NativeChatRowTypography
 }): NativeChatTranscriptWindow {
@@ -71,11 +70,12 @@ export function useNativeChatTranscriptWindow({
   const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
   const retiredMeasurementCountRef = useRef(0)
   const pinned = useMemo(
-    () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
-    [slots.length, revealIndex, newRowsMarkerIndex]
+    () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex }),
+    [slots.length, revealIndex]
   )
   // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
-  const encodedItemKeys = JSON.stringify(slots.map(nativeChatSlotKey))
+  // Encoded only when the slots change: scroll and range renders reuse it.
+  const encodedItemKeys = useMemo(() => JSON.stringify(slots.map(nativeChatSlotKey)), [slots])
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
@@ -139,7 +139,12 @@ export function useNativeChatTranscriptWindow({
       setScrollMargin((current) => (current === offset ? current : offset))
     }
   }, [scrollRef])
-  useLayoutEffect(readScrollMargin)
+  // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
+  useLayoutEffect(() => {
+    if (isVisible) {
+      readScrollMargin()
+    }
+  })
 
   useLayoutEffect(() => {
     const container = scrollRef.current
@@ -196,7 +201,14 @@ export function useNativeChatTranscriptWindow({
     [readScrollMargin]
   )
 
-  const { alignToViewportTop, isAlignPending, endAlign, isAlignHeld } = useNativeChatViewportAlign({
+  const {
+    alignToViewportTop,
+    isAlignPending,
+    endAlign,
+    isAlignHeld,
+    pinsEndGrowth,
+    releaseEndPin
+  } = useNativeChatViewportAlign({
     scrollRef,
     virtualizer,
     finishReaderTakeover,
@@ -207,8 +219,13 @@ export function useNativeChatTranscriptWindow({
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
     const offset = instance.scrollOffset ?? 0
     const written = scrollRef.current?.scrollTop ?? offset
+    if (Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
+      return false
+    }
+    if (pinsEndGrowth(item.index, instance.measurementsCache)) {
+      return true
+    }
     return (
-      Math.abs(written - offset) <= UNSEEN_SCROLL_PX &&
       !(item.index === revealIndex && !instance.itemSizeCache.has(item.key)) &&
       item.end <= offset &&
       (instance.scrollDirection !== 'backward' ||
@@ -320,6 +337,7 @@ export function useNativeChatTranscriptWindow({
     alignToViewportTop,
     isAlignPending,
     cancelAlign,
+    releaseEndPin,
     scrollToEnd,
     restoreScrollOffset,
     consumeProgrammaticScroll,

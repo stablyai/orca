@@ -55,38 +55,38 @@ export function getComposerRepoWorktreeBranches(
     : []
 }
 
-function isLocalBranchSelection(refName: string, localBranchName: string): boolean {
-  return refName === localBranchName || refName === `refs/heads/${localBranchName}`
+function isBranchSelection(refName: string, localBranchName: string): boolean {
+  return (
+    refName === localBranchName ||
+    refName === `refs/heads/${localBranchName}` ||
+    ((!refName.startsWith('refs/') || refName.startsWith('refs/remotes/')) &&
+      refName.endsWith(`/${localBranchName}`))
+  )
 }
 
-/** Reuse only local branches not checked out elsewhere. Default on when selection auto-derived the workspace name; user-edited names default to branching unless explicitly opting in (#5181). */
+/** Reuse pins branch identity independently of the workspace label. Busy branches are checked by the host. */
 export function resolveComposerBranchReuse(args: {
   refName: string
   localBranchName: string
-  selectionProducedOverride: boolean
   branchCheckedOutElsewhere: boolean
 }): { reuseEligibleBranch: string | null; defaultReuse: boolean } {
-  const reuseEligibleBranch =
-    isLocalBranchSelection(args.refName, args.localBranchName) && !args.branchCheckedOutElsewhere
-      ? args.localBranchName
-      : null
+  const reuseEligibleBranch = isBranchSelection(args.refName, args.localBranchName)
+    ? args.localBranchName
+    : null
   return {
     reuseEligibleBranch,
-    defaultReuse: reuseEligibleBranch !== null && args.selectionProducedOverride
+    defaultReuse: reuseEligibleBranch !== null
   }
 }
 
-/** Do not pin checked-out local branches as overrides: collision suffixes would silently create another branch. Derive a fresh name from the selected base instead (#5181). */
+/** Branch-off creation must not pin a busy branch; explicit reuse supplies its own pinned override. */
 export function resolveComposerReuseOverride(args: {
   refName: string
   localBranchName: string
   branchNameOverride: string | undefined
   branchCheckedOutElsewhere: boolean
 }): string | undefined {
-  if (
-    args.branchCheckedOutElsewhere &&
-    isLocalBranchSelection(args.refName, args.localBranchName)
-  ) {
+  if (args.branchCheckedOutElsewhere && isBranchSelection(args.refName, args.localBranchName)) {
     return undefined
   }
   return args.branchNameOverride
@@ -112,7 +112,6 @@ export function resolveComposerBranchPick(args: {
   const reuse = resolveComposerBranchReuse({
     refName: args.refName,
     localBranchName: args.localBranchName,
-    selectionProducedOverride: selection.branchNameOverride !== undefined,
     branchCheckedOutElsewhere
   })
   return {

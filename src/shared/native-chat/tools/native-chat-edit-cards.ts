@@ -2,7 +2,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import { editFilesFromToolPair, isEditToolName } from './native-chat-edit-normalize'
 import type { NativeChatEditFile, NativeChatEditLine } from './native-chat-edit-model'
 import {
@@ -96,45 +96,54 @@ const diffSummaries = new WeakMap<
 >()
 
 // Only the journal's path-only Diff envelope has counts that can be read without tool normalization.
-export function buildDiffSummaries(blocks: NativeChatBlock[]): Map<
+export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
   NativeChatToolCallBlock,
   {
     files: NativeChatEditFileSummary[]
     key: string
-    result: NativeChatToolResultBlock
+    result: NativeChatToolResultBlock | undefined
   }
 > {
   const summaries = new Map<
     NativeChatToolCallBlock,
-    { files: NativeChatEditFileSummary[]; key: string; result: NativeChatToolResultBlock }
+    {
+      files: NativeChatEditFileSummary[]
+      key: string
+      result: NativeChatToolResultBlock | undefined
+    }
   >()
   for (const [index, pair] of pairToolBlocks(blocks).entries()) {
     const { call, result } = pair
-    if (
-      !call ||
-      call.name !== 'Diff' ||
-      call.state === 'running' ||
-      call.state === 'failed' ||
-      result?.isError ||
-      result?.editPatch ||
-      !result?.output
-    ) {
+    if (!call || !isEditToolName(call.name)) {
       continue
     }
     const input = call.input
-    if (
-      !input ||
-      typeof input !== 'object' ||
-      !('path' in input) ||
-      typeof input.path !== 'string' ||
-      Object.keys(input).some((key) => key !== 'path')
-    ) {
+    const journalDiff =
+      call.name === 'Diff' &&
+      call.state !== 'running' &&
+      call.state !== 'failed' &&
+      result &&
+      !result.isError &&
+      !result.editPatch &&
+      result.output &&
+      input &&
+      typeof input === 'object' &&
+      'path' in input &&
+      typeof input.path === 'string' &&
+      Object.keys(input).every((key) => key === 'path')
+        ? { output: result.output, path: input.path }
+        : undefined
+    if (!journalDiff) {
+      const files = normalizedToolEditFiles(call, result)
+      if (files?.length) {
+        summaries.set(call, { files, key: `${call.name}:${index}`, result })
+      }
       continue
     }
     const cached = diffSummaries.get(call)
-    let files = cached?.result === result ? cached.files : undefined
+    let files = cached && cached.result === result ? cached.files : undefined
     if (files === undefined) {
-      files = editFilesFromPatchText(result.output, input.path, true)
+      files = editFilesFromPatchText(journalDiff.output, journalDiff.path, true)
       diffSummaries.set(call, { result, files })
     }
     if (files?.length) {

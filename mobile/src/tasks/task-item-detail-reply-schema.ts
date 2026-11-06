@@ -1,11 +1,13 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {
+  CHECK_STATUS,
   MERGEABLE_STATE,
   prCount,
   prNullableText,
   prStringList,
-  prText
+  prText,
+  prRepoIdentity
 } from '../session/github-pr-entity-reply-schema'
 import {
   assignableUserListSchema,
@@ -23,6 +25,10 @@ export const githubWorkItemDetailSchema = z
     item: salvagedOptional(
       'item',
       z.looseObject({
+        url: z.string(),
+        number: z.number(),
+        type: z.enum(['issue', 'pr']),
+        prRepo: prRepoIdentity('prRepo'),
         labels: prStringList('labels'),
         reviewDecision: prNullableText('reviewDecision'),
         reviewRequests: salvagedOptional('reviewRequests', assignableUserListSchema),
@@ -51,6 +57,15 @@ export const gitlabWorkItemDetailSchema = z
       })
     ),
     assignees: prStringList('assignees'),
+    pipeline: salvagedOptional(
+      'pipeline',
+      z.looseObject({
+        id: z.number().int().positive(),
+        status: z.string(),
+        checkStatus: salvagedOptional('checkStatus', z.enum(CHECK_STATUS)),
+        webUrl: prNullableText('webUrl')
+      })
+    ),
     pipelineJobs: salvagedOptional(
       'pipelineJobs',
       salvagingArray(

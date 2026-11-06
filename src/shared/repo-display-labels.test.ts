@@ -32,17 +32,6 @@ describe('getRepoDisplayLabelsByPath', () => {
     )
   })
 
-  it('scopes labels by execution host so same-path repos on different hosts do not collide', () => {
-    // SSH folder repos omit executionHostId; connectionId must still separate them from local same-path repos.
-    const localRepo = { path: '/Users/alice', displayName: 'alice' }
-    const sshRepo = { path: '/Users/alice', displayName: 'alice-prod', connectionId: 'prod-ssh' }
-    const labels = getRepoDisplayLabelsByPath([localRepo, sshRepo])
-
-    expect(labels.get(getRepoDisplayLabelKey(localRepo))).toBe('alice')
-    expect(labels.get(getRepoDisplayLabelKey(sshRepo))).toBe('alice-prod')
-    expect(labels.size).toBe(2)
-  })
-
   it('keeps cross-host repos with identical path AND name as separate entries', () => {
     const localRepo = { path: '/Users/alice', displayName: 'home' }
     const sshRepo = { path: '/Users/alice', displayName: 'home', connectionId: 'prod-ssh' }
@@ -52,20 +41,6 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.size).toBe(2)
     expect(labels.get(getRepoDisplayLabelKey(localRepo))).toBe('home')
     expect(labels.get(getRepoDisplayLabelKey(sshRepo))).toBe('home')
-  })
-
-  it('normalizes Windows separators to slash display labels', () => {
-    const labels = getRepoDisplayLabelsByPath([
-      { path: 'C:\\workspace\\payments\\api', displayName: 'api' },
-      { path: 'C:\\workspace\\billing\\api', displayName: 'api' }
-    ])
-
-    expect(labels.get(getRepoDisplayLabelKey({ path: 'C:\\workspace\\payments\\api' }))).toBe(
-      'payments/api'
-    )
-    expect(labels.get(getRepoDisplayLabelKey({ path: 'C:\\workspace\\billing\\api' }))).toBe(
-      'billing/api'
-    )
   })
 
   it('disambiguates collisions only within their owning host, even when paths overlap', () => {

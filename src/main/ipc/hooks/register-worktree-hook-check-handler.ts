@@ -1,9 +1,9 @@
 import { ipcMain } from 'electron'
 import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
+import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
-import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
@@ -45,7 +45,10 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           hooks: null,
           mayNeedUpdate: false,
           // A stopped distro answers once it runs again; an unverifiable one is worth a retry.
-          ...(blocked.state === 'stopped' ? { unavailable: 'wsl-distro-stopped' as const } : {})
+          unavailable:
+            blocked.state === 'stopped'
+              ? ('wsl-distro-stopped' as const)
+              : ('wsl-distro-unverifiable' as const)
         }
       }
 

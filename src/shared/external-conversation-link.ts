@@ -1,4 +1,4 @@
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from './execution-host'
 
 /** Where a connector conversation comes from; `dev` is the CLI that drives one without a service. */

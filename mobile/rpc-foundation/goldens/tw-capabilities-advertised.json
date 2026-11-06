@@ -4,18 +4,6 @@
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
   "values": {
-    "120979f40a68": {
-      "capabilities": {
-        "agentLaunch": false,
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
     "216adda2100c": {
       "name": "status.get#1",
       "ordinal": 1,
@@ -54,12 +42,28 @@
         }
       }
     },
-    "3a7704ccec26": {
+    "456a1f9383e3": {
+      "capabilities": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "b62568733b13": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -84,9 +88,9 @@
           "sender": ["216adda2100c"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "3a7704ccec26"
+            "probe": "b62568733b13"
           },
-          "state": "120979f40a68",
+          "state": "456a1f9383e3",
           "effects": []
         }
       }

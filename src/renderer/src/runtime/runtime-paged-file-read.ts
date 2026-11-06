@@ -8,7 +8,9 @@ import type {
   RuntimeFileReadChunkResult
 } from '../../../shared/runtime-types'
 import {
+  rangeReadTarget,
   readRemoteRuntimeFileChunk,
+  readRuntimeFileChunk,
   statRemoteRuntimeFile,
   type RuntimeFileSnapshot,
   type RuntimeRemoteFileAddress
@@ -16,6 +18,8 @@ import {
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../shared/file-range-read'
+import type { RuntimeFileReadArgs } from './runtime-file-client-types'
 
 // Why: under files.readChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
 const PAGED_READ_CHUNK_BYTES = 384 * 1024
@@ -25,7 +29,7 @@ export const REMOTE_FILE_CHANGED_DURING_READ_MESSAGE =
   'File changed on disk while it was loading. Reload the file to see the latest version.'
 
 export type PagedRemoteFileRead =
-  | { kind: 'ok'; bytes: Uint8Array }
+  | { kind: 'ok'; bytes: Uint8Array<ArrayBuffer> }
   // An older host without files.stat/files.readChunk: the caller keeps its one-reply error.
   | { kind: 'unsupported' }
   | { kind: 'too_large'; size: number }
@@ -63,7 +67,12 @@ export type ChunkedFileReader = {
 }
 
 /** The paging loop behind `readRemoteFileInChunks`, over any way of calling the host. */
-export async function readFileInChunks(reader: ChunkedFileReader): Promise<PagedRemoteFileRead> {
+export async function readFileInChunks(
+  reader: ChunkedFileReader,
+  limits: { maxBytes?: number; chunkBytes?: number } = {}
+): Promise<PagedRemoteFileRead> {
+  const maxBytes = limits.maxBytes ?? PAGED_REMOTE_FILE_MAX_BYTES
+  const chunkBytes = limits.chunkBytes ?? PAGED_READ_CHUNK_BYTES
   const before = await nullWhenUnsupported(() => reader.stat())
   if (!before) {
     return { kind: 'unsupported' }
@@ -71,13 +80,13 @@ export async function readFileInChunks(reader: ChunkedFileReader): Promise<Paged
   if (before.isDirectory) {
     throw new Error('Remote path is a directory')
   }
-  if (before.size > PAGED_REMOTE_FILE_MAX_BYTES) {
+  if (before.size > maxBytes) {
     return { kind: 'too_large', size: before.size }
   }
   const bytes = new Uint8Array(before.size)
   let offset = 0
   for (;;) {
-    const chunk = await nullWhenUnsupported(() => reader.readChunk(offset, PAGED_READ_CHUNK_BYTES))
+    const chunk = await nullWhenUnsupported(() => reader.readChunk(offset, chunkBytes))
     if (!chunk) {
       return { kind: 'unsupported' }
     }
@@ -113,6 +122,33 @@ export async function readRemoteBinaryFile(
   return previewableBinaryMimeType(address.relativePath)
     ? readRemoteFilePreview(address, options)
     : { content: '', isBinary: true }
+}
+
+/**
+ * A whole file's bytes on the route the editor loaded it from: this client's file system or the
+ * owning runtime (SSH and paired hosts), pinned to one pairing. Chunks stay within the local
+ * `fs:readFileChunk` cap; the stat bracket refuses a file rewritten mid-read.
+ */
+export function readRuntimeFileBytes(
+  args: RuntimeFileReadArgs,
+  maxBytes: number
+): Promise<PagedRemoteFileRead> {
+  const target = rangeReadTarget(args)
+  const remote = target ? pinRemoteFileAddress(target) : null
+  return readFileInChunks(
+    {
+      stat: () =>
+        remote
+          ? statRemoteRuntimeFile(remote)
+          : window.api.fs.stat({
+              filePath: args.filePath,
+              connectionId: args.connectionId,
+              access: args.access
+            }),
+      readChunk: (offset, length) => readRuntimeFileChunk(args, remote, offset, length)
+    },
+    { maxBytes, chunkBytes: MAX_FILE_RANGE_READ_BYTES }
+  )
 }
 
 /** `files.readPreview`, falling back to a chunked read when the file is too large for one reply. */

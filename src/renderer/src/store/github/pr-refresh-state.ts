@@ -1,7 +1,8 @@
 import type {
   GitHubPRRefreshReason,
   GitHubPRRefreshSkippedReason,
-  PRRefreshErrorType
+  PRRefreshErrorType,
+  PRRefreshOutcome
 } from '../../../../shared/github/pull-request-refresh-types'
 import { capRecordByInsertionOrder } from './cache-policy'
 
@@ -17,13 +18,45 @@ export type PRRefreshState = {
   retryDisabledUntil?: number
 }
 
+/** A direct reply's settlement: a failure replaces the key's state; an answer drops only a failure older than its read. */
+export function withDirectPRRefreshSettlement<
+  S extends { prRefreshStates: Record<string, PRRefreshState> }
+>(
+  s: S,
+  cacheKey: string,
+  outcome: PRRefreshOutcome,
+  requestStartedAt: number
+): S | Pick<S, 'prRefreshStates'> {
+  const current = s.prRefreshStates[cacheKey]
+  if (
+    outcome.kind !== 'upstream-error' &&
+    (current?.status !== 'error' || current.updatedAt >= requestStartedAt)
+  ) {
+    return s
+  }
+  const prRefreshStates = { ...s.prRefreshStates }
+  delete prRefreshStates[cacheKey]
+  if (outcome.kind === 'upstream-error') {
+    prRefreshStates[cacheKey] = {
+      status: 'error',
+      reason: 'swr',
+      updatedAt: Date.now(),
+      message: outcome.message,
+      errorType: outcome.errorType,
+      nextAutoRetryAt: outcome.nextAutoRetryAt,
+      retryDisabledUntil: outcome.retryDisabledUntil
+    }
+  }
+  return { prRefreshStates }
+}
+
 export type PRRefreshStateClearToken = {
   sequence: number
   status: PRRefreshState['status']
   updatedAt: number
 }
 
-const PR_REFRESH_ACTIVE_STALE_MS = 120_000
+export const PR_REFRESH_ACTIVE_STALE_MS = 120_000
 const PR_REFRESH_PAUSED_GRACE_MS = 5_000
 const MAX_PR_REFRESH_STATE_ENTRIES = 2000
 const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])

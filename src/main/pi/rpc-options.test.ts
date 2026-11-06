@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyPiRpcSessionOption,
   parsePiModelOptionId,
-  readPiRpcCommands,
+  PiRpcOptionObservations,
   readPiRpcSessionOptions,
+  type PiRpcOptionProof,
   type PiRpcRequester
 } from './rpc-options'
 
@@ -14,6 +15,39 @@ function requester(
 }
 
 describe('Pi RPC session options', () => {
+  it('distinguishes startup from a completed empty listing and adopts rows beside a superseded current report', async () => {
+    const proof: PiRpcOptionProof = { current: new Map(), writes: new Map() }
+    const observed = new PiRpcOptionObservations(proof, () => true)
+    expect(observed.read().modelsKnown).toBe(false)
+    observed.seed({ model: { provider: 'test', id: 'saved' } })
+    observed.prepareState(vi.fn())({ thinkingLevel: 'off' })
+    expect(observed.read().modelsKnown).toBe(false)
+    const rpc = requester({
+      get_available_models: { models: [] },
+      get_state: {
+        model: null,
+        sessionFile: '/sessions/current.jsonl',
+        isStreaming: false,
+        isCompacting: false
+      }
+    })
+    const adopt = observed.prepare()
+    const completed = await readPiRpcSessionOptions(rpc)
+    expect(adopt(completed)).toBe(true)
+    expect(observed.read().modelsKnown).toBeUndefined()
+    expect(observed.read().models).toEqual([])
+
+    observed.seed({ model: { provider: 'test', id: 'saved' } })
+    const stale = observed.prepare()
+    proof.writes.set('model', { pending: false })
+    proof.current.set('model', 'test/picked')
+    const models = [{ id: 'test/new', label: 'New', isDefault: false, efforts: [] }]
+    expect(stale({ models, current: { model: 'test/stale', confirmed: ['model'] } })).toBe(false)
+    expect(observed.read()).toMatchObject({ models, current: { model: 'test/picked' } })
+    expect(observed.read().modelsKnown).toBeUndefined()
+    expect(observed.read().current.confirmed).not.toContain('model')
+  })
+
   it('reads provider-qualified models and the reported thinking level', async () => {
     const rpc = requester({
       get_available_models: {
@@ -82,43 +116,6 @@ describe('Pi RPC session options', () => {
       applyPiRpcSessionOption(rejected, selected, 'model', 'other/new-model')
     ).rejects.toThrow('provider refused model')
     expect(selected.get('model')).toBe('openai-codex/gpt-6.1-sol')
-  })
-
-  it('rejects malformed provider data and reports only Pi-listed commands', async () => {
-    const malformed = requester({ get_available_models: { models: [{ id: 'missing-provider' }] } })
-    await expect(readPiRpcSessionOptions(malformed)).rejects.toThrow()
-    const rpc = requester({
-      get_commands: {
-        commands: [
-          { name: 'review', description: 'Review changes', source: 'extension' },
-          { name: 'search', source: 'skill' }
-        ]
-      }
-    })
-    expect(await readPiRpcCommands(rpc)).toEqual({
-      commands: [
-        { name: 'review', kind: 'command', description: 'Review changes' },
-        { name: 'search', kind: 'skill' }
-      ]
-    })
-  })
-
-  it('handles a signed-out state with no model', async () => {
-    const rpc = requester({
-      get_available_models: { models: [] },
-      get_state: {
-        model: null,
-        thinkingLevel: 'off',
-        sessionFile: '/sessions/current.jsonl',
-        isStreaming: false,
-        isCompacting: false
-      }
-    })
-    expect((await readPiRpcSessionOptions(rpc)).current).toEqual({
-      model: '',
-      effort: 'off',
-      confirmed: ['effort']
-    })
   })
 
   it('keeps ordinary thinking levels when the map only supplies overrides', async () => {

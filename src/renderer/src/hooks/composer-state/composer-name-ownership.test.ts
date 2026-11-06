@@ -63,6 +63,7 @@ function useNameOwnership(draft?: { name: string; linkedWorkItem: LinkedWorkItem
     forkPushWarning: null,
     pushTarget: undefined,
     setBranchNameOverride: vi.fn(),
+    setBranchIntent: vi.fn(),
     setBranchNameOverridePreservesNameEdits: vi.fn(),
     setCreateError: vi.fn(),
     setForkPushWarning: vi.fn(),

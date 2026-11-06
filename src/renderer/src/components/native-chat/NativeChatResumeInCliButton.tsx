@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { translate } from '@/i18n/i18n'
-import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   runNativeChatCliFork,
   useNativeChatCliForkPending

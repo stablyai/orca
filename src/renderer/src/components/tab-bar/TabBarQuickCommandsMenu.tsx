@@ -12,7 +12,7 @@ import { TabBarQuickCommandsList } from './TabBarQuickCommandsList'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/utils'
@@ -303,7 +303,7 @@ export function TabBarQuickCommandsMenu({
           align="end"
           side="bottom"
           sideOffset={6}
-          className="w-80 p-0"
+          className="w-120 max-w-[calc(100vw-1rem)]"
           onCloseAutoFocus={(event) => {
             if (!isFocused) {
               event.preventDefault()

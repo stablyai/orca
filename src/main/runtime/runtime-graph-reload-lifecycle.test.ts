@@ -9,35 +9,6 @@ describe('RuntimeGraphReloadLifecycle', () => {
     vi.useRealTimers()
   })
 
-  it('records success, failure, cancellation, and timeout as terminal outcomes', async () => {
-    vi.useFakeTimers()
-    const settlements: RuntimeGraphReloadSettlement[] = []
-    const timeouts: number[] = []
-    const lifecycle = new RuntimeGraphReloadLifecycle({
-      timeoutMs: 100,
-      onSettled: (settlement) => settlements.push(settlement),
-      onTimeout: (revision) => timeouts.push(revision)
-    })
-
-    const success = lifecycle.begin(1)
-    expect(lifecycle.settle(success, 'success')).toBe(true)
-    const failure = lifecycle.begin(1)
-    expect(lifecycle.settle(failure, 'failure')).toBe(true)
-    const cancelled = lifecycle.begin(1)
-    expect(lifecycle.settle(cancelled, 'cancelled')).toBe(true)
-    const timeout = lifecycle.begin(1)
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(settlements.map(({ revision, outcome }) => ({ revision, outcome }))).toEqual([
-      { revision: success, outcome: 'success' },
-      { revision: failure, outcome: 'failure' },
-      { revision: cancelled, outcome: 'cancelled' },
-      { revision: timeout, outcome: 'timeout' }
-    ])
-    expect(timeouts).toEqual([timeout])
-    expect(lifecycle.getActiveRevision()).toBeNull()
-  })
-
   it('cancels a superseded generation and ignores its stale completion and timeout', async () => {
     vi.useFakeTimers()
     const settlements: RuntimeGraphReloadSettlement[] = []

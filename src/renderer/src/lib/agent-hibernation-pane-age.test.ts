@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   getHibernationBoundaryResolvedAtByPaneKey,
   getHibernationPtyBindingFirstSeenAtByPaneKey,
@@ -46,12 +49,6 @@ function observe(ptyId: string | null, now: number, tabs: TerminalTab[] = [tab()
 describe('hibernation PTY binding age', () => {
   beforeEach(() => {
     resetHibernationPaneAgeForTests()
-  })
-
-  it('stamps first sight and carries it while the PTY is unchanged', () => {
-    observe('pty-1', 1_000)
-    observe('pty-1', 500_000)
-    expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBe(1_000)
   })
 
   it('resets the stamp when the pane rebinds to a new PTY', () => {

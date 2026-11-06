@@ -1,14 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isShowRefNoMatchError, probeAnyExactRef, probeExactRefs } from './exact-ref-probe'
-
-describe('isShowRefNoMatchError', () => {
-  it('accepts only the numeric Git no-match exit status', () => {
-    expect(isShowRefNoMatchError({ code: 1 })).toBe(true)
-    expect(isShowRefNoMatchError({ code: '1' })).toBe(false)
-    expect(isShowRefNoMatchError({ code: 'CONNECTION_LOST' })).toBe(false)
-    expect(isShowRefNoMatchError({ code: -32000 })).toBe(false)
-  })
-})
+import { probeAnyExactRef, probeExactRefs, probeExactRefsViaForEachRef } from './exact-ref-probe'
 
 describe('probeExactRefs', () => {
   it('preserves present, absent, and unknown states while deduplicating refs', async () => {
@@ -39,18 +30,6 @@ describe('probeExactRefs', () => {
         ([argv]) => argv.slice(0, 4).join(' ') === 'show-ref --verify --quiet --'
       )
     ).toBe(true)
-  })
-
-  it('forwards max-buffer and timeout options', async () => {
-    const runGit = vi.fn(async () => ({ stdout: '' }))
-    const ref = 'refs/remotes/origin/main'
-
-    await probeExactRefs(runGit, [ref], { maxBuffer: 4096, timeoutMs: 30_000 })
-
-    expect(runGit).toHaveBeenCalledWith(['show-ref', '--verify', '--quiet', '--', ref], {
-      maxBuffer: 4096,
-      timeoutMs: 30_000
-    })
   })
 
   it('bounds concurrent exact lookups', async () => {
@@ -115,15 +94,48 @@ describe('probeAnyExactRef', () => {
     expect(result.absentRefs).toEqual(['refs/remotes/origin/main'])
     expect(result.unknownRefs).toEqual([])
   })
+})
 
-  it('keeps the exit-code contract for a runner that reports no stderr', async () => {
-    // The SSH provider rejects without a stderr field; absence must still resolve.
-    const runGit = vi.fn(async () => {
-      throw Object.assign(new Error('missing'), { code: 1 })
+describe('probeExactRefsViaForEachRef', () => {
+  const present = 'refs/remotes/origin/main'
+  const descendantOnly = 'refs/remotes/fork/main'
+  const invalid = 'refs/remotes/origin/bad*'
+
+  it('answers all candidates from one child and ignores descendant matches', async () => {
+    const runGit = vi.fn(async () => ({
+      stdout: `${present}\r\n${descendantOnly}/sub\n`
+    }))
+
+    await expect(
+      probeExactRefsViaForEachRef(runGit, [present, descendantOnly, invalid, present])
+    ).resolves.toEqual({
+      presentRefs: [present],
+      absentRefs: [descendantOnly],
+      unknownRefs: [invalid]
+    })
+    expect(runGit).toHaveBeenCalledTimes(1)
+    expect(runGit).toHaveBeenCalledWith([
+      'for-each-ref',
+      '--format=%(refname)',
+      '--',
+      present,
+      descendantOnly
+    ])
+  })
+
+  it('falls back to per-ref probes when the batch fails', async () => {
+    const runGit = vi.fn(async (argv: string[]) => {
+      if (argv[0] === 'for-each-ref' || argv.at(-1) === descendantOnly) {
+        throw Object.assign(new Error('failed'), { code: 1 })
+      }
+      return { stdout: '' }
     })
 
-    const result = await probeExactRefs(runGit, ['refs/remotes/origin/main'])
-
-    expect(result.absentRefs).toEqual(['refs/remotes/origin/main'])
+    await expect(probeExactRefsViaForEachRef(runGit, [present, descendantOnly])).resolves.toEqual({
+      presentRefs: [present],
+      absentRefs: [descendantOnly],
+      unknownRefs: []
+    })
+    expect(runGit).toHaveBeenCalledTimes(3)
   })
 })

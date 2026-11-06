@@ -5,10 +5,11 @@ import {
   createRuntimeWithSshLease,
   deferred,
   store
-} from './orca-runtime-test-fixtures.spec'
-import { makePaneKey } from './orca-runtime-test-mocks.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
-import { registerBoundPty } from './bind-first-pane.test-fixture'
+import { registerBoundPty } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import type {
   RuntimeTerminalCreate,
   RuntimeTerminalResolvePane
@@ -256,7 +257,7 @@ describe('terminal pane recovery uses the current Root state', () => {
       expect(this).toBe(runtime)
       expect(arguments.length).toBe(2)
       expect(selector).toBe(`id:${TEST_WORKTREE_ID}`)
-      expect(options).toEqual({ tabId, leafId: HEADLESS_LEAF_ID, focus: false })
+      expect(options).toEqual({ tabId, leafId: HEADLESS_LEAF_ID, focus: false, reopensPane: true })
       return creation.promise
     })
     const first = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)

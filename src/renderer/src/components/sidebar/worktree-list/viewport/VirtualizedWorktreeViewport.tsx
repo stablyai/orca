@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { translate } from '@/i18n/i18n'
-import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
@@ -19,7 +21,7 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
-import { useWorktreeListKeyboardNavigation } from '../navigation/use-keyboard'
+import { useWorktreeListKeyboardNavigation, withKeyboardPreview } from '../navigation/use-keyboard'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
 import { useWorktreePointerDrag } from '../drag/use-pointer-drag'
@@ -42,6 +44,7 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
+  useUiLanguageRevision()
   const {
     rows,
     groupBy,
@@ -62,6 +65,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const projectHeaderHostContexts = useProjectHeaderHostContexts({
     rows,
     visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
@@ -113,15 +117,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
-  )
-  const folderBackedProjectGroupIds = useMemo(
-    () =>
-      new Set(
-        projectGroups
-          .filter((group) => group.createdFrom === 'folder-scan')
-          .map((group) => group.id)
-      ),
-    [projectGroups]
   )
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
@@ -196,6 +191,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     worktreeMap,
     worktreeLineageById,
+    lineageParentIdentities,
     collapsedGroups,
     toggleGroup,
     groupBy,
@@ -227,13 +223,11 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     toggleGroup
   })
 
-  const { handleContainerKeyDown } = useWorktreeListKeyboardNavigation({
+  const { handleContainerKeyDown, keyboardPreview } = useWorktreeListKeyboardNavigation({
     rows,
-    renderRows,
     activeWorktreeId,
     activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
-    virtualizer: virtualization.virtualizer,
     scrollRef,
     activeModal: props.activeModal,
     markDirectScrollInput
@@ -337,8 +331,12 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     markScrollMovement()
   }, [markScrollMovement])
 
+  const rowProps = useMemo(
+    () => withKeyboardPreview(props, keyboardPreview),
+    [keyboardPreview, props]
+  )
   const rowContext = buildWorktreeVirtualRowContext({
-    props,
+    props: rowProps,
     renderRows,
     firstHeaderIndex,
     virtualization,
@@ -346,7 +344,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     settings,
     projectActions,
     newCardStyle,
-    folderBackedProjectGroupIds,
     projectGroups,
     session,
     runtime,
@@ -378,8 +375,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
-          activeWorktreeId,
-          activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
+          activeWorktreeId: rowProps.activeWorktreeId,
+          activeWorkspaceExecutionHostId: rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,

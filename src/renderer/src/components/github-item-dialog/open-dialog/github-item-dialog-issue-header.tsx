@@ -9,7 +9,8 @@ import {
   Copy,
   ExternalLink,
   FolderKanban,
-  Plus
+  Plus,
+  RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -23,12 +24,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function GitHubItemDialogIssueHeader({
   workItem,
+  refreshTask,
+  refreshing,
+  canRefreshTask,
+  refreshUnsupported,
   backLabel,
   onClose,
   linkCopied,
@@ -42,6 +49,10 @@ export function GitHubItemDialogIssueHeader({
   repoPath,
   issueAttachedWorkspaceLabel
 }: {
+  refreshTask?: () => Promise<void>
+  refreshing: boolean
+  canRefreshTask: boolean
+  refreshUnsupported: boolean
   workItem: GitHubWorkItem
   backLabel: string
   onClose: () => void
@@ -88,6 +99,36 @@ export function GitHubItemDialogIssueHeader({
           ) : null}
           <span className="font-mono text-muted-foreground">#{workItem.number}</span>
           <div className="ml-auto flex items-center gap-1">
+            {refreshTask ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* A disabled button gets no pointer events; the span keeps its reason reachable. */}
+                  <span className="inline-flex">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={!canRefreshTask || refreshing}
+                      onClick={() => void refreshTask()}
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.refreshTask',
+                        'Refresh task'
+                      )}
+                    >
+                      <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {refreshUnsupported
+                    ? translate(
+                        'auto.components.GitHubItemDialog.refreshTaskUnsupported',
+                        'Update Orca on this server to refresh tasks here.'
+                      )
+                    : translate('auto.components.GitHubItemDialog.refreshTask', 'Refresh task')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -119,7 +160,7 @@ export function GitHubItemDialogIssueHeader({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => window.api.shell.openUrl(workItem.url)}
+                  onClick={(event) => openAppHttpLink(workItem.url, { event })}
                   aria-label={translate(
                     'auto.components.GitHubItemDialog.3fdf777817',
                     'Open on GitHub'
@@ -181,7 +222,7 @@ export function GitHubItemDialogIssueHeader({
                       'Start new workspace'
                     )}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                  <DropdownMenuItem onSelect={() => openAppHttpLink(workItem.url)}>
                     <ExternalLink className="size-4" />
                     {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                   </DropdownMenuItem>
@@ -224,16 +265,31 @@ export function GitHubItemDialogIssueHeader({
               : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </span>
           <span className="flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold text-foreground">
-              {workItem.author ??
-                translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
-            </span>
             <span>
-              {translate('auto.components.GitHubItemDialog.55962099bc', 'opened this issue')}
+              <Trans
+                i18n={i18n}
+                defaults={translate(
+                  'auto.components.GitHubItemDialog.authorOpenedThisIssue',
+                  '<author/> opened this issue'
+                )}
+                components={{
+                  author: (
+                    <span className="font-semibold text-foreground">
+                      {workItem.author ??
+                        translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                    </span>
+                  )
+                }}
+              />
             </span>
             <span className="text-muted-foreground/80">
-              {translate('auto.components.GitHubItemDialog.10ef1afb8e', '· updated')}{' '}
-              {formatRelativeTime(workItem.updatedAt)}
+              {translate(
+                'auto.components.GitHubItemDialog.middotUpdatedRelativeTime',
+                '· updated {{time}}',
+                {
+                  time: formatRelativeTime(workItem.updatedAt)
+                }
+              )}
             </span>
           </span>
           <WorkItemIssueSourceIndicator

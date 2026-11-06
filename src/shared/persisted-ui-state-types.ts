@@ -2,7 +2,7 @@ import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
-import type { WorkspaceCleanupUIState } from './workspace-cleanup'
+import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
@@ -110,6 +110,7 @@ export type PersistedUIState = {
   worktreeCardProperties: WorktreeCardProperty[]
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
+  showAgentModels?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
@@ -155,6 +156,8 @@ export type PersistedUIState = {
   notificationPermissionRequested?: boolean
   /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
   updateReassuranceSeen?: boolean
+  /** macOS major whose update-requirement notice was seen; a later requirement shows it again. */
+  seenMacosUpdateRequirement?: string | null
   /** Renderer ui:set acknowledgments by pane/turn timestamp; persist so seen rows stay read after restart. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
   /** Renderer ui:set cutoffs hide events at/before the timestamp; persist so cleared rows stay hidden after restart. */
@@ -183,6 +186,8 @@ export type PersistedUIState = {
   usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** One-time Compact notice; load decides eligibility before filling missing preferences. */
   statusBarCompactChangeNoticeDismissed?: boolean
+  /** User dismissed the Alpha notice at the top of Settings > Plugins. */
+  pluginsAlphaNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
   /** One-shot toast announcing per-terminal Codex servers; set when shown, so absent means not yet seen. */

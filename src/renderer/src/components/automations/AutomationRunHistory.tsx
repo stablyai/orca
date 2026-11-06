@@ -72,7 +72,11 @@ export function AutomationRunHistory({
   }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
-    return `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${completed} completed`
+    return translate(
+      'auto.components.automations.runHistory.runCountSummary',
+      '{{count}} runs · {{completed}} completed',
+      { count: runs.length, completed, defaultValue_one: '{{count}} run · {{completed}} completed' }
+    )
   }, [runs])
 
   const selectedRunId =
@@ -259,9 +263,7 @@ export function AutomationRunHistory({
               if (!run) {
                 return null
               }
-              const runWorktree = run.workspaceId
-                ? (worktreeMap.get(run.workspaceId) ?? null)
-                : null
+              const runWorktree = run.workspaceId ? (worktreeMap.get(run.id) ?? null) : null
               const workspaceLabel = getAutomationRunWorkspaceDisplay({
                 run,
                 worktree: runWorktree

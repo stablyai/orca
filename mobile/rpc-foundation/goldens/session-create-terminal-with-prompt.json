@@ -49,11 +49,6 @@
         }
       }
     },
-    "4941ab88308b": {
-      "name": "terminal.send#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"review these notes\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
     "4d318de3b635": {
       "name": "unsubscribe-terminal",
       "ordinal": 3,
@@ -75,19 +70,112 @@
       "sessionTabs": ["tab-1"],
       "terminals": ["terminal-1"]
     },
-    "52c96555f2b3": {
-      "name": "toast",
-      "ordinal": 9,
+    "579afe83429e": {
+      "name": "terminal.send#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"review these notes\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "6275ace50da2": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "8b5144e3301d": {
+      "name": "schedule-delayed-action",
+      "ordinal": 6,
       "value": {
-        "durationMs": {
-          "$rpc": "null"
-        },
-        "message": "Notes sent"
+        "delayMs": 500
       }
     },
-    "58bef0d5522c": {
+    "8c66ae259b06": {
       "name": "terminal.send#1",
-      "ordinal": 6,
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a4f53f7fb1d7": {
+      "name": "fetch-session-tabs",
+      "ordinal": 9,
+      "value": {}
+    },
+    "b1d637072fc8": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c9f8d8917777": {
+      "name": "subscribe-terminal",
+      "ordinal": 4,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "cc673665ea16": {
+      "name": "terminal.send#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -127,108 +215,20 @@
         }
       }
     },
-    "6275ace50da2": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "",
-      "creating": true,
-      "initializedHandles": ["terminal-0"],
-      "pendingSelection": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "7a456c263146": {
-      "name": "terminal.send#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": true,
-            "terminal": "terminal-1",
-            "text": "review these notes"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "95bcf41e673e": {
-      "name": "schedule-delayed-action",
-      "ordinal": 7,
-      "value": {
-        "delayMs": 500
-      }
-    },
-    "b1d637072fc8": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "c13357779299": {
-      "name": "subscribe-terminal",
-      "ordinal": 5,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
     "cce8a731064a": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     },
-    "e247d725ee7d": {
-      "name": "fetch-session-tabs",
-      "ordinal": 10,
-      "value": {}
+    "cf7e2c3136b3": {
+      "name": "toast",
+      "ordinal": 8,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Notes sent"
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -236,13 +236,6 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "fb6329365e0b": {
-      "name": "default-live-input",
-      "ordinal": 4,
-      "value": {
-        "handles": ["terminal-1"]
       }
     }
   },
@@ -265,40 +258,34 @@
       {
         "id": "created",
         "observation": {
-          "sender": ["2977cbddd89f", "7a456c263146"],
-          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "sender": ["2977cbddd89f", "8c66ae259b06"],
+          "payloads": ["cce8a731064a", "579afe83429e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "4e377b1c4bf7",
-          "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "95bcf41e673e"]
+          "effects": ["4d318de3b635", "c9f8d8917777", "8b5144e3301d"]
         }
       },
       {
         "id": "prompt-sent",
         "observation": {
-          "sender": ["2977cbddd89f", "58bef0d5522c"],
-          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "sender": ["2977cbddd89f", "cc673665ea16"],
+          "payloads": ["cce8a731064a", "579afe83429e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "4e377b1c4bf7",
-          "effects": [
-            "4d318de3b635",
-            "fb6329365e0b",
-            "c13357779299",
-            "95bcf41e673e",
-            "52c96555f2b3"
-          ]
+          "effects": ["4d318de3b635", "c9f8d8917777", "8b5144e3301d", "cf7e2c3136b3"]
         }
       },
       {
         "id": "tabs-refreshed",
         "observation": {
-          "sender": ["2977cbddd89f", "58bef0d5522c"],
-          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "sender": ["2977cbddd89f", "cc673665ea16"],
+          "payloads": ["cce8a731064a", "579afe83429e"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
@@ -306,11 +293,10 @@
           "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
-            "fb6329365e0b",
-            "c13357779299",
-            "95bcf41e673e",
-            "52c96555f2b3",
-            "e247d725ee7d"
+            "c9f8d8917777",
+            "8b5144e3301d",
+            "cf7e2c3136b3",
+            "a4f53f7fb1d7"
           ]
         }
       }

@@ -18,7 +18,8 @@ import {
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import { readRemoteRangePreview } from './runtime-file-range-preview'
-import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session/agent-session-attachments'
+import { decodeSvgBase64, isSvgFilePath } from '../../../shared/svg-document'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   isHostFileOutsideWorkspaces,
@@ -35,12 +36,32 @@ import {
 import {
   downloadRemoteFileViaPreview,
   readRemoteDownloadChunk,
-  remoteChunkedDownloadAvailable
+  remoteChunkedDownloadAvailable,
+  streamDownloadedFile
 } from './runtime-remote-file-download'
 
 export { localAccess } from './runtime-file-routing'
 
-export async function readRuntimeFileContent({
+/** SVG opens as editable markup; hosts send it as image bytes, or as a URL if a viewer asks. */
+export async function readRuntimeFileContent(
+  args: RuntimeFileReadArgs
+): Promise<RuntimeReadableFileContent> {
+  if (!isSvgFilePath(args.filePath)) {
+    return readRuntimeFileContentAsStored(args)
+  }
+  const result = await readRuntimeFileContentAsStored({ ...args, pageOversizedBinary: false })
+  const markup = result.isBinary && result.content ? decodeSvgBase64(result.content) : null
+  if (markup === null) {
+    return result
+  }
+  return {
+    content: markup,
+    isBinary: false,
+    ...(result.fileIdentity ? { fileIdentity: result.fileIdentity } : {})
+  }
+}
+
+async function readRuntimeFileContentAsStored({
   target,
   filePath,
   relativePath,
@@ -154,7 +175,10 @@ export async function readRuntimeFilePreview(
       runtimeTarget,
       'agentSessionAttachment.read',
       { path: filePath },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+      }
     )
   }
   if (!remoteArgs) {
@@ -162,7 +186,8 @@ export async function readRuntimeFilePreview(
       return readHostFilePreview({
         target: runtimeTarget,
         worktreeId,
-        absolutePath: filePath
+        absolutePath: filePath,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
       })
     }
     if (hasRemoteRuntimeOwner(context)) {
@@ -178,7 +203,8 @@ export async function readRuntimeFilePreview(
     {
       target: remoteArgs.target,
       worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath
+      relativePath: remoteArgs.relativePath,
+      expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
     },
     { pageOversized: true }
   )
@@ -214,36 +240,7 @@ export async function downloadRuntimeFile(
     return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
   }
 
-  const download = await window.api.fs.startDownloadedFile({ suggestedName })
-  if (download.canceled) {
-    return download
-  }
-
-  let finished = false
-  try {
-    let offset = 0
-    for (;;) {
-      const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
-      if (chunk.bytesRead > 0) {
-        await window.api.fs.appendDownloadedFileChunk({
-          transferId: download.transferId,
-          contentBase64: chunk.contentBase64
-        })
-      }
-      offset += chunk.bytesRead
-      if (chunk.eof) {
-        break
-      }
-      if (chunk.bytesRead <= 0) {
-        throw new Error('Remote download stalled before reaching EOF')
-      }
-    }
-    const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
-    finished = true
-    return result
-  } finally {
-    if (!finished) {
-      await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
-    }
-  }
+  return streamDownloadedFile(suggestedName, (offset) =>
+    readRemoteDownloadChunk(remoteArgs, offset)
+  )
 }

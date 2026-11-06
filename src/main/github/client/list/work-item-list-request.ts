@@ -2,7 +2,7 @@ import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
-import { shouldProbeGitRemote } from '../../../git/remote-name-listing'
+import { shouldProbeGitRemote } from '../../../git/remotes/remote-name-listing'
 import type { LocalGitExecOptions, OwnerRepo } from '../../gh-utils'
 import {
   getGitHubApiRepositoryForRemote,
@@ -13,6 +13,7 @@ import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-
 export type WorkItemListRequest = {
   args: string[]
   offset: number
+  search: string
 }
 
 export function normalizeWorkItemPage(page: number | undefined): number {
@@ -80,7 +81,8 @@ export function buildWorkItemListRequest(args: {
         '--jq',
         '.items'
       ],
-      offset: 0
+      offset: 0,
+      search: searchParts.join(' ')
     }
   }
 
@@ -98,7 +100,11 @@ export function buildWorkItemListRequest(args: {
   ]
   out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
   out.push('--search', searchParts.join(' '))
-  return { args: out, offset: (page - 1) * limit }
+  return {
+    args: out,
+    offset: (page - 1) * limit,
+    search: `( ${searchParts.join(' ')} ) repo:${ownerRepo.owner}/${ownerRepo.repo} type:pr`
+  }
 }
 
 // Carry per-source failures through IPC so pagination cannot mistake them for end-of-data.

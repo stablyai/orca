@@ -6,8 +6,9 @@ import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   CLEANUP_METHODS,
   WORK_METHODS
@@ -32,10 +33,10 @@ afterEach(() => {
 })
 
 const SETTING_OFF = {
-  requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: false }) })
+  requireStore: () => ({ getSettings: () => ({}) })
 }
 const SETTING_ON = {
-  requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: true }) })
+  requireStore: () => ({ getSettings: () => ({ nativeChatProviders: { codex: true } }) })
 }
 // A client that picks each launch's mode itself, as the desktop does.
 const MODE_CHOOSING_CLIENT = {
@@ -57,7 +58,7 @@ const RELEASED_PHONE = {
 const CREATE_SUPPORT = WORK_METHODS.find((entry) => entry.method === 'agentSession.createSupport')!
 const UNSUPPORTED = { message: expect.stringContaining('structured_agent_session_unsupported') }
 
-describe('a host with structured chat turned off', () => {
+describe('a host whose agents are set to CLI', () => {
   it.each(WORK_METHODS)('still serves $method to a capable client', async ({ method, params }) => {
     const response = await call(method, params, MODE_CHOOSING_CLIENT, SETTING_OFF).catch(
       (error: Error) => {
@@ -101,7 +102,10 @@ describe('a host with structured chat turned off', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
     expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     // The durable tab has to be retired too, or the chat comes back on the next sync.
-    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
+    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false, undefined, {
+      deferHiddenNotice: true,
+      check: expect.any(Function)
+    })
   })
 
   it('cancels an in-flight turn', async () => {
@@ -147,8 +151,41 @@ describe('a host with structured chat turned off', () => {
   )
 })
 
+// The CLI over pairing asks for agent launch and chat rename, not structured chats.
+const PAIRED_CLI = {
+  clientKind: 'runtime' as const,
+  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY, AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY]
+}
+
+describe('the paired CLI', () => {
+  it('renames a chat', async () => {
+    const response = await call(
+      'agentSession.rename',
+      { sessionId: SESSION, name: 'Release notes' },
+      PAIRED_CLI,
+      SETTING_OFF
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { name: 'Release notes', applied: true } })
+    expect(hostCalls.setUserConversationName).toHaveBeenCalledWith(
+      SESSION,
+      'Release notes',
+      'rename'
+    )
+  })
+
+  it.each(WORK_METHODS.filter(({ method }) => method !== 'agentSession.rename'))(
+    'is still refused $method',
+    async ({ method, params }) => {
+      const response = await call(method, params, PAIRED_CLI, SETTING_ON)
+
+      expect(response).toMatchObject({ ok: false, error: UNSUPPORTED })
+    }
+  )
+})
+
 describe('a client that leaves the launch mode to the host', () => {
-  it('is told a chat is unsupported while the host setting is off, so it opens a terminal', async () => {
+  it("is told a chat is unsupported while the host's choice for the agent is CLI, so it opens a terminal", async () => {
     const response = await call(
       CREATE_SUPPORT.method,
       CREATE_SUPPORT.params,
@@ -160,13 +197,12 @@ describe('a client that leaves the launch mode to the host', () => {
     expect(runtimeCalls.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
   })
 
-  it('is answered by the workspace once the host setting is on', async () => {
-    const response = await call(
-      CREATE_SUPPORT.method,
-      CREATE_SUPPORT.params,
-      RELEASED_PHONE,
-      SETTING_ON
-    )
+  it("is answered by the workspace when the host's choice for that agent is chat", async () => {
+    const response = await call(CREATE_SUPPORT.method, CREATE_SUPPORT.params, RELEASED_PHONE, {
+      requireStore: () => ({
+        getSettings: () => ({ nativeChatProviders: { claude: false, codex: true } })
+      })
+    })
 
     expect(response).toMatchObject({ ok: true })
   })

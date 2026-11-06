@@ -1,6 +1,6 @@
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { verifyRuntimeEnvironmentIdentity } from '../runtime/runtime-environment-identity-verification'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 
 export async function verifyRuntimeEnvironmentSshTunnel(

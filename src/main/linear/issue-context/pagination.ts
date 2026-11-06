@@ -12,7 +12,8 @@ export type LinearConnection<T> = {
 
 export async function readConnectionPages<T>(
   limit: number,
-  loadConnection: (page: LinearPageVariables) => Promise<LinearConnection<T>>
+  loadConnection: (page: LinearPageVariables) => Promise<LinearConnection<T>>,
+  pageSize = LINEAR_ISSUE_API_PAGE_SIZE_MAX
 ): Promise<{ nodes: T[]; hasMore: boolean }> {
   const nodes: T[] = []
   let after: string | undefined
@@ -20,7 +21,7 @@ export async function readConnectionPages<T>(
 
   while (nodes.length < limit) {
     // Walk capped backend pages to satisfy larger context limits.
-    const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - nodes.length)
+    const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, pageSize, limit - nodes.length)
     const connection = await loadConnection(after ? { first, after } : { first })
     const pageNodes = connection?.nodes ?? []
     nodes.push(...pageNodes.slice(0, limit - nodes.length))

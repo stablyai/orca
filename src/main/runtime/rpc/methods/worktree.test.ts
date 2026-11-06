@@ -135,6 +135,7 @@ describe('worktree RPC methods', () => {
       createdWithAgent: undefined,
       automationProvenance: undefined,
       allowLocalBaseFallback: true,
+      wslUserAct: true,
       creatorProvenance: { kind: 'host' },
       startup: undefined,
       startupDraft: undefined,
@@ -727,6 +728,14 @@ describe('worktree RPC methods', () => {
       headRefName: 'feature/pr-head',
       isCrossRepository: false
     })
+    // A paired client's create-from-PR wake reaches the host; anything else is dropped (E9).
+    for (const wakeWslDistro of [true, 'yes']) {
+      await dispatcher.dispatch(
+        makeRequest('worktree.resolvePrBase', { repo: 'id:repo-1', prNumber: 42, wakeWslDistro })
+      )
+    }
+    const wakes = vi.mocked(runtime.resolveManagedPrBase).mock.calls.map(([a]) => a.wakeWslDistro)
+    expect(wakes).toEqual([undefined, true, undefined])
   })
 
   it('passes explicit repo selectors to MR base resolution', async () => {
@@ -842,11 +851,14 @@ describe('worktree RPC methods', () => {
         createdAt: 1
       }
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler calls only these methods.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
       listWorktreeLineage: vi.fn().mockResolvedValue(lineage),
-      listWorkspaceLineage: vi.fn().mockResolvedValue({})
+      listWorkspaceLineage: vi.fn().mockResolvedValue({}),
+      listCrossStoreLineage: vi.fn().mockReturnValue({}),
+      readStoreInstallationId: vi.fn().mockResolvedValue(undefined)
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 

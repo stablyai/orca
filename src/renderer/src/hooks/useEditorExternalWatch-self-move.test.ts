@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: vi.fn() }
 }))
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
     ...actual,
@@ -22,8 +22,8 @@ import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { getOpenFilesForExternalFileChange } from '@/components/editor/editor-autosave'
-import { __clearSelfWriteRegistryForTests } from '@/components/editor/editor-self-write-registry'
+import { getOpenFilesForExternalFileChange } from '@/components/editor/autosave/editor-autosave'
+import { __clearSelfWriteRegistryForTests } from '@/components/editor/external-changes/editor-self-write-registry'
 import {
   __clearEditorPathMovesForTests,
   beginEditorPathMove,

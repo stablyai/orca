@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const terminalTabLookupByArray = new WeakMap<readonly TerminalTab[], Map<string, TerminalTab>>()
 

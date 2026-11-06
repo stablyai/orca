@@ -4,16 +4,16 @@ import { z } from 'zod'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-url'
 import { isBackgroundLaunch } from '../../../window/foreground-activation-policy'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
-import { resolveInsideExtensionDirectory } from '../browser-extension-manifest'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import { resolveInsideExtensionDirectory } from '../installation/browser-extension-manifest'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import { noteBrowserExtensionUserGesture } from './permissions'
 
 const optionsSchema = z
@@ -129,6 +129,8 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
       : {})
   })
   notification.on('click', () => {
+    shownFor(caller).delete(id)
+    detach(entry, false)
     noteBrowserExtensionUserGesture(caller.session, caller.extension.id)
     emit(caller, 'onClicked', [id])
   })

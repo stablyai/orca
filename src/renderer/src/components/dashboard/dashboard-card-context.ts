@@ -2,8 +2,8 @@ import { branchName } from '@/lib/git-utils'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
 import type { DashboardCardReview } from '../../../../shared/dashboard-snapshot'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
-import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/source-control/hosted-review/hosted-review-github'
+import { isPositiveHostedReviewNumber } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import {
@@ -13,8 +13,8 @@ import {
 import {
   canUseParentPrChecksGitHubPRCacheEntry,
   getParentPrChecksGitHubPRCacheEntry
-} from '../right-sidebar/parent-pr-checks-github-pr-cache'
-import { canUseParentPrChecksHostedReviewCacheEntry } from '../right-sidebar/parent-pr-checks-hosted-review-cache'
+} from '../right-sidebar/hosted-review/folder-checks/parent-pr-checks-github-pr-cache'
+import { canUseParentPrChecksHostedReviewCacheEntry } from '../right-sidebar/hosted-review/folder-checks/parent-pr-checks-hosted-review-cache'
 
 export type DashboardCardContextState = Partial<
   Pick<AppState, 'hostedReviewCache' | 'prCache' | 'settings' | 'workspaceStatuses'>

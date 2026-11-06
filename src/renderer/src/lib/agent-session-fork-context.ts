@@ -1,4 +1,4 @@
-import { trimAgentSessionContext } from '../../../shared/agent-session-context-budget'
+import { trimAgentSessionContext } from '../../../shared/agent-session/requests/agent-session-context-budget'
 const MAX_FORK_CONTEXT_CHARS = 36_000
 const MAX_FORK_CAPTURE_SANITIZE_CHARS = MAX_FORK_CONTEXT_CHARS * 4
 const ESCAPE_CODE = 27

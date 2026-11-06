@@ -1,5 +1,6 @@
-import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { parseHostAuthorityKey } from '../../../shared/host-authority'
+import { reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -47,9 +48,8 @@ export function forgeOwnerHostIdForWorkspace(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'> | null | undefined
 ): string {
-  const serverId = worktree?.runtimeOwnerEnvironmentId?.trim()
-  if (serverId) {
-    return toRuntimeExecutionHostId(serverId)
+  if (worktree && !reviewRepositoryMatchesWorkspace(repo, worktree)) {
+    throw new Error('The repository does not match this workspace’s owning host.')
   }
-  return worktree?.hostId || getRepoExecutionHostId(repo)
+  return getRepoExecutionHostId(repo)
 }
