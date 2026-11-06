@@ -110,6 +110,11 @@ export class RuntimeClientSettingsController {
       nativeChatAutoContinueAfterUsageLimit:
         settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
+      // A paired browser dictates through this host, which refuses unless these allow it.
+      voice: {
+        enabled: settings.voice?.enabled === true,
+        sttModel: settings.voice?.sttModel ?? ''
+      },
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
       // Mirror the host preference; delivery still depends on queue capability.
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
