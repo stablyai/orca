@@ -133,10 +133,11 @@ it.each([
     'No API key found for anthropic.\n\nUse /login, set an API key environment variable, or create /host/agent.db',
     'notSignedIn'
   ],
+  // OMP says this for an unresolved launch selector as well as when signed out.
   [
     // OMP 18.2.7, recorded from a signed-out temporary home.
     'No model selected.\n\nUse /login, set an API key environment variable, or create /var/folders/25/xk3307ps7552prstq_2qr7080000gn/T/acp-omp-signed-out-y6rh2dq7/.omp/agent/agent.db\n\nThen use /model to select a model.',
-    'notSignedIn'
+    'modelNotSelected'
   ],
   ['No model selected', undefined],
   ['Rate limit exceeded', undefined],

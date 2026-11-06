@@ -1,3 +1,7 @@
+import {
+  localAccountRuntimeTargetKey,
+  type LocalAccountRuntimeTarget
+} from '../../../shared/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
@@ -65,6 +69,19 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
     this.antigravityUsageEnabledResolver = resolver
+  }
+
+  setAntigravityFetchTarget(target: LocalAccountRuntimeTarget): void {
+    if (
+      localAccountRuntimeTargetKey(target) ===
+      localAccountRuntimeTargetKey(this.antigravityFetchTarget)
+    ) {
+      return
+    }
+    this.antigravityFetchTarget = { ...target }
+    this.antigravityFetchGeneration += 1
+    this.activeFailureStreakByProvider.antigravity = 0
+    this.updateState({ ...this.state, antigravity: null })
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {

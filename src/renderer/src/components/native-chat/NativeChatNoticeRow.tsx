@@ -7,7 +7,8 @@ import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useSyncExternalStore } from 'react'
+import { useContext, useSyncExternalStore } from 'react'
+import { NativeChatForkedFromContext } from './native-chat-fork-context'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -73,7 +74,36 @@ export function NativeChatNoticeRow({
 }): React.JSX.Element {
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
+  const openForkSource = useContext(NativeChatForkedFromContext)
+
   const look = nativeChatNoticeLook(block)
+  if (look.kind === 'forked-from') {
+    const label = translate(
+      'components.native-chat.notices.forkedFrom',
+      NATIVE_CHAT_NOTICE_COPY.forkedFrom
+    )
+    return (
+      // Plain text with decorative rules: a separator role would hide the source button from screen readers.
+      <div className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint">
+        <span aria-hidden className="h-px flex-1 bg-border" />
+        <span>
+          {label}{' '}
+          {openForkSource ? (
+            <button
+              type="button"
+              className="rounded-sm underline underline-offset-2 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => openForkSource(look.sourceSessionId)}
+            >
+              {look.sourceName}
+            </button>
+          ) : (
+            look.sourceName
+          )}
+        </span>
+        <span aria-hidden className="h-px flex-1 bg-border" />
+      </div>
+    )
+  }
   if (look.kind === 'divider') {
     const label =
       look.label === 'contextCleared'
