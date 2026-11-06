@@ -234,9 +234,13 @@ export function NativeChatOpenedPullRequestCard({
           "Don't show opened pull requests"
         )}
         onClick={() =>
-          hideNativeChatCardKind(
+          void hideNativeChatCardKind(
             { nativeChatOpenedPullRequests: false },
-            NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID
+            NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID,
+            translate(
+              'components.native-chat.openedPullRequests.hidden',
+              "Orca won't show opened pull requests anymore"
+            )
           )
         }
         className="absolute right-1.5 top-1.5 opacity-0 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
