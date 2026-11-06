@@ -19,7 +19,6 @@ export function useNativeChatInteractionMode({
   snapshot: readonly SessionOptionDescriptor[]
   focusComposer?: () => void
 }) {
-  useUiLanguageRevision()
   const [pending, setPending] = useState<string | null>(null)
   const descriptor = snapshot.find((entry) => entry.id === 'interactionMode')
   if (!surface || descriptor?.kind.type !== 'select') {
@@ -79,5 +78,6 @@ export function NativeChatInteractionModeButton({
 export const NativeChatInteractionModeToggle = memo(function NativeChatInteractionModeToggle(
   props: Parameters<typeof useNativeChatInteractionMode>[0]
 ): React.JSX.Element | null {
+  useUiLanguageRevision()
   return <NativeChatInteractionModeButton control={useNativeChatInteractionMode(props)} />
 })

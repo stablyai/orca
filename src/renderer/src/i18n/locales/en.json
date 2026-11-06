@@ -19884,6 +19884,7 @@
         "send": "Send",
         "buildMode": "Build",
         "planMode": "Plan",
+        "moreControls": "More chat controls",
         "modeNextTurn": "Applies to the next turn",
         "alternateSteerHint": "{{shortcut}} to steer",
         "alternateQueueHint": "{{shortcut}} to queue",
