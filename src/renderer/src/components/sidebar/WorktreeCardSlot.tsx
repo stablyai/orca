@@ -1,4 +1,6 @@
 import React from 'react'
+import { Activity, CircleX } from 'lucide-react'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { translate } from '@/i18n/i18n'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
@@ -20,7 +22,9 @@ function slotLabel(signal: SlotSignal): string | undefined {
         ? translate('sidebar.cardSlot.markedUnread', 'Marked unread by you')
         : translate('sidebar.cardSlot.unread', 'Unread result')
     case 'working':
-      return translate('sidebar.cardSlot.working', 'Working')
+      return signal.monitoring
+        ? translate('sidebar.cardSlot.monitoring', 'Monitoring')
+        : translate('sidebar.cardSlot.working', 'Working')
     case 'offline':
       return translate('sidebar.cardSlot.offlineLabel', 'Host offline')
     case 'time':
@@ -70,6 +74,8 @@ export function WorktreeCardSlot({
             'h-4 rounded-[5px] bg-agent-question/15 px-1.5 font-semibold text-agent-question-text'
           )}
         >
+          {/* Same question glyph tabs, the dashboard and kanban use for an agent waiting on you. */}
+          <AgentQuestionIcon className="size-2.5 shrink-0" />
           {signal.count > 1
             ? translate('sidebar.cardSlot.needYouCount', '{{count}} need you', {
                 count: signal.count
@@ -80,6 +86,8 @@ export function WorktreeCardSlot({
     case 'failed':
       return (
         <span {...slotProps} className={cn(base, 'font-semibold text-destructive')}>
+          {/* A crossed circle, not a red dot, so failed never reads like the blue unread dot. */}
+          <CircleX className="size-2.5 shrink-0" aria-hidden="true" />
           {translate('sidebar.cardSlot.failed', 'Failed')}
         </span>
       )
@@ -93,7 +101,11 @@ export function WorktreeCardSlot({
     case 'working':
       return (
         <span {...slotProps} className={cn(base, 'text-muted-foreground')}>
-          <AgentWorkingSpinner className="size-[9px] border-[1.5px]" />
+          {signal.monitoring ? (
+            <Activity className="size-2.5 shrink-0 text-agent-working" aria-hidden="true" />
+          ) : (
+            <AgentWorkingSpinner className="size-[9px] border-[1.5px]" />
+          )}
           {formatSlotTime(signal.at, now)}
         </span>
       )

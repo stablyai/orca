@@ -2566,6 +2566,10 @@
         "working_other": "{{count}} working"
       }
     },
+    "cardSlot": {
+      "childNeeds_one": "{{count}} needs you",
+      "childNeeds_other": "{{count}} need you"
+    },
     "createProject": {
       "errors": {
         "createDirectoryFailed": "Failed to create directory: {{detail}}",

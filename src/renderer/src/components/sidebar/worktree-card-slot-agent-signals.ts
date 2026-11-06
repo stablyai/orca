@@ -51,7 +51,7 @@ export function buildSlotAgentSignals(
     lineByPaneKey.set(agent.paneKey, {
       agent,
       dotState,
-      signal: { kind, at: slotLineAt(agent, kind) }
+      signal: { kind, at: slotLineAt(agent, kind), monitoring: dotState === 'monitoring' }
     })
   })
 

@@ -1783,15 +1783,25 @@ html.native-shell .app-layout {
   --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
 }
 
-/* Experimental 2.0 lineage guide: painted, so it adds no width; a 5px tick reaches each child's title. */
+/* Experimental 2.0 lineage guide, painted in the children's original 14px offset; a tick reaches each child. */
 .worktree-card-slot-lineage {
   --worktree-card-slot-guide: color-mix(
     in srgb,
     var(--worktree-sidebar-foreground) 16%,
     transparent
   );
-  background: linear-gradient(var(--worktree-card-slot-guide), var(--worktree-card-slot-guide))
-    no-repeat 0 0 / 1px 100%;
+  position: relative;
+}
+
+.worktree-card-slot-lineage::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: 0;
+  bottom: 8px;
+  width: 1px;
+  background: var(--worktree-card-slot-guide);
+  pointer-events: none;
 }
 
 .worktree-card-slot-lineage > * {
@@ -1801,9 +1811,9 @@ html.native-shell .app-layout {
 .worktree-card-slot-lineage > *::before {
   content: '';
   position: absolute;
-  left: -3px;
+  left: -9px;
   top: 15px;
-  width: 5px;
+  width: 12px;
   height: 1px;
   background: var(--worktree-card-slot-guide);
   pointer-events: none;

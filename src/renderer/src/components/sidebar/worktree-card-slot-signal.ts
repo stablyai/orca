@@ -5,14 +5,15 @@ import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timesta
 /** What one agent line means for the Experimental 2.0 card, in slot priority order. */
 export type SlotLineKind = 'needs' | 'failed' | 'unread' | 'working' | 'seen' | 'idle'
 
-export type SlotLineSignal = { kind: SlotLineKind; at: number | null }
+/** `monitoring`: working, but watching rather than taking turns; drawn with its own glyph. */
+export type SlotLineSignal = { kind: SlotLineKind; at: number | null; monitoring?: boolean }
 
 /** One right-hand slot: the first exception that applies, otherwise a time, or quiet. */
 export type SlotSignal =
   | { kind: 'needs'; count: number }
   | { kind: 'failed' }
   | { kind: 'unread'; at: number | null; manual: boolean }
-  | { kind: 'working'; at: number | null }
+  | { kind: 'working'; at: number | null; monitoring?: boolean }
   | { kind: 'offline' }
   | { kind: 'time'; at: number | null }
   | { kind: 'quiet' }
@@ -93,7 +94,11 @@ export function slotExceptionFor(lines: readonly SlotLineSignal[]): SlotSignal |
   }
   const working = lines.filter((line) => line.kind === 'working')
   if (working.length > 0) {
-    return { kind: 'working', at: latest(working) }
+    return {
+      kind: 'working',
+      at: latest(working),
+      monitoring: working.every((line) => line.monitoring === true)
+    }
   }
   return null
 }
