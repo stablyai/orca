@@ -1,11 +1,11 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubProjectRow } from '../../src/shared/github/project-types'
-import { projectRelationsTableFixture } from '../../src/shared/github/project-relations.test-fixture'
-import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
+import type { GitHubProjectRow } from '../../../src/shared/github/project-types'
+import { projectRelationsTableFixture } from '../../../src/shared/github/project-relations.test-fixture'
+import { normalizeLinkedPullRequests } from '../../../src/main/github/project-view/project-view-field-normalization'
 
-vi.mock('../../mobile/src/tasks/mobile-tasks-dependencies', () => ({
+vi.mock('./mobile-tasks-dependencies', () => ({
   View: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
   Text: ({ children }: React.PropsWithChildren) => React.createElement('span', null, children),
   Pressable: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
@@ -27,18 +27,18 @@ vi.mock('../../mobile/src/tasks/mobile-tasks-dependencies', () => ({
   TaskProviderLogo: () => null
 }))
 vi.mock('lucide-react-native', () => ({ Inbox: () => null }))
-vi.mock('../../mobile/src/components/MobileStateView', () => ({
+vi.mock('../components/MobileStateView', () => ({
   MobileLoadErrorState: () => null,
   MobileNoMatchState: () => null,
   MobileStateView: () => null
 }))
-vi.mock('../../mobile/src/tasks/mobile-tasks-search-control', () => ({
+vi.mock('./mobile-tasks-search-control', () => ({
   clearMobileTasksSearch: () => {}
 }))
-vi.mock('../../mobile/src/tasks/mobile-tasks-legacy-styles', () => ({ styles: {} }))
-vi.mock('../../mobile/src/theme/mobile-theme', () => ({ pressedStyle: {} }))
-vi.mock('../../mobile/src/tasks/mobile-tasks-legacy-foundation', async () => {
-  const fields = await import('../../mobile/src/tasks/mobile-tasks-project-fields')
+vi.mock('./mobile-tasks-legacy-styles', () => ({ styles: {} }))
+vi.mock('../theme/mobile-theme', () => ({ pressedStyle: {} }))
+vi.mock('./mobile-tasks-legacy-foundation', async () => {
+  const fields = await import('./mobile-tasks-project-fields')
   return {
     projectFieldDisplayLabel: fields.projectFieldDisplayLabel,
     projectGroupMeta: () => '',
@@ -47,8 +47,8 @@ vi.mock('../../mobile/src/tasks/mobile-tasks-legacy-foundation', async () => {
     getRepoBadgeColor: () => ''
   }
 })
-import { renderMobileTasksGitHubProjectList } from '../../mobile/src/tasks/mobile-tasks-github-project-list'
-import type { ConnectionPresentationModel } from '../../mobile/src/tasks/use-mobile-tasks-connection-presentation'
+import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
+import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 
 function phoneText(table: ReturnType<typeof projectRelationsTableFixture>): string {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the populated-list fields are read; inert controls never invoke omitted actions.

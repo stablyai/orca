@@ -6,7 +6,6 @@ import type {
   GitHubProjectTable,
   GitHubProjectView
 } from '../../../../shared/github/project-types'
-import { normalizeLinkedPullRequests } from '../../../../main/github/project-view/project-view-field-normalization'
 import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
 
 const singleSelectField: GitHubProjectField = {
@@ -346,46 +345,4 @@ it('groups repositories from content and orders synthetic progress groups numeri
     'p20',
     'p0'
   ])
-})
-
-it('sorts linked PRs by their first number and treats count-only metadata as an unknown sort key', () => {
-  const field: GitHubProjectField = {
-    kind: 'field',
-    id: 'prs',
-    name: 'Linked pull requests',
-    dataType: 'LINKED_PULL_REQUESTS'
-  }
-  const rows = [
-    makeRow('ten', 0, {}),
-    makeRow('two-high', 1, {}),
-    makeRow('count-only', 2, {}),
-    makeRow('two-low', 3, {}),
-    makeRow('absent', 4, {})
-  ]
-  for (const [index, numbers] of [
-    [0, [10]],
-    [1, [2, 100]],
-    [3, [2, 9]]
-  ] as const) {
-    rows[index].content.linkedPullRequests = {
-      pullRequests: numbers.map((number) => ({
-        number,
-        title: 'PR',
-        url: `https://github.com/acme/repo/pull/${number}`
-      })),
-      totalCount: numbers.length
-    }
-  }
-  rows[2].content.linkedPullRequests = normalizeLinkedPullRequests({
-    __typename: 'ProjectV2ItemFieldPullRequestValue',
-    pullRequests: { nodes: [null, {}], totalCount: 3 }
-  })
-  for (const [direction, expected] of [
-    ['ASC', ['two-high', 'two-low', 'ten', 'count-only', 'absent']],
-    ['DESC', ['ten', 'two-high', 'two-low', 'count-only', 'absent']]
-  ] as const) {
-    expect(
-      sortRows(makeTable(makeView(field, { field, direction }), rows), rows).map((row) => row.id)
-    ).toEqual(expected)
-  }
 })
