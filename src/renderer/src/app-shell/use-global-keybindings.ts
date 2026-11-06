@@ -1,3 +1,4 @@
+import { AGENTS_SHORTCUT_ACTION_IDS, agentsPanelClaimsChord } from './agents-shortcut-handlers'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -231,6 +232,15 @@ export function useGlobalKeybindings(args: {
       }
       if (matchAppShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
+      }
+      for (const actionId of AGENTS_SHORTCUT_ACTION_IDS) {
+        if (
+          matchShortcut(actionId) &&
+          (agentsPanelClaimsChord(matchShortcut, input) || !targetYields(actionId)) &&
+          handlers.get(actionId)?.()
+        ) {
+          return
+        }
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {

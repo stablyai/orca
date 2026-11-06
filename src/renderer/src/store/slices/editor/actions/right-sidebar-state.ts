@@ -14,6 +14,8 @@ export type RightSidebarState = {
   rightSidebarRouteRequestId: number
   /** Set to ask the Agent Session Search panel to widen to all computers and focus its box. */
   aiVaultSearchFocusRequested: boolean
+  /** With a focus request: leave the panel's scope alone instead of widening to All. */
+  aiVaultSearchKeepScope: boolean
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   /** In memory: the tab the mounted sidebar renders, which differs from rightSidebarTab when that tab is hidden here. */
@@ -30,9 +32,20 @@ export type RightSidebarState = {
     includePattern?: string | null
   }) => void
   showAiVaultSearch: () => void
+  showAiVaultSearchKeepingScope: () => void
   clearAiVaultSearchFocusRequest: () => void
   setRightSidebarEffectiveTab: (tab: ActiveRightSidebarTab | null) => void
   setActivityBarPosition: (position: ActivityBarPosition) => void
+}
+
+function revealAiVaultSearch(set: EditorSet, keepScope: boolean): void {
+  set((s) => ({
+    rightSidebarOpen: true,
+    rightSidebarTab: 'vault' as const,
+    rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+    aiVaultSearchFocusRequested: true,
+    aiVaultSearchKeepScope: keepScope
+  }))
 }
 
 export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightSidebarState {
@@ -43,6 +56,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarExplorerView: 'files',
     rightSidebarRouteRequestId: 0,
     aiVaultSearchFocusRequested: false,
+    aiVaultSearchKeepScope: false,
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
     rightSidebarEffectiveTab: null,
@@ -134,14 +148,10 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         }
       }),
     // Settings sends the user here; the panel owns scope, so this asks rather than writes.
-    showAiVaultSearch: () =>
-      set((s) => ({
-        rightSidebarOpen: true,
-        rightSidebarTab: 'vault' as const,
-        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
-        aiVaultSearchFocusRequested: true
-      })),
-    clearAiVaultSearchFocusRequest: () => set({ aiVaultSearchFocusRequested: false }),
+    showAiVaultSearch: () => revealAiVaultSearch(set, false),
+    showAiVaultSearchKeepingScope: () => revealAiVaultSearch(set, true),
+    clearAiVaultSearchFocusRequest: () =>
+      set({ aiVaultSearchFocusRequested: false, aiVaultSearchKeepScope: false }),
     setRightSidebarEffectiveTab: (tab) =>
       set((s) => (s.rightSidebarEffectiveTab === tab ? {} : { rightSidebarEffectiveTab: tab })),
     setActivityBarPosition: (position) => set({ activityBarPosition: position })

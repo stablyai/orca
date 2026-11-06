@@ -11,6 +11,7 @@ import type {
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
+import { AI_VAULT_SCOPE_STEP_EVENT, stepAiVaultScope } from '../scope/ai-vault-scope-state'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
@@ -33,6 +34,7 @@ type AiVaultPanelHeaderProps = {
   headerAction?: ReactNode
   /** Sees search keys first; a handled key is default-prevented. */
   onSearchKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void
+  onSearchEscape?: () => void
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
@@ -63,6 +65,7 @@ export function AiVaultPanelHeader({
   focusSearchRequestId = 0,
   headerAction,
   onSearchKeyDown,
+  onSearchEscape,
   onQueryChange,
   onScopeChange,
   onExecutionHostScopeChange,
@@ -81,6 +84,23 @@ export function AiVaultPanelHeader({
       searchInputRef.current?.select()
     }
   }, [focusSearchRequestId])
+  useEffect(() => {
+    const onStep = (event: Event): void => {
+      if (!(event instanceof CustomEvent) || (event.detail !== 1 && event.detail !== -1)) {
+        return
+      }
+      onScopeChange(
+        stepAiVaultScope({
+          scope,
+          step: event.detail,
+          workspaceAvailable: Boolean(activeWorktreePath),
+          projectAvailable: Boolean(activeProjectKey)
+        })
+      )
+    }
+    window.addEventListener(AI_VAULT_SCOPE_STEP_EVENT, onStep)
+    return () => window.removeEventListener(AI_VAULT_SCOPE_STEP_EVENT, onStep)
+  }, [scope, activeWorktreePath, activeProjectKey, onScopeChange])
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
       <div className="flex items-center gap-1.5">
@@ -162,6 +182,8 @@ export function AiVaultPanelHeader({
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <ImeInput
           ref={searchInputRef}
+          // Why: only the sidebar lets modifier chords through to global shortcuts; the /resume dialog keeps typing local.
+          data-file-search-input={onSearchEscape ? 'true' : undefined}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={translate(
@@ -178,7 +200,11 @@ export function AiVaultPanelHeader({
             // A dialog host clears the search itself before this runs, and prevents its own close.
             if (event.key === 'Escape' && !event.defaultPrevented) {
               event.stopPropagation()
-              onQueryChange('')
+              if (onSearchEscape) {
+                onSearchEscape()
+              } else {
+                onQueryChange('')
+              }
             }
           }}
           spellCheck={false}

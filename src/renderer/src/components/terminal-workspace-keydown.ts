@@ -4,6 +4,7 @@ import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store'
+import { agentsScopeShortcutOwnsChord } from '../app-shell/agents-shortcut-handlers'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -212,6 +213,10 @@ export function handleTerminalWorkspaceKeyDown(
     event.preventDefault()
     notifyTerminalCapture('tab.closeAll')
     handleCloseAllFiles()
+    return
+  }
+  // Why: while focus is in Agents, its scope chords beat every tab-switching chord, recent-tab included.
+  if (agentsScopeShortcutOwnsChord(matchShortcut)) {
     return
   }
   if (

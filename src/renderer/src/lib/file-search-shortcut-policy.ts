@@ -19,6 +19,26 @@ type TextKeyEvent = {
   getModifierState?: (key: string) => boolean
 }
 
+const NATIVE_OPTION_EDIT_KEYS = [
+  'arrowleft',
+  'arrowright',
+  'arrowup',
+  'arrowdown',
+  'home',
+  'end',
+  'backspace',
+  'delete'
+]
+
+// Why: on macOS Option+key types a character or edits by word; only other named keys (PageDown, F-keys) can be app chords.
+export function macOptionChordBelongsToField(event: Omit<TextKeyEvent, 'target'>): boolean {
+  if (getShortcutPlatform() !== 'darwin' || !event.altKey || (event.metaKey && !event.ctrlKey)) {
+    return false
+  }
+  const key = event.key?.toLowerCase()
+  return !key || key.length === 1 || NATIVE_OPTION_EDIT_KEYS.includes(key)
+}
+
 export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   if (!isEditableTarget(event.target)) {
     return false
