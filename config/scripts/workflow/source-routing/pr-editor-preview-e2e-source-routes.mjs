@@ -31,5 +31,15 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
           'src/renderer/src/runtime/runtime-file-read-client.ts',
           'src/shared/file-preview-kind.ts'
         ].includes(file))
+  },
+  {
+    id: 'editor.csv-preview',
+    specs: [
+      'tests/e2e/csv-paged-preview.spec.ts',
+      'tests/e2e/csv-table-editing.spec.ts',
+      'tests/e2e/csv-url-links.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) && file.startsWith('src/renderer/src/components/editor/csv/')
   }
 ]
