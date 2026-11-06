@@ -4,10 +4,10 @@ import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { ClaudeAccountSwitchPromptSessions } from '@/lib/claude-account-switch-sessions'
-import {
-  isClaudePaneMidTurn,
-  type ClaudeSessionCantMoveReason,
-  type ClaudeSessionMoveCandidate
+import { isClaudePaneBusyForRestart } from '@/lib/claude-pane-restart-busy'
+import type {
+  ClaudeSessionCantMoveReason,
+  ClaudeSessionMoveCandidate
 } from '@/lib/claude-session-account-move'
 import {
   resolveWorktreeBranchLabel,
@@ -276,7 +276,7 @@ function SessionRow({
     return tab?.customTitle || tab?.title || ''
   })
   const lastPrompt = useAppStore((store) => store.agentStatusByPaneKey[paneKey]?.prompt?.trim())
-  const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
+  const busy = useAppStore((store) => isClaudePaneBusyForRestart(store, paneKey))
   const title =
     lastPrompt || tabTitle || translate('accounts.claude.switchSessions.session', 'Claude session')
   return (

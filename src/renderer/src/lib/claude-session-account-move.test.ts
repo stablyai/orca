@@ -16,6 +16,7 @@ import {
   findClaudeSwitchSessions,
   findQueuedClaudeRestartsOnAccount
 } from './claude-session-account-move'
+import { isClaudePaneBusyForRestart } from './claude-pane-restart-busy'
 import type { ClaudeHostFolders } from './claude-pane-account-folder'
 
 const laneByPtyId: Record<string, string> = {}
@@ -371,6 +372,23 @@ describe('findMovableClaudeSessions', () => {
     expect(await movable('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu-24.04' })).toEqual([
       ptyId(1)
     ])
+  })
+})
+
+describe('isClaudePaneBusyForRestart', () => {
+  it('waits on a reply, a permission prompt or a question, not on an idle session', () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', state: 'working' },
+      { n: 2, agentType: 'claude', state: 'blocked' },
+      { n: 3, agentType: 'claude', state: 'waiting' },
+      { n: 4, agentType: 'claude', state: 'done' }
+    ])
+    const state = useAppStore.getState()
+    const midTurn = [1, 2, 3, 4].map((n) =>
+      isClaudePaneBusyForRestart(state, makePaneKey(tabId(n), leafId(n)))
+    )
+
+    expect(midTurn).toEqual([true, true, true, false])
   })
 })
 
