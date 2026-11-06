@@ -59,6 +59,25 @@ describe('PR E2E gate contract', () => {
   })
 })
 
+describe('GitHub Projects E2E routing', () => {
+  it.each([
+    'src/renderer/src/components/github-project/columns.ts',
+    'src/renderer/src/store/github/project-field-mutations.ts',
+    'src/main/github/project-view/project-field-mutations.ts',
+    'src/main/ipc/source-control/github-project-view-handlers.ts'
+  ])('routes %s to the board spec', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain('tests/e2e/github-project-board.spec.ts')
+  })
+  it('skips the board spec for unit tests and unrelated GitHub stores', () => {
+    for (const file of [
+      'src/renderer/src/store/github/project-field-mutations.test.ts',
+      'src/renderer/src/store/github/cache-model.ts'
+    ]) {
+      expect(selectPrE2eSpecs([file]), file).not.toContain('tests/e2e/github-project-board.spec.ts')
+    }
+  })
+})
+
 describe('Daemon mock modified-only source routing', () => {
   const helper = 'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
   const verified = { allowDaemonInitTestSupport: true }
