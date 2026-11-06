@@ -130,8 +130,8 @@ export function useNativeChatNavigation({
         sections,
         roster,
         slots,
-        // The transcript starts at its latest /clear divider; read on demand, never per frame.
-        historyFloor: latestAgentSessionContextClearSequence(journalItems ?? [])
+        // The transcript starts at its latest /clear divider; scanned only when a page is in question.
+        historyFloor: () => latestAgentSessionContextClearSequence(journalItems ?? [])
       })
       if (place.kind !== 'open') {
         return place.kind
