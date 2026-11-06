@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { BranchSwitchTarget } from '../../../shared/git/branch-switch-target'
 import type {
   RuntimeGitLocalBranches,
@@ -12,7 +13,9 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 export async function switchRuntimeGitBranch(
   context: RuntimeGitContext,
   target: BranchSwitchTarget,
-  hostLabel = context.target.kind === 'environment' ? context.target.environmentId : 'this computer'
+  hostLabel = context.target.kind === 'environment'
+    ? context.target.environmentId
+    : translate('sourceControl.branchPicker.thisComputer', 'this computer')
 ): Promise<RuntimeGitSwitchResult> {
   try {
     return await callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', {
@@ -21,7 +24,13 @@ export async function switchRuntimeGitBranch(
     })
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      throw new Error(`Update Orca on ${hostLabel} to switch branches from here.`)
+      throw new Error(
+        translate(
+          'sourceControl.branchPicker.updateHost',
+          'Update Orca on {{host}} to switch branches from here.',
+          { host: hostLabel }
+        )
+      )
     }
     throw error
   }
