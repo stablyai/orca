@@ -135,6 +135,12 @@ export class JournalInputCardIndex {
     return gatePlaces(mergeInputPlaces(current, this.released.query(place)), this.facts.failed)
   }
 
+  /** A reopened chat's cards index as a fresh open's first ensure does: no host floor yet. */
+  reopen(): void {
+    this.facts.initialized = false
+    this.facts.floor = null
+  }
+
   ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
     if (floor !== undefined) {
       this.facts.floor = floor

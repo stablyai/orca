@@ -33,7 +33,10 @@ export async function openJournalWriterSession(
   await collaborators.queuedMessages.importAtOpen()
   const { state } = session
   const openedThrough = { epoch: state.epoch, sequence: state.lastSequence }
-  journalInputOrder(state).markOpeningRecovery()
+  const order = journalInputOrder(state)
+  order.markOpeningRecovery()
+  order.newestTurn.reopen(state.lastSequence)
+  order.cards.reopen()
   return openedThrough
 }
 

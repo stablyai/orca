@@ -39,6 +39,11 @@ export class JournalNewestTurn {
     }
   }
 
+  /** As a restore does, a reopen places earlier failures' resume boundary at the opened tip. */
+  reopen(lastSequence: number): void {
+    this.storage.boundary = lastSequence
+  }
+
   read(): AgentJournalRenderItem | null {
     return this.storage.sources.latest()?.item ?? null
   }
