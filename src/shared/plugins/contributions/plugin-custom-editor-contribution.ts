@@ -5,6 +5,7 @@ import {
   pluginFieldDoc,
   pluginPathFieldDoc,
   PLUGIN_EDITOR_FRAME_SINCE,
+  PLUGIN_EDITOR_BINARY_FALLBACK_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
@@ -79,6 +80,16 @@ export const pluginCustomEditorContributionSchema = z
           ['bytes']
         )
       ),
+    binaryFallback: z
+      .boolean()
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          `Planned for Orca ${PLUGIN_EDITOR_BINARY_FALLBACK_SINCE}. \`true\` offers this bytes editor for unsupported binary files, regardless of file name. Eligible file-matched editors keep priority, with this fallback offered as an option beside them. Orca image, PDF, audio and video viewers keep their files. Requires \`contentKind: bytes\`. Defaults to \`false\`. The editor receives only the opened document; \`option\` never opens automatically.`,
+          PLUGIN_EDITOR_BINARY_FALLBACK_SINCE,
+          [true]
+        )
+      ),
     frame: z
       .enum(PLUGIN_CUSTOM_EDITOR_FRAMES)
       .optional()
@@ -94,7 +105,7 @@ export const pluginCustomEditorContributionSchema = z
   .meta({
     id: 'CustomEditorContribution',
     description:
-      'An editor for the listed files, shown in the editor tab beside Source. It must list at least one extension or file name. Requires the `sandboxed-ui` execution profile or higher.'
+      'An editor for the listed files, shown in the editor tab beside Source. It must list at least one extension or file name, or enable `binaryFallback` with `contentKind: bytes`. Requires the `sandboxed-ui` execution profile or higher.'
   })
 
 export function customEditorFrame(editor: {

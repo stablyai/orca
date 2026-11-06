@@ -29,7 +29,8 @@ type ContributionValidationManifest = {
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
-    customEditors: (IdentifiedContribution & PluginFileMatch)[]
+    customEditors: (IdentifiedContribution &
+      PluginFileMatch & { binaryFallback?: boolean; contentKind?: string })[]
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
@@ -102,11 +103,18 @@ export function validatePluginManifestContributions(
     }
   }
   for (const [index, editor] of manifest.contributes.customEditors.entries()) {
-    if (editor.extensions.length === 0 && editor.filenames.length === 0) {
+    if (editor.binaryFallback && editor.contentKind !== 'bytes') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'customEditors', index, 'binaryFallback'],
+        message: 'binaryFallback requires contentKind: bytes'
+      })
+    }
+    if (editor.extensions.length === 0 && editor.filenames.length === 0 && !editor.binaryFallback) {
       ctx.addIssue({
         code: 'custom',
         path: ['contributes', 'customEditors', index, 'extensions'],
-        message: 'must list at least one extension or file name'
+        message: 'must list at least one extension or file name, or enable binaryFallback'
       })
     }
   }

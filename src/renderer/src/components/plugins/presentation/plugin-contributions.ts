@@ -8,7 +8,7 @@ import {
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
-import { fileList } from './plugin-contribution-file-list'
+import { fileList, customEditorFileList } from './plugin-contribution-file-list'
 import {
   statusBarContributionRows,
   statusBarItemTitles,
@@ -52,6 +52,7 @@ export type PluginContributionSource = {
     filenames: readonly string[]
     /** Absent when only a catalog summary names the editor. */
     priority?: 'default' | 'option'
+    binaryFallback?: boolean
   }[]
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
@@ -265,7 +266,7 @@ export function describePluginContributions(
   }
   for (const [index, editor] of source.customEditors.entries()) {
     const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
-    const files = fileList(editor.extensions, editor.filenames)
+    const files = customEditorFileList(editor)
     const takeover = customEditorTakeover(editor)
     rows.push({
       key: `customEditors:${index}`,

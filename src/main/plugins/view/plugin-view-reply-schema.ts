@@ -33,7 +33,8 @@ export const pluginViewReplySchema: z.ZodType<PluginViewReply> = z.union([
     requestId: z.string().max(128),
     ok: z.literal(true),
     panel: drawnPanelSchema.optional(),
-    restored: z.boolean().optional()
+    restored: z.boolean().optional(),
+    editor: z.object({ id: z.string().max(128), title: z.string().max(64) }).optional()
   }),
   z.object({
     requestId: z.string().max(128),

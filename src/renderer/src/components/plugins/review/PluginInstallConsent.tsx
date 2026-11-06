@@ -29,6 +29,7 @@ type PluginInstallConsentProps = {
   replacements?: readonly PluginPageReplacement[] | null
   /** Dotted file suffixes its custom editors open and edit. */
   editorFileTypes?: readonly string[] | null
+  editorBinaryFallback?: boolean
   /** Its files are still being read; says so beside the disabled button. */
   reading?: boolean
   /** Its files couldn't be read, so nothing is known about what it can do. */
@@ -62,6 +63,7 @@ export function PluginInstallConsent({
   shortcuts,
   replacements,
   editorFileTypes,
+  editorBinaryFallback = false,
   reading = false,
   failed = false,
   onRetry,
@@ -94,7 +96,9 @@ export function PluginInstallConsent({
             {translate('auto.components.settings.PluginDetailSections.access', 'Can access')}
           </h3>
           <span className="shrink-0 rounded-md border border-border px-1.5 py-px text-2xs font-medium text-muted-foreground">
-            {!trust.worker && !trust.declarative && (editorFileTypes?.length ?? 0) > 0
+            {!trust.worker &&
+            !trust.declarative &&
+            (editorBinaryFallback || (editorFileTypes?.length ?? 0) > 0)
               ? translate(
                   'auto.components.settings.pluginConsentCopy.opensAndEditsFiles',
                   'Opens and edits files'
@@ -117,6 +121,17 @@ export function PluginInstallConsent({
               <span>{warning}</span>
             </p>
           ))}
+          {editorBinaryFallback ? (
+            <p className="flex items-start gap-2">
+              <Check className="mt-1 size-4 shrink-0 text-muted-foreground" />
+              <span>
+                {translate(
+                  'auto.components.plugins.binaryFallbackConsent',
+                  'Opens unsupported binary files of any name in Orca. It can read and edit every document you open in it.'
+                )}
+              </span>
+            </p>
+          ) : null}
           {editorFileTypes && editorFileTypes.length > 0 ? (
             <p className="flex items-start gap-2">
               <Check className="mt-1 size-4 shrink-0 text-muted-foreground" />

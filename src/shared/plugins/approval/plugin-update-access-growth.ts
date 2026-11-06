@@ -57,6 +57,7 @@ type CustomEditorReach = {
   files: string[]
   takesDefault: boolean
   contentKind: string
+  binaryFallback: boolean
 }
 
 function customEditorReach(entry: unknown): [string, CustomEditorReach] | null {
@@ -73,7 +74,8 @@ function customEditorReach(entry: unknown): [string, CustomEditorReach] | null {
           : []
       }),
       takesDefault: entry.priority !== 'option',
-      contentKind: typeof entry.contentKind === 'string' ? entry.contentKind : 'text'
+      contentKind: typeof entry.contentKind === 'string' ? entry.contentKind : 'text',
+      binaryFallback: entry.binaryFallback === true
     }
   ]
 }
@@ -92,7 +94,8 @@ function customEditorsGrow(installed: readonly unknown[], next: readonly unknown
     return (
       after.files.some((file) => !before.files.includes(file)) ||
       (after.takesDefault && !before.takesDefault) ||
-      after.contentKind !== before.contentKind
+      after.contentKind !== before.contentKind ||
+      (after.binaryFallback && !before.binaryFallback)
     )
   })
 }

@@ -128,6 +128,7 @@ export function usePluginPageAction({
           shortcuts={model.shortcuts}
           replacements={model.replacements}
           editorFileTypes={model.editorFileTypes}
+          editorBinaryFallback={model.editorBinaryFallback}
           installed={plugin}
           official={plugin.official}
           publisher={plugin.publisher}
@@ -228,6 +229,7 @@ export function usePluginPageAction({
           shortcuts={model.shortcuts}
           replacements={model.replacements}
           editorFileTypes={model.editorFileTypes}
+          editorBinaryFallback={model.editorBinaryFallback}
           reading={preview === null && !model.stale}
           failed={model.previewFailed}
           onRetry={model.retryPreview}

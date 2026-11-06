@@ -168,8 +168,8 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
         return {
           pluginKey,
           kind: 'editor',
-          editorId: editor.editorId,
-          title: editor.title,
+          editorId: reply.ok ? (reply.editor?.id ?? editor.editorId) : editor.editorId,
+          title: reply.ok ? (reply.editor?.title ?? editor.title) : editor.title,
           filePath
         }
       }

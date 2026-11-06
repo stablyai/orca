@@ -170,9 +170,8 @@ export function usePluginPageModel({
     : null
 
   // Extensions and file names the plugin's custom editors open and edit, named in the consent.
-  const customEditors: readonly PluginFileMatch[] | undefined = plugin
-    ? (plugin.customEditors ?? [])
-    : shownPreview?.manifest.contributes.customEditors
+  const customEditors: readonly (PluginFileMatch & { binaryFallback?: boolean })[] | undefined =
+    plugin ? (plugin.customEditors ?? []) : shownPreview?.manifest.contributes.customEditors
   const editorFileTypes = customEditors
     ? customEditors.flatMap((editor) => [...editor.extensions, ...editor.filenames])
     : (summary
@@ -198,6 +197,7 @@ export function usePluginPageModel({
     capabilities,
     shortcuts,
     replacements,
+    editorBinaryFallback: customEditors?.some((editor) => editor.binaryFallback) ?? false,
     editorFileTypes: editorFileTypes ? [...new Set(editorFileTypes)] : null,
     images
   }

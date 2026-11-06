@@ -196,8 +196,8 @@ export async function shootPluginEditor(
         .map((line) => line.line)
       return {
         pluginKey,
-        editorId: editor.editorId,
-        title: editor.title,
+        editorId: reply.editor?.id ?? editor.editorId,
+        title: reply.editor?.title ?? editor.title,
         filePath,
         png: image.png.toString('base64'),
         width: image.width,

@@ -32,6 +32,7 @@ import {
 import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
 import { useFileCustomEditors } from '@/store/plugin-custom-editors'
+import { usePluginEditorContentReport } from './use-plugin-editor-content-report'
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
 
@@ -138,6 +139,11 @@ function EditorPanelInner({
     editorViewMode,
     isVisible
   })
+  usePluginEditorContentReport(
+    activeFile,
+    activeFile ? fileContents[activeFile.id] : undefined,
+    customEditors.customEditors
+  )
   const isChangesMode =
     requestedChangesMode &&
     !!activeFile &&

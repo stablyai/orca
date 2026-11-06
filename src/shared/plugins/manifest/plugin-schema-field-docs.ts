@@ -17,6 +17,8 @@ export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
 export const PLUGIN_PANEL_BRIDGE_SINCE = PLUGIN_PANEL_UI_SINCE
 /** First release that reads `customEditors[].frame`, so an editor can require isolated frames. */
 export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
+/** Planned first release that offers bytes editors for otherwise unsupported binary files. */
+export const PLUGIN_EDITOR_BINARY_FALLBACK_SINCE = '1.4.250'
 /** First release that runs `contributes.hooks` and `orca.hooks.on`. */
 export const PLUGIN_HOOKS_SINCE = '1.4.248'
 /** Workers act on workspaces, terminals and agents: `workspace:write`, `terminal:read`, `agent:launch`. */

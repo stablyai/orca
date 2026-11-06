@@ -92,6 +92,43 @@ describe('catalog releases', () => {
     expect(check(pluginCatalogReleaseSchema.parse(entry), subject)).toBeNull()
   })
 
+  it.each([
+    ['a maximum-length file name', { filenames: ['a'.repeat(128)] }],
+    ['many extensions', { extensions: Array.from({ length: 32 }, (_, index) => `.data${index}`) }]
+  ])(
+    'retains binary fallback reach through catalog validation and install for %s',
+    (_label, fileMatch) => {
+      const subject = manifest({
+        execution: 'sandboxed-ui',
+        engines: { orca: '>=1.4.250' },
+        contributes: {
+          panels: [{ id: 'inspector', title: 'Inspector', entry: 'panel.html' }],
+          customEditors: [
+            {
+              id: 'hex',
+              title: 'Hex',
+              entry: 'editor.html',
+              contentKind: 'bytes',
+              binaryFallback: true,
+              ...fileMatch
+            }
+          ]
+        }
+      })
+      const entry = pluginCatalogReleaseEntry(subject, { commit: COMMIT, contentHash: HASH })
+      const parsed = pluginCatalogReleaseSchema.parse(entry)
+      const installError = check(parsed, subject)
+      expect(installError).toBeNull()
+      expect(parsed.contributes?.map((item) => [item.kind, item.name])).toEqual([
+        ['panels', 'Inspector'],
+        ['customEditors', 'Hex']
+      ])
+      expect(parsed.contributes?.find((item) => item.kind === 'customEditors')?.detail).toContain(
+        'Unsupported binary files (any file name)'
+      )
+    }
+  )
+
   it('derives types from the summary and profile when the catalog leaves them out', () => {
     const derived = release({
       types: undefined,
