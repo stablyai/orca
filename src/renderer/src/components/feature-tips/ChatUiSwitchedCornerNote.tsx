@@ -60,7 +60,7 @@ export function ChatUiSwitchedCornerNote({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="flex size-4.5 items-center justify-center rounded-full bg-status-success-background text-status-success">
-              <Check className="size-3" strokeWidth={3} />
+              <Check className="size-3" />
             </span>
             <CardTitle id="chat-ui-switched-note-heading">
               {translate(

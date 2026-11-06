@@ -17,18 +17,22 @@ import {
   openChatUiFeatureTipSettings
 } from './chat-ui-here-actions'
 
+type CornerCardState =
+  | { stage: 'prompt' | 'saving' }
+  | { stage: 'switched'; focusSettings: boolean }
+
 /** The nonblocking launch card for terminal-default profiles, sharing the tip's copy and a compact chat preview. */
 export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.Element | null {
   const mountedRef = useMountedRef()
   const settings = useAppStore((s) => s.settings)
-  const [stage, setStage] = useState<'prompt' | 'saving' | 'switched'>('prompt')
+  const [state, setState] = useState<CornerCardState>({ stage: 'prompt' })
   const focusSwitchedNote = useRef(false)
-  const [focusSettings, setFocusSettings] = useState(false)
 
   useEffect(() => {
-    if (stage !== 'saving') {
+    if (state.stage !== 'saving') {
       return
     }
+    // Disabling the save button drops focus to body; cancel restoration if the user moves on.
     const cancelFocusTransfer = (): void => {
       focusSwitchedNote.current = false
     }
@@ -38,28 +42,31 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
       document.removeEventListener('focusin', cancelFocusTransfer)
       document.removeEventListener('pointerdown', cancelFocusTransfer)
     }
-  }, [stage])
+  }, [state.stage])
 
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'chat-ui-here')
   if (!tip) {
     return null
   }
-  if (stage === 'switched') {
-    return <ChatUiSwitchedCornerNote onClose={onClose} focusSettings={focusSettings} />
+  if (state.stage === 'switched') {
+    return <ChatUiSwitchedCornerNote onClose={onClose} focusSettings={state.focusSettings} />
   }
   const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
   const [intro = ''] = paragraphs
 
   const handleUseChatUi = async (event: MouseEvent<HTMLButtonElement>): Promise<void> => {
-    if (stage !== 'prompt') {
+    if (state.stage !== 'prompt') {
       return
     }
     focusSwitchedNote.current = event.detail === 0 && document.activeElement === event.currentTarget
-    setStage('saving')
+    setState({ stage: 'saving' })
     const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
     if (mountedRef.current) {
-      setFocusSettings(saved && focusSwitchedNote.current)
-      setStage(saved ? 'switched' : 'prompt')
+      setState(
+        saved
+          ? { stage: 'switched', focusSettings: focusSwitchedNote.current }
+          : { stage: 'prompt' }
+      )
     }
   }
 
@@ -126,7 +133,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
           <div className="flex items-center gap-2">
             <FeatureTipActions
               currentTip={tip}
-              primaryBusy={stage === 'saving'}
+              primaryBusy={state.stage === 'saving'}
               swapButtons={
                 settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
                 settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
