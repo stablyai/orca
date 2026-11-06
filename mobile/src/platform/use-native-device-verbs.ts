@@ -9,7 +9,7 @@ import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device
 
 export type NativeDeviceVerb = Exclude<
   BridgeNativeVerb,
-  'native.storage.read' | 'native.pdf.view' | 'native.browser.local'
+  'native.storage.read' | 'native.pdf.view' | 'native.image.act' | 'native.browser.local'
 >
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.

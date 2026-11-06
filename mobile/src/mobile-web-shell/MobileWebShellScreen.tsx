@@ -23,6 +23,7 @@ import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
+import { useNativeImageActions } from '../platform/native-image-actions'
 import { useNativeLocalBrowser } from '../platform/native-local-browser'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
@@ -136,6 +137,7 @@ export function MobileWebShellScreen({
   // Create the media registry before the bridge; staged files belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  const serveImageAction = useNativeImageActions(readySessionId)
   const localBrowser = useNativeLocalBrowser(hostId, readySessionId)
   // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
@@ -143,11 +145,13 @@ export function MobileWebShellScreen({
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
         ? servePdfView(params)
-        : verb === 'native.browser.local'
-          ? localBrowser.serve(params)
-          : verb === 'native.browser.view'
-            ? localBrowser.serveView(params)
-            : serveDeviceVerb(verb, params)
+        : verb === 'native.image.act'
+          ? serveImageAction(params)
+          : verb === 'native.browser.local'
+            ? localBrowser.serve(params)
+            : verb === 'native.browser.view'
+              ? localBrowser.serveView(params)
+              : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {

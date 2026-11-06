@@ -6,7 +6,12 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
+import { MarkdownLinkHandlerContext } from './markdown-link-handler'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
+import {
+  MobileMarkdownLinksContext,
+  useNativeChatFileLinkExistsFrom
+} from './mobile-markdown-links-context'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 
 type Props = {
@@ -26,6 +31,11 @@ type Props = {
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   // Close incomplete streaming markup like desktop; diagrams remain code until text stops.
   growing?: boolean
+  /** The text may end mid-path: chat file links show only answers already known. */
+  streaming?: boolean
+  /** Chat's math delimiters, `\(…\)` and `\[…\]` as well as `$`, as desktop chat reads them.
+   *  GitHub text (PRs, Tasks, files) leaves them off, so `\[Bug\]` stays a bracket. */
+  chatMath?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
 }
@@ -39,13 +49,28 @@ function MobileMarkdownContent({
   renderVisual,
   renderImage,
   growing = false,
+  streaming = false,
+  chatMath = false,
   tone: toneName = 'default'
 }: Props) {
   useMobileColorScheme()
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
+  const onOpenLink = useContext(MarkdownLinkHandlerContext)
+  const links = useContext(MobileMarkdownLinksContext)
+  const fileLinkExists = useNativeChatFileLinkExistsFrom(
+    links?.fileLinks ?? null,
+    onOpenFile !== undefined,
+    streaming
+  )
   const text = content?.trim() ?? ''
-  const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing)
+  const { root, directives } = useMobileMarkdownTree(
+    text,
+    renderVisual !== undefined,
+    growing,
+    chatMath,
+    { fileLinkExists, githubRepo: links?.githubRepo }
+  )
   if (!text) {
     return fallback ? (
       <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
@@ -56,7 +81,10 @@ function MobileMarkdownContent({
   const tone = MARKDOWN_TONES[toneName]
   const ctx: MarkdownBlockContext = {
     growing,
+    chatMath,
     onOpenFile,
+    onOpenLink,
+    filePathsLinkedInTree: fileLinkExists !== undefined,
     tone,
     textScale,
     listText: [styles.listText, scaledMarkdownText(styles.listText, textScale), tone.text],

@@ -145,6 +145,7 @@ function permissionConsumersFor(
         enabled: true,
         optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target),
         turnId: null,
+        unloadedTurnRevisions: undefined,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,

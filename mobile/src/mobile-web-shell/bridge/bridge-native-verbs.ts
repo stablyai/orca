@@ -17,6 +17,7 @@ import {
   mediaNameParamsSchema,
   mediaNameResultSchema
 } from './bridge-media-verbs'
+import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
 
@@ -36,6 +37,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.stop',
   'native.storage.read',
   'native.pdf.view',
+  'native.image.act',
   'native.browser.local',
   'native.browser.view'
 ] as const
@@ -213,6 +215,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.pdf.view': {
     params: pdfViewParamsSchema,
     result: pdfViewResultSchema
+  },
+  'native.image.act': {
+    params: imageParamsSchema,
+    result: imageResultSchema
   },
   'native.browser.local': {
     params: browserLocalParamsSchema,
