@@ -1,4 +1,5 @@
 import { useSourceControlScope } from '../panel/worktree-scope'
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   captureSourceControlActionSelection,
@@ -85,30 +86,30 @@ export function useSourceControlAi({
         : null,
     [activeRepo, settings, sourceControlAiDiscoveryHostKey]
   )
-  const resolvedPrCreationDefaults = useMemo(() => {
-    if (!settings) {
-      return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-    }
-    const resolved = resolveSourceControlAiForOperation({
-      settings,
-      repo: activeRepo,
-      operation: 'pullRequest',
-      discoveryHostKey: sourceControlAiDiscoveryHostKey,
-      prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-    })
-    return resolved.ok
-      ? resolved.value.prCreationDefaults
-      : resolveSourceControlAiPrCreationDefaults({
-          settings,
-          repo: activeRepo,
-          prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-        })
-  }, [activeRepo, settings, sourceControlAiDiscoveryHostKey])
+  const resolvedPrCreationDefaults = useMemo(
+    () =>
+      settings
+        ? resolveSourceControlAiPrCreationDefaults({ settings, repo: activeRepo })
+        : DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+    [activeRepo, settings]
+  )
 
   const getLaunchActionRecipe = useCallback(
     (actionId: SourceControlLaunchActionId): SelectedSourceControlActionRecipe =>
       resolveSourceControlActionRecipe({ settings, repo: activeRepo, actionId }),
     [activeRepo, settings]
+  )
+  const getCurrentLaunchActionRecipe = useCallback(
+    (actionId: SourceControlLaunchActionId) => {
+      const state = getStoreState()
+      const repo = activeRepo
+        ? (state.repos.find((candidate) =>
+            repoMatchesHostIdentity(candidate, activeRepo.id, getRepoExecutionHostId(activeRepo))
+          ) ?? null)
+        : null
+      return resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId })
+    },
+    [activeRepo, getStoreState]
   )
   const saveActionRecipeForTarget = useCallback(
     (
@@ -172,7 +173,7 @@ export function useSourceControlAi({
     onAdmitted: async (recoveryContext, signal) => {
       const editor = {
         initialSelection: captureSourceControlActionSelection({
-          settings,
+          settings: getStoreState().settings,
           repo: activeRepo,
           actionId: 'resolveConflicts'
         }),
@@ -194,7 +195,6 @@ export function useSourceControlAi({
         basePrompt: resolveConflictsPrompt,
         ...editor,
         actionId: 'resolveConflicts',
-        settings,
         repo: activeRepo,
         promptDelivery: 'submit-after-ready',
         launchSource: 'conflict_resolution',
@@ -236,7 +236,7 @@ export function useSourceControlAi({
     commitError,
     pushRecoveryPrompt,
     stagedEntries,
-    getLaunchActionRecipe,
+    getLaunchActionRecipe: getCurrentLaunchActionRecipe,
     getStoreState
   })
 

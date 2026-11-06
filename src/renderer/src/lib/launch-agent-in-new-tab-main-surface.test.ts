@@ -166,7 +166,6 @@ it.each(
               saveTargetValue: 'none',
               actionId: 'resolveConflicts',
               repoId: 'repo1',
-              settings: store.getState().settings,
               repo: store.getState().repos[0] ?? null,
               worktreeId: MAIN_WORKTREE_ID,
               placementWorkspaceId: 'folder:feature',

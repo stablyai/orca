@@ -82,7 +82,6 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     branchName,
     hostedReviewCreateProvider,
     refreshGitStatusAfterPullRequestGeneration,
-    resolvedPrCreationDefaults,
     setPullRequestGenerationRecord,
     updatePullRequestGenerationRecord,
     worktreePath
@@ -169,8 +168,6 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     prGenerating,
     prTitle,
     pullRequestFieldsInitialized: createReviewComposer.pullRequestFieldsInitialized,
-    resolvedPrCreationDefaults,
-    settings,
     worktreePath
   })
 

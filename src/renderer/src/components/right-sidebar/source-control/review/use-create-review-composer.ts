@@ -1,3 +1,5 @@
+import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { useAppStore } from '@/store'
 import { useCallback, useEffect } from 'react'
 import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
@@ -133,13 +135,17 @@ export function useSourceControlCreateReviewComposer({
   })
 
   const handleGeneratePullRequestFieldsClick = useCallback((): void => {
-    if (!sourceControlAiActionsVisible) {
+    const currentSettings = useAppStore.getState().settings
+    if (
+      !currentSettings ||
+      !resolveSourceControlAiEnabled({ settings: currentSettings, repo: activeRepo })
+    ) {
       return
     }
     if (
       hasConfiguredSourceControlTextGenerationDefaults({
         actionId: 'pullRequest',
-        settings,
+        settings: useAppStore.getState().settings,
         repo: activeRepo ?? null
       })
     ) {
@@ -147,13 +153,7 @@ export function useSourceControlCreateReviewComposer({
       return
     }
     openPullRequestGenerationDialog()
-  }, [
-    activeRepo,
-    handleGeneratePullRequestFields,
-    openPullRequestGenerationDialog,
-    settings,
-    sourceControlAiActionsVisible
-  ])
+  }, [activeRepo, handleGeneratePullRequestFields, openPullRequestGenerationDialog])
 
   useEffect(() => {
     // Hydrate after the fields hook seeds defaults on remount, or those defaults overwrite generation.

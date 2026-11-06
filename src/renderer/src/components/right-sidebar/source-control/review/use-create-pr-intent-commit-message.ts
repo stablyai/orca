@@ -1,3 +1,6 @@
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { useCallback } from 'react'
 import { operationGitContext } from '../listing/operation-target'
 import { generateRuntimeCommitMessage } from '@/runtime/runtime-git-generation-client'
@@ -5,7 +8,6 @@ import { useAppStore } from '@/store'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'
 import { hasConfiguredCommitMessageGenerationDefaults } from '../ai/text-generation-defaults'
-import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
@@ -14,15 +16,11 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 export function useSourceControlCreatePrIntentCommitMessage({
   activeRepo,
   getCreatePrIntentOperationTarget,
-  operationStore,
-  resolvedCommitMessageAi,
-  settings
+  operationStore
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
   operationStore: SourceControlWorktreeOperationState['operationStore']
-  resolvedCommitMessageAi: SourceControlAi['resolvedCommitMessageAi']
-  settings: SourceControlWorktreeContext['settings']
 }) {
   const generateCommitMessageForCreatePrIntent = useCallback(
     async (
@@ -32,6 +30,18 @@ export function useSourceControlCreatePrIntentCommitMessage({
       message?: string
       reason?: 'settings' | 'failed' | 'canceled'
     }> => {
+      const target = getCreatePrIntentOperationTarget(token)
+      const settings = useAppStore.getState().settings
+      const resolvedCommitMessageAi = settings
+        ? resolveSourceControlAiForOperation({
+            settings,
+            repo: activeRepo,
+            operation: 'commitMessage',
+            discoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(
+              getRuntimeGitScope(target.target ?? { kind: 'local' }, target.connectionId)
+            )
+          })
+        : null
       if (
         !hasConfiguredCommitMessageGenerationDefaults({ settings, repo: activeRepo ?? null }) ||
         resolvedCommitMessageAi?.ok !== true
@@ -44,7 +54,6 @@ export function useSourceControlCreatePrIntentCommitMessage({
           return { ok: false, reason: 'settings' }
         }
       }
-      const target = getCreatePrIntentOperationTarget(token)
       if (operationStore.getState().generateInFlight) {
         return { ok: false, reason: 'failed' }
       }
@@ -75,13 +84,7 @@ export function useSourceControlCreatePrIntentCommitMessage({
         operationStore.setState({ generateInFlight: false })
       }
     },
-    [
-      activeRepo,
-      getCreatePrIntentOperationTarget,
-      operationStore,
-      resolvedCommitMessageAi,
-      settings
-    ]
+    [activeRepo, getCreatePrIntentOperationTarget, operationStore]
   )
 
   return { generateCommitMessageForCreatePrIntent }

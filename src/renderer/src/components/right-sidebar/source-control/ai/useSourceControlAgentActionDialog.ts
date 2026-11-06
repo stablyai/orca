@@ -135,7 +135,6 @@ export function useSourceControlAgentActionDialog({
     saveTargetValue,
     actionId,
     repoId,
-    settings,
     agentLaunchPreferences: choice.observation.preferences,
     repo,
     worktreeId,

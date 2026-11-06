@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { resolveSourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -7,7 +9,6 @@ import {
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import { localizedCreateFailure } from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
-import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -45,8 +46,6 @@ export function useSourceControlHostedReviewCreation({
   prGenerating,
   prTitle,
   pullRequestFieldsInitialized,
-  resolvedPrCreationDefaults,
-  settings,
   worktreePath
 }: {
   activePullRequestGenerationKey: SourceControlPullRequestGeneration['activePullRequestGenerationKey']
@@ -70,8 +69,6 @@ export function useSourceControlHostedReviewCreation({
   prGenerating: boolean
   prTitle: SourceControlCreateReviewComposer['prTitle']
   pullRequestFieldsInitialized: SourceControlCreateReviewComposer['pullRequestFieldsInitialized']
-  resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
-  settings: SourceControlWorktreeContext['settings']
   worktreePath: string | null
 }) {
   const createPullRequest = useCallback(
@@ -98,6 +95,10 @@ export function useSourceControlHostedReviewCreation({
         return
       }
 
+      const currentDefaults = resolveSourceControlAiPrCreationDefaults({
+        settings: useAppStore.getState().settings ?? {},
+        repo: activeRepo
+      })
       const fields = generated ?? { base: prBase, title: prTitle, body: prBody, draft: prDraft }
       const base = stripBaseRef(fields.base).trim()
       const title = fields.title.trim()
@@ -144,7 +145,7 @@ export function useSourceControlHostedReviewCreation({
           body: fields.body,
           draft: fields.draft,
           worktreePath,
-          useTemplate: resolvedPrCreationDefaults.useTemplate
+          useTemplate: currentDefaults.useTemplate
         }
         const result = stacked
           ? await createStackedHostedReview(activeRepo.path, createInput)
@@ -161,7 +162,7 @@ export function useSourceControlHostedReviewCreation({
             },
             context
           )
-          if (context.openChecks && resolvedPrCreationDefaults.openAfterCreate) {
+          if (context.openChecks && currentDefaults.openAfterCreate) {
             openAppHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           return
@@ -257,8 +258,6 @@ export function useSourceControlHostedReviewCreation({
       prDraft,
       prGenerating,
       prTitle,
-      resolvedPrCreationDefaults.openAfterCreate,
-      resolvedPrCreationDefaults.useTemplate,
       operationStore,
       worktreePath
     ]
@@ -275,8 +274,7 @@ export function useSourceControlHostedReviewCreation({
       fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
       generatePullRequestFields: handleGeneratePullRequestFields,
       generationKey: activePullRequestGenerationKey,
-      repo: activeRepo,
-      settings
+      repo: activeRepo
     })
 
   const handleCreatePullRequest = useCallback(

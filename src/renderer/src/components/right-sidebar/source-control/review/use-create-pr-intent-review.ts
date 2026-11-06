@@ -1,3 +1,4 @@
+import { resolveSourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorkspaceJiraIssueKey,
@@ -24,7 +25,6 @@ import {
   type CreatePrIntentRunToken
 } from './create-pr-intent-flow'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
-import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -47,9 +47,7 @@ export function useSourceControlCreatePrIntentReview({
   hostedReviewCreateCopy,
   operationStore,
   prBase,
-  prBody,
-  resolvedPrCreationDefaults,
-  settings
+  prBody
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
   createHostedReview: SourceControlStoreActions['createHostedReview']
@@ -59,8 +57,6 @@ export function useSourceControlCreatePrIntentReview({
   operationStore: SourceControlWorktreeOperationState['operationStore']
   prBase: SourceControlCreateReviewComposer['prBase']
   prBody: SourceControlCreateReviewComposer['prBody']
-  resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
-  settings: SourceControlWorktreeContext['settings']
 }) {
   const createHostedReviewForCreatePrIntent = useCallback(
     async (
@@ -88,6 +84,10 @@ export function useSourceControlCreatePrIntentReview({
         return false
       }
 
+      const currentDefaults = resolveSourceControlAiPrCreationDefaults({
+        settings: useAppStore.getState().settings ?? {},
+        repo: activeRepo
+      })
       const jiraIssueKey =
         eligibility.provider === 'github' || eligibility.provider === 'gitlab'
           ? getWorkspaceJiraIssueKey(
@@ -101,14 +101,14 @@ export function useSourceControlCreatePrIntentReview({
         title: resolveCreateReviewSeedText({ branch: token.branch, eligibility, jiraIssueKey })
           .title,
         body: eligibility.body ?? prBody,
-        draft: resolvedPrCreationDefaults.draft
+        draft: currentDefaults.draft
       }
 
       if (
         shouldGenerateHostedReviewDetailsForIntent(eligibility) &&
         hasConfiguredSourceControlTextGenerationDefaults({
           actionId: 'pullRequest',
-          settings,
+          settings: useAppStore.getState().settings,
           repo: activeRepo
         })
       ) {
@@ -126,7 +126,7 @@ export function useSourceControlCreatePrIntentReview({
             {
               ...fields,
               provider: eligibility.provider,
-              useTemplate: resolvedPrCreationDefaults.useTemplate
+              useTemplate: currentDefaults.useTemplate
             }
           )
           if (generated.branchChangedByPreparation) {
@@ -201,7 +201,7 @@ export function useSourceControlCreatePrIntentReview({
           body: fields.body,
           draft: fields.draft,
           worktreePath: token.worktreePath,
-          useTemplate: resolvedPrCreationDefaults.useTemplate
+          useTemplate: currentDefaults.useTemplate
         })
 
         if (result.ok) {
@@ -220,7 +220,7 @@ export function useSourceControlCreatePrIntentReview({
               openChecks
             }
           )
-          if (openChecks && resolvedPrCreationDefaults.openAfterCreate) {
+          if (openChecks && currentDefaults.openAfterCreate) {
             openAppHttpLink(result.url, { worktreeId: token.worktreeId })
           }
           setCreatePrIntentNotice(operationStore, null)
@@ -278,11 +278,7 @@ export function useSourceControlCreatePrIntentReview({
       hostedReviewCreateCopy.reviewLabel,
       operationStore,
       prBase,
-      prBody,
-      resolvedPrCreationDefaults.draft,
-      resolvedPrCreationDefaults.openAfterCreate,
-      resolvedPrCreationDefaults.useTemplate,
-      settings
+      prBody
     ]
   )
 

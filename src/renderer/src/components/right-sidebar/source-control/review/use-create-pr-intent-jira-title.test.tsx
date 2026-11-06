@@ -6,10 +6,7 @@ import { useAppStore } from '@/store'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import {
-  getDefaultSourceControlAiSettings,
-  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { getDefaultSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
 import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
@@ -70,6 +67,7 @@ it.each(['github', 'gitlab'] as const)(
       ...getDefaultSettings('/fixture'),
       sourceControlAi: { ...getDefaultSourceControlAiSettings(), agentId: 'cursor' as const }
     }
+    useAppStore.setState({ settings: null })
     const { result, rerender } = renderHook<
       {
         createHostedReviewForCreatePrIntent: ReturnType<
@@ -78,7 +76,7 @@ it.each(['github', 'gitlab'] as const)(
       },
       { settings: typeof settings | null }
     >(
-      ({ settings }) =>
+      () =>
         useSourceControlCreatePrIntentReview({
           activeRepo: { ...makeRepo(), connectionId: 'owner' },
           createHostedReview: create,
@@ -91,9 +89,7 @@ it.each(['github', 'gitlab'] as const)(
           hostedReviewCreateCopy: localizedHostedReviewCopy(provider),
           operationStore,
           prBase: 'main',
-          prBody: '',
-          resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-          settings
+          prBody: ''
         }),
       { initialProps: { settings: null } }
     )
@@ -109,6 +105,7 @@ it.each(['github', 'gitlab'] as const)(
       success: true,
       fields: { base: 'main', title: 'alt-42 ALT-42 Better login', body: 'Generated', draft: false }
     })
+    useAppStore.setState({ settings })
     rerender({ settings })
     await expect(
       result.current.createHostedReviewForCreatePrIntent(token, eligibility)

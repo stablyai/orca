@@ -65,7 +65,6 @@ function buildArgs(
     saveTargetValue: 'none',
     actionId: 'resolveComments',
     repoId: null,
-    settings: null,
     repo: null,
     worktreeId: 'wt-1',
     groupId: 'group-1',
@@ -249,8 +248,8 @@ describe('runSourceControlAgentActionStart', () => {
       surface: { kind: 'local-terminal', tabId: 'tab-1' },
       promptDeliveryResult
     })
+    useAppStore.setState({ settings: getDefaultSettings('/tmp') })
     const args = buildArgs({
-      settings: getDefaultSettings('/tmp'),
       saveTargetValue: 'global',
       onSaveAgentDefault,
       onLaunchAccepted,

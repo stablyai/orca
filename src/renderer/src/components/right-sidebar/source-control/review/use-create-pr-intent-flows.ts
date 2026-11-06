@@ -34,13 +34,11 @@ export function useSourceControlCreatePrIntentFlows(
     operationStore,
     provisionalHostedReviewProvider,
     remoteStatus,
-    resolvedPrCreationDefaults,
     setGitBranchCompareResult,
     setGitStatus,
     setHostedReviewCreationState,
     setIsExecutingBulk,
     setUpstreamStatus,
-    settings,
     updateCommitDraft,
     updateWorktreeGitIdentity,
     worktreePath
@@ -57,9 +55,7 @@ export function useSourceControlCreatePrIntentFlows(
     hostedReviewCreateCopy,
     operationStore,
     prBase,
-    prBody,
-    resolvedPrCreationDefaults,
-    settings
+    prBody
   })
   const createPrIntentProbes = useSourceControlCreatePrIntentProbes({
     activeRepo,

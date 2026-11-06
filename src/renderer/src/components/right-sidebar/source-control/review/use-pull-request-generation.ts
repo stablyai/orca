@@ -1,3 +1,4 @@
+import { resolveSourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   useSourceControlState,
   sourceControlConnectionId,
@@ -29,7 +30,6 @@ import {
 } from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { SourceControlAi } from '../ai/use-ai'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -44,7 +44,6 @@ export function useSourceControlPullRequestGeneration({
   branchName,
   hostedReviewCreateProvider,
   refreshGitStatusAfterPullRequestGeneration,
-  resolvedPrCreationDefaults,
   setPullRequestGenerationRecord,
   updatePullRequestGenerationRecord,
   worktreePath
@@ -56,7 +55,6 @@ export function useSourceControlPullRequestGeneration({
   branchName: string
   hostedReviewCreateProvider: HostedReviewProvider
   refreshGitStatusAfterPullRequestGeneration: SourceControlStatusRefresh['refreshGitStatusAfterPullRequestGeneration']
-  resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setPullRequestGenerationRecord: SourceControlStoreActions['setPullRequestGenerationRecord']
   updatePullRequestGenerationRecord: SourceControlStoreActions['updatePullRequestGenerationRecord']
   worktreePath: string | null
@@ -107,6 +105,10 @@ export function useSourceControlPullRequestGeneration({
       ) {
         return undefined
       }
+      const currentDefaults = resolveSourceControlAiPrCreationDefaults({
+        settings: useAppStore.getState().settings ?? {},
+        repo: activeRepo
+      })
       const requestId = allocatePullRequestGenerationRequestId()
       // Why one resolution: the result must land on this copy, not a same-path twin.
       const copy = activeWorktreeId
@@ -154,7 +156,7 @@ export function useSourceControlPullRequestGeneration({
               body: seed.body,
               draft: seed.draft,
               provider: hostedReviewCreateProvider,
-              useTemplate: resolvedPrCreationDefaults.useTemplate
+              useTemplate: currentDefaults.useTemplate
             },
             overrides
           )
@@ -210,7 +212,6 @@ export function useSourceControlPullRequestGeneration({
       branchName,
       hostedReviewCreateProvider,
       refreshGitStatusAfterPullRequestGeneration,
-      resolvedPrCreationDefaults.useTemplate,
       setPullRequestGenerationRecord,
       updatePullRequestGenerationRecord,
       worktreePath

@@ -42,10 +42,7 @@ function Probe(): null {
     allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
     openCommitGenerationDialog: () => {},
     operationStore,
-    resolvedCommitMessageAi: null,
     setCommitMessageGenerationRecord: state.setCommitMessageGenerationRecord,
-    settings: null,
-    sourceControlAiActionsVisible: true,
     updateCommitDraft: (update) => writeWorktreeCommitDraft(operationStore, update),
     updateCommitMessageGenerationRecord: state.updateCommitMessageGenerationRecord,
     worktreePath: '/repo'

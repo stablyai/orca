@@ -33,9 +33,12 @@ const SOURCE_CONTROL_SETTINGS = [
   'terminalWindowsShell',
   'sourceControlViewMode',
   'sourceControlGroupOrder',
-  'sourceControlCompareAgainstUpstream',
-  'activeRuntimeEnvironmentId'
+  'sourceControlCompareAgainstUpstream'
 ] as const satisfies readonly (keyof NonNullable<AppState['settings']>)[]
+
+export type SourceControlRenderSettings = Readonly<
+  Pick<NonNullable<AppState['settings']>, (typeof SOURCE_CONTROL_SETTINGS)[number]>
+>
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
@@ -126,7 +129,7 @@ export function useSourceControlWorktreeContext() {
   const isRemoteOperationInAnotherWorktree =
     isRemoteOperationActive && inFlightRemoteOpKind === null
   const selectSettings = useMemo(() => {
-    let previous: AppState['settings'] = null
+    let previous: SourceControlRenderSettings | null = null
     return ({ settings }: AppState) => {
       if (
         previous &&
@@ -135,8 +138,19 @@ export function useSourceControlWorktreeContext() {
       ) {
         return previous
       }
-      previous = settings
-      return settings
+      previous = settings && {
+        sourceControlAi: settings.sourceControlAi,
+        commitMessageAi: settings.commitMessageAi,
+        defaultTuiAgent: settings.defaultTuiAgent,
+        disabledTuiAgents: settings.disabledTuiAgents,
+        agentCmdOverrides: settings.agentCmdOverrides,
+        agentDefaultArgs: settings.agentDefaultArgs,
+        terminalWindowsShell: settings.terminalWindowsShell,
+        sourceControlViewMode: settings.sourceControlViewMode,
+        sourceControlGroupOrder: settings.sourceControlGroupOrder,
+        sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream
+      }
+      return previous
     }
   }, [])
   const settings = useSourceControlState(selectSettings)
@@ -145,7 +159,7 @@ export function useSourceControlWorktreeContext() {
       ? getHostedReviewCacheKey(
           activeRepo.path,
           branchName,
-          settings,
+          null,
           activeRepo.id,
           activeRepo.connectionId,
           activeRepo.executionHostId,
@@ -158,7 +172,7 @@ export function useSourceControlWorktreeContext() {
           activeRepo.path,
           activeRepo.id,
           branchName,
-          settings,
+          null,
           activeRepo.connectionId,
           activeRepo.executionHostId,
           true

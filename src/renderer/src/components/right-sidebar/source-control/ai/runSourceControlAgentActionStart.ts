@@ -1,3 +1,5 @@
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {
   canLaunchSourceControlSectionAgentInPlace,
@@ -13,7 +15,6 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
@@ -44,8 +45,7 @@ export type RunSourceControlAgentActionStartArgs = {
   actionId: SourceControlLaunchActionId
   repoId?: string | null
   agentLaunchPreferences?: AgentLaunchPreferences
-  settings: GlobalSettings | null
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
+  repo: Pick<Repo, 'id' | 'sourceControlAi' | 'connectionId' | 'executionHostId'> | null
   worktreeId?: string | null
   groupId?: string | null
   placementWorkspaceId?: string
@@ -93,9 +93,8 @@ export async function runSourceControlAgentActionStart({
   saveTargetValue,
   actionId,
   repoId,
-  settings,
   agentLaunchPreferences,
-  repo,
+  repo: submittedRepo,
   worktreeId,
   groupId,
   placementWorkspaceId,
@@ -124,6 +123,13 @@ export async function runSourceControlAgentActionStart({
   if (signal?.aborted) {
     return false
   }
+  const state = useAppStore.getState()
+  const settings = state.settings
+  const repo = submittedRepo
+    ? (state.repos.find((candidate) =>
+        repoMatchesHostIdentity(candidate, submittedRepo.id, getRepoExecutionHostId(submittedRepo))
+      ) ?? null)
+    : null
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false

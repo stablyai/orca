@@ -33,10 +33,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     refreshGitHistoryRef,
     remoteStatus,
     remoteStatusForActions,
-    resolvedCommitMessageAi,
     setCommitMessageGenerationRecord,
-    settings,
-    sourceControlAiActionsVisible,
     syncBranch,
     unresolvedConflicts,
     updateCommitDraft,
@@ -67,10 +64,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     allocateCommitMessageGenerationRequestId,
     openCommitGenerationDialog,
     operationStore,
-    resolvedCommitMessageAi,
     setCommitMessageGenerationRecord,
-    settings,
-    sourceControlAiActionsVisible,
     updateCommitDraft,
     updateCommitMessageGenerationRecord,
     worktreePath
@@ -90,9 +84,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   const createPrIntentCommitMessage = useSourceControlCreatePrIntentCommitMessage({
     activeRepo,
     getCreatePrIntentOperationTarget,
-    operationStore,
-    resolvedCommitMessageAi,
-    settings
+    operationStore
   })
   const remoteActionRunner = useSourceControlRemoteActionRunner({
     activeRepoTarget,

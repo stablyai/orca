@@ -4,6 +4,10 @@ import {
   sourceControlConnectionId,
   useSourceControlScope
 } from '../panel/worktree-scope'
+import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { useStore } from 'zustand'
@@ -37,10 +41,7 @@ export function useSourceControlCommitMessageGeneration({
   allocateCommitMessageGenerationRequestId,
   openCommitGenerationDialog,
   operationStore,
-  resolvedCommitMessageAi,
   setCommitMessageGenerationRecord,
-  settings,
-  sourceControlAiActionsVisible,
   updateCommitDraft,
   updateCommitMessageGenerationRecord,
   worktreePath
@@ -51,10 +52,7 @@ export function useSourceControlCommitMessageGeneration({
   allocateCommitMessageGenerationRequestId: SourceControlStoreActions['allocateCommitMessageGenerationRequestId']
   openCommitGenerationDialog: SourceControlAi['openCommitGenerationDialog']
   operationStore: SourceControlWorktreeOperationState['operationStore']
-  resolvedCommitMessageAi: SourceControlAi['resolvedCommitMessageAi']
   setCommitMessageGenerationRecord: SourceControlStoreActions['setCommitMessageGenerationRecord']
-  settings: SourceControlWorktreeContext['settings']
-  sourceControlAiActionsVisible: boolean
   updateCommitDraft: SourceControlWorktreeOperationState['updateCommitDraft']
   updateCommitMessageGenerationRecord: SourceControlStoreActions['updateCommitMessageGenerationRecord']
   worktreePath: string | null
@@ -77,6 +75,23 @@ export function useSourceControlCommitMessageGeneration({
   const isGenerating = activeCommitMessageGenerationRecord?.status === 'running' || generateInFlight
   const generateError = activeCommitMessageGenerationRecord?.error ?? ownerGenerateError
 
+  const resolveCurrentAi = useCallback(() => {
+    const settings = useAppStore.getState().settings
+    return settings
+      ? resolveSourceControlAiForOperation({
+          settings,
+          repo: activeRepo,
+          operation: 'commitMessage',
+          discoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(
+            getRuntimeGitScope(
+              activeRepoTarget ?? { kind: 'local' },
+              sourceControlConnectionId(scope, activeWorktreeId)
+            )
+          )
+        })
+      : null
+  }, [activeRepo, activeRepoTarget, activeWorktreeId, scope])
+
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
       if (
@@ -90,6 +105,7 @@ export function useSourceControlCommitMessageGeneration({
       if (operationStore.getState().generateInFlight) {
         return
       }
+      const resolvedCommitMessageAi = resolveCurrentAi()
       if (!overrides?.sourceControlAiResolvedParams && resolvedCommitMessageAi?.ok !== true) {
         return
       }
@@ -125,7 +141,7 @@ export function useSourceControlCommitMessageGeneration({
           {
             // Route generation through workspace ownership rather than focused runtime.
             target: activeRepoTarget,
-            prefs: settings,
+            prefs: useAppStore.getState().settings,
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -194,9 +210,8 @@ export function useSourceControlCommitMessageGeneration({
       activeWorktreeId,
       allocateCommitMessageGenerationRequestId,
       operationStore,
-      resolvedCommitMessageAi,
+      resolveCurrentAi,
       setCommitMessageGenerationRecord,
-      settings,
       updateCommitDraft,
       updateCommitMessageGenerationRecord,
       worktreePath
@@ -204,7 +219,9 @@ export function useSourceControlCommitMessageGeneration({
   )
 
   const handleGenerateCommitMessageClick = useCallback((): void => {
-    if (!sourceControlAiActionsVisible) {
+    const settings = useAppStore.getState().settings
+    const resolvedCommitMessageAi = resolveCurrentAi()
+    if (!settings || !resolveSourceControlAiEnabled({ settings, repo: activeRepo })) {
       return
     }
     if (
@@ -215,14 +232,7 @@ export function useSourceControlCommitMessageGeneration({
       return
     }
     openCommitGenerationDialog()
-  }, [
-    activeRepo,
-    handleGenerate,
-    openCommitGenerationDialog,
-    resolvedCommitMessageAi,
-    settings,
-    sourceControlAiActionsVisible
-  ])
+  }, [activeRepo, handleGenerate, openCommitGenerationDialog, resolveCurrentAi])
 
   const handleCancelGenerate = useCallback((): void => {
     if (!activeWorktreeId || !worktreePath || !activeCommitMessageGenerationKey) {

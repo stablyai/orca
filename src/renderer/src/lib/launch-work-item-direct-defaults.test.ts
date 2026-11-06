@@ -111,7 +111,6 @@ describe('direct workspace defaults', () => {
         actionId: 'fixChecks',
         repoId: 'repo-1',
         repo: null,
-        settings: useAppStore.getState().settings,
         promptDelivery: 'submit-after-ready',
         launchPlatform: 'darwin',
         launchSource: 'task_page',
