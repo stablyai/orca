@@ -66,8 +66,6 @@ export const StatusBarItem = z.enum([
   'cursor',
   'zcode',
   'muse',
-=======
->>>>>>> f4e234500b (fix(ollama): accept the ollama status-bar item in the paired-client UI schema):src/shared/rpc-contract/client-ui-params.ts
   'ollama',
   'ssh',
   'resource-usage',
