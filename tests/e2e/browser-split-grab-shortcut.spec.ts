@@ -236,7 +236,7 @@ test.describe('browser split grab shortcut', () => {
     await pressInGuest('Escape')
     await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeHidden()
 
-    // Why: after a click copies, the picker waits under the toast before rearming; Escape must end it.
+    // Why: a click-copy rearms the picker when its toast closes; outlasting the toast proves Escape ended it.
     await pressInGuest('C', [guestModifier])
     await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
     await orcaPage.evaluate(async (browserTabId) => {
