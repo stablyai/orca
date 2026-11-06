@@ -11,6 +11,23 @@ import type {
   StoredJournalSqlValue
 } from './journal-sql-value-codec'
 
+export function journalSqlItemMetadata(item: AgentJournalRenderItem, bytes: number) {
+  const turn = readAgentJournalTurn(item.body)
+  return [
+    item.sequence,
+    item.sequenceIndex ?? 0,
+    item.revision,
+    item.body.kind,
+    turn?.turnId ?? null,
+    item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null,
+    turn?.userItemId ?? null,
+    Number(isRootAgentJournalItem(item)),
+    item.agentId ?? null,
+    Number(isAgentSessionContextClear(item.body)),
+    bytes
+  ]
+}
+
 /** Item incarnations keep original log pointers; only values without a saved outcome stay inline. */
 export class JournalSqlItemValues {
   private readonly pending = new Map<string, JournalSqlValueLocation>()
@@ -155,7 +172,6 @@ export class JournalSqlItemValues {
     bytes: number,
     ordinal: number
   ): void {
-    const turn = readAgentJournalTurn(item.body)
     this.scope.db
       .prepare(`INSERT INTO journal_proj_items
       (session_id, generation, entry_key, incarnation, ordinal, sequence, sequence_index,
@@ -172,17 +188,7 @@ export class JournalSqlItemValues {
         location.key,
         location.incarnation,
         ordinal,
-        item.sequence,
-        item.sequenceIndex ?? 0,
-        item.revision,
-        item.body.kind,
-        turn?.turnId ?? null,
-        item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null,
-        turn?.userItemId ?? null,
-        Number(isRootAgentJournalItem(item)),
-        item.agentId ?? null,
-        Number(isAgentSessionContextClear(item.body)),
-        bytes
+        ...journalSqlItemMetadata(item, bytes)
       )
   }
 }

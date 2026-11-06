@@ -16,6 +16,13 @@ import {
 import type { JournalOutcomeSource } from './journal-outcome-format'
 import type Database from '../../sqlite/sync-database'
 import type { JournalEntryChange } from './journal-transition-collections'
+import type { JournalOutcomeItemAdmission } from './journal-outcome-item-provenance'
+import { iterateSelectedJournalOutcomes } from './journal-outcome-selection'
+
+export type JournalOutcomeReadOptions = {
+  admitItem?: JournalOutcomeItemAdmission
+  selection?: 'seeks' | 'recursive'
+}
 
 export type JournalOutcomeTransition = {
   state: JournalReducerState
@@ -39,31 +46,42 @@ export function readJournalOutcomes(
   sessionId: string,
   epoch: string,
   source: JournalOutcomeSource,
-  baseline?: JournalReducerState
+  baseline?: JournalReducerState,
+  options?: JournalOutcomeReadOptions
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
   const recoveries = [...(baseline ? memoryJournalMap(baseline.queue.cards).values() : [])].flatMap(
     (card) => (card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : [])
   )
   const prefix = detachJournalNativePrefix(baseline)
-  const fold = new JournalOutcomeFold()
-  let after = { field: '', key: '' }
-  for (;;) {
-    const row = newest.get(source.generation, after.field, after.key, source.through)
-    if (!row) {
-      const state = fold.finish(sessionId, epoch, source.through, baseline)
-      // Tail values omit derived recovery links; only the same raw-prefix incarnation inherits one.
-      for (const { id, recovers } of recoveries) {
-        const card = state.queue.cards.get(id)
-        if (card && !fold.replaced('queue.cards', id)) {
-          card.recovers = recovers
+  const fold = new JournalOutcomeFold(
+    options?.admitItem && { generation: source.generation, admit: options.admitItem }
+  )
+  const selected =
+    options?.selection === 'recursive' ? iterateSelectedJournalOutcomes(db, source) : undefined
+  try {
+    let after = { field: '', key: '' }
+    for (;;) {
+      const row = selected
+        ? selected.next().value
+        : newest.get(source.generation, after.field, after.key, source.through)
+      if (!row) {
+        const state = fold.finish(sessionId, epoch, source.through, baseline)
+        // Tail values omit derived recovery links; only the same raw-prefix incarnation inherits one.
+        for (const { id, recovers } of recoveries) {
+          const card = state.queue.cards.get(id)
+          if (card && !fold.replaced('queue.cards', id)) {
+            card.recovers = recovers
+          }
         }
+        restoreJournalNativeState(db, state, source.format, fold, prefix)
+        return state
       }
-      restoreJournalNativeState(db, state, source.format, fold, prefix)
-      return state
+      const value = fold.add(row)
+      after = { field: value.field, key: value.key }
     }
-    const value = fold.add(row)
-    after = { field: value.field, key: value.key }
+  } finally {
+    selected?.return?.()
   }
 }
 

@@ -17,6 +17,7 @@ import { iterateJournalEpochRows, readJournalSessionEpoch } from './journal-row-
 import { parseJournalRow } from './journal-row-schema'
 
 import type Database from '../../sqlite/sync-database'
+import type { JournalOutcomeReadOptions } from './journal-outcome-table'
 
 /** The physical anchor is sequence 1; later epoch rows are context boundaries. */
 const FIRST_JOURNAL_SEQUENCE = 1
@@ -48,7 +49,11 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
 /** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
  * frozen input prefix, then each outcome key's newest record), and nothing can interleave with it.
  * Admission comes first, so a newer chat is never folded. */
-export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
+export function restoreJournal(
+  db: Database.Database,
+  sessionId: string,
+  options?: JournalOutcomeReadOptions
+): JournalLoad | null {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
     return null
@@ -87,7 +92,7 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
           ] as const
         })
       )
-    const state = readJournalOutcomes(db, sessionId, epoch, source, baseline)
+    const state = readJournalOutcomes(db, sessionId, epoch, source, baseline, options)
     if (source.marker === 5 && source.prefix > 0) {
       const observations = foldJournalFromState(
         db,

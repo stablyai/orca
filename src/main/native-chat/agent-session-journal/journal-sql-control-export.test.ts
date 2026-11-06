@@ -1,3 +1,4 @@
+import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
@@ -10,8 +11,6 @@ import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './jo
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { exportJournalControlState } from './journal-sql-control-export'
-import { journalOutcomeScalars } from './journal-outcome-codec'
-import { journalOutcomeScalarJson } from './journal-outcome-scalars'
 import type { JournalRow } from './journal-row-schema'
 
 const databases: Database.Database[] = []
@@ -20,43 +19,6 @@ afterEach(() => {
     db.close()
   }
 })
-
-function snapshot(state: JournalReducerState) {
-  const order = journalInputOrder(state)
-  order.cards.ensure(state)
-  return {
-    scalars: Object.fromEntries(
-      Object.entries(journalOutcomeScalars(state)).map(([key, value]) => [
-        key,
-        journalOutcomeScalarJson(value)
-      ])
-    ),
-    firstQueued: order.firstQueued()?.clientMessageId,
-    explicit: order.explicitSend()?.clientMessageId,
-    entered: [...order.enteredSubmissions()].map((send) => send.clientMessageId),
-    unsettled: order.unsettledSubmissions().map((send) => send.clientMessageId),
-    sending: order.sendingSubmissions().map((send) => send.clientMessageId),
-    inputs: ['send', 'second', 'first', 'retry'].map((id) => ({
-      id,
-      predecessors: order.predecessors(state, id),
-      original: order.familyOriginal(id)?.clientMessageId,
-      linked: [...order.linkedTo(id)].map((send) => send.clientMessageId),
-      ended: state.inputs.ended.has(id),
-      submission: state.submissions.get(id),
-      receipt: state.receipts.get(id)
-    })),
-    cards: ['q', 'command', 'ordinary', 'foreign'].map((id) => {
-      const card = state.queue.cards.get(id)
-      return [id, card, card ? order.paused(state, card, null) : null]
-    }),
-    head: order.head(state, null)?.messageId ?? null,
-    bounds: order.cardBounds(state),
-    newest: state.queries.newestTurnBySequence(state),
-    candidates: state.queries.candidatesForFence(state, 1).map((send) => send.clientMessageId),
-    returned: [...state.queries.returnedCommandIds(state)],
-    newestFailure: order.newestTurn.failure()
-  }
-}
 
 it.each([
   { name: 'lifecycle and rollback', rows: journalSqlLifecycleRows() },
@@ -93,8 +55,10 @@ it.each([
     })
     const reload = (generation: string) =>
       new JournalSqlReducer(new JournalSqlScope(db, 'session', generation), 'epoch').state
-    expect(snapshot(reload('exported'))).toEqual(snapshot(reload('built')))
-    expect(snapshot(reload('exported'))).toEqual(snapshot(memory))
+    expect(journalSqlControlSnapshot(reload('exported'))).toEqual(
+      journalSqlControlSnapshot(reload('built'))
+    )
+    expect(journalSqlControlSnapshot(reload('exported'))).toEqual(journalSqlControlSnapshot(memory))
     // The next write over the exported generation saves what the memory fold saves.
     const next = (generation: string, outcome: number, row: JournalRow) =>
       persistJournalOutcomeTransition(
@@ -132,6 +96,8 @@ it.each([
         FROM journal_outcomes WHERE generation=? AND seq=? ORDER BY field, entry_key`)
         .all(generation, last.seq)
     expect(records(db, 3)).toEqual(records(oracle, 1))
-    expect(snapshot(reload('exported'))).toEqual(snapshot(expected.adopt()))
+    expect(journalSqlControlSnapshot(reload('exported'))).toEqual(
+      journalSqlControlSnapshot(expected.adopt())
+    )
   }
 )

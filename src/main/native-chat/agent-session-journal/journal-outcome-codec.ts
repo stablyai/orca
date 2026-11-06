@@ -18,6 +18,7 @@ import {
 } from './journal-outcome-format-1'
 import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
+import type { JournalOutcomeItemAdmission } from './journal-outcome-item-provenance'
 export { JournalOutcomeDecodeError } from './journal-write-guards'
 
 export type JournalOutcome = {
@@ -171,9 +172,21 @@ type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted' | 'fo
  * order comes from the canonical log. */
 export class JournalOutcomeFold {
   private readonly values = new Map<string, Map<string, Newest>>()
+  constructor(
+    private readonly itemAdmission?: { generation: number; admit: JournalOutcomeItemAdmission }
+  ) {}
   /** Admits one stored record and keeps its value as admission parsed it, not its text. */
   add(row: SqliteRow): Pick<JournalOutcome, 'field' | 'key'> {
     const { value, admitted } = admitJournalOutcome(row)
+    let kept = admitted.kept
+    if (this.itemAdmission && value.field === 'items' && !value.deleted) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: item admission checked this JSON graph without transforming it.
+      kept = this.itemAdmission.admit(
+        admitted.kept as AgentJournalRenderItem,
+        value,
+        this.itemAdmission.generation
+      )
+    }
     let field = this.values.get(value.field)
     if (!field) {
       field = new Map()
@@ -183,7 +196,8 @@ export class JournalOutcomeFold {
       ordinal: value.ordinal,
       deleted: value.deleted,
       format: value.format,
-      ...admitted
+      ...admitted,
+      kept
     })
     return value
   }

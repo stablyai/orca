@@ -18,6 +18,15 @@ import {
 import type { JournalHostDatabase } from './journal-host-database'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import { JournalOutcomeItemProvenance } from './journal-outcome-item-provenance'
+import { decodeJournalOutcomeItem } from './journal-outcome-codec'
+import { encodeJournalState } from './journal-state-codec'
+import { DirectJournalControl } from './journal-sql-direct-control.test-fixture'
+import { stageDirectJournalRecords } from './journal-sql-direct-stage.test-fixture'
+import { JournalSqlScope } from './journal-sql-scope'
+import { JournalSqlReducer } from './journal-sql-reducer'
+import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
+import { exportJournalControlState } from './journal-sql-control-export'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import {
   projectionBase as base,
@@ -267,6 +276,93 @@ function seedFrozen(db: JournalHostDatabase, fixture: z.output<ReturnType<typeof
     }
   })
 }
+
+it.each(['raw', 'prefix', 'marker5', 'outcome'] as const)(
+  'qualifies only the unchanged item incarnation admitted from the selected record: %s',
+  async (path) => {
+    if (path === 'marker5') {
+      seedFrozen(database, historicalFixture.prefix)
+    } else if (path === 'outcome') {
+      seedOutcomeRows(database, [projectionEpochRow, item(2, 'a'), item(3, 'b')])
+    } else {
+      seedProjectionRows(database, [projectionEpochRow, item(2, 'a'), item(3, 'b')])
+      if (path === 'prefix') {
+        const rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
+        rigs.push(rig)
+        await rig.writer.enqueue((seq) => item(seq, 'b'))
+      }
+    }
+    const ordinary = restoreJournal(database.db, sessionId)!
+    const provenance = new JournalOutcomeItemProvenance()
+    const tracked = restoreJournal(database.db, sessionId, {
+      admitItem: provenance.capture,
+      selection: 'recursive'
+    })!
+    expect(tracked).toMatchObject({ newer: null, damage: null })
+    expect(encodeJournalState(tracked.state)).toEqual(encodeJournalState(ordinary.state))
+    const direct = new DirectJournalControl(tracked.state, provenance)
+    await stageDirectJournalRecords(
+      new JournalSqlScope(database.db, sessionId, 'direct'),
+      direct.records(),
+      { maxRows: 2 }
+    )
+    const stage = new JournalSqlReducer(
+      new JournalSqlScope(database.db, sessionId, 'direct'),
+      epoch
+    )
+    const bulk = new JournalSqlReducer(new JournalSqlScope(database.db, sessionId, 'bulk'), epoch)
+    bulk.context.bulkLoad(() => {
+      exportJournalControlState(ordinary.state, bulk.state, { items: true })
+      bulk.flush()
+    })
+    expect(journalSqlControlSnapshot(stage.state)).toEqual(
+      journalSqlControlSnapshot(ordinary.state)
+    )
+    // Materialize every stored value through the real incarnation/reference/item reader.
+    for (const row of database.db
+      .prepare(`SELECT collection,entry_key FROM journal_proj_values
+      WHERE session_id=? AND generation='bulk' ORDER BY collection,ordinal`)
+      .all(sessionId)) {
+      const collection = String(row.collection)
+      const key = String(row.entry_key)
+      expect(stage.context.read(collection, key), `${collection}:${key}`).toEqual(
+        bulk.context.read(collection, key)
+      )
+    }
+    let qualified = 0
+    for (const [id, value] of memoryJournalMap(tracked.state.items)) {
+      const source = provenance.source(value, JSON.stringify(id))
+      if (!source) {
+        continue
+      }
+      qualified++
+      const saved = database.db
+        .prepare(`SELECT * FROM journal_outcomes
+        WHERE generation=? AND seq=? AND field='items' AND entry_key=?`)
+        .get(source.generation, source.sequence, source.key)!
+      expect(source.format).toBe(saved.format)
+      expect(decodeJournalOutcomeItem(saved)).toEqual(value)
+      expect(provenance.source({ ...value }, source.key)).toBeUndefined()
+      expect(provenance.source(value, '"different"')).toBeUndefined()
+      // Restoring the old field value cannot undo the fact that a nested alias was mutated.
+      const body = Object.getOwnPropertyDescriptor(value, 'body')!.value
+      const revision = value.revision
+      body.provenanceProbe = true
+      delete body.provenanceProbe
+      expect(value.revision).toBe(revision)
+      expect(provenance.source(value, source.key)).toBeUndefined()
+    }
+    if (path === 'outcome') {
+      expect(qualified).toBe(2)
+    }
+    if (path === 'prefix') {
+      expect(qualified).toBe(1)
+    }
+    if (path === 'raw') {
+      expect(qualified).toBe(0)
+    }
+  }
+)
 
 it('main-outcome-old-prefix-source-roundtrip', async () => {
   const readJournalHistoricalInputs = (db: Parameters<typeof restoreJournal>[0], id: string) => {

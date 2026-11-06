@@ -36,34 +36,64 @@ export function exportJournalControlState(
   sql: JournalReducerState,
   options: { items: boolean }
 ): void {
-  const seen = new Set<object>()
-  const skipped = new Set(options.items ? WIRING : [...WIRING, 'items'])
-  copyFields(memory, sql, { seen, skipped }, 'state')
-  copyFields(journalInputOrder(memory), journalInputOrder(sql), { seen, skipped }, 'order')
+  for (const { path, value, container } of journalControlStateEntries(memory)) {
+    if (!options.items && path[0] === 'state' && path[1] === 'items') {
+      continue
+    }
+    let target: object = path[0] === 'state' ? sql : journalInputOrder(sql)
+    for (const key of path.slice(1, -1)) {
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- The paired reducer graph is selected by its declared field path.
+      const next: unknown = Reflect.get(target, key)
+      if (!isImporter(next)) {
+        throw new Error('Missing journal export target')
+      }
+      target = next
+    }
+    const key = path.at(-1)!
+    if (container) {
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- A container's matching SQL handle owns the import procedure.
+      copyContainer(value, Reflect.get(target, key), path.join('.'))
+    } else {
+      Reflect.set(target, key, value)
+    }
+  }
 }
 
-type Walk = { seen: Set<object>; skipped: ReadonlySet<string> }
+export type JournalControlStateEntry = {
+  path: string[]
+} & ({ container: true; value: object } | { container: false; value: unknown })
 
-function copyFields(memory: object, sql: object, walk: Walk, path: string): void {
-  const { seen } = walk
+/** Enumerates the same restored facts for SQL imports and direct record encoding. */
+export function* journalControlStateEntries(
+  memory: JournalReducerState
+): Generator<JournalControlStateEntry> {
+  const seen = new Set<object>()
+  yield* fields(memory, seen, ['state'])
+  yield* fields(journalInputOrder(memory), seen, ['order'])
+}
+
+function* fields(
+  memory: object,
+  seen: Set<object>,
+  path: string[]
+): Generator<JournalControlStateEntry> {
   if (seen.has(memory)) {
     return
   }
   seen.add(memory)
   for (const [key, value] of Object.entries(memory)) {
-    if (walk.skipped.has(key) || typeof value === 'function') {
+    if (WIRING.includes(key) || typeof value === 'function') {
       continue
     }
-    const target: unknown = Reflect.get(sql, key)
     if (isContainer(value)) {
       if (!seen.has(value)) {
         seen.add(value)
-        copyContainer(value, target, `${path}.${key}`)
+        yield { path: [...path, key], value, container: true }
       }
-    } else if (isStructural(value) && isImporter(target)) {
-      copyFields(value, target, walk, `${path}.${key}`)
+    } else if (isStructural(value)) {
+      yield* fields(value, seen, [...path, key])
     } else {
-      Reflect.set(sql, key, value)
+      yield { path: [...path, key], value, container: false }
     }
   }
 }
