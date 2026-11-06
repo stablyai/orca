@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
-export function SourceControlPanel() {
+export const SourceControlPanel = memo(function SourceControlPanel() {
   const model = useSourceControlPanelModel()
   const { activeRepo, activeWorktree, isFolder, worktreePath } = model
 
@@ -36,4 +37,4 @@ export function SourceControlPanel() {
       worktreePath={worktreePath}
     />
   )
-}
+})

@@ -6,6 +6,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type * as WorktreeGitCopy from '@/lib/worktree-git-copy'
 import type * as GitStatusClient from '@/runtime/runtime-git-status-client'
 import type * as GitDiffClient from '@/runtime/runtime-git-diff-client'
+import type * as PanelModule from './source-control/panel/panel'
 import type * as RepoClient from '@/runtime/runtime-repo-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -24,9 +25,28 @@ const probes = vi.hoisted(() => ({
   submodules: vi.fn(),
   upstream: vi.fn(),
   eligibility: vi.fn(),
-  visible: new Set<string>()
+  visible: new Set<string>(),
+  bodyRenders: new Map<string, number>()
 }))
 const pending = (): Promise<never> => new Promise(() => {})
+
+vi.mock('./source-control/panel/panel', async (original) => {
+  const { SourceControlPanel: Panel } = await original<typeof PanelModule>()
+  const { useSourceControlScope } = await import('./source-control/panel/worktree-scope')
+  return {
+    SourceControlPanel: () => {
+      const id = useSourceControlScope()?.worktreeId ?? 'selected'
+      return (
+        <Profiler
+          id={id}
+          onRender={() => probes.bodyRenders.set(id, (probes.bodyRenders.get(id) ?? 0) + 1)}
+        >
+          <Panel />
+        </Profiler>
+      )
+    }
+  }
+})
 
 vi.mock('./source-control/sync/git-status-refresh', () => ({
   refreshGitStatusForWorktree: async (args: {
@@ -322,6 +342,8 @@ it('runs expanded body work only for on-screen sections, at mount and over the s
     await render(<FolderWorkspaceSourceControlPanel />)
     const atMount = bodyWork(worktrees)
     expect(atMount.upstream!.calls).toBeGreaterThan(0)
+    expect(atMount.compare!.worktrees).toEqual(visible.toSorted())
+    expect(atMount.compare!.calls).toBeGreaterThanOrEqual(visible.length)
     const intervals: ReturnType<typeof bodyWork>[] = []
     for (let tick = 0; tick < 2; tick++) {
       for (const operation of BODY_OPERATIONS) {
@@ -363,6 +385,7 @@ it.each([3, 30])(
     expect(renders).toBe(0)
 
     probes.upstream.mockClear()
+    probes.bodyRenders.clear()
     await act(async () =>
       useAppStore.setState((state) => ({
         worktreesByRepo: {
@@ -372,6 +395,17 @@ it.each([3, 30])(
         }
       }))
     )
+    for (const row of worktrees.slice(1)) {
+      expect(probes.bodyRenders.get(row.id) ?? 0).toBe(0)
+    }
+    await scrollTo([])
+    probes.bodyRenders.clear()
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, theme: state.settings?.theme === 'dark' ? 'light' : 'dark' }
+      }))
+    )
+    expect([...probes.bodyRenders.values()].reduce((sum, value) => sum + value, 0)).toBe(0)
     // A new record with the same routing fields refetches nothing.
     expect(probes.upstream).not.toHaveBeenCalled()
     expect(probes.eligibility).not.toHaveBeenCalled()

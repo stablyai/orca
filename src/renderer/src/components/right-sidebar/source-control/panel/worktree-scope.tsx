@@ -1,4 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { useStore } from 'zustand'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/connection-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { AttachedWorktreeOwner } from '../../folder-workspace-attached-worktrees'
@@ -19,6 +22,8 @@ const WorktreeScope = createContext<SourceControlScopeRouting | null>(null)
 const WorktreeScopeOwner = createContext<SourceControlScope | null>(null)
 // Why default true: the selected workspace's panel has no section gate, as on main.
 const SectionActive = createContext(true)
+const SectionStore =
+  createContext<Pick<typeof useAppStore, 'getState' | 'getInitialState' | 'subscribe'>>(useAppStore)
 const mountedScopeCounts = new Map<string, number>()
 
 /** Whether a folder section for this worktree is on screen, so its row actions can still apply. */
@@ -35,6 +40,14 @@ export function SourceControlScopeProvider({
   active?: boolean
   children?: ReactNode
 }) {
+  // Hidden bodies retain their last snapshot and resume from current state when shown.
+  const store = useMemo(() => {
+    if (active) {
+      return useAppStore
+    }
+    const snapshot = useAppStore.getState()
+    return { getState: () => snapshot, getInitialState: () => snapshot, subscribe: () => () => {} }
+  }, [active])
   const { worktreeId, repoId, executionHostId, placementWorkspaceId } = owner
   const connectionId = owner.repo.connectionId ?? null
   const runtimeOwnerEnvironmentId = owner.worktree.runtimeOwnerEnvironmentId
@@ -70,7 +83,9 @@ export function SourceControlScopeProvider({
   return (
     <WorktreeScopeOwner.Provider value={owner}>
       <WorktreeScope.Provider value={routing}>
-        <SectionActive.Provider value={active}>{children}</SectionActive.Provider>
+        <SectionActive.Provider value={active}>
+          <SectionStore.Provider value={store}>{children}</SectionStore.Provider>
+        </SectionActive.Provider>
       </WorktreeScope.Provider>
     </WorktreeScopeOwner.Provider>
   )
@@ -111,4 +126,9 @@ export function sourceControlConnectionId(
     (scope?.worktreeId === worktreeId ? scope.connectionId : getConnectionId(worktreeId)) ??
     undefined
   )
+}
+
+/** Body context subscriptions stop while hidden; actions still read the live app store. */
+export function useSourceControlState<T>(selector: (state: AppState) => T): T {
+  return useStore(useContext(SectionStore), selector)
 }

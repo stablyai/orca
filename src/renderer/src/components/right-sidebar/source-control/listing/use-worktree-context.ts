@@ -1,6 +1,7 @@
 import {
   useSourceControlScope,
   useSourceControlScopeOwner,
+  useSourceControlState,
   useSourceControlSectionActive
 } from '../panel/worktree-scope'
 import { useMemo } from 'react'
@@ -9,7 +10,7 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
+import { getWorktreeMapFromState, selectRepoByIdForActiveWorkspace } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
@@ -28,17 +29,35 @@ export function useSourceControlWorktreeContext() {
   const scope = useSourceControlScope()
   const scopeOwner = useSourceControlScopeOwner()
   const sectionActive = useSourceControlSectionActive()
-  const selectedWorktree = useActiveWorktree()
-  const selectedWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const selectedWorktree = useSourceControlState((s) =>
+    !scope && s.activeWorktreeId
+      ? (s.getKnownWorktreeById(
+          s.activeWorktreeId,
+          s.activeWorkspaceExecutionHostId ?? undefined
+        ) ?? null)
+      : null
+  )
+  const selectedWorktreeId = useSourceControlState((s) => s.activeWorktreeId)
   const activeWorktree = scopeOwner?.worktree ?? selectedWorktree
   const activeWorktreeId = scope?.worktreeId ?? selectedWorktreeId
   const activeWorktreeInstanceId = activeWorktree?.instanceId
-  const activeGroupId = useAppStore((s) =>
-    activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
+  const placementWorkspaceId = scope?.placementWorkspaceId ?? activeWorktreeId
+  const activeGroupId = useSourceControlState((s) =>
+    placementWorkspaceId ? s.activeGroupIdByWorktree[placementWorkspaceId] : undefined
   )
-  const worktreeMap = useWorktreeMap()
-  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const selectedRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const scopeWorktreeId = scope?.worktreeId
+  const scopedWorktrees = useMemo(
+    () => new Map(scopeWorktreeId ? [[scopeWorktreeId, true]] : []),
+    [scopeWorktreeId]
+  )
+  // A section's history ends with its owner; only the ordinary panel caches several worktrees.
+  const worktreeMap = useSourceControlState((s) =>
+    scopeWorktreeId ? scopedWorktrees : getWorktreeMapFromState(s)
+  )
+  const rightSidebarTab = useSourceControlState((s) => s.rightSidebarTab)
+  const selectedRepo = useSourceControlState((s) =>
+    scope ? null : selectRepoByIdForActiveWorkspace(s, activeWorktree?.repoId ?? null)
+  )
   const activeRepo = scopeOwner?.repo ?? selectedRepo
   const activeRepoId = activeRepo?.id ?? null
   const activeRepoPath = activeRepo?.path ?? null
@@ -46,29 +65,29 @@ export function useSourceControlWorktreeContext() {
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const entries = useAppStore((s) =>
+  const entries = useSourceControlState((s) =>
     activeWorktreeId
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
       : EMPTY_GIT_STATUS_ENTRIES
   )
-  const activeGitStatusHead = useAppStore((s) =>
+  const activeGitStatusHead = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitStatusHeadByWorktree?.[activeWorktreeId] ?? null) : null
   )
-  const repositoryHuge = useAppStore((s) =>
+  const repositoryHuge = useSourceControlState((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
-  const statusReadError = useAppStore((s) =>
+  const statusReadError = useSourceControlState((s) =>
     activeWorktreeId ? s.gitStatusReadErrorByWorktree?.[activeWorktreeId] : undefined
   )
-  const branchEntries = useAppStore((s) =>
+  const branchEntries = useSourceControlState((s) =>
     activeWorktreeId
       ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
       : EMPTY_BRANCH_CHANGE_ENTRIES
   )
-  const branchSummary = useAppStore((s) =>
+  const branchSummary = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null) : null
   )
-  const publishedBranchLineTotal = useAppStore((s) =>
+  const publishedBranchLineTotal = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitBranchLineTotalByWorktree?.[activeWorktreeId] ?? null) : null
   )
   // Status and comparison refresh independently; drop totals measured against a stale fork point.
@@ -76,22 +95,22 @@ export function useSourceControlWorktreeContext() {
     publishedBranchLineTotal && publishedBranchLineTotal.mergeBase === branchSummary?.mergeBase
       ? publishedBranchLineTotal
       : null
-  const conflictOperation = useAppStore((s) =>
+  const conflictOperation = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
   // Preserve unknown upstream while fetching so workspace switches cannot flash Publish Branch.
-  const remoteStatus = useAppStore((s) =>
+  const remoteStatus = useSourceControlState((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
-  const inFlightRemoteOpKind = useAppStore(
+  const inFlightRemoteOpKind = useSourceControlState(
     (s) =>
       s.remoteOperations.findLast((operation) => operation.worktreeId === activeWorktreeId)?.kind ??
       null
   )
-  const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
+  const isRemoteOperationActive = useSourceControlState((s) => s.isRemoteOperationActive)
   const isRemoteOperationInAnotherWorktree =
     isRemoteOperationActive && inFlightRemoteOpKind === null
-  const settings = useAppStore((s) => s.settings)
+  const settings = useSourceControlState((s) => s.settings)
   const hostedReviewCacheKey =
     activeRepo && branchName
       ? getHostedReviewCacheKey(
@@ -117,11 +136,13 @@ export function useSourceControlWorktreeContext() {
         )
       : null
   // Subscribe only to active repo/branch entries because background refresh replaces whole cache maps.
-  const hostedReviewEntry = useAppStore((s) =>
+  const hostedReviewEntry = useSourceControlState((s) =>
     selectReviewCacheEntry(s.hostedReviewCache, hostedReviewCacheKey)
   )
   const hostedReviewEntryData = hostedReviewEntry?.data ?? null
-  const activePrFromQueue = useAppStore((s) => selectReviewCacheData(s.prCache, activePrCacheKey))
+  const activePrFromQueue = useSourceControlState((s) =>
+    selectReviewCacheData(s.prCache, activePrCacheKey)
+  )
   // Route Git and metadata to the repo owner; unresolved ownership must run nothing.
   const activeRepoTarget = useMemo(
     () =>
@@ -138,7 +159,7 @@ export function useSourceControlWorktreeContext() {
   )
   const activeRepoRuntimeEnvironmentId =
     activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarOpen = useSourceControlState((s) => s.rightSidebarOpen)
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
