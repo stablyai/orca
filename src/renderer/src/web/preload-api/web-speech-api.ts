@@ -173,6 +173,9 @@ export function createWebSpeechApi(): Pick<
           emit(finalListeners, { sessionId, text })
         }
       } catch (error) {
+        if (dictation?.textSoFar) {
+          emit(finalListeners, { sessionId, text: dictation.textSoFar })
+        }
         emit(errorListeners, { sessionId, error: hostErrorMessage(error) })
       } finally {
         emit(stoppedListeners, { sessionId })

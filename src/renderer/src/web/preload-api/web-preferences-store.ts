@@ -254,6 +254,8 @@ export async function syncRuntimeBackedSettings(
           webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
         }
         delete runtimeSettings.worktreeVisibilityDefaults
+        // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
+        delete runtimeSettings.voice
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
         if (
