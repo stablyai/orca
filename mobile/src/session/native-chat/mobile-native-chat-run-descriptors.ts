@@ -13,13 +13,7 @@ export type MobileNativeChatRunPresentation = {
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
 }
 
-export type MobileNativeChatRunDescriptor = {
-  index: number
-  row: NativeChatMessage
-  sources: MobileNativeChatRowSources
-}
-
-type Run = MobileNativeChatRunDescriptor
+type Run = { index: number; row: NativeChatMessage; sources: MobileNativeChatRowSources }
 export type MobileNativeChatRunHistory = {
   presentation?: MobileNativeChatRunPresentation
   messages: readonly NativeChatMessage[]
@@ -30,7 +24,7 @@ export function mobileNativeChatRunDescriptors(
   { rows, workRuns, turnKeys, receipts }: MobileNativeChatRunPresentation,
   sourceOf: (row: NativeChatMessage) => MobileNativeChatRowSources,
   from = 0
-): MobileNativeChatRunDescriptor[] {
+): Run[] {
   return rows.slice(from).flatMap((row, offset) => {
     const index = from + offset
     if (workRuns.joined.has(index) || receipts?.has(row.id)) {
@@ -104,6 +98,9 @@ function firstChangedRun(
   }
   // Blocks first seen in an unchanged message keep their owner; only the changed tail can move one.
   const moved = new Set([...was.slice(same), ...messages.slice(same)].flatMap((m) => m.blocks))
+  if (moved.size === 0) {
+    return from
+  }
   const hit = previous.runs.find(
     (run) =>
       run.index < from &&

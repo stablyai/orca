@@ -23,7 +23,6 @@ export type MobileNativeChatProjection = {
   agent: AgentType
   sources: ReadonlyMap<string, MobileNativeChatProjectionSource>
   images: readonly ImageUnit[]
-  grouped: readonly NativeChatMessage[]
   kinds: ReadonlyMap<NativeChatMessage, NativeChatToolFoldKind>
   units: readonly Unit[]
   rows: NativeChatMessage[]
@@ -49,7 +48,6 @@ export function projectMobileNativeChatMessages(
       agent,
       sources: new Map(),
       images: [],
-      grouped: [],
       kinds: new Map(),
       units: [],
       rows: foldMobileNativeChatMessages(input, agent)
@@ -87,7 +85,6 @@ export function projectMobileNativeChatMessages(
     agent,
     sources,
     images,
-    grouped,
     kinds,
     units,
     rows: previous && unchanged ? previous.rows : units.flatMap((unit) => unit.rows)

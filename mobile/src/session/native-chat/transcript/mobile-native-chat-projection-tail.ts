@@ -58,16 +58,19 @@ export function projectMobileNativeChatTail(
     }
   }
   const sources = new Map(previous.sources)
-  sources.set(
-    candidate.id,
-    prepareMobileNativeChatSource(candidate, verifiedMobileNativeChatCommands(agent), before)
+  const prepared = prepareMobileNativeChatSource(
+    candidate,
+    verifiedMobileNativeChatCommands(agent),
+    before
   )
-  const source = withMobileNativeChatHarness(sources.get(candidate.id)!, sources, agent, before)
+  // Set before harnessing: a message may name itself as its command parent.
+  sources.set(candidate.id, prepared)
+  const source = withMobileNativeChatHarness(prepared, sources, agent, before)
   sources.set(candidate.id, source)
-  const oldImage = before?.harness ? previous.images.at(-1) : undefined
+  const oldImage = before?.harness && previous.images.at(-1)
   if (
-    before?.harness &&
-    (oldImage?.sources.length !== 1 ||
+    oldImage &&
+    (oldImage.sources.length !== 1 ||
       oldImage.sources[0] !== before.harness ||
       !staysInTail(before.harness))
   ) {
@@ -91,10 +94,6 @@ export function projectMobileNativeChatTail(
   ) {
     return null
   }
-  const grouped = [
-    ...previous.grouped.slice(0, previous.grouped.length - oldRows.length),
-    ...newRows
-  ]
   const kinds = new Map(previous.kinds)
   oldRows.forEach((row) => kinds.delete(row))
   newRows.forEach((row) => kinds.set(row, previous.kinds.get(row) ?? nativeChatToolFoldKind(row)))
@@ -128,7 +127,6 @@ export function projectMobileNativeChatTail(
       ...previous.images.slice(0, previous.images.length - (oldImage ? 1 : 0)),
       ...(image ? [image] : [])
     ],
-    grouped,
     kinds,
     units: [...previous.units.slice(0, from), ...rebuilt],
     rows: unchanged
