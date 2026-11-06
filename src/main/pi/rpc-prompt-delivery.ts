@@ -30,10 +30,24 @@ type DeliveryDeps = {
 }
 
 const MISSING_KEY_PREFIX = 'No API key found for '
-const DEAD_OAUTH_GRANT =
-  /invalid_grant|invalid_token|unauthorized_client|\brevoked\b|refresh[\s_]?token.*expired/i
+const DEAD_OAUTH_GRANT = /invalid_grant|invalid_token|unauthorized_client|\brevoked\b/i
 const TEMPORARY_OAUTH_FAILURE =
   /timeout|network|fetch failed|ECONN(?:REFUSED|RESET)|ETIMEDOUT|ETIMEOUT|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|FailedToOpenSocket|EAI_AGAIN|socket hang up|\b(?:408|425|429|5\d{2})\b|rate.?limit|too many requests|temporar|unavailable|forbidden|permission_denied|cloudflare|captcha/i
+
+function hasExpiredRefreshToken(error: string): boolean {
+  let refreshToken = false
+  // Consume bounded tokens once rather than searching the remaining suffix at every token.
+  for (const [part] of error.matchAll(/refresh[\s_]?token|expired|[\r\n\u2028\u2029]/gi)) {
+    if (part.toLowerCase() === 'expired') {
+      if (refreshToken) {
+        return true
+      }
+    } else {
+      refreshToken = part.length > 1
+    }
+  }
+  return false
+}
 
 export function piRpcFailureFact(error: string) {
   const signInRequired =
@@ -41,6 +55,7 @@ export function piRpcFailureFact(error: string) {
     (error.startsWith('Authentication failed for ') && error.includes("Run '/login ")) ||
     (error.startsWith('OAuth refresh failed for ') &&
       (DEAD_OAUTH_GRANT.test(error) ||
+        hasExpiredRefreshToken(error) ||
         (/\b401\b/.test(error) && !TEMPORARY_OAUTH_FAILURE.test(error))))
   return agentSessionFailureFact(signInRequired ? 'notSignedIn' : 'providerRejected', {
     detail: providerDiagnostic(error, 'person')

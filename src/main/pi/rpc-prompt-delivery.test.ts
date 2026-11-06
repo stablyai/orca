@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PiRpcPromptDelivery } from './rpc-prompt-delivery'
+import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 
 const deliveries: PiRpcPromptDelivery[] = []
 afterEach(() => {
@@ -194,4 +194,13 @@ it.each([
   )
   await vi.runAllTimersAsync()
   expect(h.send).toHaveBeenCalledOnce()
+})
+
+it.each([100, 1000])('classifies a refresh diagnostic with %i token mentions', (count) => {
+  const prefix = 'OAuth refresh failed for openai-codex: '
+  const mentions = 'refresh token '.repeat(count)
+  expect(piRpcFailureFact(prefix + mentions).kind).toBe('providerRejected')
+  expect(piRpcFailureFact(`${prefix}${mentions}expired`).kind).toBe('notSignedIn')
+  expect(piRpcFailureFact(`${prefix}${mentions}\nexpired`).kind).toBe('providerRejected')
+  expect(piRpcFailureFact(`${prefix}${mentions}\nrefresh\ntoken expired`).kind).toBe('notSignedIn')
 })

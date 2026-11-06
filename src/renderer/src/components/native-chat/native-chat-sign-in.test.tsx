@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react'
+import { Profiler } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const { state, remoteCreate, persistOrder, startHost, notifyFailure } = vi.hoisted(() => ({
@@ -31,7 +32,8 @@ vi.mock('@/runtime/web-runtime-terminal-create-failure-notice', () => ({
 }))
 vi.mock('@/lib/wsl-host-user-start', () => ({ startStoppedWslHostForUserAct: startHost }))
 vi.mock('@/lib/claude-account-sign-in', () => ({ signInToClaudeAccount: vi.fn() }))
-import { useNativeChatSignIn } from './native-chat-sign-in'
+import { NativeChatSignInContext, useNativeChatSignIn } from './native-chat-sign-in'
+import { NativeChatSignInButton } from './NativeChatSignInButton'
 
 afterEach(() => {
   cleanup()
@@ -136,4 +138,59 @@ it('leaves a failed WSL start to its existing notification owner', async () => {
   await waitFor(() => expect(result.current?.signingIn).toBe(false))
   expect(remoteCreate).not.toHaveBeenCalled()
   expect(notifyFailure).not.toHaveBeenCalled()
+})
+
+it.each([20, 200])('shares one sign-in operation across %i row actions', async (count) => {
+  const pending = Promise.withResolvers<{ status: 'created' }>()
+  remoteCreate.mockReturnValueOnce(pending.promise)
+  const eligibleRender = vi.fn()
+  const unrelatedRender = vi.fn()
+  const rows = Array.from({ length: count }, (_, index) => (
+    <div key={index}>
+      <Profiler id={`auth-${index}`} onRender={eligibleRender}>
+        <NativeChatSignInButton failureKind="notSignedIn" />
+      </Profiler>
+      <Profiler id={`other-${index}`} onRender={unrelatedRender}>
+        <NativeChatSignInButton failureKind="providerRejected" />
+      </Profiler>
+    </div>
+  ))
+  function Chat({ revision: _revision }: { revision: number }) {
+    const signIn = useNativeChatSignIn({
+      agent: 'pi',
+      target: { kind: 'environment', environmentId: 'paired-host' },
+      worktreeId: 'remote-project',
+      failure: null,
+      startFailures: []
+    })
+    return (
+      <NativeChatSignInContext.Provider value={signIn}>{rows}</NativeChatSignInContext.Provider>
+    )
+  }
+  const view = render(<Chat revision={0} />)
+  eligibleRender.mockClear()
+  unrelatedRender.mockClear()
+  await act(async () => view.rerender(<Chat revision={1} />))
+  expect(eligibleRender).not.toHaveBeenCalled()
+  expect(unrelatedRender).not.toHaveBeenCalled()
+  expect(remoteCreate).not.toHaveBeenCalled()
+  expect(state.createTab).not.toHaveBeenCalled()
+  const buttons = view.getAllByRole('button') as HTMLButtonElement[]
+  expect(buttons).toHaveLength(count)
+  await act(async () => {
+    for (const button of buttons) {
+      fireEvent.click(button)
+    }
+  })
+  expect(startHost).toHaveBeenCalledOnce()
+  expect(remoteCreate).toHaveBeenCalledOnce()
+  expect(unrelatedRender).not.toHaveBeenCalled()
+  expect(eligibleRender).toHaveBeenCalledTimes(count)
+  expect(buttons.every((button) => button.disabled)).toBe(true)
+  eligibleRender.mockClear()
+  await act(async () => pending.resolve({ status: 'created' }))
+  expect(eligibleRender).toHaveBeenCalledTimes(count)
+  expect(unrelatedRender).not.toHaveBeenCalled()
+  expect(buttons.every((button) => !button.disabled)).toBe(true)
+  expect(remoteCreate).toHaveBeenCalledOnce()
 })
