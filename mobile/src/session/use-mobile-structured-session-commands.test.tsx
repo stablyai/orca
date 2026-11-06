@@ -106,6 +106,42 @@ describe('useMobileStructuredSessionCommands', () => {
     expect(hook!.commands).toEqual(lists.b)
   })
 
+  it('reads again after the current read when the menu opens during it', async () => {
+    let catalog = [{ name: 'review-pr', kind: 'skill' as const }]
+    const answers: (() => void)[] = []
+    const sendRequest = vi.fn(async () => {
+      const answered = [...catalog]
+      await new Promise<void>((resolve) => answers.push(resolve))
+      return {
+        id: 'rpc-1',
+        ok: true as const,
+        result: { commands: answered },
+        _meta: { runtimeId: 'runtime-1' }
+      }
+    })
+    const client: RpcClient = {
+      sendRequest,
+      subscribe: () => () => {},
+      updateTerminalSubscriptionViewport: () => {},
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {},
+      notifyForeground: () => {},
+      close: () => {}
+    }
+    await act(async () => {
+      renderer = createWithQueryClient(createElement(Probe, { client, sessionId: 'a' }))
+    })
+    catalog = [...catalog, { name: 'research', kind: 'skill' as const }]
+    await act(async () => hook!.refresh())
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    await act(async () => answers.shift()!())
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    await act(async () => answers.shift()!())
+    expect(hook!.commands?.map((entry) => entry.name)).toEqual(['review-pr', 'research'])
+  })
   it.each(['pending', 'lost-hint', 'lost-reply'])(
     'recovers a %s only while the same menu stays open',
     async (mode) => {

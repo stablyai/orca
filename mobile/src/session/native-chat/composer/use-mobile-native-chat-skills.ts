@@ -37,6 +37,7 @@ export function useMobileNativeChatSkills(args: {
   const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
   // The scan runs once a menu asks for it; a scan this document already holds shows at once.
   const [demanded, setDemanded] = useState(false)
+  const demandedRef = useRef(false)
   const scan = useHostQuery(skillDiscoveryQuery, { hostId, client }, target, NO_INPUT, {
     enabled: supported && demanded
   })
@@ -50,7 +51,12 @@ export function useMobileNativeChatSkills(args: {
     if (!client || !supported) {
       return
     }
-    setDemanded(true)
+    // The first demand enables the query, which fetches a missing or failed scan by itself.
+    if (!demandedRef.current) {
+      demandedRef.current = true
+      setDemanded(true)
+      return
+    }
     // The phone has no Retry button, so the next menu opening retries a failed scan.
     const held = scanRef.current
     if (held.isError && held.data === undefined && !held.isFetching) {

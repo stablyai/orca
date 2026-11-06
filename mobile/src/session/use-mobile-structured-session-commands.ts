@@ -1,5 +1,5 @@
 import { startAgentSessionCommandMenuQuery } from '../../../src/shared/agent-session/agent-session-command-menu-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as z from 'zod'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
@@ -78,13 +78,18 @@ export function useMobileStructuredSessionCommands(args: {
   const [reported, setReported] = useState<Reported | null>(null)
   const exec = useWorkspaceExecutionHost() ?? 'local'
   const reads = !!hostId && !!sessionId && enabled && !commandsOnRequest
-  const { data: published, refetch } = useHostQuery(
+  const commandsQuery = useHostQuery(
     sessionCommandsQuery,
     { hostId: hostId ?? '', client },
     { exec },
     { sessionId: sessionId ?? '' },
     { enabled: reads }
   )
+  const { data: published } = commandsQuery
+  const commandsQueryRef = useRef(commandsQuery)
+  useLayoutEffect(() => {
+    commandsQueryRef.current = commandsQuery
+  }, [commandsQuery])
 
   useEffect(() => {
     if (!commandsOnRequest || !menuOpen || !enabled || !client || !hostId || !sessionId) {
@@ -129,10 +134,15 @@ export function useMobileStructuredSessionCommands(args: {
   }, [client, commandsOnRequest, enabled, hostId, menuOpen, sessionId])
   const invalidate = useCallback(() => query.current?.invalidate(), [])
   const refresh = useCallback(() => {
-    if (reads) {
-      void refetch()
+    if (!reads) {
+      return
     }
-  }, [reads, refetch])
+    const { data, isFetching, refetch } = commandsQueryRef.current
+    // Without data TanStack joins the read in flight, which may predate a newly installed skill: read once more after it.
+    void (data === undefined && isFetching
+      ? refetch().then(() => refetch({ cancelRefetch: false }))
+      : refetch())
+  }, [reads])
 
   return {
     commands: commandsOnRequest
