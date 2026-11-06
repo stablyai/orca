@@ -99,6 +99,25 @@ describe('GitHub Projects E2E routing', () => {
   })
 })
 
+describe('Terminal pane geometry E2E routing', () => {
+  const specs = [
+    'tests/e2e/issue-12656-terminal-link-tooltip.spec.ts',
+    'tests/e2e/terminal-pane-padding-edges.spec.ts'
+  ]
+  it.each([
+    'src/renderer/src/assets/terminal.css',
+    'src/renderer/src/lib/pane-manager/pane-divider.ts',
+    'src/renderer/src/lib/pane-manager/pane-dom-creation.ts',
+    'src/renderer/src/lib/pane-manager/terminal-linkifier-hover-reset-on-mouseleave.ts'
+  ])('routes %s to the pane geometry specs', (file) => {
+    expect(selectPrE2eSpecs([file])).toEqual(expect.arrayContaining(specs))
+  })
+  it('skips the pane geometry specs for their unit tests', () => {
+    const selected = selectPrE2eSpecs(['src/renderer/src/lib/pane-manager/pane-divider.test.ts'])
+    expect(selected).not.toContain(specs[0])
+  })
+})
+
 describe('Daemon mock modified-only source routing', () => {
   const helper = 'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
   const verified = { allowDaemonInitTestSupport: true }
