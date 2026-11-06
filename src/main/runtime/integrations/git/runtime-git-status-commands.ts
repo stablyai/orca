@@ -5,7 +5,6 @@ import type {
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { BranchSwitchTarget } from '../../../../shared/git/branch-switch-target'
-import type { RuntimeGitSwitchResult } from '../../../../shared/runtime-worktree-contracts'
 import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from '../../../git/branch-switch'
 import type {
   GitConflictOperation,
@@ -13,6 +12,7 @@ import type {
   GitStatusResult
 } from '../../../../shared/git/status/git-status-types'
 import type {
+  RuntimeGitSwitchResult,
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
 } from '../../../../shared/runtime-worktree-contracts'
@@ -136,7 +136,10 @@ export class RuntimeGitStatusCommands {
         {
           getStatus: () =>
             provider.getStatus(path, { admissionTier: 'interactive', includeLineStats: false }),
-          checkout: (branch, creation) => provider.checkoutBranch(path, branch, creation),
+          checkout: (branch, creation) =>
+            creation
+              ? provider.checkoutBranch(path, branch, creation)
+              : provider.checkoutBranch(path, branch),
           getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(path) ?? null,
           onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
         }

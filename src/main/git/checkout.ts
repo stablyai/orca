@@ -4,6 +4,7 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 import { gitEnvWithoutYesNoPrompt } from './command-runner/git-no-prompt-env'
+import { translateWorktreePath } from './worktrees/catalog/worktree-path-comparison'
 import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
@@ -82,7 +83,7 @@ export async function listLocalBranches(
       committedAt[name] = Number(timestamp) * 1000
     }
     if (occupiedPath) {
-      worktreePaths[name] = occupiedPath
+      worktreePaths[name] = translateWorktreePath(occupiedPath, worktreePath, options)
     }
   }
   branches.sort((a, b) => {

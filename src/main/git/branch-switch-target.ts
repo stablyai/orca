@@ -59,7 +59,16 @@ export async function resolveBranchSwitchTarget(
   if (tracker?.[0]) {
     return { branch: tracker[0].slice('refs/heads/'.length) }
   }
-  const remotes = (await run(['remote'])).stdout
+  const remotes = (
+    await run(['remote']).catch((error) => {
+      if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw error
+      }
+      throw new Error(
+        "Orca couldn't read this repository's remotes. Check its remote settings in a terminal, then try again."
+      )
+    })
+  ).stdout
     .trim()
     .split('\n')
     .sort((a, b) => b.length - a.length)

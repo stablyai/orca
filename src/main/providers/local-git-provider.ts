@@ -104,7 +104,9 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
     abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),
     checkoutBranch: (worktreePath, branch, creation) =>
-      checkoutBranch(worktreePath, branch, interactive, creation),
+      creation
+        ? checkoutBranch(worktreePath, branch, interactive, creation)
+        : checkoutBranch(worktreePath, branch, interactive),
     listLocalBranches: (worktreePath) => listLocalBranches(worktreePath, base),
     getBranchCompare: (worktreePath, baseRef, compareOptions) =>
       getBranchCompare(worktreePath, baseRef, {
