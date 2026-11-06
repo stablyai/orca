@@ -2,6 +2,16 @@ import type { AiVaultSearchHit, AiVaultSearchStatus } from './ai-vault-search-ty
 
 export type SessionSearchTransport = 'ipc' | 'runtime' | 'relay'
 
+/**
+ * Undefined is a same-machine caller. Paired desktops hold workspace grants and already read
+ * these fields from the session list; phones stay redacted.
+ */
+export function sessionSearchTransportForClient(
+  clientKind: 'mobile' | 'runtime' | undefined
+): SessionSearchTransport {
+  return clientKind === 'mobile' ? 'relay' : 'runtime'
+}
+
 export function redactForTransport(
   hit: AiVaultSearchHit,
   transport: SessionSearchTransport

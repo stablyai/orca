@@ -28,6 +28,7 @@ import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-re
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
+import { useFileListWorktree } from '@/store/selectors'
 import { isQuickOpenQueryTooLarge } from '../quick-open-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'
@@ -96,9 +97,7 @@ function TabBarCreateEntrySession({
   )
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
   // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
-  const worktreePath = useAppStore((state) =>
-    menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
-  )
+  const worktreePath = useFileListWorktree(menuOpen ? worktreeId : null)?.path ?? null
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   const searchEngine = useAppStore(
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE

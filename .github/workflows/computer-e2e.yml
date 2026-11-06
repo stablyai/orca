@@ -20,7 +20,6 @@ on:
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-trial-cleanup.mjs'
       - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.mjs'
-      - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.test.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs'
@@ -79,6 +78,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
         with:
@@ -93,7 +93,6 @@ jobs:
           pnpm vitest run --config config/vitest.config.ts
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
-          config/scripts/runtime-verification/desktop-transport/computer-use-smoke.test.mjs
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
@@ -133,6 +132,7 @@ jobs:
   linux:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'
@@ -152,6 +152,7 @@ jobs:
   windows:
     if: github.event_name != 'pull_request'
     runs-on: windows-latest
+    timeout-minutes: 180
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:

@@ -145,11 +145,22 @@ export function buildMirroredTerminalTabs(
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
+    // A host window that resolves the session name is its only writer (null clears); a headless or older host's name is a saved cache, so the client resolves its own.
+    const hostResolvesSessionTitle = activeSurface.resolvesSessionTitle === true
+    const sessionTitle = hostResolvesSessionTitle
+      ? activeSurface.aiVaultTitle?.title.trim()
+        ? activeSurface.aiVaultTitle
+        : null
+      : existing?.aiVaultTitle
+    // The host's titles rank its session names in, so when it clears a name none of the retained ones is a safe placeholder.
+    const sessionNameCleared = hostResolvesSessionTitle && !sessionTitle && !!existing?.aiVaultTitle
     // Idle headless panes publish default Terminal; retain known title until a ready surface supplies one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
     const hostTitleIsPlaceholder =
       hostTitle === '' || (activeSurface.status === 'pending-handle' && hostTitle === 'Terminal')
-    const retainedTitle = existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
+    const retainedTitle = sessionNameCleared
+      ? ''
+      : existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
     const title = normalizeCompatibleAgentTitleForOwner(
       (hostTitleIsPlaceholder ? retainedTitle || hostTitle : hostTitle) || 'Terminal',
       ownerRecord?.agent,
@@ -180,7 +191,8 @@ export function buildMirroredTerminalTabs(
         defaultTitle: existing?.defaultTitle ?? title,
         // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
-        ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
+        ...(sessionTitle ? { aiVaultTitle: sessionTitle } : {}),
+        ...(hostResolvesSessionTitle ? { sessionTitleFromHost: true as const } : {}),
         // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),

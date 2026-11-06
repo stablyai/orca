@@ -8,13 +8,13 @@ import { revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import {
   admitPairedCreateColors,
   getTerminalViewerColors
 } from '../view/terminal-view-attribute-store'
-import { resolveTerminalPresentation } from '../../orca-runtime-core'
+import { resolveTerminalPresentation } from './terminal-presentation'
 import {
   allocateTerminalPaneIdentity,
   materializedStablePaneReply

@@ -85,6 +85,8 @@ export function useTabGroupItemProjections({
             defaultTitle: terminalTab?.defaultTitle,
             quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
             generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
+            // Why: the strip re-resolves this title; without the session title the first-prompt title wins.
+            aiVaultTitle: item.aiVaultTitle ?? terminalTab?.aiVaultTitle ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,

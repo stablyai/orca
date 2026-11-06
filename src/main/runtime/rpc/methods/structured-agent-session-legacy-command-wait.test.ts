@@ -1,16 +1,17 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId,
   hostTestMessage
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,

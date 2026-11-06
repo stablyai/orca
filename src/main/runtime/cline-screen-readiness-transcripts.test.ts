@@ -14,7 +14,7 @@ import {
   describeScreenRuledAgentTranscripts,
   readsIdleComposer
 } from './screen-ruled-agent-transcript-suite'
-import { RuntimeMachineName } from './runtime-machine-name'
+import { RuntimeMachineName } from './hosts/platform-probe/runtime-machine-name'
 import { GROK_STARTUP_PTY_TRACE } from '../../shared/__fixtures__/grok-startup-pty-trace'
 import { waitForWorkerStartComposer } from './terminal/wait/launched-agent-composer-readiness'
 import { readFileSync } from 'node:fs'

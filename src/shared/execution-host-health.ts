@@ -42,7 +42,11 @@ export function getExecutionHostHealthLabel(
     case 'connecting':
       return 'Connecting'
     case 'blocked':
-      return blockedReason === 'access-revoked' ? 'Re-pair needed' : 'Update needed'
+      return blockedReason === 'access-revoked'
+        ? 'Re-pair needed'
+        : blockedReason === 'server-replaced'
+          ? 'Different server'
+          : 'Update needed'
     case 'disconnected':
       return 'Disconnected'
     case 'error':

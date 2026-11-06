@@ -13,8 +13,8 @@ import type {
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
-import { withTimeout } from '../../runtime-async-boundaries'
-import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../../orca-runtime-core'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/worker-provider-session'

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { deleteWorktreeHistoryDirMock } from '../orca-runtime-test-mocks/setup.spec'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,

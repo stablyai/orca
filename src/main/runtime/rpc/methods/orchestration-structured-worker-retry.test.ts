@@ -3,9 +3,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { CodexAppServerRequestError } from '../../../codex/app-server/codex-app-server-request-error'
 import { codexStartFailure } from '../../../codex/app-server/codex-startup-outcome'
 import { OrchestrationDb } from '../../orchestration/db'
@@ -15,7 +15,7 @@ import {
 } from './orchestration-structured-worker-session'
 import { deliverWorkerDispatchPreamble } from './orchestration/worker/deliver-worker-dispatch-preamble'
 import { tearDownFailedWorkerStart } from './orchestration/worker/failed-worker-start-teardown'
-import { structuredWorkerIdentities } from '../../structured-worker-identity'
+import { structuredWorkerIdentities } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { rpcContext, runtimeStub } from './agent-launch.test-fixture'
 
 let rig: RestTestRig

@@ -1,4 +1,4 @@
-import { MOBILE_RPC_METHOD_ROUTES } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-routing'
+import { MOBILE_RPC_METHOD_ROUTES } from '../../../src/main/runtime/rpc/server/runtime-rpc-mobile-method-routing'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { createElement } from 'react'

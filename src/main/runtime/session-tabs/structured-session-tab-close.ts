@@ -1,3 +1,4 @@
+import { retireMobileSessionTabSelection } from './mobile-session-tab-selection'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
@@ -12,11 +13,11 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
-import type { BrowserSessionTabSelectionOptions } from '../browser-tab-create-publication'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { applyBrowserSessionTabSelection } from '../browser-session-tab-selection-snapshot'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
+import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { applyBrowserSessionTabSelection } from '../browser/tabs/browser-session-tab-selection-snapshot'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   chatTabId,
   withChatTabChanges,
@@ -167,20 +168,15 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       return savedTabClosed
     }
     const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== retiredTab.id)
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserClose(snapshot),
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: active?.id ?? null,
-      activeTabType: active?.type ?? null,
-      tabGroups: (snapshot.tabGroups ?? []).map((group) => ({
-        ...group,
-        tabOrder: group.tabOrder.filter((id) => id !== retiredTab.id),
-        activeTabId: group.activeTabId === retiredTab.id ? null : group.activeTabId
-      })),
-      tabs: nextTabs
-    }
+    const nextSnapshot = retireMobileSessionTabSelection(
+      {
+        ...snapshot,
+        publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserClose(snapshot),
+        snapshotVersion: snapshot.snapshotVersion + 1
+      },
+      nextTabs,
+      new Set([retiredTab.id, retiredTab.browserWorkspaceId])
+    )
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return true
@@ -241,25 +237,24 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   }
 
   /** Saves a chat's tab in a windowless host's layout, where it is listed from once read there. */
-  protected saveWindowlessAgentSessionTab(
+  protected async saveWindowlessAgentSessionTab(
     worktreeId: string,
     chat: Pick<ChatPublication, 'sessionId' | 'agent' | 'placement' | 'tabId'> & {
       eligible?: () => boolean
     }
-  ): Promise<void> {
+  ): Promise<boolean> {
     const tabId = chat.tabId ?? chatTabId(chat.sessionId)
-    return this.changeWindowlessChatTabs(
-      worktreeId,
-      [{ open: { ...chat, tabId } }],
-      () =>
+    let attempted = false
+    await this.changeWindowlessChatTabs(worktreeId, [{ open: { ...chat, tabId } }], () => {
+      const session = this.getWorkspaceSessionForWorktree(worktreeId)
+      const eligible =
+        !!session &&
         chat.eligible?.() !== false &&
-        windowlessStructuredSessionTabSaveEligible(
-          chat.sessionId,
-          tabId,
-          this.getWorkspaceSessionForWorktree(worktreeId),
-          worktreeId
-        )
-    )
+        windowlessStructuredSessionTabSaveEligible(chat.sessionId, tabId, session, worktreeId)
+      attempted ||= eligible
+      return eligible
+    })
+    return attempted
   }
 
   captureStructuredAgentSessionPresentation(sessionId: string) {

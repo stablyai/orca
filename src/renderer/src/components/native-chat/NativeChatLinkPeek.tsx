@@ -5,7 +5,7 @@ import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
 
-/** Hover or focus a link to preview it: its own repo's PRs and issues, or what a web page says about itself. */
+/** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
 export function NativeChatLinkPeek({
   href,
   children
@@ -15,18 +15,26 @@ export function NativeChatLinkPeek({
 }): ReactNode {
   const { githubRepo, webPreviews } = useContext(NativeChatLinkPeekContext)
   const body = useMemo(() => {
-    const githubLink = href ? resolveGitHubPeekLink(githubRepo, href) : null
-    if (githubRepo && githubLink) {
-      return <NativeChatGitHubPeekBody key={href} repo={githubRepo.repo} link={githubLink} />
-    }
     const webUrl = webPreviews ? previewableWebUrl(href) : null
-    return webUrl ? (
+    const webBody = webUrl ? (
       <NativeChatWebPeekBody
         key={webUrl}
         url={webUrl}
         runtimeEnvironmentId={webPreviews?.runtimeEnvironmentId ?? null}
       />
     ) : null
+    const github = href ? resolveGitHubPeekLink(githubRepo, href) : null
+    if (githubRepo && github) {
+      return (
+        <NativeChatGitHubPeekBody
+          key={href}
+          repo={githubRepo.repo}
+          link={github.link}
+          otherRepoFallback={github.ownRepo ? undefined : webBody}
+        />
+      )
+    }
+    return webBody
   }, [githubRepo, href, webPreviews])
   if (!body) {
     return children

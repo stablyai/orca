@@ -4,7 +4,6 @@ import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
@@ -40,7 +39,6 @@ export type NativeChatQuestionCardProps = {
   shouldFocus?: boolean
   /** Paste target while the card replaces the composer. */
   answerInputRef?: RefObject<HTMLTextAreaElement | null>
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }
 
 // Reserve a non-option index so single-select holds either an option or typed text.
@@ -64,8 +62,7 @@ export function NativeChatQuestionCard({
   onCancel,
   onCollapse,
   shouldFocus = false,
-  answerInputRef,
-  onLinkClick
+  answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
@@ -169,7 +166,6 @@ export function NativeChatQuestionCard({
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
-  useNativeChatQuestionKeys(cardRef, shouldFocus && !isSubmitting, q.options.length, pickOption)
 
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
@@ -187,6 +183,20 @@ export function NativeChatQuestionCard({
     autoAdvance.cancel()
     setIndex(questionIndex)
   }
+  useNativeChatQuestionKeys(
+    cardRef,
+    shouldFocus && !isSubmitting,
+    q.options.length,
+    pickOption,
+    (delta) => {
+      const next = index + delta
+      if (next < 0 || next >= total) {
+        return false
+      }
+      goTo(next)
+      return true
+    }
+  )
   const cancel = (): void => {
     autoAdvance.cancel()
     onCancel()
@@ -229,6 +239,7 @@ export function NativeChatQuestionCard({
               <button
                 key={i}
                 type="button"
+                data-native-chat-question-step
                 disabled={isSubmitting}
                 onClick={() => goTo(i)}
                 className={cn(
@@ -257,7 +268,6 @@ export function NativeChatQuestionCard({
             <NativeChatQuestionText
               data-testid="native-chat-question-card-title"
               content={q.question}
-              onLinkClick={onLinkClick}
               className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_p]:my-0 [&_p+p]:mt-2"
             />
             {collapse ? (

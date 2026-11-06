@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -33,7 +33,7 @@ type WorkerHost = Pick<
 const hostRef: { current: unknown } = { current: null }
 const createSpy = vi.fn()
 
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 vi.mock('./structured-agent-session-create', () => ({
@@ -46,8 +46,10 @@ const {
   sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
-const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
+const { structuredWorkerIdentities } =
+  await import('../../orchestration/terminal-authority/structured-sessions/structured-worker-identity')
+const { sealedChildEnv } =
+  await import('../../agent-session/environment/structured-session-child-env.test-support')
 
 function installHost(
   location: Pick<AgentSessionExecutionLocation, 'executionHostId' | 'wslDistro'> = {

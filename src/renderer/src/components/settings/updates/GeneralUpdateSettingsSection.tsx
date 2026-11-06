@@ -212,25 +212,34 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             </>
           )}
           {updateStatus.state === 'not-available' &&
-            (updateStatus.delayedUpdate
-              ? isDelayedUpdatePending(updateStatus.delayedUpdate, now)
-                ? translate(
-                    'settings.updateDelay.upToDateWithHeld',
-                    'You’re up to date. A newer release is on hold until {{date}}.',
-                    {
-                      date: formatUpdateDelayDate(
-                        Date.parse(updateStatus.delayedUpdate.availableAt)
-                      )
-                    }
-                  )
+            (updateStatus.unsupportedSystemUpdate
+              ? translate(
+                  'macosUpdateRequirement.settingsStatus',
+                  'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
+                  {
+                    version: updateStatus.unsupportedSystemUpdate.version,
+                    macos: updateStatus.unsupportedSystemUpdate.minimumMacosVersion
+                  }
+                )
+              : updateStatus.delayedUpdate
+                ? isDelayedUpdatePending(updateStatus.delayedUpdate, now)
+                  ? translate(
+                      'settings.updateDelay.upToDateWithHeld',
+                      'You’re up to date. A newer release is on hold until {{date}}.',
+                      {
+                        date: formatUpdateDelayDate(
+                          Date.parse(updateStatus.delayedUpdate.availableAt)
+                        )
+                      }
+                    )
+                  : translate(
+                      'settings.updateDelay.heldReleaseReady',
+                      'A newer release is ready. Check for updates to get it.'
+                    )
                 : translate(
-                    'settings.updateDelay.heldReleaseReady',
-                    'A newer release is ready. Check for updates to get it.'
-                  )
-              : translate(
-                  'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
-                  'You’re on the latest version.'
-                ))}
+                    'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
+                    'You’re on the latest version.'
+                  ))}
           {updateStatus.state === 'downloading' &&
             translate(
               'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',

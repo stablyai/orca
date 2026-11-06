@@ -635,11 +635,18 @@
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",
+      "rename": "Rename",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
       "deleteAnyway": "Delete Anyway"
+    },
+    "workspaceRenameSheet": {
+      "title": "Rename Workspace",
+      "emptyUsesBranch": "Leave empty to use the branch name.",
+      "emptyUsesFolder": "Leave empty to use the folder name.",
+      "failed": "Couldn't rename the workspace. {{reason}}"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -1087,7 +1094,7 @@
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
       "pairingTemporarilyUnavailable": "Pairing temporarily unavailable",
-      "updateDesktopHint": "Update desktop Orca and sign in to connect from anywhere",
+      "sameNetworkOnlyHint": "Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again",
       "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",
@@ -1316,7 +1323,16 @@
     },
     "markdownBlocks": {
       "copyCode": "Copy code",
-      "openImage": "Open image"
+      "openImage": "Open image",
+      "wrapLines": "Wrap lines",
+      "disableLineWrap": "Disable line wrap"
+    },
+    "markdownCallout": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"
@@ -1863,6 +1879,10 @@
       "previewFile": "Preview file {{name}}",
       "unavailable": "Unavailable on mobile"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copy Name",
+      "copyRelativePath": "Copy Relative Path"
+    },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
     },
@@ -1945,7 +1965,6 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
-      "editingAttributed": "Editing message · {{attribution}}",
       "editing": "Editing message"
     },
     "accessoryKeys": {
@@ -2154,13 +2173,8 @@
       "agent": "Agent"
     },
     "agentMessageAttribution": {
-      "messageFromUnnamed": "Message from an agent",
-      "fromUnnamed": "From an agent",
       "unnamedSender": "an agent",
-      "messageFromMore": "Message from {{sender}} +{{count}}",
-      "fromMore": "From {{sender}} +{{count}}",
-      "messageFrom": "Message from {{sender}}",
-      "from": "From {{sender}}"
+      "fromSender": "From"
     },
     "backgroundTask": {
       "monitoring": "Monitoring background tasks",
@@ -2173,6 +2187,7 @@
       "monitor": "Background monitor",
       "task": "Background task",
       "detailsUnavailable": "Task details are unavailable for this session.",
+      "outputFile": "Output: {{value0}}",
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agents",
       "countShell_one": "{{count}} shell",
@@ -2507,6 +2522,7 @@
       "backgroundTaskNotStopped": "The background task wasn't stopped.",
       "backgroundTasksNotStopped": "The background tasks weren't stopped.",
       "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "hostFault": "Orca ran into a problem, so this didn't go through.",
       "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
       "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
@@ -2531,6 +2547,8 @@
       "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
       "claudeEffortInvalid": "Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.",
       "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+      "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
+      "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
       "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -2764,6 +2782,11 @@
       "fileFailed": "Couldn't load file preview",
       "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
     },
+    "linkActionSheet": {
+      "openInOrca": "Open in Orca browser",
+      "openInBrowser": "Open in system browser",
+      "copyLink": "Copy link"
+    },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Waiting for desktop..."
     },
@@ -2783,6 +2806,11 @@
       "sendSteer": "Steer",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
+    },
+    "contextUsage": {
+      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
+      "title": "Context",
+      "estimated": "Estimated from the last response."
     },
     "composerAttachments": {
       "file": "File",
@@ -2931,13 +2959,16 @@
       "responding": "Agent is responding"
     },
     "message": {
-      "copyMessage": "Copy message"
+      "copyMessage": "Copy message",
+      "forkFromResponse": "Fork from this response",
+      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",
-      "selectText": "Select text"
+      "selectText": "Select text",
+      "rewind": "Rewind to here"
     },
     "notice": {
       "stoppedManually": "Stopped manually",
@@ -2947,7 +2978,10 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+      "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+      "forkedFrom": "Forked from",
+      "signIn": "Sign in",
+      "signInHint": "Opens a terminal on the computer running this chat"
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3011,6 +3045,13 @@
       "remote": "Orca on {{machine}} stopped while this response was in progress.",
       "canContinue": "You can continue in this conversation.",
       "unnamedServer": "the remote server"
+    },
+    "interruptedContinue": {
+      "failed": "Couldn't continue this chat. Try again, or send a message.",
+      "explanation": "Continue, and the agent first checks whether its last step finished."
+    },
+    "sendError": {
+      "dismiss": "Dismiss"
     },
     "toolActivity": {
       "count_one": "{{count}} tool call",
@@ -3083,7 +3124,14 @@
       "windowCredits": "extra usage",
       "reachedNamed": "{{agent}} hit its {{window}} limit.",
       "reached": "{{agent}} hit its usage limit.",
-      "resetsAt": "It resets at {{when}}."
+      "switchAccount": "Switch Account",
+      "autoContinueCancelFailed": "Couldn't cancel automatic continuation. Try again.",
+      "autoContinueCancel": "Don't continue",
+      "statusResetAt": "Reset at {{time}}",
+      "statusResetsAt": "Resets at {{time}}",
+      "statusContinuesShortly": "Orca continues shortly",
+      "statusContinuesThen": "Orca continues then",
+      "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
       "reconnecting": "Reconnecting…",
@@ -3091,7 +3139,18 @@
       "prompt": "Ask anything, @ to mention files, / for commands"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Close image"
+      "closeImage": "Close image",
+      "imageActions": "Image actions",
+      "copyImage": "Copy image",
+      "saveImage": "Save image",
+      "share": "Share…",
+      "imageCopied": "Image copied",
+      "imageSaved": "Image saved",
+      "copyFailed": "Couldn't copy image",
+      "saveFailed": "Couldn't save image",
+      "shareFailed": "Couldn't share image",
+      "photosAccessDenied": "Allow Orca to add photos in Settings",
+      "imageTooLarge": "This image is too large"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",
@@ -3163,8 +3222,54 @@
       "taskFromCoordinator": "Task from coordinator",
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
-      "messageFrom": "Message from",
-      "showMore": "Show more"
+      "messageFrom": "Message from"
+    },
+    "fork": {
+      "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
+      "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
+      "failed": "{{agent}} couldn't fork this chat. {{detail}}",
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} is reconnecting…",
+      "stopped": "{{hostName}} is stopped. Start it on your computer.",
+      "server": "The server",
+      "unavailable": "{{hostName}} isn't available from your phone. Open one of its projects on your computer."
+    },
+    "goal": {
+      "chip": "Goal",
+      "exitMode": "Exit goal mode",
+      "placeholder": "Describe your goal, define measurable outcomes for best results",
+      "pursuing": "Pursuing goal",
+      "set": "Goal set",
+      "paused": "Paused goal",
+      "blocked": "Goal blocked",
+      "limited": "Goal limited",
+      "clear": "Clear goal",
+      "expand": "Show full goal",
+      "collapse": "Hide full goal",
+      "attachmentsUnsupported": "Remove attachments before setting a goal.",
+      "pause": "Pause",
+      "resume": "Resume"
+    },
+    "rewind": {
+      "title": "Rewind to here?",
+      "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
+      "confirm": "Rewind",
+      "unsupported": "This chat can't go back to an earlier message.",
+      "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
+      "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+      "staleEpoch": "The conversation changed. Review the latest messages and try again.",
+      "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
+      "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
+      "providerRefused": "The agent couldn't go back to this message.",
+      "proofMismatch": "The agent's history didn't match this chat. Check the conversation before continuing.",
+      "outcomeUnknown": "Orca couldn't confirm whether the conversation went back to an earlier message. It checks before your next message is sent.",
+      "refused": "Orca couldn't go back to this message. Check the conversation before continuing.",
+      "unavailable": "Wait for the chat to finish connecting.",
+      "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
+      "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
+      "pending": "Wait for the conversation to go back to the earlier message."
     }
   },
   "sourceControl": {
@@ -3816,7 +3921,8 @@
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields",
       "loading": "Loading project…",
-      "noMatches": "No project items match."
+      "noMatches": "No project items match.",
+      "linkedPullRequestsOverflow": "+{{count}} more"
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",

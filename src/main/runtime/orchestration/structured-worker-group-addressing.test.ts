@@ -11,7 +11,7 @@ import type { RunningStructuredSession } from './structured-session-lineage'
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
@@ -24,7 +24,7 @@ const {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} = await import('../structured-worker-identity')
+} = await import('./terminal-authority/structured-sessions/structured-worker-identity')
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const RUNNING: RunningStructuredSession = {

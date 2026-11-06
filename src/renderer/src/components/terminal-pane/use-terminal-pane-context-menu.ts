@@ -112,8 +112,7 @@ export function useTerminalPaneContextMenu({
     }
     const panes = manager.getPanes()
     if (contextPaneIdRef.current !== null) {
-      const clickedPane = panes.find((pane) => pane.id === contextPaneIdRef.current) ?? null
-      return clickedPane
+      return panes.find((pane) => pane.id === contextPaneIdRef.current) ?? null
     }
     return manager.getActivePane() ?? panes[0] ?? null
   }, [managerRef])
@@ -127,6 +126,7 @@ export function useTerminalPaneContextMenu({
         paneTransportsRef,
         tabId,
         worktreeId,
+        cwd: fallbackCwd,
         forceBracketedMultilineTextPaste,
         onPasteError
       },

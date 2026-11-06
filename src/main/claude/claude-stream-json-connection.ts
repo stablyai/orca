@@ -23,7 +23,7 @@ import {
 import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
-import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 
 export { ClaudeControlRequestError }
 

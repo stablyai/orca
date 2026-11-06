@@ -9,7 +9,7 @@ import type {
   RuntimeOrchestrationEnvelope
 } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import { markEnvironmentUsed } from './environments'
+import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import type {
   sendWebSocketRequest,
@@ -58,7 +58,7 @@ export class RemoteRuntimeCompatGate {
         }
         this.noteVerifiedStatus(response.result)
         if (this.environmentSelector) {
-          markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+          recordRuntimeEnvironmentUsage(this.userDataPath, this.environmentSelector, {
             runtimeId: response._meta.runtimeId
           })
         }

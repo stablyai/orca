@@ -23,18 +23,18 @@ import {
   wslDistroForPath
 } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
-import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
+import type { BrowserExecutionHostKeyResolution } from '../browser/client-pages/runtime-browser-client-page-adoption'
 import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
 
 import {
   type ClientHostedBrowserRpcRoute,
   routeRuntimeBrowserClientAutomation
-} from '../runtime-browser-client-automation'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
+} from '../browser/client-pages/runtime-browser-client-automation'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
 import {
   routeDesktopBrowserBridgeRpc,
   type DesktopBrowserBridgeRoute
@@ -43,8 +43,8 @@ import {
   getDesktopBrowserBridgeRegistry,
   isDesktopBrowserBridgeHostEnabled
 } from '../desktop-browser-bridge/desktop-browser-bridge-registry'
-import { runtimeBrowserCommandsFactoryIsAvailable } from '../runtime-browser-commands-factory'
-import { hasPairedPageHost } from '../browser/browser-client-page-opening'
+import { runtimeBrowserCommandsFactoryIsAvailable } from '../browser/installation/runtime-browser-commands-factory'
+import { hasPairedPageHost } from '../browser/client-pages/browser-client-page-opening'
 import { resolveRemoteCliBrowserScopeSelector } from '../desktop-browser-bridge/remote-cli-browser-scope'
 import type { RpcContext } from '../rpc/core'
 

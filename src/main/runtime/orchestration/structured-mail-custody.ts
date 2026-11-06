@@ -7,7 +7,7 @@ import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import { structuredMailboxCustody } from './structured-session-mail-target'
 import { structuredMailFitsWhole } from './structured-mail-source'
-import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
+import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   orchestrationMailNotice,
   type AgentMessageSource

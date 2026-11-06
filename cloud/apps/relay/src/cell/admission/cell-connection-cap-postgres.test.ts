@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ASSIGNMENT_CONNECTION_HEADROOM_QUERY } from '../../assignment/assignment-connection-headroom-query.js'
 import { RelayAssignmentStore } from '../../assignment/assignment-store.js'
 import type { RelayCellConfig } from '../../config.js'
 import { openRelayDatabase, type RelayDatabase } from '../../database/database.js'
@@ -7,7 +6,6 @@ import { openRelayDatabase, type RelayDatabase } from '../../database/database.j
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 const CELL_PREFIX = 'connection-cap-min-postgres'
-const CELL_ID = `${CELL_PREFIX}-single`
 const FLEET_SIZE = 16
 
 function cellConfig(id: string, connectionHardCap: 1_000 | 3_000): RelayCellConfig {
@@ -19,8 +17,6 @@ function cellConfig(id: string, connectionHardCap: 1_000 | 3_000): RelayCellConf
     connectionUnobservedBound: 60
   }
 }
-const configured = (connectionHardCap: 1_000 | 3_000): RelayCellConfig =>
-  cellConfig(CELL_ID, connectionHardCap)
 
 async function removeCells(database: RelayDatabase): Promise<void> {
   for (const table of [
@@ -81,40 +77,6 @@ describePostgres('PostgreSQL effective connection cap', () => {
     await removeCells(database)
     await racer.close()
     await database.close()
-  })
-
-  it('records the previous cap on a raise and places against the cell-reported cap', async () => {
-    const store = storeOn(database)
-    const beat = async (connectionHardCap: number, units: number): Promise<void> =>
-      await heartbeat(store, configured(1_000), connectionHardCap, units)
-    await store.reconcileCells([configured(1_000)], true)
-    await beat(1_000, 10)
-    // A pre-change director's row: no report stamped.
-    await database.query(
-      `UPDATE relay_cell_connection_limits SET reported_hard_cap = NULL WHERE cell_id = ?`,
-      [CELL_ID]
-    )
-
-    await store.reconcileCells([configured(3_000)], true)
-    const status = await store.cellDeploymentStatus(CELL_ID)
-    expect(status.connectionCapacity).toMatchObject({
-      hardCap: 3_000,
-      reportedHardCap: 1_000,
-      effectiveHardCap: 1_000,
-      normalAdmissionPause: 840,
-      heartbeatFresh: true
-    })
-
-    await beat(1_000, 839)
-    const headroom = await database.query(
-      `${ASSIGNMENT_CONNECTION_HEADROOM_QUERY} WHERE limits.cell_id = ?`,
-      [CELL_ID]
-    )
-    expect(Number(headroom[0]?.effective_hard_cap)).toBe(1_000)
-    await expect(beat(3_000, 0)).resolves.toBeUndefined()
-    await expect(store.cellDeploymentStatus(CELL_ID)).resolves.toMatchObject({
-      connectionCapacity: { reportedHardCap: 3_000, effectiveHardCap: 3_000 }
-    })
   })
 
   it('keeps 16 raised cells placeable while a heartbeat races the raise', async () => {

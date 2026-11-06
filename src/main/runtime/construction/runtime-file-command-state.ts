@@ -17,9 +17,9 @@ import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtim
 import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
 import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
-import { ClientHostedBrowserRowPublisher } from '../client-hosted-browser-row-publication'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
+import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
 import {
   isChatScratchWorktreeId,
   resolveChatScratchSelectorFolder
@@ -30,12 +30,16 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import {
+  createBranchSwitchHost,
+  storeBackedBranchSwitchSources
+} from '../integrations/git/runtime-branch-switch-host'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 import { resolveNativeChatMediaPath } from '../../native-chat/native-chat-media-path'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -201,8 +205,24 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         return
       }
       store.setWorktreeMeta(target, { pushTarget })
-    }
+    },
+    ...createBranchSwitchHost({
+      getStore: () => this.store,
+      readAgentRows: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      readAgentPaneRows: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey) ?? [],
+      ptys: () => this.ptysById.values(),
+      paneOf: (pty) => this.paneOfPty(pty),
+      terminalHandlesOf: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
+      hasSyncedTab: (tabId) => this.tabs.has(tabId),
+      ...storeBackedBranchSwitchSources(() => this.store),
+      probeProcess: (paneKey) => this.checkHookAgentPresenceFn?.(paneKey) ?? Promise.resolve(null),
+      notifyBranchChanged: (repoId) => this.notifyBranchRenamed(repoId)
+    })
   })
+
+  protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
+
+  abstract notifyBranchRenamed(repoId: string): void
 
   /** Remote views consume raw bytes even with a hidden desktop; resync daemon marks so those streams are never thinned. */
   onRemoteTerminalViewPresenceChanged: ((ptyId: string) => void) | null = null

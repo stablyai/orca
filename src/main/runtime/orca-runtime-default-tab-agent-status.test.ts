@@ -7,7 +7,7 @@ import { createMinimalPersistedTerminalTab } from '../persistence/restoring-sess
 import { buildHeadlessMobileSessionTerminalTabs } from './terminal/surface/mobile-session-terminal-projection'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { provisionWorktreeTerminals } from './workspaces/startup/runtime-worktree-terminal-provisioning'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'

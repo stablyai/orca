@@ -12,14 +12,14 @@ import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from './terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { OrchestrationDb } from './db'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
+import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   structuredMailboxCustody,
   structuredSessionIdleEdgeMailboxes,

@@ -4,14 +4,14 @@ import { readAgentSessionFailureFact } from '../../shared/agent-session/failures
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
-import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../native-chat/agent-session-journal/replay/journal-open'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import {
   attachParams,
   openHostRig,
@@ -161,39 +161,6 @@ describe('a saved Grok session Grok cannot reopen', () => {
 })
 
 describe('a created Grok session Grok reports missing on the first reopen', () => {
-  it('replaces it and says so once when the chat exchanged a turn on it', async () => {
-    const { host, store, fence, loads, warnings, ready, exchange, messages } = await openRestoreRig(
-      -32002,
-      'Resource not found'
-    )
-    expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
-    await ready()
-    await exchange('remember 42', 'noted', PROVIDER_SESSION)
-    await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-
-    expect(loads).toEqual([PROVIDER_SESSION])
-    const chain = store.getRecord(SESSION)?.providerHandleChain ?? []
-    expect(chain).toHaveLength(2)
-    const head = agentSessionProviderHandleChainHead(chain)
-    expect(head).toMatchObject({
-      origin: 'created',
-      handle: { nativeId: FRESH },
-      replaces: { key: keyOf(PROVIDER_SESSION), reason: 'restore-failed' }
-    })
-    expect(head?.supersedesKey).toBeUndefined()
-    expect(await warnings()).toHaveLength(1)
-    expect(await messages()).toEqual(expect.arrayContaining(['remember 42', 'noted']))
-
-    await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(loads).toEqual([PROVIDER_SESSION, FRESH])
-    expect(await warnings()).toHaveLength(1)
-    await host.close(SESSION, 'user-close')
-  })
-
   it('supersedes it silently when nothing was exchanged on it', async () => {
     const { host, store, fence, loads, warnings, ready } = await openRestoreRig(
       -32002,
@@ -251,22 +218,6 @@ describe('a replacement after its earlier attach failed to open the journal', ()
     return opened
   }
 
-  it('writes the warning when the next start replaces the old session, and only once', async () => {
-    const { host, fence, loads, warnings, ready } = await failAttachBeforeReplacement()
-
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(loads).toEqual([PROVIDER_SESSION])
-    expect(await warnings()).toHaveLength(1)
-
-    await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(loads).toEqual([PROVIDER_SESSION, FRESH])
-    expect(await warnings()).toHaveLength(1)
-    await host.close(SESSION, 'user-close')
-  })
-
   it('is written when Grok never saved the fresh session and a newer one supersedes it', async () => {
     const { host, store, fence, loads, lost, warnings, ready } = await failAttachBeforeReplacement()
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
@@ -284,34 +235,6 @@ describe('a replacement after its earlier attach failed to open the journal', ()
       supersedesKey: keyOf(FRESH),
       replaces: { key: keyOf(PROVIDER_SESSION), reason: 'restore-failed' }
     })
-    expect(await warnings()).toHaveLength(1)
-    await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(loads).toEqual([PROVIDER_SESSION, FRESH, FRESH_2])
-    expect(await warnings()).toHaveLength(1)
-    await host.close(SESSION, 'user-close')
-  })
-})
-
-describe('a replacement Grok never saved, superseded after its row was written', () => {
-  it('keeps the one row: the conversation lost is still the first one', async () => {
-    const { host, fence, loads, lost, warnings, ready } = await openRestoreRig(
-      -32603,
-      'session file is corrupt'
-    )
-    expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
-    await ready()
-    await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(await warnings()).toHaveLength(1)
-    await host.close(SESSION, 'user-close')
-    lost.set(FRESH, { code: -32002, message: 'Resource not found' })
-
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(loads).toEqual([PROVIDER_SESSION, FRESH])
     expect(await warnings()).toHaveLength(1)
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })

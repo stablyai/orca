@@ -13,7 +13,7 @@ import {
 import {
   getRuntimeBrowserPageRegistry,
   type RuntimeBrowserClientPage
-} from './runtime-browser-page-registry'
+} from './browser/client-pages/runtime-browser-page-registry'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 await import('./orca-runtime-tests/runtime-test-module-registration.spec')
