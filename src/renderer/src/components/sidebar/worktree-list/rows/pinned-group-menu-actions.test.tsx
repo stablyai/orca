@@ -79,10 +79,11 @@ afterEach(() => {
   useAppStore.setState(initial, true)
 })
 
-function itemMenu() {
+function itemMenu(folderWorkspaceId: string | null = null) {
   return render(
     <PinnedWorktreeGroupMenuItems
       model={{
+        folderWorkspaceId,
         pinnedGroupWorktree: { ...worktree, hostId: 'local', isPinned: true },
         pinnedGroups: useAppStore.getState().settings?.pinnedGroups,
         pinnedGroupByWorktreeIdentity:
@@ -208,4 +209,9 @@ it('creates a group for the pinned ancestor after the descendant menu closes', a
       'local|parent': 'new-group'
     }
   })
+})
+
+it('keeps group actions off folder cards outside the Pinned worktree section', () => {
+  const view = itemMenu('folder-1')
+  expect(view.queryByRole('button', { name: 'Remove from group' })).toBeNull()
 })

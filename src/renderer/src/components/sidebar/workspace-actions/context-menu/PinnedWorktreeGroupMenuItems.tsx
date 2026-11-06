@@ -16,6 +16,7 @@ export function PinnedWorktreeGroupMenuItems({
 }: {
   model: Pick<
     WorktreeContextMenuModel,
+    | 'folderWorkspaceId'
     | 'pinnedGroupWorktree'
     | 'pinnedGroupByWorktreeIdentity'
     | 'pinnedGroups'
@@ -24,7 +25,7 @@ export function PinnedWorktreeGroupMenuItems({
   >
 }) {
   const t = useTranslate()
-  const worktree = model.pinnedGroupWorktree
+  const worktree = model.folderWorkspaceId ? null : model.pinnedGroupWorktree
   if (!worktree) {
     return null
   }
