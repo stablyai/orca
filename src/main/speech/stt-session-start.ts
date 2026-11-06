@@ -165,7 +165,7 @@ async function startSttSession(
   } catch (error) {
     cleanupActiveSttWorkerLifecycleListeners(state)
     worker.removeAllListeners()
-    void worker.terminate()
+    void state.audioPending.terminateWorker(worker).catch(() => undefined)
     if (state.worker === worker) {
       handleSttWorkerFailure(state)
     }
