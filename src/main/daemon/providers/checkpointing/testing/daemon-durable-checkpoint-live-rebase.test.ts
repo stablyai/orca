@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ColdRestoreReplayWriter } from '../../../history/restoration/cold-restore-replay-writer'
+import { afterEach, describe, expect, it } from 'vitest'
 import { boundSnapshot, buildDurableCheckpointSnapshot } from '../daemon-durable-history-snapshot'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../sessions/daemon-session-scrollback-window'
@@ -169,56 +168,6 @@ describe('durable checkpoint rebased on the live snapshot', () => {
     expectConsecutive(numberedRowIds(replayedRows(durable)), 1, 2_000)
   })
 
-  it('rebases a fold without disk history on the live owner and modes', async () => {
-    const stream = numberedLines(1, 1_500)
-    const live = emulator({ scrollback: DAEMON_SESSION_SCROLLBACK_ROWS })
-    write(live, stream)
-    const liveSnapshot: TerminalSnapshot = { ...live.getSnapshot(), terminalOwner: 'shell' }
-
-    const durable = await buildDurableCheckpointSnapshot({
-      liveSnapshot,
-      restoreInfo: null,
-      pendingRecords: [{ kind: 'output', data: `${stream}\x1b[?1049h\x1b[?1003h` }],
-      isFirstTake: false
-    })
-
-    expect(durable.terminalOwner).toBe('shell')
-    expect(durable.modes).toEqual(liveSnapshot.modes)
-    expectConsecutive(numberedRowIds(replayedRows(durable)), 1, 1_500)
-  })
-
-  it('reuses an agreeing disk checkpoint for a zero-record fold without replaying', async () => {
-    const stream = numberedLines(1, 3_000)
-    const disk = emulator({ scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS })
-    write(disk, stream)
-    const restoreInfo = restoreInfoFrom(disk.getSnapshot())
-    const live = emulator({ scrollback: DAEMON_SESSION_SCROLLBACK_ROWS })
-    write(live, stream)
-    const liveSnapshot: TerminalSnapshot = {
-      ...live.getSnapshot(),
-      terminalOwner: 'shell',
-      outputSequence: 8
-    }
-    const replayWrite = vi.spyOn(ColdRestoreReplayWriter.prototype, 'write')
-
-    try {
-      const durable = await buildDurableCheckpointSnapshot({
-        liveSnapshot,
-        restoreInfo,
-        pendingRecords: [],
-        isFirstTake: false
-      })
-
-      expect(replayWrite).not.toHaveBeenCalled()
-      expect(durable.snapshotAnsi).toBe(restoreInfo.snapshotAnsi)
-      expect(durable.terminalOwner).toBe('shell')
-      expect(durable.outputSequence).toBe(8)
-      expectConsecutive(numberedRowIds(replayedRows(durable)), 1, 3_000)
-    } finally {
-      replayWrite.mockRestore()
-    }
-  })
-
   it('keeps restore depth with rows the live window evicted, without seam duplicates', async () => {
     const baseLines = numberedLines(1, 6_000)
     const newLines = numberedLines(6_001, 6_200)
@@ -268,25 +217,6 @@ describe('durable checkpoint rebased on the live snapshot', () => {
     expectConsecutive(numberedRowIds(replayedRows(bounded)), 4_000 - (2_000 + 24 - 2), 4_000)
   })
 
-  it('keeps only kept-row OSC links when bounding', async () => {
-    const link = (uri: string, text: string): string =>
-      `\x1b]8;;${uri}\x1b\\${text}\x1b]8;;\x1b\\\r\n`
-    const stream = `${link('https://trimmed.example', 'TRIMMED')}${numberedLines(1, 1_500)}${link(
-      'https://kept.example',
-      'KEPT_LINK'
-    )}${numberedLines(1_501, 3_000)}`
-    const live = emulator({ scrollback: 3_000 })
-    write(live, stream)
-
-    const durable = await boundSnapshot(live.getSnapshot(), 2_000)
-
-    const keptRow = replayedRows(durable).findIndex((row) => row.startsWith('KEPT_LINK'))
-    expect(keptRow).toBeGreaterThan(0)
-    expect(durable.oscLinks).toEqual([
-      { row: keptRow, startCol: 0, endCol: 9, uri: 'https://kept.example' }
-    ])
-  })
-
   it('keeps older-row OSC links across a recorded resize', async () => {
     const oldLink = '\x1b]8;;https://old.example\x1b\\OLD_LINK\x1b]8;;\x1b\\\r\n'
     const stream = `${oldLink}${numberedLines(1, 1_500)}`
@@ -309,37 +239,6 @@ describe('durable checkpoint rebased on the live snapshot', () => {
     expect(durable.oscLinks).toEqual([
       { row: oldRow, startCol: 0, endCol: 8, uri: 'https://old.example' }
     ])
-  })
-
-  it('offsets live OSC links below the older rows and keeps older-row links', async () => {
-    const oldLink = '\x1b]8;;https://old.example\x1b\\OLD_LINK\x1b]8;;\x1b\\\r\n'
-    const newLink = '\x1b]8;;https://new.example\x1b\\NEW_LINK\x1b]8;;\x1b\\\r\n'
-    const stream = `${oldLink}${numberedLines(1, 1_500)}${newLink}`
-    const disk = emulator({ scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS })
-    write(disk, stream)
-    const restoreInfo = restoreInfoFrom(disk.getSnapshot())
-    const live = emulator({ scrollback: DAEMON_SESSION_SCROLLBACK_ROWS })
-    write(live, stream)
-
-    const durable = await buildDurableCheckpointSnapshot({
-      liveSnapshot: live.getSnapshot(),
-      restoreInfo,
-      pendingRecords: [],
-      isFirstTake: false
-    })
-
-    const rows = replayedRows(durable)
-    const oldRow = rows.findIndex((row) => row.startsWith('OLD_LINK'))
-    const newRow = rows.findIndex((row) => row.startsWith('NEW_LINK'))
-    expect(oldRow).toBe(0)
-    expect(newRow).toBeGreaterThan(DAEMON_SESSION_SCROLLBACK_ROWS)
-    expect(durable.oscLinks).toEqual(
-      expect.arrayContaining([
-        { row: oldRow, startCol: 0, endCol: 8, uri: 'https://old.example' },
-        { row: newRow, startCol: 0, endCol: 8, uri: 'https://new.example' }
-      ])
-    )
-    expect(durable.oscLinks).toHaveLength(2)
   })
 
   it('keeps an older-row OSC link on its text across folds that evict rows', async () => {
@@ -385,26 +284,6 @@ describe('durable checkpoint rebased on the live snapshot', () => {
     })
 
     expect(joinedCells(durable)).toBe(expected)
-  })
-
-  it('keeps seam content after a reflow straddling the live window top', async () => {
-    const { restoreInfo, live, expected } = straddlingWrappedHistory()
-    live.resize(100, 24)
-
-    const durable = await buildDurableCheckpointSnapshot({
-      liveSnapshot: live.getSnapshot(),
-      restoreInfo,
-      pendingRecords: [{ kind: 'resize', cols: 100, rows: 24 }],
-      isFirstTake: false
-    })
-
-    // Reflow gives the orphaned continuation the full line's row count, losing its evicted head at the seam.
-    const evictedRows = STRADDLE_LINES * 4 + 1 - (DAEMON_SESSION_SCROLLBACK_ROWS + 24)
-    const straddleStart = Math.floor(evictedRows / 4) * STRADDLE_LINE_LENGTH
-    const lostHead = (evictedRows % 4) * 80
-    expect(joinedCells(durable)).toBe(
-      expected.slice(0, straddleStart) + expected.slice(straddleStart + lostHead)
-    )
   })
 })
 

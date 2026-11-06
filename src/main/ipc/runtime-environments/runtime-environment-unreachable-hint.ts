@@ -6,7 +6,7 @@ const UNREACHABLE_RE =
   /could not connect to the remote orca runtime|remote orca runtime closed the connection|timed out (?:waiting for|while connecting to) the remote orca runtime/i
 
 export function withRuntimeUnreachableHint(
-  environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment'>,
+  environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment' | 'sshAccess'>,
   message: string,
   endpoint: string | null | undefined
 ): string {
@@ -14,6 +14,9 @@ export function withRuntimeUnreachableHint(
   switch (host.kind) {
     case 'network':
       return withRemoteRuntimeTailscaleHint(message, endpoint)
+    case 'ssh':
+      // An SSH tunnel already crosses networks; Tailscale cannot help it.
+      return message
     case 'wsl':
       // WSL is reached locally through wsl.exe; a Tailscale hint cannot help.
       return UNREACHABLE_RE.test(message)

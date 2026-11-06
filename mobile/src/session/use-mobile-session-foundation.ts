@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -76,11 +76,9 @@ export function useMobileSessionFoundation() {
       dockWidth: HOST_DOCK_MIN_WIDTH
     })
   // Clear dock selection when rotation makes it too narrow so it cannot survive into push/overlay layout.
-  useEffect(() => {
-    if (!canDockPanel && activePanel !== null) {
-      setActivePanel(null)
-    }
-  }, [canDockPanel, activePanel])
+  if (!canDockPanel && activePanel !== null) {
+    setActivePanel(null)
+  }
   // Gate hosted reviews on repo provider without paying for unused branch identity reads.
   const { isGithubRepo: prIsGithubRepo, repoLoaded: prRepoContextLoaded } =
     useMobilePrBranchContext({
@@ -90,11 +88,9 @@ export function useMobileSessionFoundation() {
       worktreeId,
       includeBranchIdentity: false
     })
-  useEffect(() => {
-    if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
-      setActivePanel(null)
-    }
-  }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
+  if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
+    setActivePanel(null)
+  }
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   return {
     hostId,

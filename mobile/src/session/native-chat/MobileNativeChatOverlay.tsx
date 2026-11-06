@@ -54,6 +54,8 @@ type Props = {
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
   hostName: string | null
+  /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
+  onOpenAccounts?: () => void
   /** Offered for tapped links; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
   /** Opens a host terminal tab in this chat's workspace running `command`. */
@@ -88,7 +90,8 @@ export function MobileNativeChatOverlay({
   hostName,
   onOpenUrlInOrca,
   onRunInTerminal,
-  hostOutage = null
+  hostOutage = null,
+  onOpenAccounts
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -198,6 +201,8 @@ export function MobileNativeChatOverlay({
       hostName,
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
+      usageLimit: controller.nativeChatUsageLimit,
+      ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
             continuation: {
@@ -211,7 +216,15 @@ export function MobileNativeChatOverlay({
           }
         : {})
     }),
-    [hostName, agent, continuation, onClearSendError, runInTerminal]
+    [
+      hostName,
+      agent,
+      continuation,
+      onClearSendError,
+      runInTerminal,
+      controller.nativeChatUsageLimit,
+      onOpenAccounts
+    ]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,

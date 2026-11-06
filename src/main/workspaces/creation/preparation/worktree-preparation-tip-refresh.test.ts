@@ -40,7 +40,8 @@ describe('prepared checkout tip refresh', () => {
       entry.preparedPath,
       'refs/remotes/origin/main',
       entry.lockReason,
-      { wslDistro: 'Ubuntu', signal: expect.any(AbortSignal) }
+      expect.objectContaining({ wslDistro: 'Ubuntu' }),
+      expect.anything()
     )
   })
 
@@ -79,10 +80,10 @@ describe('prepared checkout tip refresh', () => {
     try {
       await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
       const entry = listPreparations()[0]!
-      mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
-        signal = options.signal
+      mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, _options, operation) => {
+        signal = operation.signal
         return new Promise<void>((_resolve, reject) => {
-          options.signal.addEventListener('abort', () => reject(options.signal.reason), {
+          operation.signal.addEventListener('abort', () => reject(operation.signal.reason), {
             once: true
           })
         })
@@ -103,7 +104,7 @@ describe('prepared checkout tip refresh', () => {
       expect(mocks.discard).toHaveBeenCalledWith(
         repo.path,
         entry.preparedPath,
-        {},
+        expect.anything(),
         entry.lockReason
       )
       expect(listPreparations()).toEqual([])
@@ -116,10 +117,10 @@ describe('prepared checkout tip refresh', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     const entry = listPreparations()[0]!
     let signal: AbortSignal | undefined
-    mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
-      signal = options.signal
+    mocks.refreshTip.mockImplementationOnce((_repo, _path, _base, _lock, _options, operation) => {
+      signal = operation.signal
       return new Promise<void>((_resolve, reject) => {
-        options.signal.addEventListener('abort', () => reject(options.signal.reason), {
+        operation.signal.addEventListener('abort', () => reject(operation.signal.reason), {
           once: true
         })
       })
@@ -135,7 +136,12 @@ describe('prepared checkout tip refresh', () => {
     expect((await settled)[0]?.status).toBe('rejected')
     await flushBackgroundWork()
     expect(mocks.discard).toHaveBeenCalledOnce()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, entry.preparedPath, {}, entry.lockReason)
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      entry.preparedPath,
+      expect.anything(),
+      entry.lockReason
+    )
   })
 
   it('preserves a checkout whose lock was taken over', async () => {
@@ -150,7 +156,7 @@ describe('prepared checkout tip refresh', () => {
     expect(await consume()).toMatchObject({ status: 'miss', reason: 'none_armed' })
   })
 
-  it('serializes successive fetched tips and lets consume wait for the newest queued refresh', async () => {
+  it('waits only for the active refresh and skips the redundant queued one', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     const order: string[] = []
     let release!: () => void
@@ -182,7 +188,8 @@ describe('prepared checkout tip refresh', () => {
     release()
     const results = await Promise.all([first, second, create])
     expect(results[2]).toMatchObject({ status: 'hit' })
-    expect(order).toEqual(['first-tip', 'second-tip', 'finalize'])
+    expect(order).toEqual(['first-tip', 'finalize'])
+    expect(mocks.refreshTip).toHaveBeenCalledOnce()
     expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
   })
 

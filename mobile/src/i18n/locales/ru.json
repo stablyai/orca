@@ -613,7 +613,6 @@
     "usageLimit": {
       "reached": "{{agent}} достиг лимита использования.",
       "reachedNamed": "{{agent}} достиг лимита: {{window}}.",
-      "resetsAt": "Сброс: {{when}}.",
       "theAgent": "Агент",
       "windowCredits": "дополнительное использование",
       "windowSession": "на сессию",
@@ -691,6 +690,8 @@
     }
   },
   "common": {
+    "details": "Подробности",
+    "hideDetails": "Скрыть подробности",
     "back": "Назад",
     "cancel": "Отмена",
     "close": "Закрыть",
@@ -926,6 +927,13 @@
       "openImage": "Открыть изображение",
       "wrapLines": "Переносить строки",
       "disableLineWrap": "Выключить перенос строк"
+    },
+    "markdownCallout": {
+      "note": "Заметка",
+      "tip": "Совет",
+      "important": "Важно",
+      "warning": "Предупреждение",
+      "caution": "Осторожно"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
@@ -3453,7 +3461,8 @@
       "moreFields_one": "+{{count}} поле",
       "moreFields_other": "+{{count}} поля",
       "noItems": "В проекте нет элементов",
-      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "Ещё {{count}}"
     },
     "githubProjectPickers": {
       "add": "Добавить",
