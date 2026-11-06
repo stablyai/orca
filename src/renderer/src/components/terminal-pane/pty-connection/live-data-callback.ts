@@ -4,7 +4,7 @@ import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-d
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../input/paste/terminal-bracketed-paste'
 import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
-import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
+import { sendTerminalOscColorQueryReplies } from '../emulation/terminal-capability-replies'
 import { isDropSentinelMeta } from '../terminal-stream-position'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'

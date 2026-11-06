@@ -14,7 +14,7 @@ import {
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
-import { scheduleImagePasteWebglAtlasRecovery } from '../../terminal-webgl-atlas-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { createTerminalClipboardCopiedFiles } from '../../clipboard/terminal-clipboard-copied-files'
 import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboard-text'

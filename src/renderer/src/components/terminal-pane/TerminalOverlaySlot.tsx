@@ -7,7 +7,7 @@ import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal
 import TerminalPane from './TerminalPane'
 import type { HiddenTerminalPrewarm } from './terminal-pane-types'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import { shouldDeferParkedPtyExitTabClose } from './parking/output-watchers/terminal-parked-tab-watchers'
 
 type TerminalOverlaySlotProps = {
   terminalTabId: string

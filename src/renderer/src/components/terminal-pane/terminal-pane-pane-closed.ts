@@ -15,7 +15,7 @@ import {
   discardDeferredSplitPaneHandoffForKey
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
-import { clearTerminalFontSizeOverride } from './terminal-font-size-overrides'
+import { clearTerminalFontSizeOverride } from './appearance/terminal-font-size-overrides'
 
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
