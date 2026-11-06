@@ -132,8 +132,10 @@ it('consumes the audience when a separate mode is chosen before first display', 
   expect(screen.queryByText('App is now one project')).toBeNull()
 })
 
-vi.mock('../settings/WorkspaceDirectorySetting', () => ({ WorkspaceDirectorySetting: () => null }))
-vi.mock('../settings/OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
+vi.mock('../settings/general/WorkspaceDirectorySetting', () => ({
+  WorkspaceDirectorySetting: () => null
+}))
+vi.mock('../settings/general/OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
 const noChange = () => {}
 const loaded = async () => {}
 function SettingsDestination() {

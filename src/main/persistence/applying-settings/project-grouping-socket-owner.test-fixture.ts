@@ -21,7 +21,7 @@ import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-state/client
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/client-events/runtime-client-capabilities'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../runtime/rpc/methods/mobile-delivery/mobile-project-sections'
 import { STATUS_METHODS } from '../../runtime/rpc/methods/host-management/status'
-import { PAIRING_METHODS } from '../../runtime/rpc/methods/pairing'
+import { PAIRING_METHODS } from '../../runtime/rpc/methods/pairing/pairing'
 import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 /** Real encrypted owner; only delivery may be delayed or an old peer response substituted. */

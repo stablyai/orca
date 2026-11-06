@@ -20,7 +20,9 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
 vi.mock('@/components/agent/AgentCombobox', () => ({ default: () => null }))
-vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({ AddRemoteHostDialog: () => null }))
+vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
+  AddRemoteHostDialog: () => null
+}))
 vi.mock('@/components/sparse/SparseCheckoutPresetSelect', () => ({ default: () => null }))
 vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: () => <input aria-label="workspace name" />
