@@ -23643,6 +23643,7 @@
     "refresh": "Actualizar commits",
     "branchTag": "Rama / Etiqueta",
     "graph": "Grafo",
+    "resizeColumn": "Cambiar el tamaño de la columna del gráfico",
     "message": "Mensaje",
     "author": "Autor",
     "date": "Fecha",

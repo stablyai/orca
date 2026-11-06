@@ -22904,6 +22904,7 @@
     "refresh": "重新整理提交",
     "branchTag": "分支 / 標籤",
     "graph": "圖",
+    "resizeColumn": "調整圖形欄寬",
     "message": "訊息",
     "author": "作者",
     "date": "日期",

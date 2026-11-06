@@ -22955,6 +22955,7 @@
     "refresh": "刷新提交",
     "branchTag": "分支 / 标签",
     "graph": "图",
+    "resizeColumn": "调整图形列宽",
     "message": "消息",
     "author": "作者",
     "date": "日期",

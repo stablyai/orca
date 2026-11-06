@@ -22954,6 +22954,7 @@
     "refresh": "커밋 새로 고침",
     "branchTag": "브랜치 / 태그",
     "graph": "그래프",
+    "resizeColumn": "그래프 열 너비 조절",
     "message": "메시지",
     "author": "작성자",
     "date": "날짜",

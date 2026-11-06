@@ -22954,6 +22954,7 @@
     "refresh": "コミットを更新",
     "branchTag": "ブランチ / タグ",
     "graph": "グラフ",
+    "resizeColumn": "グラフ列の幅を変更",
     "message": "メッセージ",
     "author": "作成者",
     "date": "日付",

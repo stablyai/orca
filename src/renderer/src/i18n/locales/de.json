@@ -23236,6 +23236,7 @@
     "refresh": "Commits aktualisieren",
     "branchTag": "Branch / Tag",
     "graph": "Graph",
+    "resizeColumn": "Breite der Graphspalte ändern",
     "message": "Nachricht",
     "author": "Autor",
     "date": "Datum",

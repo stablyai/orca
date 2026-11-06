@@ -300,7 +300,7 @@ it('keeps an older selection, loaded depth and scroll through refresh', async ()
 })
 
 async function loadOlderHistory() {
-  const items = Array.from({ length: 200 }, (_, index) => ({
+  const items = Array.from({ length: 300 }, (_, index) => ({
     id: `commit-${index}`,
     subject: `Commit ${index}`,
     message: `Commit ${index}`,
@@ -311,7 +311,7 @@ async function loadOlderHistory() {
     refs: 'all',
     historyToken: 'pinned',
     items: items.slice(skip, skip + 50),
-    hasMore: skip < 150
+    hasMore: skip < 250
   })
   getHistory.mockReset().mockImplementation(async (_owner, options) => page(options.skip))
   await act(async () =>
@@ -335,14 +335,41 @@ async function loadOlderHistory() {
   return { controller, items, page }
 }
 
-it('bounds refresh to the loaded depth when the selected commit has vanished', async () => {
+it('keeps a selection pushed past the loaded depth with exactly one extra page', async () => {
+  const { controller, items } = await loadOlderHistory()
+  await act(async () => {
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Commit 149')!
+      .click()
+  })
+  const refreshed = [
+    { id: 'new-tip', subject: 'New commit', message: 'New commit', parentIds: [] },
+    ...items
+  ]
+  getHistory.mockImplementation(async (_owner, options) => ({
+    ...result,
+    refs: 'all',
+    historyToken: 'refreshed',
+    items: refreshed.slice(options.skip, options.skip + 50),
+    hasMore: true
+  }))
+  await act(async () => {
+    await controller.refresh()
+  })
+  expect(getHistory).toHaveBeenCalledTimes(4)
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(200)
+  expect(container.querySelector('[data-current="true"] button[title="Commit 149"]')).not.toBeNull()
+  expect(container.querySelector('aside h2')?.textContent).toBe('Commit 149')
+})
+
+it('bounds refresh to one extra page when the selected commit has vanished', async () => {
   const { controller, items } = await loadOlderHistory()
   const remaining = items.filter((item) => item.id !== 'commit-110')
   getHistory.mockImplementation(async (_owner, options) => ({
     ...result,
     refs: 'all',
     items: remaining.slice(options.skip, options.skip + 50),
-    hasMore: options.skip < 150
+    hasMore: options.skip < 250
   }))
   const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
   await act(async () => {
@@ -350,8 +377,8 @@ it('bounds refresh to the loaded depth when the selected commit has vanished', a
     controller.scrollOffset = 2400
     await controller.refresh()
   })
-  expect(getHistory).toHaveBeenCalledTimes(3)
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(getHistory).toHaveBeenCalledTimes(4)
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(200)
   expect(container.querySelector('[data-current="true"] button[title="Commit 0"]')).not.toBeNull()
   expect(container.querySelector('aside h2')?.textContent).toBe('Commit 0')
   expect(scroll.scrollTop).toBe(0)

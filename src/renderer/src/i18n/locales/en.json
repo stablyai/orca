@@ -23983,6 +23983,7 @@
     "refresh": "Refresh commits",
     "branchTag": "Branch / Tag",
     "graph": "Graph",
+    "resizeColumn": "Resize graph column",
     "message": "Message",
     "author": "Author",
     "date": "Date",

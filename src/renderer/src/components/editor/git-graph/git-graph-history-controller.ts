@@ -40,6 +40,7 @@ export function disposeGitGraphHistory(tabId: string): void {
 export class GitGraphHistoryController {
   readonly view = createStore<HistoryView>(() => ({ loading: false }))
   scrollOffset = 0
+  graphWidth = 132
   private scope: ReturnType<typeof gitGraphScope>
   private filter: GitHistoryRefs
   executionHostId: ExecutionHostId | undefined
@@ -57,8 +58,7 @@ export class GitGraphHistoryController {
     const file = state.openFiles.find((file) => file.id === `${worktreeId}::git-graph`)
     this.executionHostId =
       file?.operationProvenance?.generation.route.executionHostId ??
-      gitGraphScope(worktreeId, state)?.route.executionHostId ??
-      undefined
+      gitGraphScope(worktreeId, state)?.route.executionHostId
     this.scope = gitGraphScope(worktreeId, state, this.executionHostId)
     this.filter = filterFor(worktreeId)
   }
@@ -192,12 +192,9 @@ export class GitGraphHistoryController {
       return this.pending
     }
     const previous = this.view.getState().result
-    if (append && !previous?.hasMore) {
-      return Promise.resolve(previous)
-    }
     const context = this.scope
-    if (!context) {
-      return Promise.resolve(undefined)
+    if (!context || (append && !previous?.hasMore)) {
+      return Promise.resolve(context ? previous : undefined)
     }
     const generation = this.generation
     const targetDepth = previous?.items.length ?? 0
@@ -255,8 +252,11 @@ export class GitGraphHistoryController {
             }
           }
           accumulated = { ...page, items }
+          // One extra page catches a selection pushed past the loaded depth.
           if (
-            (!revealId && items.length >= targetDepth) ||
+            (!revealId &&
+              items.length >= targetDepth &&
+              (count >= targetDepth || ids.has(this.view.getState().selectedId ?? ''))) ||
             (revealId && (navigation !== this.navigation || ids.has(revealId))) ||
             !page.hasMore ||
             items.length === count

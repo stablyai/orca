@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw } from 'lucide-react'
@@ -24,7 +24,7 @@ const sameGroup = () => undefined
 
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const history = useGitGraphHistory(worktreeId)
-  const { result, scope } = history
+  const { result, scope, selectedId, revealId, controller } = history
   const workspaces = useGitGraphWorkspaces(scope)
   const rows = useMemo(
     () =>
@@ -49,17 +49,25 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
       ),
     [rows]
   )
-  const [graphWidth, setGraphWidth] = useState(132)
+  const [graphWidth, setGraphWidth] = useState(controller.graphWidth)
+  const [draftGraphWidth, setDraftGraphWidth] = useState(graphWidth)
+  const commitGraphWidth = useCallback(
+    (width: number) => {
+      controller.graphWidth = width
+      setGraphWidth(width)
+    },
+    [controller]
+  )
   const { containerRef: graphHeader, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: true,
     width: graphWidth,
     minWidth: 44,
     maxWidth: maxGraphWidth,
     deltaSign: 1,
-    setWidth: setGraphWidth,
-    onDraftWidthChange: setGraphWidth
+    setWidth: commitGraphWidth,
+    onDraftWidthChange: setDraftGraphWidth
   })
-  const columns = `160px ${graphWidth}px minmax(200px,1fr) 120px 100px`
+  const columns = `160px ${draftGraphWidth}px minmax(200px,1fr) 120px 100px`
   const scroll = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -69,7 +77,6 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     overscan: 12,
     getItemKey: (index) => rows[index]!.historyItem.id
   })
-  const { selectedId, revealId, controller } = history
   const selected = result?.items.find((item) => item.id === selectedId)
   useLayoutEffect(() => {
     if (scroll.current) {
@@ -124,7 +131,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
         <div className="flex min-w-0 flex-1 flex-col overflow-x-auto scrollbar-sleek">
           <div
             className="grid h-7 shrink-0 items-center border-b border-border px-3 text-2xs text-muted-foreground"
-            style={{ gridTemplateColumns: columns, minWidth: graphWidth + 604 }}
+            style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 604 }}
           >
             <span>{translate('gitGraph.branchTag', 'Branch / Tag')}</span>
             <div ref={graphHeader} className="relative flex h-full items-center">
@@ -133,19 +140,17 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                 role="separator"
                 tabIndex={0}
                 aria-orientation="vertical"
-                aria-label={translate('csv.resizeColumn', 'Resize column {{column}}', {
-                  column: 2
-                })}
+                aria-label={translate('gitGraph.resizeColumn', 'Resize graph column')}
                 aria-valuemin={44}
                 aria-valuemax={maxGraphWidth}
-                aria-valuenow={graphWidth}
+                aria-valuenow={draftGraphWidth}
                 className="absolute inset-y-0 right-0 w-2 cursor-col-resize hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 onMouseDown={onResizeStart}
-                onDoubleClick={() => setGraphWidth(132)}
+                onDoubleClick={() => commitGraphWidth(132)}
                 onKeyDown={(event) => {
                   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
                     event.preventDefault()
-                    setGraphWidth(
+                    commitGraphWidth(
                       Math.max(
                         44,
                         Math.min(maxGraphWidth, graphWidth + (event.key === 'ArrowLeft' ? -11 : 11))
@@ -153,10 +158,10 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                     )
                   } else if (event.key === 'Home') {
                     event.preventDefault()
-                    setGraphWidth(132)
+                    commitGraphWidth(132)
                   } else if (event.key === 'End') {
                     event.preventDefault()
-                    setGraphWidth(maxGraphWidth)
+                    commitGraphWidth(maxGraphWidth)
                   }
                 }}
               />
@@ -184,7 +189,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
           >
             <div
               className="relative min-w-max"
-              style={{ height: virtualizer.getTotalSize(), minWidth: graphWidth + 604 }}
+              style={{ height: virtualizer.getTotalSize(), minWidth: draftGraphWidth + 604 }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
                 const viewModel = rows[virtualRow.index]!

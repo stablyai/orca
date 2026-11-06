@@ -23616,6 +23616,7 @@
     "refresh": "Atualizar commits",
     "branchTag": "Branch / Tag",
     "graph": "Grafo",
+    "resizeColumn": "Redimensionar coluna do grafo",
     "message": "Mensagem",
     "author": "Autor",
     "date": "Data",
