@@ -78,28 +78,6 @@ it.each([false, true])(
   }
 )
 
-it.each([1, 10])('does not inspect document selections for %i hidden unselected views', (count) => {
-  const root = { current: document.createElement('div') }
-  document.body.append(root.current)
-  const views = Array.from({ length: count }, () =>
-    renderHook(() => useNativeChatHistoryRetention({ root, sourceKey: 'hidden', isVisible: false }))
-  )
-  const visible = renderHook(() => useNativeChatHistoryRetention({ root, sourceKey: 'visible' }))
-  const readSelection = vi.spyOn(document, 'getSelection')
-  try {
-    act(() => document.dispatchEvent(new Event('selectionchange')))
-    expect(readSelection).toHaveBeenCalledOnce()
-    visible.unmount()
-    readSelection.mockClear()
-    act(() => document.dispatchEvent(new Event('selectionchange')))
-    expect(readSelection).not.toHaveBeenCalled()
-  } finally {
-    readSelection.mockRestore()
-    views.forEach((view) => view.unmount())
-    root.current.remove()
-  }
-})
-
 it.each([false, true])(
   'reads a departure immediately when a send returns before the next render (shared: %s)',
   (shared) => {

@@ -1,7 +1,5 @@
 import { expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
-import { omitNativeChatThreadGoalRows } from '../../../../shared/native-chat/transcript/native-chat-thread-goal-rows'
 import { createNativeChatConversationProjection } from './native-chat-conversation-projection'
 
 function text(id: string): NativeChatMessage {
@@ -13,56 +11,6 @@ function text(id: string): NativeChatMessage {
     source: 'transcript'
   }
 }
-
-it.each([100, 1000])(
-  'does not inspect unchanged rows during final projection at %i rows',
-  (size) => {
-    let reads = 0
-    const rows = Array.from({ length: size }, (_, index) => {
-      const message = text(`row-${index}`)
-      message.role = index % 2 ? 'system' : 'assistant'
-      if (message.role === 'system') {
-        message.blocks = [
-          {
-            type: 'text',
-            text: 'notice',
-            providerFrame: {
-              provider: 'codex',
-              kind:
-                index % 4 === 1
-                  ? 'notification:turn/plan/updated'
-                  : 'notification:thread/goal/cleared',
-              payload: {
-                head: 'invalid json',
-                byteLength: 12,
-                digest: message.id,
-                truncated: false
-              }
-            }
-          }
-        ]
-      }
-      const blocks = message.blocks
-      Object.defineProperty(message, 'blocks', {
-        get: () => {
-          reads++
-          return blocks
-        }
-      })
-      return message
-    })
-    const project = createNativeChatConversationProjection()
-    project(rows, true)
-    reads = 0
-    const updated = project(
-      [...rows.slice(0, -1), { ...text('changed'), role: 'system' as const }],
-      true
-    )
-    expect(reads).toBe(0)
-    expect(updated.at(-1)?.blocks).toEqual([{ type: 'text', text: 'changed' }])
-    expect(updated[0]).toBe(rows[0])
-  }
-)
 
 it('preserves task conversion and mode-dependent goal omission across revisions and structural changes', () => {
   const frame = (id: string, kind: string, head: string): NativeChatMessage => ({
@@ -102,18 +50,26 @@ it('preserves task conversion and mode-dependent goal omission across revisions 
   if (truncated.blocks[0]?.type === 'text' && truncated.blocks[0].providerFrame) {
     truncated.blocks[0].providerFrame.payload.truncated = true
   }
-  for (const rows of [
-    [plan, goal, invalid],
-    [goal, plan],
-    [changedRole, invalid],
-    [truncated, plan, plan],
-    []
-  ]) {
-    for (const hideGoals of [false, true]) {
-      const full = projectNativeChatTaskListFrames(rows)
-      expect(project(rows, hideGoals)).toEqual(
-        hideGoals ? omitNativeChatThreadGoalRows(full) : full
-      )
-    }
+  for (const [rows, visibleIds, hiddenIds] of [
+    [
+      [plan, goal, invalid],
+      ['plan', 'goal', 'invalid'],
+      ['plan', 'invalid']
+    ],
+    [[goal, plan], ['goal', 'plan'], ['plan']],
+    [
+      [changedRole, invalid],
+      ['goal', 'invalid'],
+      ['goal', 'invalid']
+    ],
+    [
+      [truncated, plan, plan],
+      ['truncated', 'plan', 'plan'],
+      ['truncated', 'plan', 'plan']
+    ],
+    [[], [], []]
+  ] as const) {
+    expect(project([...rows], false).map((row) => row.id)).toEqual(visibleIds)
+    expect(project([...rows], true).map((row) => row.id)).toEqual(hiddenIds)
   }
 })

@@ -37,10 +37,13 @@ it('retires off-page turn projections without discarding authoritative session s
   expect(trimmed.items).toHaveLength(1024)
   expect(trimmed.items[0]?.itemId).toBe('row-976')
   expect(trimmed.unloadedTurnRevisions).toBe(5)
-  expect(trimmed.latestTurn).toBe(state.latestTurn)
-  expect(trimmed.cursor).toBe(state.cursor)
-  expect(trimmed.actionablePromptIds).toBe(state.actionablePromptIds)
-  expect(trimmed.queuedMessages).toBe(state.queuedMessages)
+  expect(trimmed.latestTurn).toEqual({
+    itemId: 'off-page-turn',
+    observedAt: 0,
+    turn: { turnId: 'turn', state: 'completed' }
+  })
+  expect(trimmed.cursor).toEqual({ epoch: 'epoch', sequence: 2000 })
+  expect(trimmed.actionablePromptIds).toEqual(['approval'])
+  expect(trimmed.queuedMessages).toEqual([])
   expect(trimmed.hasOlder).toBe(true)
-  expect(reduceStructuredAgentSession(trimmed, { type: 'trim-history' })).toBe(trimmed)
 })

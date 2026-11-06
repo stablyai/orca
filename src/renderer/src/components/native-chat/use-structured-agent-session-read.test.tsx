@@ -214,11 +214,10 @@ describe('useStructuredAgentSessionRead history window', () => {
     act(() => {
       oldRead = view.result.current.second.loadOlder()
     })
-    const cursor = view.result.current.first.state.cursor
     act(() => releaseSecond())
     expect(view.result.current.first.state.items).toHaveLength(1024)
     expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
-    expect(view.result.current.first.state.cursor).toBe(cursor)
+    expect(view.result.current.first.state.cursor).toEqual({ epoch: 'epoch-a', sequence: 4000 })
     expect(view.result.current.first.state.hasOlder).toBe(true)
     expect(view.result.current.first.loadingOlder).toBe(false)
     const releaseAgain = view.result.current.first.retainHistory()
@@ -288,7 +287,7 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.call).toHaveBeenCalledTimes(2)
     expect(mocks.subscribe.mock.calls[2]?.[1]).toEqual({
       sessionId: 'session-switch-a',
-      cursor: view.result.current.first.state.cursor
+      cursor: { epoch: 'epoch-a', sequence: 500 }
     })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
     const owner = getStructuredAgentSessionReadOwner('session-switch-a', LOCAL_TARGET)
