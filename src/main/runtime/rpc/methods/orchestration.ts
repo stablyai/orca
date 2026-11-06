@@ -1,3 +1,4 @@
+import { SESSION_LINK_METHODS } from './orchestration/session-link-methods'
 import { requiringOrcadFeature } from '../orcad-feature-readiness'
 import { ORCHESTRATION_CREW_METHODS } from './orchestration/crew-methods'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration/runs/runs'
@@ -15,6 +16,7 @@ import { ORCHESTRATION_CALLER_METHODS } from './orchestration/caller-show'
 
 // Every orchestration method reads the authority restored at startup.
 export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
+  ...SESSION_LINK_METHODS,
   ...ORCHESTRATION_CREW_METHODS,
   ...ORCHESTRATION_RUN_METHODS,
   ...ORCHESTRATION_WORKER_METHODS,

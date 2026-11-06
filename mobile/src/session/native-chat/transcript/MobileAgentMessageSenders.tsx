@@ -72,6 +72,15 @@ export function MobileAgentMessageSenders({
           </Fragment>
         )
       })}
+      {from.link ? (
+        <Text
+          pointerEvents={compact ? 'none' : undefined}
+          style={[styles.meta, compact && styles.compactLink]}
+          numberOfLines={compact ? 1 : 2}
+        >
+          {t('chat.agentMessage.sessionLink', 'Link')}: {from.link.title}
+        </Text>
+      ) : null}
       {more > 0 ? (
         <Text
           pointerEvents={compact ? 'none' : undefined}

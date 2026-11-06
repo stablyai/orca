@@ -1,0 +1,122 @@
+import { sessionLinkOwnerRequest } from '../../../../shared/session-link-wait'
+import type { NativeChatStructuredViewProps } from './native-chat-view-types'
+import { translate as t } from '@/i18n/i18n'
+import { SecuritySurface } from '@/components/ui/security-surface'
+import { Button } from '@/components/ui/button'
+import { SessionLinkOwnerDecision } from './SessionLinkOwnerDecision'
+import { sessionLinkStatus } from './session-link-presentation'
+import { useSessionLink } from './use-session-link'
+
+export function SessionLinkOwnerQuestion({
+  sessionId
+}: {
+  sessionId: string
+}): React.JSX.Element | null {
+  const state = useSessionLink(sessionId, { kind: 'local' }, false)
+  const snapshot = state.snapshot
+  const request = snapshot && sessionLinkOwnerRequest(snapshot.events)
+  if (
+    !snapshot ||
+    snapshot.link.state === 'ended' ||
+    (!request && snapshot.link.state !== 'paused')
+  ) {
+    return null
+  }
+  const unresolved = snapshot.events.some(
+    (event) => event.state === 'blocked' && event.retryable === false
+  )
+  return (
+    <SecuritySurface>
+      <details open className="shrink-0 border-t bg-card text-card-foreground">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+          {request
+            ? t('components.sessionLink.ownerQuestion', 'Question for you')
+            : t('components.sessionLink.paused', 'Paused')}{' '}
+          · {t('components.sessionLink.workTogether', 'Work together…')}
+        </summary>
+        <div className="max-h-80 space-y-2 overflow-y-auto px-3 pb-3 scrollbar-sleek">
+          <p className="text-xs text-muted-foreground">{snapshot.link.story}</p>
+          {!request ? (
+            <p role="status" className="text-sm">
+              {sessionLinkStatus(snapshot)}
+            </p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            {snapshot.link.participants.map((p) => `${p.agent} · ${p.name}`).join(' ↔ ')}
+          </p>
+          {state.error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {state.error}
+            </p>
+          ) : null}
+          {state.uncertain ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={state.busy}
+              onClick={() => void state.retry()}
+            >
+              {t('components.sessionLink.retry', 'Retry the unconfirmed action')}
+            </Button>
+          ) : null}
+          {unresolved ? (
+            <p className="text-sm">
+              {t(
+                'components.sessionLink.reviewBeforeContinue',
+                'Review the unconfirmed delivery before continuing'
+              )}
+            </p>
+          ) : null}
+          {request ? (
+            <SessionLinkOwnerDecision
+              key={request.id}
+              embedded
+              question={request.body}
+              disabled={state.busy || state.uncertain || unresolved}
+              atomic={state.policySupported}
+              onAnswer={(body) =>
+                state.policySupported
+                  ? state.mutate('orchestration.linkControl', {
+                      id: snapshot.link.id,
+                      version: snapshot.link.version,
+                      action: 'resume',
+                      ownerMessage: body
+                    })
+                  : state.mutate('orchestration.linkSend', {
+                      id: snapshot.link.id,
+                      body,
+                      kind: 'owner-note'
+                    })
+              }
+            />
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={state.busy || state.uncertain || unresolved}
+              onClick={() =>
+                void state.mutate('orchestration.linkControl', {
+                  id: snapshot.link.id,
+                  version: snapshot.link.version,
+                  action: 'resume'
+                })
+              }
+            >
+              {t('components.sessionLink.continue', 'Continue link')}
+            </Button>
+          )}
+        </div>
+      </details>
+    </SecuritySurface>
+  )
+}
+
+export function sessionLinkOwnerQuestion(
+  view: Pick<NativeChatStructuredViewProps, 'sessionId' | 'target' | 'isVisible' | 'agent'>
+): React.JSX.Element | null {
+  return view.isVisible &&
+    view.target.kind === 'local' &&
+    (view.agent === 'claude' || view.agent === 'codex') ? (
+    <SessionLinkOwnerQuestion sessionId={view.sessionId} />
+  ) : null
+}

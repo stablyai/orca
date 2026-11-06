@@ -5,6 +5,7 @@ import { deliverQuestionAnswer } from '../../../../orchestration/question-answer
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
 import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import {
   readMutationReplayNudge,
   stripMutationReplayNudge
@@ -66,6 +67,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       )
     }
 
+    assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, original.from_handle)
     const question = db.getQuestion(params.id)
     const creatorAnswerer =
       question && (params.run === undefined || params.run === question.run_id)
@@ -161,6 +163,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       originalFrom: original.from_handle,
       originalRunId: original.run_id
     })
+    assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, recipient.to)
     db.markAsRead([original.id])
     const reply = db.insertMessage({
       from: params.from ?? original.to_handle,

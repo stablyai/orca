@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { Link2, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -107,6 +107,7 @@ type SortableTabContextMenuProps = {
   onToggleViewMode?: () => void
   canSplitTerminal?: boolean
   nativeChat?: NativeChatTabSession
+  onWorkTogether?: () => void
 }
 
 export function SortableTabContextMenu({
@@ -130,7 +131,8 @@ export function SortableTabContextMenu({
   isChatView = false,
   onToggleViewMode,
   canSplitTerminal = true,
-  nativeChat
+  nativeChat,
+  onWorkTogether
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -175,6 +177,12 @@ export function SortableTabContextMenu({
             )}
           </ContextMenuItem>
         </>
+      ) : null}
+      {onWorkTogether ? (
+        <ContextMenuItem onSelect={onWorkTogether}>
+          <Link2 className="size-3.5 shrink-0" />
+          {translate('components.sessionLink.workTogether', 'Work together…')}
+        </ContextMenuItem>
       ) : null}
       <TabSessionSurfaceSwitchMenuItems
         key={sessionSwitchOpening}

@@ -1,8 +1,10 @@
+import { ORCHESTRATION_LINK_COMMAND_SPECS } from './orchestration-link-specs'
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
+  ...ORCHESTRATION_LINK_COMMAND_SPECS,
   {
     path: ['orchestration', 'run-create'],
     summary: 'Create and bind a lightweight orchestration Run',

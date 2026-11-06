@@ -627,7 +627,8 @@
     },
     "agentMessage": {
       "handedOffToAgent": "Передано агенту",
-      "startedAgent": "Агент запущен"
+      "startedAgent": "Агент запущен",
+      "sessionLink": "Связь"
     },
     "textAttachmentPreview": {
       "unreadableReply": "Не удалось прочитать ответ для вложения. Повторите попытку.",
