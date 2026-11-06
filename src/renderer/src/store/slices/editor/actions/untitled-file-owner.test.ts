@@ -148,3 +148,77 @@ it.each(['local', 'runtime:peer'] as const)(
     }
   }
 )
+
+it('creates a file through the runtime alias of a detected-only SSH worktree', async () => {
+  const store = setup('local')
+  seedStore(store, {
+    repos: [{ ...TEST_REPO, id: 'repo1', executionHostId: 'runtime:peer' }],
+    worktreesByRepo: {},
+    sshStateByEnvironment: new Map([
+      [
+        'peer',
+        {
+          connectionStates: new Map([
+            [
+              'box',
+              {
+                targetId: 'box',
+                status: 'connected',
+                connectionGeneration: 1,
+                error: null,
+                reconnectAttempt: 0,
+                remotePlatform: 'linux'
+              }
+            ]
+          ]),
+          targetLabels: new Map(),
+          targetGenerations: new Map(),
+          removedTargetLabels: new Map(),
+          targetsHydrated: true
+        }
+      ]
+    ]),
+    detectedWorktreesByRepo: {
+      repo1: makeDetectedResult('repo1', [
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          path: '/server/ssh-copy',
+          hostId: 'ssh:box',
+          runtimeOwnerEnvironmentId: 'peer'
+        })
+      ])
+    }
+  })
+  expect(store.getState().getKnownWorktreeById(id, 'runtime:peer')?.path).toBe('/server/ssh-copy')
+  const created = await createUntitledFileInActiveWorkspace(
+    store.getState,
+    'group',
+    async (context) => {
+      context.assertOperationCurrent()
+      expect(context).toMatchObject({
+        target: { kind: 'environment', environmentId: 'peer' },
+        expectedExecutionHostId: 'ssh:box',
+        expectedSshTargetId: 'box',
+        expectedSshConnectionGeneration: 1
+      })
+      return {
+        filePath: '/server/ssh-copy/untitled.md',
+        relativePath: 'untitled.md',
+        worktreeId: id,
+        language: 'markdown',
+        isUntitled: true,
+        mode: 'edit',
+        operationProvenance: context.operationProvenance
+      }
+    },
+    'Creation failed',
+    id,
+    'runtime:peer'
+  )
+  expect(created).toBe(true)
+  expect(store.getState().openFile).toHaveBeenCalledWith(
+    expect.objectContaining({ filePath: '/server/ssh-copy/untitled.md' }),
+    expect.anything()
+  )
+})

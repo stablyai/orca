@@ -320,3 +320,25 @@ test('page-wide create actions target the active split group', async ({ orcaPage
   await expect(selected.locator('[data-testid="sortable-tab"]')).toHaveCount(2)
   await expect(source.locator('[data-testid="sortable-tab"]')).toHaveCount(sourceCount)
 })
+
+test('unmounting an open create menu restores its empty active workspace', async ({ orcaPage }) => {
+  const id = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    const id = state.activeWorktreeId!
+    for (const tab of state.tabsByWorktree[id] ?? []) {
+      state.closeTab(tab.id, { reason: 'user' })
+    }
+    return id
+  })
+  const tabs = () =>
+    orcaPage.evaluate((id) => window.__store!.getState().tabsByWorktree[id]?.length ?? 0, id)
+  await expect.poll(tabs).toBe(0)
+  await worktreeRow(orcaPage, id)
+    .getByRole('button', { name: 'New tab', exact: true })
+    .click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeVisible()
+  await orcaPage.evaluate(() => window.__store!.getState().setSidebarOpen(false))
+  await expect(orcaPage.locator('[data-worktree-sidebar]')).toHaveCount(0)
+  await expect.poll(tabs).toBe(1)
+  await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(1)
+})

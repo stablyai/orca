@@ -1,6 +1,6 @@
 import { afterPendingWorkspaceTabs } from '@/runtime/layout-owner-pending-tabs'
 import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
-import { useState, useRef, useLayoutEffect } from 'react'
+import { useState, useRef, useLayoutEffect, useCallback } from 'react'
 import type { usePluginNewFiles } from '@/store/plugin-new-files'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { workspaceRootGroupId } from '../../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -105,6 +105,8 @@ function WorktreeCreateMenu({
   onClose: (restoreFocus: boolean) => void
   executionHostId: ExecutionHostId
 }): React.JSX.Element {
+  const mounted = useRef(false)
+  const closed = useRef(false)
   const menuOpen = useRef(true)
   const closeGeneration = useRef(0)
   const keyboardDismissal = useRef(false)
@@ -179,6 +181,31 @@ function WorktreeCreateMenu({
   useLayoutEffect(() => {
     menuOpen.current = controller.newTabMenuOpen
   }, [controller.newTabMenuOpen])
+  const clearFocus = controller.clearPendingNewTabMenuFocusOnUnmount
+  const triggerRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (!node) {
+        return
+      }
+      mounted.current = true
+      return () => {
+        mounted.current = false
+        closeGeneration.current++
+        clearFocus(null)
+        if (closed.current) {
+          return
+        }
+        void Promise.allSettled(pending.current).then(() =>
+          afterPendingWorkspaceTabs(worktreeId, () => {
+            if (!mounted.current) {
+              restoreWorktreeCreateMenuSurface(worktreeId, executionHostId)
+            }
+          })
+        )
+      }
+    },
+    [worktreeId, executionHostId, clearFocus]
+  )
   const plugins = usePluginNewFileMenuOptions(
     controller.createMenuOptions,
     controller.handleSelectCreateMenuOption,
@@ -199,7 +226,7 @@ function WorktreeCreateMenu({
         launchAgentFromNewTabEntry: (option) =>
           track(() => controller.launchAgentFromNewTabEntry(option))
       }}
-      trigger={<Trigger />}
+      trigger={<Trigger ref={triggerRef} />}
       onOpenChange={(open) => {
         menuOpen.current = open
         if (open) {
@@ -219,6 +246,7 @@ function WorktreeCreateMenu({
         void Promise.allSettled(pending.current).then(() =>
           afterPendingWorkspaceTabs(worktreeId, () => {
             if (generation === closeGeneration.current) {
+              closed.current = true
               onClose(restoreFocus)
             }
           })
