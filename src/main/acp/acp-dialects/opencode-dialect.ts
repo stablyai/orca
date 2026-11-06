@@ -102,6 +102,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
+  clientCapabilities: { elicitation: { form: {} } },
   effortChangesModel: true,
   normalizeToolUpdate,
   promptFailure

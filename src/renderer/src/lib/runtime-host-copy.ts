@@ -21,7 +21,9 @@ export function getExecutionHostHealthLabel(
     case 'blocked':
       return blockedReason === 'access-revoked'
         ? translate('runtime.health.repair', 'Re-pair needed')
-        : translate('runtime.health.update', 'Update needed')
+        : blockedReason === 'server-replaced'
+          ? translate('runtime.health.serverReplaced', 'Different server')
+          : translate('runtime.health.update', 'Update needed')
   }
 }
 

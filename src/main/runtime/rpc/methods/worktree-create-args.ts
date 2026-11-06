@@ -1,4 +1,5 @@
 import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
+import { callerLaunchSource } from '../../../agent-launch/agent-started-telemetry'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -28,6 +29,7 @@ export function buildManagedWorktreeCreateArgs(
   origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
   const viewerSupported = origin && terminalImageViewerSupported(origin)
+  const launchSource = callerLaunchSource(origin ?? {}, params.launchSource)
   // Why: another owner's provenance is a label only; this host's create policy stays as before.
   const hostAutomationCreate =
     provenance.automationProvenance !== undefined &&
@@ -110,13 +112,17 @@ export function buildManagedWorktreeCreateArgs(
       : undefined,
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
-    ...(params.launchSource ? { startupLaunchSource: params.launchSource } : {}),
+    ...(launchSource ? { startupLaunchSource: launchSource } : {}),
     startupDraft: params.startupDraft,
     lineage: {
       parentWorkspace: params.parentWorkspace,
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
+      ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
+      ...(params.crossStoreParentInferredFrom
+        ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }
+        : {}),
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
       ...(params.cwdParentAmbiguous === true
         ? { cwdParentAmbiguous: params.cwdParentAmbiguous }

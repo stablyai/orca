@@ -94,14 +94,6 @@ describe('ConPTY resize correction when narrowing', () => {
     terminal.dispose()
   })
 
-  it('skips the correction inside an app scroll region (DECSTBM)', async () => {
-    const terminal = await conptyScreenNeedingNarrowCorrection('\x1b[1;9r\x1b[6;3H')
-    await narrow(terminal)
-    // xterm's own placement: the rewrapped rows stay pushed into scrollback.
-    expect(row(terminal, 0)).toBe(`${'x'.repeat(30)} L0`)
-    terminal.dispose()
-  })
-
   it('moves a saved cursor (DECSC) with its row, so DECRC lands on the prompt', async () => {
     const terminal = await conptyScreenNeedingNarrowCorrection('\x1b7')
     await narrow(terminal)

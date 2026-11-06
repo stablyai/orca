@@ -1,3 +1,4 @@
+import { approvalDetailPreview } from './agent-session-approval-detail-preview'
 import { isPlanApprovalSubject } from './agent-session-approval-subject'
 import type { AgentJournalApprovalSubject } from './journal/agent-session-journal-types'
 
@@ -19,7 +20,7 @@ export function approvalBlockedPathToShow(approval: ApprovalCardText): string | 
   const forms = [path, JSON.stringify(path).slice(1, -1)]
   const drawn = isPlanApprovalSubject(approval.subject)
     ? [approval.subject.text, approval.subject.filePath]
-    : [approval.detail]
+    : [approval.detail === undefined ? undefined : approvalDetailPreview(approval.detail)]
   const shown = [approval.description, approval.decisionReason, ...drawn].some(
     (text) => text !== undefined && forms.some((form) => containsWholePath(text, form))
   )

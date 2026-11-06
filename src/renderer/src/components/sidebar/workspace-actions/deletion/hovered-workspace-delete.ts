@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget, isNativeChatPromptTarget } from '@/lib/editable-target'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,
@@ -56,7 +56,12 @@ export function resolveHoveredWorkspaceDeleteTarget(
   state: HoveredWorkspaceDeleteState,
   doc: HoveredWorkspaceDocument = document
 ): HoveredWorkspaceDeleteTarget | null {
-  if (state.activeModal !== 'none' || (doc.activeElement && isEditableTarget(doc.activeElement))) {
+  if (
+    state.activeModal !== 'none' ||
+    (doc.activeElement &&
+      isEditableTarget(doc.activeElement) &&
+      !isNativeChatPromptTarget(doc.activeElement))
+  ) {
     return null
   }
   const hovered = getHoveredWorkspaceIdentity(doc)

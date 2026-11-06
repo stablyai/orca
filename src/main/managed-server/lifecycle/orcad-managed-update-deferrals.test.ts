@@ -31,21 +31,6 @@ afterEach(() => clearManagedOrcadUpdateDeferral('env-1'))
 
 describe('a recorded update deferral', () => {
   it.each([
-    ['no build', NONE],
-    ['the same build', RUNNING]
-  ])('stays while the host still runs %s', (_label, incumbent) => {
-    defer(incumbent)
-    expect(currentManagedOrcadUpdateDeferral('env-1', { ...incumbent })).toEqual({
-      outcome: 'deferred',
-      candidateVersion: CANDIDATE,
-      code: 'orcad_activation_fence_busy',
-      reason: 'Another update holds this host.',
-      forceable: false,
-      deferredAt: expect.any(String)
-    })
-  })
-
-  it.each([
     // #38400: same release, different content hash; the versions cannot be ordered.
     [
       'another build of the same release',

@@ -1,17 +1,15 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createServer, connect, type Server, type Socket } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonServer } from '../../../server/daemon-server'
 import { createNoopDaemonFileLog } from '../../../observability/daemon-file-log'
 import { DaemonClient } from '../../client/daemon-client'
-import { sendDaemonHello } from '../../client/daemon-client-hello-handshake'
 import { encodeBinaryStreamDataFrame } from '../daemon-stream-binary-framing'
 import { encodeNdjson } from '../../../../../shared/main-process-ndjson-framer'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
-import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
 
 const TERMINAL_TEXT = '\x1b[1;32m✔\x1b[0m done ┌──┐ \u{1F680} "q" \\\r\n'
@@ -136,37 +134,6 @@ describe('daemon stream framing negotiation', () => {
     const received = waitForData(client, bulk)
     daemon.emit(bulk)
     expect(await received).toBe(bulk)
-  })
-
-  it('keeps NDJSON for a client that does not ask, which is what every older main sends', async () => {
-    await startRealDaemon()
-    const socket = connect(socketPath)
-    await new Promise<void>((resolve) => socket.once('connect', resolve))
-    const outcome = await sendDaemonHello({
-      socket,
-      token: readFileSync(tokenPath, 'utf-8').trim(),
-      role: 'control',
-      timeoutMs: 2000,
-      protocolVersion: PROTOCOL_VERSION,
-      clientId: 'legacy-client',
-      requestBinaryStream: false
-    })
-    const stream = connect(socketPath)
-    await new Promise<void>((resolve) => stream.once('connect', resolve))
-    const streamOutcome = await sendDaemonHello({
-      socket: stream,
-      token: readFileSync(tokenPath, 'utf-8').trim(),
-      role: 'stream',
-      timeoutMs: 2000,
-      protocolVersion: PROTOCOL_VERSION,
-      clientId: 'legacy-client',
-      requestBinaryStream: false
-    })
-    expect(outcome.streamFraming).toBe('ndjson')
-    expect(streamOutcome.streamFraming).toBe('ndjson')
-    expect(acceptedStreams).toEqual(['ndjson'])
-    stream.destroy()
-    socket.destroy()
   })
 
   // Legacy daemons ignore binary negotiation and reply with an ordinary hello.

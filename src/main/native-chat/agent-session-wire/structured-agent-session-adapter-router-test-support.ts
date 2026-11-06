@@ -67,7 +67,8 @@ export function claudeAndCodexDeclared(): StructuredAgentRegistry {
     compact: unused,
     changeThreadGoal: unused,
     rewind: unused,
-    recoverRewind: unused
+    recoverRewind: unused,
+    copyConversation: unused
   })
 }
 
@@ -87,6 +88,7 @@ function implementedBy(
     ...definition,
     capabilities: {
       ...declared,
+      fork: adapter.copyConversation ? declared.fork : undefined,
       compact: declared.compact && Boolean(adapter.compact),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
       rewind:
