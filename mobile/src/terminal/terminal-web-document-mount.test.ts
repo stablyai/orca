@@ -171,6 +171,7 @@ describe('terminal panes start when first selected', () => {
           onTerminalQueryReply: noop,
           onTerminalInteraction: noop,
           onTerminalTap: noop,
+          onTerminalSwipeDown: noop,
           onFileTap: noop,
           onOpenUrl: noop
         })
