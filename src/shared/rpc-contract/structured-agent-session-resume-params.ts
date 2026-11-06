@@ -1,6 +1,9 @@
 import * as z from 'zod'
 import { Identifier, SessionId } from './structured-agent-session-identifiers'
 
+/** The renderer drops recorded args past this bound rather than failing the whole create. */
+export const RESUME_SOURCE_AGENT_ARGS_MAX_CHARS = 8 * 1024
+
 /** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
 export const ResumeSource = z
   .object({
@@ -11,7 +14,9 @@ export const ResumeSource = z
         paneKey: Identifier('Invalid pane key')
       })
       .strict()
-      .optional()
+      .optional(),
+    /** Requires agent-session.structured.source-terminal-args.v1 on the executing host. */
+    agentArgs: z.string().max(RESUME_SOURCE_AGENT_ARGS_MAX_CHARS).optional()
   })
   .strict()
 

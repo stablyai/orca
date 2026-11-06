@@ -62,6 +62,8 @@ export type AgentSessionAttachParams = {
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
+  /** Host-only: a create continuing a terminal founds its record with that terminal's arguments. */
+  sourceTerminalArgs?: string[]
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
   /** Host-only adoption seeds resume/import. Ordinary ensure handles must not imply adoption. */
@@ -217,6 +219,7 @@ export function reserveRequestFor(input: {
       ? { surfaceTabId: params.surfaceTabId }
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
+    ...(params.sourceTerminalArgs ? { sourceTerminalArgs: params.sourceTerminalArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt
