@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
+import type { DatabaseSync } from 'node:sqlite'
 import type {
   FollowUpHostInputs,
   FollowUpObservation,
@@ -40,7 +41,9 @@ it.each([10, 100])(
       rows: 0,
       sql: 0,
       promptBytes: 0,
-      histories: new Set<string>()
+      histories: new Set<string>(),
+      pendingExtractions: 0,
+      pendingReads: 0
     }
     const tracked = <T>(items: T[]): T[] =>
       new Proxy(items, {
@@ -72,7 +75,7 @@ it.each([10, 100])(
       })
     )
     const byId = new Map(targets.map((target) => [target.worktreeId, target]))
-    const workspaces = tracked(
+    let workspaces = tracked(
       targets.map((target, index): FollowUpWorkspace => ({
         instanceId: target.instanceId,
         worktreeId: target.worktreeId,
@@ -132,17 +135,35 @@ it.each([10, 100])(
         status: 'accepted' as const,
         sessionStartedAt: 1,
         sessionEndedAt: 2,
+        agent: 'codex',
         launch: {
           agent: 'codex',
           target: { kind: 'existing', worktree: `id:${target.worktreeId}` },
           prompt: { delivery: 'submit', text: 'irrelevant-install-prompt:'.repeat(4096) }
         }
       }
-      db.prepare('INSERT INTO followup_action VALUES (?, ?, ?)').run(
-        legacy.actionKey,
-        legacy.prKey,
-        JSON.stringify(legacy)
-      )
+      records.saveAction(legacy)
+      const { launch: _launch, ...metadata } = legacy
+      records.saveAction({
+        ...metadata,
+        actionKey: `live-${prKey}`,
+        headSha: 'h1',
+        attemptStartedAt: Date.now() - 10000,
+        sessionStartedAt: Date.now() - 10000,
+        sessionEndedAt: undefined,
+        sessionId: `session-${prKey}`
+      })
+      if (prKey === 'github.com/a/b#0') {
+        for (let old = 1; old < count; old++) {
+          records.saveAction({ ...legacy, actionKey: `old-extra-${old}` })
+        }
+        records.saveAction({
+          ...legacy,
+          actionKey: 'final-uncertain',
+          status: 'unconfirmed',
+          recoveryFinalizedAt: 2
+        })
+      }
     }
     let observationListener!: (observation: FollowUpObservation) => void
     let transition!: (change: AgentPaneChange) => void
@@ -190,7 +211,7 @@ it.each([10, 100])(
         return () => {}
       }
     }
-    const knownTargets = tracked(targets.slice(0, -1))
+    let knownTargets = tracked(targets.slice(0, -1))
     const inputs: FollowUpHostInputs = {
       targets: () => knownTargets,
       target: (id) => byId.get(id),
@@ -232,6 +253,19 @@ it.each([10, 100])(
       await host.engine.reconcile([])
     }
     await drain()
+    let pendingQuery = false
+    const sqlite: DatabaseSync = Reflect.get(db, 'db')
+    sqlite.function('json_extract', { deterministic: true }, (json, path) => {
+      if (pendingQuery) {
+        metrics.pendingExtractions++
+      }
+      const value = JSON.parse(String(json))[String(path).slice(2)]
+      return value === undefined
+        ? null
+        : value !== null && typeof value === 'object'
+          ? JSON.stringify(value)
+          : value
+    })
     const prepare = db.prepare.bind(db)
     vi.spyOn(db, 'prepare').mockImplementation((sql) => {
       const statement = prepare(sql)
@@ -252,7 +286,13 @@ it.each([10, 100])(
                 }
               }
             }
+            const pending = sql.includes('followup_action_pending')
+            if (pending) {
+              metrics.pendingReads++
+            }
+            pendingQuery = pending
             const result = statement[field](...args)
+            pendingQuery = false
             if (field !== 'run') {
               for (const row of Array.isArray(result) ? result : result ? [result] : []) {
                 metrics.rows++
@@ -275,6 +315,8 @@ it.each([10, 100])(
       metrics.sql = 0
       metrics.promptBytes = 0
       metrics.histories.clear()
+      metrics.pendingExtractions = 0
+      metrics.pendingReads = 0
       emitted.length = 0
     }
     reset()
@@ -284,6 +326,14 @@ it.each([10, 100])(
     })
     settingsChanged({ fontSize: 14 })
     sessionCrewChanges.notify(new Set(['names']))
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), { recordIds: ['unrelated-session'] })
+    )
+    inventoryChanged({})
+    inventoryChanged({})
+    inventoryChanged({})
+    clientEvent({ type: 'worktreesChanged', repoId: 'repo' })
+    clientEvent({ type: 'worktreesChanged', repoId: 'unrelated' })
     clientEvent({ type: 'worktreesChanged', repoId: 'unrelated', sortOrderOnly: true })
     transition({
       kind: 'observed',
@@ -310,6 +360,28 @@ it.each([10, 100])(
     expect(metrics.inventoryVisits).toBe(0)
     expect(metrics.targetVisits).toBe(0)
     expect(metrics.sql).toBe(0)
+    reset()
+    const identity = 'session-github.com/a/b#0'
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), { recordIds: [identity] })
+    )
+    await drain()
+    expect([...metrics.histories]).toEqual(['github.com/a/b#0'])
+    expect(metrics.pendingReads).toBeGreaterThan(0)
+    expect(metrics.pendingExtractions).toBe(0)
+    expect(metrics.promptBytes).toBe(0)
+    const active = records.action('live-github.com/a/b#0')!
+    records.saveAction({ ...active, sessionEndedAt: Date.now() })
+    reset()
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), { recordIds: [identity] })
+    )
+    await drain()
+    expect(records.actions('github.com/a/b#0', true)).toEqual([])
+    expect(metrics.pendingReads).toBeGreaterThan(0)
+    expect(metrics.pendingExtractions).toBe(0)
+    expect(metrics.promptBytes).toBe(0)
+    reset()
     byId.get('w3')!.workingAgent = null
     transition({
       kind: 'moved',
@@ -322,7 +394,9 @@ it.each([10, 100])(
     })
     await drain()
     expect([...metrics.histories]).toEqual(['github.com/a/b#1'])
-    expect(metrics.rows).toBeLessThan(30)
+    expect(metrics.rows).toBeLessThan(60)
+    expect(metrics.pendingReads).toBeGreaterThan(0)
+    expect(metrics.pendingExtractions).toBe(0)
     expect(metrics.inventoryVisits).toBe(0)
     expect(metrics.promptBytes).toBe(0)
     expect(emitted.filter((event) => event.type === 'prFollowUpsChanged')).toHaveLength(3)
@@ -341,18 +415,30 @@ it.each([10, 100])(
     inventoryChanged({})
     await drain()
     expect(metrics.sql).toBe(0)
+    expect(metrics.inventoryVisits).toBe(0)
+    expect(metrics.targetVisits).toBeLessThan(25)
     expect(emitted).toHaveLength(0)
     // Each instance owns its reader handle even when request inputs match another instance.
     const pair = registrations.filter((item) => item.prNumber === 1)
     expect(pair).toHaveLength(2)
-    byId.get('w2')!.settings = { enabled: false }
-    workspaces[2]!.settings = { enabled: false }
+    const disable = (index: number) => {
+      const target = { ...byId.get(`w${index}`)!, settings: { enabled: false } }
+      byId.set(target.worktreeId, target)
+      knownTargets = tracked(
+        knownTargets.map((item) => (item.worktreeId === target.worktreeId ? target : item))
+      )
+      workspaces = tracked(
+        workspaces.map((item) =>
+          item.worktreeId === target.worktreeId ? { ...item, settings: target.settings } : item
+        )
+      )
+    }
+    disable(2)
     inventoryChanged({})
     await drain()
     expect(pair[0]!.unregister).toHaveBeenCalledOnce()
     expect(pair[1]!.unregister).not.toHaveBeenCalled()
-    byId.get('w3')!.settings = { enabled: false }
-    workspaces[3]!.settings = { enabled: false }
+    disable(3)
     inventoryChanged({})
     await drain()
     expect(pair[1]!.unregister).toHaveBeenCalledOnce()

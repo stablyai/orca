@@ -138,6 +138,7 @@ export type FollowUpWorking = boolean | 'unknown' | { working: boolean; at: numb
 
 // Complete inventory includes persisted archived, disabled, hidden and disconnected instances.
 export type FollowUpHostInputs = {
+  // Inventory snapshots and their items retain identity until their follow-up inputs change.
   targets(): readonly FollowUpTarget[]
   target(worktreeId: string): FollowUpTarget | undefined
   subscribeInventory(listener: (change: { deletedInstanceId?: string }) => void): () => void

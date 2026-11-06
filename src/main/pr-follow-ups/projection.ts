@@ -11,6 +11,7 @@ export function createFollowUpProjectionState() {
     entries: new Map<string, FollowUpSnapshot['workspaces'][string]>(),
     recoveryDeadlines: new Map<string, { at: number; timer: ReturnType<typeof setTimeout> }>(),
     identityPrKeys: new Map<string, string>(),
+    activityStates: new Map<string, string>(),
     activeKeys: new Set<string>(),
     observations: new Map<string, string>(),
     projections: new Map<string, FollowUpProjection>(),
@@ -39,6 +40,19 @@ export function publishFollowUpProjection(
       used: pr ? store.acceptedCount(key, pr.generation) : 0,
       recentStarts: store.recentAcceptedStarts(key, (deps.now?.() ?? Date.now()) - FOLLOW_UP_DAY),
       waitingForWindow: state.windowHolds.get(key)
+    }
+    const identities = new Set(
+      projection.pending
+        .flatMap((action) => [action.sessionId, action.paneKey, action.terminalPtyId])
+        .filter(Boolean)
+    )
+    for (const old of state.projections.get(key)?.pending ?? []) {
+      for (const id of [old.sessionId, old.paneKey, old.terminalPtyId]) {
+        if (id && !identities.has(id)) {
+          state.identityPrKeys.delete(id)
+          state.activityStates.delete(id)
+        }
+      }
     }
     state.projections.set(key, projection)
     const { pending } = projection

@@ -1,3 +1,4 @@
+import { FollowUpTargetIndex } from './target-index'
 import { evaluateFollowUpObservation } from './observation'
 import { createFollowUpProjectionState, publishFollowUpProjection } from './projection'
 import { recordFollowUpActivity, reconcileFollowUpActions } from './action-lifecycle'
@@ -16,66 +17,32 @@ export class FollowUpEngine {
   private unsubscribe?: () => void
   private disposed = false
   private swept = false
-  private readonly inventoryKeys = new Map<string, string>()
+  private readonly inventory: FollowUpTargetIndex
   private readonly projection = createFollowUpProjectionState()
   activePrKeys(): string[] {
     return [...this.projection.activeKeys]
   }
-  private readonly byPr = new Map<string, FollowUpTarget[]>()
-  private readonly byWorkspace = new Map<string, FollowUpTarget>()
+  prKeysForIdentities(identities: readonly string[]): string[] {
+    return [...new Set(identities.flatMap((id) => this.projection.identityPrKeys.get(id) ?? []))]
+  }
 
   get waitingForWindow(): boolean {
     return this.projection.windowHolds.size > 0
   }
 
   private readonly deps: FollowUpEngineDependencies
-  constructor(private readonly host: FollowUpEngineDependencies) {
+  constructor(host: FollowUpEngineDependencies) {
+    this.inventory = new FollowUpTargetIndex(host, this.projection)
     this.deps = {
       ...host,
-      targets: (key) => (key ? (this.byPr.get(key) ?? []) : [...this.byWorkspace.values()])
+      targets: (key) =>
+        key ? (this.inventory.byPr.get(key) ?? []) : [...this.inventory.byWorkspace.values()]
     }
     this.refreshInventory()
   }
 
   refreshInventory(): Set<string> {
-    const before = new Map(this.inventoryKeys)
-    this.inventoryKeys.clear()
-    const affected = new Set<string>()
-    const previous = new Map(this.byWorkspace)
-    this.byPr.clear()
-    this.byWorkspace.clear()
-    for (const target of this.host.targets()) {
-      this.byWorkspace.set(target.worktreeId, target)
-      this.inventoryKeys.set(target.worktreeId, JSON.stringify(target))
-      const items = this.byPr.get(target.prKey) ?? []
-      items.push(target)
-      this.byPr.set(target.prKey, items)
-      if (before.get(target.worktreeId) !== JSON.stringify(target)) {
-        affected.add(target.prKey)
-        const old = before.get(target.worktreeId)
-        if (old) {
-          affected.add(JSON.parse(old).prKey)
-        }
-      }
-      previous.delete(target.worktreeId)
-    }
-    for (const old of previous.values()) {
-      affected.add(old.prKey)
-      this.projection.entries.delete(old.worktreeId)
-    }
-    const ids = new Set(this.host.workspaceIds())
-    this.projection.inventoryProjection = JSON.stringify([...ids])
-    for (const id of this.projection.entries.keys()) {
-      if (!ids.has(id)) {
-        this.projection.entries.delete(id)
-      }
-    }
-    for (const id of ids) {
-      if (!this.projection.entries.has(id)) {
-        this.projection.entries.set(id, null)
-      }
-    }
-    return affected
+    return this.inventory.refreshInventory()
   }
 
   private now(): number {
@@ -93,7 +60,7 @@ export class FollowUpEngine {
 
   observe(observation: FollowUpObservation): Promise<void> {
     if (
-      !this.byPr.get(observation.prKey)?.length &&
+      !this.inventory.byPr.get(observation.prKey)?.length &&
       !this.projection.projections.has(observation.prKey)
     ) {
       return Promise.resolve()
@@ -133,7 +100,7 @@ export class FollowUpEngine {
       this.swept = true
     }
     const keys = new Set(
-      affected ?? [...this.deps.store.prs().map((pr) => pr.prKey), ...this.byPr.keys()]
+      affected ?? [...this.deps.store.prs().map((pr) => pr.prKey), ...this.inventory.byPr.keys()]
     )
     for (const key of removed) {
       keys.add(key)
@@ -157,6 +124,7 @@ export class FollowUpEngine {
       for (const identity of [action.sessionId, action.paneKey, action.terminalPtyId]) {
         if (identity) {
           this.projection.identityPrKeys.delete(identity)
+          this.projection.activityStates.delete(identity)
         }
       }
     }
@@ -211,13 +179,13 @@ export class FollowUpEngine {
     return this.enqueue(async () => {
       const keys = this.deps.store.deleteBinding(instanceId)
       for (const key of keys) {
-        this.byPr.set(
+        this.inventory.byPr.set(
           key,
-          (this.byPr.get(key) ?? []).filter((target) => {
+          (this.inventory.byPr.get(key) ?? []).filter((target) => {
             if (target.instanceId !== instanceId) {
               return true
             }
-            this.byWorkspace.delete(target.worktreeId)
+            this.inventory.byWorkspace.delete(target.worktreeId)
             this.projection.entries.delete(target.worktreeId)
             return false
           })
@@ -236,14 +204,15 @@ export class FollowUpEngine {
     identity: string,
     working: boolean | 'unknown',
     at: number
-  ): Promise<void> {
-    const key =
-      this.projection.identityPrKeys.get(identity) ?? this.byWorkspace.get(worktreeId)?.prKey
-    if (!key) {
-      return Promise.resolve()
+  ): Promise<void> | undefined {
+    const key = this.projection.identityPrKeys.get(identity)
+    const state = JSON.stringify([working, at])
+    if (!key || this.projection.activityStates.get(identity) === state) {
+      return undefined
     }
+    this.projection.activityStates.set(identity, state)
+    let changed = false
     return this.enqueue(async () => {
-      let changed = false
       for (const action of this.deps.store.actions(key, true)) {
         if (
           action.status === 'accepted' &&
@@ -252,7 +221,7 @@ export class FollowUpEngine {
           changed = this.activity(action, working, at) || changed
         }
       }
-      if (!this.byWorkspace.has(worktreeId)) {
+      if (!this.inventory.byWorkspace.has(worktreeId)) {
         await this.reconcileNow([key])
       } else if (changed) {
         this.publish([key])
@@ -279,22 +248,12 @@ export class FollowUpEngine {
     return Object.fromEntries(this.projection.entries)
   }
 
+  targetRemoved(worktreeId: string, workspaceRemains = false): string[] {
+    return this.inventory.targetRemoved(worktreeId, workspaceRemains)
+  }
+
   targetChanged(target: FollowUpTarget): string[] {
-    const saved = this.inventoryKeys.get(target.worktreeId)
-    const old: FollowUpTarget | undefined = saved ? JSON.parse(saved) : undefined
-    if (saved === JSON.stringify(target)) {
-      return []
-    }
-    if (old) {
-      this.byPr.set(
-        old.prKey,
-        (this.byPr.get(old.prKey) ?? []).filter((item) => item.worktreeId !== old.worktreeId)
-      )
-    }
-    this.byWorkspace.set(target.worktreeId, target)
-    this.inventoryKeys.set(target.worktreeId, JSON.stringify(target))
-    this.byPr.set(target.prKey, [...(this.byPr.get(target.prKey) ?? []), target])
-    return old ? [old.prKey, target.prKey] : [target.prKey]
+    return this.inventory.targetChanged(target)
   }
 
   forWorkspace(worktreeId: string): { prKey: string; view: FollowUpView; fixing: boolean } | null {
@@ -302,7 +261,8 @@ export class FollowUpEngine {
   }
 
   view(prKey: string): FollowUpView {
-    const target = eligibleFollowUpTargets(this.deps, prKey)[0] ?? this.byPr.get(prKey)?.[0]
+    const target =
+      eligibleFollowUpTargets(this.deps, prKey)[0] ?? this.inventory.byPr.get(prKey)?.[0]
     return (
       (target ? this.projection.entries.get(target.worktreeId)?.view : undefined) ??
       followUpView({ pending: [], used: 0, recentStarts: [] }, this.deps.globalSettings())

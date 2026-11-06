@@ -11,28 +11,8 @@ export class FollowUpStore {
         payload TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS followup_action_pr ON followup_action(pr_key);
     `)
-    if (
-      db
-        .prepare('PRAGMA table_info(followup_action)')
-        .all()
-        .some((column) => column.name === 'metadata')
-    ) {
-      this.transaction(() =>
-        db.exec(`
-        DROP INDEX IF EXISTS followup_action_session;
-        DROP INDEX IF EXISTS followup_action_pty;
-        DROP INDEX IF EXISTS followup_action_status;
-        DROP INDEX IF EXISTS followup_action_generation;
-        DROP INDEX IF EXISTS followup_action_started;
-        DROP INDEX IF EXISTS followup_action_latest;
-        UPDATE followup_action SET payload = metadata;
-        ALTER TABLE followup_action DROP COLUMN metadata;
-      `)
-      )
-    }
-    db.exec(`UPDATE followup_action SET payload = json_set(json_remove(payload, '$.launch'),
-      '$.agent', json_extract(payload, '$.launch.agent')) WHERE json_type(payload, '$.launch') IS NOT NULL;`)
     db.exec(`
+      CREATE INDEX IF NOT EXISTS followup_action_pending ON followup_action(pr_key) WHERE (json_extract(payload, '$.status') IN ('claimed', 'unconfirmed') AND json_extract(payload, '$.recoveryFinalizedAt') IS NULL OR (json_extract(payload, '$.status') = 'accepted' AND json_extract(payload, '$.sessionEndedAt') IS NULL));
       CREATE INDEX IF NOT EXISTS followup_action_session ON followup_action(json_extract(payload, '$.sessionId'));
       CREATE INDEX IF NOT EXISTS followup_action_pty ON followup_action(json_extract(payload, '$.terminalPtyId'));
       CREATE INDEX IF NOT EXISTS followup_action_status ON followup_action(pr_key, json_extract(payload, '$.status'), json_extract(payload, '$.sessionEndedAt'));
@@ -85,7 +65,7 @@ export class FollowUpStore {
   actions(prKey: string, pendingOnly = false): FollowUpAction[] {
     return this.db
       .prepare(
-        `SELECT payload FROM followup_action WHERE pr_key = ?${pendingOnly ? " AND (json_extract(payload, '$.status') IN ('claimed', 'unconfirmed') AND json_extract(payload, '$.recoveryFinalizedAt') IS NULL OR (json_extract(payload, '$.status') = 'accepted' AND json_extract(payload, '$.sessionEndedAt') IS NULL))" : ''}`
+        `SELECT payload FROM followup_action${pendingOnly ? ' INDEXED BY followup_action_pending' : ''} WHERE pr_key = ?${pendingOnly ? " AND (json_extract(payload, '$.status') IN ('claimed', 'unconfirmed') AND json_extract(payload, '$.recoveryFinalizedAt') IS NULL OR (json_extract(payload, '$.status') = 'accepted' AND json_extract(payload, '$.sessionEndedAt') IS NULL))" : ''}`
       )
       .all(prKey)
       .map((row) => JSON.parse(String(row.payload)))

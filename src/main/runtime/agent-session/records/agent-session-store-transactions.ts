@@ -32,8 +32,7 @@ import {
 } from './agent-session-store-draft'
 import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
 
-// Commit validated draft rows atomically before publication; failures discard the draft.
-// The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
+// Commit drafts before publication; FIFO defers BEGIN beyond the caller's open transaction.
 
 // Identity-based diffs miss in-place edits; freeze rows in dev/tests to catch them.
 const FREEZE_ROWS = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
@@ -286,7 +285,27 @@ export class AgentSessionStoreTransactions {
             )
             .map(([id]) => id)
           if (topologyChanged) {
-            sessionCrewChanges.notify(new Set(['records']))
+            const changedTabs = writes.sessionTabs
+              ? [
+                  ...new Set([
+                    ...(published.sessionTabs?.sessionIds() ?? []),
+                    ...(draft.sessionTabs?.sessionIds() ?? [])
+                  ])
+                ].filter(
+                  (id) => published.sessionTabs?.tabIdFor(id) !== draft.sessionTabs?.tabIdFor(id)
+                )
+              : []
+            sessionCrewChanges.notify(
+              Object.assign(new Set(['records'] as const), {
+                recordIds: [
+                  ...new Set([
+                    ...writes.records.remove,
+                    ...writes.records.upsert.map(([id]) => id),
+                    ...changedTabs
+                  ])
+                ]
+              })
+            )
           } else if (renamed.length) {
             sessionCrewChanges.notify(
               Object.assign(new Set(['names'] as const), { recordIds: renamed })

@@ -1,15 +1,14 @@
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type {
   FollowUpObservationSource,
-  FollowUpHostInputs,
-  FollowUpWorkspace
+  FollowUpHostInputs
 } from '../../shared/pr-follow-ups/contracts'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { sessionCrewChanges } from '../runtime/orchestration/crew/crew-changes'
 import { FollowUpEngine } from './engine'
 import { FollowUpStore } from './store'
-import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
+import { FollowUpInventory } from './inventory'
 import { launchFollowUp, recoverFollowUpLaunch } from './launch'
 
 export type { FollowUpHostInputs } from '../../shared/pr-follow-ups/contracts'
@@ -23,8 +22,7 @@ export function installPrFollowUps(
   onGraphSync: (listener: () => void) => () => void,
   emit: (event: RuntimeClientEvent) => void
 ): { engine: FollowUpEngine; dispose(): Promise<void> } {
-  let workspaces = inputs.workspaces()
-  let workspaceByInstance = new Map(workspaces.map((item) => [item.instanceId, item]))
+  let inventory: FollowUpInventory
   const records = new FollowUpStore(runtime.getOrchestrationDb().db)
   const engine = new FollowUpEngine({
     ...inputs,
@@ -32,7 +30,7 @@ export function installPrFollowUps(
       inputs.started?.(action)
       emit({
         type: 'prFollowUpStarted',
-        prNumber: workspaceByInstance.get(action.instanceId)?.prNumber ?? undefined,
+        prNumber: inventory.byInstance.get(action.instanceId)?.prNumber ?? undefined,
         failedCheckCount: action.failingNames.length,
         worktreeId: action.worktreeId,
         paneKey: action.paneKey,
@@ -41,73 +39,27 @@ export function installPrFollowUps(
       })
     },
     source,
-    workspaceIds: () => workspaces.map((workspace) => workspace.worktreeId),
+    workspaceIds: () => inputs.workspaces().map((workspace) => workspace.worktreeId),
     store: records,
     globalSettings: () => store.getSettings().prFollowUps,
     canPublishAgentLaunchTab: () => runtime.canPublishAgentLaunchTab(),
     launch: (params) => launchFollowUp(runtime, params),
     recover: (action) => recoverFollowUpLaunch(runtime, action),
     changed: (keys) => {
-      syncWatches(keys)
+      if (!disposed) {
+        inventory.sync(keys)
+      }
       emit({ type: 'prFollowUpsChanged' })
     }
   })
   let disposed = false
-  const registrations = new Map<string, { fingerprint: string; handle: { unregister(): void } }>()
-  let workspacesByPr = new Map<string, FollowUpWorkspace[]>()
-  const indexWatches = (): void => {
-    workspacesByPr = new Map()
-    const targets = new Map(inputs.targets().map((target) => [target.instanceId, target]))
-    for (const workspace of workspaces) {
-      const key = targets.get(workspace.instanceId)?.prKey ?? ''
-      const items = workspacesByPr.get(key) ?? []
-      items.push(workspace)
-      workspacesByPr.set(key, items)
-    }
-  }
-  const releaseWatch = (instanceId: string): void => {
-    registrations.get(instanceId)?.handle.unregister()
-    registrations.delete(instanceId)
-  }
-  const syncWatches = (keys: readonly string[] = [...workspacesByPr.keys()]): void => {
-    if (disposed) {
-      return
-    }
-    for (const prKey of keys) {
-      const pr = prKey ? records.pr(prKey) : undefined
-      const paused = pr && (pr.stoppedAt !== null || pr.consecutiveReadFailures >= 8)
-      for (const workspace of workspacesByPr.get(prKey) ?? []) {
-        const settings = resolvePrFollowUps(store.getSettings().prFollowUps, workspace.settings)
-        const { repoId, connectionId, branch, prNumber } = workspace
-        const key =
-          !workspace.archived &&
-          !paused &&
-          branch &&
-          settings.enabled &&
-          settings.ciFailed !== 'off'
-            ? JSON.stringify([repoId, connectionId, branch, prNumber])
-            : undefined
-        if (registrations.get(workspace.instanceId)?.fingerprint === key) {
-          continue
-        }
-        releaseWatch(workspace.instanceId)
-        if (!key) {
-          continue
-        }
-        registrations.set(workspace.instanceId, {
-          fingerprint: key,
-          handle: source.registerPRWatch({
-            repoId,
-            connectionId,
-            branch,
-            prNumber,
-            reason: 'pr-follow-ups'
-          })
-        })
-      }
-    }
-  }
-  indexWatches()
+  inventory = new FollowUpInventory(
+    inputs,
+    source,
+    records,
+    engine,
+    () => store.getSettings().prFollowUps
+  )
   const pending = new Set<string>()
   let scheduled = false
   const schedule = (keys: Iterable<string>, inventory = false): void => {
@@ -119,41 +71,23 @@ export function installPrFollowUps(
     }
     scheduled = true
     queueMicrotask(() => {
-      scheduled = false
       const keys = [...pending]
       pending.clear()
       void engine
         .reconcile(keys)
         .catch((error: unknown) => console.error('[pr-follow-ups] reconciliation failed', error))
+        .finally(() => {
+          scheduled = false
+          schedule([])
+        })
     })
   }
-  let workspaceKey = JSON.stringify(workspaces)
-  const inventoryChanged = (): void => {
-    const nextWorkspaces = inputs.workspaces()
-    const nextKey = JSON.stringify(nextWorkspaces)
-    workspaces = nextWorkspaces
-    const affected = engine.refreshInventory()
-    for (const target of inputs.targets()) {
-      const value = JSON.stringify(inputs.launchInputs(target))
-      if (launchKeys.get(target.instanceId) !== value) {
-        affected.add(target.prKey)
-      }
-      launchKeys.set(target.instanceId, value)
+  const inventoryChanged = (repoId?: string): void => {
+    const affected = inventory.refresh(repoId)
+    if (affected.size) {
+      schedule([...affected].filter(Boolean), true)
+      inventory.sync([...affected])
     }
-    if (workspaceKey === nextKey && !affected.size) {
-      return
-    }
-    workspaceKey = nextKey
-    workspaceByInstance = new Map(workspaces.map((item) => [item.instanceId, item]))
-    const instances = new Set(workspaces.map((item) => item.instanceId))
-    for (const id of registrations.keys()) {
-      if (!instances.has(id)) {
-        releaseWatch(id)
-      }
-    }
-    indexWatches()
-    schedule(affected, true)
-    syncWatches()
   }
   const targetChanged = (worktreeId: string, activity = false): void => {
     const target = inputs.target(worktreeId)
@@ -161,14 +95,8 @@ export function installPrFollowUps(
       schedule([...engine.targetChanged(target), ...(activity ? [target.prKey] : [])])
     }
   }
-  const chatActivity = followUpChatActivity(engine, (id) => targetChanged(id, true))
-  const launchKeys = new Map(
-    inputs
-      .targets()
-      .map((target) => [target.instanceId, JSON.stringify(inputs.launchInputs(target))])
-  )
+  const chatActivity = followUpChatActivity(engine, targetChanged)
   let settingsKey = JSON.stringify(store.getSettings().prFollowUps)
-  const paneStates = new Map<string, string>()
   let inventoryWasComplete = inputs.inventoryComplete()
   const releases = [
     inputs.subscribeInventory((change) => {
@@ -193,35 +121,43 @@ export function installPrFollowUps(
         return
       }
       const phase = change.kind === 'moved' ? change.to : change.phase
-      const state = JSON.stringify([change.workspace.worktreeId, phase])
-      if (paneStates.get(change.paneKey) === state) {
-        return
-      }
-      paneStates.set(change.paneKey, state)
-      void engine.activityObserved(
+      const activity = engine.activityObserved(
         change.workspace.worktreeId,
         change.paneKey,
         phase === 'rest' ? 'unknown' : phase === 'working' || phase === 'needs-you',
         change.at
       )
-      targetChanged(change.workspace.worktreeId, true)
+      if (activity) {
+        schedule(engine.prKeysForIdentities([change.paneKey]))
+        void activity.catch((error: unknown) =>
+          console.error('[pr-follow-ups] activity failed', error)
+        )
+      }
+      targetChanged(change.workspace.worktreeId)
     }),
     sessionCrewChanges.subscribe((facets) => {
       if (facets.has('topology')) {
         chatActivity.refresh()
         inventoryChanged()
       }
-      if (facets.has('records') || facets.has('topology')) {
+      if (facets.has('topology')) {
+        // Topology recovery deliberately checks obligations that outlive their workspace.
         schedule(engine.activePrKeys())
+      } else if (facets.has('records')) {
+        schedule(
+          facets.recordIds ? engine.prKeysForIdentities(facets.recordIds) : engine.activePrKeys()
+        )
       }
     }),
     runtime.onClientEvent(
       (event) => {
-        if (
-          event.type === 'reposChanged' ||
-          (event.type === 'worktreesChanged' && !event.sortOrderOnly)
-        ) {
+        if (event.type === 'reposChanged') {
           inventoryChanged()
+          const affected = inventory.effectiveInputsChanged()
+          schedule(affected)
+          inventory.sync()
+        } else if (event.type === 'worktreesChanged' && !event.sortOrderOnly) {
+          inventoryChanged(event.repoId)
         }
       },
       { consumesTerminalSideEffects: false }
@@ -235,31 +171,25 @@ export function installPrFollowUps(
         return
       }
       const key = JSON.stringify(store.getSettings().prFollowUps)
-      const affected = engine.refreshInventory()
+      const affected = inventory.refresh()
       if (settingsKey !== key) {
         for (const target of inputs.targets()) {
           affected.add(target.prKey)
         }
       }
       settingsKey = key
-      // Effective input changes, rather than unrelated writes, wake parked attempts.
-      for (const target of inputs.targets()) {
-        const value = JSON.stringify(inputs.launchInputs(target))
-        if (launchKeys.get(target.instanceId) !== value) {
-          affected.add(target.prKey)
-        }
-        launchKeys.set(target.instanceId, value)
+      for (const key of inventory.effectiveInputsChanged()) {
+        affected.add(key)
       }
-      schedule(affected)
-      if (affected.size) {
-        syncWatches([...affected])
-      }
+      schedule([...affected].filter(Boolean))
+      // Discovery also belongs to unresolved workspaces, which have no PR key yet.
+      inventory.sync()
     })
   ]
   void engine
     .start()
     .catch((error: unknown) => console.error('[pr-follow-ups] startup failed', error))
-  syncWatches()
+  inventory.sync()
   return {
     engine,
     async dispose() {
@@ -269,10 +199,7 @@ export function installPrFollowUps(
           release()
         }
       }
-      for (const registration of registrations.values()) {
-        registration.handle.unregister()
-      }
-      registrations.clear()
+      inventory.dispose()
       chatActivity.dispose()
       await engine.dispose()
     }

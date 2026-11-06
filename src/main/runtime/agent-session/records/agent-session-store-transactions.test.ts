@@ -116,6 +116,25 @@ describe('writing a transaction', () => {
     ).toBe(NOW + 10_000)
   })
 
+  it('carries affected record identities in normal record invalidations', async () => {
+    const events: string[][] = []
+    const release = sessionCrewChanges.subscribe((facets) => {
+      if (facets.has('records')) {
+        events.push([...(facets.recordIds ?? [])])
+      }
+    })
+    try {
+      const store = await openTestAgentSessionRecordStore(root)
+      await liveChat(store, 'affected-chat')
+      await store.setSessionTabVisibility('affected-chat', true)
+      await store.setSessionTabVisibility('affected-chat', false)
+      expect(events.length).toBeGreaterThan(0)
+      expect(events.every((ids) => ids.length === 1 && ids[0] === 'affected-chat')).toBe(true)
+    } finally {
+      release()
+    }
+  })
+
   it('writes nothing for a transaction that changes nothing', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     await liveChat(store, 'chat-a-0001')

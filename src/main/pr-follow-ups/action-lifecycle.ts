@@ -76,11 +76,10 @@ export async function reconcileFollowUpActions(
 
 export function followUpChatActivity(
   engine: FollowUpEngine,
-  workspaceChanged: (id: string) => void
+  workspaceChanged: (id: string, activity?: boolean) => void
 ): { refresh(): void; dispose(): void } {
   let chatHost: ReturnType<typeof getStructuredAgentSessionHost>
   let releaseChat: (() => void) | undefined
-  const chatStates = new Map<string, string>()
   const attachChat = (): void => {
     const next = getStructuredAgentSessionHost()
     if (next === chatHost) {
@@ -88,7 +87,6 @@ export function followUpChatActivity(
     }
     releaseChat?.()
     chatHost = next
-    chatStates.clear()
     releaseChat = next?.subscribeStatus({
       id: 'pr-follow-ups',
       emit: (event) => {
@@ -99,24 +97,19 @@ export function followUpChatActivity(
               ? [event.session]
               : []
         for (const session of sessions) {
-          const state = JSON.stringify([
-            session.workspaceId,
-            session.status,
-            session.statusStartedAt
-          ])
-          if (chatStates.get(session.sessionId) === state) {
-            continue
-          }
-          chatStates.set(session.sessionId, state)
-          if (session.status !== null) {
-            void engine.activityObserved(
-              session.workspaceId,
-              session.sessionId,
-              session.status !== 'idle',
-              session.statusStartedAt ?? Date.now()
-            )
-          }
-          workspaceChanged(session.workspaceId)
+          const activity =
+            session.status !== null
+              ? engine.activityObserved(
+                  session.workspaceId,
+                  session.sessionId,
+                  session.status !== 'idle',
+                  session.statusStartedAt ?? Date.now()
+                )
+              : undefined
+          workspaceChanged(session.workspaceId, !!activity)
+          void activity?.catch((error: unknown) =>
+            console.error('[pr-follow-ups] activity failed', error)
+          )
         }
       }
     })
