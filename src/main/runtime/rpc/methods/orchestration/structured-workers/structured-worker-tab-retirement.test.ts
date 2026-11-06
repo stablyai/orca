@@ -12,7 +12,7 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import { partialRuntimeStore } from '../../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,

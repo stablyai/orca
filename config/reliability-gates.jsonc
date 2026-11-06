@@ -1656,7 +1656,7 @@
       "invariant": "One structured-send operation id causes at most one provider dispatch. Each user Send on phone or desktop is a new action with a fresh id and one request; neither automatically resends an ambiguous action. The host retains the original action's outcome, and a later phone Send remains possible with equal text, after remount, or when phone storage fails. Repeated transmission of the same operation remains protected by host deduplication.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
       ],
       "testFiles": [
@@ -1664,8 +1664,8 @@
         "src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts",
         "src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts",
         "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts",
-        "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
-        "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
+        "src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery.test.ts",
+        "src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host.test.ts",
         "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
         "mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts",
         "mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts",
@@ -1712,7 +1712,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
+          "file": "src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery.test.ts",
           "assertions": [
             "never sends a message twice when its card already waits after a restart",
             "admits a recorded send that never landed under the same id",
@@ -1781,7 +1781,7 @@
           "platform": "linux",
           "result": "passed",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
           "durationSeconds": 9.682,
           "summary": "97 focused tests passed on isolated Xvfb. Deterministic fixtures; no live provider, physical mobile, mixed-version deployment or cross-platform claim. Audit1474 reduced selector."
         }
@@ -12550,7 +12550,7 @@
       "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Local worker-start with supported observation must preserve an unobserved turn as start_unknown without revoking authority, closing questions, or triggering a rescue Enter; a worker report during observation must settle normally. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Runtime tests assert the exact PTY write sequence, failure cleanup, Claude/Codex marker-gated multi-frame renders, and the legacy platform delay for every other configured agent. The candidate resets settlement on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. The worker-start contract drives the production RPC through a delayed fake Codex composer and independently checks exact turn/Enter counts plus reopened SQLite Task, Dispatch, worker receipt, and mutation receipt state for accepted and swallowed outcomes. Other orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator/coordinator.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts --reporter=dot",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
@@ -12559,7 +12559,7 @@
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts",
         "src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts",
-        "src/main/runtime/orchestration/coordinator.test.ts",
+        "src/main/runtime/orchestration/coordinator/coordinator.test.ts",
         "tests/tools/repro-orchestration-long-prompt.mjs"
       ],
       "assertionRefs": [
@@ -12589,7 +12589,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/coordinator.test.ts",
+          "file": "src/main/runtime/orchestration/coordinator/coordinator.test.ts",
           "assertions": [
             "coordinator dispatch failures from prompt injection circuit-break through the DB",
             "silent-skip paths do not attempt prompt injection"
@@ -12688,10 +12688,10 @@
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then distinguish the three settlement outcomes end to end: only a proven refusal releases the reservation and drains a delivery parked behind the watermark; a dropped in-flight settlement must surface as unverifiable with bytes handed to the transport, preserve the durable write-attempted reservation, and emit no duplicate pointer after restart; a settled write that throws mid-pointer is unverifiable, not a refusal; and an Enter whose settlement is lost stays at enter-attempted so restart emits no second Enter. Install the production PTY controller and verify that it routes settled writes through the owning provider and refuses before any byte when the routed provider cannot settle. Census every production PTY provider class and reject a settlement synthesized from the fire-and-forget write.",
       "commands": [
         "pnpm run build:cli && pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-message-delivery-identity.test.ts --reporter=dot --testTimeout=5000",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-delivery.test.ts src/main/ipc/pty/pty-controller-ownership-routing.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/orchestration/mailbox-pointer-stage.test.ts src/main/daemon/transport/client/testing/client.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-delivery.test.ts src/main/ipc/pty/pty-controller-ownership-routing.test.ts src/main/runtime/orchestration/db/schema/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/db/runs/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/db/worker-dispatch/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/mailbox/formatting/message-formatting.test.ts src/main/runtime/orchestration/mailbox/terminal-pointer/mailbox-pointer-stage.test.ts src/main/daemon/transport/client/testing/client.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-titles.test.ts src/main/runtime/orchestration-mailbox-delivery.test.ts src/main/runtime/orchestration-mailbox-routing.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration/runs/runs.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation/synchronization/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/runtime/orchestration-message-delivery-identity.test.ts",
@@ -12699,11 +12699,11 @@
         "src/main/runtime/orchestration-mailbox-routing.test.ts",
         "src/main/runtime/orchestration-mailbox-delivery.test.ts",
         "src/main/ipc/pty/pty-controller-ownership-routing.test.ts",
-        "src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts",
-        "src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts",
-        "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
-        "src/main/runtime/orchestration/formatter.test.ts",
-        "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts",
+        "src/main/runtime/orchestration/db/schema/run-coordinator-handle-migration.test.ts",
+        "src/main/runtime/orchestration/db/runs/orchestration-run-delivery-db.test.ts",
+        "src/main/runtime/orchestration/db/worker-dispatch/orchestration-worker-dispatch-db.test.ts",
+        "src/main/runtime/orchestration/mailbox/formatting/message-formatting.test.ts",
+        "src/main/runtime/orchestration/mailbox/terminal-pointer/mailbox-pointer-stage.test.ts",
         "src/main/daemon/transport/client/testing/client.test.ts",
         "src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts",
         "src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts",
@@ -12712,7 +12712,7 @@
         "src/main/runtime/rpc/methods/orchestration/runs/runs.test.ts",
         "src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts",
         "src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
-        "src/main/runtime/orchestration/federation-sync.test.ts",
+        "src/main/runtime/orchestration/federation/synchronization/federation-sync.test.ts",
         "src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
         "src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts"
       ],
@@ -12763,7 +12763,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts",
+          "file": "src/main/runtime/orchestration/db/schema/run-coordinator-handle-migration.test.ts",
           "assertions": [
             "v27 databases backfill current coordinator handles during v28 migration",
             "v28 triggers retain A-to-B-to-C coordinator history across old-runtime writes",
@@ -12771,7 +12771,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/federation-sync.test.ts",
+          "file": "src/main/runtime/orchestration/federation/synchronization/federation-sync.test.ts",
           "assertions": [
             "an acknowledged duplicate replay does not wake a waiter",
             "overlapping syncs preserve one durable forward-only checkpoint"
@@ -12792,7 +12792,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts",
+          "file": "src/main/runtime/orchestration/mailbox/terminal-pointer/mailbox-pointer-stage.test.ts",
           "assertions": ["a refused pointer write drains a delivery parked behind its watermark"]
         },
         {
@@ -12810,7 +12810,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
+          "file": "src/main/runtime/orchestration/db/worker-dispatch/orchestration-worker-dispatch-db.test.ts",
           "assertions": [
             "remote Dispatch attachment lookup remains bounded across pane remints and malformed suffix collisions"
           ]
@@ -12837,7 +12837,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 8.99,
-          "summary": "52 tests passed with real OrchestrationDb rows, a deliberately dropped federation acknowledgment, reconnect/restart, forward-only checkpoints, duplicate read-row wake suppression, and protocol v1/v2 lifecycle settlement replay. The broader final federation/cross-version set passed 77/77."
+          "summary": "52 tests passed with real OrchestrationDb rows, a deliberately dropped federation acknowledgment, reconnect/restart, forward-only checkpoints, duplicate read-row wake suppression, and protocol v1/v2 lifecycle settlement replay. The broader final federation/cross-version set passed 77/77.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation/synchronization/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot"
         },
         {
           "date": "2026-08-14",
@@ -12922,9 +12923,9 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/mailbox/formatting/message-formatting.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/db/federation/federation-acknowledgment-migration.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm run test:e2e -- tests/e2e/orchestration-worker-terminal-visibility.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --workers=1",
@@ -12933,7 +12934,7 @@
       "testFiles": [
         "src/main/runtime/rpc/methods/orchestration/messaging/check-worker-federated-attachment.test.ts",
         "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
-        "src/main/runtime/orchestration/formatter.test.ts",
+        "src/main/runtime/orchestration/mailbox/formatting/message-formatting.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/cli/handlers/orchestration.test.ts",
         "src/cli/handlers/orchestration-lifecycle-rejection.test.ts",
@@ -12946,7 +12947,7 @@
         "src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts",
         "src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
         "src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts",
-        "src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts",
+        "src/main/runtime/orchestration/db/federation/federation-acknowledgment-migration.test.ts",
         "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
         "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
         "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
@@ -12970,7 +12971,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/formatter.test.ts",
+          "file": "src/main/runtime/orchestration/mailbox/formatting/message-formatting.test.ts",
           "assertions": [
             "legacy compatibility and recovery replay show only runtime-supplied supported actions",
             "legacy provenance without live authority stays read-only",
@@ -13051,7 +13052,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts",
+          "file": "src/main/runtime/orchestration/db/federation/federation-acknowledgment-migration.test.ts",
           "assertions": [
             "a v26 database gains a zeroed durable home-to-worker acknowledgment watermark",
             "a complete v26 database starts migration at v26 rather than replaying v7-v26",
@@ -13154,7 +13155,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 0.47,
-          "summary": "A complete v26 database resolved migration start at v26, upgraded to v27, retained its imported cursor, and initialized the durable acknowledgment watermark to zero."
+          "summary": "A complete v26 database resolved migration start at v26, upgraded to v27, retained its imported cursor, and initialized the durable acknowledgment watermark to zero.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/db/federation/federation-acknowledgment-migration.test.ts --reporter=dot"
         },
         {
           "date": "2026-08-12",
@@ -13235,7 +13237,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
           "result": "passed",
           "durationSeconds": 2.72,
-          "summary": "Two focused files passed with 34 tests, covering authority-aware legacy affordances and federated non-reveal."
+          "summary": "Two focused files passed with 34 tests, covering authority-aware legacy affordances and federated non-reveal.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/mailbox/formatting/message-formatting.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts"
         },
         {
           "date": "2026-07-28",
@@ -13318,13 +13321,13 @@
       "invariant": "A live Dispatch created by orchestration dispatch can be stopped or abandoned even though it has no supervised worker row. Release must durably record the requested outcome, revoke lifecycle authority, close questions, free the exact assignee identity, and block only the Task whose current Dispatch was released. It must never close the unsupervised terminal process, disturb unrelated or supervised workers, or let a repeat or opposite verb rewrite the persisted outcome.",
       "oracle": "Create manual, unrelated, and supervised Dispatches through production runtime methods. Require dispatch-show to return the manual id while no worker row exists, then release it and require failed status with exact stopped or abandoned provenance, completion and revocation timestamps, one status notification, zero terminal closes, and immediate redispatch to the same terminal. Repeat through the opposite verb and require the first durable outcome. Create two active contexts for one Task through an explicit ready override, release the older context, and require only its identity to unlock while the newer context and Task remain dispatched. In an isolated Electron runtime, repeat both verbs against one real pane and require the same PTY/incarnation to survive before a third dispatch succeeds.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts src/main/runtime/orchestration/db/worker-dispatch/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts",
-        "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
+        "src/main/runtime/orchestration/db/worker-dispatch/orchestration-worker-dispatch-db.test.ts",
         "src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts",
         "src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts",
         "src/cli/handlers/orchestration-worker-cli.test.ts",
@@ -13373,7 +13376,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3.38,
-          "summary": "Five focused files passed 60 tests, including both context-only release verbs, stale/current ownership, question closure, repeat and cross-verb idempotency, supervised controls, terminal-close negative assertions, and text-mode retained-process guidance."
+          "summary": "Five focused files passed 60 tests, including both context-only release verbs, stale/current ownership, question closure, repeat and cross-verb idempotency, supervised controls, terminal-close negative assertions, and text-mode retained-process guidance.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts src/main/runtime/orchestration/db/worker-dispatch/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot"
         },
         {
           "date": "2026-08-09",
@@ -13444,10 +13448,10 @@
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Surviving unchanged-source receipts are the current oracle; changed-source assertions await validation. Historical oracle account: Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain against a controlled archive promise and require no committed archive or close. Rebase a closed web-terminal host partition without terminalLayoutsByTabId and require the persistence write to complete while preserving host-authoritative membership; replay a valid legacy retirement under the same omission and require exact membership removal plus revision advancement. For retained external, user-owned, transferred, stopped, and abandoned resources, run one fresh inventory against the exact local/WSL or SSH provider: an exact live incarnation and every unknown inventory shape stay retained, while positive absence atomically sets ownership_state and release_state to released with processAction none and zero closeTerminal calls. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-mobile-report.test.ts src/main/runtime/terminal/identity/orca-runtime-terminal-handle-incarnation.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/query/runtime-terminal-inventory-contracts.test.ts src/main/runtime/terminal/surface/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/surface/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/query/runtime-terminal-inventory-contracts.test.ts src/main/runtime/terminal/surface/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/surface/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -13458,7 +13462,7 @@
         "src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts",
         "src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts",
         "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
-        "src/main/runtime/orchestration/worker-transcript-read.test.ts",
+        "src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.test.ts",
         "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
       ],
@@ -13538,7 +13542,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3.48,
-          "summary": "Five focused files passed 56 tests covering lease serialization, reminted-handle transfer, duplicate-identity fencing, retain and takeover races, immutable archives, conservative legacy migration, mutation restart, reset cleanup, bounded accounting, and renderer input reporting."
+          "summary": "Five focused files passed 56 tests covering lease serialization, reminted-handle transfer, duplicate-identity fencing, retain and takeover races, immutable archives, conservative legacy migration, mutation restart, reset cleanup, bounded accounting, and renderer input reporting.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.test.ts --reporter=dot"
         }
       ],
       "runtimeBudget": {
@@ -17430,22 +17435,22 @@
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Reopen historical completed/failed/circuit-broken PTY, structured and handle-less assignments and require no active recovery rows; preserve genuine report outcomes, pending unknown workers, diagnostics and terminal resources. Inject settlement failure and require complete transaction rollback. Resolve each workspace once per pass, recheck it on later passes, and query 100 missing-workspace candidates once per provider, preserve live/unidentified PTYs and wrong-host SSH evidence. Advance fake time ten minutes and require zero persistence for unresolved passes and no repeated settlement. Make a host verifiable after two minutes and require automatic convergence and timer cleanup. Require indexed SQL lookups for only the requested assignments, one query shape across batch sizes, and recovery after a failed SQL read. Require the actual startup query to use the active-worker partial index, let healthy repair finish under a competing writer lock, and repair stale rows introduced by an older SQL writer after the first repair. Check all 45 assignment/worker state combinations and idempotent reopen; inject failure on the second startup repair and require complete rollback. Measure 100,000 historical assignments with 1,000 stale workers and require zero writes on the next repair pass. On a real SSH host, require settled worker bookkeeping with unchanged terminal ownership, shell PID, background child PID, environment and working directory through restart and reconnect, with rendered input/output proof.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts tests/e2e/cross-version-wire/orchestration-delivery-downgrade.unit.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/db/dispatch-context/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/terminal-authority/release/worker-dispatch-repair-safety.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/terminal-authority/release/worker-dispatch-repair-safety.test.ts"
       ],
       "testFiles": [
-        "src/main/runtime/orchestration/worker-dispatch-settlement.test.ts",
+        "src/main/runtime/orchestration/db/dispatch-context/worker-dispatch-settlement.test.ts",
         "src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts",
         "src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts",
         "src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
-        "src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts"
+        "src/main/runtime/orchestration/terminal-authority/release/worker-dispatch-repair-safety.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/runtime/orchestration/worker-dispatch-settlement.test.ts",
+          "file": "src/main/runtime/orchestration/db/dispatch-context/worker-dispatch-settlement.test.ts",
           "assertions": [
             "repairs historical settled PTY, structured and handle-less assignments on reopen",
             "preserves genuine report outcomes and pending unknown workers",
@@ -17474,7 +17479,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
+          "file": "src/main/runtime/orchestration/terminal-authority/release/worker-dispatch-repair-safety.test.ts",
           "assertions": [
             "all 45 assignment and worker state combinations preserve genuine outcomes, pending work and terminal ownership",
             "historical repair uses an active-worker partial index and primary-key assignment lookups without scanning settled history",
@@ -17502,7 +17507,8 @@
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
           "result": "passed",
           "durationSeconds": 1.58,
-          "summary": "47 focused settlement, automatic retry, indexed SQL, missing-workspace, durable host-routing and historical-repair safety regressions passed. Includes all 45 state combinations and 100,000 historical assignments."
+          "summary": "47 focused settlement, automatic retry, indexed SQL, missing-workspace, durable host-routing and historical-repair safety regressions passed. Includes all 45 state combinations and 100,000 historical assignments.",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/db/dispatch-context/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/terminal-authority/release/worker-dispatch-repair-safety.test.ts"
         },
         {
           "date": "2026-10-05",
@@ -17511,7 +17517,8 @@
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
           "result": "passed",
           "durationSeconds": 2.29,
-          "summary": "Three safety and scale tests pass. One local run with 100,000 assignments and 1,000 stale workers: repair 38.83ms, no-op repair 25.07ms, complete subsequent database open 38.52ms. These are observations, not a CI latency bound."
+          "summary": "Three safety and scale tests pass. One local run with 100,000 assignments and 1,000 stale workers: repair 38.83ms, no-op repair 25.07ms, complete subsequent database open 38.52ms. These are observations, not a CI latency bound.",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/terminal-authority/release/worker-dispatch-repair-safety.test.ts"
         }
       ],
       "runtimeBudget": {

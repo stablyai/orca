@@ -6,7 +6,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 
-import { questionAnswerWaitPrefix } from '../../orchestration/question-answer-delivery'
+import { questionAnswerWaitPrefix } from '../../orchestration/mailbox/questions/question-answer-delivery'
 const DISCONNECTED_PTY_RECORD_MAX = 128
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {

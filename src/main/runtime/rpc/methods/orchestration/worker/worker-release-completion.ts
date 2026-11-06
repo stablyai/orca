@@ -1,12 +1,12 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type {
   WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
-} from '../../../../orchestration/worker-terminal-ownership'
-import { summarizeWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { summarizeWorkerOutputArchive } from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './worker-observation'
 import { orchestrationTimestampToMs } from './worker-output'
@@ -18,7 +18,7 @@ import { stopStructuredWorkerForRelease } from './structured-worker-release-stop
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
 import { WorkerTerminalReleaseSingleFlight } from './worker-terminal-release-single-flight'
-import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/worker-terminal-auto-release-working-yield'
+import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 
 export type WorkerReleaseReceipt = {
   dispatchId: string

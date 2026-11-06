@@ -4,8 +4,8 @@ import {
   chatAssigneeSessionId,
   observeChatAssignee,
   type ChatAssigneeObservation
-} from '../../../../orchestration/chat-assignee'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../orchestration/workers/lifecycle/chat-assignee'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   holdStructuredWorker,
   observeStructuredSession

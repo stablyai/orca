@@ -1,8 +1,8 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
+import { chatAssigneeSessionId } from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 /** What a worker transcript read needs of the session it reads, and what its cursor is bound to. */

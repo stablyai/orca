@@ -8,7 +8,7 @@ import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { STATUS_METHODS } from '../../host-management/status'
 import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import {
   createQueuedMessageTestRig,

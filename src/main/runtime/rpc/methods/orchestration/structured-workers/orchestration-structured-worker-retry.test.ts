@@ -8,8 +8,12 @@ import { HOST_TEST_NOW } from '../../../../../native-chat/agent-session-wire/hos
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { CodexAppServerRequestError } from '../../../../../codex/app-server/codex-app-server-request-error'
 import { codexStartFailure } from '../../../../../codex/app-server/codex-startup-outcome'
-import '../../../../orchestration/db'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+
 import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession

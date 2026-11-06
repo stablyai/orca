@@ -18,7 +18,7 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import type { RuntimeAutomationController } from '../runtime-automation-controller'
 import { RuntimeArtifactController } from '../runtime-artifact-controller'
-import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
+import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
 import type { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
 import type {
   RuntimeGraphStatus,
@@ -54,7 +54,7 @@ import type {
   PtyRegistrationClaim,
   RuntimeWorktreeTerminalSleepState
 } from '../terminal/records/runtime-terminal-state-records'
-import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
+import { MailPointerRepointScheduler } from '../orchestration/mailbox/notifications/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from '../terminal/wait/terminal-waiter-registry'
 import { RuntimeTerminalWriter } from '../terminal/input/runtime-terminal-writer'
 import { writeRefused } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'

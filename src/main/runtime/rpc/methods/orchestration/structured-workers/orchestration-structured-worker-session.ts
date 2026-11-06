@@ -22,12 +22,12 @@ import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { mintAgentSessionOperationId } from '../../../../orchestration/structured-pointer-operation-id'
-import { structuredPointerCallerKey } from '../../../../orchestration/structured-mailbox-pointer-host'
+import { mintAgentSessionOperationId } from '../../../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
+import { structuredPointerCallerKey } from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   sendAgentTurn,
   type StructuredAgentTurnHost
-} from '../../../../orchestration/send-agent-turn'
+} from '../../../../orchestration/turn-delivery/send-agent-turn'
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession

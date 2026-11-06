@@ -18,14 +18,14 @@ import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-terminal-contracts'
-import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
-import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
-import { reportWorkerTurnStop } from '../../orchestration/worker-turn-stop-report'
+import { escalateWorkerFailure } from '../../orchestration/workers/reports/worker-failure-escalation'
+import { dispatchReportMailbox } from '../../orchestration/workers/reports/dispatch-report-mailbox'
+import { reportWorkerTurnStop } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
-import type { OrchestrationDb } from '../../orchestration/db'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(

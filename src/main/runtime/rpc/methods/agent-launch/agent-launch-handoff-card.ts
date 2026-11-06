@@ -6,7 +6,7 @@ import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent
 import {
   prepareAgentCreationCard,
   startedAgentSender
-} from '../../../orchestration/worker-start-card'
+} from '../../../orchestration/workers/launch/worker-start-card'
 import type { RpcContext } from '../../core'
 import { isAgentRpcCaller } from '../../rpc-caller-identity'
 

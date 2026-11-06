@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readCallerStoreInstallationId } from '../../../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../../../persistence/loading-store/user-data-path'

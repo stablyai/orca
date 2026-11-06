@@ -30,7 +30,7 @@ import {
   needsOrchestrationCallerResolution,
   ORCHESTRATION_CALLER_PARAM
 } from './orchestration-session-caller'
-import { ORCHESTRATION_TARGET_PARAM } from '../orchestration/orchestration-party'
+import { ORCHESTRATION_TARGET_PARAM } from '../orchestration/addressing/orchestration-party'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({

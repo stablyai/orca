@@ -8,8 +8,12 @@ import { agentSessionConversationView } from '../../../../../../shared/agent-ses
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import '../../../../orchestration/db'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
@@ -18,7 +22,7 @@ import {
 import {
   CHAT_REDISPATCH_PARAGRAPH,
   TERMINAL_REDISPATCH_PARAGRAPH
-} from '../../../../orchestration/preamble'
+} from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
 import { inspectWorkerTerminal } from '../worker/worker-observation'

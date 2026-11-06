@@ -14,8 +14,8 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
-import { sendAgentTurn } from '../../../../runtime/orchestration/send-agent-turn'
-import { structuredSessionPointerCallerKey } from '../../../../runtime/orchestration/structured-mailbox-pointer-host'
+import { sendAgentTurn } from '../../../../runtime/orchestration/turn-delivery/send-agent-turn'
+import { structuredSessionPointerCallerKey } from '../../../../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig

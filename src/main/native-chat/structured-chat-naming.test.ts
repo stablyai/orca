@@ -1,5 +1,9 @@
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { OrchestrationDb } from '../runtime/orchestration/db'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import '../runtime/orchestration/db/contract-constants'
+import '../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../runtime/orchestration/db/dispatch-row-writer'
+import '../runtime/orchestration/db/attempt-outcome-projection'
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork

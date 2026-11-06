@@ -10,20 +10,20 @@ import {
   buildStructuredJournalArchive,
   captureRetiredLineageArchive,
   type WorkerStructuredJournalArchive
-} from '../../../../orchestration/structured-worker-journal-archive'
+} from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
 import {
   readStructuredLineageJournalPage,
   type StructuredLineageJournalPage
-} from '../../../../orchestration/structured-worker-journal-page'
+} from '../../../../orchestration/workers/archives/structured-worker-journal-page'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
-} from '../../../../orchestration/worker-transcript-payload'
+} from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat
@@ -38,7 +38,7 @@ import {
 import type { StructuredWorkerObservation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { structuredWorkerOwned } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import type { WorkerTerminalReleaseState } from '../../../../orchestration/worker-terminal-ownership'
+import type { WorkerTerminalReleaseState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import {
   closeStructuredAgentSessionChild,

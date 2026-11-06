@@ -6,7 +6,7 @@ import { agentSessionConversationView } from '../../../../../../shared/agent-ses
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildStructuredJournalArchive } from '../../../../orchestration/structured-worker-journal-archive'
+import { buildStructuredJournalArchive } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
 import { projectSavedChatContextItems } from '../../../../../native-chat/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../../../shared/worker-transcript-text'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'

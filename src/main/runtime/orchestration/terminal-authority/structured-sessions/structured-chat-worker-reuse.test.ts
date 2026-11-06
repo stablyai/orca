@@ -1,7 +1,7 @@
 import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
-import { structuredMailboxCustody } from '../../structured-session-mail-target'
+import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/orca-session-address'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'

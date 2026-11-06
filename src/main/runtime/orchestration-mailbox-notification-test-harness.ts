@@ -8,7 +8,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration/orchestration'
 import type { RuntimeStore } from './runtime-store-contract'

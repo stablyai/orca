@@ -3,9 +3,9 @@ import { dirname } from 'node:path'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { acquiredAgentSessionAccount } from '../../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import { describe, expect, it, vi } from 'vitest'
-import { dispatchReportMailbox } from '../../../../runtime/orchestration/dispatch-report-mailbox'
-import { OrchestrationStructuredMailboxPointerDelivery } from '../../../../runtime/orchestration/structured-mailbox-pointer-delivery'
-import { createStructuredMailboxPointerHost } from '../../../../runtime/orchestration/structured-mailbox-pointer-host'
+import { dispatchReportMailbox } from '../../../../runtime/orchestration/workers/reports/dispatch-report-mailbox'
+import { OrchestrationStructuredMailboxPointerDelivery } from '../../../../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
+import { createStructuredMailboxPointerHost } from '../../../../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import { HOST_TEST_NOW } from './structured-agent-session-host-test-data'
 import {
   createReceivingCallerFixture,

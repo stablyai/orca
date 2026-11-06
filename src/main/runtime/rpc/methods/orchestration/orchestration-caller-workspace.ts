@@ -2,7 +2,7 @@
  * showTerminal requires a real PTY; fabricating its writable fields would break terminal verbs for chat workers. */
 
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { isStructuredWorkerHandle } from '../../../../../shared/structured-worker-handle'
 
 export async function resolveDispatchCallerWorktreeId(

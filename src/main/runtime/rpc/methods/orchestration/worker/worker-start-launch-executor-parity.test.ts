@@ -10,7 +10,7 @@ import { downgradeAgentLaunchModeForHost } from '../../../../../agent-launch/age
 import type { AgentLaunchModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_START_VOCABULARY } from '../structured-workers/orchestration-worker-start-mode'
 import { structuredWorkerIdentities } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { WorkerEffect } from './worker-topology'

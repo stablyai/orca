@@ -299,7 +299,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
-  'src/main/runtime/orchestration/orchestration-schema-version-skew'
+  'src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [

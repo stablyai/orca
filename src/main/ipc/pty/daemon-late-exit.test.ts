@@ -195,7 +195,7 @@ describe('daemon physical exit after synthetic renderer exit', () => {
 
 describe('synthetic exit and orchestration settlement', () => {
   it('settles an active dispatch and its exit listener only once', async () => {
-    const { OrchestrationDb } = await import('../../runtime/orchestration/db')
+    const { OrchestrationDb } = await import('../../runtime/orchestration/db/orchestration-db')
     const { createRootDispatch } =
       await import('../../runtime/orchestration/db/root-dispatch-test-fixture')
     const { vi } = await import('vitest')
