@@ -9,14 +9,26 @@ import { translate } from '@/i18n/i18n'
 
 export function AccountSwitchList({
   heading,
+  badge,
   children
 }: {
   heading: string
+  /** Shown beside the heading, e.g. a mode the list is in. */
+  badge?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <div className="pb-1">
-      <DropdownMenuLabel>{heading}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        {badge ? (
+          <span className="inline-flex items-center gap-2">
+            {heading}
+            {badge}
+          </span>
+        ) : (
+          heading
+        )}
+      </DropdownMenuLabel>
       <div className="max-h-[min(300px,40vh)] overflow-y-auto scrollbar-sleek">{children}</div>
     </div>
   )
@@ -37,12 +49,15 @@ export function AccountSwitchSignedOutHeading(): React.JSX.Element {
  */
 export function AccountSwitchSection({
   heading,
+  badge,
   targets,
   panelShowsActiveAccount,
   onOpenSettings,
   children
 }: {
   heading: string
+  /** Shown beside the heading, e.g. a mode the list is in. */
+  badge?: React.ReactNode
   targets: readonly { active: boolean }[]
   panelShowsActiveAccount: boolean
   onOpenSettings: () => void
@@ -64,7 +79,9 @@ export function AccountSwitchSection({
   }
   return (
     <>
-      <AccountSwitchList heading={heading}>{children}</AccountSwitchList>
+      <AccountSwitchList heading={heading} badge={badge}>
+        {children}
+      </AccountSwitchList>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={onOpenSettings}>
         {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}

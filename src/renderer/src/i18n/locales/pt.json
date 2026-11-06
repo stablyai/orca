@@ -21926,6 +21926,14 @@
       "copySignInLink": "Copiar link de login",
       "signInLinkCopied": "Link de login copiado. Abra-o em uma janela privativa para entrar com outra conta.",
       "signInLinkCopyFailed": "Não foi possível copiar o link.",
+      "pool": {
+        "settingTitle": "Distribuir sessões entre contas",
+        "settingDescription": "Novas sessões do Claude começam na conta conectada com mais margem.",
+        "sessionsOne": "1 sessão",
+        "sessionsOther": "{{count}} sessões",
+        "badge": "Reparto",
+        "paneBadge": "Conta Claude {{label}}"
+      },
       "switchSessions": {
         "title": "Conta alterada para {{account}}",
         "dontAskAgain": "Não perguntar novamente (reiniciar automaticamente)",

@@ -99,6 +99,10 @@ export type RuntimePtyController = {
     isNewSession?: boolean
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean
+    /** Stop this PTY and bind the new one to its pane. */
+    replacesPtyId?: string
+    /** Account the new Claude process should run as. */
+    claudeAccountId?: string
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
     placement?: TerminalPanePlacement

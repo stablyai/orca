@@ -14,10 +14,18 @@ import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
+import { releaseSupersededOwnProxySlot } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-slot-env'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Daemon providers bypass LocalPtyProvider environment assembly; inject the same host-local state here.
+  // The patch wins. The shell slot it replaces is released; a user base URL has no slot.
+  if (ctx.claudeAuth?.envPatch.ANTHROPIC_BASE_URL) {
+    releaseSupersededOwnProxySlot(
+      args.env?.ANTHROPIC_BASE_URL,
+      ctx.claudeAuth.envPatch.ANTHROPIC_BASE_URL
+    )
+  }
   const baseEnvWithAuth = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)

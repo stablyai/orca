@@ -1,18 +1,33 @@
-import { app } from 'electron'
 import { detectUiLanguage, type UiLanguageDetection } from '../../shared/ui-locale'
 
 let snapshot: UiLanguageDetection | null | undefined
+
+export type SystemLanguageReader = {
+  isReady(): boolean
+  preferredLanguages(): readonly string[]
+}
+
+let reader: SystemLanguageReader | null = null
+
+/** Desktop entry binds Electron. Headless runtimes leave this unset. */
+export function bindSystemLanguageReader(next: SystemLanguageReader | null): void {
+  reader = next
+  snapshot = undefined
+}
 
 export function getSystemLanguageDetection(
   browserPreferences?: readonly string[]
 ): UiLanguageDetection | null {
   if (snapshot === undefined) {
     try {
-      if (!app.isReady()) {
+      if (!reader) {
+        snapshot = null
+      } else if (!reader.isReady()) {
         // Pre-ready startup-failure dialogs still need a language; cache only the post-ready read.
         return readNativeLanguageDetection()
+      } else {
+        snapshot = readNativeLanguageDetection()
       }
-      snapshot = readNativeLanguageDetection()
     } catch {
       snapshot = null
     }
@@ -24,8 +39,11 @@ export function getSystemLanguageDetection(
 }
 
 function readNativeLanguageDetection(): UiLanguageDetection | null {
+  if (!reader) {
+    return null
+  }
   try {
-    const preferences = app.getPreferredSystemLanguages()
+    const preferences = reader.preferredLanguages()
     return preferences.length ? detectUiLanguage(preferences, 'native') : null
   } catch {
     return null

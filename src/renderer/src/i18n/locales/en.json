@@ -19674,6 +19674,8 @@
         "signInThenSend": "Sign in, then send your message again.",
         "historyTooLarge": "This conversation's history is too large to restore here.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
+        "claudeAccountUnknown": "That Claude account is no longer saved. Choose another account.",
+        "claudeAccountWslUnsupported": "That Claude account is in WSL and can't run here. Choose another account.",
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
         "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
@@ -22281,6 +22283,59 @@
       "copySignInLink": "Copy sign-in link instead",
       "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
       "signInLinkCopyFailed": "Could not copy the link.",
+      "autoSwitch": "Switch accounts before a usage limit",
+      "autoSwitchDescription": "When the selected account passes 95% of its 5-hour limit or 90% of its weekly limit, Orca switches to the account with the most room left, as if you had switched by hand.",
+      "autoSwitchedTitle": "Claude account switched",
+      "autoSwitchedBody": "{{from}} is near its usage limit. New Claude sessions start on {{to}}.",
+      "keyword": {
+        "auto": "auto"
+      },
+      "authProxy": {
+        "settingTitle": "Bill Claude through a local auth proxy",
+        "settingDescription": "A running Claude session can change accounts without restarting. The next request uses the new account."
+      },
+      "sessionMover": {
+        "settingTitle": "Move running sessions before a usage limit",
+        "settingDescription": "A running Claude session whose own account nears its limit continues on the account with the most room, between turns, in the same pane.",
+        "settingOff": "Off",
+        "settingAsk": "Ask",
+        "settingMove": "Move",
+        "noticeTitle": "Claude session mover",
+        "movedBody": "{{from}} is near its usage limit. The session continues on {{to}}.",
+        "askBody": "A session on {{from}} is near its usage limit. Set \"Move running sessions before a usage limit\" to Move to move it automatically.",
+        "failedBody": "A session on {{from}} could not be moved: {{detail}}",
+        "handoff": {
+          "moved": "Orca moved this session from {{from}} to {{to}} because {{detail}}.",
+          "ended": "The restart ended subagents of the previous process ({{known}}).",
+          "continue": "Re-run what is still needed, then continue.",
+          "monitoring": "monitoring",
+          "backgroundTask": "a background task was still running",
+          "subagent": "{{agentType}} {{id}} ({{state}})",
+          "subagentUntyped": "{{id}} ({{state}})",
+          "more": "and {{count}} more",
+          "none": "none reported",
+          "detailFallback": "its usage limit"
+        },
+        "movedRestartlessBody": "{{from}} is near its usage limit. The session continues on {{to}} without a restart.",
+        "rebalanceBody": "{{from}} continues on {{to}} to balance your accounts.",
+        "recentMoves": "Recent moves",
+        "recentMovesDescription": "The mover's last decision for each live Claude session.",
+        "recentMovesEmpty": "No Claude session moves.",
+        "keyword": {
+          "move": "move",
+          "session": "session",
+          "strategy": "strategy",
+          "rebalance": "rebalance"
+        }
+      },
+      "pool": {
+        "settingTitle": "Spread sessions across accounts",
+        "settingDescription": "New Claude sessions start on the signed-in account with the most room left.",
+        "sessionsOne": "1 session",
+        "sessionsOther": "{{count}} sessions",
+        "badge": "Pool",
+        "paneBadge": "Claude account {{label}}"
+      },
       "switchSessions": {
         "title": "Switched to {{account}}",
         "dontAskAgain": "Don't ask again (restart automatically)",

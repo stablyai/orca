@@ -1,3 +1,4 @@
+import { setClaudeSessionMoveStatsRecorder } from '../claude-accounts/claude-session-move-stats'
 import { feedAgentSessionStats, type AgentStatusSource } from '../stats/agent-session-stats-feed'
 import { initStatsPath, StatsCollector } from '../stats/collector'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
@@ -9,8 +10,12 @@ export function startOrcadStats(
 ): StatsCollector {
   initStatsPath(userDataPath)
   const stats = new StatsCollector()
-  // Reverse cleanup order stops feeds/RPC before the final stats flush.
+  setClaudeSessionMoveStatsRecorder((stat) => stats.recordClaudeSessionMove(stat))
+  // Reverse cleanup order stops feeds before the recorder, then flushes.
   registerCleanup(() => stats.flushAsync())
+  registerCleanup(() => {
+    setClaudeSessionMoveStatsRecorder(null)
+  })
   registerCleanup(feedAgentSessionStats(stats, hooks))
   return stats
 }

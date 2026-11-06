@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
-import type { StatsAggregates, StatsFile } from './types'
+import type { ClaudeSessionMoveStats, StatsAggregates, StatsFile } from './types'
 
 export const STATS_SCHEMA_VERSION = 1
+
+function defaultClaudeSessionMoves(): ClaudeSessionMoveStats {
+  return { resume: 0, proxy: 0, rebalances: 0, failures: 0 }
+}
 
 function defaultAggregates(): StatsAggregates {
   return {
@@ -9,7 +13,8 @@ function defaultAggregates(): StatsAggregates {
     totalPRsCreated: 0,
     totalAgentTimeMs: 0,
     countedPRs: [],
-    firstEventAt: null
+    firstEventAt: null,
+    claudeSessionMoves: defaultClaudeSessionMoves()
   }
 }
 
@@ -28,7 +33,15 @@ export function loadStatsFile(statsFile: string): StatsFile {
       return {
         ...defaultStatsFile(),
         ...parsed,
-        aggregates: { ...defaultAggregates(), ...parsed.aggregates }
+        aggregates: {
+          ...defaultAggregates(),
+          ...parsed.aggregates,
+          // A file written before this field, or with only some counters, must not drop the rest.
+          claudeSessionMoves: {
+            ...defaultClaudeSessionMoves(),
+            ...parsed.aggregates?.claudeSessionMoves
+          }
+        }
       }
     }
   } catch (err) {

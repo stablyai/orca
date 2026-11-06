@@ -21144,6 +21144,14 @@
       "copySignInLink": "代わりにサインインリンクをコピー",
       "signInLinkCopied": "サインインリンクをコピーしました。別のアカウントでサインインするには、プライベートウィンドウで開いてください。",
       "signInLinkCopyFailed": "リンクをコピーできませんでした。",
+      "pool": {
+        "settingTitle": "セッションをアカウントに分散",
+        "settingDescription": "新しい Claude セッションは、残りが多いアカウントで始まります。",
+        "sessionsOne": "1 セッション",
+        "sessionsOther": "{{count}} セッション",
+        "badge": "分散",
+        "paneBadge": "Claude アカウント {{label}}"
+      },
       "switchSessions": {
         "busy": "作業中",
         "idle": "アイドル",

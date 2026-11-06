@@ -21798,6 +21798,14 @@
       "copySignInLink": "Copier plutôt le lien de connexion",
       "signInLinkCopied": "Lien de connexion copié. Ouvrez-le dans une fenêtre privée pour vous connecter avec un autre compte.",
       "signInLinkCopyFailed": "Impossible de copier le lien.",
+      "pool": {
+        "settingTitle": "Répartir les sessions entre les comptes",
+        "settingDescription": "Les nouvelles sessions Claude démarrent sur le compte connecté qui a le plus de marge.",
+        "sessionsOne": "1 session",
+        "sessionsOther": "{{count}} sessions",
+        "badge": "Réparti",
+        "paneBadge": "Compte Claude {{label}}"
+      },
       "switchSessions": {
         "busy": "En activité",
         "idle": "Inactif",

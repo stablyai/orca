@@ -1,11 +1,6 @@
-import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
-import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
-import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
-import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV,
@@ -13,11 +8,20 @@ import {
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../shared/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
+import { ClaudeProfileSetupQueue } from './claude-profile-setup-queue'
+import {
+  chosenAccountLaunchEnv,
+  chosenAccountPreparation,
+  prepareChosenAccountLaunch,
+  type ChosenAccountRouting
+} from './claude-profile-chosen-account'
+import { systemDefaultRunsAnotherAccount } from './claude-profile-system-default-comparison'
+import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
+import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { claudeAuthProxyEnabled } from '../../shared/claude-account-switch-settings'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
-import { resolveClaudeCommand } from '../codex-cli/command'
 import {
   describeClaudeProfile,
   type ClaudeProfileDescriptor,
@@ -25,8 +29,7 @@ import {
   readUserClaudeConfigDirAsSet,
   resolveClaudeDefaultHome
 } from './claude-profile-paths'
-import type { ClaudeProfileSetupReport } from './claude-profile-setup'
-import { runClaudeProfileSetupInWorker } from './claude-profile-setup-worker'
+import type { runClaudeProfileSetupInWorker } from './claude-profile-setup-worker'
 import type { ClaudeEnvPatch } from './environment'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 import {
@@ -44,6 +47,8 @@ import {
   type ClaudeFolderLogin
 } from './claude-account-folder'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { claudeAuthProxyBaseUrl } from './claude-auth-proxy/claude-auth-proxy-host'
+import { claudeAssignedAccountForProviderSession } from './claude-pane-account-registry'
 
 export type ClaudeProfileRouterSettings = Pick<
   GlobalSettings,
@@ -52,12 +57,13 @@ export type ClaudeProfileRouterSettings = Pick<
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'agentStatusHooksEnabled'
   | 'disabledTuiAgents'
+  | 'claudeAuthProxy'
 >
 
 /** Mirror the settings selection to a pointer file for Claude in existing terminals. */
 export class ClaudeProfileRouter {
   readonly pointerPath: string
-  private readonly setups = new Map<string, Promise<ClaudeProfileSetupReport>>()
+  private readonly setups: ClaudeProfileSetupQueue
   private env: NodeJS.ProcessEnv
   private readonly envReady: Promise<unknown>
   private envResolved: boolean
@@ -87,6 +93,15 @@ export class ClaudeProfileRouter {
             console.warn('[claude-profile] Could not update the Claude account pointer:', error)
           }
         })
+    this.setups = new ClaudeProfileSetupQueue({
+      getSettings: args.getSettings,
+      dataRoot: args.dataRoot,
+      runSetup: args.runSetup,
+      refreshWaitMs: args.refreshWaitMs,
+      userHome: () => this.userHome,
+      userConfigDir: () => this.userConfigDir(),
+      envReady: this.envReady
+    })
   }
 
   get userHome(): string {
@@ -129,6 +144,7 @@ export class ClaudeProfileRouter {
     return resolveClaudeDefaultHome(this.userHome, this.userConfigDir())
   }
 
+  /** Never fall back from a missing folder: that would run the wrong account. */
   /** Never fall back from a missing folder: that would run the wrong account. `identity` names
    *  the selected route before its folder exists; launches and reads still check availability. */
   routedHome(availability: 'checked' | 'identity' = 'checked'): string | null {
@@ -147,7 +163,7 @@ export class ClaudeProfileRouter {
     // Create missing or covered folders without a login so they can sign in separately.
     const profile = this.selectedProfile()
     if (profile) {
-      this.setUpInBackground(profile)
+      this.setups.runInBackground(profile)
     }
   }
 
@@ -165,13 +181,7 @@ export class ClaudeProfileRouter {
     return true
   }
 
-  private setUpInBackground(profile: ClaudeProfileDescriptor): void {
-    this.setUp(profile).catch((error: unknown) => {
-      console.warn('[claude-profile] Account setup failed:', error)
-    })
-  }
-
-  /** Initial setup must succeed; later refreshes may time out without blocking launch. */
+  /** Refreshes the routed folder first; only a first setup that fails stops the launch. */
   async prepareLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
     const selected = this.selectedProfile()
     // Only fallback routing needs the shell env; account setup waits for it separately.
@@ -181,14 +191,9 @@ export class ClaudeProfileRouter {
     // Login changes since publication can change the route.
     this.writePointer()
     const profile = this.routedProfile()
-    if (!profile) {
-      return this.preparation()
+    if (profile) {
+      await this.setups.runForLaunch(profile)
     }
-    await prepareClaudeProfileForLaunch(
-      profile,
-      (value) => this.setUp(value),
-      this.args.refreshWaitMs
-    )
     return this.preparation()
   }
 
@@ -198,7 +203,7 @@ export class ClaudeProfileRouter {
 
   async prepareAccount(accountId: string): Promise<string> {
     const profile = this.describe(accountId)
-    const report = await this.setUp(profile).catch(() => null)
+    const report = await this.setups.run(profile).catch(() => null)
     if (report?.outcome !== 'prepared') {
       throw new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
     }
@@ -207,7 +212,7 @@ export class ClaudeProfileRouter {
 
   /** Wait for setup before deleting so it cannot recreate the folder. */
   async removeAccount(accountId: string): Promise<void> {
-    await this.setups.get(accountId)?.catch(() => {})
+    await this.setups.settle(accountId)
     await removeClaudeAccountFolder(this.args.dataRoot, accountId)
   }
 
@@ -227,48 +232,76 @@ export class ClaudeProfileRouter {
     })
   }
 
-  /** Reuse in-flight setup per account. */
-  private setUp(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
-    const running = this.setups.get(profile.accountId)
-    if (running) {
-      return running
-    }
-    const run = this.runSetup(profile).finally(() => this.setups.delete(profile.accountId))
-    this.setups.set(profile.accountId, run)
-    return run
+  /** Account a previous proxy move billed, so a `--resume` of that session stays there. */
+  assignedAccountForResume(sessionId: string): string | null {
+    return claudeAssignedAccountForProviderSession(sessionId)
   }
 
-  private async runSetup(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
-    await this.envReady
-    const hooks = isAgentStatusHooksEnabledForAgent(this.args.getSettings(), 'claude')
-    const claudeVersion = hooks ? await probeRecentClaudeCliVersion(resolveClaudeCommand()) : null
-    const report = await (this.args.runSetup ?? runClaudeProfileSetupInWorker)({
-      dataRoot: this.args.dataRoot,
-      profile,
-      userHome: this.userHome,
-      userConfigDir: this.userConfigDir(),
-      hooks,
-      claudeVersion: claudeVersion ?? undefined
-    })
-    if (report.outcome === 'prepared') {
-      await getClaudeAgentViewService(this.args.dataRoot).prepareProfile(profile.home)
+  /** Adds the pane's proxy slot when the proxy is on and the user has not set a base URL. */
+  private withAuthProxy(
+    accountId: string | null | undefined,
+    patch: ClaudeEnvPatch
+  ): ClaudeEnvPatch {
+    if (patch.ANTHROPIC_BASE_URL) {
+      return patch
     }
-    if (report.outcome === 'refused' || report.warnings.length > 0) {
-      console.warn('[claude-profile] Account setup was incomplete:', report)
-    }
-    return report
+    const url = claudeAuthProxyBaseUrl(
+      accountId,
+      this.env,
+      claudeAuthProxyEnabled(this.args.getSettings())
+    )
+    return url ? { ...patch, ANTHROPIC_BASE_URL: url } : patch
   }
 
+  /** Env for a launch Orca makes itself. Throws like routedHome. */
   launchEnv(): ClaudeEnvPatch {
     const home = this.routedHome()
-    return {
+    const accountId = this.routedProfile()?.accountId ?? this.selectedProfile()?.accountId
+    return this.withAuthProxy(accountId, {
       [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
       // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
       ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
-    }
+    })
   }
 
-  /** A broken account selection must not prevent opening a terminal. */
+  /** What chosen-account launches borrow from this router. */
+  private readonly chosen: ChosenAccountRouting = {
+    getSettings: () => this.args.getSettings(),
+    coveredBySystemDefault: (id) => this.coveredBySystemDefault(id),
+    hasOwnLogin: (id) => Boolean(this.accountLogin(id)),
+    accountHome: (id) => this.accountHome(id),
+    systemDefaultHome: () => this.systemDefaultHome(),
+    env: () => this.env,
+    envReady: () => this.envReady,
+    setUpForLaunch: (id) => this.setups.runForLaunch(this.describe(id))
+  }
+
+  /**
+   * Env for a launch on a chosen host account. Throws for an unknown or WSL account and a missing folder.
+   * Apply it to a base env free of Orca's routing keys (see chosenAccountLaunchEnv), or a covered
+   * account can run on the selected one. Before the login shell resolves (a Dock launch) coverage is
+   * judged against process.env and can misclassify; real launches use prepareLaunchFor.
+   */
+  launchEnvFor(accountId: string): ClaudeEnvPatch {
+    return this.withAuthProxy(accountId, chosenAccountLaunchEnv(this.chosen, accountId))
+  }
+
+  /**
+   * Like preparation(), for a chosen host account. Before the login shell resolves (a Dock launch)
+   * coverage is judged against process.env and can misclassify; real launches use prepareLaunchFor.
+   */
+  preparationFor(accountId: string): ClaudeRuntimeAuthPreparation {
+    const preparation = chosenAccountPreparation(this.chosen, accountId)
+    return { ...preparation, envPatch: this.withAuthProxy(accountId, preparation.envPatch) }
+  }
+
+  /** Like prepareLaunch(), for a chosen host account. */
+  async prepareLaunchFor(accountId: string): Promise<ClaudeRuntimeAuthPreparation> {
+    const preparation = await prepareChosenAccountLaunch(this.chosen, accountId)
+    return { ...preparation, envPatch: this.withAuthProxy(accountId, preparation.envPatch) }
+  }
+
+  /** A pane's spawn env. Never throws, so a broken selection cannot stop a terminal opening. */
   terminalEnv(target?: ClaudeAccountSelectionTarget): ClaudeEnvPatch {
     // Pass the pointer without waiting on the guest.
     if (target?.runtime === 'wsl') {
@@ -289,7 +322,7 @@ export class ClaudeProfileRouter {
       // Refresh without delaying terminal creation.
       const profile = this.routedProfile()
       if (profile) {
-        this.setUpInBackground(profile)
+        this.setups.runInBackground(profile)
       }
       return { ...base, ...this.launchEnv() }
     } catch {
@@ -312,15 +345,10 @@ export class ClaudeProfileRouter {
 
   /** Compare pre-routing terminals against the selection; null means no account is selected. */
   systemDefaultRunsAnotherAccount(): boolean | null {
-    const profile = this.selectedProfile()
-    if (!profile) {
-      return null
-    }
-    const selected =
-      this.accountLogin(profile.accountId) ??
-      findClaudeAccount(this.args.getSettings(), profile.accountId)
-    const systemDefault = this.systemDefaultLogin(5_000)
-    return !selected || !systemDefault || !isSameClaudeLogin(selected, systemDefault)
+    const id = this.selectedProfile()?.accountId
+    return id
+      ? systemDefaultRunsAnotherAccount(this, id, findClaudeAccount(this.args.getSettings(), id))
+      : null
   }
 
   routesToAccount(): boolean {
@@ -336,7 +364,6 @@ export class ClaudeProfileRouter {
     return claudeProfileSelectionHomes(this, this.args.getSettings(), this.envReady, launchEnv)
   }
 
-  /** Every account folder on this host, selected or not. */
   accountHomes(): string[] {
     return listClaudeProfileHomes(this.args.dataRoot)
   }

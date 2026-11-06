@@ -1,7 +1,15 @@
+export type ClaudeSessionMoveStats = {
+  resume: number
+  proxy: number
+  rebalances: number
+  failures: number
+}
+
 export type StatsEventType =
   | 'agent_start' // agent reported working via its hooks
   | 'agent_stop' // agent left working (done/waiting/blocked) or its pane was torn down
   | 'pr_created' // PR opened from an Orca worktree
+  | 'claude_session_move' // a Claude session move landed, rebalanced, or failed
 
 export type StatsEvent = {
   type: StatsEventType
@@ -19,6 +27,8 @@ export type StatsAggregates = {
   countedPRs: string[]
   // Persisted because raw events are not retained.
   firstEventAt: number | null
+  // Completed moves by how they landed. A rebalance is also counted under its strategy.
+  claudeSessionMoves: ClaudeSessionMoveStats
 }
 
 export type StatsFile = {
