@@ -6,6 +6,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.reveal',
   'agentSession.send',
   'agentSession.cancel',
+  // Continue a turn Orca's own stop cut off; phones gate on agent-session.continue-interrupted.phone.v1.
+  'agentSession.continueInterrupted',
   'agentSession.queuedMessageSend',
   'agentSession.queuedMessageDelete',
   'agentSession.queuedMessageMove',
@@ -20,6 +22,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.options',
   'agentSession.modelCatalog',
   'agentSession.conversationCommand',
+  // Gated on the phone by agent-session.thread-goal.phone.v1.
+  'agentSession.threadGoal',
   'agentSession.commands',
   'agentSession.history',
   'agentSession.currentRequests',
@@ -31,6 +35,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.readVisual',
   // One item whole, for "Show full output" and "Show full message".
   'agentSession.item',
+  // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
+  'agentSession.rewind',
   // A file the phone attaches to a chat, stored on this host; the agent sees only the host path.
   'agentSessionAttachment.uploadStart',
   'agentSessionAttachment.uploadAppend',

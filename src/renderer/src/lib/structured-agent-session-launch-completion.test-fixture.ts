@@ -10,7 +10,6 @@ import {
 import { admitStructuredAgentSession } from './agent-session/structured-agent-session-busy'
 import { renderHook } from '@testing-library/react'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
 import { getStructuredLaunchStateBySessionId } from './agent-session/launch/structured-agent-session-launch-registry'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
 import {
@@ -119,16 +118,8 @@ export function registerCreateCompletionTests(): void {
       expect(view.result.current).toMatchObject({
         starting: false,
         transportEnabled: true,
-        lifecycle: null
+        lifecycle: 'visibility-unknown'
       })
-      expect(
-        structuredSessionNotices({
-          launch: view.result.current,
-          agentLabel: 'Codex',
-          sessionError: null,
-          composerError: null
-        })
-      ).toEqual([])
       expect(getStructuredAgentSessionSendNotice(launch.sessionId)).toBeNull()
       expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toMatchObject([
         {

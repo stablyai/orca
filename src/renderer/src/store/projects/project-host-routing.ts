@@ -21,6 +21,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
 import {
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
+  sshHostWithoutServerMessage,
   type ProjectHostSetupTarget
 } from '../../../../shared/project-host-setup-target'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -46,11 +47,23 @@ export function assertNotSshProjectHost(
   if (parsed?.kind !== 'ssh') {
     return
   }
-  throw new Error(
-    isPairedServerSshTarget(state, parsed.targetId)
-      ? SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
-      : `SSH connection "${parsed.targetId}" not found or not connected`
+  if (isPairedServerSshTarget(state, parsed.targetId)) {
+    throw new Error(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
+  }
+  throw new SshProjectHostWithoutServerError(
+    parsed.targetId,
+    state.sshTargetLabels.get(parsed.targetId) || parsed.targetId
   )
+}
+
+/** This computer's SSH host has no Orca server yet; Connect sets one up. */
+export class SshProjectHostWithoutServerError extends Error {
+  constructor(
+    readonly targetId: string,
+    hostLabel: string
+  ) {
+    super(sshHostWithoutServerMessage(hostLabel))
+  }
 }
 
 /**

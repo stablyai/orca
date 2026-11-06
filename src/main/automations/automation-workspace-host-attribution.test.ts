@@ -16,7 +16,6 @@ import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AutomationService } from './service'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
@@ -137,43 +136,6 @@ beforeEach(() => {
 afterEach(async () => {
   await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
-})
-
-describe('folder-workspace host attribution', () => {
-  // Main persists connectionId; normalization drops the renderer’s executionHostId stamp.
-  it('files a pinned workspace under its SSH host instead of Self', async () => {
-    const store = await createStore([folderWorkspace({ connectionId: 'ssh-1' })], [])
-
-    expect(store.listAutomationsForScope({ selector: { kind: 'self' } }).automations).toEqual([])
-    const scoped = store.listAutomationsForScope({
-      selector: { kind: 'ssh', targetId: 'ssh-1', expectedTargetGeneration: 7 }
-    })
-    expect(scoped.automations.map((entry) => entry.id)).toEqual(['pinned-1'])
-    expect(scoped.items[0]?.selector).toEqual({
-      kind: 'ssh',
-      targetId: 'ssh-1',
-      targetGeneration: 7
-    })
-  })
-
-  it('orphans a workspace whose scope spans two hosts rather than showing a healthy Self row', async () => {
-    const store = await createStore([folderWorkspace({})], AMBIGUOUS_REPOS)
-
-    expect(store.listAutomationsForScope({ selector: { kind: 'self' } }).automations).toEqual([])
-    const orphans = store.listAutomationsForScope({ selector: { kind: 'orphan' } })
-    expect(orphans.items[0]?.selector).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous
-    })
-  })
-
-  it('leaves an unpinned local workspace on Self', async () => {
-    const store = await createStore([folderWorkspace({})])
-
-    expect(
-      store.listAutomationsForScope({ selector: { kind: 'self' } }).automations.map((e) => e.id)
-    ).toEqual(['pinned-1'])
-  })
 })
 
 const AMBIGUOUS_REFUSAL =

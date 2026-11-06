@@ -2,14 +2,23 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 
 type WorktreeSetupReceipt = NonNullable<CreateWorktreeResult['setupReceipt']>
 
-export function worktreeSetupReceipt(input: {
+type WorktreeSetupReceiptInput = {
   requested: WorktreeSetupReceipt['requested']
   hookFound: boolean
   waitForAgentStartup: boolean | undefined
   shouldRunSetup: boolean
   setupStarted: boolean
   terminalHandle: string | null | undefined
-}): WorktreeSetupReceipt {
+}
+
+export function worktreeSetupReceiptField(
+  awaitedProvisioning: boolean | undefined,
+  input: WorktreeSetupReceiptInput
+): { setupReceipt?: WorktreeSetupReceipt } {
+  return awaitedProvisioning ? { setupReceipt: worktreeSetupReceipt(input) } : {}
+}
+
+function worktreeSetupReceipt(input: WorktreeSetupReceiptInput): WorktreeSetupReceipt {
   return {
     requested: input.requested,
     hookFound: input.hookFound,

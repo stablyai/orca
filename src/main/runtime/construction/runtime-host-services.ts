@@ -165,7 +165,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly canRecoverPersistentLocalPtysFn!: HostBindings['canRecoverPersistentLocalPtys']
 
-  protected readonly getPairedDeviceNameFn!: HostBindings['getPairedDeviceName']
+  declare protected readonly getPairedDeviceNameFn: HostBindings['getPairedDeviceName']
 
   protected readonly buildAgentHookPtyEnv!: HostBindings['buildAgentHookPtyEnv'] | null
 

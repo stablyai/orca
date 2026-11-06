@@ -21,6 +21,14 @@ import * as journalSchema from '../../../../native-chat/agent-session-journal/jo
 
 import { fixture, COORD, h } from './worker-start-card-contract-test-fixture'
 
+const sourceSql = [
+  "SELECT id, run_id, task_id, contract_version, launch_token_hash, assignee_handle, assignee_pane_key, assignee_orca_session_id, capability_hash, process_incarnation, capability_revoked_at, retry_of_dispatch_id, creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id, host_scope, status, failure_count, last_failure, termination_reason, depth, consumer_generation, dispatched_at, completed_at, created_at, last_heartbeat_at, follow_up_of_dispatch_id, follow_up_mail_at FROM dispatch_contexts\n       WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') ORDER BY rowid DESC LIMIT 1",
+  'SELECT id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key, created_by_process_incarnation, created_by_run_generation, task_title, display_name, spec, status, deps, result, created_at, completed_at FROM tasks WHERE id = ?',
+  'SELECT * FROM worker_dispatches WHERE dispatch_id = ?',
+  'SELECT * FROM worker_terminal_resources WHERE owner_dispatch_id = ?',
+  'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
+]
+
 it.each([10, 100])(
   'counts populated producer source and journal operations for %i starts and duplicate publications',
   async (count) => {
@@ -160,6 +168,9 @@ it.each([10, 100])(
       }
     })
     const prepareSource = db.db.prepare.bind(db.db)
+    const sentinelSql = 'SELECT 1 AS sender_cache_sentinel'
+    const sentinel = prepareSource(sentinelSql)
+    const sourceExec = vi.spyOn(db.db, 'exec')
     const sourceQueries = vi
       .spyOn(db.db, 'prepare')
       .mockImplementation((query) =>
@@ -241,7 +252,9 @@ it.each([10, 100])(
     expect(epochReads).toHaveBeenCalledTimes(4)
     expect(serialized).toHaveBeenCalledTimes(1)
     expect(inserts).toHaveBeenCalledTimes(1)
-    expect(sourceQueries).toHaveBeenCalledTimes(3)
+    expect(sourceExec).not.toHaveBeenCalled()
+    expect(prepareSource(sentinelSql)).toBe(sentinel)
+    expect(sourceQueries.mock.calls.map(([sql]) => sql)).toEqual(sourceSql)
     expect(dispatchVisits).toBe(1)
     expect(taskVisits).toBe(1)
     expect(workerVisits).toBe(1)
@@ -293,7 +306,11 @@ it.each([10, 100])(
     expect(names).toHaveBeenCalledTimes(2 * count)
     expect(activeSource).toHaveBeenCalledTimes(2 * count)
     expect(recordedSource).not.toHaveBeenCalled()
-    expect(sourceQueries).toHaveBeenCalledTimes(6 * count)
+    expect(sourceExec).not.toHaveBeenCalled()
+    expect(prepareSource(sentinelSql)).toBe(sentinel)
+    expect(sourceQueries.mock.calls.map(([sql]) => sql)).toEqual(
+      Array.from({ length: 2 * count }, () => sourceSql).flat()
+    )
     expect(dispatchVisits).toBe(2 * count)
     expect(taskVisits).toBe(2 * count)
     expect(workerVisits).toBe(2 * count)

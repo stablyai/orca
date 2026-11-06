@@ -51,6 +51,7 @@ export {
 } from './tab-create-entry-local-path'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
+import { selectFileListWorktree } from '@/store/selectors'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
@@ -261,7 +262,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     worktreeId: args.worktreeId,
     groupId: args.groupId,
     getFileContext: () => {
-      const worktree = state.getKnownWorktreeById(args.worktreeId)
+      const worktree = selectFileListWorktree(state, args.worktreeId)
       if (!worktree) {
         throw new Error(getTabEntryNoActiveWorktreeMessage())
       }

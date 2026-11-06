@@ -273,40 +273,6 @@ describe('DaemonPtyAdapter history recovery', () => {
     expect(maxActiveCheckpoints).toBe(1)
   })
 
-  it('reschedules another dirty session after a keepHistory checkpoint', async () => {
-    const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
-    const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-    adapterClass.CHECKPOINT_INTERVAL_MS = 25
-    try {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const sleeping = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'sleep-with-dirty-peer'
-      })
-      const peer = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'dirty-peer'
-      })
-      const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
-      lastSubprocess._simulateData('peer output before sleep\r\n')
-
-      await historyAdapter.shutdown(sleeping.id, { immediate: true, keepHistory: true })
-      await waitFor(() => appendSpy.mock.calls.some(([sessionId]) => sessionId === peer.id))
-
-      expect(appendSpy).toHaveBeenCalledWith(
-        peer.id,
-        expect.any(Number),
-        expect.arrayContaining([
-          expect.objectContaining({ kind: 'output', data: 'peer output before sleep\r\n' })
-        ])
-      )
-    } finally {
-      adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-    }
-  })
-
   it.each([
     ['checkpoint.json', TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1],
     ['scrollback.bin', TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES + 1]

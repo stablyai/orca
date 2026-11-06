@@ -28,7 +28,7 @@ import type { WorkspaceCreationHandle } from '../lifecycle/workspace-lifecycle-c
 import { workspaceLifecycleKey } from '../lifecycle/workspace-lifecycle-commands'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
-import { worktreeSetupReceipt } from './worktree-setup-receipt'
+import { worktreeSetupReceiptField } from './worktree-setup-receipt'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
@@ -191,8 +191,9 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       rearm,
       timing
     })
-    const { worktree, worktreePath, includeCopyWarning, created, addResult } = localCreate
-    const { lineage, workspaceLineage, warnings: lineageWarnings } = localCreate.metadataResult
+    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
+      localCreate
+    const { lineage, workspaceLineage } = metadataResult
 
     let {
       setup,
@@ -275,20 +276,16 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         workspaceLineage,
         git: created
       },
-      ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
+      ...(lineageInput ? metadataResult : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
-      ...(args.awaitTerminalProvisioning
-        ? {
-            setupReceipt: worktreeSetupReceipt({
-              requested: effectiveDecision,
-              hookFound,
-              waitForAgentStartup: setup?.waitForAgentStartup,
-              shouldRunSetup,
-              setupStarted: didSpawnSetup || didStartInProcessSetupHook,
-              terminalHandle: setupTerminalHandle
-            })
-          }
-        : {}),
+      ...worktreeSetupReceiptField(args.awaitTerminalProvisioning, {
+        requested: effectiveDecision,
+        hookFound,
+        waitForAgentStartup: setup?.waitForAgentStartup,
+        shouldRunSetup,
+        setupStarted: didSpawnSetup || didStartInProcessSetupHook,
+        terminalHandle: setupTerminalHandle
+      }),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(warning ? { warning } : {}),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),

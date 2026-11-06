@@ -54,12 +54,13 @@ import { createNativeChatRuntimeSelector } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
-import { handleNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import { handleNativeChatPaneShortcut } from './native-chat-pane-shortcut'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function NativeChatResolvedView({
@@ -311,7 +312,7 @@ export function NativeChatResolvedView({
   })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
-  return (
+  const root = (
     <div
       ref={rootRef}
       data-native-chat-root="true"
@@ -327,7 +328,7 @@ export function NativeChatResolvedView({
       }}
       onKeyDownCapture={(event) => {
         find.onKeyDownCapture(event)
-        if (handleNativeChatSplitShortcut(event, keybindings, contextMenuActions)) {
+        if (handleNativeChatPaneShortcut(event, keybindings, contextMenuActions)) {
           return
         }
         rootInput.onKeyDownCapture(event)
@@ -364,8 +365,6 @@ export function NativeChatResolvedView({
             expandSignal={false}
             {...turnTiming}
             awaitingInput={awaitingInput}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={fileLinkContext !== null}
             deliveryNotices={deliveryNotices}
             runtimeContext={imageRuntimeContext}
           />
@@ -383,7 +382,7 @@ export function NativeChatResolvedView({
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={promptCardPresentation.collapse}
             shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
-            {...{ answerInputRef: questionAnswerInputRef, onLinkClick }}
+            answerInputRef={questionAnswerInputRef}
           />
         </div>
       ) : null}
@@ -418,4 +417,5 @@ export function NativeChatResolvedView({
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
+  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

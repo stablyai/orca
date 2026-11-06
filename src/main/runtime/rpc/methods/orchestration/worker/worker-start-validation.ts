@@ -24,7 +24,7 @@ export function validateFederatedWorkerStartPlacement(
   if (createsWorktree && !params.repo) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Remote new-top-level requires an explicit --repo from remote discovery.'
+      'Remote new-child and new-top-level require an explicit --repo from remote discovery.'
     )
   }
   if (createsWorktree && params.terminal) {
@@ -36,7 +36,7 @@ export function validateFederatedWorkerStartPlacement(
   if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Creation and setup options apply only to remote new-top-level worktrees.'
+      'Creation and setup options apply only to remote new-child or new-top-level worktrees.'
     )
   }
   if (params.terminal && params.agent) {

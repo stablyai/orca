@@ -9,7 +9,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
   'config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
-  'config/scripts/skills/recipe-contracts/skill-recipe-shell.test.mjs',
   'src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
@@ -60,7 +59,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/acp-structured-host-configured-default.test.ts',
   'src/main/pi/rpc-session-adapter.test.ts',
   'src/main/pi/rpc-session-startup.test.ts',
-  'src/main/acp/acp-structured-publish-at-spawn.test.ts',
   'src/main/acp/acp-structured-omp-recordings.test.ts',
   'src/main/acp/acp-text-stream-identity.test.ts',
   'src/main/acp/acp-text-message-ownership.test.ts',
@@ -206,7 +204,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
-  'config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'
 ]
 

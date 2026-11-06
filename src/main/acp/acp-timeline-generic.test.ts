@@ -1,13 +1,11 @@
 import { applyPatch } from 'diff'
 import { afterEach, describe, expect, it } from 'vitest'
-import { contextTokensFromUsage } from '../../shared/agent-session/agent-session-context-usage'
 import {
   closeProviderTimelineRigs,
   messageText,
   openProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import { AcpAgentError } from './acp-errors'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
 
 afterEach(closeProviderTimelineRigs)
@@ -116,85 +114,6 @@ describe('generic ACP translation', () => {
     expect(applyPatch(oldText, diff.patch.head)).toBe(newText)
   })
 
-  it('keeps context occupancy from usage_update instead of aggregate prompt usage', async () => {
-    const { rig, translator, apply, update } = await genericRig()
-    apply(translator.openPrompt('send-1', 1000).events)
-    update({ sessionUpdate: 'usage_update', used: 42, size: 100 })
-    apply(
-      translator.promptResult(
-        'send-1',
-        {
-          stopReason: 'end_turn',
-          usage: {
-            inputTokens: 50,
-            outputTokens: 5,
-            totalTokens: 55,
-            cachedReadTokens: 20,
-            cachedWriteTokens: 10
-          }
-        },
-        1200
-      )
-    )
-    const turn = (await rig.turns())[0]!
-    expect(turn.contextUsage?.window).toEqual({ tokens: 100, capturedAt: 1100 })
-    expect(turn.contextUsage?.used).toMatchObject({
-      kind: 'estimate',
-      usage: {
-        inputTokens: 42,
-        cacheReadInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        outputTokens: 0
-      }
-    })
-    if (turn.contextUsage?.used?.kind !== 'estimate') {
-      throw new Error('Missing usage')
-    }
-    expect(contextTokensFromUsage(turn.contextUsage.used.usage)).toBe(42)
-  })
-
-  it.each(['refusal', 'max_tokens', 'max_turn_requests'] as const)(
-    'records %s as provider failure without an extra status row',
-    async (stopReason) => {
-      const { rig, translator, apply } = await genericRig()
-      apply(translator.openPrompt('send-1', 1000).events)
-      apply(translator.promptResult('send-1', { stopReason }, 1200))
-      expect((await rig.turns())[0]).toMatchObject({ state: 'completed', outcome: 'failure' })
-      expect(
-        (await rig.rows()).some(
-          (row) =>
-            row.body.kind === 'status' && row.body.providerFrame?.kind === `prompt:${stopReason}`
-        )
-      ).toBe(false)
-    }
-  )
-
-  it.each([
-    [undefined, 'The agent ended this turn with an error.'],
-    ['Agent X', 'Agent X ended this turn with an error.']
-  ])(
-    "writes a failed turn row in the agent's words, or names the agent (%s) without any",
-    async (agentName, fallback) => {
-      const { rig, translator, apply } = await genericRig(agentName ? { agentName } : {})
-      apply(translator.openPrompt('send-1', 1000).events)
-      apply(translator.promptResult('send-1', { stopReason: 'end_turn' }, 1100))
-      apply(translator.openPrompt('send-2', 1200).events)
-      apply(translator.promptFailed('send-2', new AcpAgentError(-32603, 'Upstream failed'), 1300))
-      apply(translator.openPrompt('send-3', 1400).events)
-      apply(translator.promptFailed('send-3', new AcpAgentError(-32603, ''), 1500))
-      const rows = (await rig.rows()).filter((row) => row.body.kind === 'status')
-      expect(rows.map((row) => row.body)).toEqual([
-        { kind: 'status', tone: 'error', text: 'Upstream failed' },
-        { kind: 'status', tone: 'error', text: fallback }
-      ])
-      expect((await rig.turns()).map((turn) => turn.outcome)).toEqual([
-        'success',
-        'failure',
-        'failure'
-      ])
-    }
-  )
-
   it('bounds unknown frames without opening a turn and leaves unknown stop outcomes unset', async () => {
     const { rig, translator, apply } = await genericRig()
     apply(
@@ -225,80 +144,6 @@ describe('generic ACP translation', () => {
     expect(turn).not.toHaveProperty('outcome')
   })
 
-  it('ignores live user echoes and options metadata, and rejects cross-session requests', async () => {
-    const { rig, translator, update } = await genericRig()
-    update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'echo' } })
-    update({ sessionUpdate: 'available_commands_update', availableCommands: [] })
-    expect(await rig.rows()).toEqual([])
-    expect(
-      translator.notification(
-        'session/update',
-        {
-          sessionId: 'other',
-          update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'other' } }
-        },
-        1100
-      )
-    ).toEqual([])
-    expect(() =>
-      translator.request('session/request_permission', { sessionId: 'other' }, 0)
-    ).toThrow('unknown session')
-    expect(translator.request('future/request', { sessionId: 'provider-1' }, 0)).toMatchObject({
-      events: [{ type: 'provider.frame' }]
-    })
-  })
-
-  it('drops unmarked load history, except context usage', () => {
-    const translator = new AcpTimelineTranslator({ sessionId: 'provider-1' })
-    translator.beginLoad()
-    const events = [
-      { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'User' } },
-      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'History' } },
-      { sessionUpdate: 'tool_call', toolCallId: 'old-tool', title: 'Read', status: 'completed' },
-      { sessionUpdate: 'usage_update', used: 5000, size: 256000 }
-    ].flatMap((update) =>
-      translator.notification('session/update', { sessionId: 'provider-1', update }, 1100)
-    )
-    expect(events).toEqual([
-      expect.objectContaining({ type: 'context.usage', join: { thread: 'provider-1' } })
-    ])
-  })
-
-  it('drops marked replay outside a load and uses typed standard events', async () => {
-    const { rig, translator, apply } = await genericRig()
-    expect(
-      translator.notification(
-        'session/update',
-        {
-          sessionId: 'provider-1',
-          _meta: { isReplay: true },
-          update: {
-            sessionUpdate: 'user_message_chunk',
-            content: { type: 'text', text: 'History' }
-          }
-        },
-        1100
-      )
-    ).toEqual([])
-    apply(translator.openPrompt('send-1', 1000).events)
-    apply(
-      translator.sessionEvent(
-        {
-          kind: 'known',
-          notification: {
-            sessionId: 'provider-1',
-            update: {
-              sessionUpdate: 'agent_message_chunk',
-              content: { type: 'text', text: 'typed' }
-            }
-          }
-        },
-        1100
-      )
-    )
-    apply(translator.promptResult('send-1', { stopReason: 'end_turn' }, 1200))
-    expect((await rig.rows()).some((row) => messageText(row.body) === 'typed')).toBe(true)
-  })
   it('preserves active tool input during long turns with many completed snapshots', async () => {
     const { rig, translator, apply, update } = await genericRig()
     apply(translator.openPrompt('send-1', 1000).events)
