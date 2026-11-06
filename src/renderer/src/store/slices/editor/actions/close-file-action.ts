@@ -30,11 +30,18 @@ export function createCloseFileAction(
     closeFile: (fileId, opts) => {
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
-      const placementId = opts?.placementWorkspaceId ?? preClose?.worktreeId
       const state = get()
       const owners = editorPlacementIndex(state.unifiedTabsByWorktree).workspacesByEntityId.get(
         fileId
       )
+      const placementId =
+        opts?.placementWorkspaceId ??
+        preClose?.worktreeId ??
+        (state.activeWorktreeId && owners?.has(state.activeWorktreeId)
+          ? state.activeWorktreeId
+          : owners?.size === 1
+            ? owners.values().next().value
+            : undefined)
       if (
         (opts?.placementWorkspaceId && owners?.size) ||
         (owners && [...owners].some((id) => id !== placementId))
@@ -74,15 +81,9 @@ export function createCloseFileAction(
               .map((file) => file.id)
           : [fileId]
       )
-      const unifiedTabIdsToClose = Object.values(get().unifiedTabsByWorktree ?? {}).flatMap(
-        (tabs) =>
-          tabs
-            .filter(
-              (entry) =>
-                fileIdsToClose.has(entry.entityId) && isEditorTabContentType(entry.contentType)
-            )
-            .map((entry) => entry.id)
-      )
+      const unifiedTabIdsToClose = [...fileIdsToClose].flatMap((id) => [
+        ...(editorPlacementIndex(state.unifiedTabsByWorktree).tabIdsByEntityId.get(id) ?? [])
+      ])
       const closedTabOrderIds = new Set([...fileIdsToClose, ...unifiedTabIdsToClose])
       const preCloseFiles = get().openFiles.filter((file) => fileIdsToClose.has(file.id))
       // Debounced isDirty can lag real edits; any editorDrafts entry also prevents empty-untitled cleanup.

@@ -113,21 +113,33 @@ export function removeWorktreeLayout(
   const liveTabIds = new Set(
     Object.values(unifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
+  const removedPlacementIds = new Set(
+    Object.values(s.unifiedTabsByWorktree).flatMap((tabs) =>
+      tabs.filter((tab) => !liveTabIds.has(tab.id)).map((tab) => tab.id)
+    )
+  )
+  const affectedWorkspaces = new Set(
+    Object.entries(s.unifiedTabsByWorktree)
+      .filter(([, tabs]) => tabs.some((tab) => removedPlacementIds.has(tab.id)))
+      .map(([id]) => id)
+  )
   const cleanGroups = Object.fromEntries(
     Object.entries(omitByWorktree(transferred.sourceGroups)).map(([id, groups]) => [
       id,
-      groups.map((group) => {
-        const tabOrder = group.tabOrder.filter((id) => liveTabIds.has(id))
-        return {
-          ...group,
-          tabOrder,
-          recentTabIds: group.recentTabIds?.filter((id) => liveTabIds.has(id)),
-          activeTabId:
-            group.activeTabId && liveTabIds.has(group.activeTabId)
-              ? group.activeTabId
-              : (tabOrder[0] ?? null)
-        }
-      })
+      affectedWorkspaces.has(id)
+        ? groups.map((group) => {
+            const tabOrder = group.tabOrder.filter((id) => !removedPlacementIds.has(id))
+            return {
+              ...group,
+              tabOrder,
+              recentTabIds: group.recentTabIds?.filter((id) => !removedPlacementIds.has(id)),
+              activeTabId:
+                group.activeTabId && !removedPlacementIds.has(group.activeTabId)
+                  ? group.activeTabId
+                  : (tabOrder[0] ?? null)
+            }
+          })
+        : groups
     ])
   )
   const collapsed = collapseEmptiedKeptGroups(
@@ -137,12 +149,7 @@ export function removeWorktreeLayout(
       activeGroupIdByWorktree: groupLayout?.activeGroups ?? s.activeGroupIdByWorktree
     },
     cleanGroups,
-    new Set(Object.keys(cleanGroups))
-  )
-  const removedPlacementIds = new Set(
-    Object.values(s.unifiedTabsByWorktree).flatMap((tabs) =>
-      tabs.filter((tab) => !liveTabIds.has(tab.id)).map((tab) => tab.id)
-    )
+    affectedWorkspaces
   )
   const recentEditors = Object.fromEntries(
     Object.entries(omitByWorktree(s.recentlyClosedEditorTabsByWorktree)).map(([id, rows]) => [

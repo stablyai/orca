@@ -29,7 +29,7 @@ import {
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
-  ownershipProjection: 'explicit' | 'legacy'
+  ownershipProjection: 'explicit' | 'qualified' | 'legacy'
   childRepo?: { id: string; path: string }
   expectedSshConnectionGeneration?: number
 }
@@ -159,7 +159,7 @@ export function resolveEditorOwnerRoute(
       worktreeId,
       folderHostId
     )
-    return { ...qualified, ownershipProjection: 'explicit' }
+    return { ...qualified, ownershipProjection: 'qualified' }
   }
   const scope = parseWorkspaceKey(worktreeId)
   const explicit: WorktreeOperationRouteResolution =
@@ -247,12 +247,15 @@ function resolveCurrentEditorRoute(
   const owner = resolveEditorOwnerRoute(
     state,
     worktreeId,
-    provenance.generation.route.executionHostId
+    provenance.ownershipProjection === 'qualified' ||
+      parseWorkspaceKey(worktreeId)?.type === 'folder'
+      ? provenance.generation.route.executionHostId
+      : undefined
   )
-  if (owner.ownershipProjection === 'explicit' && owner.kind === 'resolved') {
+  if (owner.ownershipProjection !== 'legacy' && owner.kind === 'resolved') {
     return owner.route
   }
-  if (owner.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
+  if (owner.kind === 'ambiguous' || provenance.ownershipProjection !== 'legacy') {
     return null
   }
   // Folder workspaces must still confirm their live owner rather than retain a published-worktree hint.
