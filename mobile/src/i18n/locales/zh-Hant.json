@@ -5,10 +5,13 @@
       "connecting": "正在連線至主機…",
       "connectingTo": "正在連線至 {{name}}…",
       "default": "系統預設",
+      "fableWindow": "Fable",
       "hostNotFound": "找不到主機",
       "invalidSnapshot": "主機傳回的帳戶快照無效",
       "loadingAccounts": "正在載入帳戶…",
       "manageAccountsHint": "請至桌面版的「設定」→「帳戶」，新增帳戶或重新驗證。",
+      "mcpWindow": "MCP",
+      "otherAgents": "其他代理程式",
       "refreshAccounts": "重新整理帳戶",
       "sessionWindow": "5 小時",
       "switchFailed": "無法切換帳戶",
@@ -186,6 +189,11 @@
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根據上一次回應的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
       "file": "檔案",
@@ -217,10 +225,22 @@
       "clipboardRejected": "無法將文字複製到剪貼簿。",
       "copyFailed": "複製失敗",
       "copyMessage": "複製訊息",
-      "selectText": "選取文字"
+      "selectText": "選取文字",
+      "rewind": "回溯到此處"
     },
     "nativeChatImageViewer": {
-      "closeImage": "關閉圖片"
+      "closeImage": "關閉圖片",
+      "imageActions": "影像動作",
+      "copyImage": "拷貝影像",
+      "saveImage": "儲存影像",
+      "share": "分享⋯",
+      "imageCopied": "已拷貝影像",
+      "imageSaved": "已儲存影像",
+      "copyFailed": "無法拷貝影像",
+      "saveFailed": "無法儲存影像",
+      "shareFailed": "無法分享影像",
+      "photosAccessDenied": "請在「設定」中允許 Orca 加入照片",
+      "imageTooLarge": "影像過大"
     },
     "nativeChatProse": {
       "attachedImage": "附加的圖片",
@@ -279,7 +299,9 @@
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
-      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。"
+      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
+      "signIn": "登入",
+      "signInHint": "在執行此聊天的電腦上開啟終端機"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",
@@ -288,6 +310,13 @@
       "remote": "此回覆進行期間，{{machine}} 上的 Orca 已停止。",
       "unnamedServer": "遠端伺服器",
       "update": "此回覆進行期間，{{machine}} 上的 Orca 為更新而重新啟動。"
+    },
+    "interruptedContinue": {
+      "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
+      "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
+    },
+    "sendError": {
+      "dismiss": "關閉"
     },
     "permission": {
       "needsAccessTo": "需要存取： ",
@@ -372,7 +401,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "預設",
-      "notReportedMarker": "未回報"
+      "notReportedMarker": "未回報",
+      "moreModels": "更多模型",
+      "fewerModels": "較少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認"
@@ -542,6 +573,47 @@
       "byteSize": "{{size}} 位元組",
       "saveUpdate": "儲存功能將在手機更新中提供。",
       "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新連線…",
+      "stopped": "{{hostName}} 已停止。請在你的電腦上啟動它。",
+      "server": "伺服器",
+      "unavailable": "無法從手機存取 {{hostName}}。請在你的電腦上開啟它的一個專案。"
+    },
+    "goal": {
+      "chip": "目標",
+      "exitMode": "退出目標模式",
+      "placeholder": "描述您的目標，定義可衡量的結果以獲得最佳結果",
+      "pursuing": "正在追求目標",
+      "set": "目標已設定",
+      "paused": "目標已暫停",
+      "blocked": "目標受阻",
+      "limited": "目標受限",
+      "clear": "清除目標",
+      "expand": "顯示完整目標",
+      "collapse": "隱藏完整目標",
+      "attachmentsUnsupported": "在設定目標之前刪除附件。",
+      "pause": "暫停",
+      "resume": "繼續"
+    },
+    "rewind": {
+      "title": "回溯到此處？",
+      "confirmation": "要丟棄此訊息及其之後的所有內容嗎？該訊息會返回到輸入框，以便您編輯並重新傳送。磁碟上的檔案變更會保留。",
+      "confirm": "回溯",
+      "unsupported": "此聊天無法返回到更早的訊息。",
+      "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
+      "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+      "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
+      "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
+      "historyLimit": "此對話過長，無法回溯。未做任何更改。",
+      "providerRefused": "代理程式無法返回到此訊息。",
+      "proofMismatch": "代理程式的歷史記錄與此聊天不符。請在繼續前檢查對話。",
+      "outcomeUnknown": "Orca 無法確認對話是否已返回到更早的訊息。它會在傳送您的下一則訊息前進行檢查。",
+      "refused": "Orca 無法返回到此訊息。請在繼續前檢查對話。",
+      "unavailable": "請等待聊天完成連線。",
+      "outcomeUnknownReturned": "Orca 無法確認對話是否已返回到此訊息。您的訊息已回到輸入框中，Orca 會在傳送您的下一則訊息前檢查對話。",
+      "timeout": "返回到此訊息後聊天未更新。請重新開啟以檢視最新內容。",
+      "pending": "請等待對話回溯到更早的訊息。"
     }
   },
   "common": {
@@ -736,12 +808,14 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
+      "needsYou_one": "{{count}} 個需要您處理",
+      "needsYou_other": "{{count}} 個需要您處理",
       "openHost": "開啟 {{title}}",
       "pairingInvalid": "配對已失效",
       "pairingTemporarilyUnavailable": "配對暫時無法使用",
       "repairHint": "點一下以重新與電腦配對",
+      "sameNetworkOnlyHint": "僅能在同一 Wi-Fi 或 Tailscale 下連線。若要隨時隨地連線，請在電腦上登入並重新配對",
       "unlockHint": "解鎖手機後，點一下以重試",
-      "updateDesktopHint": "更新桌面版 Orca 並登入，即可隨時隨地連線",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 個使用中"
     },
     "hostDiagnosticsLink": {
@@ -769,7 +843,9 @@
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
-      "openImage": "開啟圖片"
+      "openImage": "開啟圖片",
+      "wrapLines": "自動換行",
+      "disableLineWrap": "停用自動換行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "關閉抽屜面板"
@@ -1199,6 +1275,10 @@
       "retryLoading": "重新嘗試載入 {{path}}",
       "unavailable": "行動版無法使用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "複製名稱",
+      "copyRelativePath": "複製相對路徑"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
       "copySource": "複製 Markdown 原始碼",
@@ -1269,10 +1349,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} 個使用中",
+      "heading": "代理程式",
+      "showAll": "顯示全部 {{count}} 個",
+      "showFewer": "收合"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",
       "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
+    },
+    "automationsTab": {
+      "connectDesktop": "請連線 {{desktop}}，才能檢視及執行自動化。",
+      "createHint": "點一下 + 即可排定代理程式。",
+      "emptyTitle": "排定代理程式工作",
+      "lastStatus": "上次：{{status}}",
+      "newAutomation": "新增自動化",
+      "noAutomations": "尚無自動化",
+      "pairDesktop": "請先配對電腦，才能檢視及執行自動化。",
+      "paused": "已暫停",
+      "scheduled": "已排定",
+      "showFor": "選擇要顯示自動化的電腦",
+      "toggleFailed": "無法更新 {{name}}",
+      "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1284,9 +1384,7 @@
       "title": "連線至您的電腦"
     },
     "listFooter": {
-      "hostPickerTitle": "選擇開啟任務的主機",
-      "automationsHeading": "自動化",
-      "automationsHostPickerTitle": "選擇主機以開啟自動化"
+      "hostPickerTitle": "選擇開啟任務的主機"
     },
     "listHeader": {
       "desktopsHeading": "電腦"
@@ -1297,6 +1395,33 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
+    },
+    "stats": {
+      "agentTime": "代理程式時間",
+      "agentsSpawned": "已啟動代理程式",
+      "days": "{{days}} 天",
+      "heading": "你的統計",
+      "hours": "{{hours}} 小時",
+      "minutes": "{{minutes}} 分鐘",
+      "prsCreated": "已建立 PR"
+    },
+    "tabs": {
+      "automations": "自動化",
+      "chooseDesktop": "{{desktop}}，選擇其他電腦",
+      "feed": "動態",
+      "usage": "用量"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "請至桌面版的「設定」→「帳戶」新增帳戶。",
+      "connectDesktop": "請連線 {{desktop}}，才能查看代理程式帳戶用量。",
+      "emptyTitle": "尚無用量",
+      "openAccountsHint": "開啟這台電腦的帳戶",
+      "pairDesktop": "請先配對電腦，才能查看代理程式帳戶用量。",
+      "refresh": "重新整理用量",
+      "showUsageFor": "選擇要顯示用量的電腦",
+      "updatedAgo": "{{time}}前更新",
+      "updatedJustNow": "剛剛更新"
     }
   },
   "hooks": {
@@ -1497,7 +1622,7 @@
       "notificationsTitle": "代理程式需要您時，別錯過通知",
       "openInChatUi": "以聊天介面開啟工作階段",
       "openInTerminal": "在終端機中開啟工作階段",
-      "sessionViewDescription": "選擇在此裝置上以終端機或聊天介面開啟支援此功能的代理程式工作階段。長按工作階段分頁可切換檢視方式，也可稍後在「設定」中變更預設值。",
+      "sessionViewDescription": "選擇在此裝置上以終端機或聊天介面開啟支援此功能的代理程式工作階段。長按工作階段分頁可切換檢視方式，也可隨時在「設定」→「聊天介面」中變更預設值。",
       "sessionViewTitle": "如何開啟工作階段？",
       "skipNotifications": "暫不啟用通知",
       "useChatUi": "使用聊天介面"
@@ -1715,13 +1840,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "來自 {{sender}}",
-      "fromMore": "來自 {{sender}} +{{count}}",
-      "fromUnnamed": "來自代理程式",
-      "messageFrom": "來自 {{sender}} 的訊息",
-      "messageFromMore": "來自 {{sender}} +{{count}} 的訊息",
-      "messageFromUnnamed": "來自代理程式的訊息",
-      "unnamedSender": "一個代理程式"
+      "unnamedSender": "一個代理程式",
+      "fromSender": "來自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "無法建立終端機",
@@ -1746,6 +1866,7 @@
       "countWorkflows_one": "{{count}} 個工作流程",
       "countWorkflows_other": "{{count}} 個工作流程",
       "detailsUnavailable": "無法取得此工作階段的任務詳細資訊。",
+      "outputFile": "輸出：{{value0}}",
       "groupAgents": "代理程式",
       "groupMonitors": "監控項目",
       "groupShell": "Shell 命令",
@@ -2089,8 +2210,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "無法將命令儲存在排隊中的訊息內。",
-      "editing": "正在編輯訊息",
-      "editingAttributed": "正在編輯訊息 · {{attribution}}"
+      "editing": "正在編輯訊息"
     },
     "quickCommandEditorForm": {
       "action": "操作",
@@ -3882,7 +4002,6 @@
       "unknownResult": "未知結果",
       "notReported": "未回報",
       "searchOptions": "搜尋選項",
-      "scheduleAgentWorkAndViewRuns": "排定代理程式工作並查看執行",
       "task": "任務",
       "review": "檢查"
     },

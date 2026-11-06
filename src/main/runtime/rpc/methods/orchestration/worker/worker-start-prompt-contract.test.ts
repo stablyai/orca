@@ -10,7 +10,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protoco
 import {
   AGENT_PROMPT_TEST_WORKTREE_ID,
   createAgentPromptSubmissionRuntime
-} from '../../../../agent-prompt-submission-runtime-test-fixture'
+} from '../../../../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'

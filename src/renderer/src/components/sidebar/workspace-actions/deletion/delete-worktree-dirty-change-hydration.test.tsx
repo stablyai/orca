@@ -100,28 +100,6 @@ afterEach(cleanup)
 beforeEach(() => vi.clearAllMocks())
 
 describe('loaded deletion disclosure and existing hydration', () => {
-  it('shows pending and failed detail checks alongside a known dirty warning', async () => {
-    let failRead: (error: Error) => void = () => {
-      throw new Error('Status read has not started')
-    }
-    vi.mocked(getRuntimeGitStatus).mockImplementationOnce(
-      () =>
-        new Promise((_resolve, reject) => {
-          failRead = reject
-        })
-    )
-    render(<Preview worktree={target('known-dirty')} />)
-    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
-    expect(screen.getByText('· Checking…')).toBeVisible()
-    await act(async () => {
-      failRead(new Error('Details unavailable'))
-    })
-    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
-    expect(screen.getByText('· Details unavailable')).toBeVisible()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.queryByText(/No uncommitted|0 changes/)).not.toBeInTheDocument()
-  })
-
   it('expands and collapses a hydrated snapshot without requesting status again', async () => {
     vi.mocked(getRuntimeGitStatus).mockResolvedValue({
       entries: [

@@ -19,7 +19,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { hostStableKey } from '../../../shared/automation-owner-key'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
 let hasCreatedStoreInCase = false

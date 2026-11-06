@@ -15,7 +15,7 @@ import {
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
-import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
+import { getRuntimeSourceStamp } from '../../../runtime/hosts/platform-probe/host-descriptor'
 import {
   getCompatibleSelectedCodexHomePath,
   shouldStripInheritedOrcaCodexHome

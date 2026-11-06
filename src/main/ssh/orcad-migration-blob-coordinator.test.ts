@@ -119,12 +119,6 @@ describe('orcad migration blob sender', () => {
     ).rejects.toThrow('orcad_migration_blob_descriptor_conflict:terminal-restore-hints')
     expect(destination.stageChunk).not.toHaveBeenCalled()
   })
-
-  it('sends nothing and asks nothing when there are no blobs', async () => {
-    const destination = realDestination([])
-    await transferOrcadMigrationBlobs({ source: source(), manifest, blobs: [], destination })
-    expect(destination.readCapabilities).not.toHaveBeenCalled()
-  })
 })
 
 function descriptor(

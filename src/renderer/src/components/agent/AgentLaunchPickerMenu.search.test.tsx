@@ -75,6 +75,7 @@ it('skips unchanged search rows on unrelated inventory updates and launches curr
     agent: 'codex',
     surface: 'terminal',
     choices: { model: 'host-model', options: { effort: 'low' } },
+    acceptedEdits: { choices: { model: 'host-model', options: { effort: 'low' } } },
     delegated: [],
     literalKeys: []
   })
@@ -93,6 +94,7 @@ it('skips unchanged search rows on unrelated inventory updates and launches curr
       agent: 'codex',
       surface: 'terminal',
       choices: { model: 'host-model' },
+      acceptedEdits: { choices: { model: 'host-model', options: {} } },
       delegated: [],
       literalKeys: []
     },

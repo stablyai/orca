@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import { HEADLESS_RUNTIME_WINDOW_ID, OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { OrcaRuntimeService } from '../orca-runtime'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emission'
 
 describe('terminal side-effect fact channel', () => {

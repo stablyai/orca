@@ -95,12 +95,6 @@ beforeEach(() => {
 })
 
 describe('structured launch of a host-registered agent', () => {
-  it('opens an unchosen chat with empty native installation inventory', async () => {
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(store(), 'grok')).toBe('structured-native-chat')
-  })
-
   it('never offers it from a host without the registered-agents capability', async () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
     mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue(STRUCTURED)

@@ -69,6 +69,7 @@ export type InitialTerminalOptions = {
   /** The user deliberately opened this workspace with no surface choice, so it may open their
    *  default agent chat instead of a bare shell. */
   seedUserDefaultSurface?: boolean
+  initialCwd?: string
   /** The host a create targeted: a same-path twin on another host cannot make the owner ambiguous. */
   executionHostId?: ExecutionHostId
 }

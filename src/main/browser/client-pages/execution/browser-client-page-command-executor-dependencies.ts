@@ -50,6 +50,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
       browserProfileId: string
       method: BrowserClientAutomationMethod
       params: Record<string, unknown>
+      agent: boolean
       registration: BrowserClientRetainedPage['registration']
     },
     signal: AbortSignal
