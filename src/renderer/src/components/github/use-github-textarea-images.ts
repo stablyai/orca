@@ -97,7 +97,7 @@ export function useGitHubTextareaImages(
     const active = new Set(markers.map((marker) => marker.start))
     const removed: { start: number; length: number }[] = []
     display = display.replace(
-      /!\[Uploading (?:\\.|[^\\\]])*…\]\(\)/g,
+      /!\[Uploading (?:\\.|[^\\[\]])*…\]\(\)/g,
       (token: string, offset: number) => {
         if (active.has(offset) || !known.current.has(token)) {
           return token

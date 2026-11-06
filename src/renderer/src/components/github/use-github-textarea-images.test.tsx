@@ -144,26 +144,26 @@ it.each([2, 20])(
     })
     await waitFor(() => expect(upload).toHaveBeenCalledTimes(count))
     await waitFor(() => expect(field.value).not.toContain('Uploading'))
-    let historicalSearches = 0
-    const originalIndexOf = String.prototype.indexOf
-    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+    let projectionPasses = 0
+    const originalReplace = String.prototype.replace
+    const replace = vi.spyOn(String.prototype, 'replace').mockImplementation(function (
       this: string,
-      needle: string,
-      position?: number
+      pattern: string | RegExp,
+      replacement: Parameters<typeof originalReplace>[1]
     ) {
-      if (needle.startsWith('![Uploading ')) {
-        historicalSearches++
+      if (pattern instanceof RegExp && pattern.source.startsWith('!\\[Uploading ')) {
+        projectionPasses++
       }
-      return originalIndexOf.call(this, needle, position)
+      return originalReplace.call(this, pattern, replacement)
     })
     changed.mockClear()
     try {
       fireEvent.change(field, { target: { value: `${field.value} typed` } })
-      expect(historicalSearches).toBe(0)
+      expect(projectionPasses).toBe(1)
       expect(changed).toHaveBeenCalledOnce()
       expect(field.value.endsWith(' typed')).toBe(true)
     } finally {
-      search.mockRestore()
+      replace.mockRestore()
     }
     fireEvent.change(field, { target: { value: `${field.value}![Uploading history-0.png…]()` } })
     expect(field.value).not.toContain('Uploading')
@@ -174,3 +174,20 @@ it.each([2, 20])(
     )
   }
 )
+
+it('removes an undo-restored owned label after an incomplete user label prefix', async () => {
+  const held = Promise.withResolvers<string>()
+  upload.mockReset().mockReturnValue(held.promise)
+  const prefix = '![Uploading note '
+  const view = render(<Draft initialBody={prefix} />)
+  const field = view.getByRole('textbox') as HTMLTextAreaElement
+  paste(field)
+  const restored = field.value
+  fireEvent.change(field, { target: { value: field.value.slice(0, -1) } })
+  expect(field.value).toBe(prefix)
+  fireEvent.change(field, { target: { value: restored } })
+  expect(field.value).toBe(prefix)
+  expect(view.container.querySelector('output')?.textContent).toBe(prefix)
+  await act(async () => held.resolve('https://github.com/user-attachments/assets/deleted'))
+  expect(view.container.querySelector('output')?.textContent).toBe(prefix)
+})

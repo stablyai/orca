@@ -117,6 +117,9 @@ export function useGitHubImagePaste(
       return true
     },
     transformPastedHTML: (html: string) => {
+      if (!/<img\b/i.test(html)) {
+        return html
+      }
       const document = new DOMParser().parseFromString(html, 'text/html')
       let removed = false
       for (const image of document.querySelectorAll('img[src]')) {
@@ -135,7 +138,7 @@ export function useGitHubImagePaste(
           translate('github.pasteImageFile', 'Paste the image as a file to attach it to GitHub.')
         )
       }
-      return document.body.innerHTML
+      return removed ? document.body.innerHTML : html
     }
   }
 }

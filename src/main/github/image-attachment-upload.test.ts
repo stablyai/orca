@@ -32,6 +32,7 @@ describe('GitHub image attachment upload', () => {
         resolve: async () => repository
       })
     ).resolves.toEqual({ url: 'https://github.com/user-attachments/assets/a' })
+    expect(gh.mock.calls[0][0]).toEqual(['api', '--cache', '60s', 'repos/octo/images'])
     expect(gh.mock.calls[1][0]).toEqual([
       'api',
       '-X',
