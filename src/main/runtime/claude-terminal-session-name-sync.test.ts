@@ -1,0 +1,363 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  ClaudeTerminalSessionNameSync,
+  type ClaudeTerminalSessionNameSyncDeps
+} from './claude-terminal-session-name-sync'
+import {
+  claudeTitleShowsName,
+  latestClaudeCustomTitle,
+  normalizeClaudeSessionName
+} from '../claude/claude-terminal-session-name'
+
+const LEAF = '11111111-1111-4111-8111-111111111111'
+const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
+const PANE = `tab-1:${LEAF}`
+
+function harness(overrides: Partial<ClaudeTerminalSessionNameSyncDeps> = {}) {
+  let customTitle: string | null = null
+  const sent: string[] = []
+  const renamed: string[] = []
+  let sync: ClaudeTerminalSessionNameSync
+  const deps: ClaudeTerminalSessionNameSyncDeps = {
+    isEnabled: () => true,
+    listRows: () => [{ paneKey: PANE, agentType: 'claude' }],
+    readTranscriptPath: () => '/t.jsonl',
+    getHandle: () => 'handle-1',
+    waitForEmptyComposer: async () => true,
+    readComposerDraft: async () => undefined,
+    sendCommand: async (_handle, text, _signal, beforeEachWrite) => {
+      // The paste, then Enter, each behind the write check.
+      await beforeEachWrite()
+      await beforeEachWrite()
+      sent.push(text)
+      // Claude records the rename, then retitles its window.
+      customTitle = text.replace('/rename ', '')
+      sync.observeTitle(PANE, customTitle)
+    },
+    renameTab: async (_handle, name) => {
+      renamed.push(name)
+      // The host's renameTerminal reports the rename back, as it does for every source.
+      sync.tabRenamed('tab-1', name)
+    },
+    readCustomTitle: async () => customTitle,
+    ...overrides
+  }
+  sync = new ClaudeTerminalSessionNameSync(deps)
+  return {
+    sync,
+    sent,
+    renamed,
+    claudeRenames: (name: string) => {
+      customTitle = name
+      sync.observeTitle(PANE, name)
+    }
+  }
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+describe('ClaudeTerminalSessionNameSync', () => {
+  it('sends /rename for a tab rename without renaming the tab back', async () => {
+    const { sync, sent, renamed } = harness()
+    sync.tabRenamed('tab-1', '  fix   login ')
+    await settle()
+    sync.tabRenamed('tab-1', 'fix login')
+    await settle()
+    expect(sent).toEqual(['/rename fix login'])
+    expect(renamed).toEqual([])
+  })
+
+  it('names the tab after a /rename typed in Claude, without sending it back', async () => {
+    const { claudeRenames, sent, renamed } = harness()
+    claudeRenames('payments refactor')
+    await settle()
+    expect(renamed).toEqual(['payments refactor'])
+    expect(sent).toEqual([])
+  })
+
+  it('ignores Claude titles its transcript never recorded as a rename', async () => {
+    const { sync, renamed } = harness({ readCustomTitle: async () => 'older name' })
+    sync.observeTitle(PANE, 'Login bug')
+    await settle()
+    expect(renamed).toEqual([])
+  })
+
+  it('confirms a title at the next turn change once the transcript catches up', async () => {
+    let recorded: string | null = null
+    const { sync, renamed } = harness({ readCustomTitle: async () => recorded })
+    sync.observeTitle(PANE, 'early name')
+    await settle()
+    expect(renamed).toEqual([])
+    recorded = 'early name'
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renamed).toEqual(['early name'])
+  })
+
+  it('leaves a tab with several Claude panes alone', async () => {
+    const { sync, sent } = harness({
+      listRows: () => [
+        { paneKey: PANE, agentType: 'claude' },
+        { paneKey: `tab-1:${OTHER_LEAF}`, agentType: 'claude' }
+      ]
+    })
+    sync.tabRenamed('tab-1', 'shared')
+    await settle()
+    expect(sent).toEqual([])
+  })
+
+  it('sends only the newest name once the composer frees up', async () => {
+    const waits: (() => void)[] = []
+    const sendCommand = vi.fn(async () => {})
+    const { sync } = harness({
+      sendCommand,
+      waitForEmptyComposer: (_handle, signal) =>
+        new Promise((resolve) => {
+          waits.push(() => resolve(!signal.aborted))
+        })
+    })
+    sync.tabRenamed('tab-1', 'first')
+    sync.tabRenamed('tab-1', 'second')
+    for (const release of waits) {
+      release()
+    }
+    await settle()
+    expect(sendCommand).toHaveBeenCalledTimes(1)
+    expect(sendCommand).toHaveBeenCalledWith(
+      'handle-1',
+      '/rename second',
+      expect.anything(),
+      expect.any(Function)
+    )
+  })
+  it('lets a /rename typed in Claude win over a tab rename still waiting for the composer', async () => {
+    const sendCommand = vi.fn(async () => {})
+    const { sync, claudeRenames, renamed } = harness({
+      sendCommand,
+      waitForEmptyComposer: (_handle, signal) =>
+        new Promise((resolve) => signal.addEventListener('abort', () => resolve(false)))
+    })
+    sync.tabRenamed('tab-1', 'from orca')
+    claudeRenames('from claude')
+    await settle()
+    expect(renamed).toEqual(['from claude'])
+    expect(sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('reads the transcript once per shown name, not per spinner frame', async () => {
+    const readCustomTitle = vi.fn(async () => 'spun')
+    const { sync, renamed } = harness({ readCustomTitle })
+    for (const frame of ['⠂ spun', '⠐ spun', '✳ spun']) {
+      sync.observeTitle(PANE, frame)
+    }
+    await settle()
+    expect(readCustomTitle).toHaveBeenCalledTimes(1)
+    expect(renamed).toEqual(['spun'])
+  })
+
+  it('retries a name whose /rename was not delivered', async () => {
+    const sendCommand = vi
+      .fn<ClaudeTerminalSessionNameSyncDeps['sendCommand']>()
+      .mockRejectedValueOnce(new Error('agent_not_in_foreground'))
+      .mockResolvedValue(undefined)
+    const { sync } = harness({ sendCommand })
+    sync.tabRenamed('tab-1', 'again')
+    await settle()
+    sync.tabRenamed('tab-1', 'again')
+    await settle()
+    expect(sendCommand).toHaveBeenCalledTimes(2)
+  })
+
+  it('names the tab once the transcript catches up with a second rename', async () => {
+    let recorded: string | null = 'first'
+    const { sync, renamed } = harness({ readCustomTitle: async () => recorded })
+    sync.observeTitle(PANE, '✳ first')
+    await settle()
+    sync.observeTitle(PANE, '✳ second')
+    await settle()
+    recorded = 'second'
+    sync.observeTitle(PANE, '⠂ second')
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renamed).toEqual(['first', 'second'])
+  })
+
+  it('drops a queued rename when sync is turned off or a second Claude pane joins', async () => {
+    let enabled = true
+    let rows = [{ paneKey: PANE, agentType: 'claude' as const }]
+    const waits: (() => void)[] = []
+    const sendCommand = vi.fn(async () => {})
+    const { sync } = harness({
+      isEnabled: () => enabled,
+      listRows: () => rows,
+      sendCommand,
+      waitForEmptyComposer: () => new Promise((resolve) => waits.push(() => resolve(true)))
+    })
+    sync.tabRenamed('tab-1', 'while busy')
+    enabled = false
+    waits.shift()?.()
+    await settle()
+    enabled = true
+    sync.tabRenamed('tab-1', 'joined')
+    rows = [...rows, { paneKey: `tab-1:${OTHER_LEAF}`, agentType: 'claude' }]
+    waits.shift()?.()
+    await settle()
+    expect(sendCommand).not.toHaveBeenCalled()
+  })
+
+  it('drops a rename that goes stale at the write boundary', async () => {
+    let enabled = true
+    const written: string[] = []
+    const { sync } = harness({
+      isEnabled: () => enabled,
+      sendCommand: async (_handle, text, _signal, beforeEachWrite) => {
+        // The write guard waits; sync is turned off meanwhile.
+        enabled = false
+        await beforeEachWrite()
+        written.push(text)
+      }
+    })
+    sync.tabRenamed('tab-1', 'late')
+    await settle()
+    expect(written).toEqual([])
+  })
+
+  it('drops a Claude confirmation that a tab rename overtook during the transcript read', async () => {
+    let finishRead: (() => void) | undefined
+    const { sync, renamed, sent } = harness({
+      readCustomTitle: () => new Promise((resolve) => (finishRead = () => resolve('old'))),
+      sendCommand: async (_handle, text) => {
+        sent.push(text)
+      }
+    })
+    sync.observeTitle(PANE, '✳ old')
+    sync.tabRenamed('tab-1', 'newer')
+    finishRead?.()
+    await settle()
+    expect(renamed).toEqual([])
+    expect(sent).toEqual(['/rename newer'])
+  })
+
+  it('retries a Claude name whose tab rename failed', async () => {
+    const renameTab = vi
+      .fn<ClaudeTerminalSessionNameSyncDeps['renameTab']>()
+      .mockRejectedValueOnce(new Error('terminal_handle_stale'))
+      .mockResolvedValue(undefined)
+    const { sync, claudeRenames } = harness({ renameTab })
+    claudeRenames('from claude')
+    await settle()
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renameTab).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops an older rename still writing once a newer one was queued', async () => {
+    const written: string[] = []
+    let releaseFirst: (() => void) | undefined
+    const { sync } = harness({
+      sendCommand: async (_handle, text, _signal, beforeEachWrite) => {
+        if (text === '/rename older') {
+          // The write guard holds the older rename before its paste.
+          await new Promise<void>((resolve) => (releaseFirst = resolve))
+        }
+        await beforeEachWrite()
+        await beforeEachWrite()
+        written.push(text)
+      }
+    })
+    sync.tabRenamed('tab-1', 'older')
+    await settle()
+    sync.tabRenamed('tab-1', 'newer')
+    await settle()
+    releaseFirst?.()
+    await settle()
+    expect(written).toEqual(['/rename newer'])
+  })
+
+  it('waits for the composer again when the user starts typing before the paste', async () => {
+    const drafts: (string | undefined)[] = ['typing', undefined, undefined]
+    const { sync, sent } = harness({ readComposerDraft: async () => drafts.shift() })
+    sync.tabRenamed('tab-1', 'retried')
+    await settle()
+    await settle()
+    // Busy before the first paste, then two clean checks on the retry.
+    expect(drafts).toEqual([])
+    expect(sent).toEqual(['/rename retried'])
+  })
+
+  it('never submits when the user typed into the pasted command', async () => {
+    const drafts: (string | undefined)[] = [undefined, '/rename mine and my draft']
+    const { sync, sent } = harness({ readComposerDraft: async () => drafts.shift() })
+    sync.tabRenamed('tab-1', 'mine')
+    await settle()
+    expect(sent).toEqual([])
+  })
+
+  it('rechecks a title shown before its transcript path was known', async () => {
+    let path: string | null = null
+    const { sync, renamed } = harness({
+      readTranscriptPath: () => path,
+      readCustomTitle: async () => 'early'
+    })
+    sync.observeTitle(PANE, '✳ early')
+    await settle()
+    path = '/t.jsonl'
+    sync.observeTurnChange(PANE)
+    await settle()
+    expect(renamed).toEqual(['early'])
+  })
+
+  it('does not name a tab with several Claude panes from one of them', async () => {
+    const { claudeRenames, renamed } = harness({
+      listRows: () => [
+        { paneKey: PANE, agentType: 'claude' },
+        { paneKey: `tab-1:${OTHER_LEAF}`, agentType: 'claude' }
+      ]
+    })
+    claudeRenames('one of two')
+    await settle()
+    expect(renamed).toEqual([])
+  })
+
+  it('withdraws a rename still waiting for the composer when the tab title is cleared', async () => {
+    const sendCommand = vi.fn(async () => {})
+    let release: (() => void) | undefined
+    const { sync } = harness({
+      sendCommand,
+      waitForEmptyComposer: (_handle, signal) =>
+        new Promise((resolve) => {
+          release = () => resolve(!signal.aborted)
+        })
+    })
+    sync.tabRenamed('tab-1', 'never mind')
+    sync.tabRenamed('tab-1', null)
+    release?.()
+    await settle()
+    expect(sendCommand).not.toHaveBeenCalled()
+  })
+})
+
+describe('Claude transcript names', () => {
+  it('keeps control characters out of a session name', () => {
+    expect(normalizeClaudeSessionName('fix\u0003 login\u001b[2J')).toBe('fix login [2J')
+  })
+
+  it('reads the newest custom title and skips a torn last line', () => {
+    const tail = [
+      '{"type":"custom-title","customTitle":"old","sessionId":"s"}',
+      '{"type":"user","message":"custom-title in prose"}',
+      '{"type":"custom-title","customTitle":"new","sessionId":"s"}',
+      '{"type":"custom-title","customTi'
+    ].join('\n')
+    expect(latestClaudeCustomTitle(tail)).toBe('new')
+  })
+
+  it('matches a title with or without the status glyph', () => {
+    expect(claudeTitleShowsName('my name', 'my name')).toBe(true)
+    expect(claudeTitleShowsName('✳ my name', 'my name')).toBe(true)
+    expect(claudeTitleShowsName('◐ my name', 'my name')).toBe(true)
+    expect(claudeTitleShowsName('not my name', 'my name')).toBe(false)
+    expect(claudeTitleShowsName('# urgent', 'urgent')).toBe(false)
+    expect(claudeTitleShowsName('# urgent', '# urgent')).toBe(true)
+  })
+})

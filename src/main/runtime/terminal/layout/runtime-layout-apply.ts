@@ -250,7 +250,7 @@ async function renameEditorFilesInWorkspaces(
 }
 
 /** A tab-bar id's terminal id, which a legacy entry's can differ from. */
-function terminalIdOf(
+export function terminalIdOf(
   store: RuntimeStore,
   hostId: ExecutionHostId,
   workspace: string,

@@ -15,6 +15,10 @@ import {
   getAgentGeneratedTabTitlesTitle
 } from './behavior/agent-generated-tab-title-copy'
 import {
+  getClaudeSessionNameSyncDescription,
+  getClaudeSessionNameSyncTitle
+} from './behavior/claude-session-name-sync-copy'
+import {
   getAgentStatusHooksDescription,
   getAgentStatusHooksTitle
 } from './behavior/agent-status-hooks-copy'
@@ -104,6 +108,7 @@ export function AgentsPane({
           </>
         ) : null}
         <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
+        <ClaudeSessionNameSyncSetting settings={settings} updateSettings={updateSettings} />
         {!isPairedWebClientWindow() ? (
           <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
@@ -157,6 +162,21 @@ export function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: Age
         checked={enabled}
         onChange={() => updateSettings({ tabAutoGenerateTitle: !enabled })}
         ariaLabel={getAgentGeneratedTabTitlesTitle()}
+      />
+    </section>
+  )
+}
+
+export function ClaudeSessionNameSyncSetting({ settings, updateSettings }: AgentSettingProps) {
+  const enabled = settings.claudeSessionNameSync !== false
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={getClaudeSessionNameSyncTitle()}
+        description={getClaudeSessionNameSyncDescription()}
+        checked={enabled}
+        onChange={() => updateSettings({ claudeSessionNameSync: !enabled })}
+        ariaLabel={getClaudeSessionNameSyncTitle()}
       />
     </section>
   )

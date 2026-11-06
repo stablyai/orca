@@ -1,5 +1,6 @@
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
+import type { ClaudeSessionNameSyncSettings } from './claude-session-name-sync-settings'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
@@ -21,6 +22,7 @@ import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
+  ClaudeSessionNameSyncSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
