@@ -1,3 +1,4 @@
+import { isClaudeToolResultContent } from '../../shared/claude-tool-content'
 import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
 import {
@@ -16,7 +17,7 @@ export function claudeTranscriptPrompt(
     row.type === 'attachment' ||
     (envelope?.role === 'user' &&
       !feedback &&
-      envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result'))
+      envelope.content.some((part) => !isClaudeToolResultContent(part)))
   const decodedPrompt = candidate
     ? decodeClaudeTranscriptLine(JSON.stringify(row), `${providerSessionId}:${String(row.uuid)}`)
     : null

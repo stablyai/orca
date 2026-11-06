@@ -24,6 +24,10 @@ import {
 } from '../journal/claude-structured-item-translation'
 import { claudeResultOutcome } from '../../claude-result-outcome'
 import { isUnmodeledClaudeSystemFrame } from '../../../native-chat/agent-session-wire/provider-frame-disposition'
+import {
+  isClaudeToolUseContent,
+  isClaudeToolResultContent
+} from '../../../../shared/claude-tool-content'
 import type { ClaudeRowStamp } from '../../claude-provisional-row-corrections'
 import {
   CLAUDE_API_RETRY_FRAME_KIND,
@@ -105,10 +109,10 @@ export function isModeledClaudeContent(value: unknown): boolean {
     // Local attachments replay with the base64 or file source Orca sent.
     return source?.type === 'base64' || source?.type === 'file'
   }
-  if (part.type === 'tool_use') {
+  if (isClaudeToolUseContent(part)) {
     return claudeText(part.id) !== null && claudeText(part.name) !== null
   }
-  if (part.type === 'tool_result') {
+  if (isClaudeToolResultContent(part)) {
     return claudeText(part.tool_use_id) !== null
   }
   // Redacted thinking arrives as an empty string plus a signature.

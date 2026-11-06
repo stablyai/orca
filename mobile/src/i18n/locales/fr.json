@@ -578,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} a atteint sa limite d’utilisation.",
       "reachedNamed": "{{agent}} a atteint sa limite {{window}}.",
-      "resetsAt": "Elle se réinitialise à {{when}}.",
       "theAgent": "L'agent",
       "windowCredits": "d’utilisation supplémentaire",
       "windowSession": "de session",
       "windowWeekly": "hebdomadaire",
-      "windowWeeklyModel": "hebdomadaire du modèle"
+      "windowWeeklyModel": "hebdomadaire du modèle",
+      "switchAccount": "Changer de compte",
+      "autoContinueCancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
+      "autoContinueCancel": "Ne pas reprendre",
+      "statusResetAt": "Réinitialisé à {{time}}",
+      "statusResetsAt": "Réinitialisation à {{time}}",
+      "statusContinuesShortly": "Orca reprendra sous peu",
+      "statusContinuesThen": "Orca reprendra à ce moment-là",
+      "statusWontContinue": "Orca ne reprendra pas automatiquement"
     },
     "useImageUpload": {
       "attachFailed": "Échec de l'ajout",
@@ -656,6 +663,8 @@
     }
   },
   "common": {
+    "details": "Détails",
+    "hideDetails": "Masquer les détails",
     "back": "Retour",
     "cancel": "Annuler",
     "close": "Fermer",
@@ -888,6 +897,13 @@
       "openImage": "Ouvrir l'image",
       "wrapLines": "Retour à la ligne",
       "disableLineWrap": "Désactiver le retour à la ligne"
+    },
+    "markdownCallout": {
+      "note": "Remarque",
+      "tip": "Conseil",
+      "important": "Important",
+      "warning": "Avertissement",
+      "caution": "Attention"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fermer le panneau"
@@ -3365,7 +3381,8 @@
       "moreFields_one": "+{{count}} champ",
       "moreFields_other": "+{{count}} champs",
       "noItems": "Aucun élément de projet",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} de plus"
     },
     "githubProjectPickers": {
       "add": "Ajouter",
