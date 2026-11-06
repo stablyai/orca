@@ -1,6 +1,6 @@
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import { buildJiraTextMatchJql, mayBeJql } from '../../../../../shared/jira/jira-search-input-jql'
-import { searchJiraIssuesByKeyOrText } from '../../jira-key-or-text-search'
+import { searchJiraIssuesByKeyOrText, type JiraIssueSearch } from '../../jira-key-or-text-search'
 import { getJiraBadRequestReason } from './task-page-jira-load-state'
 
 export type TaskPageJiraJqlRejection = {
@@ -18,15 +18,19 @@ export type TaskPageJiraSearchResult = {
 
 export async function searchTaskPageJiraIssues(
   query: string,
-  search: (jql: string) => Promise<JiraIssue[]>,
-  mode: 'input' | 'jql' = 'input'
+  search: JiraIssueSearch,
+  mode: 'input' | 'jql' = 'input',
+  projectKey?: string
 ): Promise<TaskPageJiraSearchResult> {
   const trimmed = query.trim()
   if (mode === 'jql') {
     return { issues: await search(trimmed), jqlRejection: null }
   }
   if (!mayBeJql(trimmed)) {
-    return { issues: await searchJiraIssuesByKeyOrText(trimmed, search), jqlRejection: null }
+    return {
+      issues: await searchJiraIssuesByKeyOrText(trimmed, search, projectKey),
+      jqlRejection: null
+    }
   }
   try {
     return { issues: await search(trimmed), jqlRejection: null }

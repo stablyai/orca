@@ -11,7 +11,10 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
-import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
+import {
+  searchJiraIssuesByKeyOrText,
+  type JiraIssueSearch
+} from '@/components/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
@@ -262,17 +265,14 @@ export function useSmartWorkspaceSecondarySearches({
       jiraConnectionStatus?.selectedSiteId ??
       jiraConnectionStatus?.activeSiteId ??
       null
-    void searchJiraIssuesByKeyOrText(jiraSearchQuery, (jql) =>
+    const searchOptions = { sourceContext: jiraSourceContext, siteId, signal: controller.signal }
+    const search: JiraIssueSearch = (jql, suggestions) =>
       searchJiraIssues(
         jiraProject ? restrictJiraQueryToProject(jql, jiraProject) : jql,
         RESULT_LIMIT,
-        {
-          sourceContext: jiraSourceContext,
-          siteId,
-          signal: controller.signal
-        }
+        { ...searchOptions, ...(suggestions ? { suggestions } : {}) }
       )
-    )
+    void searchJiraIssuesByKeyOrText(jiraSearchQuery, search, jiraProject?.key)
       .then((issues) => {
         if (!stale) {
           setJiraIssues(issues)

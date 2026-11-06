@@ -1,5 +1,6 @@
 import { taskProviderFailure } from '../../../shared/task-provider-failure'
 import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira-quick-filter-params'
+import { IssueSuggestions } from '../../../shared/rpc-contract/jira-params'
 import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira-favourite-filter-params'
 import { ipcMain } from 'electron'
 import type { JiraMediaFormat } from '../../../shared/jira/jira-attachment-image'
@@ -82,7 +83,13 @@ export function registerJiraHandlers(): void {
     'jira:searchIssues',
     async (
       _event,
-      args: { jql: string; limit?: number; siteId?: JiraSiteSelection; requestId?: string }
+      args: {
+        jql: string
+        limit?: number
+        siteId?: JiraSiteSelection
+        requestId?: string
+        suggestions?: unknown
+      }
     ) => {
       if (typeof args?.jql !== 'string') {
         return []
@@ -92,7 +99,9 @@ export function registerJiraHandlers(): void {
           args.jql,
           clampJiraIssueLimit(args.limit),
           normalizeJiraSiteSelection(args.siteId),
-          signal
+          signal,
+          false,
+          args.suggestions === undefined ? undefined : IssueSuggestions.parse(args.suggestions)
         )
       )
     }

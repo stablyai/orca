@@ -130,6 +130,26 @@ describe('buildJiraTextMatchJql', () => {
 
 describe('buildJiraIssueKeyJql', () => {
   it.each([
+    ['400', 'PROJ', 'key = "PROJ-400"'],
+    [' 400 ', 'proj', 'key = "PROJ-400"'],
+    ['OTHER-5', 'PROJ', 'key = "OTHER-5"'],
+    ['9007199254740993', 'PROJ', 'key = "PROJ-9007199254740993"']
+  ])('resolves %j within project %s', (input, projectKey, expected) => {
+    expect(buildJiraIssueKeyJql(input, projectKey)).toBe(expected)
+  })
+
+  it.each(['400 crash', '#400', 'v400', '4.0', '-400'])('keeps %j as text', (input) => {
+    expect(buildJiraIssueKeyJql(input, 'PROJ')).toBeNull()
+  })
+
+  it.each([undefined, '', ' ', '10', 'PROJ" OR key = "OTHER'])(
+    'does not infer a key from a missing or invalid project: %j',
+    (projectKey) => {
+      expect(buildJiraIssueKeyJql('400', projectKey)).toBeNull()
+    }
+  )
+
+  it.each([
     ['abc-12', 'key = "ABC-12"'],
     ['  ABC-12  ', 'key = "ABC-12"'],
     // Key-shaped text a user may well mean literally; the caller retries these as text.
