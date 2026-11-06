@@ -58,6 +58,7 @@ export type RequestActiveTerminalPaneSplitDetail = {
 /** Unlike a split request, a close always names its tab: an untargeted close must not reach every mounted pane. */
 export type RequestActiveTerminalPaneCloseDetail = {
   tabId: string
+  leafId?: string
 }
 
 export type CloseTerminalPaneDetail = {

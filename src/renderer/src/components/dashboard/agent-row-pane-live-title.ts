@@ -13,5 +13,7 @@ export function resolveAgentRowPaneLiveTitle(
   if (!leafId) {
     return null
   }
-  return resolveRuntimePaneTitleForLeaf(layout, paneTitles, leafId)
+  return (
+    layout.titlesByLeafId?.[leafId] ?? resolveRuntimePaneTitleForLeaf(layout, paneTitles, leafId)
+  )
 }

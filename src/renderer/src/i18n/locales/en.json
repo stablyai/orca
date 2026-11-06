@@ -222,6 +222,18 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "agentActions": {
+      "menu": "Agent actions",
+      "close": "Close agent",
+      "paneUnavailable": "This agent could not be closed. Try again.",
+      "rename": "Rename…",
+      "renameTitle": "Rename agent",
+      "renameDescription": "Leave the name blank to use the default title.",
+      "renameUnavailable": "This agent is no longer available to rename.",
+      "name": "Name",
+      "cancel": "Cancel",
+      "save": "Save"
     }
   },
   "app": {
