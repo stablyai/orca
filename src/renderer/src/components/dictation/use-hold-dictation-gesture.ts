@@ -113,9 +113,12 @@ export function useHoldDictationGesture({
   const activeHoldRef = useRef<ActiveHold | null>(null)
   const mode = settings?.voice?.dictationMode ?? 'toggle'
   const enabled = settings?.voice?.enabled === true
-  // Settings changes re-create these callbacks; re-running the effect would end a held dictation.
+  // Settings and keybinding refreshes re-create these inputs; re-running the effect would end a held dictation.
   const start = useEffectEvent(() => void startDictation())
   const stop = useEffectEvent(() => void stopDictation())
+  const matchesShortcut = useEffectEvent((e: KeyboardEvent) =>
+    keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)
+  )
 
   // Hold mode owns DOM press/release events; main before-input-event suppresses keyup after preventDefault.
   useEffect(() => {
@@ -133,7 +136,7 @@ export function useHoldDictationGesture({
     }
 
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (!keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
+      if (!matchesShortcut(e)) {
         return
       }
       e.preventDefault()
@@ -154,11 +157,7 @@ export function useHoldDictationGesture({
 
     const handleKeyUp = (e: KeyboardEvent): void => {
       const hold = activeHoldRef.current
-      if (
-        hold &&
-        (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings) ||
-          hold.matchesRelease(e))
-      ) {
+      if (hold && (matchesShortcut(e) || hold.matchesRelease(e))) {
         endHold()
       }
     }
@@ -180,5 +179,5 @@ export function useHoldDictationGesture({
       window.removeEventListener('blur', endHold)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [mode, enabled, keybindings, dictationStateRef])
+  }, [mode, enabled, dictationStateRef])
 }

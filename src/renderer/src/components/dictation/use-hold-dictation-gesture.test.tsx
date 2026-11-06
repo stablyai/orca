@@ -178,7 +178,7 @@ describe('useHoldDictationGesture', () => {
     expect(stopDictation).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a held dictation when the dictation callbacks are re-created', async () => {
+  it('keeps a held dictation when its callbacks and keybindings are re-created', async () => {
     await renderProbe()
 
     beginHold()
@@ -191,6 +191,7 @@ describe('useHoldDictationGesture', () => {
     })
 
     expect(firstStopDictation).not.toHaveBeenCalled()
+    expect(stopDictation).not.toHaveBeenCalled()
 
     act(() => {
       dispatchKeyUp({ key: 'e', code: 'KeyE', metaKey: false })
