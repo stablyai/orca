@@ -80,6 +80,22 @@ function makeAgentSnapshot(
   }
 }
 
+/** An older host omits the worktree on agents restored after a restart. */
+function withoutAgentWorktree(
+  snapshot: RuntimeMobileSessionTabsResult
+): RuntimeMobileSessionTabsResult {
+  return {
+    ...snapshot,
+    tabs: snapshot.tabs.map((tab) => {
+      if (tab.type !== 'terminal' || !tab.agentStatus) {
+        return tab
+      }
+      const { worktreeId: _worktreeId, ...agentStatus } = tab.agentStatus
+      return { ...tab, agentStatus }
+    })
+  }
+}
+
 function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, live: boolean): void {
   const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
   applyWebSessionTabsStorePatch(
@@ -178,24 +194,30 @@ describe('paired session-tab agent completion notifications', () => {
     }
   )
 
-  it('announces one live stamped completion after a late-pair working seed', () => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
-      getPtyId: () => 'pty-1',
-      inspectProcess: vi.fn(),
-      dispatchCompletion,
-      isLive: () => true
-    })
-    mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
-      seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
-    )
+  it.each([
+    ['a host naming the worktree', (snapshot: RuntimeMobileSessionTabsResult) => snapshot],
+    ['an older host that omits it', withoutAgentWorktree]
+  ])(
+    'announces one live stamped completion after a late-pair working seed from %s',
+    (_label, frame) => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
+        getPtyId: () => 'pty-1',
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
+      })
+      mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
+        seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
+      )
 
-    applySnapshot(makeAgentSnapshot(1, NOW), false)
-    applySnapshot(makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000), true)
+      applySnapshot(frame(makeAgentSnapshot(1, NOW)), false)
+      applySnapshot(frame(makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000)), true)
 
-    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-  })
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it('announces a host-stamped turn while client OSC status owns the pane', () => {
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
