@@ -1,14 +1,17 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import type { RuntimeWorktreeScanCache, RuntimeWorktreeScanRefresh } from '../../orca-runtime-core'
+import type {
+  RuntimeWorktreeScanCache,
+  RuntimeWorktreeScanRefresh
+} from './runtime-worktree-scan-state'
 import { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
 import {
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-} from '../../orca-runtime-postlude'
+} from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { withTimeoutResult } from '../../runtime-async-boundaries'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
 import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
-import { RuntimeMachineName } from '../runtime-machine-name'
+import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop-targets'
 

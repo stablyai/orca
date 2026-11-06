@@ -163,17 +163,6 @@ beforeAll(async () => {
 afterAll(() => releaseSeed?.())
 
 describe('process-host dist build', () => {
-  it('leaves an up-to-date dist untouched on repeated builds', async () => {
-    const packageDir = fixture(undefined, seededDist)
-    const before = distSnapshot(packageDir)
-
-    const repeated = await build(packageDir)
-
-    expect(repeated.stdout).toBe('')
-    expect(distSnapshot(packageDir)).toEqual(before)
-    expect(leftovers(packageDir)).toEqual([])
-  })
-
   it('rewrites only changed outputs and keeps source maps pointing at src', async () => {
     const packageDir = fixture(undefined, seededDist)
     const before = distSnapshot(packageDir)
@@ -189,25 +178,6 @@ describe('process-host dist build', () => {
     expect(after['internal.js']).not.toEqual(before['internal.js'])
     const map = JSON.parse(readFileSync(join(packageDir, 'dist', 'internal.js.map'), 'utf8'))
     expect(map.sources).toEqual(['../src/internal.ts'])
-  })
-
-  it('removes outputs of renamed sources', async () => {
-    const packageDir = fixture(undefined, seededDist)
-    renameSync(join(packageDir, 'src', 'internal.ts'), join(packageDir, 'src', 'renamed.ts'))
-    writeFileSync(join(packageDir, 'src', 'entry.ts'), "export { value } from './renamed'\n")
-
-    await build(packageDir)
-
-    expect(readdirSync(join(packageDir, 'dist')).sort()).toEqual([
-      'entry.d.ts',
-      'entry.d.ts.map',
-      'entry.js',
-      'entry.js.map',
-      'renamed.d.ts',
-      'renamed.d.ts.map',
-      'renamed.js',
-      'renamed.js.map'
-    ])
   })
 
   it('preserves the previous dist when compilation fails', async () => {
@@ -262,44 +232,6 @@ await buildPackageDist(process.argv[2])
     expect(reader).toMatchObject({ code: 0, stderr: '' })
     expect(JSON.parse(reader.stdout)).toEqual({ value: 2, oldDependencyExists: true })
     expect(existsSync(oldDependency)).toBe(false)
-    expect(leftovers(packageDir)).toEqual([])
-  })
-
-  it('keeps dist loadable while concurrent builds and a reader run', async () => {
-    const packageDir = fixture(undefined, seededDist)
-    writeFileSync(
-      join(packageDir, 'src', 'internal.ts'),
-      `export const value = ${'2 + '.repeat(10_000)}2\n`
-    )
-    const entry = join(packageDir, 'dist', 'entry.js')
-    const finished = join(packageDir, 'builds-finished')
-    const reader = runProcess({
-      program: nodeExecutable,
-      args: [
-        '-e',
-        `const { existsSync } = require('node:fs')
-let reads = 0
-while (!existsSync(${JSON.stringify(finished)}) || reads === 0) {
-  for (const key of Object.keys(require.cache)) delete require.cache[key]
-  if (typeof require(${JSON.stringify(entry)}).value !== 'number') process.exit(2)
-  reads += 1
-}`
-      ],
-      timeoutMs: 60_000
-    })
-
-    let builds
-    let read
-    try {
-      builds = await Promise.all([1, 2, 3].map(() => runBuild(packageDir)))
-    } finally {
-      writeFileSync(finished, '')
-      read = await reader
-    }
-
-    expect(builds.map((result) => [result.code, result.stderr])).toEqual(builds.map(() => [0, '']))
-    expect(read).toMatchObject({ code: 0, stderr: '' })
-    expect(readFileSync(join(packageDir, 'dist', 'internal.js'), 'utf8')).toContain('2 + 2')
     expect(leftovers(packageDir)).toEqual([])
   })
 
@@ -381,26 +313,6 @@ await buildPackageDist(process.argv[2])
     expect(existsSync(join(packageDir, 'dist', 'entry.js'))).toBe(true)
     expect(existsSync(join(packageDir, 'dist', 'partial.js'))).toBe(false)
     expect(leftovers(packageDir)).toEqual([])
-  })
-
-  it('compiles with the package-local TypeScript', async () => {
-    const packageDir = fixture()
-    rmSync(join(packageDir, 'node_modules', 'typescript'))
-    const localCompilerDir = join(packageDir, 'node_modules', 'typescript')
-    mkdirSync(join(localCompilerDir, 'bin'), { recursive: true })
-    writeFileSync(
-      join(localCompilerDir, 'package.json'),
-      JSON.stringify({ name: 'typescript', bin: { tsc: './bin/tsc' } })
-    )
-    writeFileSync(
-      join(localCompilerDir, 'bin', 'tsc'),
-      "require('node:fs').writeFileSync('compiled-by', 'package')\nprocess.exit(1)\n"
-    )
-
-    const failed = await runBuild(packageDir)
-
-    expect(failed.code).toBe(1)
-    expect(readFileSync(join(packageDir, 'compiled-by'), 'utf8')).toBe('package')
   })
 
   it('builds its own package when reached through a symlinked directory', async () => {

@@ -2,7 +2,6 @@ import { serializeNativeChatAgentReferences } from './native-chat-agent-referenc
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type {
   NativeChatComposerSendIntent,
@@ -20,13 +19,15 @@ import {
   isStructuredAgentSessionHostCommand,
   structuredAgentSessionGoalObjective
 } from '../../../../shared/agent-session/view/structured-agent-session-composer'
+import {
+  structuredAgentSessionGoalModeDraft,
+  structuredAgentSessionPickEntersGoalMode
+} from '../../../../shared/agent-session/view/structured-agent-session-goal-mode'
 
 import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
-
-const GOAL_COMMAND = 'goal'
 
 export type NativeChatComposerGoalMode = {
   /** True while the draft is an objective rather than a message. */
@@ -69,21 +70,16 @@ export function useNativeChatComposerSubmit(args: {
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
-        // Without host goals only the provider's built-in /goal opens the chip; a namesake keeps its invocation.
         if (
           !structuredTransport ||
-          item.kind !== 'command' ||
-          item.name !== GOAL_COMMAND ||
-          (!threadGoal && item.builtin !== true)
+          !structuredAgentSessionPickEntersGoalMode(item, threadGoal !== undefined)
         ) {
           pick(item)
           return
         }
-        // Drop the `/goal ` token the pick would have inserted; the chip replaces it.
-        const inserted = applyPickerSuggestion(draft, caret, item)
-        const tokenStart = inserted.caret - item.token.length - 1
-        setDraft(inserted.draft.slice(0, tokenStart) + inserted.draft.slice(inserted.caret))
-        setCaret(tokenStart)
+        const next = structuredAgentSessionGoalModeDraft(draft, caret, item)
+        setDraft(next.draft)
+        setCaret(next.caret)
         setEntered(true)
       },
     [caret, draft, setCaret, setDraft, structuredTransport, threadGoal]

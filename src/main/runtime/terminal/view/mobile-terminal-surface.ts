@@ -4,7 +4,7 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../../shared/runtime-types'
-import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../../orca-runtime-core'
+import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from './terminal-surface-deadlines'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'

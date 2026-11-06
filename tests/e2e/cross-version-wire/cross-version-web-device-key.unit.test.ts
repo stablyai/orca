@@ -10,8 +10,8 @@ import {
   REGISTER_DEVICE_KEY_METHOD
 } from '../../../src/shared/remote-runtime/pairing/device-key-capability'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
-import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
-import { registerSocketDeviceKey } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-device-key-registration'
+import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
+import { registerSocketDeviceKey } from '../../../src/main/runtime/rpc/server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../src/shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
@@ -41,7 +41,7 @@ let releasedHost: HostImplementation
 beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
   const [registryModule, wiringModule] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/device-registry.ts'),
+    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/server/pairing/device-registry.ts'),
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/mobile-socket-wiring.ts')
   ])
   releasedHost = {

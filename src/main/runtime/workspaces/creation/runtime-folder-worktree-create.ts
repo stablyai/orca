@@ -18,7 +18,7 @@ import {
 } from '../catalog/runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup

@@ -5,7 +5,7 @@ import {
 } from '../../shared/rpc-contract/agent-session-params'
 import { HostAccountLaunchEnvParams } from '../../shared/host-account-launch-env'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
 import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 const ACCOUNT_ENV = {

@@ -2,7 +2,7 @@ import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/executi
 import { isStaleLocalWorktreeRegistration } from '../catalog/stale-worktree-registration-preflight'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import { OrcaRuntimeWithCreateManagedRemoteWorktree } from '../workspace-metadata'
+import { RuntimeWorkspaceMetadata } from '../workspace-metadata'
 import {
   resolveWorktreeRemovalMetadata,
   resolveWorktreeRemovalRepoOwner
@@ -38,7 +38,7 @@ import {
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
-export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateManagedRemoteWorktree {
+export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,

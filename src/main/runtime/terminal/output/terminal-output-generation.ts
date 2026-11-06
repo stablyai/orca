@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './terminal-derived-agent-facts'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
+import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
 import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
 import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 

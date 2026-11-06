@@ -79,6 +79,9 @@ function Sidebar({
   const setAgentGroupBy = useAppStore((s) => s.setAgentsGroupBy)
   const [agentQuery, setAgentQuery] = React.useState('')
   const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
+  const [projectsCollapseTarget, setProjectsCollapseTarget] = React.useState<HTMLDivElement | null>(
+    null
+  )
   const agentsScrollTopRef = React.useRef(0)
   // Retain collapse state and scroll geometry across Agents-list unmounts.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
@@ -181,6 +184,7 @@ function Sidebar({
               <SidebarHeader
                 onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
                 activityOptionsTarget={setAgentOptionsTarget}
+                projectsCollapseTarget={setProjectsCollapseTarget}
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
@@ -211,6 +215,7 @@ function Sidebar({
                     onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
                     onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
                     onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                    projectsCollapseTarget={projectsCollapseTarget}
                   />
                   <WslMovedProjectsSection />
                 </>
