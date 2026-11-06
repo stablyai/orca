@@ -21,7 +21,7 @@ import {
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getEligibleFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
+import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
 
@@ -79,7 +79,7 @@ export function useWorktreeLineageDropCommit(args: {
           }
         } else {
           // A folder workspace parent, when Set Parent would offer it to this child.
-          parent = getEligibleFolderParentsInState(useAppStore.getState(), child).find(
+          parent = getDropFolderParentsInState(useAppStore.getState(), child).find(
             (folder) => getWorktreeHostIdentity(folder) === parentIdentity
           )
           if (!parent) {

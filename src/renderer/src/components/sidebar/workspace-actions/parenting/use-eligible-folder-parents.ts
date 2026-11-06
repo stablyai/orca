@@ -26,13 +26,14 @@ function eligibleFolderParents(
     : NO_FOLDER_PARENTS
 }
 
-/** Folder workspaces `child` may take as a parent, read once from the store: a sidebar drop asks
- * this at drop time instead of re-rendering on every lineage or runtime status change. */
-export function getEligibleFolderParentsInState(state: AppState, child: Worktree): Worktree[] {
+/** Folder workspaces a sidebar drop may nest `child` under, read once from the store at drop time
+ * instead of re-rendering on every lineage or runtime status change. Its current folder stays a
+ * target, as a worktree parent does: dropping a child back on its own folder keeps it there. */
+export function getDropFolderParentsInState(state: AppState, child: Worktree): Worktree[] {
   return eligibleFolderParents(
     child,
     selectFolderWorkspaces(state),
-    state.workspaceLineageByChildKey[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey,
+    undefined,
     state.runtimeStatusByEnvironmentId
   )
 }
