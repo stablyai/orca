@@ -63,6 +63,7 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
+import { recordMobileChatSend } from '../../../telemetry/mobile-client-telemetry'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -93,7 +94,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       await ensureHostInstalled(ctx)
       const host = requireSessionHost(ctx, params.envelope.sessionId)
       await host.revealSession(params.envelope.sessionId)
-      return host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
+      const result = await host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
+      // The desktop composer counts a slash command as a send, so the phone's does too.
+      recordMobileChatSend(ctx.clientKind, host.sessionAgent(params.envelope.sessionId), result)
+      return result
     }
   }),
   defineMethod({

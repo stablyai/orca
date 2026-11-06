@@ -289,6 +289,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     return isTuiAgent(agent) ? agent : null
   }
 
+  /** Usage counts include agents the user typed into a shell, not only ones Orca launched. */
+  getPaneAgentForTelemetry(ptyId: string | null | undefined): TuiAgent | null {
+    return this.getPaneAgentForTuiIdle(ptyId)
+  }
+
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Sequence authoritative graph statements to distinguish absent surfaces from unpublished ones.

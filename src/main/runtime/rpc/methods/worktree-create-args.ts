@@ -28,6 +28,8 @@ export function buildManagedWorktreeCreateArgs(
   origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
   const viewerSupported = origin && terminalImageViewerSupported(origin)
+  // A phone's own label names the desktop surface it mirrors; this host knows the caller.
+  const launchSource = origin?.clientKind === 'mobile' ? 'mobile' : params.launchSource
   // Why: another owner's provenance is a label only; this host's create policy stays as before.
   const hostAutomationCreate =
     provenance.automationProvenance !== undefined &&
@@ -110,7 +112,7 @@ export function buildManagedWorktreeCreateArgs(
       : undefined,
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
-    ...(params.launchSource ? { startupLaunchSource: params.launchSource } : {}),
+    ...(launchSource ? { startupLaunchSource: launchSource } : {}),
     startupDraft: params.startupDraft,
     lineage: {
       parentWorkspace: params.parentWorkspace,

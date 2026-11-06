@@ -4,6 +4,8 @@ import { commitLeafMoveAndRekey } from '../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { MovedPanePlacement } from '../../session-tabs/headless-pane-move-to-new-tab'
 import { defineMethod } from '../core'
+import { recordMobileSessionOpened } from '../../../telemetry/mobile-client-telemetry'
+import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
 import {
   assertProjectedSessionTabVisible,
   translateProjectedSessionTabMove
@@ -42,6 +44,15 @@ export const SESSION_TAB_MUTATION_METHODS = [
           clientKind
         })
       })
+      if (!isAutomaticTabActivation(params.intent)) {
+        recordMobileSessionOpened({
+          clientKind,
+          deviceId: pairedDeviceId,
+          worktree: params.worktree,
+          tab: inventory.tabs.find((tab) => tab.id === tabId),
+          paneAgent: (ptyId) => runtime.getPaneAgentForTelemetry(ptyId)
+        })
+      }
       const projected = projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
       // One reply's answer, outside the projection: the fallback is never part of the tab snapshot.
       return result.startupCwdFallback
