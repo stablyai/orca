@@ -17,23 +17,25 @@ export function queuePreparedWorktreeTipRefresh(
     if (operation.isClaimed) {
       return
     }
-    return worktreePreparationGit.run(() =>
-      refreshPreparedWorktreeTip(
-        entry.repoPath,
-        entry.preparedPath,
-        entry.canonicalBase,
-        entry.lockReason,
-        entry.options,
-        operation
+    try {
+      return await worktreePreparationGit.run(() =>
+        refreshPreparedWorktreeTip(
+          entry.repoPath,
+          entry.preparedPath,
+          entry.canonicalBase,
+          entry.lockReason,
+          entry.options,
+          operation
+        )
       )
-    )
+    } catch (error) {
+      if (error instanceof WorktreePreparationLockOwnershipError) {
+        entry.checkoutStarted = false
+      }
+      throw error
+    }
   }, true)
   entry.ready = ready
-  void ready.catch((error: unknown) => {
-    if (error instanceof WorktreePreparationLockOwnershipError) {
-      entry.checkoutStarted = false
-    }
-    retire()
-  })
+  void ready.catch(() => retire())
   return ready
 }
