@@ -75,6 +75,7 @@ type ClaudeHookServiceOptions = {
 
 type ClaudeHookInstallOptions = {
   claudeVersion?: string
+  retirePermissionRequest?: boolean
 }
 
 type ClaudeHookTargetOptions = ClaudeHookInstallOptions & {
@@ -111,7 +112,7 @@ export class ClaudeHookService {
   // Claude version-gates hook events; compatible CLIs use their own fixed plans.
   private managedHookPlan(options: ClaudeHookInstallOptions): ClaudeManagedHookPlan {
     return this.options.agent === 'claude'
-      ? getClaudeManagedHookPlan(options.claudeVersion)
+      ? getClaudeManagedHookPlan(options.claudeVersion, options.retirePermissionRequest)
       : (this.options.hookPlan ?? OPENCLAUDE_MANAGED_HOOK_PLAN)
   }
 

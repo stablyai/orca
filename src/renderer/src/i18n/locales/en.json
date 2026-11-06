@@ -1022,7 +1022,7 @@
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
       "permissionGuardSkip": "Also skip Claude Code’s built-in refusals",
-      "permissionGuardSkipExplanation": "Claude Code refuses a few commands even with Full access. This removes those refusals too."
+      "permissionGuardSkipExplanation": "Claude Code refuses a few commands even with Full access. This removes those refusals too. While it’s on, Orca can’t show when any Claude session is waiting for permission."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",

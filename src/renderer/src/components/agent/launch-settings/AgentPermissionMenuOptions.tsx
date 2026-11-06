@@ -83,7 +83,7 @@ export function AgentPermissionMenuOptions({
               <span className="text-xs text-muted-foreground">
                 {translate(
                   'settings.agents.permissionGuardSkipExplanation',
-                  'Claude Code refuses a few commands even with Full access. This removes those refusals too.'
+                  'Claude Code refuses a few commands even with Full access. This removes those refusals too. While it’s on, Orca can’t show when any Claude session is waiting for permission.'
                 )}
               </span>
             </span>

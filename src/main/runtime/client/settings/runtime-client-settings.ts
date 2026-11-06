@@ -23,6 +23,7 @@ import { recordManagedHookInstallFailure } from '../../../agent-hooks/install-te
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { permissionGuardSkipInUse } from '../../../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import {
   agentLaunchSettingsMutationUpdates,
@@ -158,7 +159,8 @@ export class RuntimeClientSettingsController {
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
       (updates.disabledTuiAgents !== undefined &&
-        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
+        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents)) ||
+      claudePermissionHookPlanChanged(beforeSettings, settings)
     ) {
       await this.reconcileManagedAgentHooks()
     }
@@ -194,8 +196,9 @@ export class RuntimeClientSettingsController {
         value: {
           settings: projectAgentLaunchSettings(applied, process.platform),
           reconcileHooks:
-            updates.disabledTuiAgents !== undefined &&
-            !haveSameDisabledTuiAgents(before.disabledTuiAgents, applied.disabledTuiAgents)
+            (updates.disabledTuiAgents !== undefined &&
+              !haveSameDisabledTuiAgents(before.disabledTuiAgents, applied.disabledTuiAgents)) ||
+            claudePermissionHookPlanChanged(before, applied)
         },
         rollback: () => {
           const rollback = agentLaunchSettingsRollbackUpdates(
@@ -280,6 +283,17 @@ export class RuntimeClientSettingsController {
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
   }
+}
+
+type HookPlanSettings = Parameters<typeof isAgentStatusHooksEnabledForAgent>[0] &
+  Parameters<typeof permissionGuardSkipInUse>[0]
+
+// The guard skip retires Orca's PermissionRequest hook, which every Claude session shares.
+function claudePermissionHookPlanChanged(before: HookPlanSettings, after: HookPlanSettings) {
+  return (
+    isAgentStatusHooksEnabledForAgent(after, 'claude') &&
+    permissionGuardSkipInUse(before) !== permissionGuardSkipInUse(after)
+  )
 }
 
 function projectSourceControlLaunchRecipes(

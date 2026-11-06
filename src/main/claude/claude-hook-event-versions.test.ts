@@ -78,3 +78,15 @@ describe('identified Claude version output', () => {
     expect(await probeClaudeCliVersion('/bin/claude')).toBeNull()
   })
 })
+
+describe('getClaudeManagedHookPlan', () => {
+  it('retires PermissionRequest while the guard skip is in use and installs it otherwise', () => {
+    const names = (events: readonly { eventName: string }[]) => events.map((e) => e.eventName)
+    expect(names(getClaudeManagedHookPlan('2.1.319').install)).toContain('PermissionRequest')
+    const skipping = getClaudeManagedHookPlan('2.1.319', true)
+    expect(names(skipping.install)).not.toContain('PermissionRequest')
+    expect(names(skipping.retire)).toEqual(['PermissionRequest'])
+    // A failed probe retires nothing else, but must still drop the entry that blocks the waiver.
+    expect(names(getClaudeManagedHookPlan(null, true).retire)).toEqual(['PermissionRequest'])
+  })
+})
