@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalTitleTracker } from '../../src/shared/terminal/output/terminal-output-side-effects'
-import {
-  createAgentCompletionCoordinator,
-  resetAgentCompletionCoordinatorIdentitiesForTest
-} from '../../src/renderer/src/components/terminal-pane/agent-completion-coordinator'
-import type { AgentCompletionDispatchMeta } from '../../src/renderer/src/components/terminal-pane/agent-completion-coordinator-types'
+import { createAgentCompletionCoordinator } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import { resetAgentCompletionCoordinatorIdentitiesForTest } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-identity-store'
+import type { AgentCompletionDispatchMeta } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import { inspectRuntimeTerminalProcess } from '../../src/renderer/src/runtime/runtime-terminal-inspection'
 import { clearRuntimeCompatibilityCacheForTests } from '../../src/renderer/src/runtime/runtime-rpc-client'
 import {

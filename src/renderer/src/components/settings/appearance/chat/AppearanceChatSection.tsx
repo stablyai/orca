@@ -1,6 +1,4 @@
 import {
-  nativeChatShowsOpenedPullRequests,
-  nativeChatShowsTurnDiffSummary,
   normalizeNativeChatAppearanceSettings,
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
@@ -16,8 +14,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import {
   NumberField,
   SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSwitchRow
+  SettingsSegmentedControl
 } from '../../form-controls/SettingsFormControls'
 import {
   chatTerminalControlledHint,
@@ -49,8 +46,6 @@ export function AppearanceChatSection({
   const increase = formatPrimaryShortcutLabel('zoom.in', keybindings)
   const decrease = formatPrimaryShortcutLabel('zoom.out', keybindings)
   const entries = getChatAppearanceEntriesByKey({ increase, decrease })
-  const changedFilesSummary = nativeChatShowsTurnDiffSummary(settings)
-  const openedPullRequests = nativeChatShowsOpenedPullRequests(settings)
   const update = (updates: NativeChatAppearanceSettings): void => {
     void writeNativeChatAppearance(
       (current) => normalizeNativeChatAppearanceSettings({ ...current, ...updates }),
@@ -128,32 +123,6 @@ export function AppearanceChatSection({
         />
       </SearchableSetting>
       <SearchableSetting
-        id={entries.changedFilesSummary.targetSectionId}
-        {...entries.changedFilesSummary}
-        forceVisible={forceVisiblePrimary}
-      >
-        <SettingsSwitchRow
-          label={entries.changedFilesSummary.title}
-          description={entries.changedFilesSummary.description}
-          checked={changedFilesSummary}
-          ariaLabel={entries.changedFilesSummary.title}
-          onChange={() => updateSettings({ nativeChatTurnDiffSummary: !changedFilesSummary })}
-        />
-      </SearchableSetting>
-      <SearchableSetting
-        id={entries.openedPullRequests.targetSectionId}
-        {...entries.openedPullRequests}
-        forceVisible={forceVisiblePrimary}
-      >
-        <SettingsSwitchRow
-          label={entries.openedPullRequests.title}
-          description={entries.openedPullRequests.description}
-          checked={openedPullRequests}
-          ariaLabel={entries.openedPullRequests.title}
-          onChange={() => updateSettings({ nativeChatOpenedPullRequests: !openedPullRequests })}
-        />
-      </SearchableSetting>
-      <SearchableSetting
         id={entries.reset.targetSectionId}
         {...entries.reset}
         forceVisible={forceVisiblePrimary}
@@ -165,16 +134,9 @@ export function AppearanceChatSection({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
+              onClick={() =>
                 void writeNativeChatAppearance(resetNativeChatAppearanceSettings, updateSettings)
-                // The card switches are separate keys, but Reset restores every row above it.
-                if (!changedFilesSummary || !openedPullRequests) {
-                  updateSettings({
-                    nativeChatTurnDiffSummary: true,
-                    nativeChatOpenedPullRequests: true
-                  })
-                }
-              }}
+              }
             >
               {translate('settings.appearance.chat.reset', 'Reset')}
             </Button>

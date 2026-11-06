@@ -277,3 +277,82 @@ it('reads saved order from a window-owned runtime partition before any main surf
     ['G2', ['agent-session:active']]
   ])
 })
+
+it('activates a newly placed chat without importing the saved group selection', async () => {
+  const fixture = makeRuntimeStoreWithWorkspaceSession(savedSession('ordinary', false))
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+  runtime.storeMobileSessionSnapshot(WT, rawSnapshot('ordinary', false))
+  const frames: RuntimeMobileSessionTabsResult[] = []
+  runtime.onMobileSessionTabsChanged((snapshot) => frames.push(snapshot))
+  await runtime.publishStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'child',
+    agent: 'claude',
+    activate: true,
+    placement: { afterTabId: 'agent-session:source' }
+  })
+  expect(fixture.getSession().tabGroups?.[WT]?.[0]?.tabOrder).toEqual([
+    'structured-agent-session-source',
+    'structured-agent-session-child',
+    'structured-agent-session-B'
+  ])
+  const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+  expect(snapshot.tabGroups?.[0]).toMatchObject({
+    id: 'G1',
+    activeTabId: 'agent-session:child',
+    tabOrder: ['agent-session:source', 'agent-session:child', 'agent-session:B']
+  })
+  expect(snapshot.activeGroupId).toBe('G1')
+  expect(snapshot.activeTabId).toBe('agent-session:child')
+  expect(snapshot.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual([
+    'agent-session:child'
+  ])
+  expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe('agent-session:child')
+  expect(frames.at(-1)?.activeTabId).toBe('agent-session:child')
+})
+
+it('keeps an explicit saved null selection when its first chat restores', () => {
+  const saved = savedSession('ordinary', false)
+  saved.activeGroupIdByWorktree![WT] = 'G1'
+  saved.tabGroups![WT]![0]!.activeTabId = null
+  const fixture = makeRuntimeStoreWithWorkspaceSession(saved)
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+  runtime.projectStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'source',
+    agent: 'claude',
+    activate: false
+  })
+  const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+  expect(snapshot.activeGroupId).toBe('G1')
+  expect(snapshot.tabGroups?.[0]?.activeTabId).toBeNull()
+  expect(snapshot.activeTabId).toBeNull()
+  expect(snapshot.tabs.filter((tab) => tab.isActive)).toEqual([])
+})
+
+it('keeps current pending navigation when saved order materializes another chat', () => {
+  const fixture = makeRuntimeStoreWithWorkspaceSession(savedSession('ordinary', false))
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+  const current = rawSnapshot('ordinary', false)
+  current.tabGroups![1]!.activeTabId = 'agent-session:pending'
+  current.tabGroups![1]!.tabOrder.push('agent-session:pending')
+  current.activeTabId = null
+  current.activeTabType = null
+  current.tabs = current.tabs
+    .filter((tab) => tab.id !== 'agent-session:source')
+    .map((tab) => ({ ...tab, isActive: false }))
+  runtime.storeMobileSessionSnapshot(WT, current)
+  runtime.projectStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'source',
+    agent: 'claude',
+    activate: false
+  })
+  const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+  expect(snapshot.activeGroupId).toBe('G2')
+  expect(snapshot.tabGroups?.find((group) => group.id === 'G2')?.activeTabId).toBe(
+    'agent-session:pending'
+  )
+  expect(snapshot.activeTabId).toBeNull()
+  expect(snapshot.tabs.filter((tab) => tab.isActive)).toEqual([])
+})

@@ -1,8 +1,8 @@
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
 import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { useAppStore } from '@/store/index'
-import type { PtyConnectResult } from '../pty-transport-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { PtyConnectResult } from '../pty-transport/pty-transport-types'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-record-legacy-pane-key'
 import { neutralTerminalTitle } from '../../../../../shared/workspace-layout/terminal-pane-title-reset'
 import {

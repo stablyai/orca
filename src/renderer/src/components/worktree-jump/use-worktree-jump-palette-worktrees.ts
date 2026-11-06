@@ -9,8 +9,11 @@ import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
   searchWorktreeDocuments
-} from '@/lib/worktree-palette-search'
-import { buildPaletteWorktreeIndex, resolvePaletteWorktree } from '@/lib/palette-repo-resolution'
+} from '@/lib/workspace/search/worktrees/worktree-palette-search'
+import {
+  buildPaletteWorktreeIndex,
+  resolvePaletteWorktree
+} from '@/lib/workspace/search/palette-repo-resolution'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment

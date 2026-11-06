@@ -28,7 +28,7 @@ import {
   getReplaceablePreviewFileId,
   removeEditorStateForReplacedPreview
 } from '../tabs/workspace-editor-item'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../../tabs/tabs-group-actions'
 
 export type OpenFileApplyScratch = {

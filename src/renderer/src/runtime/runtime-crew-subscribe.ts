@@ -4,7 +4,7 @@ import type {
   CrewSubscriptionAttemptCallbacks
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { observePairingRefusal } from './runtime-environment-pairing-refresh'
-import { createBrowserUuid } from '../lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 
 export class RuntimeCrewSetupError extends Error {
   constructor(

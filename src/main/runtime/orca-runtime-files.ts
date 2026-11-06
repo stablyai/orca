@@ -150,6 +150,15 @@ export class RuntimeFileCommands {
     )
   }
 
+  statTerminalArtifact(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    clientId?: string
+  ) {
+    return this.artifacts.statTerminalArtifact(worktreeSelector, grantId, absolutePath, clientId)
+  }
+
   readTerminalArtifactChunk(
     worktreeSelector: string,
     grantId: string,

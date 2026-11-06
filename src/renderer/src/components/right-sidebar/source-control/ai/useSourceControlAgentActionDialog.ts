@@ -2,7 +2,7 @@ import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { applySourceControlPickerDraft } from '../../../../lib/source-control-agent-launch-picker'
+import { applySourceControlPickerDraft } from '../../../../lib/source-control/ai/source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
   commitSourceControlActionArguments,
@@ -18,8 +18,8 @@ import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-import { savedSurfaceForPick } from '@/lib/source-control-agent-picker'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { savedSurfaceForPick } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import {

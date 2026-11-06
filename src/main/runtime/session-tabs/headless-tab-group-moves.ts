@@ -1,3 +1,4 @@
+import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
 import { RuntimeHeadlessTabProperties } from './headless-tab-properties'
 import type {
   RuntimeMobileSessionTabGroup,
@@ -58,27 +59,20 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       const bIndex = orderIndexByParentTabId.get(bParent) ?? Number.MAX_SAFE_INTEGER
       return aIndex - bIndex
     })
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    const reorderedTargetActiveTabId =
-      active?.type === 'terminal' ? active.parentTabId : active ? active.id : (tabOrder[0] ?? null)
     // Reorder only the addressed group or multi-group siblings disappear.
     const existingGroups = snapshot.tabGroups ?? []
     const nextGroups = existingGroups.some((group) => group.id === targetGroup.id)
       ? existingGroups.map((group) =>
-          group.id === targetGroup.id
-            ? { ...group, tabOrder, activeTabId: reorderedTargetActiveTabId }
-            : group
+          group.id === targetGroup.id ? { ...group, tabOrder } : group
         )
-      : [{ ...targetGroup, tabOrder, activeTabId: reorderedTargetActiveTabId }]
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      : [{ ...targetGroup, tabOrder }]
+    const nextSnapshot = normalizeMobileSessionTabSelection({
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: active?.id ?? null,
-      activeTabType: active?.type ?? null,
       tabGroups: nextGroups,
       tabs: nextTabs
-    }
+    })
     this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)

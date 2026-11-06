@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installTerminalCapabilityReplyHandlers } from '../terminal-capability-replies'
+import { installTerminalCapabilityReplyHandlers } from '../emulation/terminal-capability-replies'
 import { bindHiddenOutputRestoreChunk } from './hidden-output-restore-chunk'
 import { bindHiddenOutputRestoreDrain } from './hidden-output-restore-drain'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

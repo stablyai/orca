@@ -1,4 +1,4 @@
-import type { AtRestCommandDemand } from '../native-chat/agent-session-wire/at-rest-command-demand'
+import type { AtRestCommandDemand } from '../native-chat/agent-session-wire/options/at-rest-command-demand'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
@@ -17,7 +17,7 @@ import {
   AT_REST_COMMANDS_TTL_MS,
   AtRestCommandCatalog,
   type AtRestCommandScan
-} from '../native-chat/agent-session-wire/at-rest-command-catalog'
+} from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { join } from 'node:path'
 
 export const CLAUDE_AT_REST_COMMANDS_TTL_MS = AT_REST_COMMANDS_TTL_MS

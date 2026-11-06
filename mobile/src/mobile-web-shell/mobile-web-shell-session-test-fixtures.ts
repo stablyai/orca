@@ -109,6 +109,8 @@ export const CACHED_BELOW_HOST_FLOOR: CachedGeneration = {
   compat: { ...CACHED.compat, runtimeProtocolVersion: 0 }
 }
 
+export const DOCUMENT_FAILED = { type: 'shell-failed', reason: 'document-load-failed' } as const
+
 // Default result events to the current flow; stale-result tests pin their superseded flow explicitly.
 type PendingEvent<E = MobileWebShellSessionEvent> = E extends { flow: number }
   ? Omit<E, 'flow'> & { readonly flow?: number }

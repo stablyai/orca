@@ -20,9 +20,9 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { useTerminalTabColdParking } from './parking/lifecycle/use-terminal-tab-cold-parking'
 // Hoisted mock factories need erased namespace types because typeof import() annotations are banned.
-import type * as SleepingRecordParkExemptionModule from './sleeping-record-park-exemption'
+import type * as SleepingRecordParkExemptionModule from './parking/retention/sleeping-record-park-exemption'
 import type * as WorktreeAgentActivitySummaryModule from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type * as WorktreeCardStatusInputsModule from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import type * as StructuredAgentSessionProjectionModule from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -68,7 +68,7 @@ const selectorRuns = vi.hoisted(() => ({
   worktreeCardStatusInputs: 0
 }))
 
-vi.mock('./sleeping-record-park-exemption', async (importOriginal) => {
+vi.mock('./parking/retention/sleeping-record-park-exemption', async (importOriginal) => {
   const actual = await importOriginal<typeof SleepingRecordParkExemptionModule>()
   return {
     ...actual,

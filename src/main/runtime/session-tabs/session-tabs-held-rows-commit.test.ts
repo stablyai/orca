@@ -150,3 +150,48 @@ describe('held session.tabs rows across layout commits (switch on)', () => {
     expect(ptyOf()).toBe('pty-new')
   })
 })
+
+it('carries pending navigation through actual main-owned storage and later materialization', async () => {
+  const { runtime } = surfaceRuntime()
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+  const before = held(runtime)!
+  const pending = 'agent-session:pending-storage'
+  const input = {
+    ...before,
+    activeTabId: null,
+    activeTabType: null,
+    tabGroups: before.tabGroups!.map((group) =>
+      group.id === before.activeGroupId
+        ? { ...group, activeTabId: pending, tabOrder: [...group.tabOrder, pending] }
+        : group
+    ),
+    tabs: before.tabs.map((tab) => ({ ...tab, isActive: false }))
+  }
+  const waiting = runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, input)
+  expect(waiting.tabGroups?.find((group) => group.id === waiting.activeGroupId)?.activeTabId).toBe(
+    'agent-session:pending-storage'
+  )
+  expect(waiting.activeTabId).toBeNull()
+  expect(waiting.tabs.filter((tab) => tab.isActive)).toEqual([])
+  const again = runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, waiting)
+  expect(again.tabGroups).toEqual(waiting.tabGroups)
+  const restored = runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, {
+    ...again,
+    tabs: [
+      ...again.tabs,
+      {
+        id: 'agent-session:pending-storage',
+        type: 'agent-session',
+        sessionId: 'pending-storage',
+        agent: 'codex',
+        title: 'Pending chat',
+        isActive: false
+      }
+    ]
+  })
+  expect(restored.activeTabId).toBe('agent-session:pending-storage')
+  expect(restored.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual([
+    'agent-session:pending-storage'
+  ])
+})

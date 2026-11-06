@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { VirtualizedList } from '../virtualized-list'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { CheckButton, SortIndicator } from './workspace-space-selection-controls'

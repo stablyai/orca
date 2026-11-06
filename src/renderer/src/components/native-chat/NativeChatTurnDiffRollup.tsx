@@ -3,12 +3,12 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
+import { NativeChatDiffCard } from './NativeChatDiffCard'
+import { NativeChatExpandable } from './NativeChatExpandable'
 import {
   NativeChatCardHideButton,
   NATIVE_CHAT_HIDEABLE_CARD_CLASS
 } from './NativeChatCardHideButton'
-import { NativeChatDiffCard } from './NativeChatDiffCard'
-import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import {
@@ -94,9 +94,9 @@ export function NativeChatTurnDiffRollup({
         <NativeChatCardHideButton
           updates={{ nativeChatTurnDiffSummary: false }}
           settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
-          failedMessage={translate(
-            'components.native-chat.turnDiff.hideFailed',
-            "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI."
+          hiddenMessage={translate(
+            'components.native-chat.turnDiff.hidden',
+            "Orca won't show turn diffs anymore"
           )}
         />
       </div>

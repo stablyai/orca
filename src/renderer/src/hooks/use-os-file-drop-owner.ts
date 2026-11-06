@@ -2,7 +2,6 @@ import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 import {
   createRejectedNativeFileDropPayload,
   NATIVE_FILE_DROP_MAX_PATHS,
-  validateNativeFileDropPaths,
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
 import {
@@ -11,6 +10,7 @@ import {
   type PreparedDroppedPaths
 } from '../../../shared/native-file-drop-preparation'
 import { hasOsFileDragTypes } from '../lib/os-file-drop-cancellation-guard'
+import { prepareOsFileDropPaths } from '../lib/os-file-drop-preparation'
 import {
   holdBrowserAttachmentFiles,
   releaseBrowserAttachmentFiles
@@ -191,39 +191,12 @@ export function useOsFileDropOwner<Destination = undefined>(
         const resolutionFailures = unresolvedCount
           ? rejectedDrop('unresolved-paths', unresolvedCount).failures
           : []
-        const validation = validateNativeFileDropPaths(paths)
-        if (validation.status === 'rejected') {
-          queueDelivery({
-            paths: [],
-            failures: [...resolutionFailures, createRejectedNativeFileDropPayload(validation)]
-          })
-          return
-        }
-
-        const preparation = (async (): Promise<PreparedDroppedPaths> => {
-          let prepared: PreparedDroppedPaths
-          try {
-            prepared = await window.api.fs.prepareDroppedPaths({
-              paths,
-              consumer: preparationConsumer
-            })
-          } catch {
-            prepared = {
-              paths: [],
-              failures: [
-                {
-                  target: 'rejected',
-                  reason: 'temp-copy-failed',
-                  commonReason: 'copy-failed',
-                  pathCount: paths.length,
-                  byteLength: validation.byteLength
-                }
-              ]
-            }
-          }
-          return { paths: prepared.paths, failures: [...resolutionFailures, ...prepared.failures] }
-        })()
-        queueDelivery(preparation)
+        queueDelivery(
+          prepareOsFileDropPaths(paths, preparationConsumer).then((prepared) => ({
+            paths: prepared.paths,
+            failures: [...resolutionFailures, ...prepared.failures]
+          }))
+        )
       }
 
       root.setAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE, '')
