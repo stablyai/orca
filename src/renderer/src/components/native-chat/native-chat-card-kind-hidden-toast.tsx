@@ -10,7 +10,8 @@ const NATIVE_CHAT_CARD_KIND_HIDDEN_TOAST_DURATION_MS = 10_000
 /** Turns a chat card kind off everywhere and says once where to turn it back on. */
 export function hideNativeChatCardKind(
   updates: Partial<GlobalSettings>,
-  settingsSectionId: string
+  settingsSectionId: string,
+  failedMessage?: string
 ): void {
   const { updateSettingsOrThrow, openSettingsPage, openSettingsTarget } = useAppStore.getState()
   void updateSettingsOrThrow(updates).then(
@@ -45,7 +46,8 @@ export function hideNativeChatCardKind(
       ),
     () =>
       toast.error(
-        translate('components.native-chat.cardKindHidden.failed', 'Could not save that setting.')
+        failedMessage ??
+          translate('components.native-chat.cardKindHidden.failed', 'Could not save that setting.')
       )
   )
 }

@@ -4,6 +4,7 @@ import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../../chat/native-chat-turn-diff-setting-target'
+import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../../chat/native-chat-ci-result-lines-setting-target'
 
 export function chatTerminalControlledHint(): string {
   return translate('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
@@ -99,6 +100,19 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           translate('settings.appearance.chat.title', 'Chat UI'),
           translate('settings.appearance.chat.changedFilesSummaryKeywordDiff', 'diff'),
           translate('settings.appearance.chat.changedFilesSummaryKeywordEdits', 'edits')
+        ]
+      },
+      ciResultLines: {
+        targetSectionId: NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID,
+        title: translate('settings.appearance.chat.ciResultLines', 'CI result lines'),
+        description: translate(
+          'settings.appearance.chat.ciResultLinesDescription',
+          'A line in the chat when CI finishes on a pull request the agent opened or pushed to.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat UI'),
+          translate('settings.appearance.chat.ciResultLinesKeywordChecks', 'checks'),
+          translate('settings.appearance.chat.ciResultLinesKeywordPr', 'pull request')
         ]
       },
       reset: {

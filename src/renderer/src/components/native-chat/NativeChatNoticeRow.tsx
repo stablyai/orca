@@ -9,6 +9,8 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
 import { NativeChatForkedFromContext } from './native-chat-fork-context'
+import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -80,6 +82,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
   const openForkSource = useContext(NativeChatForkedFromContext)
+  if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
+    return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+  }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
     const label = translate(
