@@ -223,6 +223,9 @@ describe('nativeChatTurnOpenedPullRequests', () => {
   })
 })
 
+const GH_CREATE_OUTPUT_CRLF =
+  'Creating pull request for brennanb2025/chat-pr-card into main in stablyai/orca \r\nhttps://github.com/stablyai/orca/pull/38750\r\n'
+
 describe('PowerShell create commands', () => {
   const opened = (command: unknown): number[] => openedIn(bashTurn({ command }, GH_CREATE_OUTPUT))
 
@@ -245,6 +248,23 @@ describe('PowerShell create commands', () => {
         '$body = @\'\r\nsay "hi" then gh pr create\r\n\'@\r\nWrite-Output $body'
       ])
     ).toEqual([])
+  })
+
+  it("reads Codex on Windows' recorded calls, including a quote inside the script", () => {
+    // Recorded on Windows QA of this change, as the renderer received them.
+    const pwsh = '"C:\\\\Users\\\\neil\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\pwsh.exe"'
+    const recorded: [string, string, number[]][] = [
+      [`${pwsh} -Command 'gh pr create --fill'`, GH_CREATE_OUTPUT_CRLF, [38750]],
+      [
+        `${pwsh} -Command "gh pr create --title \\"Don't stop\\" --fill"`,
+        GH_CREATE_OUTPUT_CRLF,
+        [38750]
+      ],
+      [`${pwsh} -Command "Write-Output 'gh pr create'"`, 'gh pr create\r\n', []]
+    ]
+    for (const [command, output, expected] of recorded) {
+      expect(openedIn(bashTurn({ command }, output))).toEqual(expected)
+    }
   })
 
   it('keeps a real create through PowerShell quoting', () => {

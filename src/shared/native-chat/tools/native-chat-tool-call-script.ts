@@ -168,7 +168,7 @@ function powershellInvocationScript(argv: readonly string[]): string | null {
   return null
 }
 
-/** A Windows command line's words, undoing its own quoting: `"…"` (with `""`), `'…'` (with `''`). */
+/** A Windows command line's words, undoing its own quoting: `"…"` (with `""` or `\"`), `'…'` (with `''`). */
 function commandLineWords(command: string): string[] | null {
   const words: string[] = []
   let index = 0
@@ -189,6 +189,10 @@ function commandLineWords(command: string): string[] | null {
         }
         if (command[index] === quote && command[index + 1] === quote) {
           word += quote
+          index += 2
+        } else if (quote === '"' && command[index] === '\\' && command[index + 1] === '"') {
+          // Codex writes a double quote inside one as `\"`, as Windows splits command lines.
+          word += '"'
           index += 2
         } else if (command[index] === quote) {
           index += 1
