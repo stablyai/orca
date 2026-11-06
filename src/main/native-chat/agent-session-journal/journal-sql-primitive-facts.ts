@@ -2,6 +2,120 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation } from './journal-sql-value-codec'
 
 const FACTS = {
+  'queue.returnedCommands': {
+    table: 'journal_proj_returned_commands',
+    id: 'message_id',
+    value: 'message_id',
+    counter: 'returned_commands'
+  },
+  'inputs.echoes': {
+    table: 'journal_proj_input_echoes',
+    id: 'input_id',
+    value: 'input_id',
+    counter: 'input_echoes'
+  },
+  'inputs.ended': {
+    table: 'journal_proj_ended_inputs',
+    id: 'input_id',
+    value: 'input_id',
+    counter: 'ended_inputs'
+  },
+  'order.recoveryOwed': {
+    table: 'journal_proj_recovery_owed',
+    id: 'input_id',
+    value: 'input_id',
+    counter: 'recovery_owed'
+  },
+  'cards.unintroduced': {
+    table: 'journal_proj_unintroduced_cards',
+    id: 'message_id',
+    value: 'message_id',
+    counter: 'unintroduced_cards'
+  },
+  'cards.cleared': {
+    table: 'journal_proj_cleared_cards',
+    id: 'message_id',
+    value: 'message_id',
+    counter: 'cleared_cards'
+  },
+  'observations.providerByInput': {
+    table: 'journal_proj_input_providers',
+    id: 'input_id',
+    value: 'provider_item_id',
+    counter: 'input_providers'
+  },
+  'observations.inputIds': {
+    table: 'journal_proj_observed_input_ids',
+    id: 'item_key',
+    value: 'input_id',
+    counter: 'observed_input_ids'
+  },
+  'observations.fences': {
+    table: 'journal_proj_input_dispatch_fences',
+    id: 'input_id',
+    value: 'fence',
+    counter: 'input_dispatch_fences'
+  },
+  'observations.recoveredUnknown': {
+    table: 'journal_proj_recovered_unknown_inputs',
+    id: 'input_id',
+    value: 'input_id',
+    counter: 'recovered_unknown_inputs'
+  },
+  'evidence.submissionRows': {
+    table: 'journal_proj_submission_row_winners',
+    id: 'sequence',
+    value: 'input_id',
+    counter: 'submission_row_winners'
+  },
+  'evidence.rowsBySubmission': {
+    table: 'journal_proj_submission_row_coordinates',
+    id: 'input_id',
+    value: 'sequence',
+    counter: 'submission_row_coordinates'
+  },
+  'evidence.keptBySubmission': {
+    table: 'journal_proj_kept_input_cards',
+    id: 'input_id',
+    value: 'message_id',
+    counter: 'kept_input_cards'
+  },
+  'evidence.ordinals': {
+    table: 'journal_proj_input_ordinals',
+    id: 'input_id',
+    value: 'input_ordinal',
+    counter: 'input_ordinals'
+  },
+  'evidence.steerTurns': {
+    table: 'journal_proj_steer_turns',
+    id: 'input_id',
+    value: 'turn_id',
+    counter: 'steer_turns'
+  },
+  'evidence.stoppedCandidates': {
+    table: 'journal_proj_stopped_candidates',
+    id: 'input_id',
+    value: 'input_id',
+    counter: 'stopped_candidates'
+  },
+  'links.latest': {
+    table: 'journal_proj_latest_family_members',
+    id: 'family_id',
+    value: 'input_id',
+    counter: 'latest_family_members'
+  },
+  'newest-turn.evidence': {
+    table: 'journal_proj_turn_failure_reports',
+    id: 'item_id',
+    value: 'target_item_id',
+    counter: 'turn_failure_reports'
+  },
+  'newest-turn.reports': {
+    table: 'journal_proj_turn_failure_report_counts',
+    id: 'target_item_id',
+    value: 'report_count',
+    counter: 'turn_failure_report_counts'
+  },
   aliases: { table: 'journal_proj_aliases', id: 'alias', value: 'target', counter: 'aliases' },
   itemFences: {
     table: 'journal_proj_item_fences',
