@@ -90,6 +90,7 @@ describe('host prompt delivery and retirement', () => {
             agentNeedsInput: true,
             terminalBell: true,
             suppressWhenFocused: false,
+            showDockBadge: true,
             customSoundId: 'system',
             customSoundPath: null,
             customSoundVolume: 1,
