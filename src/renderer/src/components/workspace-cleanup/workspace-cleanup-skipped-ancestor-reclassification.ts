@@ -1,4 +1,4 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 import {
   getSkippedAncestorMessage,

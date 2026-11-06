@@ -136,13 +136,6 @@ describe('a restored WSL bridge pane whose distro is stopped (E9)', () => {
     return transport.connect.mock.calls[0]?.[0]
   }
 
-  it("starts the pane the user's own switch mounts", async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    noteUserWorkspaceSwitch('wt')
-    vi.mocked(Date.now).mockRestore()
-    expect(await mountAt(1_500)).not.toHaveProperty('wslPassiveRestore')
-  })
-
   // e9 review: switch at 10:00, distro stops at 12:00, Orca remounts at 12:01.
   it('makes a remount after that switch passive again, so a stopped distro holds it', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000)

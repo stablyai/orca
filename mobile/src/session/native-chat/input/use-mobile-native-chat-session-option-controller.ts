@@ -1,10 +1,8 @@
 import type { RpcClient } from '../../../transport/rpc-client'
 import { useMobileNativeChatModelDiscovery } from '../../use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
-import {
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog
-} from '../../../../../src/shared/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
@@ -39,6 +37,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   structured: {
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
+    compactInstructions?: boolean
     optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
@@ -117,6 +116,7 @@ export function useMobileNativeChatSessionOptionController(args: {
             optionPickerRequest: structured.optionPickerRequest,
             optionSurface: structured.optionSurface,
             conversationCommands: structured.conversationCommands,
+            compactInstructions: structured.compactInstructions,
             pendingId: structuredPendingId,
             setOption: setStructuredOption,
             invokeAction: invokeStructuredAction,
@@ -129,6 +129,7 @@ export function useMobileNativeChatSessionOptionController(args: {
       setStructuredOption,
       structuredPendingId,
       structuredSnapshot,
+      structured.compactInstructions,
       structured.conversationCommands,
       structured.optionPickerRequest,
       structured.optionSurface

@@ -1,6 +1,11 @@
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import {
+  type AgentProviderSessionMetadata,
+  agentProviderSessionsEqual
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '../types'

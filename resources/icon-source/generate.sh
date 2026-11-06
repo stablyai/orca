@@ -73,7 +73,7 @@ echo "  -> resources/icon.png (256x256)"
 # #5357: Windows scales the safe-area-inset 1024px render into undersized taskbar/Open-with icons.
 # Use the repo’s pngjs trim script to remove the inset, re-square with 2% margin and emit multi-size ICO,
 # keeping committed output reproducible without ImageMagick.
-node "$PROJECT_DIR/config/scripts/trim-windows-icon-source.mjs"
+node "$PROJECT_DIR/config/scripts/desktop-distribution/windows/trim-windows-icon-source.mjs"
 echo "  -> resources/build/icon.ico (trimmed, filled multi-size ICO)"
 
 echo "Done! Icons generated in resources/build/ and resources/"

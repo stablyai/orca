@@ -1,4 +1,4 @@
-import type { RemoteDropdownCopy } from '../../../src/shared/source-control-dropdown-remote-copy'
+import type { RemoteDropdownCopy } from '../../../src/shared/source-control/dropdown/source-control-dropdown-remote-copy'
 import type { Translate } from '../i18n/mobile-i18n'
 import {
   localizedPushCount,

@@ -1,17 +1,17 @@
-import { sessionIdFromStructuredWorkerIncarnation } from '../../structured-worker-identity'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { observeStructuredWorker } from '../../rpc/methods/orchestration-structured-worker-lifecycle'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
-import { addListenerToMap } from '../../orca-runtime-core'
-import { notifyRuntimeListeners, withTimeoutResult } from '../../runtime-async-boundaries'
-import type { TerminalExitCause } from '../../../../shared/terminal-exit-cause'
+import { addListenerToMap } from './terminal-listener-map'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+
 import {
+  type TerminalExitCause,
   describeTerminalExitCause,
   isDeliberateTerminalExit
-} from '../../../../shared/terminal-exit-cause'
-import {
-  DEFAULT_TERMINAL_LIST_LIMIT,
-  PTY_CONTROLLER_LIST_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { DEFAULT_TERMINAL_LIST_LIMIT } from '../query/terminal-list-limit'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionRequest,
@@ -22,6 +22,7 @@ import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
 import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
+import { reportWorkerTurnStop } from '../../orchestration/worker-turn-stop-report'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db'
 
@@ -58,7 +59,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     cause: TerminalExitCause
   ): void {
     const errorContext = describeTerminalExitCause(cause)
-    this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
+    const settledLocally = this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
       error: errorContext,
       options: { workerProcessExited: true, terminationReason: cause.kind },
       processExited: true,
@@ -70,6 +71,39 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       }),
       payload: { exitCode, exitCause: cause }
     })
+    if (!settledLocally && paneKey) {
+      this.reportRemoteWorkerExit(handle, paneKey, errorContext)
+    }
+  }
+
+  /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */
+  private reportRemoteWorkerExit(handle: string, paneKey: string, exitCause: string): void {
+    const db = this._orchestrationDb
+    const attachment = db?.findActiveRemoteAttachmentForPane(paneKey)
+    const processIncarnation = this.getTerminalProcessIncarnation(handle)
+    if (
+      !db ||
+      !attachment ||
+      !db.isRemoteAttachmentProcessCurrent({
+        dispatchId: attachment.dispatch_id,
+        paneKey,
+        processIncarnation
+      })
+    ) {
+      return
+    }
+    reportWorkerTurnStop(
+      db,
+      { kind: 'remote', attachment },
+      {
+        from: handle,
+        stopKey: `exit:${processIncarnation}`,
+        reason: 'exited',
+        lastOutput: undefined,
+        exitCause
+      },
+      this.workerTurnStopReportDeps
+    )
   }
 
   /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */

@@ -164,7 +164,7 @@ describe('assembleOrcadArtifact', () => {
     const first = await assembleOrcadArtifact({ ...fixture, target: TARGET })
     const entry = statSync(join(first, 'orcad.js'))
     const older = [1, 2, 3].map((age) => {
-      const dir = join(fixture.cacheRoot, TARGET, `0.0.${age}+old`)
+      const dir = join(fixture.cacheRoot, TARGET, `0.0.${age}+${String(age).padStart(12, '0')}`)
       write(join(dir, 'orcad.js'), 'old')
       const at = new Date(Date.now() - age * 60_000)
       utimesSync(dir, at, at)

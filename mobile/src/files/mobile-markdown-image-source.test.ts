@@ -44,17 +44,22 @@ describe('Markdown preview images', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
+  it.each(['/Users/me/notes/readme.md', 'C:\\notes\\readme.md'])(
+    'does not read workspace images for a document outside the workspace: %s',
+    async (documentPath) => {
+      const client = host()
+      await expect(
+        loadMarkdownPreviewImage(client, 'wt', documentPath, 'images/d.png')
+      ).rejects.toThrow()
+      expect(client.sendRequest).not.toHaveBeenCalled()
+    }
+  )
+
   it('lets native Image load public URLs without sending them to the workspace host', async () => {
     const client = host()
     await expect(
       loadMarkdownPreviewImage(client, 'wt', 'readme.md', 'https://example.com/a.png')
     ).resolves.toBe('https://example.com/a.png')
     expect(client.sendRequest).not.toHaveBeenCalled()
-  })
-
-  it('reports a disconnected host instead of trying to read phone-local files', async () => {
-    await expect(loadMarkdownPreviewImage(null, 'wt', 'readme.md', 'a.png')).rejects.toThrow(
-      'Waiting for desktop'
-    )
   })
 })

@@ -1,3 +1,4 @@
+// @protected-copy: site permission Allow/Block prompt.
 import {
   BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN,
   type BrowserSitePermission

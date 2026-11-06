@@ -20,7 +20,7 @@ import {
   isTransientRipgrepSpawnError,
   ripgrepMissingCwdError
 } from '../../shared/ripgrep-process-availability'
-import { toWindowsWslPath } from '../wsl'
+import { toWindowsWslPath } from '../../shared/wsl-paths'
 import { bundledRipgrepUnavailableError } from './bundled-ripgrep-path'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'
 import { stopBundledRipgrep } from './bundled-ripgrep-stop'

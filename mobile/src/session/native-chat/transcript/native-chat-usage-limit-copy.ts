@@ -1,4 +1,4 @@
-import type { AgentSessionUsageLimit } from '../../../../../src/shared/agent-session-usage-limit'
+import type { AgentSessionUsageLimit } from '../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import { joinSentences } from '../../../../../src/shared/sentence-joining'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../../../i18n/ui-intl-locale'

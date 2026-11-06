@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { createMobileCommandMenuHostFixture } from './mobile-queued-edit-host.test-fixture'
-import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../shared/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { expect, it, vi } from 'vitest'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 
 it.each([
   ['claude', false],

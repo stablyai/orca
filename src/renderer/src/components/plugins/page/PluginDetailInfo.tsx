@@ -6,9 +6,17 @@ import { PluginCategoryBadges } from '../list/PluginCategoryBadge'
 import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
+import {
+  formatPluginInstallCount,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
-import { pluginRepositoryPageUrl } from '../../../../../shared/plugins/catalog/plugin-repository-link'
+import {
+  pluginListingRepositoryUrl,
+  pluginReadmePageUrl,
+  pluginRepositoryPageUrl
+} from '../../../../../shared/plugins/catalog/plugin-repository-link'
 
 function InfoRow({
   label,
@@ -33,7 +41,7 @@ function InfoRow({
   )
 }
 
-function RepositoryLink({ url }: { url: string | null }) {
+function ExternalLink({ url, label }: { url: string | null; label: string }) {
   if (!url) {
     return null
   }
@@ -44,7 +52,7 @@ function RepositoryLink({ url }: { url: string | null }) {
       className="-ml-2"
       onClick={(event) => openAppHttpLink(url, { event })}
     >
-      {translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
+      {label}
       <ArrowUpRight />
     </Button>
   )
@@ -63,12 +71,24 @@ export function PluginDetailInfo({
   const rollbackVersion = usePluginRollbackVersion(
     plugin?.source?.kind === 'marketplace' ? plugin.pluginKey : null
   )
+  const installCount = usePluginInstallCount(entry)
   const updated = formatPluginReleaseDate(listing?.updatedAt)
   const license = plugin?.license ?? listing?.license
-  // Why only the install source: manifest and catalog `repository`/`homepage` are author text.
-  const sourceUrl =
-    listing?.source.url ?? (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
+  // Why never the manifest's `repository`/`homepage`: author text; Orca rebuilds every link.
+  const sourceUrl = listing
+    ? pluginListingRepositoryUrl(listing)
+    : plugin?.source?.kind === 'git'
+      ? plugin.source.reference
+      : null
   const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
+  const readme =
+    listing?.release && sourceUrl
+      ? pluginReadmePageUrl({
+          gitUrl: sourceUrl,
+          commit: listing.release.commit,
+          path: listing.source.path
+        })
+      : null
 
   return (
     <aside className="mt-6">
@@ -100,6 +120,12 @@ export function PluginDetailInfo({
             value={updated}
           />
         ) : null}
+        {installCount !== null ? (
+          <InfoRow
+            label={translate('auto.components.settings.PluginDetailInfo.installs', 'Installs')}
+            value={formatPluginInstallCount(installCount)}
+          />
+        ) : null}
         {entry.minimumOrca ? (
           <InfoRow
             label={translate('auto.components.settings.PluginDetailPage.requires', 'Requires')}
@@ -129,7 +155,18 @@ export function PluginDetailInfo({
         />
       </dl>
       <div className="mt-2 flex flex-col items-start">
-        <RepositoryLink url={repository} />
+        <ExternalLink
+          url={repository}
+          label={translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
+        />
+        <ExternalLink
+          url={readme}
+          label={translate(
+            'auto.components.settings.PluginDetailInfo.readme',
+            'Read the README on {{value0}}',
+            { value0: readme?.startsWith('https://gitlab.com/') ? 'GitLab' : 'GitHub' }
+          )}
+        />
       </div>
     </aside>
   )

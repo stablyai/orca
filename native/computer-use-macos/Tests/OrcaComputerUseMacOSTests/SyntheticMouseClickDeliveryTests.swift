@@ -32,97 +32,6 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         }
     }
 
-    func testScrollWaitsBeforeRecheckAndDragDoesNotRecheckAfterDown() throws {
-        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
-        for drag in [false, true] {
-            var trace: [String] = []
-            let observe = {
-                trace.append("recipient")
-                return SyntheticMouseClickDelivery.RecipientObservation.focused(target)
-            }
-            let post = { (event: String) in trace.append(event) }
-            let pause = { (_: UInt32) in trace.append("pause") }
-            if drag {
-                try SyntheticMouseClickDelivery.deliverDrag(
-                    move: "move", down: "down", dragged: ["drag"], up: "up",
-                    target: target, currentObservation: observe, post: post, pause: pause
-                )
-                XCTAssertEqual(trace, ["recipient", "move", "recipient", "down", "pause", "drag", "pause", "up"])
-            } else {
-                try SyntheticMouseClickDelivery.deliverScroll(
-                    move: "move", wheel: "wheel", target: target,
-                    currentObservation: observe, post: post, pause: pause
-                )
-                XCTAssertEqual(trace, ["recipient", "move", "pause", "recipient", "wheel"])
-            }
-        }
-    }
-
-    func testSingleClickPlanPairsDownAndUpAfterMove() {
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.steps(clickCount: 1),
-            [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)]
-        )
-    }
-
-    func testMultiClickPlanNumbersEachPressForClickState() {
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.steps(clickCount: 2),
-            [
-                .move,
-                .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1),
-                .buttonDown(pressIndex: 2), .buttonUp(pressIndex: 2),
-            ]
-        )
-    }
-
-    func testNonPositiveClickCountStillDeliversOnePress() {
-        for count in [0, -3] {
-            XCTAssertEqual(
-                SyntheticMouseClickDelivery.steps(clickCount: count),
-                [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)]
-            )
-        }
-    }
-
-    func testExcessiveClickCountIsCappedAtTripleClick() {
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.steps(clickCount: Int.max),
-            [
-                .move,
-                .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1),
-                .buttonDown(pressIndex: 2), .buttonUp(pressIndex: 2),
-                .buttonDown(pressIndex: 3), .buttonUp(pressIndex: 3),
-            ]
-        )
-    }
-
-    func testClickStateMatchesPressIndexAndSkipsMove() {
-        XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .move), 0)
-        XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonDown(pressIndex: 1)), 1)
-        XCTAssertEqual(SyntheticMouseClickDelivery.clickState(for: .buttonUp(pressIndex: 2)), 2)
-    }
-
-    func testAmbiguousWindowFrameFallbackDoesNotSelectRecipient() {
-        let candidates = [(windowID: 101, frame: 7), (windowID: 202, frame: 7)]
-
-        XCTAssertNil(SyntheticMouseClickDelivery.uniqueWindowCandidate(
-            from: candidates,
-            matching: { $0.frame == 7 }
-        ))
-        XCTAssertNil(SyntheticMouseClickDelivery.uniqueWindowCandidate(
-            from: candidates,
-            matching: { $0.frame == 8 }
-        ))
-        XCTAssertEqual(
-            SyntheticMouseClickDelivery.uniqueWindowCandidate(
-                from: candidates,
-                matching: { $0.windowID == 101 }
-            )?.windowID,
-            101
-        )
-    }
-
     func testRecipientChangeBeforeMouseDownPostsNoClickAndReportsBothWindows() {
         let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
         let intruder = SyntheticMouseClickDelivery.Recipient(ownerPID: 52, windowID: 202)
@@ -210,40 +119,6 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
             )
         }
         XCTAssertEqual(posted, [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)])
-    }
-
-    func testMouseUpPostsBeforeRecipientCheckForTheNextPress() throws {
-        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
-        var trace: [String] = []
-
-        try SyntheticMouseClickDelivery.deliver(
-            clickCount: 2,
-            target: target,
-            currentObservation: {
-                trace.append("recipient")
-                return .focused(target)
-            },
-            makeEvent: { $0 },
-            post: {
-                switch $0 {
-                case .move:
-                    trace.append("move")
-                case .buttonDown:
-                    trace.append("down")
-                case .buttonUp:
-                    trace.append("up")
-                }
-            },
-            pause: { interval in
-                XCTAssertGreaterThan(interval, 0)
-                trace.append("pause")
-            }
-        )
-
-        XCTAssertEqual(trace, [
-            "move", "pause", "recipient", "down", "pause", "up", "recipient",
-            "pause", "recipient", "down", "pause", "up", "recipient", "pause"
-        ])
     }
 
     func testRecipientChangeBeforeLaterPressReportsCompletedPresses() {

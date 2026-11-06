@@ -1,31 +1,94 @@
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handlers, store, resetFilesystemIpcMocks } from './filesystem-test-harness'
 
 const { listQuickOpenFilesMock } = vi.hoisted(() => ({ listQuickOpenFilesMock: vi.fn() }))
 
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const { listWorktreesMock } = await import('./filesystem-test-harness')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktreeGraph: listWorktreesMock,
+    listWorktrees: listWorktreesMock
+  }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const { listWorktreesMock } = await import('./filesystem-test-harness')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesMock
+  }
+})
+
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
   '../../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+vi.mock('../../git/source-control/commit-changes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  commitChanges: (await import('./filesystem-test-harness')).commitChangesMock
+}))
+
+vi.mock('../../git/source-control/status-read', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getStatus: (await import('./filesystem-test-harness')).getStatusMock
+}))
+
+vi.mock('../../git/source-control/git-conflict-operation', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  detectConflictOperation: (await import('./filesystem-test-harness')).detectConflictOperationMock,
+  abortMerge: (await import('./filesystem-test-harness')).abortMergeMock,
+  abortRebase: (await import('./filesystem-test-harness')).abortRebaseMock
+}))
+
+vi.mock('../../git/source-control/file-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDiff: (await import('./filesystem-test-harness')).getDiffMock
+}))
+
+vi.mock('../../git/source-control/branch-compare', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchCompare: (await import('./filesystem-test-harness')).getBranchCompareMock
+}))
+
+vi.mock('../../git/source-control/branch-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchDiff: (await import('./filesystem-test-harness')).getBranchDiffMock
+}))
+
+vi.mock('../../git/source-control/staged-commit-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getStagedCommitContext: (await import('./filesystem-test-harness')).getStagedCommitContextMock
+}))
+
+vi.mock('../../git/source-control/staging', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  stageFile: (await import('./filesystem-test-harness')).stageFileMock,
+  bulkStageFiles: (await import('./filesystem-test-harness')).bulkStageFilesMock,
+  stageWorktreeChanges: (await import('./filesystem-test-harness')).stageWorktreeChangesMock,
+  unstageFile: (await import('./filesystem-test-harness')).unstageFileMock,
+  bulkUnstageFiles: (await import('./filesystem-test-harness')).bulkUnstageFilesMock
+}))
+
+vi.mock('../../git/source-control/discard-changes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  bulkDiscardChanges: (await import('./filesystem-test-harness')).bulkDiscardChangesMock,
+  discardChanges: (await import('./filesystem-test-harness')).discardChangesMock
+}))
 vi.mock(
-  '../../git/status',
-  async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
-)
-vi.mock(
-  '../../git/check-ignored-paths',
+  '../../git/source-control/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
-vi.mock(
-  '../../git/worktree',
-  async () => (await import('./filesystem-test-harness')).gitWorktreeMock
-)
+
 vi.mock(
   '../../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock

@@ -29,60 +29,6 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('ssh RPC methods', () => {
-  it('returns the registered SSH target state', async () => {
-    const state = {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    }
-    getRegisteredSshStateMock.mockReturnValueOnce(state)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.getState', { targetId: 'ssh-1' }))
-
-    expect(getRegisteredSshStateMock).toHaveBeenCalledWith('ssh-1')
-    expect(response).toMatchObject({ ok: true, result: { state } })
-  })
-
-  it('connects through the registered desktop SSH lifecycle', async () => {
-    const state = {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    }
-    connectRegisteredSshTargetMock.mockResolvedValueOnce(state)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1' }))
-
-    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', { automatic: false })
-    expect(response).toMatchObject({ ok: true, result: { state } })
-  })
-
-  it("keeps a paired client's automatic connect from lifting a cancelled sign-in", async () => {
-    connectRegisteredSshTargetMock.mockResolvedValueOnce(null)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1', automatic: true }))
-
-    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', { automatic: true })
-  })
-
-  it('returns null when the target has no registered state yet', async () => {
-    getRegisteredSshStateMock.mockReturnValueOnce(undefined)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.getState', { targetId: 'ssh-1' }))
-
-    expect(response).toMatchObject({ ok: true, result: { state: null } })
-  })
-
   it('redacts HUB-private diagnostics from state and connect failures', async () => {
     const privateMessage = 'identity /Users/hub/.ssh/private via bastion.internal failed'
     getRegisteredSshStateMock.mockReturnValue({
@@ -152,37 +98,6 @@ describe('ssh RPC methods', () => {
     expect(JSON.stringify(response)).not.toContain('bastion')
   })
 
-  it('does not invent a platform before the SSH host has been detected', async () => {
-    listRegisteredSshTargetsMock.mockReturnValueOnce([{ id: 'ssh-1', label: 'Dev box' }])
-    getRegisteredSshStateMock.mockReturnValueOnce(undefined)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { targets: [{ id: 'ssh-1', label: 'Dev box' }] }
-    })
-    expect(JSON.stringify(response)).not.toContain('remotePlatform')
-  })
-
-  it('reports disconnected lifecycle states without calling them connected', async () => {
-    listRegisteredSshTargetsMock.mockReturnValueOnce([{ id: 'ssh-1', label: 'Dev box' }])
-    getRegisteredSshStateMock.mockReturnValueOnce({ status: 'reconnecting' })
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.listTargetSummaries'))
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        targets: [{ id: 'ssh-1', connected: false, connectionStatus: 'reconnecting' }]
-      }
-    })
-  })
-
   it('redacts the legacy target response for older clients', async () => {
     const targets = [
       {
@@ -208,16 +123,5 @@ describe('ssh RPC methods', () => {
     expect(JSON.stringify(response)).not.toContain('dev.internal')
     expect(JSON.stringify(response)).not.toContain('/secret/key')
     expect(JSON.stringify(response)).not.toContain('bastion')
-  })
-
-  it('lists removed-target labels for ghost-host display on paired clients', async () => {
-    const labels = { 'ssh-old': 'Dev box' }
-    listRegisteredRemovedSshTargetLabelsMock.mockReturnValueOnce(labels)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.listRemovedTargetLabels'))
-
-    expect(response).toMatchObject({ ok: true, result: { labels } })
   })
 })

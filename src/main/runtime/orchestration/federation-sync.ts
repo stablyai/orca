@@ -1,3 +1,5 @@
+import { federationRelayPrefix } from './federation-relay-prefix'
+import { federationRelayWireItem } from './federation-relay-wire'
 import { z } from 'zod'
 import type { FederationRuntime } from './federation-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
@@ -9,7 +11,10 @@ import {
   recordFederationAckCheckpoint
 } from './federation-ack-checkpoints'
 import { bindCoordinatorMutationPayload } from './dispatch-message-binding'
-import { resolveFederatedLifecycleSettlementCapability } from './federation-sync-capability'
+import {
+  armHomeAutoReleaseForOlderHost,
+  resolveFederatedLifecycleSettlementCapability
+} from './federation-sync-capability'
 import { getOrchestrationPeerCapabilityCache } from './orchestration-peer-capability-cache'
 import { parseFederatedLifecycle, parseRelayedMessage } from './federation-sync-message'
 export { parseRelayedMessage } from './federation-sync-message'
@@ -193,13 +198,19 @@ async function syncFederatedDispatchPages(
     acknowledgmentCursor >
       Math.max(getFederationAckedThrough(ackLease, ackIdentity), durableAcknowledgedThrough)
   ) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unchanged ack receipt cast; the gate flags it only because this diff adds the autoRelease opt-in inside its span.
     const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationAck',
       {
         dispatchId,
         throughSequence: acknowledgmentCursor,
-        ...(settlements.length > 0 ? { settlements } : {})
+        ...(settlements.length > 0
+          ? {
+              settlements,
+              ...(db.workerAutoReleaseEnabled?.() !== false ? { autoRelease: true } : {})
+            }
+          : {})
       },
       15_000,
       { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` },
@@ -225,26 +236,51 @@ async function syncFederatedDispatchPages(
     pulled.runtimeEpoch
   )
   db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
+  if (isCurrent()) {
+    // Best effort: without a deadline the worker keeps manual release, as before.
+    await armHomeAutoReleaseForOlderHost(runtime, dispatchId, currentServer.pairingRevision).catch(
+      () => undefined
+    )
+  }
   const toWorker =
     db.getWorkerDispatch(dispatchId)?.state === 'ready'
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')
       : []
-  if (toWorker.length > 0) {
+  let outgoing = toWorker.map(federationRelayWireItem)
+  while (outgoing.length > 0 && isCurrent()) {
+    let sentThrough = outgoing.at(-1)!.sequence
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: federationImport returns this receipt; the acknowledgment is validated below.
     const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationImport',
-      { dispatchId, items: toWorker },
+      { dispatchId, items: outgoing },
       15_000,
+      { orchestrationRequestId: `relay_import_${dispatchId}_${sentThrough}` },
       {
-        orchestrationRequestId: `relay_import_${dispatchId}_${toWorker.at(-1)?.sequence ?? 0}`
-      },
-      { expectedEnvironmentPairingRevision: currentServer.pairingRevision }
+        expectedEnvironmentPairingRevision: currentServer.pairingRevision,
+        prepareRequest: federationRelayPrefix(dispatchId, outgoing, (last) => {
+          sentThrough = last
+        })
+      }
     )) as { acknowledgedThrough: number }
+    if (!isCurrent()) {
+      break
+    }
+    if (!Number.isInteger(delivered.acknowledgedThrough)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'The federation acknowledgment has an invalid sequence.'
+      )
+    }
+    if (delivered.acknowledgedThrough < outgoing[0]!.sequence) {
+      break
+    }
     db.acknowledgeFederationRelay({
       dispatchId,
       direction: 'to_worker',
       throughSequence: delivered.acknowledgedThrough
     })
+    outgoing = outgoing.filter((item) => item.sequence > delivered.acknowledgedThrough)
   }
   if (
     isCurrent() &&

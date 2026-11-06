@@ -71,6 +71,11 @@ export function captureRemoteCliBrowserScope(): {
   }
 }
 
+/** The workspace an SSH host's command is scoped to, if this call came through the bridge. */
+export function remoteCliBrowserScopeWorkspaceId(): string | undefined {
+  return scope.getStore()?.workspaceId
+}
+
 /** Prevent long-lived resources from inheriting a command's host scope. */
 export function runOutsideRemoteCliBrowserScope<T>(work: () => T): T {
   return scope.exit(work)

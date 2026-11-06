@@ -1,5 +1,6 @@
 import { translateMain } from '../i18n/main-i18n'
-import { ipcMain, shell, dialog } from 'electron'
+import { ipcMain, shell } from 'electron'
+import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,19 +8,19 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
+} from '../../shared/shell/opening/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import {
   repoIconPickFailure,
   type RepoIconPickResult
 } from '../../shared/repo-icon-pick-failure-copy'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
   resolveExternalEditorLaunchSpec
-} from '../external-editor-launch'
-import { resolveRemoteSshEditorLaunchSpec } from '../remote-ssh-editor-launch'
+} from '../external-editors/external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -202,7 +203,7 @@ export function registerShellHandlers(
   ipcMain.handle(
     'shell:pickDirectory',
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
-      const result = await dialog.showOpenDialog({
+      const result = await showSingleFlightOpenDialog({
         defaultPath: args.defaultPath,
         // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
         properties: ['openDirectory']
@@ -216,7 +217,7 @@ export function registerShellHandlers(
 
   // Native dialogs avoid Electron prompt/file-input reliability issues.
   ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
+    const result = await showSingleFlightOpenDialog({
       properties: ['openFile']
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -227,14 +228,14 @@ export function registerShellHandlers(
 
   // Keep single-file callers, including interpreter selection, on pickAttachment.
   ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
-    const result = await dialog.showOpenDialog({
+    const result = await showSingleFlightOpenDialog({
       properties: ['openFile', 'multiSelections']
     })
     return result.canceled ? [] : result.filePaths
   })
 
   ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
+    const result = await showSingleFlightOpenDialog({
       properties: ['openFile'],
       filters: [
         {
@@ -250,7 +251,7 @@ export function registerShellHandlers(
   })
 
   ipcMain.handle('shell:pickRepoIconImage', async (): Promise<RepoIconPickResult> => {
-    const result = await dialog.showOpenDialog({
+    const result = await showSingleFlightOpenDialog({
       properties: ['openFile'],
       filters: [
         {
@@ -283,7 +284,7 @@ export function registerShellHandlers(
   })
 
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
+    const result = await showSingleFlightOpenDialog({
       properties: ['openFile'],
       filters: [
         {

@@ -4,7 +4,7 @@ import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 
 // Normalize ProxyJump/jumpHost to the ProxyCommand equivalent so ssh2 has one proxy transport path.

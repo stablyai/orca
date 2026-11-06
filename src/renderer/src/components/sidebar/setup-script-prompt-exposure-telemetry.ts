@@ -1,5 +1,5 @@
 import { track } from '@/lib/telemetry'
-import { buildSetupScriptPromptTelemetry } from '../../../../shared/setup-script-telemetry'
+import { buildSetupScriptPromptTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
 export function trackSetupScriptPromptExposure(input: {

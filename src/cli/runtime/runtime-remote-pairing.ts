@@ -1,8 +1,8 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../shared/pairing'
+} from '../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { resolveEnvironmentPairingOffer } from './environments'
 import { RuntimeClientError } from './types'
 

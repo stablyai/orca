@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION

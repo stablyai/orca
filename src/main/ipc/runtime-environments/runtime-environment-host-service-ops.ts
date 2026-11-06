@@ -1,7 +1,7 @@
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { WslHostServerStop } from '../../../shared/wsl-host-types'
-import { getWslHostService } from '../../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 
 /** Explicit connection may boot the WSL distro. */
 export async function connectThroughOwningService(

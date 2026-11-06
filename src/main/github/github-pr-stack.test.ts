@@ -7,7 +7,10 @@ const { ghExecFileAsyncMock, rateLimitGuardMock, noteRateLimitSpendMock } = vi.h
   noteRateLimitSpendMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({ ghExecFileAsync: ghExecFileAsyncMock }))
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
 vi.mock('./rate-limit', () => ({
   repositoryRateLimitGuard: rateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRateLimitSpendMock
@@ -94,7 +97,7 @@ describe('hydrateGitHubPRStack', () => {
       repository,
       201,
       { ...summary, position: 1 },
-      { cwd: '/other-worktree' }
+      { cwd: '/repo' }
     )
 
     expect(first).toMatchObject({

@@ -1,6 +1,6 @@
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import { isClosedPaneFenced } from '../../../persistence/terminal-topology/closed-pane-binding-fence'
-import { hasClosedTerminalTabRecord } from '../../../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import {
   toSshExecutionHostId,
   getConnectionExecutionHostId
@@ -8,8 +8,8 @@ import {
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { reconcilePaneOwner } from './stable-pane-attach'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { Store } from '../../../persistence'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { Store } from '../../../persistence/loading-store/store'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import {
   joinPaneSpawn,

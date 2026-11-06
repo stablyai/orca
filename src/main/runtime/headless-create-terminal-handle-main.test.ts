@@ -5,9 +5,10 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } = await import('./orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { surfaceRuntime } = await import('./terminal/surface/terminal-surface-replies.test-fixture')
 
 type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
@@ -55,7 +56,8 @@ it.each([
       ['pty-a', 'pty-b', 'pty-new'].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
   })
 
-  const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone')
+  const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone', 'mobile')
+  const before = runtime['agentProjections'].senders.workForTest()
   const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
     activate: false,
     select: false,
@@ -63,6 +65,7 @@ it.each([
     clientNavigationId: 'phone'
   })
 
+  expect(runtime['agentProjections'].senders.workForTest()).toEqual(before)
   unsubscribe()
   expect(created.tab).toMatchObject({
     status: 'ready',

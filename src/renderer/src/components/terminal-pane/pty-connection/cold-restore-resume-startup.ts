@@ -4,9 +4,9 @@ import {
 } from '@/lib/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
   resolveRuntimeHostTerminalWindowsShell,
@@ -17,12 +17,12 @@ import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
 } from '@/lib/sleeping-record-execution-host-scope'
-import { resolveResumeLaunchRecipe } from '../../../../../shared/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
@@ -73,16 +73,14 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     ) {
       return null
     }
-    const matchingSleepingLaunchConfig =
-      sleepingRecord?.launchConfig &&
-      (!useLiveEntry ||
-        (sleepingRecord.agent === agent &&
-          agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
-        ? sleepingRecord.launchConfig
+    const matchingSleepingRecord =
+      sleepingRecord?.agent === agent &&
+      agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
+        ? sleepingRecord
         : undefined
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-      matchingSleepingLaunchConfig
+      matchingSleepingRecord?.launchConfig
     // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
     // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
     // copy, while a folder's own record carries its connection.
@@ -134,14 +132,14 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       },
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: providerSession,
+      connectionId:
+        entry?.connectionId !== undefined
+          ? entry.connectionId
+          : matchingSleepingRecord?.connectionId,
       resumeOrigin: 'saved',
       resumeSource: {
         cancelled: false,
-        ...(sleepingRecord &&
-        sleepingRecord.agent === agent &&
-        agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
-          ? { record: sleepingRecord }
-          : {}),
+        ...(matchingSleepingRecord ? { record: matchingSleepingRecord } : {}),
         ...(useLiveEntry && entry
           ? {
               expectedStatus: {

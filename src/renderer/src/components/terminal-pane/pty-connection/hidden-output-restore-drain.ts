@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
-import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 
@@ -23,6 +23,8 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       discardPendingLiveChunksSalvagingQueries()
       return 'overflow'
     }
+    // A chunk skipped after a gap left output only a fresher snapshot can repaint.
+    let skippedAfterGap = false
     while (session.hiddenOutputRestorePendingChunks.length > 0) {
       const chunks = session.hiddenOutputRestorePendingChunks
       session.hiddenOutputRestorePendingChunks = []
@@ -46,7 +48,12 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
           )
         }
         if (data) {
-          session.writePtyOutputToXterm(data, true)
+          const admitted = session.admitStreamBytes(data, chunk, { repairsOwnSkips: true })
+          if (admitted === null) {
+            skippedAfterGap = true
+          } else {
+            session.writePtyOutputToXterm(admitted, true)
+          }
           session.recordRendererOrderedSeq(chunk)
         }
       }
@@ -56,7 +63,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
         return 'overflow'
       }
     }
-    return 'drained'
+    return skippedAfterGap ? 'refetch' : 'drained'
   }
 
   function discardPendingLiveChunksSalvagingQueries(): void {

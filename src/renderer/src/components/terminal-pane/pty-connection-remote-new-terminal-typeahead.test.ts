@@ -4,7 +4,11 @@ import { connectPanePty } from './pty-connection'
 import { restoreScrollbackBuffers } from './layout-serialization'
 import { createDeferred } from './pty-connection-test-async'
 import { createManager, createPane, leafIdForPane } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -130,6 +134,10 @@ async function connectNewRemotePane() {
     }
   })
   const connectArgs = [pane, createManager(1), buildPaneConnectionDeps(() => mockStoreState)]
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  bindPaneAgentTitleMocks(connectArgs[2], agentTitleMocks)
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
   const binding = connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
   await vi.waitFor(() =>

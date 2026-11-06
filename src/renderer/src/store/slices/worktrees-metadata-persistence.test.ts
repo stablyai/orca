@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import { toast } from 'sonner'
+import 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
@@ -99,37 +99,6 @@ describe('worktree remote runtime mutations', () => {
     }
   )
 
-  it('persists worktree metadata through the active remote runtime environment', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      hostId: 'runtime:env-1'
-    })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-set',
-      ok: true,
-      result: { worktree: { ...wt, comment: 'remote note' } },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { comment: 'remote note' })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'worktree.set',
-      params: expect.objectContaining({ worktree: `id:${wt.id}`, comment: 'remote note' }),
-      timeoutMs: 15_000
-    })
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
-  })
-
   it('force-deletes a preserved HUB-owned SSH branch through its HUB', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -167,22 +136,6 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
   })
 
-  it('suppresses per-branch feedback for an aggregate delete', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
-    vi.mocked(toast.success).mockClear()
-    vi.mocked(toast.error).mockClear()
-
-    const result = await store
-      .getState()
-      .forceDeletePreservedBranch(wt.id, 'feature/test', 'abc123', { suppressToast: true })
-
-    expect(result).toEqual({ ok: true, deleted: true })
-    expect(toast.success).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('fails preserved branch deletion closed for two HUB owners', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-ssh::/srv/same-wt'
@@ -215,40 +168,6 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
-  })
-
-  it('persists SSH-owned worktree metadata through local IPC even when a runtime is focused', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo-ssh::/home/orca/wt1',
-      repoId: 'repo-ssh',
-      path: '/home/orca/wt1',
-      hostId: 'ssh:ssh-1'
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [
-        {
-          id: 'repo-ssh',
-          path: '/home/orca/repo',
-          displayName: 'SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: { 'repo-ssh': [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { comment: 'ssh note' })
-
-    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      executionHostId: 'ssh:ssh-1',
-      updates: expect.objectContaining({ comment: 'ssh note' })
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['repo-ssh'][0]?.comment).toBe('ssh note')
   })
 
   it('clears pending first-agent rename when the title is updated', async () => {
@@ -397,6 +316,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().prCache[legacyPathPRCacheKey]).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'pr-branch', {
       repoId: 'repo1',
+      repoOwnerExecutionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,

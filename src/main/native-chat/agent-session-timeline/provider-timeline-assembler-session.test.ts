@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalApprovalItem } from '../../../shared/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalApprovalItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,

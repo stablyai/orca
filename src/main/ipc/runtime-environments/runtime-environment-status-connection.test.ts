@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { addEnvironmentFromPairingCode } from '../../../shared/runtime-environment-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { addEnvironmentFromPairingCode } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import {
   createSharedControlTestServer,

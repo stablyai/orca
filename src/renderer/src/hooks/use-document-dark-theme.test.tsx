@@ -14,7 +14,8 @@ vi.mock('@/store', () => ({
     })
 }))
 
-import { useDocumentDarkTheme } from './use-document-dark-theme'
+import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { useDocumentDarkTheme, useSettingsDarkTheme } from './use-document-dark-theme'
 
 function installMatchMedia(initialMatches: boolean): {
   emit: (matches: boolean) => void
@@ -45,6 +46,7 @@ const originalMatchMedia = window.matchMedia
 
 afterEach(() => {
   cleanup()
+  usePluginViewCaptureStore.getState().end()
   settingsState.theme = 'system'
   resetSystemPrefersDarkSubscriptionForTests()
   window.matchMedia = originalMatchMedia
@@ -62,26 +64,17 @@ describe('useDocumentDarkTheme', () => {
     act(() => media.emit(false))
     expect(result.current).toBe(false)
   })
+})
 
-  it.each([
-    ['light', false],
-    ['dark', true]
-  ] as const)('keeps an explicit %s theme when the system flips', (theme, expected) => {
-    settingsState.theme = theme
-    const media = installMatchMedia(!expected)
-    const { result } = renderHook(() => useDocumentDarkTheme())
-    expect(result.current).toBe(expected)
-
-    act(() => media.emit(expected))
-    expect(result.current).toBe(expected)
-    act(() => media.emit(!expected))
-    expect(result.current).toBe(expected)
-  })
-
-  it('treats unloaded settings as system', () => {
-    settingsState.theme = undefined
-    installMatchMedia(true)
-    const { result } = renderHook(() => useDocumentDarkTheme())
-    expect(result.current).toBe(true)
+describe('a plugin shot --theme capture', () => {
+  it('paints its mode while it runs, then the setting again', () => {
+    settingsState.theme = 'light'
+    installMatchMedia(false)
+    const { result } = renderHook(() => [useSettingsDarkTheme(), useDocumentDarkTheme()])
+    expect(result.current).toEqual([false, false])
+    act(() => usePluginViewCaptureStore.getState().begin({ panelWidth: null, dark: true }))
+    expect(result.current).toEqual([true, true])
+    act(() => usePluginViewCaptureStore.getState().end())
+    expect(result.current).toEqual([false, false])
   })
 })

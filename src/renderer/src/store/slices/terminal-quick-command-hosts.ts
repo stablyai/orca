@@ -1,14 +1,15 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   applyTerminalQuickCommandMutation,
   parseNormalizedTerminalQuickCommands,
   type TerminalQuickCommandMutation
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import '../../../../shared/protocol-version'
+import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'

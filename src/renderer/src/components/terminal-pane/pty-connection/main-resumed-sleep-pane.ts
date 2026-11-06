@@ -6,7 +6,7 @@ import { readTerminalSpawnDeferral } from '../../../../../shared/host-spawn-admi
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { findTerminalTabForPane } from './terminal-tab-id'
 import { isHostMirroredSleepingRecord } from '@/lib/host-mirrored-pane-liveness'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   isWorkspaceSleepRecord,
   WORKTREE_TERMINALS_SLEEPING_ERROR

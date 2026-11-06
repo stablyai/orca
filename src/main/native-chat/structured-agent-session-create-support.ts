@@ -1,5 +1,5 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export type StructuredAgentSessionCreateSupport = {

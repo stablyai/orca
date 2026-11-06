@@ -1,5 +1,6 @@
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { classifyRemotePairingHostname } from '../../shared/remote-runtime/pairing/remote-pairing-address'
 import type { ServeReadiness } from '../server/serve-readiness'
 
 export function tunneledOrcadPairingCode(

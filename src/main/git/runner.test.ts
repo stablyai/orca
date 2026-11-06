@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mergeGitConfigEnvProtocol } from '../../shared/git/commands/git-credential-prompt-env'
 import {
-  appendGitConfigEnv,
   extractExecError,
   isTransientGhError,
   nonInteractiveGitEnv,
@@ -10,20 +10,6 @@ import {
   redirectPortedHostnameToEnv,
   untranslatedGitOutputEnv
 } from './runner'
-import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
-
-function readGitConfigEnv(env: NodeJS.ProcessEnv): Record<string, string> {
-  const count = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10)
-  const config: Record<string, string> = {}
-  for (let i = 0; i < count; i++) {
-    const key = env[`GIT_CONFIG_KEY_${i}`]
-    const value = env[`GIT_CONFIG_VALUE_${i}`]
-    if (key !== undefined && value !== undefined) {
-      config[key] = value
-    }
-  }
-  return config
-}
 
 describe('redirectPortedHostnameToEnv', () => {
   it('moves a ported --hostname into GITLAB_HOST and strips the flag', () => {
@@ -161,45 +147,6 @@ describe('extractExecError', () => {
   })
 })
 
-describe('appendGitConfigEnv', () => {
-  it('injects entries starting at count 0 when none exist', () => {
-    const env = appendGitConfigEnv({ PATH: '/usr/bin' }, [['credential.interactive', 'false']])
-    expect(env.GIT_CONFIG_COUNT).toBe('1')
-    expect(env.GIT_CONFIG_KEY_0).toBe('credential.interactive')
-    expect(env.GIT_CONFIG_VALUE_0).toBe('false')
-    expect(env.PATH).toBe('/usr/bin')
-  })
-
-  it('composes with an existing count instead of clobbering caller config', () => {
-    const env = appendGitConfigEnv(
-      { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.quotePath', GIT_CONFIG_VALUE_0: 'false' },
-      [['credential.guiPrompt', 'false']]
-    )
-    expect(env.GIT_CONFIG_COUNT).toBe('2')
-    expect(env.GIT_CONFIG_KEY_0).toBe('core.quotePath')
-    expect(env.GIT_CONFIG_VALUE_0).toBe('false')
-    expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
-    expect(env.GIT_CONFIG_VALUE_1).toBe('false')
-  })
-
-  it.each(['bogus', '-1', '0', String(Number.MAX_SAFE_INTEGER)])(
-    'does not overwrite dangling caller config when count is %s',
-    (count) => {
-      const original = {
-        GIT_CONFIG_COUNT: count,
-        GIT_CONFIG_KEY_0: 'user.key',
-        GIT_CONFIG_VALUE_0: 'caller-value'
-      }
-      expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
-    }
-  )
-
-  it('does not append to an incomplete indexed-config protocol', () => {
-    const original = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.key' }
-    expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
-  })
-})
-
 describe('mergeGitConfigEnvProtocol', () => {
   it('replaces inherited indexed config atomically when an override has a smaller count', () => {
     const env = mergeGitConfigEnvProtocol(
@@ -228,11 +175,8 @@ describe('promptGuardGitEnv credential-interactivity disable (STA-1292)', () => 
   it('disables the GCM GUI prompt without nuking the credential helper', () => {
     const env = promptGuardGitEnv({ PATH: '/usr/bin' })
     expect(env.GCM_INTERACTIVE).toBe('never')
-    const config = readGitConfigEnv(env)
-    expect(config['credential.interactive']).toBe('false')
-    expect(config['credential.guiPrompt']).toBe('false')
-    // Preserve credential helpers so private repos can still use cached authentication.
-    expect(config['credential.helper']).toBeUndefined()
+    // Scalar guards only: env scrubs can split an indexed config protocol (#26594).
+    expect(env.GIT_CONFIG_COUNT).toBeUndefined()
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
   })
 })
@@ -241,25 +185,29 @@ describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () 
   it('carries the credential-interactivity disable through from promptGuardGitEnv', () => {
     const env = nonInteractiveGitEnv({ PATH: '/usr/bin' })
     expect(env.GCM_INTERACTIVE).toBe('never')
-    const config = readGitConfigEnv(env)
-    expect(config['credential.interactive']).toBe('false')
-    expect(config['credential.guiPrompt']).toBe('false')
-    expect(config['credential.helper']).toBeUndefined()
+    expect(env.GIT_CONFIG_COUNT).toBeUndefined()
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
   })
 })
 
 describe('guard-env WSLENV forwarding (#7652)', () => {
   it('registers the guard vars in WSLENV on Windows so WSL-routed git imports them', () => {
-    const env = promptGuardGitEnv({ PATH: '/usr/bin' }, 'win32')
+    const env = promptGuardGitEnv(
+      {
+        PATH: '/usr/bin',
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'http.proxy',
+        GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+      },
+      'win32'
+    )
     const keys = (env.WSLENV ?? '').split(':')
     expect(keys).toContain('GIT_TERMINAL_PROMPT')
     expect(keys).toContain('GCM_INTERACTIVE')
+    // A caller's indexed config is forwarded as a complete set.
     expect(keys).toContain('GIT_CONFIG_COUNT')
     expect(keys).toContain('GIT_CONFIG_KEY_0')
     expect(keys).toContain('GIT_CONFIG_VALUE_0')
-    expect(keys).toContain('GIT_CONFIG_KEY_1')
-    expect(keys).toContain('GIT_CONFIG_VALUE_1')
     // Windows askpass paths are meaningless inside a distro.
     expect(keys).not.toContain('GIT_ASKPASS')
     expect(keys).not.toContain('SSH_ASKPASS')

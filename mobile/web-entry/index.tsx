@@ -16,7 +16,10 @@ import {
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
 import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
-import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
+import {
+  publishPageStorage,
+  refreshPageTerminalSettings
+} from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
@@ -156,6 +159,12 @@ bootstrapShellPage({
             ).value
         : null
     )
+    client.onStorageUpdate(() => {
+      const current = client.getShellSession()
+      if (current !== null) {
+        refreshPageTerminalSettings(current.storage, current.storageOversize)
+      }
+    })
     // Activation settles to English on failure, so the page always mounts.
     void settleLatest(() => uiLocaleActivation).then(() =>
       createRoot(container).render(

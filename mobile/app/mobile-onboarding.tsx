@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Animated, BackHandler, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Animated, BackHandler, Easing, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -10,6 +10,7 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
+import { PUSH_CURVE, PUSH_SLIDE_MS } from '../src/navigation/push-motion'
 import { useReducedMotionEnabled } from '../src/platform/use-reduced-motion'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
@@ -19,8 +20,6 @@ import {
 } from '../src/storage/session-view-preferences'
 import { setRemotePushEnabled } from '../src/notifications/push-registration'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-
-const SLIDE_DURATION_MS = 280
 
 export default function MobileOnboardingScreen() {
   const params = useLocalSearchParams<{
@@ -82,7 +81,8 @@ function MobileOnboardingFlow({
     Animated.timing(slideProgress, {
       toValue: nextIndex,
       // Preserve carousel continuity while honoring reduced motion.
-      duration: reducedMotionEnabled === true ? 0 : SLIDE_DURATION_MS,
+      duration: reducedMotionEnabled === true ? 0 : PUSH_SLIDE_MS,
+      easing: Easing.bezier(...PUSH_CURVE),
       useNativeDriver: true
     }).start(() => {
       // Cancelled cosmetic animation must not block the next choice after previous choice persisted.

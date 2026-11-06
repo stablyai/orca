@@ -1,6 +1,6 @@
 import type Database from '../../sqlite/sync-database'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { writeAgentSessionStoreRows } from '../../runtime/agent-session-record-rows'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { writeAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { CommandReceipt } from './command-receipt-schema'
 
 type AcceptedReceipt = Extract<CommandReceipt, { status: 'accepted' }>

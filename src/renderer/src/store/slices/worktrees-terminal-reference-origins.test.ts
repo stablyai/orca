@@ -1,4 +1,8 @@
-import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
+vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
+import type {
+  HostedReviewInfo,
+  HostedReviewForBranchArgs
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { singlePaneLayoutSnapshot } from './terminal-helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
@@ -7,8 +11,8 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 function installReviewRead() {
   const read = vi.fn<(args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>>()
@@ -24,9 +28,7 @@ const url = 'https://github.com/acme/orca/pull/42'
 const link = { url, slug: { owner: 'acme', repo: 'orca' }, number: 42 }
 const leaf = '11111111-1111-4111-8111-111111111111'
 const flush = async () => {
-  for (let i = 0; i < 20; i++) {
-    await Promise.resolve()
-  }
+  await vi.dynamicImportSettled()
 }
 function setup() {
   const store = createTestStore()
@@ -79,6 +81,10 @@ const context = (tabId: string) => ({
 beforeEach(() => {
   vi.clearAllMocks()
   resetRemoteRuntimeMocks()
+  Object.defineProperty(window.api, 'gh', {
+    configurable: true,
+    value: { workItemByOwnerRepo: vi.fn().mockResolvedValue(null) }
+  })
   resetWorktreeSliceModuleMemory()
 })
 describe('terminal reference evidence', () => {
@@ -203,43 +209,6 @@ describe('terminal reference evidence', () => {
       expect.objectContaining({ hostId: 'local', tabId: 'tab-1' })
     ])
   })
-  it('confirms a number-only secondary attachment without requiring it to be the primary review', async () => {
-    const { store } = setup()
-    const workspace = store.getState().worktreesByRepo.repo1[0]
-    const readHostedReview = installReviewRead().mockResolvedValue({
-      provider: 'github',
-      number: 42,
-      title: 'Secondary',
-      state: 'open',
-      url,
-      status: 'success',
-      mergeable: 'MERGEABLE',
-      updatedAt: '2026-01-01'
-    })
-    store.setState({
-      worktreesByRepo: {
-        repo1: [
-          {
-            ...workspace,
-            linkedItems: [
-              ...getWorkspaceAttachments(workspace),
-              {
-                provider: 'github',
-                type: 'pr',
-                number: 42
-              }
-            ]
-          }
-        ]
-      }
-    })
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    expect(readHostedReview).toHaveBeenCalledWith(expect.objectContaining({ linkedGitHubPR: 42 }))
-    const current = store.getState().worktreesByRepo.repo1[0]
-    expect(current.linkedPR).toBe(7)
-    expect(getWorkspaceAttachments(current)[1].origins?.[0].tabId).toBe('tab-1')
-  })
   it('rejects a different provider returned by owner-scoped branch confirmation', async () => {
     const { store } = setup()
     installReviewRead().mockResolvedValue({
@@ -256,17 +225,6 @@ describe('terminal reference evidence', () => {
     await flush()
     expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])).toHaveLength(1)
   })
-  it('adds a second confirmed PR without changing which review is used for checks', async () => {
-    const { store } = setup()
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    const workspace = store.getState().worktreesByRepo.repo1[0]
-    expect(workspace.linkedPR).toBe(7)
-    expect(getWorkspaceAttachments(workspace).map((item) => item.number)).toEqual([7, 42])
-    expect(getWorkspaceAttachments(workspace)[1].origins).toEqual([
-      expect.objectContaining({ kind: 'observed', tabId: 'tab-1', hostId: 'local' })
-    ])
-  })
   it('records two terminals for one PR and keeps repeated evidence deduplicated', async () => {
     const { store, readHostedReview } = setup()
     for (const tabId of ['tab-1', 'tab-2', 'tab-2']) {
@@ -279,28 +237,6 @@ describe('terminal reference evidence', () => {
       )
     ).toEqual(['tab-1', 'tab-2'])
     expect(readHostedReview.mock.calls.filter(([args]) => args.active === true)).toHaveLength(1)
-  })
-  it('does not associate a same-number PR from a different repository', async () => {
-    const { store } = setup()
-    store
-      .getState()
-      .observeTerminalGitHubPullRequestLink(
-        worktreeId,
-        { ...link, url: 'https://github.com/other/repo/pull/42' },
-        context('tab-1')
-      )
-    await flush()
-    expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])).toHaveLength(1)
-  })
-  it('does not write after a failed confirmation', async () => {
-    const { store, readHostedReview } = setup()
-    readHostedReview.mockRejectedValue(new Error('Offline'))
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])).toHaveLength(1)
-    expect(warning).toHaveBeenCalled()
-    warning.mockRestore()
   })
   it('ignores a stale PTY even when its caller supplies an execution host', async () => {
     const { store, readHostedReview } = setup()

@@ -1,12 +1,13 @@
-import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
+import { findFirstIndexedWorktree } from '@/lib/worktree-runtime-owner-index'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
   CreateWorktreeCallOptions,
   CreatedWorktreeResult
 } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
-import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceKey } from '../../../../shared/workspace-scope'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
@@ -28,9 +29,9 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneRecoveryOutcome } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
@@ -106,6 +107,10 @@ export type WorktreeSlice = {
   worktreeCatalogVersionByRepoHost: Record<string, WorktreeCatalogVersion>
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
   workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
+  /** Each store's saved cross-store parents as it keeps them, by lineage store key (OWN_LINEAGE_STORE_KEY or a paired environment id). */
+  crossStoreLineageByStoreKey: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+  /** This desktop store's installationId; undefined until its lineage list answers. */
+  ownLineageInstallationId: string | undefined
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
@@ -146,12 +151,19 @@ export type WorktreeSlice = {
   fetchWorktreeLineage: (options?: {
     forceLocalOwner?: boolean
     executionHostId?: ExecutionHostId
+    /** Hosts whose other stores also load their cross-machine links. */
+    crossStoreHostIds?: Iterable<ExecutionHostId>
   }) => Promise<void>
+  /** `executionHostId` names the clicked row's host, so a same-id twin elsewhere is never the target. */
   updateWorktreeLineage: (
     worktreeId: string,
-    args: { parentWorktreeId?: string; noParent?: boolean }
+    args: { parentWorktreeId?: string; noParent?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<void>
-  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
+  assignWorktreeParent: (
+    worktreeId: string,
+    args: { parentWorktreeId: string; executionHostId?: ExecutionHostId }
+  ) => Promise<void>
+  assignCrossStoreWorktreeParent: (children: readonly Worktree[], parent: Worktree) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
@@ -194,9 +206,14 @@ export type WorktreeSlice = {
       error?: string
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
+      chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
+      heldChatMessage?: string
+      heldChatAttachments?: PendingWorktreeCreation['heldChatAttachments']
+      heldChatSkills?: PendingWorktreeCreation['heldChatSkills']
+      chatInputHandedOff?: boolean
     }
   ) => void
   /** Drop pending/active creation; VM cleanup applies to cancellation/dismissal, never successful handoff. */
@@ -305,12 +322,5 @@ export function findWorktreeById(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string
 ): Worktree | undefined {
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) {
-      return match
-    }
-  }
-
-  return undefined
+  return findFirstIndexedWorktree(worktreesByRepo, worktreeId)
 }

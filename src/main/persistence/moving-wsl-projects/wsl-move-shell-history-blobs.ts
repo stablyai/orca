@@ -10,8 +10,8 @@ import {
   type OrcadMigrationBlobDescriptor
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
-import { getHistoryRootWsl } from '../../terminal-history-paths'
-import { hashWorktreeId } from '../../terminal-history-id'
+import { getHistoryRootWsl } from '../../pty/history/terminal-history-paths'
+import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import {
   MAX_ORCAD_MIGRATION_SHELL_HISTORY_BYTES,
   ORCAD_MIGRATION_SHELL_HISTORY_SHELLS,

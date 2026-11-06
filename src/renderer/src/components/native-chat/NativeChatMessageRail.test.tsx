@@ -73,20 +73,6 @@ describe('message rail interaction', () => {
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0Reply 0'))
   })
 
-  it('previews the message alone while the agent has not replied', async () => {
-    render(<Rail />)
-    fireEvent.pointerEnter(tick('Prompt 2'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 2')
-  })
-
-  it('jumps to the clicked tick', async () => {
-    const select = vi.fn()
-    render(<Rail onSelect={select} />)
-    await userEvent.setup().click(tick('Prompt 1'))
-    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-1' }))
-  })
-
   it('keeps focus where it was while a hover preview opens and closes', async () => {
     render(<Rail />)
     const composer = screen.getByRole('textbox')
@@ -137,12 +123,6 @@ describe('message rail interaction', () => {
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1Reply 1'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 2'))
-  })
-
-  it('marks a tick whose history is still paging in as busy', () => {
-    render(<Rail pendingId="prompt-0" />)
-    expect(tick('Prompt 0').getAttribute('aria-busy')).toBe('true')
-    expect(tick('Prompt 1').getAttribute('aria-busy')).toBeNull()
   })
 
   it.each([

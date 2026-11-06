@@ -1,6 +1,6 @@
 import { defineMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   GitDiscoverCommitMessageModels,
   GitGenerateCommitMessage,

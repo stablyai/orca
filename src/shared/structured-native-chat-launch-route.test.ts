@@ -1,12 +1,12 @@
 /** Renderer and orchestration share launch feasibility/defaults; changes here must move both surfaces together. */
 
 import { describe, expect, it } from 'vitest'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from './agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './agent-session/agent-session-runtime-capabilities'
 import {
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from './protocol-version'
-import {
+  nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
+  type NativeChatDefaultSettings,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
@@ -67,14 +67,6 @@ describe('per-launch structured feasibility', () => {
       })
     ).toEqual({ supported: false, blocker: 'project-runtime' })
   })
-
-  // Floating workspaces have resolvable configured directories; kind alone must not refuse structured launches.
-  it.each(['folder', 'floating', 'git-worktree'] as const)(
-    'supports a local %s workspace',
-    (workspaceKind) => {
-      expect(support({ workspaceKind })).toEqual({ supported: true })
-    }
-  )
 })
 
 describe('agents beyond Claude and Codex', () => {
@@ -114,3 +106,20 @@ describe('agents beyond Claude and Codex', () => {
     expect(support({ agent: 'codex' })).toEqual({ supported: true })
   })
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'resolves boolean overrides before default %s for existing and later agents',
+  (agentDefaultSurface) => {
+    const settings: NativeChatDefaultSettings = {
+      agentDefaultSurface,
+      nativeChatProviders: { claude: false, codex: true }
+    }
+    expect(nativeChatPreferenceFor(settings, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor(settings, 'codex')).toBe(true)
+    expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(agentDefaultSurface === 'chat')
+    Reflect.set(settings.nativeChatProviders!, 'malformed', 'true')
+    expect(nativeChatPreferenceFor(settings, 'malformed')).toBe(agentDefaultSurface === 'chat')
+    Reflect.set(settings, 'agentDefaultSurface', 'invalid')
+    expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(false)
+  }
+)

@@ -1,8 +1,8 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredChatNamingFailure,
@@ -32,8 +32,11 @@ export type StructuredAgentSessionStatusFeedDeps = {
   starting?: (sessionId: string) => boolean
   getConversation: (sessionId: string) => AgentSessionConversationView | null
   listConversations?: () => AgentSessionConversationView[]
+  /** Reading a closed chat reopens it; true keeps its existing row updating but adds no new one. */
+  rowRetired?: (sessionId: string) => boolean
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
+  readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
   now: () => number
   /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger

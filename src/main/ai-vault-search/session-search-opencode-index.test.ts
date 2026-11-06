@@ -3,40 +3,46 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 // Replace worker transport while exercising the real SQLite readers.
 export const openCodeReadCalls: string[] = []
-vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
-  const list = await import('../ai-vault/session-scanner-opencode-sqlite-list')
-  const parse = await import('../ai-vault/session-scanner-opencode-sqlite')
-  const capture = await import('../ai-vault/session-scanner-opencode-sqlite-capture')
-  const own = await import('./session-search-opencode-index.test')
-  const { listOpenCode2SqliteSessions } =
-    await import('../ai-vault/session-scanner-opencode2-sqlite-list')
-  return {
-    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
-    resolveOpenCodeSqliteWorkerEntryPath: () => null,
-    listOpenCodeSqliteSessionsViaWorker: (
-      args: Parameters<typeof list.listOpenCodeSqliteSessions>[0]
-    ) => list.listOpenCodeSqliteSessions(args),
-    parseOpenCodeSqliteSessionViaWorker: (
-      args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
-    ) => {
-      own.openCodeReadCalls.push(`parse:${args.sessionId}`)
-      return parse.parseOpenCodeSqliteSession(args)
-    },
-    captureOpenCodeSqliteSessionViaWorker: (
-      args: Parameters<typeof capture.captureOpenCodeSqliteSession>[0]
-    ) => {
-      own.openCodeReadCalls.push(`capture:${args.sessionId}`)
-      return capture.captureOpenCodeSqliteSession(args)
+vi.mock(
+  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async () => {
+    const list =
+      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const parse =
+      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite')
+    const capture =
+      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture')
+    const own = await import('./session-search-opencode-index.test')
+    const { listOpenCode2SqliteSessions } =
+      await import('../ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    return {
+      listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
+      resolveOpenCodeSqliteWorkerEntryPath: () => null,
+      listOpenCodeSqliteSessionsViaWorker: (
+        args: Parameters<typeof list.listOpenCodeSqliteSessions>[0]
+      ) => list.listOpenCodeSqliteSessions(args),
+      parseOpenCodeSqliteSessionViaWorker: (
+        args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
+      ) => {
+        own.openCodeReadCalls.push(`parse:${args.sessionId}`)
+        return parse.parseOpenCodeSqliteSession(args)
+      },
+      captureOpenCodeSqliteSessionViaWorker: (
+        args: Parameters<typeof capture.captureOpenCodeSqliteSession>[0]
+      ) => {
+        own.openCodeReadCalls.push(`capture:${args.sessionId}`)
+        return capture.captureOpenCodeSqliteSession(args)
+      }
     }
   }
-})
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
-import { buildOpenCodeSqliteCandidatePath } from '../ai-vault/session-scanner-opencode-sqlite-paths'
+)
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
+import { buildOpenCodeSqliteCandidatePath } from '../../shared/opencode-sqlite-session-path'
 import {
   appendOpenCodeSqliteTurn,
   writeOpenCodeSqliteDatabase
-} from '../ai-vault/session-scanner-opencode-sqlite-fixture'
+} from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import type SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchEngine } from './session-search-engine'
 import { SessionSearchIndexer } from './session-search-indexer'

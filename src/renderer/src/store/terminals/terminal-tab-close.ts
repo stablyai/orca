@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
   getRecentlyClosedTabPosition,
@@ -271,6 +271,7 @@ export function createTerminalTabCloseActions(
           const closeUnifiedTab = (): void => {
             get().closeUnifiedTab(workspaceItem.id, {
               recordInteraction: opts?.recordInteraction,
+              ...(opts?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
               terminalRetirementHandled: true
             })
           }

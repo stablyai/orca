@@ -23,7 +23,8 @@ const {
 
 // Why: the #9171 default-branch guard resolves the repo default branch via
 // git; keep those probes hermetic instead of spawning real git processes.
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

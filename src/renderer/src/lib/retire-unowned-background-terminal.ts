@@ -2,10 +2,11 @@ import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export async function retireUnownedTerminal(args: {
   /** Present tab id, or `{ worktreeId }` for a launch whose tab is created after the spawn. */
-  owner: { tabId: string } | { worktreeId: string }
+  owner: { tabId: string } | { worktreeId: string; hostId?: ExecutionHostId }
   ptyId: string
   runtimeTarget: RuntimeClientTarget
   runtimeTerminalHandle?: string | null
@@ -17,7 +18,7 @@ export async function retireUnownedTerminal(args: {
     'tabId' in owner
       ? isTerminalTabPresent(state, owner.tabId)
       : // Folder workspaces exist only in getKnownWorktreeById.
-        state.getKnownWorktreeById(owner.worktreeId) !== undefined
+        state.getKnownWorktreeById(owner.worktreeId, owner.hostId) !== undefined
   if (isOwned) {
     return false
   }

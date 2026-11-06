@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
 import TabBar from './tab-bar/TabBar'
 import type { TerminalController } from './use-terminal-controller'
@@ -65,7 +65,7 @@ export function TerminalTitlebarTabs({
       activeTabId={activeTabId}
       worktreeId={renderedActiveWorktreeId}
       onActivate={handleActivateTab}
-      onClose={handleCloseTab}
+      onClose={(tabId) => handleCloseTab(tabId, 'user')}
       onCloseOthers={handleCloseOthers}
       onCloseToRight={handleCloseTabsToRight}
       onCloseToLeft={handleCloseTabsToLeft}

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defaultExclude, defineConfig } from 'vitest/config'
@@ -6,8 +6,8 @@ import { defaultExclude, defineConfig } from 'vitest/config'
 // PostgreSQL files share session locks and a small connection budget.
 // The runner overlaps this serialized project with SQLite tests after other packages finish.
 const sourceDirectory = fileURLToPath(new URL('src', import.meta.url))
-const sharedPostgresTests = readdirSync(sourceDirectory)
-  .filter((entry) => entry.endsWith('.test.ts'))
+const sharedPostgresTests = globSync('**/*.test.ts', { cwd: sourceDirectory })
+  .map((entry) => entry.replaceAll('\\', '/'))
   .filter((entry) =>
     readFileSync(join(sourceDirectory, entry), 'utf8').includes('ORCA_RELAY_TEST_POSTGRES_URL')
   )

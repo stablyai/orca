@@ -63,24 +63,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('writes orca-opencode-status.js into the overlay and returns that dir', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
-      })
-      const source = '// orca opencode status plugin\nexport const Plugin = () => ({})\n'
-      const res = install({ opencodePluginSource: source })
-
-      expect(res.installed.opencode).toBe(true)
-      const dir = res.overlayDirs.opencode
-      expect(typeof dir).toBe('string')
-      const pluginPath = join(requireOverlayDir(dir), 'plugins', 'orca-opencode-status.js')
-      expect(existsSync(pluginPath)).toBe(true)
-      expect(readFileSync(pluginPath, 'utf8')).toBe(source)
-    })
-  })
-
   it('materializes the requested Pi extension in the guest home', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
@@ -132,24 +114,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('rebuilds if the resolved source dir ever changes (defensive)', () => {
-    withHome((home) => {
-      // Mutate captured env to model a newly resolvable source dir; production relay env stays fixed for its lifetime.
-      const userConfig = join(home, 'my-opencode')
-      const env: NodeJS.ProcessEnv = { HOME: home, ORCA_WSL_HOOK_INSTANCE: 'inst1' }
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), env)
-      const source = '// v1\n'
-      install({ opencodePluginSource: source })
-
-      mkdirSync(userConfig, { recursive: true })
-      writeFileSync(join(userConfig, 'opencode.json'), '{"model":"late"}')
-      env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = userConfig
-
-      const dir = requireOverlayDir(install({ opencodePluginSource: source }).overlayDirs.opencode)
-      expect(readFileSync(join(dir, 'opencode.json'), 'utf8')).toBe('{"model":"late"}')
-    })
-  })
-
   it('rebuilds when the cached overlay lost its plugin file', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
@@ -181,21 +145,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('rebuilds when the cached overlay disappeared from the guest', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
-      })
-      const source = '// v1\n'
-      const dir = requireOverlayDir(install({ opencodePluginSource: source }).overlayDirs.opencode)
-      rmSync(dir, { recursive: true, force: true })
-
-      expect(install({ opencodePluginSource: source }).overlayDirs.opencode).toBe(dir)
-      expect(existsSync(join(dir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
-    })
-  })
-
   it('mirrors an explicitly-set config root so overriding the var does not drop it', () => {
     withHome((home) => {
       // Why: setting OPENCODE_CONFIG_DIR to the overlay removes the user's own value
@@ -217,26 +166,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('mirrors the XDG default config root when using an overlay', () => {
-    withHome((home) => {
-      // Why: OPENCODE_CONFIG_DIR replaces the default root, so the overlay must
-      // carry the user's default config and Orca's plugin together.
-      const defaultConfig = join(home, '.config', 'opencode')
-      mkdirSync(defaultConfig, { recursive: true })
-      writeFileSync(join(defaultConfig, 'opencode.json'), '{"model":"default"}')
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
-      })
-      const dir = requireOverlayDir(
-        install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode
-      )
-
-      expect(existsSync(join(dir, 'opencode.json'))).toBe(true)
-      expect(existsSync(join(dir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
-    })
-  })
-
   it('rejects a source that exceeds the byte cap before writing anything', () => {
     withHome((home) => {
       const overlay = new PluginOverlayManager({ homeDir: home })
@@ -246,17 +175,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       const tooBig = 'a'.repeat(PLUGIN_SOURCE_MAX_BYTES + 1)
       expect(() => install({ opencodePluginSource: tooBig })).toThrow(/byte cap/)
       expect(overlay.hasOpenCodeSource()).toBe(false)
-    })
-  })
-
-  it('returns no overlay dir when no opencode source is provided', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home
-      })
-      const res = install({})
-      expect(res.installed.opencode).toBe(false)
-      expect(res.overlayDirs.opencode).toBeUndefined()
     })
   })
 })

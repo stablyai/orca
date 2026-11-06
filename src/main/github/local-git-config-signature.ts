@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/remotes/coalesced-probe'
 import type { GitHubRepoContext } from './github-repository-identity'
 
 type LocalGitConfigPaths = {

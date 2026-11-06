@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { createAgentStatusStore } from '../shared/agent-status-store'
-import { isTmuxInnerSubject, type TmuxAgentHookOwner } from '../shared/tmux-agent-hook-owner'
-import { readTmuxUnavailable, tmuxCanonicalStatusEvent } from '../shared/tmux-selected-status'
+import { createAgentStatusStore } from '../shared/agent-status/store/agent-status-store'
+import type { TmuxAgentHookOwner } from '../shared/tmux-agent-hook-owner'
+import {
+  isTmuxInnerSubject,
+  readTmuxUnavailable,
+  tmuxCanonicalStatusEvent
+} from '../shared/tmux-selected-status'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { createRelayTmuxHookOwner } from './relay-tmux-hook-owner'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookServerOptions } from './agent-hook-server-contract'

@@ -1,4 +1,9 @@
 import {
+  EMPTY_PAGE_GEOMETRY,
+  samePageGeometry,
+  type BridgePageGeometry
+} from './bridge/bridge-page-geometry'
+import {
   BridgeInitRouteSchema,
   type BridgeColorScheme,
   type BridgeInitRoute,
@@ -10,6 +15,8 @@ import {
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
 } from './bridge/bridge-safe-area-insets'
+import { sameFoldDivision, type BridgeFoldDivision } from './bridge/bridge-fold-division'
+import { sameTerminalKeyRail, type BridgeTerminalKeyRail } from './bridge/bridge-terminal-key'
 
 export type BridgeHostRoute = {
   readonly current: () => BridgeInitRoute | null
@@ -21,6 +28,16 @@ export type BridgeHostRoute = {
   readonly publishSafeAreaInsets: (next: BridgeSafeAreaInsets, deliverable: boolean) => void
   readonly keyboardInset: () => number
   readonly publishKeyboardInset: (next: number, deliverable: boolean) => void
+  /** The fold the next `init` carries; null when none splits the page. */
+  readonly pageGeometry: () => BridgePageGeometry
+  readonly publishPageGeometry: (next: BridgePageGeometry, deliverable: boolean) => void
+  readonly foldDivision: () => BridgeFoldDivision | null
+  /** Moves the held fold on the same lane as the insets. */
+  readonly publishFoldDivision: (next: BridgeFoldDivision | null, deliverable: boolean) => void
+  /** The keys the next `init` tells the page the shell's rail shows beside it. */
+  readonly terminalKeyRail: () => BridgeTerminalKeyRail
+  /** Moves the rail's keys on the same lane as the insets. */
+  readonly publishTerminalKeyRail: (next: BridgeTerminalKeyRail, deliverable: boolean) => void
   readonly colorScheme: () => BridgeColorScheme
   readonly publishColorScheme: (next: BridgeColorScheme, deliverable: boolean) => void
   readonly uiLocale: () => BridgeUiLocale | undefined
@@ -36,6 +53,9 @@ export function createBridgeHostRoute(args: {
   onRefused: (issue: string) => void
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  pageGeometry?: BridgePageGeometry
+  foldDivision?: BridgeFoldDivision | null
+  terminalKeyRail?: BridgeTerminalKeyRail
   colorScheme?: BridgeColorScheme
   uiLocale?: BridgeUiLocale
 }): BridgeHostRoute {
@@ -43,6 +63,9 @@ export function createBridgeHostRoute(args: {
   let route = parsed.success && !args.refused ? parsed.data : null
   let insets = args.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
   let keyboard = args.keyboardInset ?? 0
+  let geometry = args.pageGeometry ?? EMPTY_PAGE_GEOMETRY
+  let fold = args.foldDivision ?? null
+  let rail = args.terminalKeyRail ?? []
   let scheme = args.colorScheme ?? 'dark'
   let uiLocale = args.uiLocale
   return {
@@ -75,6 +98,36 @@ export function createBridgeHostRoute(args: {
         return
       }
       keyboard = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    pageGeometry: () => geometry,
+    publishPageGeometry: (next, deliverable) => {
+      if (samePageGeometry(geometry, next)) {
+        return
+      }
+      geometry = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    foldDivision: () => fold,
+    publishFoldDivision: (next, deliverable) => {
+      if (sameFoldDivision(fold, next)) {
+        return
+      }
+      fold = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    terminalKeyRail: () => rail,
+    publishTerminalKeyRail: (next, deliverable) => {
+      if (sameTerminalKeyRail(rail, next)) {
+        return
+      }
+      rail = next
       if (deliverable) {
         args.sendInit()
       }

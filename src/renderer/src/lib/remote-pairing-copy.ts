@@ -1,8 +1,8 @@
 import type {
   HostAccessLinkErrorKind,
   RemotePairingEndpointKind
-} from '../../../shared/remote-pairing-address'
-import type { RemotePairingFailureKind } from '../../../shared/remote-pairing-verification'
+} from '../../../shared/remote-runtime/pairing/remote-pairing-address'
+import type { RemotePairingFailureKind } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { translate } from '@/i18n/i18n'
 
 export function translateHostAccessLinkError(kind: HostAccessLinkErrorKind): string {

@@ -1,8 +1,10 @@
+import { normalizePRCheckHeadSha } from '../../../src/shared/github/pr-check-head'
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import type { GitHubReaction, PRComment } from '../../../src/shared/github/comment-types'
 import type {
   GitHubAssignableUser,
+  GitHubPRFile,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
   GitHubRepositoryIdentity,
@@ -158,7 +160,9 @@ const checkSummarySchema = z
     passed: prCount('passed'),
     failed: prCount('failed'),
     pending: prCount('pending'),
-    neutral: prCount('neutral')
+    neutral: prCount('neutral'),
+    cancelled: salvagedOptional('cancelled', z.number().int().nonnegative()),
+    scope: z.literal('pipeline').optional()
   })
   .transform((summary): ProviderCheckSummary => ({
     state: summary.state,
@@ -166,7 +170,14 @@ const checkSummarySchema = z
     passed: summary.passed ?? 0,
     failed: summary.failed ?? 0,
     pending: summary.pending ?? 0,
-    neutral: summary.neutral ?? 0
+    neutral: summary.neutral ?? 0,
+    ...(summary.cancelled !== undefined &&
+    [summary.total, summary.passed, summary.failed, summary.pending, summary.neutral].every(
+      (count) => count !== undefined
+    )
+      ? { cancelled: summary.cancelled }
+      : {}),
+    ...(summary.scope ? { scope: summary.scope } : {})
   }))
 
 export function prCheckSummary(name: string) {
@@ -192,6 +203,7 @@ const prCommentSchema = z
     isOutdated: prFlag('isOutdated'),
     line: prCount('line'),
     startLine: prCount('startLine'),
+    diffHunk: prText('diffHunk'),
     isBot: prFlag('isBot')
   })
   .transform((comment): PRComment => ({
@@ -208,6 +220,8 @@ const prCommentSchema = z
     isOutdated: comment.isOutdated,
     line: comment.line,
     startLine: comment.startLine,
+    // Newer hosts only; absent keeps the comment's shape unchanged for older ones.
+    ...(comment.diffHunk ? { diffHunk: comment.diffHunk } : {}),
     isBot: comment.isBot
   }))
 
@@ -223,7 +237,8 @@ const checkDetailSchema = z
     conclusion: salvagedOptional('conclusion', z.enum(CHECK_RUN_CONCLUSION)),
     url: prText('url'),
     checkRunId: prCount('checkRunId'),
-    workflowRunId: prCount('workflowRunId')
+    workflowRunId: prCount('workflowRunId'),
+    observedHeadSha: z.unknown().optional().transform(normalizePRCheckHeadSha)
   })
   .transform((check): PRCheckDetail => ({
     name: check.name,
@@ -231,7 +246,8 @@ const checkDetailSchema = z
     conclusion: check.conclusion ?? null,
     url: check.url ?? null,
     checkRunId: check.checkRunId,
-    workflowRunId: check.workflowRunId
+    workflowRunId: check.workflowRunId,
+    observedHeadSha: check.observedHeadSha
   }))
 
 export const prChecksSchema = salvagingArray(checkDetailSchema)
@@ -239,3 +255,43 @@ export const prChecksSchema = salvagingArray(checkDetailSchema)
 export function prCheckList(name: string) {
   return salvagedOptional(name, prChecksSchema)
 }
+
+const PR_FILE_STATUS = [
+  'added',
+  'modified',
+  'removed',
+  'renamed',
+  'copied',
+  'changed',
+  'unchanged'
+] as const
+
+// The diff screen reads viewed state and commentable lines per path; a malformed file drops alone.
+export const prFileSchema = z
+  .looseObject({
+    path: z.string().min(1),
+    oldPath: salvagedOptional('oldPath', z.string()),
+    status: openEnum(PR_FILE_STATUS, 'modified').catch('modified'),
+    additions: z.number().catch(0),
+    deletions: z.number().catch(0),
+    isBinary: z.boolean().catch(false),
+    reviewCommentLineNumbers: salvagedOptional(
+      'reviewCommentLineNumbers',
+      z.array(z.number().int().positive())
+    ),
+    viewerViewedState: openEnum(['VIEWED', 'UNVIEWED', 'DISMISSED'] as const, undefined)
+      .optional()
+      .catch(undefined)
+  })
+  .transform((file): GitHubPRFile => ({
+    path: file.path,
+    ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+    isBinary: file.isBinary,
+    ...(file.reviewCommentLineNumbers
+      ? { reviewCommentLineNumbers: file.reviewCommentLineNumbers }
+      : {}),
+    ...(file.viewerViewedState ? { viewerViewedState: file.viewerViewedState } : {})
+  }))

@@ -1,5 +1,5 @@
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
+import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 
@@ -9,13 +9,18 @@ export function dispatchTaskSource(args: {
   dispatch: Pick<DispatchContextRow, 'id' | 'run_id' | 'task_id'>
   /** The coordinator's address; a Dispatch with no declared caller names no sender. */
   from: string | undefined
-  senderName: SenderNameResolver
+  senderSnapshot: SenderSnapshotResolver
 }): AgentMessageSource {
   const { dispatch } = args
   return {
     kind: 'agent',
     senders: args.from
-      ? [{ ...agentMessageSender(args.from, args.db, args.senderName), relation: 'coordinator' }]
+      ? [
+          {
+            ...agentMessageSender(args.from, args.db, args.senderSnapshot),
+            relation: 'coordinator'
+          }
+        ]
       : [],
     orchestration: {
       message: 'task',

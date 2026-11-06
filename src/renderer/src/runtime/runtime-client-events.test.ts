@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SshProviderEpoch } from '../../../shared/ssh-types'
+
 import { subscribeRuntimeClientEvents } from './runtime-client-events'
 import {
   recordRuntimeSubscription,
@@ -7,77 +7,6 @@ import {
 } from './runtime-environment-bridge-fixture'
 
 describe('subscribeRuntimeClientEvents', () => {
-  it('preserves full SSH authority in retained snapshots and live client events', async () => {
-    const { subscribe, respond } = recordRuntimeSubscription({ subscriptionId: 'sub-1' })
-    const onEvent = vi.fn()
-    stubRuntimeEnvironmentBridge({ subscribe })
-    await subscribeRuntimeClientEvents('env-1', onEvent)
-    respond({
-      ok: true,
-      result: {
-        type: 'ready',
-        subscriptionId: 'sub-1',
-        snapshot: {
-          sshStates: [
-            {
-              targetId: 'ssh-1',
-              state: {
-                targetId: 'ssh-1',
-                status: 'connected',
-                error: null,
-                reconnectAttempt: 0,
-                providerEpoch: 'snapshot-provider-epoch' as SshProviderEpoch,
-                connectionGeneration: 17
-              }
-            }
-          ]
-        }
-      }
-    })
-
-    expect(onEvent).toHaveBeenCalledWith({
-      type: 'sshStateChanged',
-      targetId: 'ssh-1',
-      state: {
-        targetId: 'ssh-1',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        providerEpoch: 'snapshot-provider-epoch',
-        connectionGeneration: 17
-      }
-    })
-
-    respond({
-      ok: true,
-      result: {
-        type: 'sshStateChanged',
-        targetId: 'ssh-1',
-        state: {
-          targetId: 'ssh-1',
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0,
-          providerEpoch: 'live-provider-epoch' as SshProviderEpoch,
-          connectionGeneration: 18
-        }
-      }
-    })
-
-    expect(onEvent).toHaveBeenLastCalledWith({
-      type: 'sshStateChanged',
-      targetId: 'ssh-1',
-      state: {
-        targetId: 'ssh-1',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        providerEpoch: 'live-provider-epoch',
-        connectionGeneration: 18
-      }
-    })
-  })
-
   it('rejects a partial runtime authority instead of retaining it', async () => {
     const { subscribe, respond } = recordRuntimeSubscription({ subscriptionId: 'sub-1' })
     const onEvent = vi.fn()

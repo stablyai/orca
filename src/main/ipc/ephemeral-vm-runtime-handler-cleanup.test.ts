@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
-import type * as RuntimeEnvironmentStore from '../../shared/runtime-environment-store'
+import type * as RuntimeEnvironmentStore from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
 const { getPathMock, handleMock, removeRuntimeOwnedSshTargetMock, removeHandlerMock } = vi.hoisted(
@@ -25,11 +25,14 @@ const { listEnvironmentsMock, removeEnvironmentMock } = vi.hoisted(() => ({
   removeEnvironmentMock: vi.fn()
 }))
 
-vi.mock('../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
-  listEnvironments: listEnvironmentsMock,
-  removeEnvironment: removeEnvironmentMock
-}))
+vi.mock(
+  '../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: listEnvironmentsMock,
+    removeEnvironment: removeEnvironmentMock
+  })
+)
 
 vi.mock('./runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: vi.fn(async () => {})
@@ -206,7 +209,8 @@ it("retires a recipe server's session partition once its VM is destroyed (#33805
     })),
     removeWorkspaceSessionHost,
     getRemoteLayoutSnapshot: vi.fn(),
-    setRemoteLayoutSnapshot: vi.fn()
+    setRemoteLayoutSnapshot: vi.fn(),
+    setHostRepoCatalogSnapshot: vi.fn()
   } as never)
 
   await expect(

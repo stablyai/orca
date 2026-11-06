@@ -4,7 +4,7 @@ import { z } from 'zod'
 import {
   AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH
-} from '../agent-session-question-answer'
+} from '../agent-session/agent-session-question-answer'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 
 const MAX_QUESTION_ANSWER_QUESTIONS = 4

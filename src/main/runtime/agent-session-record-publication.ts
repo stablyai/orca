@@ -1,5 +1,5 @@
-import type { AgentSessionStoreState } from './agent-session-store-state'
-import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import type { AgentSessionStoreState } from './agent-session/records/agent-session-store-state'
+import type { AgentSessionStoreTransactions } from './agent-session/records/agent-session-store-transactions'
 
 export abstract class AgentSessionRecordPublication {
   constructor(protected readonly transactions: AgentSessionStoreTransactions) {}

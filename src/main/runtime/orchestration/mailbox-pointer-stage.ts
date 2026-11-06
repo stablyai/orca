@@ -7,25 +7,30 @@ import {
   shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import type { OrchestrationMailboxLeaf } from './mailbox-owner'
+import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
-import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
-import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
-import { isSettledWrite, type WriteSettlement } from '../../../shared/pty-write-settlement'
+import {
+  submitOrchestrationMailboxPointer,
+  type OrchestrationMailboxPointerSubmitTarget
+} from './mailbox-pointer-submit'
+
+import {
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>
   state: OrchestrationMailboxPointerState
-  leaf: OrchestrationMailboxLeaf
+  terminal: OrchestrationMailboxTerminal
   mailboxHandle: string
   messages: readonly OrchestrationMailboxPointerMessage[]
   heldDeliveryId?: string
   newestSequence: number
   enterDelayMs: number
-  leafKey: string
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -33,11 +38,8 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
 export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMessageWaiter>(
   args: StagePointerArgs<TWaiter>
 ): void {
-  const ptyId = args.leaf.ptyId
-  if (!ptyId) {
-    return
-  }
-  const expectedTarget = args.deps.resolveSubmitTarget(args.leaf, ptyId)
+  const { ptyId } = args.terminal
+  const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
   if (!expectedTarget) {
     return
   }
@@ -76,7 +78,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     return
   }
   // The watermark must not outlive its DB reservation or concurrent delivery stays parked.
-  args.state.setWatermark(args.mailboxHandle, args.newestSequence, ptyId, args.leafKey)
+  args.state.setWatermark(args.mailboxHandle, args.newestSequence, ptyId)
   // Only `refused` proves no bytes left, so only `refused` may release the reservation.
   const settlePointerWrite = (settlement: WriteSettlement): void => {
     if (settlement.outcome === 'unverifiable') {
@@ -98,7 +100,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       formatMessagePointer(
         args.messages.length,
         args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminalHandle),
+        args.deps.getCliCommand(expectedTarget.terminal.handle),
         args.heldDeliveryId
       )
     )
@@ -133,20 +135,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       }
       return
     }
-    if (
-      !db ||
-      shouldReleaseOrchestrationPointer(
-        db,
-        args.mailboxHandle,
-        args.messages,
-        args.deps.getMessageWaiters(args.mailboxHandle)
-      )
-    ) {
-      if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
-        args.redrive(args.mailboxHandle)
-      }
-      return
-    }
     const submitEnter = (): void =>
       submitOrchestrationMailboxPointer(
         {
@@ -154,7 +142,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           state: args.state,
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
-          getMessageWaiters: args.deps.getMessageWaiters,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
@@ -162,10 +149,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           redrive: args.redrive
         },
         {
-          leaf: args.leaf,
           mailboxHandle: args.mailboxHandle,
           messages: args.messages,
-          heldDeliveryId: args.heldDeliveryId,
           newestSequence: args.newestSequence,
           ptyId,
           flight,

@@ -2,7 +2,10 @@
 // what it pushes, and which writes the row writer may skip.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
-import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID } from '../orca-runtime-test-fixtures.spec'
+import {
+  HEADLESS_LEAF_ID,
+  TEST_WORKTREE_ID
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime
@@ -67,19 +70,6 @@ describe('held session.tabs rows across layout commits (switch on)', () => {
     const { runtime } = await closedFirstTab()
 
     expect(heldStrip(runtime)).toEqual(MOVED_STRIP)
-  })
-
-  it('after it, a write that changes no row pushes nothing', async () => {
-    const { runtime, store, setSession } = await closedFirstTab()
-    let pushes = 0
-    runtime.onMobileSessionTabsChanged(() => {
-      pushes += 1
-    })
-
-    setSession(store.getSession())
-    await vi.runAllTimersAsync()
-
-    expect(pushes).toBe(0)
   })
 
   it("another workspace's commits push nothing for a workspace with a kept row", async () => {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
@@ -13,7 +13,7 @@ import {
   readOpenCodeNativeChatTranscriptTail
 } from './transcript-opencode'
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
-import { handleOpenCodeSqliteRequest } from '../ai-vault/session-scanner-opencode-sqlite-dispatch'
+import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {

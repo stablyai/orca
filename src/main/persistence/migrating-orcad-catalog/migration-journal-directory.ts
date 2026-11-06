@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { writeSecureJsonFileWithinLimit } from '../../../shared/bounded-secure-json-file'
 import { errorMessage } from '../../../shared/error-message'
 import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-reader'
-import { syncDirectoryDurablySync } from '../../durable-file-write'
+import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 
 const JOURNAL_FILE = /^[A-Za-z0-9_-]{1,128}\.json$/
 // `<id>.json.<pid>.<ms>.<rand>.tmp`: a durable write that died before its rename.

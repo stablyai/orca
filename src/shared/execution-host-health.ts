@@ -1,5 +1,5 @@
 import type { SshConnectionStatus } from './ssh-types'
-import type { RuntimeHostBlockedReason } from './runtime-host-status'
+import type { RuntimeHostBlockedReason } from './remote-runtime/host-status/runtime-host-status'
 
 export type ExecutionHostHealth =
   | 'local'

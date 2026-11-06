@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
@@ -40,8 +40,6 @@ export function NativeChatAssistantMessageRow({
     activeTurnIsWorking,
     trailingRun,
     continuesTurn = false,
-    onLinkClick,
-    allowFileUriLinks = false,
     inSubagentSection = false,
     runtimeContext
   } = props
@@ -77,9 +75,7 @@ export function NativeChatAssistantMessageRow({
           variant="document"
           className="text-sm"
           renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-          linkifyFilePaths={onLinkClick !== undefined}
+          linkifyFilePaths
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
           // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
@@ -122,7 +118,6 @@ function toolRunProps(
     previousUpdatePlan: props.previousUpdatePlan,
     revealedDiff: run ? run.revealedDiff : props.revealedDiff,
     onRevealDiff: props.onScrollMessageToTop,
-    onLinkClick: props.onLinkClick,
     subagentGroups: content.subagentGroups,
     subagentRoster: props.subagentRoster,
     subagentDisclosure: props.subagentDisclosure,
@@ -132,6 +127,7 @@ function toolRunProps(
     activeTurnIsWorking: props.activeTurnIsWorking,
     trailing: props.trailingRun,
     disclosureId: props.message.id,
-    asides: run?.asides
+    asides: run?.asides,
+    runtimeContext: props.runtimeContext
   }
 }

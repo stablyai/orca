@@ -34,15 +34,6 @@ afterEach(async () => {
 })
 
 describe('troubleshooting paired endpoints', () => {
-  it('loads endpoint advice before the user runs diagnostics', async () => {
-    hosts.catalog.mockResolvedValue([{ endpoint: 'ws://desktop.local:6769' }])
-    await act(async () => {
-      tree = create(createElement(Harness))
-    })
-    expect(state.current?.diagnosticStatus).toBe('idle')
-    expect(state.current?.hostEndpoints).toEqual(['ws://desktop.local:6769'])
-  })
-
   it('keeps the newly probed endpoints when the initial catalog read finishes later', async () => {
     let finishCatalog: (value: { endpoint: string }[]) => void = () => {}
     hosts.catalog

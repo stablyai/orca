@@ -52,6 +52,7 @@ describe('federated worker start receipt validation', () => {
         }
       })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC handler returns unknown; this test pins its receipt shape.
     const result = (await startFederatedWorker({
       params: {
         task: task.id,
@@ -62,7 +63,8 @@ describe('federated worker start receipt validation', () => {
       },
       runtime,
       db,
-      runId: run.id,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
       task,
       orchestrationMutation: {
         callerFingerprint: 'caller',

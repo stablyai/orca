@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { hasUsageData } from '../../../../shared/usage-provider-windows'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -35,16 +36,6 @@ type UsageProviderSnapshots = {
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
-
-export function hasUsageData(provider: ProviderRateLimits): boolean {
-  return Boolean(
-    provider.session ||
-    provider.weekly ||
-    provider.fableWeekly ||
-    provider.monthly ||
-    (provider.buckets && provider.buckets.length > 0)
-  )
-}
 
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))

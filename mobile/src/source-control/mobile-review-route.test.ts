@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { firstReviewParam } from '../session/mobile-diff-review-screen-model'
-import { buildMobileReviewFileRoute, type MobileReviewRouteArea } from './mobile-review-route'
+import { buildMobileReviewFileRoute } from './mobile-review-route'
 
 function queryParams(route: string): URLSearchParams {
   const query = route.split('?')[1] ?? ''
@@ -23,25 +23,23 @@ describe('buildMobileReviewFileRoute', () => {
       expect(route).toContain('/h/host%2Fid/review/repo%3A%3Awork%20tree?')
       expect(firstReviewParam(params.get('file') ?? undefined)).toBe(filePath)
       expect(firstReviewParam(params.get('area') ?? undefined)).toBe('unstaged')
-      expect(firstReviewParam(params.get('scope') ?? undefined)).toBe('all')
       expect(firstReviewParam(params.get('name') ?? undefined)).toBe('My Repo')
     }
   )
 
-  it.each<MobileReviewRouteArea>(['unstaged', 'untracked', 'staged', 'branch'])(
-    'preserves true area %s',
-    (area) => {
-      const params = queryParams(
-        buildMobileReviewFileRoute({
-          hostId: 'host',
-          worktreeId: 'wt',
-          worktreeName: '',
-          filePath: 'a.ts',
-          area
-        })
-      )
+  it('carries the commit for a file opened from a commit', () => {
+    const params = queryParams(
+      buildMobileReviewFileRoute({
+        hostId: 'host',
+        worktreeId: 'wt',
+        worktreeName: '',
+        filePath: 'a.ts',
+        area: 'commit',
+        commitOid: 'c0ffee0123456789abcdef0123456789abcdef01'
+      })
+    )
 
-      expect(params.get('area')).toBe(area)
-    }
-  )
+    expect(params.get('area')).toBe('commit')
+    expect(params.get('commit')).toBe('c0ffee0123456789abcdef0123456789abcdef01')
+  })
 })

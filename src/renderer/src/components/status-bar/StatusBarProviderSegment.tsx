@@ -17,10 +17,10 @@ import {
   USAGE_URGENT_PERCENT,
   USAGE_WARNING_PERCENT,
   clampUsedPercent,
-  getProviderDisplayName,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './tooltip'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getStatusBarPrioritySection, getUsageHeadlineSection } from './UsageRosterPanel'

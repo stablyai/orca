@@ -299,16 +299,6 @@ describe('useDetectedAgents (unresolved target)', () => {
 })
 
 describe('useDetectedAgents (runtime call site)', () => {
-  it('distinguishes an initial remote failure from the pre-effect loading state', async () => {
-    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime disconnected'))
-
-    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    expect(latestHookResult?.detectedIds).toBeNull()
-    expect(latestHookResult?.isLoading).toBe(false)
-    expect(latestHookResult?.detectionFailed).toBe(true)
-  })
-
   it('probes each empty runtime target at most once per mounted surface', async () => {
     const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
 

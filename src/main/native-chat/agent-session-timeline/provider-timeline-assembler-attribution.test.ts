@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   backgroundTask,
   backgroundTaskState,
@@ -104,6 +104,32 @@ describe('a request key reused in another turn', () => {
       body: { resolution: { state: 'pending' } },
       turnScope: { kind: 'turn', turnItemId: providerTurnItemId('t2') }
     })
+  })
+
+  it('still shows a live request whose turn another writer ended while the open was queued', async () => {
+    const rig = await answeredInAnEarlierTurn()
+    const { assembler, bind } = openUnboundProviderTimelineAssembler(rig.journal)
+    const join = { turn: 't2' }
+    assembler.apply({
+      type: 'request.open',
+      request: 'p1',
+      body: pendingApproval,
+      join,
+      outlivesTurn: true
+    })
+    const running = await rig.turn('t2')
+    if (!running) {
+      throw new Error('t2 is running')
+    }
+    await rig.journal.appendItem(
+      identityOf(providerTurnItemId('t2')),
+      agentJournalTurnBody({ ...running, state: 'interrupted', completedAt: 4_000 }),
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    await bind()
+    expect(
+      (await rig.row(providerItemId('request', 'p1', { generation: 'gen-unbound' })))?.body
+    ).toMatchObject({ resolution: { state: 'pending' } })
   })
 
   it('asks nothing in a turn another writer ended while the open was queued', async () => {

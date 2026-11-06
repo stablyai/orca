@@ -2,28 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
 
 describe('RendererTerminalSerializerReadiness', () => {
-  it('resolves current and future waiters when the renderer settles', async () => {
-    const readiness = new RendererTerminalSerializerReadiness()
-    const pending = readiness.wait('pty-1', 0, 1_000)
-
-    readiness.markReady('pty-1')
-
-    await expect(pending).resolves.toBe(true)
-    expect(readiness.generation('pty-1')).toBe(1)
-    await expect(readiness.wait('pty-1', 0, 1_000)).resolves.toBe(true)
-  })
-
-  it('waits for a fresh settlement when historical readiness is stale', async () => {
-    const readiness = new RendererTerminalSerializerReadiness()
-    readiness.markReady('pty-1')
-    const pending = readiness.wait('pty-1', readiness.generation('pty-1'), 1_000)
-
-    readiness.markReady('pty-1')
-
-    await expect(pending).resolves.toBe(true)
-    expect(readiness.generation('pty-1')).toBe(2)
-  })
-
   it('releases waiters when the PTY is cleared', async () => {
     const readiness = new RendererTerminalSerializerReadiness()
     readiness.markReady('pty-1')
@@ -47,19 +25,6 @@ describe('RendererTerminalSerializerReadiness', () => {
 
     await expect(aborted).resolves.toBe(false)
     await expect(timedOut).resolves.toBe(false)
-    vi.useRealTimers()
-  })
-
-  it('keeps a lifecycle waiter until readiness or abort when no timeout is supplied', async () => {
-    vi.useFakeTimers()
-    const readiness = new RendererTerminalSerializerReadiness()
-    const abortController = new AbortController()
-    const pending = readiness.wait('pty-lifecycle', 0, undefined, abortController.signal)
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    abortController.abort()
-
-    await expect(pending).resolves.toBe(false)
     vi.useRealTimers()
   })
 

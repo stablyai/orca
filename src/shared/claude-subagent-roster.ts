@@ -1,4 +1,4 @@
-import type { AgentSubagentSnapshot } from './agent-status-types'
+import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { ClaudeBackgroundAgentTask } from './claude-background-task-inventory'
 
 /** Match the wire ID cap at upsert so an invisible oversized child cannot keep the pane working. */

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAccountRecord,
@@ -13,10 +13,13 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 vi.mock('electron', () => ({ app: { getPath: () => testState.userDataDir } }))
 vi.mock(import('node:os'), async (importOriginal) => {
   const actual = await importOriginal()
@@ -30,11 +33,11 @@ const bridges = vi.hoisted(() => ({
 }))
 
 function mockBridges(): void {
-  vi.doMock('../codex/codex-account-session-bridge', async (importOriginal) => ({
+  vi.doMock('../codex/history/bridges/codex-account-session-bridge', async (importOriginal) => ({
     ...(await importOriginal<object>()),
     startCodexAccountSessionBridgeInBackground: bridges.account
   }))
-  vi.doMock('../codex/codex-session-bridge', async (importOriginal) => ({
+  vi.doMock('../codex/history/bridges/codex-session-bridge', async (importOriginal) => ({
     ...(await importOriginal<object>()),
     startSystemCodexSessionBridgeInBackground: bridges.system
   }))
@@ -87,8 +90,8 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
   })
 
   afterEach(() => {
-    vi.doUnmock('../codex/codex-account-session-bridge')
-    vi.doUnmock('../codex/codex-session-bridge')
+    vi.doUnmock('../codex/history/bridges/codex-account-session-bridge')
+    vi.doUnmock('../codex/history/bridges/codex-session-bridge')
     teardownRuntimeHomeTest()
   })
 
@@ -114,10 +117,13 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'ubuntu-home')
-    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground: bridges.wsl
     }))
-    vi.doMock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu', getWslHome: () => wslHome }))
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
     const accountsRoot = join(wslHome, '.local', 'share', 'orca', 'codex-accounts')
     const wslAccount = (id: string) => ({
       id,
@@ -151,8 +157,8 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
       await Promise.resolve()
       expect(bridges.wsl).not.toHaveBeenCalled()
     } finally {
-      vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../codex/history/bridges/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -208,7 +214,8 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
         createSettings({ realHomeRoutable: true, codexSessionSourceHome: { host } })
       )
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-      const { resolveCodexSessionBackfillPaths } = await import('../codex/codex-session-backfill')
+      const { resolveCodexSessionBackfillPaths } =
+        await import('../codex/history/backfill/codex-session-backfill')
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the getSettings/updateSettings surface this service reads.
       const service = new CodexRuntimeHomeService(store as never)
 
@@ -226,9 +233,10 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
       createSettings({ realHomeRoutable: true, codexSessionSourceHome: plain })
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { resolveCodexSessionBackfillPaths } = await import('../codex/codex-session-backfill')
+    const { resolveCodexSessionBackfillPaths } =
+      await import('../codex/history/backfill/codex-session-backfill')
     const { writeCodexSessionBackfillMarker, captureCodexSessionBackfillMarkerGeneration } =
-      await import('../codex/codex-session-backfill-marker')
+      await import('../codex/history/backfill/codex-session-backfill-marker')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the getSettings/updateSettings surface this service reads.
     const service = new CodexRuntimeHomeService(store as never)
     const paths = resolveCodexSessionBackfillPaths(plain.host)

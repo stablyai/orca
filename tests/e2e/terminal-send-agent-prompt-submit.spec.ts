@@ -7,7 +7,7 @@ import { expect, test } from './helpers/orca-app'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import { recognizeAgentProcess } from '../../src/shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../src/shared/agent-status/process/agent-process-recognition'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../src/shared/orchestration-timing-budgets'
 
 const execFileAsync = promisify(execFile)
@@ -102,7 +102,7 @@ test('CLI text plus Enter waits for a slow agent composer before submitting', as
       [
         path.join(repoRoot, 'tests', 'tools', 'repro-terminal-send-submit.mjs'),
         '--cli',
-        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'development', 'launch', 'orca-dev.mjs'),
         '--worktree',
         testRepoPath,
         '--terminal',
@@ -157,7 +157,7 @@ test('CLI reports a swallowed Enter as accepted without submitting a second Ente
       [
         path.join(repoRoot, 'tests', 'tools', 'repro-terminal-send-submit.mjs'),
         '--cli',
-        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'development', 'launch', 'orca-dev.mjs'),
         '--worktree',
         testRepoPath,
         '--terminal',
@@ -216,7 +216,7 @@ test('CLI does not write prompt bytes into an active permission dialog', async (
       [
         path.join(repoRoot, 'tests', 'tools', 'repro-terminal-send-submit.mjs'),
         '--cli',
-        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'development', 'launch', 'orca-dev.mjs'),
         '--worktree',
         testRepoPath,
         '--terminal',

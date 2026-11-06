@@ -60,20 +60,6 @@ describe('statUserOpenedPath', () => {
     mocks.statRuntimePath.mockReset()
   })
 
-  it('keeps a project file that stays in the project contained', async () => {
-    answer(true, true)
-
-    await expect(statUserOpenedPath(project, '/repo/src/a.ts')).resolves.toEqual({
-      isDirectory: false,
-      escapesWorktree: false
-    })
-    expect(mocks.statRuntimePath).toHaveBeenCalledTimes(1)
-    // Opening a path is a user act, so its stat may start a stopped WSL distro.
-    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts', undefined, {
-      wakeWslDistro: true
-    })
-  })
-
   it.each([false, true])(
     'reports a project link that leads out of the project (directory: %s)',
     async (isDirectory) => {

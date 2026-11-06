@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import { parsePairingCode } from './pairing'
-import type { PairingOffer } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 export type PairConfirmRouteState =
   | { kind: 'ready'; offer: PairingOffer; errorMessage: '' }

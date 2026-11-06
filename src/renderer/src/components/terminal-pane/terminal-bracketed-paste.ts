@@ -1,20 +1,9 @@
 import type { Terminal } from '@xterm/xterm'
 import type { WindowsInputRecordNewline } from './terminal-paste-model'
 import {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START,
-  normalizeTerminalPasteLineEndings,
   sanitizeBracketedPasteText,
   wrapTerminalBracketedPasteText
-} from '../../../../shared/terminal-bracketed-paste-text'
-
-export {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START,
-  normalizeTerminalPasteLineEndings,
-  sanitizeBracketedPasteText,
-  wrapTerminalBracketedPasteText
-}
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 
 type BracketedPasteTerminal = {
   modes: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
+
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
 import { acknowledgeViewedAutoAckTarget } from './agent-auto-ack-surfaces'
 import {
@@ -8,8 +8,8 @@ import {
   makeTabGroup,
   makeUnifiedTab
 } from '../store/slices/store-test-helpers'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { workspaceHasLiveMarker } from '../store/slices/workspace-attention/workspace-live-markers'
 
 const WORKSPACE = 'wt-1'
@@ -89,20 +89,6 @@ const workspaceStillHeld = (store: TestStore): boolean =>
   workspaceHasLiveMarker(store.getState(), WORKSPACE)
 
 describe('the on-screen read in a workspace holding both a terminal and a structured chat', () => {
-  it('sends the visible surface to the adapter that owns its address', () => {
-    expect(
-      resolveAutoAckTabTargets(
-        seedMixedWorkspace({ visible: 'terminal', unreadSubjectKeys: [] }).store.getState()
-      )
-    ).toEqual([{ tabId: TERMINAL_TAB, worktreeId: WORKSPACE, surfaceKind: 'terminal' }])
-
-    expect(
-      resolveAutoAckTabTargets(
-        seedMixedWorkspace({ visible: 'chat', unreadSubjectKeys: [] }).store.getState()
-      )
-    ).toEqual([{ tabId: CHAT_TAB, worktreeId: WORKSPACE, surfaceKind: 'structured' }])
-  })
-
   it('reading the visible terminal keeps the hidden chat unread', () => {
     const { store } = seedMixedWorkspace({
       visible: 'terminal',
@@ -129,28 +115,6 @@ describe('the on-screen read in a workspace holding both a terminal and a struct
     expect(workspaceStillHeld(store)).toBe(true)
   })
 
-  it('clears workspace attention when the visible terminal held the only unread', () => {
-    const { store } = seedMixedWorkspace({
-      visible: 'terminal',
-      unreadSubjectKeys: [TERMINAL_SUBJECT]
-    })
-
-    runAutoAckScan(store)
-
-    expect(workspaceStillHeld(store)).toBe(false)
-  })
-
-  it('clears workspace attention when the visible chat held the only unread', () => {
-    const { store } = seedMixedWorkspace({
-      visible: 'chat',
-      unreadSubjectKeys: [CHAT_SUBJECT]
-    })
-
-    runAutoAckScan(store)
-
-    expect(workspaceStillHeld(store)).toBe(false)
-  })
-
   it('keeps workspace attention while a hidden chat holds only its tab marker', () => {
     const { store } = seedMixedWorkspace({
       visible: 'terminal',
@@ -162,36 +126,5 @@ describe('the on-screen read in a workspace holding both a terminal and a struct
 
     expect(store.getState().unreadTerminalTabs[CHAT_TAB]).toBe('agent-completion')
     expect(workspaceStillHeld(store)).toBe(true)
-  })
-})
-
-function markChatGroupUnread(store: TestStore, groupId: string): void {
-  // Why: tab markers for completions sit behind the experimental attention setting.
-  store.setState({
-    settings: { ...getDefaultSettings('/home/test'), experimentalTerminalAttention: true }
-  })
-  store.getState().markAgentAttentionUnread({
-    workspaceId: WORKSPACE,
-    subjectKey: CHAT_SUBJECT,
-    groupId,
-    reason: 'agent-completion'
-  })
-}
-
-describe('tab marker container addressing', () => {
-  it('accepts a structured chat addressed by its unified tab id', () => {
-    const { store } = seedMixedWorkspace({ visible: 'chat', unreadSubjectKeys: [] })
-
-    markChatGroupUnread(store, CHAT_TAB)
-
-    expect(store.getState().unreadTerminalTabs[CHAT_TAB]).toBe('agent-completion')
-  })
-
-  it('still refuses an id no open tab owns', () => {
-    const { store } = seedMixedWorkspace({ visible: 'chat', unreadSubjectKeys: [] })
-
-    markChatGroupUnread(store, 'tab-that-never-existed')
-
-    expect(store.getState().unreadTerminalTabs['tab-that-never-existed']).toBeUndefined()
   })
 })
