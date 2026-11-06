@@ -54,7 +54,7 @@ jobs:
             fi
           done
           if [ "${#missing[@]}" -ne 0 ]; then
-            echo "::error::Android release signing is not configured. Missing secrets or variables: ${missing[*]}. See "Android Release Signing" in mobile/README.md."
+            echo "::error::Android release signing is not configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
             exit 1
           fi
 
