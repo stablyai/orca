@@ -1,4 +1,5 @@
 import {
+  nativeChatShowsOpenedPullRequests,
   nativeChatShowsTurnDiffSummary,
   normalizeNativeChatAppearanceSettings,
   resetNativeChatAppearanceSettings,
@@ -49,6 +50,7 @@ export function AppearanceChatSection({
   const decrease = formatPrimaryShortcutLabel('zoom.out', keybindings)
   const entries = getChatAppearanceEntriesByKey({ increase, decrease })
   const changedFilesSummary = nativeChatShowsTurnDiffSummary(settings)
+  const openedPullRequests = nativeChatShowsOpenedPullRequests(settings)
   const update = (updates: NativeChatAppearanceSettings): void => {
     void writeNativeChatAppearance(
       (current) => normalizeNativeChatAppearanceSettings({ ...current, ...updates }),
@@ -139,6 +141,19 @@ export function AppearanceChatSection({
         />
       </SearchableSetting>
       <SearchableSetting
+        id={entries.openedPullRequests.targetSectionId}
+        {...entries.openedPullRequests}
+        forceVisible={forceVisiblePrimary}
+      >
+        <SettingsSwitchRow
+          label={entries.openedPullRequests.title}
+          description={entries.openedPullRequests.description}
+          checked={openedPullRequests}
+          ariaLabel={entries.openedPullRequests.title}
+          onChange={() => updateSettings({ nativeChatOpenedPullRequests: !openedPullRequests })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
         id={entries.reset.targetSectionId}
         {...entries.reset}
         forceVisible={forceVisiblePrimary}
@@ -152,9 +167,12 @@ export function AppearanceChatSection({
               size="sm"
               onClick={() => {
                 void writeNativeChatAppearance(resetNativeChatAppearanceSettings, updateSettings)
-                // The changed files card is a separate key, but Reset restores every row above it.
-                if (!changedFilesSummary) {
-                  updateSettings({ nativeChatTurnDiffSummary: true })
+                // The card switches are separate keys, but Reset restores every row above it.
+                if (!changedFilesSummary || !openedPullRequests) {
+                  updateSettings({
+                    nativeChatTurnDiffSummary: true,
+                    nativeChatOpenedPullRequests: true
+                  })
                 }
               }}
             >

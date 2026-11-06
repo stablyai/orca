@@ -45,6 +45,13 @@ export function nativeChatShowsTurnDiffSummary(
   return settings?.nativeChatTurnDiffSummary !== false
 }
 
+/** Only explicit OFF hides the card for pull requests a turn opened. */
+export function nativeChatShowsOpenedPullRequests(
+  settings: { readonly nativeChatOpenedPullRequests?: unknown } | null | undefined
+): boolean {
+  return settings?.nativeChatOpenedPullRequests !== false
+}
+
 export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14
 export const DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE = 12
 export const DEFAULT_NATIVE_CHAT_CONTRAST = 100

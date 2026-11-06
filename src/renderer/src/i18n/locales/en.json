@@ -699,6 +699,10 @@
         "changedFilesSummaryDescription": "Shows the files each turn changed, with line counts, below the reply.",
         "changedFilesSummaryKeywordDiff": "diff",
         "changedFilesSummaryKeywordEdits": "edits",
+        "openedPullRequests": "Opened pull requests",
+        "openedPullRequestsDescription": "Shows each pull request a turn opened, with its title and changed lines, below the reply.",
+        "openedPullRequestsKeywordPr": "PR",
+        "openedPullRequestsKeywordCard": "pull request card",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -19862,10 +19866,7 @@
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files",
         "showMoreFiles": "Show {{count}} more",
-        "hide": "Hide",
-        "hidden": "Hidden",
-        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI.",
-        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat UI</settings>"
+        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI."
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -20679,17 +20680,16 @@
           "alreadyRedeemed": "That reset credit was already used."
         }
       },
-      "cardKindHidden": {
-        "title": "We won't show these anymore.",
-        "description": "You can change this anytime in",
-        "settingsLink": "Settings › Chat",
-        "failed": "Could not save that setting."
-      },
       "openedPullRequests": {
         "one": "Opened {{name}}",
-        "hide": "Don't show opened pull requests",
         "many_one": "Opened {{count}} pull request",
-        "many_other": "Opened {{count}} pull requests"
+        "many_other": "Opened {{count}} pull requests",
+        "hideFailed": "Couldn't hide opened pull requests. Try again, or turn off Opened pull requests in Settings › Chat UI."
+      },
+      "cardHide": {
+        "hide": "Hide",
+        "hidden": "Hidden",
+        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat UI</settings>"
       }
     },
     "tab": {
@@ -21129,11 +21129,7 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "timeout",
         "idleStopSearchKeepAlive": "keep alive",
-        "idleStopNever": "Never",
-        "openedPullRequestsTitle": "Show pull requests the agent opens",
-        "openedPullRequestsCopy": "A card under the turn that opened a pull request, with its title and changed lines.",
-        "openedPullRequestsSearchPr": "PR",
-        "openedPullRequestsSearchCard": "pull request card"
+        "idleStopNever": "Never"
       }
     },
     "agentChildRow": {

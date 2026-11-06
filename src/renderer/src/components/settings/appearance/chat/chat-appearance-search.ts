@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID } from '../../chat/native-chat-opened-pull-requests-setting-target'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../../chat/native-chat-turn-diff-setting-target'
 
 export function chatTerminalControlledHint(): string {
@@ -99,6 +100,19 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           translate('settings.appearance.chat.title', 'Chat UI'),
           translate('settings.appearance.chat.changedFilesSummaryKeywordDiff', 'diff'),
           translate('settings.appearance.chat.changedFilesSummaryKeywordEdits', 'edits')
+        ]
+      },
+      openedPullRequests: {
+        targetSectionId: NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID,
+        title: translate('settings.appearance.chat.openedPullRequests', 'Opened pull requests'),
+        description: translate(
+          'settings.appearance.chat.openedPullRequestsDescription',
+          'Shows each pull request a turn opened, with its title and changed lines, below the reply.'
+        ),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat UI'),
+          translate('settings.appearance.chat.openedPullRequestsKeywordPr', 'PR'),
+          translate('settings.appearance.chat.openedPullRequestsKeywordCard', 'pull request card')
         ]
       },
       reset: {
