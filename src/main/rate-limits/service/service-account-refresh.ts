@@ -1,4 +1,5 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
+import { claudeUsageDisabledSnapshot } from '../claude-usage-snapshot'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
 import { hasUsageWindows } from './service-result-policy'
 import {
@@ -173,8 +174,13 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
-      claude: this.withFetchingStatus(null, 'claude')
+      claude: this.isClaudeUsageEnabled()
+        ? this.withFetchingStatus(null, 'claude')
+        : claudeUsageDisabledSnapshot()
     })
+    if (!this.isClaudeUsageEnabled()) {
+      return this.getState()
+    }
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
   }
@@ -192,8 +198,13 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     }
     this.updateState({
       ...this.state,
-      claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
+      claude: this.isClaudeUsageEnabled()
+        ? this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
+        : claudeUsageDisabledSnapshot()
     })
+    if (!this.isClaudeUsageEnabled()) {
+      return this.getState()
+    }
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
   }
