@@ -6,7 +6,8 @@ import {
 import { isContextualTourStepDone } from '../../../../../shared/contextual-tour-action-steps'
 import {
   isContextualTourSessionConsumed,
-  isContextualTourStartBlockedByProgress
+  isContextualTourStartBlockedByProgress,
+  isInformationalTour
 } from './ui-slice-tour-gates'
 import {
   getContextualTourRequestDecision,

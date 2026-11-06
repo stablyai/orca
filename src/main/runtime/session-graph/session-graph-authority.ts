@@ -1,4 +1,4 @@
-import { readMobileProjectSections } from '../mobile-project-sections-snapshot'
+import { readMobileProjectSections } from '../sidebar-inputs/mobile-project-sections-snapshot'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   getRepoExecutionHostId,

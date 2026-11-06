@@ -8,6 +8,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import { useProjectGroupOperationOwner } from '../../use-project-group-operation'
 
 afterEach(() => {
   cleanup()
@@ -38,6 +39,11 @@ function runNewChildWorktree(args: {
   const state = useAppStore.getState()
   const { result } = renderHook(() =>
     useWorktreeContextMenuCommands({
+      operationOwner: useProjectGroupOperationOwner(),
+      groupOperation: null,
+      createGroupAttempt: null,
+      setCreateGroupAttempt: () => {},
+      createGroupDialogActiveRef: { current: false },
       worktree: makeWorktree({ id: 'project::/parent', repoId: 'project', ...args.worktree }),
       repo: args.activeRepo,
       getState: useAppStore.getState,
@@ -46,12 +52,8 @@ function runNewChildWorktree(args: {
       folderWorkspaceId: null,
       activeContextWorktrees: [],
       batchDeleteWorktrees: [],
-      createGroupDialogActiveRef: { current: false },
-      createProjectGroup: state.createProjectGroup,
       isMultiContext: false,
-      moveProjectToGroup: state.moveProjectToGroup,
       scopeRef: { current: null },
-      setCreateGroupDialogOpen: () => {},
       setWorkspaceUnreadByUser: state.setWorkspaceUnreadByUser,
       setWorktreesPinnedAndReveal: state.setWorktreesPinnedAndReveal,
       sleepableWorktrees: [],

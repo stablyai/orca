@@ -11,7 +11,7 @@ import {
 import { projectRepoFilterMatcher } from '../../../shared/project-grouping'
 import { buildMobileProjectSectionCatalog } from '../../../shared/mobile-project-sections-contract'
 import { ProjectSectionCatalogSchema } from '../../../shared/project-section-catalog-schema'
-import { publishMobileProjectSections } from '../../runtime/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '../../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../runtime/rpc/methods/mobile-project-sections'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import {
@@ -30,7 +30,7 @@ import { join } from 'node:path'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-ui'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/runtime-client-capabilities'
-import { RuntimeClientSettingsController } from '../../runtime/runtime-client-settings'
+import { RuntimeClientSettingsController } from '../../runtime/client/settings/runtime-client-settings'
 import { parseRuntimeClientCapabilities } from '../../runtime/rpc/runtime-client-capabilities'
 import {
   MOBILE_RUNTIME_CLIENT_CAPABILITIES,

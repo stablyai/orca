@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { ResolvedWorktree } from '../../../../main/runtime/runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../../../main/runtime/workspaces/catalog/runtime-worktree-path-identity'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createElement } from 'react'

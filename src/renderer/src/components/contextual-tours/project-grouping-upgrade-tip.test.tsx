@@ -109,7 +109,7 @@ it.each(['Got it', 'Dismiss tour', 'Group checkouts in Settings'])(
     act(() =>
       useAppStore.setState({
         activeContextualTourId: null,
-        contextualTourShownThisSession: false,
+        contextualToursStartedThisSession: [],
         contextualToursSeenIds: [...seen]
       })
     )

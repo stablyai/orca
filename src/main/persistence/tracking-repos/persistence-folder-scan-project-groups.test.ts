@@ -273,7 +273,7 @@ it('does not schedule a save or hydrate on a missing destination at the actual r
     state,
     scheduleSave,
     hydrateRepo,
-    removeWorkspaceLineageForFolderParent: () => {},
+    removeWorkspaceLineageForRemovedFolder: () => {},
     pruneMobileClientTabSelections: () => {}
   })
   expect(receiving.moveProjectToGroup({ id: 'a', executionHostId: 'local' }, 'deleted')).toBeNull()

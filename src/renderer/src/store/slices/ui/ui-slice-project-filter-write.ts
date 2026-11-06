@@ -5,7 +5,7 @@ import type { UISlice, UISliceGet } from './ui-slice-contract'
 /** A web client's filter write carries whether its one server reads project filters exactly. */
 export function getProjectFilterWrite(
   state: ReturnType<UISliceGet>,
-  ids: string[]
+  ids: readonly string[]
 ): UISlice['persistedUIProjectFilterWrite'] {
   const environment =
     isWebClientLocation() && state.runtimeEnvironments.length === 1

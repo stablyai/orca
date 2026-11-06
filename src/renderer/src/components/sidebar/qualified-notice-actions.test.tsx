@@ -122,9 +122,7 @@ it('routes a rendered concrete Show through mounted action/rollback adapters and
             row,
             vItem: { index, key: row.key, start: 0, end: 20, size: 20, lane: 0 },
             measureVirtualRowElement: () => {},
-            actionState: cards.importedWorktreeCardActionState.get(
-              getRepoHostIdentity(candidate.repo)
-            ),
+            actionStateByRepoHost: cards.importedWorktreeCardActionState,
             onShow: cards.handleShowImportedWorktrees,
             onKeepHidden: cards.handleKeepImportedWorktreesHidden
           })}

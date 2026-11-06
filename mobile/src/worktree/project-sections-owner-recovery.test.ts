@@ -7,9 +7,9 @@ import type { RpcResponse } from '../transport/types'
 import type { RpcRequestFrame } from '../transport/rpc-envelope-fields'
 import { RpcClientRequestTracker } from '../transport/rpc-client-request-tracker'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { partialRuntimeStore } from '../../../src/main/runtime/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../../src/main/runtime/rpc/methods/mobile-project-sections'
-import { publishMobileProjectSections } from '../../../src/main/runtime/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '../../../src/main/runtime/sidebar-inputs/mobile-project-sections-snapshot'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../src/shared/runtime-types'
 import { mapRuntimeError, successResponse } from '../../../src/main/runtime/rpc/errors'
 vi.mock('electron', () => ({
@@ -157,7 +157,7 @@ it.each([false, true])(
         sent.push(frame)
         if (frame.method === 'runtime.clientEvents.subscribe') {
           tasks.push(
-            subscribeMethod.handler(undefined, context, (result) => {
+            subscribeMethod.handler({}, context, (result) => {
               const reply = {
                 ...successResponse(frame.id, { runtimeId: 'owner' }, result),
                 streaming: true as const

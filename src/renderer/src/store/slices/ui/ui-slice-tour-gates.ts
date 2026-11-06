@@ -18,7 +18,7 @@ export function isPausedActionTour(
   )
 }
 
-function isInformationalTour(tourId: ContextualTourId): boolean {
+export function isInformationalTour(tourId: ContextualTourId): boolean {
   return !hasContextualTourActionStep(getContextualTour(tourId))
 }
 

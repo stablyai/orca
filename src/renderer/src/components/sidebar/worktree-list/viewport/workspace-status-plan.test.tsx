@@ -87,7 +87,6 @@ function headerContext(rows: GroupHeaderRow[], statuses: readonly WorkspaceStatu
     settings: initial.settings,
     projectActions: {},
     newCardStyle: false,
-    folderBackedProjectGroupIds: new Set(),
     session: {},
     runtime: {},
     primaryActive: {},

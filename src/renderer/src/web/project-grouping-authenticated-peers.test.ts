@@ -11,8 +11,8 @@ import {
   testState
 } from '../../../main/persistence/persistence-test-harness'
 import { OrcaRuntimeService } from '../../../main/runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../../main/runtime/runtime-rpc'
-import { DeviceRegistry } from '../../../main/runtime/device-registry'
+import { OrcaRuntimeRpcServer } from '../../../main/runtime/rpc/server/runtime-rpc'
+import { DeviceRegistry } from '../../../main/runtime/rpc/server/pairing/device-registry'
 import {
   MobileSocketWiring,
   type MobileSocketTransport

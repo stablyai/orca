@@ -23,9 +23,9 @@ describe.each([false, true])('layout owner on main: %s', (isMain) => {
 })
 
 import { OrcaRuntimeService } from './orca-runtime'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from './rpc/methods/mobile-project-sections'
-import { publishMobileProjectSections } from './mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from './sidebar-inputs/mobile-project-sections-snapshot'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 
 it('answers only known owner input and wakes pending readers after real headless restoration', async () => {

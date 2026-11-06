@@ -11,8 +11,8 @@ import {
 } from '../../../shared/rpc-contract/ui-update-value-tolerance-params'
 import { createStore, closeTestStores, testState } from '../persistence-test-harness'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
+import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import {
   MobileSocketWiring,
   type MobileSocketTransport

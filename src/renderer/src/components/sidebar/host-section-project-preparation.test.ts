@@ -12,6 +12,13 @@ import {
   sectionHosts
 } from './host-section-project-header-test-fixtures'
 import { expect, it, vi } from 'vitest'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
+
+// Project grouping only emits per-repo notice lines; the all-projects line has no single repo.
+const noticeRepo = (row: Row): Repo | undefined =>
+  'repo' in row && (row.type !== 'imported-worktrees-card' || row.placement === 'repo-group')
+    ? row.repo
+    : undefined
 
 import {
   type ProjectSectionModel,
@@ -97,7 +104,7 @@ it.each(['host', 'folder'] as const)(
                 row.type === 'imported-worktrees-card' ||
                 row.type === 'new-external-worktrees-inbox'
             )
-            .map((row) => row.repo)
+            .map(noticeRepo)
         ).toEqual(collapsed ? [] : notice === 'both' ? [ssh, ssh] : [ssh])
       }
     }
@@ -125,7 +132,7 @@ it('keeps the first valid SSH raw-map candidate ahead of a later admitted notice
   expect(
     expanded.flatMap((row) =>
       row.type === 'imported-worktrees-card' || row.type === 'new-external-worktrees-inbox'
-        ? [[row.type, row.repo.id]]
+        ? [[row.type, noticeRepo(row)?.id]]
         : row.type === 'pending-creation'
           ? [[row.type, row.repo?.id]]
           : []
@@ -507,9 +514,7 @@ it.each(['notices', 'pending', 'sections'] as const)(
       } finally {
         probe.mockRestore()
       }
-      expect(
-        rows.filter((row) => row.type === 'imported-worktrees-card').map((row) => row.repo)
-      ).toEqual(
+      expect(rows.filter((row) => row.type === 'imported-worktrees-card').map(noticeRepo)).toEqual(
         dimension === 'sections'
           ? Array.from({ length: n }, (_, i) =>
               Array.from({ length: 1000 / n }, (_, j) => entries[i + j * n])
@@ -559,9 +564,9 @@ it('retains both unknown twins and qualified pending assignments through null/em
       pendingCreations: pending
     })
     const rows = plan.render(new Set())
-    expect(
-      rows.filter((row) => row.type === 'imported-worktrees-card').map((row) => row.repo)
-    ).toEqual(entries)
+    expect(rows.filter((row) => row.type === 'imported-worktrees-card').map(noticeRepo)).toEqual(
+      entries
+    )
     expect(rows.filter((row) => row.type === 'pending-creation').map((row) => row.repo)).toEqual(
       entries
     )
