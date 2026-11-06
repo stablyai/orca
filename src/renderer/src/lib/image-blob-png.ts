@@ -37,6 +37,7 @@ function encodeImagePng(
   if (!context) {
     throw new Error('Clipboard image could not be decoded')
   }
+  context.imageSmoothingQuality = 'high'
   context.drawImage(image, 0, 0, width, height)
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((png) => {
@@ -49,7 +50,11 @@ function encodeImagePng(
   })
 }
 
-export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+// Pastes shrink to fit the save limit; copies keep full size and fail instead of silently degrading.
+export async function convertImageBlobToPng(
+  blob: Blob,
+  { downscaleToFit = false }: { downscaleToFit?: boolean } = {}
+): Promise<Blob> {
   assertClipboardImageByteLengthWithinLimit(blob.size)
   const url = URL.createObjectURL(blob)
   try {
@@ -62,6 +67,11 @@ export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
     // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
     if (await hasPngSignature(blob)) {
       return blob
+    }
+    if (!downscaleToFit) {
+      const png = await encodeImagePng(image, { width, height })
+      assertClipboardImageByteLengthWithinLimit(png.size)
+      return png
     }
     return await encodeClipboardImageWithinLimit(
       { width, height },
