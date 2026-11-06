@@ -953,7 +953,7 @@
         "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
         "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
         "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
-        "zipformerStreamingEn": "Nur Englisch. Schlankes Modell mit 20 Mio. Parametern und gutem Verhältnis von Geschwindigkeit und Größe.",
+        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
         "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
         "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
         "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",

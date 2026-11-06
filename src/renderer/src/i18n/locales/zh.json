@@ -499,7 +499,7 @@
         "parakeetV2": "仅限英语。准确度与 v3 相近，速度更快。支持标点和大小写。",
         "zipformerBilingual": "中文 + 英文，支持语言混用。低延迟实时流式处理。",
         "paraformerBilingual": "中文（普通话 + 方言）+ 英文。擅长识别各地口音和方言。",
-        "zipformerStreamingEn": "仅限英语。2000 万参数的轻量模型，兼顾速度和体积。",
+        "zipformerStreamingEnRetired": "已不再提供：它会丢失句子开头。删除它以释放空间。",
         "zipformerStreamingZh": "仅限中文。1400 万参数的超轻量模型，适合资源有限的设备。",
         "zipformerStreamingKo": "仅限韩语。低延迟实时流式处理。",
         "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
