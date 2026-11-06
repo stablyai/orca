@@ -145,7 +145,6 @@ export async function preparePendingSplitClose(
     paneKittyKeyboardModesRef: { current: new Map() },
     paneLastThemeModeRef: { current: new Map() },
     paneCwdRef: { current: new Map() },
-    paneFontSizesRef: { current: new Map() },
     replayingPanesRef: { current: new Map() },
     paneTitlesRef: { current: {} },
     expandedPaneIdRef: { current: null },
