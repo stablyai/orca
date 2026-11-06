@@ -14,7 +14,7 @@ import {
   withIndependentNativeChatComposerDraft,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
-import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
+import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal-batch'
 import {
   clearDraftMemoryForTests,
   resolveNativeChatComposerDraftOwner,

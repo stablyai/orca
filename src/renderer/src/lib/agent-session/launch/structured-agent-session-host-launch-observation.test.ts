@@ -499,6 +499,33 @@ describe('a plain opening given back to the composer', () => {
     warn.mockRestore()
   })
 
+  it('lets the launch go of the opening only once its return is complete, and returns it once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = await endedAfterRelease()
+    // The draft store refuses every write; only its journal holds the return, as one complete
+    // copy of the draft with the receipt that replaces the identified addition.
+    refuseDraftWrites(true)
+    parent.resolve({ state: 'unknown' })
+    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    window.dispatchEvent(new Event('pagehide'))
+
+    // A restart: the complete copy lands once, and nothing returns it again.
+    refuseDraftWrites(false)
+    await coldReload()
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    host.status.mockReset()
+    host.status.mockResolvedValue({ state: 'unknown' })
+    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    await coldReload()
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    expect(host.release).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
+
   it('keeps an independent draft equal to the opening beside it', async () => {
     const parent = await endedAfterRelease(HELD)
     parent.resolve({ state: 'unknown' })
@@ -542,11 +569,26 @@ describe('a return to the composer whose save is still on its way', () => {
       const held = Promise.withResolvers<void>()
       const backend = nativeChatComposerDraftStorage()
       const update = backend.update.bind(backend)
-      const blocked = vi
-        .spyOn(backend, 'update')
-        .mockImplementation((key, apply) =>
-          key === scope ? held.promise.then(() => update(key, apply)) : update(key, apply)
-        )
+      // Reactions on the promise the store derives from that save (its written result), each
+      // still delegated to the native then.
+      let writtenReactions = 0
+      const blocked = vi.spyOn(backend, 'update').mockImplementation((key, apply) => {
+        if (key !== scope) {
+          return update(key, apply)
+        }
+        const raw = held.promise.then(() => update(key, apply))
+        const rawThen = raw.then.bind(raw)
+        vi.spyOn(raw, 'then').mockImplementation((fulfilled, rejected) => {
+          const written = rawThen(fulfilled, rejected)
+          const writtenThen = written.then.bind(written)
+          vi.spyOn(written, 'then').mockImplementation((next, failed) => {
+            writtenReactions += 1
+            return writtenThen(next, failed)
+          })
+          return written
+        })
+        return raw
+      })
       const setItem = localStorage.setItem.bind(localStorage)
       const journal = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
         if (key === 'orca:nativeChatComposerDraftJournal:v1') {
@@ -566,6 +608,7 @@ describe('a return to the composer whose save is still on its way', () => {
       expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
       expect(getStructuredLaunchStateBySessionId(SESSION_ID)?.intent.opening).toBeDefined()
       const initial = reactions
+      const writtenInitial = writtenReactions
       const owners = receiptListeners.live
       host.status.mockResolvedValue({ state: 'unknown' })
       for (let index = 0; index < count; index++) {
@@ -576,6 +619,7 @@ describe('a return to the composer whose save is still on its way', () => {
       }
       // One current input, one pending save: its observation does not grow with Retries.
       expect(reactions - initial).toBeLessThanOrEqual(1)
+      expect(writtenReactions).toBe(writtenInitial)
       expect(receiptListeners.live).toBeLessThanOrEqual(Math.max(owners, 1))
       expect(blocked).toHaveBeenCalledTimes(1)
 
@@ -587,6 +631,7 @@ describe('a return to the composer whose save is still on its way', () => {
       held.resolve()
       await vi.advanceTimersByTimeAsync(0)
       expect(reactions).toBe(afterClose)
+      expect(writtenReactions).toBe(writtenInitial)
       expect(receiptListeners.live).toBe(0)
       expect(getStructuredLaunchStateBySessionId(SESSION_ID)).toBeUndefined()
       expect(host.prepare).toHaveBeenCalledOnce()

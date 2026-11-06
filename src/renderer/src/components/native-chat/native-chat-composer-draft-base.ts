@@ -2,17 +2,20 @@
 
 import { withIndependentNativeChatComposerDraft } from './native-chat-composer-draft-addition'
 import {
-  claimUncommittedNativeChatDraftHandbacks,
   draftCustody,
   handbackReceiptKey,
   knownDraftBases,
-  projectStoredNativeChatDraftCustody,
   referencedNativeChatDraftPaths,
   withIdentifiedHandback
 } from './native-chat-composer-draft-custody'
 import {
-  replayNativeChatComposerDraftJournal,
-  snapshotNativeChatComposerDraftJournal
+  claimUncommittedNativeChatDraftHandbacks,
+  projectStoredNativeChatDraftCustody,
+  settleLoadedNativeChatDraftProof
+} from './native-chat-composer-draft-receipt-proof'
+import {
+  nativeChatComposerDraftReplayEntries,
+  replayNativeChatComposerDraftJournal
 } from './native-chat-composer-draft-journal'
 import {
   isNativeChatSetupDraft,
@@ -63,6 +66,7 @@ export function establishNativeChatDraftBase(
   )
   materialized.forEach((key) => draftCustody.get(scopeKey)?.journaled.add(key))
   claimUncommittedNativeChatDraftHandbacks(scopeKey, committed)
+  settleLoadedNativeChatDraftProof(scopeKey, committed, materialized)
   noticeNativeChatDraftReceipts(scopeKey)
   notifyScope(scopeKey)
 }
@@ -81,10 +85,12 @@ export function nativeChatDraftAtBase(
     const drafts = new Map([[scopeKey, stored]])
     const materialized = new Map<string, Set<string>>()
     if (!load.complete) {
-      const entries = snapshotNativeChatComposerDraftJournal().filter(
-        (entry) => entry.scopeKey === scopeKey
+      // This load attempt's one journal snapshot, already indexed by scope.
+      replayNativeChatComposerDraftJournal(
+        drafts,
+        nativeChatComposerDraftReplayEntries(scopeKey),
+        materialized
       )
-      replayNativeChatComposerDraftJournal(drafts, entries, materialized)
     }
     establishNativeChatDraftBase(
       scopeKey,

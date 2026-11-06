@@ -12,9 +12,9 @@ import {
 import {
   draftCustody,
   dropEmptyNativeChatDraftCustody,
-  projectStoredNativeChatDraftCustody,
   scopeCustody
 } from './native-chat-composer-draft-custody'
+import { projectStoredNativeChatDraftCustody } from './native-chat-composer-draft-receipt-proof'
 import type {
   NativeChatComposerDraftImage,
   NativeChatDraftHandbackReceipt,

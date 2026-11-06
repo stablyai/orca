@@ -24,8 +24,9 @@ import {
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 import {
-  replayNativeChatComposerDraftJournal,
-  snapshotNativeChatComposerDraftJournal
+  captureNativeChatComposerDraftReplaySnapshot,
+  releaseNativeChatComposerDraftReplaySnapshot,
+  replayNativeChatComposerDraftJournal
 } from './native-chat-composer-draft-journal'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
@@ -202,7 +203,8 @@ it('replays a full rich addition into existing content, renders it and sends res
   const loaded = new Map<string, StoredNativeChatComposerDraft | null>([
     [scope, { text: 'existing', images: [], savedAt: 0 }]
   ])
-  replayNativeChatComposerDraftJournal(loaded, snapshotNativeChatComposerDraftJournal())
+  replayNativeChatComposerDraftJournal(loaded, captureNativeChatComposerDraftReplaySnapshot())
+  releaseNativeChatComposerDraftReplaySnapshot()
   updateNativeChatComposerDraft(scope, loaded.get(scope)!, 'immediate')
   render(<Bottom />)
   expect(promptSkillRefs(promptEditor(screen.getByRole('textbox')).getJSON())).toEqual([

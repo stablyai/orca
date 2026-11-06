@@ -23,6 +23,7 @@ const SCOPE = 'agent-session:s1'
 const A = 'Also run lint'
 const B = 'Inspect the failing test and fix it'
 const RECEIPT = { operationId: 'op-1', clientMessageId: 'msg-1', sessionId: 's1' }
+const RECEIPT_2 = { operationId: 'op-2', clientMessageId: 'msg-2' }
 const IMAGE = { id: 'returned-msg-1-0', path: '/client/durable.png' }
 const B_INPUT = { text: `${B} [Image #1]`, images: [IMAGE] }
 const SOURCE_PATHS = [IMAGE.path]
@@ -73,10 +74,20 @@ function text(tab: Renderer, scope = SCOPE): string {
 /** The receipt's next commit result, through the one removable subscription. */
 function settled(tab: Renderer, scope: string, receipt: typeof RECEIPT): Promise<boolean> {
   return new Promise((resolve) => {
-    const stop = tab.handback.subscribeNativeChatDraftReceiptCommit(scope, receipt, (durable) => {
-      stop()
-      resolve(durable)
-    })
+    let first = true
+    const stop = tab.handback.subscribeNativeChatDraftReceiptProgress(
+      scope,
+      receipt,
+      (progress) => {
+        // The registration's own report comes first; the next commit result settles it.
+        if (first && !progress.backed) {
+          first = false
+          return
+        }
+        stop()
+        resolve(progress.backed)
+      }
+    )
   })
 }
 
@@ -129,7 +140,7 @@ describe('an identified hand-back in the composer draft', () => {
     ).toEqual({ adopted: true })
     expect(text(tab)).toBe(`${A}\n\n${B} [Image #1]`)
     expect(await settled(tab, SCOPE, RECEIPT)).toBe(false)
-    expect(tab.handback.nativeChatDraftReceiptDurable(SCOPE, RECEIPT)).toBe(false)
+    expect(tab.handback.nativeChatDraftReceiptProgress(SCOPE, RECEIPT).backed).toBe(false)
 
     tab.drafts.writeNativeChatDraftCache(SCOPE, `${text(tab)}\nAnd run tests`)
     storage.refuseWrites = false
@@ -336,7 +347,7 @@ describe('an identified hand-back before its draft’s saved base is known', () 
         }
         // Retired as soon as the journal proves the adoption: a metadata-only change.
         if (mode === 'retire') {
-          expect(tab.handback.nativeChatDraftReceiptDurable(SCOPE, RECEIPT)).toBe(true)
+          expect(tab.handback.nativeChatDraftReceiptProgress(SCOPE, RECEIPT).backed).toBe(true)
           tab.handback.retireNativeChatDraftReceipt(SCOPE, RECEIPT)
         }
         storage.refuseWrites = false
@@ -432,8 +443,8 @@ describe('an identified hand-back before its draft’s saved base is known', () 
       tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
       const heard: boolean[] = []
       for (let index = 0; index < count; index++) {
-        tab.handback.subscribeNativeChatDraftReceiptCommit(SCOPE, RECEIPT, (durable) =>
-          heard.push(durable)
+        tab.handback.subscribeNativeChatDraftReceiptProgress(SCOPE, RECEIPT, (progress) =>
+          heard.push(progress.backed)
         )()
       }
       // Bound: the one write's own settlement; subscribers add none, whatever their number.
@@ -442,7 +453,152 @@ describe('an identified hand-back before its draft’s saved base is known', () 
       commit()
       await tab.store.nativeChatComposerDraftWritesSettled()
       expect(heard).toEqual([])
-      expect(tab.handback.nativeChatDraftReceiptDurable(SCOPE, RECEIPT)).toBe(true)
+      expect(tab.handback.nativeChatDraftReceiptProgress(SCOPE, RECEIPT).backed).toBe(true)
+    }
+  )
+})
+
+describe('retiring a receipt once its source is dead', () => {
+  type Commit = 'confirmed' | 'unconfirmed' | 'refused'
+
+  /** A over B's identified hand-back, with the backend committing as `commit` says. */
+  async function adopted(commit: Commit) {
+    const tab = await reload()
+    tab.drafts.writeNativeChatDraftCache(SCOPE, A)
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    const update = storage.update
+    storage.refuseWrites = commit === 'refused'
+    if (commit === 'unconfirmed') {
+      storage.update = (...args) => (void update(...args), new Promise<void>(() => {}))
+    }
+    tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+    if (commit === 'confirmed') {
+      await tab.store.nativeChatComposerDraftWritesSettled()
+    }
+    await Promise.resolve()
+    return {
+      tab,
+      /** The renderer dies; the next one loads what the backend and journal actually hold. */
+      crash: async () => {
+        tab.store.clearNativeChatComposerDraftsForTests()
+        storage.update = update
+        storage.refuseWrites = false
+        journalRefuses = false
+        const cold = await reload()
+        await cold.store.nativeChatComposerDraftWritesSettled()
+        return { text: text(cold), stored: storage.drafts.get(SCOPE)?.text, cold }
+      }
+    }
+  }
+
+  const identifiedInJournal = () => (localStorage.getItem(JOURNAL_KEY) ?? '').includes('"custody"')
+  const progress = (tab: Renderer) => tab.handback.nativeChatDraftReceiptProgress(SCOPE, RECEIPT)
+
+  it('returns B once after a refused backend, retirement on its backup alone and an unload', async () => {
+    const tab = await reload()
+    tab.drafts.writeNativeChatDraftCache(SCOPE, A)
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    storage.refuseWrites = true
+    tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+    // Retired on its backup alone, before the refused commit has even answered.
+    expect(progress(tab)).toEqual({ backed: true, incorporated: false, retired: false })
+    tab.handback.retireNativeChatDraftReceipt(SCOPE, RECEIPT)
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    window.dispatchEvent(new Event('pagehide'))
+    tab.store.clearNativeChatComposerDraftsForTests()
+    storage.refuseWrites = false
+    const cold = await reload()
+    await cold.store.nativeChatComposerDraftWritesSettled()
+    expect(text(cold)).toBe(`${A}\n\n${B}`)
+    expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\n${B}`)
+  })
+
+  it('replays nothing when the commit holding the receipt landed but its addition was not yet pruned', async () => {
+    const { tab, crash } = await adopted('unconfirmed')
+    expect(storage.drafts.get(SCOPE)).toMatchObject({ handbacks: [RECEIPT] })
+    expect(identifiedInJournal()).toBe(true)
+    expect(progress(tab).retired).toBe(false)
+    const after = await crash()
+    expect(after.text).toBe(`${A}\n\n${B}`)
+    expect(after.cold.handback.nativeChatDraftHasReceipt(SCOPE, RECEIPT)).toBe(true)
+  })
+
+  it('discharges the addition before the receipt, and keeps the receipt until a commit omits it', async () => {
+    const { tab, crash } = await adopted('confirmed')
+    expect(progress(tab)).toEqual({ backed: true, incorporated: true, retired: false })
+    const update = storage.update
+    storage.update = () => new Promise<void>(() => {})
+    tab.handback.retireNativeChatDraftReceipt(SCOPE, RECEIPT)
+    expect(identifiedInJournal()).toBe(false)
+    expect(progress(tab).retired).toBe(false)
+    storage.update = update
+    const after = await crash()
+    expect(after.text).toBe(`${A}\n\n${B}`)
+  })
+
+  it.each([
+    ['refuses', true, false],
+    ['accepts', false, true]
+  ])(
+    'keeps the last proof when the journal %s the atomic replacement, and replays B once',
+    async (_case, refuse, retired) => {
+      const { tab, crash } = await adopted('refused')
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      journalRefuses = refuse
+      tab.handback.retireNativeChatDraftReceipt(SCOPE, RECEIPT)
+      expect(progress(tab).retired).toBe(retired)
+      expect(identifiedInJournal()).toBe(false)
+      // One complete copy of the draft, before or after the replacement; no addition beside it.
+      const entries = JSON.parse(localStorage.getItem(JOURNAL_KEY) ?? '[]')
+      expect(entries.map((entry: { draft?: { text: string } }) => entry.draft?.text)).toEqual([
+        `${A}\n\n${B}`
+      ])
+      const after = await crash()
+      expect(after.text).toBe(`${A}\n\n${B}`)
+    }
+  )
+
+  it.each([3, 30])(
+    'ends %i observers each at its own bucket, moved ones included, and twice is inert',
+    async (count) => {
+      const tab = await reload()
+      const stops: (() => void)[] = []
+      const heard: string[] = []
+      for (let index = 0; index < count; index++) {
+        const scope = `agent-session:s${index}`
+        tab.handback.adoptIdentifiedNativeChatDraftInput(
+          scope,
+          RECEIPT,
+          { text: B, images: [] },
+          []
+        )
+        stops.push(
+          tab.handback.subscribeNativeChatDraftReceiptProgress(scope, RECEIPT, () =>
+            heard.push(scope)
+          )
+        )
+      }
+      tab.move.moveNativeChatComposerDraft('agent-session:s0', 'agent-session:moved')
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      const deletes = vi.spyOn(Set.prototype, 'delete')
+      stops.forEach((stop) => stop())
+      // Bound: one owned-bucket deletion per observer, whatever the number of other buckets.
+      expect(deletes).toHaveBeenCalledTimes(count)
+      stops.forEach((stop) => stop())
+      expect(deletes).toHaveBeenCalledTimes(count)
+      deletes.mockRestore()
+      heard.length = 0
+      tab.handback.adoptIdentifiedNativeChatDraftInput(
+        'agent-session:moved',
+        RECEIPT_2,
+        {
+          text: B,
+          images: []
+        },
+        []
+      )
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      expect(heard).toEqual([])
     }
   )
 })

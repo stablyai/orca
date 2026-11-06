@@ -17,18 +17,17 @@ import {
   type DraftAppend
 } from './native-chat-composer-draft-memory'
 import { withIndependentNativeChatComposerDraft } from './native-chat-composer-draft-addition'
+import { pruneNativeChatComposerDraftJournal } from './native-chat-composer-draft-journal'
 import {
-  journalNativeChatComposerDraftAddition,
-  journalNativeChatComposerDraftChanges,
-  pruneNativeChatComposerDraftJournal
-} from './native-chat-composer-draft-journal'
+  writeNativeChatComposerDraftJournalBatch,
+  type NativeChatDraftJournalAddition
+} from './native-chat-composer-draft-journal-batch'
+import { draftCustody, handbacksAtBase } from './native-chat-composer-draft-custody'
 import {
   confirmNativeChatDraftCustody,
-  draftCustody,
-  handbacksAtBase,
   markNativeChatDraftHandbacksDurable,
   projectStoredNativeChatDraftCustody
-} from './native-chat-composer-draft-custody'
+} from './native-chat-composer-draft-receipt-proof'
 import {
   authorizedRemovals,
   broadcastNativeChatComposerDraft,
@@ -64,34 +63,37 @@ const CHANNEL_NAME = 'orca-native-chat-composer-drafts'
 let flushOnHideInstalled = false
 let channelInstalled = false
 
-/** Storage settles asynchronously; journal unconfirmed and refused writes synchronously before the window leaves. */
+/** Storage settles asynchronously; before the window leaves, every unconfirmed change goes into
+ *  the shared journal in one write: whole snapshots for drafts whose base is known, and for a
+ *  draft still waiting for its base, its pending hand-backs as coalesced identified additions. */
 function journalUnconfirmed(): void {
   flushNativeChatComposerDrafts()
-  // A scope whose base is unknown keeps its coalesced identified addition instead of a snapshot.
-  const whole = new Map([...unconfirmed].filter(([scopeKey]) => !journalPartialScope(scopeKey)))
-  for (const scopeKey of journalNativeChatComposerDraftChanges(whole)) {
-    markNativeChatDraftHandbacksDurable(scopeKey, whole.get(scopeKey)?.draft)
+  const snapshots = new Map<string, { draft: StoredNativeChatComposerDraft | null; at: number }>()
+  const additions: NativeChatDraftJournalAddition[] = []
+  for (const [scopeKey, change] of unconfirmed) {
+    const pending = draftCustody.get(scopeKey)?.pending ?? []
+    if (!pending.length) {
+      snapshots.set(scopeKey, change)
+      continue
+    }
+    // What was typed into the partial view joins the first pending hand-back.
+    const typed = records.get(scopeKey) ?? { text: '', images: [] }
+    pending.forEach((handback, index) =>
+      additions.push({
+        scopeKey,
+        at: draftCustody.get(scopeKey)?.savedAt ?? change.at,
+        addition:
+          index === 0
+            ? withIndependentNativeChatComposerDraft(typed, handback.contribution)
+            : handback.contribution,
+        custody: { handback: handback.receipt, sourcePaths: handback.sourcePaths }
+      })
+    )
   }
-}
-
-/** Folds what was typed into a partial view into the first pending hand-back's journal entry. */
-function journalPartialScope(scopeKey: string): boolean {
-  const pending = draftCustody.get(scopeKey)?.pending ?? []
-  if (!pending.length) {
-    return false
+  const witness = writeNativeChatComposerDraftJournalBatch({ snapshots, additions })
+  for (const scopeKey of witness.snapshots) {
+    markNativeChatDraftHandbacksDurable(scopeKey, snapshots.get(scopeKey)?.draft)
   }
-  const typed = records.get(scopeKey) ?? { text: '', images: [] }
-  pending.forEach((handback, index) => {
-    const contribution =
-      index === 0
-        ? withIndependentNativeChatComposerDraft(typed, handback.contribution)
-        : handback.contribution
-    journalNativeChatComposerDraftAddition(scopeKey, contribution, nextSavedAt(), {
-      handback: handback.receipt,
-      sourcePaths: handback.sourcePaths
-    })
-  })
-  return true
 }
 
 function journalWhenHidden(): void {

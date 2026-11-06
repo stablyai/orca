@@ -41,7 +41,7 @@ describe('reuseEqualCatalogRows', () => {
 })
 
 import * as addition from '@/components/native-chat/native-chat-composer-draft-addition'
-import * as journal from '@/components/native-chat/native-chat-composer-draft-journal'
+import * as journalBatch from '@/components/native-chat/native-chat-composer-draft-journal-batch'
 it.each([10, 100])(
   'bounds current-memory setup association, chain/replay/recovery/deletion beside ordinary hydration at N=%i',
   async (count) => {
@@ -260,16 +260,20 @@ it.each([10, 100])(
         return compose(base, contribution)
       }
     )
-    const full = journal.journalNativeChatComposerDraftChanges,
-      append = journal.journalNativeChatComposerDraftAddition
-    vi.spyOn(journal, 'journalNativeChatComposerDraftChanges').mockImplementation((entries) => {
-      counts.fullJournalEntries += entries.size
-      return full(entries)
-    })
-    vi.spyOn(journal, 'journalNativeChatComposerDraftAddition').mockImplementation((...args) => {
-      counts.additionJournalEntries++
-      return append(...args)
-    })
+    const full = journalBatch.writeNativeChatComposerDraftJournalBatch,
+      append = journalBatch.journalNativeChatComposerDraftAddition
+    vi.spyOn(journalBatch, 'writeNativeChatComposerDraftJournalBatch').mockImplementation(
+      (batch) => {
+        counts.fullJournalEntries += batch.snapshots?.size ?? 0
+        return full(batch)
+      }
+    )
+    vi.spyOn(journalBatch, 'journalNativeChatComposerDraftAddition').mockImplementation(
+      (...args) => {
+        counts.additionJournalEntries++
+        return append(...args)
+      }
+    )
     const move = pending.moveNativeChatPendingAttachments
     vi.spyOn(pending, 'moveNativeChatPendingAttachments').mockImplementation((from, to) => {
       counts.pendingMoves++

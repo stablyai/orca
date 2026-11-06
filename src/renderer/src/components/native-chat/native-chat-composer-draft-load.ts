@@ -9,13 +9,14 @@ import {
   notifyScope,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
+import { draftCustody, knownDraftBases } from './native-chat-composer-draft-custody'
 import {
   claimUncommittedNativeChatDraftHandbacks,
-  draftCustody,
-  knownDraftBases,
+  settleLoadedNativeChatDraftProof,
   projectStoredNativeChatDraftCustody
-} from './native-chat-composer-draft-custody'
+} from './native-chat-composer-draft-receipt-proof'
 import { establishNativeChatDraftBase } from './native-chat-composer-draft-base'
+import { resetNativeChatDraftRetirementsForTests } from './native-chat-composer-draft-retirement'
 import {
   noticeNativeChatDraftReceipts,
   resetNativeChatDraftReceiptEventsForTests
@@ -26,8 +27,9 @@ import {
   installNativeChatComposerDraftBroadcast
 } from './native-chat-composer-draft-persistence'
 import {
+  captureNativeChatComposerDraftReplaySnapshot,
+  releaseNativeChatComposerDraftReplaySnapshot,
   replayNativeChatComposerDraftJournal,
-  snapshotNativeChatComposerDraftJournal,
   startNativeChatComposerDraftJournalRunForTests,
   type NativeChatComposerDraftJournalSnapshot
 } from './native-chat-composer-draft-journal'
@@ -154,11 +156,13 @@ function applyLoaded(
     )
     journaled.forEach((key) => draftCustody.get(scopeKey)?.journaled.add(key))
     claimUncommittedNativeChatDraftHandbacks(scopeKey, committed.get(scopeKey))
+    settleLoadedNativeChatDraftProof(scopeKey, committed.get(scopeKey), journaled)
     if (changed || restaged || journaled.length) {
       dirtyScopes.add(scopeKey)
     }
     notifyScope(scopeKey)
   }
+  releaseNativeChatComposerDraftReplaySnapshot()
   for (const scopeKey of draftCustody.keys()) {
     noticeNativeChatDraftReceipts(scopeKey)
   }
@@ -176,6 +180,7 @@ function retryLater(error: unknown): void {
   }
   const delay = RETRY_DELAYS_MS[failedLoads]
   failedLoads += 1
+  releaseNativeChatComposerDraftReplaySnapshot()
   if (delay === undefined) {
     // Given up: what was changed meanwhile is all there is, so nothing waits on a load any more.
     load.hydrated = true
@@ -198,7 +203,8 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     installNativeChatComposerDraftBroadcast()
     // Why read here: storage applies changes in order, so this load reads every append made so far.
     const readAtSequence = load.appendSequence
-    const journal = snapshotNativeChatComposerDraftJournal().filter(
+    // The attempt's one journal snapshot, which its own scope reads share.
+    const journal = captureNativeChatComposerDraftReplaySnapshot().filter(
       (entry) => !isNativeChatSetupDraft(entry.scopeKey)
     )
     applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
@@ -228,5 +234,7 @@ export function resetNativeChatComposerDraftLoadForTests(): void {
   draftCustody.clear()
   knownDraftBases.clear()
   resetNativeChatDraftReceiptEventsForTests()
+  resetNativeChatDraftRetirementsForTests()
+  releaseNativeChatComposerDraftReplaySnapshot()
   startNativeChatComposerDraftJournalRunForTests()
 }

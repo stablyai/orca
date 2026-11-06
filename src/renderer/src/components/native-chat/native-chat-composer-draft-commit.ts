@@ -13,13 +13,11 @@ import {
   type UnconfirmedDraftChange
 } from './native-chat-composer-draft-memory'
 import { pruneNativeChatComposerDraftJournal } from './native-chat-composer-draft-journal'
-import {
-  confirmNativeChatDraftCustody,
-  draftCustody,
-  handbackReceiptKey
-} from './native-chat-composer-draft-custody'
+import { draftCustody, handbackReceiptKey } from './native-chat-composer-draft-custody'
+import { confirmNativeChatDraftCustody } from './native-chat-composer-draft-receipt-proof'
 import { nativeChatDraftAtBase } from './native-chat-composer-draft-base'
 import { publishNativeChatDraftReceipts } from './native-chat-composer-draft-receipt-events'
+import { advanceNativeChatDraftRetirements } from './native-chat-composer-draft-retirement'
 import {
   journalOwedNativeChatDraftHandbacks,
   nextStoredNativeChatComposerDraft
@@ -77,7 +75,7 @@ function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
   pruneNativeChatComposerDraftJournal(scopeKey, change.at, !change.draft, change.journaled)
   broadcastNativeChatComposerDraft(scopeKey)
   completeDeferredRemovals(scopeKey, change.at)
-  publishNativeChatDraftReceipts(scopeKey, false)
+  wakeNativeChatDraftRetirements(scopeKey)
 }
 
 function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown): void {
@@ -92,7 +90,20 @@ function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown
     notifyScope(scopeKey)
   }
   journalOwedNativeChatDraftHandbacks(scopeKey)
-  publishNativeChatDraftReceipts(scopeKey, true)
+  wakeNativeChatDraftRetirements(scopeKey)
+}
+
+/** The one wake every proof transition of a scope reaches: requested retirements advance, then
+ *  the scope's own listeners hear their current progress. */
+export function wakeNativeChatDraftRetirements(scopeKey: string, announce = true): void {
+  const retiring = draftCustody.get(scopeKey)?.retiring.size ?? 0
+  for (const receipt of advanceNativeChatDraftRetirements(scopeKey)) {
+    retireStoredNativeChatDraftReceipt(scopeKey, receipt)
+  }
+  // A request alone announces only a retirement it completed, so listeners cannot loop on it.
+  if (announce || (draftCustody.get(scopeKey)?.retiring.size ?? 0) !== retiring) {
+    publishNativeChatDraftReceipts(scopeKey)
+  }
 }
 
 function persist(scopeKey: string): void {
@@ -127,7 +138,7 @@ function persist(scopeKey: string): void {
 }
 
 /** Retirement changes only the stored record's receipts; it never writes this memory's content. */
-export function retireStoredNativeChatDraftReceipt(
+function retireStoredNativeChatDraftReceipt(
   scopeKey: string,
   receipt: NativeChatDraftHandbackReceipt
 ): void {
@@ -148,6 +159,7 @@ export function retireStoredNativeChatDraftReceipt(
       () => {
         confirmNativeChatDraftCustody(scopeKey, written)
         broadcastNativeChatComposerDraft(scopeKey)
+        wakeNativeChatDraftRetirements(scopeKey)
         return true
       },
       // Still retired here: every later write at the base leaves it out.

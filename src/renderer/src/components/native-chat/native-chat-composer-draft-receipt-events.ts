@@ -1,52 +1,71 @@
 // Who hears about a draft's receipts: keyed removable commit listeners, and the one reconciler
 // that rebuilds a receipt's source obligation wherever the draft finds one it did not adopt live.
 
+import { draftCustody, handbackReceiptKey } from './native-chat-composer-draft-custody'
 import {
-  draftCustody,
-  handbackReceiptKey,
-  type NativeChatDraftCustody
-} from './native-chat-composer-draft-custody'
+  nativeChatDraftReceiptProgressOf,
+  type NativeChatDraftReceiptProgress
+} from './native-chat-composer-draft-receipt-proof'
 import type { NativeChatDraftHandbackReceipt } from './native-chat-composer-draft-storage'
 
-type ReceiptListener = { readonly key: string; readonly listener: (durable: boolean) => void }
+/** A listener owns its current scope bucket: disposal and moves touch only that bucket. */
+type ReceiptListener = {
+  readonly receipt: NativeChatDraftHandbackReceipt
+  readonly key: string
+  readonly listener: (progress: NativeChatDraftReceiptProgress) => void
+  scope: string
+  members: Set<ReceiptListener> | null
+}
 
 const listeners = new Map<string, Set<ReceiptListener>>()
 let reconciler: ((scope: string, receipt: NativeChatDraftHandbackReceipt) => void) | null = null
-const queued = new Map<string, NativeChatDraftHandbackReceipt>()
+const queued = new Map<string, readonly [string, NativeChatDraftHandbackReceipt]>()
 
-function isDurable(custody: NativeChatDraftCustody | undefined, key: string): boolean {
-  return Boolean(
-    custody?.durable.has(key) &&
-    custody.handbacks.some((receipt) => handbackReceiptKey(receipt) === key)
-  )
+function bucket(scopeKey: string): Set<ReceiptListener> {
+  let members = listeners.get(scopeKey)
+  if (!members) {
+    members = new Set()
+    listeners.set(scopeKey, members)
+  }
+  return members
 }
 
-/** One removable entry per subscriber; publication happens at the persistence completion point. */
-export function addNativeChatDraftReceiptListener(
-  scopeKey: string,
-  receipt: NativeChatDraftHandbackReceipt,
-  listener: (durable: boolean) => void
-): () => void {
-  const entry: ReceiptListener = { key: handbackReceiptKey(receipt), listener }
-  const scoped = listeners.get(scopeKey) ?? new Set()
-  listeners.set(scopeKey, scoped)
-  scoped.add(entry)
-  return () => {
-    for (const [scope, members] of listeners) {
-      if (members.delete(entry) && members.size === 0) {
-        listeners.delete(scope)
-      }
-    }
+function leave(entry: ReceiptListener): void {
+  const members = entry.members
+  entry.members = null
+  members?.delete(entry)
+  if (members?.size === 0 && listeners.get(entry.scope) === members) {
+    listeners.delete(entry.scope)
   }
 }
 
-/** A commit attempt for `scopeKey` finished: proof reaches listeners as true, a refusal as false. */
-export function publishNativeChatDraftReceipts(scopeKey: string, attempted: boolean): void {
-  const custody = draftCustody.get(scopeKey)
-  for (const entry of Array.from(listeners.get(scopeKey) ?? [])) {
-    const durable = isDurable(custody, entry.key)
-    if (durable || attempted) {
-      entry.listener(durable)
+/** One removable entry per subscriber; disposing it twice, or after a move, is inert. */
+export function addNativeChatDraftReceiptListener(
+  scopeKey: string,
+  receipt: NativeChatDraftHandbackReceipt,
+  listener: (progress: NativeChatDraftReceiptProgress) => void
+): () => void {
+  const members = bucket(scopeKey)
+  const entry: ReceiptListener = {
+    receipt,
+    key: handbackReceiptKey(receipt),
+    listener,
+    scope: scopeKey,
+    members
+  }
+  members.add(entry)
+  return () => leave(entry)
+}
+
+/** Every proof transition of a scope reaches its own listeners with their current progress. */
+export function publishNativeChatDraftReceipts(scopeKey: string): void {
+  const members = listeners.get(scopeKey)
+  if (!members) {
+    return
+  }
+  for (const entry of Array.from(members)) {
+    if (entry.members === members) {
+      entry.listener(nativeChatDraftReceiptProgressOf(scopeKey, entry.receipt))
     }
   }
 }
@@ -61,14 +80,11 @@ export function moveNativeChatDraftReceiptListeners(
   const source = listeners.get(from)
   for (const entry of Array.from(source ?? [])) {
     if (keys.has(entry.key)) {
-      source?.delete(entry)
-      const target = listeners.get(to) ?? new Set()
-      listeners.set(to, target)
-      target.add(entry)
+      leave(entry)
+      entry.scope = to
+      entry.members = bucket(to)
+      entry.members.add(entry)
     }
-  }
-  if (source?.size === 0) {
-    listeners.delete(from)
   }
 }
 
@@ -88,7 +104,7 @@ export function noticeNativeChatDraftReceipts(
 ): void {
   const wasEmpty = queued.size === 0
   for (const receipt of receipts) {
-    queued.set(JSON.stringify([scopeKey, handbackReceiptKey(receipt)]), receipt)
+    queued.set(JSON.stringify([scopeKey, handbackReceiptKey(receipt)]), [scopeKey, receipt])
   }
   if (wasEmpty && queued.size > 0) {
     queueMicrotask(drainReconciler)
@@ -96,15 +112,14 @@ export function noticeNativeChatDraftReceipts(
 }
 
 function drainReconciler(): void {
-  const due = [...queued]
+  const due = [...queued.values()]
   queued.clear()
-  for (const [id, receipt] of due) {
-    const scopeKey = JSON.parse(id)[0] as string
-    const custody = draftCustody.get(scopeKey)
+  for (const [scopeKey, receipt] of due) {
+    const key = handbackReceiptKey(receipt)
     // Retired or deleted in the meantime: nothing is owed.
     if (
       reconciler &&
-      custody?.handbacks.some((held) => handbackReceiptKey(held) === JSON.parse(id)[1])
+      draftCustody.get(scopeKey)?.handbacks.some((held) => handbackReceiptKey(held) === key)
     ) {
       reconciler(scopeKey, receipt)
     }

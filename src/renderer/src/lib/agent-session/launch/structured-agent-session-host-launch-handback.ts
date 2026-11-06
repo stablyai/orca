@@ -1,14 +1,17 @@
 /** A host launch's opening on its way back to the chat's composer, from the moment it joins the
- *  draft until both ends are durable: the draft holds it (its receipt is saved) and the launch's
- *  own saved row no longer does. One obligation per launch, whatever its Retries; it owns the one
- *  draft-commit subscription and the launch's source files until then, and it is rebuilt from the
- *  saved draft receipt and launch row after a reload. Every wake (the handback itself, a Retry, a
- *  draft commit, a launch journal save, a reload, Close) reconciles it the same way. */
+ *  draft until nothing of it is owed anywhere. Three facts end it, in order, each proved by its
+ *  own witness: the draft holds it completely (its saved base read, with the receipt) and backed
+ *  up, so the launch stops emitting it and saves its row without it; that row saved, so the
+ *  launch's files end; and the draft's receipt and any replay of the returned input discharged.
+ *  One obligation per launch, whatever its Retries, with one draft-progress subscription that
+ *  follows every step; it is rebuilt from the saved receipt and launch row after a reload. Every
+ *  wake (the handback itself, a Retry, draft progress, a launch journal save, a reload, Close)
+ *  reconciles it the same way. */
 
 import {
-  nativeChatDraftReceiptDurable,
+  nativeChatDraftReceiptProgress,
   retireNativeChatDraftReceipt,
-  subscribeNativeChatDraftReceiptCommit,
+  subscribeNativeChatDraftReceiptProgress,
   type NativeChatDraftHandbackReceipt
 } from '@/components/native-chat/native-chat-composer-draft-handback'
 import {
@@ -28,7 +31,7 @@ import { retireHostLaunchSources } from './structured-agent-session-host-launch-
 type Obligation = {
   receipt: NativeChatDraftHandbackReceipt
   scope: string
-  /** Removes the draft-commit subscription while the draft's receipt is not yet durable. */
+  /** The one draft-progress subscription, kept until the obligation ends. */
   stopDraft?: () => void
 }
 
@@ -56,34 +59,30 @@ export function holdHostLaunchHandback(
   reconcileHostLaunchHandback(sessionId)
 }
 
-/** Advances the obligation as far as durable truth allows: once the draft holds the opening the
- *  launch stops emitting it and saves its row without it; once that row is saved the launch's
- *  files and the draft's receipt end. Anything not yet durable waits on its one wake. */
+/** Advances the obligation as far as its witnesses allow; anything not yet proved waits on its
+ *  wake. A backup of the returned input alone never lets the launch let go of it. */
 export function reconcileHostLaunchHandback(sessionId: string): void {
   const held = obligations.get(sessionId)
   if (!held) {
     return
   }
   const { receipt, scope } = held
-  if (!nativeChatDraftReceiptDurable(scope, receipt)) {
-    held.stopDraft ??= subscribeNativeChatDraftReceiptCommit(scope, receipt, (durable) => {
-      if (durable && obligations.get(sessionId) === held) {
-        held.stopDraft?.()
-        delete held.stopDraft
-        reconcileHostLaunchHandback(sessionId)
-      }
-    })
+  held.stopDraft ??= subscribeNativeChatDraftReceiptProgress(scope, receipt, () => {
+    if (obligations.get(sessionId) === held) {
+      reconcileHostLaunchHandback(sessionId)
+    }
+  })
+  const progress = nativeChatDraftReceiptProgress(scope, receipt)
+  if (!progress.retired && !(progress.backed && progress.incorporated)) {
     return
   }
-  held.stopDraft?.()
-  delete held.stopDraft
   const state = getStructuredLaunchStateBySessionId(sessionId)
   const intent = state?.intent
   if (
     intent?.opening?.clientMessageId === receipt.clientMessageId &&
     intent.hostLaunch?.operationId === receipt.operationId
   ) {
-    // The draft holds it: the launch no longer emits it, and saves its row without it.
+    // The draft holds it completely: the launch no longer emits it, and saves its row without it.
     delete intent.opening
     notifyStructuredLaunchIntentChanged(intent)
   }
@@ -91,15 +90,15 @@ export function reconcileHostLaunchHandback(sessionId: string): void {
     stopSourceSaves ??= subscribeStructuredAgentLaunchRecordsSaved(reconcileAllHostLaunchHandbacks)
     return
   }
+  // The draft's own reference holds any file that came back; the launch's hold ends.
   if (intent?.hostLaunch?.operationId === receipt.operationId) {
     retireHostLaunchSources(intent)
   }
-  obligations.delete(sessionId)
-  retireNativeChatDraftReceipt(scope, receipt)
-  if (obligations.size === 0) {
-    stopSourceSaves?.()
-    stopSourceSaves = undefined
+  if (!progress.retired) {
+    retireNativeChatDraftReceipt(scope, receipt)
+    return
   }
+  endHostLaunchHandback(sessionId)
 }
 
 function reconcileAllHostLaunchHandbacks(): void {

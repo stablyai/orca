@@ -12,11 +12,13 @@ import {
 import {
   draftCustody,
   finishStoredNativeChatDraft,
-  hasUndurableNativeChatDraftHandback,
-  markNativeChatDraftHandbacksDurable,
   withNativeChatDraftCustody
 } from './native-chat-composer-draft-custody'
-import { journalNativeChatComposerDraftChanges } from './native-chat-composer-draft-journal'
+import {
+  hasUnincorporatedNativeChatDraftHandback,
+  markNativeChatDraftHandbacksDurable
+} from './native-chat-composer-draft-receipt-proof'
+import { writeNativeChatComposerDraftJournalBatch } from './native-chat-composer-draft-journal-batch'
 import { unavailableNativeChatComposerDraftImage } from './native-chat-composer-draft-restore'
 import type {
   NativeChatComposerDraftImage,
@@ -71,14 +73,14 @@ export function nextStoredNativeChatComposerDraft(
 export function journalOwedNativeChatDraftHandbacks(scopeKey: string): void {
   // A scope whose base is unknown is proved by its coalesced identified addition, not a snapshot.
   if (
-    !hasUndurableNativeChatDraftHandback(scopeKey) ||
+    !hasUnincorporatedNativeChatDraftHandback(scopeKey) ||
     draftCustody.get(scopeKey)?.pending.length
   ) {
     return
   }
   const draft = currentStoredNativeChatComposerDraft(scopeKey)
-  const change = new Map(draft ? [[scopeKey, { draft, at: draft.savedAt }]] : [])
-  if (journalNativeChatComposerDraftChanges(change).has(scopeKey)) {
+  const snapshots = new Map(draft ? [[scopeKey, { draft, at: draft.savedAt }]] : [])
+  if (writeNativeChatComposerDraftJournalBatch({ snapshots }).snapshots.has(scopeKey)) {
     markNativeChatDraftHandbacksDurable(scopeKey, draft)
   }
 }

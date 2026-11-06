@@ -2,7 +2,7 @@
 // durability is proved by a concrete commit or journal entry and heard through one subscription.
 
 import { currentDraftScope } from './native-chat-launch-draft-source'
-import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
+import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal-batch'
 import {
   dirtyScopes,
   isNativeChatMemoryOnlyDraft,
@@ -16,7 +16,7 @@ import { persistNativeChatComposerDraft } from './native-chat-composer-draft-per
 import {
   flushNativeChatComposerDrafts,
   hasPendingNativeChatComposerDraftWrite,
-  retireStoredNativeChatDraftReceipt
+  wakeNativeChatDraftRetirements
 } from './native-chat-composer-draft-commit'
 import {
   draftCustody,
@@ -30,7 +30,13 @@ import {
   type NativeChatDraftHandbackContribution
 } from './native-chat-composer-draft-custody'
 import {
+  nativeChatDraftReceiptProgressOf,
+  retiredNativeChatDraftReceipts,
+  type NativeChatDraftReceiptProgress
+} from './native-chat-composer-draft-receipt-proof'
+import {
   addNativeChatDraftReceiptListener,
+  publishNativeChatDraftReceipts,
   setNativeChatDraftReceiptReconciler
 } from './native-chat-composer-draft-receipt-events'
 import {
@@ -44,6 +50,7 @@ import type {
 
 export type { NativeChatDraftHandbackReceipt } from './native-chat-composer-draft-storage'
 export type { NativeChatDraftHandbackContribution } from './native-chat-composer-draft-custody'
+export type { NativeChatDraftReceiptProgress } from './native-chat-composer-draft-receipt-proof'
 
 /** One synchronous visible transition once the scope's base is known: merge the complete input as
  *  an independent contribution unless the draft already holds this receipt. Before that, the input
@@ -121,20 +128,17 @@ export function nativeChatDraftHasReceipt(
   return hasHandbackReceipt(draftCustody.get(currentDraftScope(reference))?.handbacks, receipt)
 }
 
-/** True only once a committed draft or a written journal entry holds the receipt; pending is not proof. */
-export function nativeChatDraftReceiptDurable(
+/** The receipt's three witnesses: backed by a durable copy; incorporated once the draft's base is
+ *  resolved and the current draft holding it is saved; retired once no replay can return it. */
+export function nativeChatDraftReceiptProgress(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt
-): boolean {
-  const custody = draftCustody.get(currentDraftScope(reference))
-  return (
-    hasHandbackReceipt(custody?.handbacks, receipt) &&
-    Boolean(custody?.durable.has(handbackReceiptKey(receipt)))
-  )
+): NativeChatDraftReceiptProgress {
+  return nativeChatDraftReceiptProgressOf(currentDraftScope(reference), receipt)
 }
 
 /** A Retry's wake for the destination: one commit attempt of the current draft when its receipt is
- *  unproved or a refused write is still owed, and no write is already on its way. */
+ *  not yet incorporated or a refused write is still owed, and no write is already on its way. */
 export function requestNativeChatDraftReceiptCommit(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt
@@ -142,7 +146,8 @@ export function requestNativeChatDraftReceiptCommit(
   const scopeKey = currentDraftScope(reference)
   if (
     nativeChatDraftHasReceipt(scopeKey, receipt) &&
-    (!nativeChatDraftReceiptDurable(scopeKey, receipt) || dirtyScopes.has(scopeKey)) &&
+    (!nativeChatDraftReceiptProgress(scopeKey, receipt).incorporated ||
+      dirtyScopes.has(scopeKey)) &&
     !hasPendingNativeChatComposerDraftWrite(scopeKey)
   ) {
     dirtyScopes.add(scopeKey)
@@ -150,54 +155,53 @@ export function requestNativeChatDraftReceiptCommit(
   }
 }
 
-/** One removable listener for the receipt's commit results: true once it is durable (in this same
- *  tick when it already is), false for each refused attempt. Registration asks for one attempt. */
-export function subscribeNativeChatDraftReceiptCommit(
+/** One removable observer of the receipt's progress through every transition (and refusal), until
+ *  removed; it follows the draft through moves. Registration rechecks in this same tick and asks
+ *  for one commit attempt when the receipt is not yet incorporated. */
+export function subscribeNativeChatDraftReceiptProgress(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt,
-  listener: (durable: boolean) => void
+  listener: (progress: NativeChatDraftReceiptProgress) => void
 ): () => void {
   const scopeKey = currentDraftScope(reference)
   let active = true
-  const remove = addNativeChatDraftReceiptListener(scopeKey, receipt, (durable) => {
+  const remove = addNativeChatDraftReceiptListener(scopeKey, receipt, (progress) => {
     if (active) {
-      listener(durable)
+      listener(progress)
     }
   })
-  if (nativeChatDraftReceiptDurable(scopeKey, receipt)) {
-    queueMicrotask(() => {
-      if (active && nativeChatDraftReceiptDurable(scopeKey, receipt)) {
-        listener(true)
-      }
-    })
-  } else {
-    requestNativeChatDraftReceiptCommit(scopeKey, receipt)
-  }
+  queueMicrotask(() => {
+    if (active) {
+      listener(nativeChatDraftReceiptProgress(scopeKey, receipt))
+    }
+  })
+  requestNativeChatDraftReceiptCommit(scopeKey, receipt)
   return () => {
     active = false
     remove()
   }
 }
 
-/** Only after the source's own retirement is durable and its emitters are revoked. Changes only the
- *  receipt: the saved record's content, and anything typed here, are left as they are. */
+/** Requested only once the source is durably dead and its emitters revoked. The store ends the
+ *  receipt only when no replay can return the input; progress reports when it has. */
 export function retireNativeChatDraftReceipt(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt
 ): void {
   const scopeKey = currentDraftScope(reference)
   const custody = draftCustody.get(scopeKey)
+  const key = handbackReceiptKey(receipt)
   if (!custody || !hasHandbackReceipt(custody.handbacks, receipt)) {
+    // Nothing holds it here: nothing can return it either.
+    if (!nativeChatDraftReceiptProgressOf(scopeKey, receipt).retired) {
+      const retired = retiredNativeChatDraftReceipts.get(scopeKey) ?? new Set<string>()
+      retiredNativeChatDraftReceipts.set(scopeKey, retired.add(key))
+      publishNativeChatDraftReceipts(scopeKey)
+    }
     return
   }
-  const key = handbackReceiptKey(receipt)
-  custody.handbacks = custody.handbacks.filter((held) => handbackReceiptKey(held) !== key)
-  custody.durable.delete(key)
-  custody.added.delete(key)
-  custody.retired.add(key)
-  if (!isNativeChatMemoryOnlyDraft(scopeKey)) {
-    retireStoredNativeChatDraftReceipt(scopeKey, receipt)
-  }
+  custody.retiring.add(key)
+  wakeNativeChatDraftRetirements(scopeKey, false)
 }
 
 /** The source obligation's reconciler: called for receipts found at load, replay, another
