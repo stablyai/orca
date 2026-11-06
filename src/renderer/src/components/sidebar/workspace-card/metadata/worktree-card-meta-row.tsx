@@ -1,3 +1,4 @@
+import { PrFollowUpBadge } from '../../../pr-follow-ups/PrFollowUpRow'
 import React from 'react'
 
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
@@ -89,6 +90,7 @@ export function WorktreeCardMetaRow({
           <WorktreeCardConflictBadge operation={conflictOperation} />
         )}
 
+        <PrFollowUpBadge worktreeId={worktree.id} />
         {cacheStartedAt != null && <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />}
       </div>
 

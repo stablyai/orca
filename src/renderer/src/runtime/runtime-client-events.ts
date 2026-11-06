@@ -102,6 +102,7 @@ function isRuntimeClientEvent(
     (message.type === 'notificationAttentionAcknowledged' &&
       isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||
+    message.type === 'prFollowUpsChanged' ||
     message.type === 'worktreesChanged' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||

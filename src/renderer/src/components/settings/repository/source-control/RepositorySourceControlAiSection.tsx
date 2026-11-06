@@ -1,3 +1,4 @@
+import { PrFollowUpSettings } from '../../../pr-follow-ups/PrFollowUpSettings'
 import { useShallow } from 'zustand/react/shallow'
 import { useMemo } from 'react'
 import type React from 'react'
@@ -34,6 +35,7 @@ export function RepositorySourceControlAiSection({
       (state) =>
         state.settings && {
           sourceControlAi: state.settings.sourceControlAi,
+          prFollowUps: state.settings.prFollowUps,
           commitMessageAi: state.settings.commitMessageAi,
           defaultTuiAgent: state.settings.defaultTuiAgent
         }
@@ -122,6 +124,7 @@ export function RepositorySourceControlAiSection({
         onActionDiscard={discardActionRecipeText}
         onActionSave={(actionId) => void saveActionRecipeText(actionId)}
       />
+      <PrFollowUpSettings global={settings?.prFollowUps} repo={repo} />
       <RepositorySourceControlAiHostedReviewDefaults
         value={displayRepoAi.prCreationDefaults}
         source={source}
