@@ -59,7 +59,7 @@ export function fittingComposerSurface(target: HTMLElement, viewport: HTMLElemen
   return target
 }
 
-export function revealOffset(viewport: HTMLElement, target: HTMLElement, bottom: boolean): number {
+function revealOffset(viewport: HTMLElement, target: HTMLElement, bottom: boolean): number {
   const bounds = viewport.getBoundingClientRect()
   const rect = target.getBoundingClientRect()
   if (
@@ -88,4 +88,36 @@ export function focusedLowerElement(content: HTMLElement): HTMLElement | null {
   return target instanceof HTMLElement && content.contains(target) && visible(target)
     ? target
     : null
+}
+
+export function revealComposerSurface(
+  viewport: HTMLElement,
+  target: HTMLElement,
+  requested: HTMLElement | null,
+  menu: boolean,
+  write: (node: HTMLElement, offset: number) => void
+) {
+  for (
+    let parent = target.parentElement;
+    parent && parent !== viewport;
+    parent = parent.parentElement
+  ) {
+    const style = getComputedStyle(parent)
+    if (/(auto|scroll)/.test(style.overflowY) && parent.scrollHeight > parent.clientHeight) {
+      write(
+        parent,
+        parent.scrollTop + revealOffset(parent, fittingComposerSurface(target, parent), false)
+      )
+    }
+  }
+  const group =
+    target.closest<HTMLElement>('[data-testid="queued-card-editor"]') ??
+    (requested && requested.contains(target) && visible(requested)
+      ? requested
+      : composerGroupOf(target))
+  const surface =
+    group.getBoundingClientRect().height <= viewport.clientHeight
+      ? group
+      : fittingComposerSurface(target, viewport)
+  write(viewport, viewport.scrollTop + revealOffset(viewport, surface, menu && surface !== group))
 }

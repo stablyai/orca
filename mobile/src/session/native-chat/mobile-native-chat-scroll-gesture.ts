@@ -9,14 +9,17 @@ export function connectMobileNativeChatScrollGesture(
   const touchTargets = new Set<EventTarget>()
   let contacts = 0
   let inputSession = false
+  let version = 0
   const active = () => contacts > 0 || pointers.size > 0 || touchPointers.size > 0
   const start = () => {
     inputSession = true
+    version += 1
     onStart()
   }
   const onMove = () => {
     if (active()) {
-      start()
+      inputSession = true
+      version += 1
     }
   }
   const onWheel = () => {
@@ -101,6 +104,7 @@ export function connectMobileNativeChatScrollGesture(
   return {
     active,
     navigating: () => inputSession,
+    version: () => version,
     settled: () => {
       if (!active()) {
         inputSession = false

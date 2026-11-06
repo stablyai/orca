@@ -365,6 +365,9 @@ it('keeps new Tab and tap focus reveals while later navigation cancels and editi
   field.focus()
   viewport.scrollTop = 0
   viewport.dispatchEvent(new Event('scroll'))
+  field.dispatchEvent(
+    new PointerEvent('pointermove', { pointerType: 'mouse', pointerId: 3, bubbles: true })
+  )
   document.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'mouse', pointerId: 3 }))
   await vi.advanceTimersByTimeAsync(200)
   expect(viewport.scrollTop).toBe(190)

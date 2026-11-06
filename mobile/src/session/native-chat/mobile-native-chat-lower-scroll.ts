@@ -2,10 +2,9 @@ import { createMobileNativeChatReadingHold } from './mobile-native-chat-reading-
 import { connectMobileNativeChatScrollGesture } from './mobile-native-chat-scroll-gesture'
 import {
   externalAllowance,
-  visible,
   composerGroupOf as groupOf,
   fittingComposerSurface,
-  revealOffset,
+  revealComposerSurface,
   surfaceVisibility,
   focusedLowerElement
 } from './mobile-native-chat-lower-geometry'
@@ -24,8 +23,12 @@ export function connectMobileNativeChatLowerScroll(
   let lastScroll = viewport.scrollTop
   let lastMaximum = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
   let active: { element: HTMLElement; visible: boolean; clipped: number } | null = null
-  let pending: { group: HTMLElement | null; target: HTMLElement; reason: RevealReason } | null =
-    null
+  let pending: {
+    group: HTMLElement | null
+    target: HTMLElement
+    reason: RevealReason
+    navigation: number
+  } | null = null
   let layoutPending = false
   let frame: number | null = null
   let settle: ReturnType<typeof setTimeout> | null = null
@@ -61,10 +64,6 @@ export function connectMobileNativeChatLowerScroll(
       lastMaximum = maximum()
     }
   }
-  const expose = (node: HTMLElement, target: HTMLElement, bottom = false) => {
-    write(node, node.scrollTop + revealOffset(node, target, bottom))
-  }
-
   const reconcile = () => {
     frame = null
     if (disposed) {
@@ -79,24 +78,7 @@ export function connectMobileNativeChatLowerScroll(
     if (pending && target === pending.target) {
       const requested = pending
       pending = null
-      for (
-        let parent = target.parentElement;
-        parent && parent !== viewport;
-        parent = parent.parentElement
-      ) {
-        const style = getComputedStyle(parent)
-        if (/(auto|scroll)/.test(style.overflowY) && parent.scrollHeight > parent.clientHeight) {
-          expose(parent, surfaceOf(target, parent))
-        }
-      }
-      const group =
-        target.closest<HTMLElement>('[data-testid="queued-card-editor"]') ??
-        (requested.group && requested.group.contains(target) && visible(requested.group)
-          ? requested.group
-          : groupOf(target))
-      const surface =
-        group.getBoundingClientRect().height <= viewport.clientHeight ? group : surfaceOf(target)
-      expose(viewport, surface, requested.reason === 'menu' && surface !== group)
+      revealComposerSurface(viewport, target, requested.group, requested.reason === 'menu', write)
       attached = atBottom()
       reading.clear()
       if (!attached) {
@@ -125,7 +107,14 @@ export function connectMobileNativeChatLowerScroll(
   }
   const reveal = (group?: unknown, reason: RevealReason = 'focus') => {
     const target = focused()
-    pending = target ? { group: group instanceof HTMLElement ? group : null, target, reason } : null
+    pending = target
+      ? {
+          group: group instanceof HTMLElement ? group : null,
+          target,
+          reason,
+          navigation: gesture.version()
+        }
+      : null
     schedule()
   }
   const layoutChanged = () => {
@@ -173,6 +162,9 @@ export function connectMobileNativeChatLowerScroll(
     if (Math.abs(delta) < 0.5) {
       return false
     }
+    if (pending && gesture.version() > pending.navigation) {
+      pending = null
+    }
     if (pending) {
       return false
     }
@@ -213,6 +205,9 @@ export function connectMobileNativeChatLowerScroll(
         schedule()
       }
       return
+    }
+    if (pending && gesture.version() > pending.navigation) {
+      pending = null
     }
     if (pending || !gesture.navigating()) {
       schedule()
