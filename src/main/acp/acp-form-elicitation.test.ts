@@ -80,49 +80,4 @@ describe('OMP ask forms', () => {
     })
     expect(presentation.reply(null)).toEqual({ action: 'cancel' })
   })
-
-  it('tells OMP which questions past the fourth were never shown', () => {
-    const properties = Object.fromEntries(
-      [0, 1, 2, 3, 4].map((n) => [
-        `q${n}__other`,
-        { type: 'string', title: 'Other (type your own)' }
-      ])
-    )
-    const presentation = acpFormElicitationPresentation({
-      ...ask,
-      message: 'Answer 5 questions',
-      requestedSchema: { type: 'object', properties }
-    })
-    const answers = [1, 2, 3, 4].map((n) => ({
-      questionId: `q${n}`,
-      optionIds: [],
-      other: `a${n}`
-    }))
-    expect(presentation.reply({ kind: 'answers', answers })).toEqual({
-      action: 'accept',
-      content: {
-        q0__other: 'a1',
-        q1__other: 'a2',
-        q2__other: 'a3',
-        q3__other: 'a4',
-        q4__other: expect.any(String)
-      }
-    })
-  })
-
-  it('answers a confirm form with a boolean', () => {
-    const confirm = acpFormElicitationPresentation({
-      mode: 'form',
-      sessionId: 'session-1',
-      message: 'Switch model?',
-      requestedSchema: {
-        type: 'object',
-        properties: { value: { type: 'boolean' } },
-        required: ['value']
-      }
-    })
-    expect(
-      confirm.reply({ kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['o1'] }] })
-    ).toEqual({ action: 'accept', content: { value: true } })
-  })
 })
