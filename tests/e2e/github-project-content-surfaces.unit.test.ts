@@ -51,6 +51,7 @@ import { renderMobileTasksGitHubProjectList } from '../../mobile/src/tasks/mobil
 import type { ConnectionPresentationModel } from '../../mobile/src/tasks/use-mobile-tasks-connection-presentation'
 
 function phoneText(table: ReturnType<typeof projectRelationsTableFixture>): string {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the populated-list fields are read; inert controls never invoke omitted actions.
   const model = {
     activeGitHubProject: table.project,
     githubProjectTable: table,
@@ -60,7 +61,6 @@ function phoneText(table: ReturnType<typeof projectRelationsTableFixture>): stri
     githubProjectListEntries: table.rows.map((row) => ({ type: 'row', row })),
     insets: { bottom: 0 },
     findProjectRowRepo: () => null
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rendered populated-list branch reads only these fields; inert controls never invoke omitted actions.
   } as unknown as ConnectionPresentationModel
   return renderToStaticMarkup(renderMobileTasksGitHubProjectList(model, 'dark', 0)).replace(
     /<[^>]*>/g,
