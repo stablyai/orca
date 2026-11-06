@@ -54,6 +54,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--worktree-sidebar-active-border': 'Border of the current workspace row',
   '--host-badge': 'Execution-host badge on workspaces (for example `Local`, an SSH host)',
   '--host-badge-foreground': 'Text on `--host-badge`',
+  '--host-badge-border': 'Host badge outline on the current workspace row (minimum 2:1 contrast)',
   '--tab-bar': 'Strip behind tabs, including the title bar when tabs sit in it',
   '--tab-active': 'Active tab',
   '--tab-active-foreground': 'Active tab text, and inactive tab text on hover',
@@ -83,7 +84,6 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
 
 // Why: these mix per mode in main.css, which the derivation rules cannot express.
 const MODE_MIXES: Partial<Record<PluginAppThemeToken, string>> = {
-  '--worktree-sidebar-active': 'a translucent wash of `--worktree-sidebar-foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
   '--chat-user-message': '`--foreground` mixed lightly into the chat background'
 }

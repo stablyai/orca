@@ -109,6 +109,7 @@
   --color-worktree-sidebar-accent-foreground: var(--worktree-sidebar-accent-foreground);
   --color-worktree-sidebar-border: var(--worktree-sidebar-border);
   --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
+  --color-host-badge-border: var(--host-badge-border);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -267,6 +268,7 @@
   --chart-5: var(--color-blue-800);
   --worktree-sidebar: #f5f5f5;
   --worktree-sidebar-foreground: #0a0a0a;
+  --host-badge-border: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
   --worktree-sidebar-accent: #eaeaea;
   --worktree-sidebar-accent-foreground: #171717;
   --worktree-sidebar-border: #e5e5e5;
@@ -383,6 +385,7 @@
   /* Mirror light mode’s lifted worktree sidebar above the dark canvas. */
   --worktree-sidebar: #2a2a2a;
   --worktree-sidebar-foreground: #f0f0f0;
+  --host-badge-border: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #f0f0f0;
   /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
@@ -1523,10 +1526,10 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
-/* #15971: the wash matches the pill's fill, so its border carries the shape; 80% keeps >=3:1 wherever the validated foreground is >=4.5:1. */
+/* #15971: the border carries the pill's shape; the default 80% keeps >=3:1 against the wash. */
 @scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
   [data-variant='hostContext'] {
-    border-color: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
+    border-color: var(--host-badge-border);
   }
 }
 

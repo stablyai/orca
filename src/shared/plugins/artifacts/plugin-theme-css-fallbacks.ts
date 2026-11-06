@@ -29,6 +29,8 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--tab-inactive-foreground': ['--muted-foreground'],
   '--host-badge': { light: ['--accent'], dark: { tint: '--accent', percent: 80 } },
   '--host-badge-foreground': ['--muted-foreground'],
+  '--host-badge-border': { tint: '--worktree-sidebar-foreground', percent: 80 },
+  '--worktree-sidebar-active': tint('--worktree-sidebar-foreground', 8, 10),
   '--diff-added': ['--git-decoration-added'],
   '--diff-removed': ['--git-decoration-deleted'],
   '--diff-added-background': tint('--diff-added', 13, 16),
