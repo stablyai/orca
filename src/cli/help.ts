@@ -202,6 +202,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (flag === 'key' && command === 'computer press-key') {
     return '--key <key>            Single key, e.g. Return, Escape, Tab, Left, or PageUp'
   }
+  if (command === 'repo delete-branch' && flag === 'ref') {
+    return '--ref refs/heads/<branch> Exact local branch ref to delete'
+  }
+  if (command === 'repo delete-branch' && flag === 'repo') {
+    return '--repo id:<repoId>      Exact registered repository id'
+  }
   return formatFlagHelp(flag)
 }
 

@@ -1,3 +1,4 @@
+import { runWithGitAttachmentMutation } from '../repo-attachment-lock'
 import { withGitSpan } from '../../observability/instrumentation'
 import {
   resolveGitFetchHeadCommand,
@@ -188,17 +189,23 @@ export function gitExecFileAsync(
   const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
   // Missing folders start no child and must not record a git.exec span.
-  const result = runAdmittedWslGit(options, () =>
-    runUnlessGitCwdKnownMissing(options, () =>
-      command.needsLock
-        ? runWithGitFetchHeadLock(
-            command.cwd,
-            options.signal,
-            () => gitExecFileAsyncUnlocked(args, options, terminationState),
-            command.gitDir
-          )
-        : gitExecFileAsyncUnlocked(args, options, terminationState)
-    )
+  const result = runWithGitAttachmentMutation(
+    args,
+    options,
+    () =>
+      runAdmittedWslGit(options, () =>
+        runUnlessGitCwdKnownMissing(options, () =>
+          command.needsLock
+            ? runWithGitFetchHeadLock(
+                command.cwd,
+                options.signal,
+                () => gitExecFileAsyncUnlocked(args, options, terminationState),
+                command.gitDir
+              )
+            : gitExecFileAsyncUnlocked(args, options, terminationState)
+        )
+      ),
+    () => terminationState.current
   )
   return result.finally(() => {
     // A timed-out caller can settle before its child exits.

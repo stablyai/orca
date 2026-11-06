@@ -65,6 +65,7 @@ export type RuntimeRepositoryCommandSurface = {
   createRepo: RuntimeRepositoryRegistrationController['create']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   showRepo: RuntimeRepositorySettingsController['show']
+  deleteRepoBranch: RuntimeRepositorySettingsController['deleteBranch']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
   removeProject: RuntimeRepositorySettingsController['remove']
@@ -143,6 +144,7 @@ export function installRuntimeRepositoryCommandSurface(
     createRepo: registrations.create.bind(registrations),
     cloneRepo: clones.clone.bind(clones),
     showRepo: settings.show.bind(settings),
+    deleteRepoBranch: settings.deleteBranch.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),
     removeProject: settings.remove.bind(settings),

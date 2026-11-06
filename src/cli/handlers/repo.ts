@@ -1,3 +1,6 @@
+import { uncertainBranchDeletion } from '../../shared/standalone-branch-deletion'
+import { z } from 'zod'
+import { REPO_DELETE_BRANCH_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
@@ -67,6 +70,57 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       ref: getRequiredStringFlag(flags, 'ref')
     })
     printResult(result, json, formatRepoShow)
+  },
+  'repo delete-branch': async ({ flags, client, json }) => {
+    const request = {
+      repo: getRequiredStringFlag(flags, 'repo'),
+      repoHostId: getRequiredStringFlag(flags, 'repo-host-id'),
+      ref: getRequiredStringFlag(flags, 'ref'),
+      expectedOid: getRequiredStringFlag(flags, 'expected-oid'),
+      anchorRef: getRequiredStringFlag(flags, 'anchor-ref'),
+      anchorOid: getRequiredStringFlag(flags, 'anchor-oid')
+    }
+    let dispatched = false
+    const result = await client
+      .call('repo.deleteBranch', request, {
+        requestSelection: {
+          paramsForStatus: (raw) => {
+            const status = z.object({ capabilities: z.array(z.string()) }).safeParse(raw)
+            if (
+              !status.success ||
+              !status.data.capabilities.includes(REPO_DELETE_BRANCH_RUNTIME_CAPABILITY)
+            ) {
+              throw new RuntimeClientError(
+                'unsupported_operation',
+                'Update Orca on the execution host: safe standalone branch deletion is unsupported.'
+              )
+            }
+            return request
+          },
+          onDispatch: () => {
+            dispatched = true
+          }
+        }
+      })
+      .catch((error: unknown) => {
+        if (
+          dispatched &&
+          error instanceof RuntimeClientError &&
+          [
+            'runtime_unavailable',
+            'remote_runtime_unavailable',
+            'runtime_timeout',
+            'invalid_runtime_response'
+          ].includes(error.code)
+        ) {
+          const uncertain = uncertainBranchDeletion(
+            `The runtime reply was lost or could not be verified: ${error.message}`
+          )
+          throw new RuntimeClientError(uncertain.code, uncertain.message, uncertain.data)
+        }
+        throw error
+      })
+    printResult(result, json, (value) => JSON.stringify(value))
   },
   'repo search-refs': async ({ flags, client, json }) => {
     const result = await client.call<RuntimeRepoSearchRefs>('repo.searchRefs', {

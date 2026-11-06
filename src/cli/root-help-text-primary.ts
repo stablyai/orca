@@ -98,6 +98,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  repo show                 Show one registered repo',
   '  repo set                  Set whether non-Orca worktrees are shown for a repo',
   "  repo set-base-ref         Set the repo's default base ref for future worktrees",
+  '  repo delete-branch        Safely delete an integrated standalone local branch',
   '  repo search-refs          Search branch/tag refs within a repo',
   '',
   'Worktrees:',

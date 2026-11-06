@@ -17,6 +17,16 @@ const {
   forceTerminateProcessTreeMock: vi.fn().mockResolvedValue(false)
 }))
 
+// These admission fixtures use virtual repositories; retain the real attachment FIFO without libuv metadata reads.
+vi.mock('../../../shared/git/metadata/git-common-directory', async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveGitCommonDirectory: async () => '/repo/.git'
+}))
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal()),
+  realpath: async (path: string) => path
+}))
+
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal()),
   execFile: execFileMock,

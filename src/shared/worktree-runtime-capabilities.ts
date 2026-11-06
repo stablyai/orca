@@ -1,5 +1,6 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachments/workspace-attachment-capabilities'
 
+export const REPO_DELETE_BRANCH_RUNTIME_CAPABILITY = 'repo.delete-branch.v1' as const
 export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
   'worktree.rename-error-dismiss.v1' as const
 
@@ -68,6 +69,7 @@ export function assertCrossStoreLineageSupported(
 }
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  REPO_DELETE_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,

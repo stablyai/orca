@@ -1,3 +1,4 @@
+import { StandaloneBranchDeletionError } from '../../../shared/standalone-branch-deletion'
 import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
@@ -189,6 +190,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  if (error instanceof StandaloneBranchDeletionError) {
+    return errorResponse(id, meta, error.code, message, error.data)
+  }
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
