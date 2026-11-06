@@ -96,6 +96,10 @@ function isCurrentWorkspaceTab({
     : (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
 }
 
+/**
+ * Builds Cmd-J entries for each worktree's terminal and editor tabs, skipping tabs
+ * whose host owner is unverifiable. Editor absolute paths index as location text.
+ */
 export function buildSearchableWorkspaceTabEntries({
   worktrees,
   ownershipWorktrees,

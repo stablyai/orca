@@ -45,7 +45,8 @@ export function parsePaletteTabIndexedFieldId(fieldId: string, prefix: string): 
 
 /**
  * Every tab field is visible identity text, so tokens combine freely — a tab has
- * no hidden supporting evidence in phase 2.
+ * no hidden supporting evidence in phase 2. Location texts prove container scope
+ * only, but an exact full-path query still counts as a destination.
  */
 export function buildPaletteTabDocument(input: PaletteTabDocumentInput): PaletteDocument {
   const fields: PaletteVisibleFieldSource[] = [

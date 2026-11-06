@@ -144,6 +144,7 @@ function baseResult(
   }
 }
 
+/** Builds Cmd-J entries for simulator tabs owned by each worktree's verified host. */
 export function buildSearchableSimulatorTabs({
   worktrees,
   ownershipWorktrees,
