@@ -1362,12 +1362,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} etkin",
-      "heading": "Ajanlar",
-      "showAll": "Tümünü göster ({{count}})",
-      "showFewer": "Daha az göster"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",

@@ -1440,12 +1440,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "Активных: {{count}}",
-      "heading": "Агенты",
-      "showAll": "Показать все ({{count}})",
-      "showFewer": "Свернуть"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",

@@ -1358,12 +1358,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 個使用中",
-      "heading": "代理程式",
-      "showAll": "顯示全部 {{count}} 個",
-      "showFewer": "收合"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",

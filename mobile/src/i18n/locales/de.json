@@ -1362,12 +1362,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} aktiv",
-      "heading": "Agenten",
-      "showAll": "Alle {{count}} anzeigen",
-      "showFewer": "Weniger anzeigen"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Update-Hinweis für Orca {{version}} ausblenden",
       "title": "Orca {{version}} ist verfügbar",

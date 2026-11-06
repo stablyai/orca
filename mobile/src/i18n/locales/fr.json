@@ -1409,12 +1409,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} en activité",
-      "heading": "Agents",
-      "showAll": "Tout afficher ({{count}})",
-      "showFewer": "Afficher moins"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",

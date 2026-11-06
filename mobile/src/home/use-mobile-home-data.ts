@@ -1,9 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  countAgentsNeedingYouByHost,
+  selectAgentsNeedingYou,
+  type AgentListInput
+} from '../agents/agent-list-model'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
 import type { AccountsSnapshot } from '../components/AccountUsage'
-import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
+import { setCachedWorktrees } from '../cache/worktree-cache'
+import { useNow } from '../hooks/use-now'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -15,17 +20,7 @@ import {
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry } from '../transport/types'
 import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
-import {
-  withoutHomeAgentStates,
-  type HomeWorktreeSummary,
-  type HostWorktreeInfo
-} from '../worktree/home-worktree-info'
-import {
-  LAST_VISITED_WORKTREE_STORAGE_KEY,
-  readLastVisitedWorktreeRecord
-} from '../worktree/last-visited-worktree-repo'
-import { selectHomeJumpBackInRows } from '../worktree/home-jump-back-in'
-import { selectHomeResumeCard } from '../worktree/home-resume-card'
+import { withoutHomeAgentStates, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { fetchHomeHostStats } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { projectHomeHostConnections } from './home-host-connection-projection'
@@ -44,9 +39,6 @@ export function useMobileHomeData() {
   const hostSetters = useMemo(
     () => ({ setWorktreeInfo, setStats: setStatsByHost, setAccounts: setAccountsByHost }),
     []
-  )
-  const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
-    null
   )
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
@@ -89,7 +81,10 @@ export function useMobileHomeData() {
 
   useEffect(() => {
     if (Object.keys(worktreeInfo).length > 0) {
-      saveHomeSnapshot({ worktreeInfo, savedAt: Date.now() })
+      const saved = Object.fromEntries(
+        Object.entries(worktreeInfo).map(([hostId, info]) => [hostId, withoutHomeAgentStates(info)])
+      )
+      saveHomeSnapshot({ worktreeInfo: saved, savedAt: Date.now() })
     }
   }, [worktreeInfo])
 
@@ -122,11 +117,6 @@ export function useMobileHomeData() {
             router.replace(mobileOnboardingDestination(steps))
           }
         })
-      void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY).then((raw) => {
-        if (!stale) {
-          setLastVisited(readLastVisitedWorktreeRecord(raw))
-        }
-      })
       for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
           void fetchHomeHostWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
@@ -142,26 +132,16 @@ export function useMobileHomeData() {
 
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
-  const resumeCard = useMemo(
-    () =>
-      selectHomeResumeCard({
-        hosts: sortedHosts,
-        hostStates: connections.hostStates,
-        worktreeInfo,
-        lastVisited,
-        cachedWorktrees: (hostId) => getCachedWorktrees(hostId) as HomeWorktreeSummary[] | null
-      }),
-    [sortedHosts, connections.hostStates, worktreeInfo, lastVisited]
+  // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
+  const now = useNow(30_000)
+  const agentList = useMemo<AgentListInput>(
+    () => ({ hosts: sortedHosts, hostStates: connections.hostStates, worktreeInfo, now }),
+    [sortedHosts, connections.hostStates, worktreeInfo, now]
   )
-  const jumpBackInRows = useMemo(
-    () =>
-      selectHomeJumpBackInRows({
-        hosts: sortedHosts,
-        hostStates: connections.hostStates,
-        worktreeInfo,
-        resumeCard
-      }),
-    [sortedHosts, connections.hostStates, worktreeInfo, resumeCard]
+  const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
+  const needsYouByHost = useMemo(
+    () => countAgentsNeedingYouByHost(agentsNeedingYou),
+    [agentsNeedingYou]
   )
   const connectedHosts = useMemo(
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
@@ -182,12 +162,14 @@ export function useMobileHomeData() {
   return {
     ...connections,
     accountsByHost,
+    agentList,
+    agentsNeedingYou,
     connectedHosts,
     hostCatalog,
     hostCatalogLoaded,
     hostConnections,
     hostsConnecting,
-    jumpBackInRows,
+    needsYouByHost,
     router,
     setHostCatalog,
     sortedHostCatalog,
