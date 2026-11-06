@@ -19,7 +19,7 @@ import {
   useChecksPanelCreatedReview,
   type ChecksPanelCreatedReviewInput
 } from './use-checks-panel-created-review'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
   Pick<

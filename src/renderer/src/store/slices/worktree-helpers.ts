@@ -1,4 +1,4 @@
-import { findFirstIndexedWorktree } from '@/lib/worktree-runtime-owner-index'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
@@ -45,7 +45,7 @@ import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AppState } from '../types'
 import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
 import type { WorktreeRefreshResult } from './worktrees/listing/worktree-refresh-result'

@@ -18,7 +18,7 @@ import {
   type EditorSaveAndCloseDetail
 } from './editor/autosave/editor-autosave'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
-import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
+import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
 
 vi.mock('@/runtime/runtime-rpc-client', async (original) =>

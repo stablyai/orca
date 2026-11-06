@@ -172,8 +172,8 @@
 2 src/renderer/src/components/task-page/use-task-page-source-availability.ts
 1 src/renderer/src/components/terminal-pane/pty-connection/agent-idle-working-handlers.ts
 1 src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts
-1 src/renderer/src/components/terminal-pane/terminal-fit-restore.ts
-1 src/renderer/src/components/terminal-pane/terminal-link-open-hints.ts
+1 src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.ts
+1 src/renderer/src/components/terminal-pane/links/terminal-link-open-hints.ts
 2 src/renderer/src/components/terminal-pane/terminal-pane-close-admission.ts
 1 src/renderer/src/components/terminal-pane/terminal-pane-mount-preparation.ts
 2 src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
@@ -219,14 +219,14 @@
 1 src/renderer/src/lib/client-creation-action-error.ts
 2 src/renderer/src/lib/client-creation-action-policy.ts
 1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
-6 src/renderer/src/lib/http-link-destinations.ts
-1 src/renderer/src/lib/http-link-localhost-route.ts # extracted from http-link-routing.ts
-1 src/renderer/src/lib/http-link-routing.ts
-1 src/renderer/src/lib/launch-agent-in-new-tab.ts
-1 src/renderer/src/lib/launch-agent-web-host-tab.ts
+6 src/renderer/src/lib/browser/navigation/http-link-destinations.ts
+1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
+1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
+1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.ts
+1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab.ts
 1 src/renderer/src/lib/launch-ai-vault-session.ts
-1 src/renderer/src/lib/linear-issue-url-lookup.ts
-1 src/renderer/src/lib/linear-issue-write.ts
+1 src/renderer/src/lib/work-items/linear/linear-issue-url-lookup.ts
+1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts
 1 src/renderer/src/lib/local-preflight-context.ts
 2 src/renderer/src/lib/provider-runtime-context.ts
 2 src/renderer/src/lib/repo-runtime-owner.ts
@@ -237,10 +237,10 @@
 4 src/renderer/src/lib/terminal-worktree-route.ts # resolveTerminalPtyOwner: teardown, close and PTY identity read spawn's attribution (round 3 F8), which retired the deprecated resolver's readers
 3 src/renderer/src/lib/unread-badge-count-selector.ts
 1 src/renderer/src/lib/web-runtime-worktree-terminal-after-wake.ts
-2 src/renderer/src/lib/workspace-browser-tab-open.ts
-1 src/renderer/src/lib/worktree-activation.ts
+2 src/renderer/src/lib/browser/workspace/workspace-browser-tab-open.ts
+1 src/renderer/src/lib/workspace/activation/worktree-activation.ts
 1 src/renderer/src/lib/worktree-jump-navigation.ts
-1 src/renderer/src/lib/worktree-runtime-owner.ts # a setup terminal with no row spawns on the focused runtime
+1 src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.ts # a setup terminal with no row spawns on the focused runtime
 17 src/renderer/src/runtime/runtime-jira-client.ts
 2 src/renderer/src/runtime/runtime-jira-summary-client.ts
 1 src/renderer/src/runtime/runtime-jira-target.ts

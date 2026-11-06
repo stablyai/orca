@@ -30,8 +30,8 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: createBrowserUuidMock
+vi.mock('../../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: createBrowserUuidMock
 }))
 
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({

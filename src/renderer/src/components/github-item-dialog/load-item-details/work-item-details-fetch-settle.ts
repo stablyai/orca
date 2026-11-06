@@ -13,7 +13,7 @@ import type {
 import type { GitHubTaskRecordCache, TaskBinding } from '@/store/github/task-record-cache'
 import { githubTaskRpcOptions, type GitHubTaskTarget } from '@/lib/github-task-target'
 import { useAppStore } from '@/store'
-import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemDetailsForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   WORK_ITEM_DETAILS_FRESH_MS,

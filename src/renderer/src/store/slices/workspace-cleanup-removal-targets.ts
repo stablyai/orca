@@ -24,7 +24,7 @@ import {
   hasValidWorkspaceCleanupUnverifiedConsent,
   hasWorkspaceCleanupRiskEscalated
 } from './workspace-cleanup-preflight-failures'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 /** Distinct from every ExecutionHostId, so a hostless row cannot alias one. */
 const UNQUALIFIED_HOST_BUCKET = Symbol('unqualified-cleanup-host')

@@ -7,7 +7,7 @@ import {
   useRef,
   useSyncExternalStore
 } from 'react'
-import { sameSourceControlSetupSelection } from '../../lib/source-control-agent-launch-picker'
+import { sameSourceControlSetupSelection } from '../../lib/source-control/ai/source-control-agent-launch-picker'
 import { shallow } from 'zustand/shallow'
 import {
   agentPickerDraft,

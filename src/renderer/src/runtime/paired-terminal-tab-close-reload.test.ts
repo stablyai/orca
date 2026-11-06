@@ -7,7 +7,7 @@ import { useAppStore, type AppState } from '@/store'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from '@/lib/session-write-subscriber'
+} from '@/lib/workspace/persistence/session-write-subscriber'
 import { closeWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
 import { resetWebSessionCloseReplaysForTests } from './web-session-close-replay'
 import { recordReceivedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking'

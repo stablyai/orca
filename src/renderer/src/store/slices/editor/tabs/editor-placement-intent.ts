@@ -1,5 +1,5 @@
 import { beginPendingTab, afterPendingTab, isPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import type { AppState } from '../../../types'
 import { editorContentIsReferenced } from './workspace-editor-files'
 

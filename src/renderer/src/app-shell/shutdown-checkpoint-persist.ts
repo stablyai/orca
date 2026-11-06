@@ -1,6 +1,6 @@
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import { formatShutdownCheckpointFailureReason } from '../../../shared/renderer-shutdown-events'
-import type { WorkspaceSessionHostSnapshot } from '../lib/workspace-session-host-persistence'
+import type { WorkspaceSessionHostSnapshot } from '../lib/workspace/persistence/workspace-session-host-persistence'
 import { recordRendererCrashBreadcrumb } from '../lib/crash-breadcrumb-recorder'
 
 export type ShutdownCheckpointStageArgs = {

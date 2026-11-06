@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 

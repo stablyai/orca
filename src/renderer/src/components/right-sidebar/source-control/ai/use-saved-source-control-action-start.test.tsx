@@ -8,7 +8,9 @@ import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fix
 import { useSavedSourceControlActionStart } from './use-saved-source-control-action-start'
 
 const { launch } = vi.hoisted(() => ({ launch: vi.fn() }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launch }))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTab: launch
+}))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 vi.mock('@/lib/host-chat-program-acquisition', () => ({
   AgentLaunchChoiceCancelled: class extends Error {},

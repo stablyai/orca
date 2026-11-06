@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import { isSyncPushStageError } from '@/lib/source-control-remote-error'
+import { isSyncPushStageError } from '@/lib/source-control/remote/source-control-remote-error'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../../../shared/git/remotes/git-upstream-status'
 import {
   captureSourceControlRecoveryEntrySnapshot,

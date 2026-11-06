@@ -5,12 +5,12 @@ import {
   cleanupCreateMessageFixture,
   created,
   createParams
-} from '../../src/renderer/src/lib/structured-agent-session-launch-create-message.test-fixture'
+} from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-create-message.test-fixture'
 import type { AgentSessionModelCatalogResult } from '../../src/shared/agent-session/agent-session-wire'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../src/shared/non-secure-context-uuid'
 import { mkdir, mkdtemp, writeFile, rm, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'

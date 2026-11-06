@@ -8,7 +8,7 @@ import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts,
   subscribeWorktreeCommitDraftRetirement
-} from '@/lib/source-control-commit-draft-session'
+} from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId

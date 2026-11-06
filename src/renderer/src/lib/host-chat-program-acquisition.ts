@@ -5,7 +5,7 @@ import {
 } from '@/store/app-state-view'
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import type { ProspectiveWorkspace } from './agent-launch-route-input'
+import type { ProspectiveWorkspace } from './agent-session/launch/routing/agent-launch-route-input'
 import {
   agentsOfferedForLaunch,
   resolveChatProgramContext,

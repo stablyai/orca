@@ -137,7 +137,7 @@ vi.mock('@/store/index', async () =>
 
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
-import { adoptAgentSessionLaunchVerdict } from '../../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './routing/agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch

@@ -8,10 +8,8 @@ import {
 } from '@/lib/host-chat-program-acquisition'
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'

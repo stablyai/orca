@@ -10,7 +10,7 @@ import {
   resolveRemotePtyOwnerMachine,
   type PaneOwnerTransport,
   type PtyOwnerMachineState
-} from '../pty-owner-machine-platform'
+} from '../pty-transport/host-ownership/pty-owner-machine-platform'
 
 export type PaneWindowsPtyModelContext = {
   terminal: Pick<Terminal, 'options'>

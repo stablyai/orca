@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import { hydrateOverrides, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
 import {
   beginTerminalScrollIntentBufferRebuild,

@@ -1,7 +1,7 @@
 import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
-} from '@/lib/source-control-remote-error'
+} from '@/lib/source-control/remote/source-control-remote-error'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from './action-error'
 import type { RemoteOpKind } from '../review/source-control-primary-action-types'

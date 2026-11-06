@@ -2,7 +2,7 @@ import {
   retirePendingWorkspaceTabs,
   hasPendingEntityTab
 } from '@/runtime/layout-owner-pending-tabs'
-import { editorPlacementsInContentOwners } from '@/lib/workspace-session-unified-tabs'
+import { editorPlacementsInContentOwners } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'

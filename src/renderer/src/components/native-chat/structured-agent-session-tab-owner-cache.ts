@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { structuredAgentSessionOwnerForTab } from '@/runtime/structured-agent-session-owner'

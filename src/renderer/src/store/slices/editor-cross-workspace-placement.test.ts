@@ -11,7 +11,7 @@ import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mob
 import { workspaceEditorFiles } from './editor/tabs/workspace-editor-files'
 import { removeWorktreeLayout } from './tabs/worktree-layout-lifecycle'
 import { buildHydratedTabState } from './tabs-hydration'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 
 vi.mock('@/runtime/runtime-rpc-client', async (original) =>
   (

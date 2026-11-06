@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRoutableExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
 import {
   selectWorkspaceByHostTarget,
