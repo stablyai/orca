@@ -1327,6 +1327,13 @@
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap"
     },
+    "markdownCallout": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"
     },
