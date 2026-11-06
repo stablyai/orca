@@ -464,7 +464,9 @@ describe('getPRChecks', () => {
               status: 'completed',
               conclusion: 'success',
               html_url: 'https://github.com/acme/widgets/actions/runs/88',
-              details_url: null
+              details_url: null,
+              started_at: '2026-11-05T10:00:00Z',
+              completed_at: '2026-11-05T10:03:12Z'
             }
           ]
         })
@@ -507,6 +509,8 @@ describe('getPRChecks', () => {
         status: 'completed',
         conclusion: 'success',
         url: 'https://github.com/acme/widgets/actions/runs/88',
+        startedAt: '2026-11-05T10:00:00Z',
+        completedAt: '2026-11-05T10:03:12Z',
         checkRunId: 88,
         workflowRunId: 88
       },
