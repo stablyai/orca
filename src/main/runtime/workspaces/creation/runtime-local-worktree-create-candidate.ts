@@ -50,6 +50,7 @@ export type RuntimeLocalWorktreeCreateCandidate = {
   worktreePath: string
 }
 
+/** Probes suffixed candidates until one has a free path and a usable branch; throws a collision error when the attempt budget is exhausted. */
 export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo

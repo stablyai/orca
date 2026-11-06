@@ -6,6 +6,7 @@ export function getWorktreeCreateCandidate(value: string, suffix: number): strin
   return suffix === 1 ? value : `${value}-${suffix}`
 }
 
+/** Starts above the highest existing numeric suffix so probing never re-enters a range known to be taken. */
 export function getWorktreeCreateStartingSuffix(
   baseName: string,
   existingNames: readonly string[]
