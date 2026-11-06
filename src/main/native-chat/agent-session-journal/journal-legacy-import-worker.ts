@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import type { EventEmitter } from 'node:events'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
@@ -11,10 +12,8 @@ import type {
   PreparedLegacyImport
 } from './journal-legacy-import-worker-protocol'
 
-export type LegacyImportWorker = Pick<
-  Worker,
-  'on' | 'once' | 'unref' | 'postMessage' | 'terminate' | 'removeAllListeners'
->
+export type LegacyImportWorker = Pick<Worker, 'unref' | 'postMessage' | 'terminate'> &
+  Pick<EventEmitter, 'on' | 'once' | 'removeAllListeners'>
 
 function startWorker(request: LegacyTranscriptImportRequest): LegacyImportWorker {
   return spawnWorkerThread(
