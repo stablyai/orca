@@ -1,3 +1,4 @@
+import { nonRefusedAgentLaunch } from './agent-tab-launch-outcome.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
@@ -54,11 +55,13 @@ describe('launchAgentInNewTab main-window surface', () => {
     const before = store.getState()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      agent: 'opencode',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-1',
+        agent: 'opencode',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    )
 
     expect(result?.surface.kind).toBe('local-terminal')
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null

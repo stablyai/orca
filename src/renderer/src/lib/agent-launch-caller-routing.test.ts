@@ -1,3 +1,4 @@
+import { nonRefusedAgentLaunch } from './agent-tab-launch-outcome.test-fixture'
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -144,12 +145,14 @@ describe('agent launch caller routing', () => {
         { basePrompt: 'Fix checks', settings: store.settings }
       )
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-      const result = launchAgentInNewTab({
-        requestId: 'saved-surface',
-        agent: 'codex',
-        worktreeId: 'wt-1',
-        ...projection
-      })
+      const result = nonRefusedAgentLaunch(
+        launchAgentInNewTab({
+          requestId: 'saved-surface',
+          agent: 'codex',
+          worktreeId: 'wt-1',
+          ...projection
+        })
+      )
       expect(result?.surface.kind).toBe(chat ? 'host-published' : 'local-terminal')
       if (chat) {
         expect(store.createTab).not.toHaveBeenCalled()
@@ -307,12 +310,14 @@ describe('agent launch caller routing', () => {
         { basePrompt: 'Fix checks' }
       )
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-    const result = launchAgentInNewTab({
-      requestId: 'wait-q',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      ...projection
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'wait-q',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        ...projection
+      })
+    )
     expect(result?.surface.kind).toBe('host-published')
     expect(mockCreateSupport).not.toHaveBeenCalled()
     projection.agentArgs = '--model later-form'
@@ -339,7 +344,7 @@ describe('agent launch caller routing', () => {
     async (_id, profile) => {
       mockIsWebRuntimeSessionActive.mockReturnValue(true)
 
-      const result = await launch(profile)
+      const result = nonRefusedAgentLaunch(await launch(profile))
 
       expect(result?.surface).toEqual({ kind: 'host-published' })
       // Placement never rides this route's payload as a tab; the host owns the surface.
@@ -364,11 +369,13 @@ describe('agent launch caller routing', () => {
     ])
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'claude',
-      worktreeId: 'wt-1'
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-2',
+        agent: 'claude',
+        worktreeId: 'wt-1'
+      })
+    )
 
     expect(result?.surface.kind).toBe('host-published')
     expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -390,14 +397,16 @@ describe('agent launch caller routing', () => {
     mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-3',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'fix the flaky test',
-      promptDelivery: 'submit-after-ready',
-      agentArgs: '--model sonnet'
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-3',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'fix the flaky test',
+        promptDelivery: 'submit-after-ready',
+        agentArgs: '--model sonnet'
+      })
+    )
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
@@ -425,15 +434,17 @@ describe('agent launch caller routing', () => {
     mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-10',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      groupId: 'group-1',
-      prompt: 'fix the flaky test',
-      promptDelivery: 'submit-after-ready',
-      agentArgs: '--model sonnet'
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-10',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        groupId: 'group-1',
+        prompt: 'fix the flaky test',
+        promptDelivery: 'submit-after-ready',
+        agentArgs: '--model sonnet'
+      })
+    )
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(store.createTab).not.toHaveBeenCalled()
@@ -478,12 +489,14 @@ describe('agent launch caller routing', () => {
     const onStructuredHostDeclined = vi.fn(() => ({ opened: true }))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-11',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      onStructuredHostDeclined
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-11',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        onStructuredHostDeclined
+      })
+    )
 
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(onStructuredHostDeclined).toHaveBeenCalledOnce()

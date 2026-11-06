@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
+import { getDefaultSettings } from '../../../shared/constants'
 import { i18n } from '@/i18n/i18n'
 import fr from '@/i18n/locales/fr.json'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
@@ -459,7 +460,7 @@ it('Start work reports one truthful recovery before a remote agent has been sele
     const state = useAppStore.getState()
     useAppStore.setState({
       repos: [{ ...state.repos[0], path: '/srv/repo', executionHostId: 'runtime:hub-a' }],
-      settings: { ...state.settings, defaultTuiAgent: 'claude' },
+      settings: { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' },
       runtimeEnvironments: [environment],
       runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey('hub-a')]: ['codex'] },
       runtimeStatusByEnvironmentId: new Map([

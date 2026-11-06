@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { nonRefusedAgentLaunch } from './agent-tab-launch-outcome.test-fixture'
 import {
   liveStore,
   mockCreateTab,
@@ -296,7 +297,7 @@ it.each([true, false])(
     )
     await act(async () => button('Launch chat').click())
     const call = dispatch.mock.results[0]
-    const result = call?.type === 'return' ? call.value : null
+    const result = nonRefusedAgentLaunch(call?.type === 'return' ? call.value : null)
     expect(result?.surface.kind).toBe('local-chat')
     expect(await result?.structuredSettlement).toMatchObject({ kind: 'failed' })
     expect(preparationErrors).toEqual([])

@@ -64,7 +64,7 @@ export async function launchWorkItemDirect(
     if (!context) {
       return false
     }
-    if ('unavailable' in context) {
+    if (context.unavailable) {
       return context.unavailable.pending
         ? 'cancelled'
         : reportFailure(agentLaunchRecoveryMessage(context.unavailable.recovery))
