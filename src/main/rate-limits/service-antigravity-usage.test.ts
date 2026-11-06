@@ -274,3 +274,61 @@ describe('Antigravity usage gating', () => {
     }
   })
 })
+
+describe('Antigravity account attribution', () => {
+  const login = { key: 'consumer\na', accountId: 'a', email: 'a@example.invalid' }
+  const saved = (rateLimits: ProviderRateLimits | null) => [
+    { accountId: 'a', email: 'a@example.invalid', active: true, rateLimits },
+    { accountId: 'b', email: 'b@example.invalid', active: false, rateLimits: null }
+  ]
+
+  beforeEach(() => {
+    resetRateLimitProviderMocks()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+  })
+
+  it('names the saved account a reading belongs to and lists every saved account', async () => {
+    const service = new RateLimitService()
+    const finish = vi.fn(async (_target: unknown, _login: unknown, limits: ProviderRateLimits) => ({
+      switched: false as const,
+      account: { id: 'a', email: 'a@example.invalid' },
+      accounts: saved(limits)
+    }))
+    service.setAntigravityAccountUsageRecorder({
+      begin: async () => ({ login, accounts: saved(null) }),
+      finish
+    })
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(finish).toHaveBeenCalledWith(
+      { runtime: 'host', wslDistro: null },
+      login,
+      expect.anything()
+    )
+    expect(state.antigravity?.usageMetadata?.account).toEqual({
+      id: 'a',
+      email: 'a@example.invalid'
+    })
+    expect(
+      state.antigravityAccounts.map((entry) => entry.rateLimits?.session?.usedPercent ?? null)
+    ).toEqual([30, null])
+  })
+
+  it('discards a reading when the agy login changed during the read', async () => {
+    const service = new RateLimitService()
+    service.setAntigravityAccountUsageRecorder({
+      begin: async () => ({ login, accounts: saved(null) }),
+      finish: async () => ({ switched: true })
+    })
+
+    await service.refresh()
+
+    expect(service.getState().antigravity).toBeNull()
+    expect(service.getState().antigravityAccounts.every((entry) => !entry.rateLimits)).toBe(true)
+  })
+})

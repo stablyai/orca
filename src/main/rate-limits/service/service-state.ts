@@ -1,10 +1,12 @@
 import type { LocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import type {
+  AntigravityAccountUsage,
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitState
 } from '../../../shared/rate-limit-types'
+import type { AntigravityAccountUsageRecorder } from '../antigravity-account-usage'
 import {
   type ActiveRateLimitProvider,
   type InactiveCodexAccountInfo,
@@ -114,6 +116,8 @@ export abstract class RateLimitServiceState {
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
+  protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null
+  protected antigravityAccounts: AntigravityAccountUsage[] = []
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
