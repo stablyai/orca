@@ -120,7 +120,7 @@ export function useDetailCardScope({
       }
     }
     const capture = { capture: true, signal: listeners.signal }
-    // Why: iOS sends no click for a touch whose touchmove was prevented, as the terminal does for any finger movement.
+    // Why: the terminal claims its touches, so iOS sends no click for a tap there.
     document.addEventListener('pointerdown', press, capture)
     document.addEventListener('click', press, capture)
     document.addEventListener('keydown', key, capture)
