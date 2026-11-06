@@ -1,3 +1,5 @@
+import type { AcpItemOwnership } from './acp-item-ownership'
+import type { AcpOwnershipReader } from './acp-ownership-reader'
 import { createPatch } from 'diff'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -74,16 +76,31 @@ type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string }
 // Keep partial-update context until completion or the owning turn ends.
 export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
-  // Late requests need their original turn even when no journal lookup is available.
-  private readonly turns = new Map<string, string>()
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
+
+  constructor(
+    private readonly owners: AcpItemOwnership,
+    private readonly read?: AcpOwnershipReader
+  ) {}
+
+  join(toolCallId: string): ProviderTimelineJoin {
+    const turn = this.turn(toolCallId)
+    if (turn !== undefined) {
+      return { turn }
+    }
+    const scope = this.read?.tool(toolCallId)
+    return scope ? { scope } : {}
+  }
 
   translate(
     raw: ToolCallUpdate,
     dialect: AcpDialect,
     join: ProviderTimelineJoin
   ): ProviderTimelineEvent[] {
+    join = join.turn === undefined ? { ...join, ...this.join(raw.toolCallId) } : join
+    const turn = join.turn
+    const retain = turn === undefined ? join.scope === undefined : this.owners.isLive(turn)
     const update = dialect.normalizeToolUpdate?.(raw) ?? raw
     const previous = this.tools.get(update.toolCallId)
     const held = this.whole.get(update.toolCallId)
@@ -99,7 +116,7 @@ export class AcpToolTimeline {
           : update.status === 'pending' || update.status === 'in_progress'
             ? 'running'
             : (previous?.body.state ?? 'running')
-    if (state === 'running') {
+    if (state === 'running' && retain) {
       this.whole.set(update.toolCallId, { input, output })
     } else {
       this.whole.delete(update.toolCallId)
@@ -135,13 +152,14 @@ export class AcpToolTimeline {
                 : journalToolPayload(output, state === 'running')
           })
     }
-    const turn = join.turn ?? this.turn(update.toolCallId)
-    this.turns.delete(update.toolCallId)
+    if (turn !== undefined) {
+      this.owners.remember(`tool:${update.toolCallId}`, turn)
+    }
     const snapshot = { body, ...(turn === undefined ? {} : { turn }) }
-    if (state === 'running') {
+    if (state === 'running' && retain) {
       this.tools.set(update.toolCallId, snapshot)
     } else {
-      this.retire(update.toolCallId, snapshot)
+      this.tools.delete(update.toolCallId)
     }
     const events: ProviderTimelineEvent[] = [
       {
@@ -178,28 +196,20 @@ export class AcpToolTimeline {
   }
 
   turn(toolCallId: string): string | undefined {
-    return this.tools.get(toolCallId)?.turn ?? this.turns.get(toolCallId)
+    return this.tools.get(toolCallId)?.turn ?? this.owners.get(`tool:${toolCallId}`)?.turn
   }
 
   end(turn: string): void {
-    for (const [key, snapshot] of this.tools) {
-      if (snapshot.turn === turn) {
-        this.retire(key, snapshot)
-        this.whole.delete(key)
+    for (const key of this.owners.keys(turn)) {
+      if (key.startsWith('tool:')) {
+        this.tools.delete(key.slice(5))
+        this.whole.delete(key.slice(5))
       }
-    }
-  }
-
-  private retire(key: string, snapshot: ToolSnapshot): void {
-    this.tools.delete(key)
-    if (snapshot.turn !== undefined) {
-      this.turns.set(key, snapshot.turn)
     }
   }
 
   dispose(): void {
     this.tools.clear()
     this.whole.clear()
-    this.turns.clear()
   }
 }

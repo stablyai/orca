@@ -56,6 +56,15 @@ export class AcpSubagents {
     return this.pending.splice(0)
   }
 
+  reconcile(
+    id: string,
+    state: NativeChatSubagentState,
+    thread: string,
+    at: number
+  ): AcpTimelineEvent[] {
+    return this.translate([{ id, state, knownOnly: true }], { thread }, at)
+  }
+
   translate(
     updates: readonly AcpSubagentUpdate[],
     join: ProviderTimelineJoin,

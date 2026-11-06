@@ -20,16 +20,15 @@ import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
-  hostTestAttachParams,
-  HOST_TEST_SESSION as SESSION
+  hostTestAttachParams
 } from './structured-agent-session-host-test-data'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
-  restTestSend
+  restTestSend,
+  type RestTestRig
 } from './structured-agent-session-rest-test-rig'
-
-import type { RestTestRig } from './structured-agent-session-rest-test-rig'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 const LAST_CHUNK_AT = HOST_TEST_NOW + 5_500
 const CONNECTION_CLOSED_AT = HOST_TEST_NOW + 60_000
@@ -146,7 +145,7 @@ describe.each([
       })
       assembler.apply({ type: 'turn.open', turn: 'acp-turn', at: HOST_TEST_NOW })
       rig.clock.now = LAST_CHUNK_AT
-      const tasks = new AcpBackgroundTaskTimeline(() => undefined)
+      const tasks = new AcpBackgroundTaskTimeline(() => ({}))
       for (const event of tasks.translate(
         [
           {
