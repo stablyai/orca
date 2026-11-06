@@ -124,22 +124,6 @@ describe('caller filters', () => {
   })
 })
 
-it('plans a cwd scope as a seek on sessions_cwd_key, never a scan', async () => {
-  const db = await openIndex()
-  const filter = sessionRowFilter({ scopePaths: ['/work/app'] })
-  const plan = (
-    db
-      .prepare(
-        `EXPLAIN QUERY PLAN SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')}`
-      )
-      .all(...filter.values) as { detail: string }[]
-  ).map((row) => row.detail)
-
-  expect(plan.join(' | ')).toContain('sessions_cwd_key')
-  expect(plan.some((detail) => detail.startsWith('SEARCH'))).toBe(true)
-  expect(plan.some((detail) => /^SCAN (sessions|scoped)\b/.test(detail))).toBe(false)
-})
-
 it('matches under a thousand-plus scopes, past where an OR chain exceeds SQLite expression depth', async () => {
   const db = await openIndex()
   addSession(db, 1, '/lanes/lane-1199/src')

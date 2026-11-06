@@ -66,7 +66,7 @@ export class SessionSearchTypoRepair {
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
-    if (this.countRows(term, postings) > 0 || postings.exhausted) {
+    if (this.countRows(lowered, postings) > 0 || postings.exhausted) {
       return null
     }
     // Widen cautiously: common prefix, transposed pair, then first letter.

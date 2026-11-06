@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS files(
   prefix_hash TEXT
 );
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
+CREATE INDEX IF NOT EXISTS files_session_mtime ON files(session_row_id, mtime_ms);
 CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,

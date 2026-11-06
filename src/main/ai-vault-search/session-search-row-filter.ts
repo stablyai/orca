@@ -17,7 +17,9 @@ export function sessionRowFilter(
 ): SessionRowFilter {
   const filter: SessionRowFilter = { conditions: [], values: [] }
   if (cutoffMs !== null) {
-    filter.conditions.push('id IN (SELECT session_row_id FROM files WHERE mtime_ms >= ?)')
+    filter.conditions.push(
+      'EXISTS (SELECT 1 FROM files WHERE session_row_id = sessions.id AND mtime_ms >= ?)'
+    )
     filter.values.push(cutoffMs)
   }
   if (filters.agents && filters.agents.length > 0) {
@@ -41,11 +43,11 @@ export function sessionRowFilter(
   return filter
 }
 
-// One JSON parameter avoids OR-depth limits; exact-key and child-prefix ranges seek sessions_cwd_key.
-const SCOPE_CONDITION = `id IN (
-  SELECT scoped.id FROM json_each(?) AS scope JOIN sessions AS scoped
-    ON scoped.${CWD} = scope.value ->> 0
-    OR (scoped.${CWD} >= scope.value ->> 1 AND scoped.${CWD} < scope.value ->> 2)
+// Why: candidate checks must compare their own cwd, without rebuilding a workspace's session set.
+const SCOPE_CONDITION = `EXISTS (
+  SELECT 1 FROM json_each(?) AS scope
+    WHERE sessions.${CWD} = scope.value ->> 0
+    OR (sessions.${CWD} >= scope.value ->> 1 AND sessions.${CWD} < scope.value ->> 2)
 )`
 
 function scopeRange(scopeKey: string): [string, string, string] {

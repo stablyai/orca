@@ -260,12 +260,20 @@ export class SessionSearchRetrieval {
     if (!rows.length) {
       return []
     }
+    const admitted = new Map(rows.map((row) => [row.rowid, row]))
+    const ids = [...admitted.keys()]
+    // Why: one range cursor retains BM25's corpus statistics across all admitted rows.
     const scores = this.db
       .prepare(`SELECT rowid, -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score
         FROM messages_fts WHERE messages_fts MATCH ?
-        AND rowid IN (SELECT value FROM json_each(?))`)
-      .all(scopedExpression(scope.scope, expression), JSON.stringify(rows.map((row) => row.rowid)))
-    const byId = new Map(scores.map((row) => [Number(row.rowid), Number(row.score)]))
-    return rows.map((row) => ({ ...row, score: byId.get(row.rowid) ?? 0 }))
+        AND rowid >= CAST(? AS INTEGER) AND rowid <= CAST(? AS INTEGER)`)
+      .iterate(scopedExpression(scope.scope, expression), Math.min(...ids), Math.max(...ids))
+    for (const score of scores) {
+      const row = admitted.get(Number(score.rowid))
+      if (row) {
+        row.score = Number(score.score)
+      }
+    }
+    return rows
   }
 }
