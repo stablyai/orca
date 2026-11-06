@@ -21,6 +21,25 @@ export function creatorFirstParent<T>(
   return creator ?? (coordinatorIsSelf ? undefined : coordinator)
 }
 
+/** Done is a settled assignment. An open dispatch whose agent is not working is idle, even if the last turn reported done. */
+export function crewRowStatus(
+  activityState: string | undefined,
+  assignmentStatus: string | undefined
+): string {
+  if (
+    activityState === 'working' ||
+    activityState === 'monitoring' ||
+    activityState === 'waiting' ||
+    activityState === 'blocked'
+  ) {
+    return activityState
+  }
+  if (assignmentStatus === 'pending' || assignmentStatus === 'dispatched') {
+    return 'idle'
+  }
+  return activityState ?? (assignmentStatus ? 'done' : 'unknown')
+}
+
 export function crewDisplayName(...names: (string | null | undefined)[]): string | null {
   return names.find((name) => Boolean(name)) || null
 }

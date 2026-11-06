@@ -374,6 +374,8 @@ export function MobileSessionActiveContent({
                     terminalView: true
                   })
                 }
+                crewClient={client}
+                crewTab={controller.activeSessionTab}
               />
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>

@@ -23,6 +23,8 @@ vi.mock('../mobile-native-chat-stale-input', () => ({
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
+import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
+import { projectMobileCrewMentions } from '../../orchestration-crew/mobile-orchestration-crew'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 
@@ -151,5 +153,32 @@ describe('useMobileNativeChatMessageSend', () => {
     })
     expect(originalRecorder).toHaveBeenCalledWith('/clear')
     expect(nextRecorder).not.toHaveBeenCalled()
+  })
+
+  it('reconciles a crew mention against the projected wire text', async () => {
+    const draft = 'Look at @Worker (Orca agent term_worker) '
+    const projected = projectMobileCrewMentions(draft.trimEnd())
+    mount(() => null)
+    await act(async () => {
+      await api!.send(draft)
+    })
+    expect(projected).not.toBe(draft.trimEnd())
+    expect(sendWithOutcome.mock.calls[0]![0].text).toBe(buildNativeChatPasteBytes(projected))
+    expect(captureSendOrigin).toHaveBeenCalledWith(projected, undefined)
+    expect(acceptSend.mock.calls[0]![1]).toBe(projected)
+    expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
+  })
+
+  it('holds an unconfirmed crew mention against the projected text', async () => {
+    const draft = 'Look at @Worker (Orca agent term_worker)'
+    const projected = projectMobileCrewMentions(draft)
+    sendWithOutcome.mockResolvedValue('unknown')
+    mount(() => null)
+    await act(async () => {
+      await api!.send(draft)
+    })
+    expect(holdUnconfirmedSend.mock.calls[0]![1]).toBe(projected)
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
   })
 })
