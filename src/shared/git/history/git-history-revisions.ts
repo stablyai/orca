@@ -32,10 +32,12 @@ export async function loadGitHistoryRefs(
     ],
     cwd
   )
+  const search = query?.toLowerCase()
   const rows = stdout
     .split('\n')
     .filter(Boolean)
     .map((line) => line.split('\0'))
+    .filter((row) => !search || row[5]?.toLowerCase().includes(search))
   const nested = rows.filter((row) => !row[4] && row[3] === 'tag')
   const peeled = new Map<string, string>()
   if (nested.length) {
@@ -63,9 +65,6 @@ export async function loadGitHistoryRefs(
     const revision =
       type === 'commit' ? oid : peeledType === 'commit' ? peeledOid : peeled.get(name)
     if (!revision || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(revision)) {
-      continue
-    }
-    if (query && !name.toLowerCase().includes(query.toLowerCase())) {
       continue
     }
     refs.push({

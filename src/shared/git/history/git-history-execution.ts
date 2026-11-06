@@ -159,7 +159,7 @@ export async function loadGitHistoryFromExecutor(
     hasMore: false,
     limit,
     refs,
-    resolvedRefs: []
+    ...(Array.isArray(refs) ? { resolvedRefs: [] } : {})
   }
   const requestedToken = options.branchOnly ? undefined : options.historyToken
   const pinned =
@@ -197,14 +197,15 @@ export async function loadGitHistoryFromExecutor(
     : headOid
       ? [headOid]
       : []
-  let resolvedRefs: string[] = []
+  let resolvedRefs: string[] | undefined
   if (pinned) {
     historyRevisions = pinned.revisions
     resolvedRefs = pinned.resolvedRefs
   } else if (refs !== 'head') {
     const catalog = await loadGitHistoryRefs(git, cwd)
-    const chosen = Array.isArray(refs) ? catalog.filter((ref) => refs.includes(ref.id)) : catalog
-    resolvedRefs = chosen.map((ref) => ref.id)
+    const selected = Array.isArray(refs) ? new Set(refs) : undefined
+    const chosen = selected ? catalog.filter((ref) => selected.has(ref.id)) : catalog
+    resolvedRefs = selected ? chosen.map((ref) => ref.id).sort() : undefined
     historyRevisions = [
       ...new Set([
         ...(refs === 'all' && headOid ? [headOid] : []),
@@ -214,8 +215,10 @@ export async function loadGitHistoryFromExecutor(
   }
   const historyToken =
     requestedToken ??
-    (branchBase ? undefined : gitHistoryTokens.put(cwd, refs, historyRevisions, resolvedRefs))
-  const echo = { refs, resolvedRefs, historyToken }
+    (options.refs !== undefined && !options.branchOnly
+      ? gitHistoryTokens.put(cwd, refs, historyRevisions, resolvedRefs)
+      : undefined)
+  const echo = { refs, ...(resolvedRefs ? { resolvedRefs } : {}), historyToken }
   if (!historyRevisions.length) {
     return { ...empty, ...echo }
   }

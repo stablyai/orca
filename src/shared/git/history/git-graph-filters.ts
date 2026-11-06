@@ -12,7 +12,7 @@ export function normalizeGitGraphFilters(value: unknown): Record<string, GitHist
     } else if (Array.isArray(refs) && refs.every((ref): ref is string => typeof ref === 'string')) {
       try {
         validateHistoryRefs(refs)
-        filters[key] = refs
+        filters[key] = [...new Set(refs)].sort()
       } catch {
         /* Discard an invalid saved choice. */
       }

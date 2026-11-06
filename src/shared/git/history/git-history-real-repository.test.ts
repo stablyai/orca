@@ -216,6 +216,8 @@ describe('filtered and pinned history', () => {
       'refs/tags/outer'
     ])
     const all = await loadGitHistoryFromExecutor(git, repo, { refs: 'all' })
+    expect(all).not.toHaveProperty('resolvedRefs')
+    expect(all.historyToken).toEqual(expect.any(String))
     expect(all.items.map((item) => item.subject).sort()).toEqual([
       'A',
       'B',
@@ -280,4 +282,20 @@ describe('filtered and pinned history', () => {
       )
     }
   )
+})
+
+it('keeps default history unpinned without evicting an explicitly pinned graph', async () => {
+  const { repo, git } = await createRepository()
+  const graph = await loadGitHistoryFromExecutor(git, repo, { refs: 'head', limit: 1 })
+  expect(graph.historyToken).toEqual(expect.any(String))
+  for (let i = 0; i < 40; i++) {
+    const sidebar = await loadGitHistoryFromExecutor(git, repo)
+    expect(sidebar.historyToken).toBeUndefined()
+  }
+  const next = await loadGitHistoryFromExecutor(git, repo, {
+    refs: 'head',
+    historyToken: graph.historyToken,
+    skip: 1
+  })
+  expect(next.historyChanged).toBeUndefined()
 })

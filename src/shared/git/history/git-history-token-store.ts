@@ -4,7 +4,7 @@ import type { GitHistoryRefs } from './git-history-types'
 type PinnedHistory = {
   key: string
   revisions: string[]
-  resolvedRefs: string[]
+  resolvedRefs?: string[]
   touched: number
   bytes: number
 }
@@ -49,10 +49,11 @@ export class GitHistoryTokenStore {
     return entry
   }
 
-  put(cwd: string, refs: GitHistoryRefs, revisions: string[], resolvedRefs: string[]): string {
+  put(cwd: string, refs: GitHistoryRefs, revisions: string[], resolvedRefs?: string[]): string {
     this.prune(Date.now())
     const key = this.key(cwd, refs)
-    const bytes = 2 * (key.length + revisions.join('').length + resolvedRefs.join('').length)
+    const bytes =
+      2 * (key.length + revisions.join('').length + (resolvedRefs?.join('').length ?? 0))
     if (bytes > MAX_BYTES) {
       throw new Error('Git history revision set exceeds the host memory limit')
     }
