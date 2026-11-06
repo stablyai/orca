@@ -5,6 +5,7 @@ import { SpliceRelay } from './splice-relay'
 import { edgeConfig, type Env } from './env'
 import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
+import { metric } from './metrics'
 import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
@@ -35,6 +36,17 @@ function forward(
 
 // Director → edge (phase 2). 401 for any token problem; 400 for a body that fails its schema.
 async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Response> {
+  const response = await handleAdminCall(env, request, op)
+  let label = String(response.status)
+  if (response.status === 200 || response.status === 409) {
+    const outcome = ((await response.clone().json().catch(() => ({}))) as { outcome?: unknown }).outcome
+    if (typeof outcome === 'string') label = outcome
+  }
+  metric(env, 'admin', 1, `${op}:${label}`)
+  return response
+}
+
+async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise<Response> {
   if (request.method !== 'POST' || edgeConfig(env).backend !== 'object') return reject(404)
   const verified = await verifyAdminRequest(env, request, op)
   if (!verified) return reject(401)

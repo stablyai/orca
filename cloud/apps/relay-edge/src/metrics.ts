@@ -13,6 +13,10 @@ export type MetricEvent =
   | 'refuse'
   // One per database operation: label 'ok' | 'transient' | 'error', value = ms (Hyperdrive latency, R6).
   | 'db_op'
+  // Object backend daily sweep: label 'swept' | 'wiped'.
+  | 'sweep'
+  // Director admin calls: label '<op>:<outcome or status>'.
+  | 'admin'
 
 // blobs: [event, label, version]; doubles: [value, ...extra]. One index per event for sampling.
 // Heartbeat events fire per host every ping interval; keep 1 in 10 (multiply counts by 10).

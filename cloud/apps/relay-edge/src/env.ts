@@ -20,6 +20,10 @@ export interface Env {
   PING_INTERVAL_MS: string
   SILENCE_TIMEOUT_MS: string
   ORPHAN_GRACE_MS: string
+  // Object backend: store cleanup cadence (default 24 h) and how long an object keeps the data of
+  // a host that moved away before wiping it (default 30 days). Tests shorten both.
+  SWEEP_INTERVAL_MS?: string
+  LEFT_RETENTION_MS?: string
   // Flood guard per splice direction: close 4429 if more than this many bytes reach a peer that
   // has sent nothing within the window. 0 disables (default; it cut healthy readers in the spike).
   SPLICE_SILENT_BYTES_MAX?: string
@@ -52,6 +56,8 @@ export type EdgeConfig = {
   pingIntervalMs: number
   silenceTimeoutMs: number
   orphanGraceMs: number
+  sweepIntervalMs: number
+  leftRetentionMs: number
 }
 
 const configs = new WeakMap<object, EdgeConfig>()
@@ -85,7 +91,9 @@ export function edgeConfig(env: Env): EdgeConfig {
     cellId: env.EDGE_CELL_ID || 'edge',
     pingIntervalMs: positiveInt('ping_interval', env.PING_INTERVAL_MS),
     silenceTimeoutMs: positiveInt('silence_timeout', env.SILENCE_TIMEOUT_MS),
-    orphanGraceMs: positiveInt('orphan_grace', env.ORPHAN_GRACE_MS)
+    orphanGraceMs: positiveInt('orphan_grace', env.ORPHAN_GRACE_MS),
+    sweepIntervalMs: positiveInt('sweep_interval', env.SWEEP_INTERVAL_MS ?? String(24 * 60 * 60 * 1000)),
+    leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000))
   }
   // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
   if (config.pingIntervalMs >= config.silenceTimeoutMs) throw new Error('relay_edge_config_ping_interval')

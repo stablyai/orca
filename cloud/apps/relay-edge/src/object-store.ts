@@ -83,6 +83,11 @@ export class ObjectStore implements AssignmentSource {
     }
   }
 
+  assignmentUpdatedAt(): number | null {
+    const row = this.sql.exec('SELECT updated_at FROM edge_assignment WHERE id = 1').toArray()[0]
+    return row ? Number(row.updated_at) : null
+  }
+
   async verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean> {
     const a = this.assignment()
     if (this.frozen()) return false
@@ -160,8 +165,11 @@ export class ObjectStore implements AssignmentSource {
       })
   }
 
-  // Erasure guard, as today's: no live phone session basis may remain.
-  activeBases(): number {
-    return Number(this.sql.exec('SELECT count(*) AS n FROM relay_connection_bases WHERE active = 1').toArray()[0]?.n ?? 0)
+  // Erasure guard, as today's: no live phone session basis may remain. Readers reject a basis past
+  // its deadline whatever its flag, so only unexpired ones count (a reset splice never clears its own).
+  activeBases(now = Date.now()): number {
+    return Number(
+      this.sql.exec('SELECT count(*) AS n FROM relay_connection_bases WHERE active = 1 AND deadline > ?', now).toArray()[0]?.n ?? 0
+    )
   }
 }

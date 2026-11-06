@@ -172,7 +172,10 @@ async function main(): Promise<void> {
       `RELAY_AUTH_ISSUER=${ISSUER}`,
       'PING_INTERVAL_MS=3000',
       'SILENCE_TIMEOUT_MS=9000',
-      'ORPHAN_GRACE_MS=4000'
+      'ORPHAN_GRACE_MS=4000',
+      // The daily sweep every 3 s (it then runs under the whole flow), wiping hosts gone 6 s.
+      'SWEEP_INTERVAL_MS=3000',
+      'LEFT_RETENTION_MS=6000'
     ].join('\n')
   )
   const stateDir = mkdtempSync(join(tmpdir(), 'relay-edge-mvp-object-'))
@@ -193,6 +196,7 @@ async function main(): Promise<void> {
       await sleep(500)
     }
     await run(host, privateKey, () => jwksHits)
+    await sweepCheck()
   } catch (error) {
     console.error(error)
     console.error(devLog.split('\n').filter((l) => /error|exception/i.test(l)).slice(-20).join('\n'))
@@ -330,6 +334,15 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = fa
     busy.json?.outcome === 'busy' && otherUser.json?.outcome === 'mismatch' && erased.json?.outcome === 'erased' && afterErase.json?.assignment === null && (afterErase.json?.devices as unknown[]).length === 0 && g instanceof Error && ghost.events.closes.includes(4409),
     `${busy.json?.outcome}/${otherUser.json?.outcome}/${erased.json?.outcome} left=${JSON.stringify(afterErase.json)} hello=${ghost.events.closes}`
   )
+}
+
+// E10 (local only: short sweep and retention): a host that moved away is wiped by its sweep.
+async function sweepCheck(): Promise<void> {
+  const id = newHost().relayHostId
+  const away = await assign(id, 'c10', 5)
+  await sleep(11_000)
+  const after = await assign(id, 'edge', 1)
+  record('E10 sweep wipes an object whose host left past the retention (older epoch now applies)', away.json?.outcome === 'applied' && after.json?.outcome === 'applied', `${away.json?.outcome}/${after.json?.outcome}`)
 }
 
 main().catch((error) => {

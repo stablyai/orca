@@ -34,6 +34,7 @@ import { relayHostCloseReasonFrom } from '../../../packages/relay-contract/src/h
 import { verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
+import { RelayCredentialStore } from '../../relay/src/credential-store'
 import type { AssignBody, DeviceRow } from './admin'
 import { ObjectStore, type AssignResult, type StoredAssignment } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
@@ -87,6 +88,7 @@ export type AuthorizeResult =
 export type ConfirmResult = { ok: true; hello: RelayHello } | { ok: false; code: number }
 
 const NO_DEADLINE = Number.MAX_SAFE_INTEGER
+const SWEEP_AT_KEY = 'sweepAt'
 // 6 h ± 30 min, as the cells: desktops re-ask the director at least this often.
 const LEASE_BASE_MS = 6 * 60 * 60 * 1000
 const LEASE_JITTER_MS = 30 * 60 * 1000
@@ -126,6 +128,8 @@ export class HostRelay extends DurableObject<Env> {
       for (const ws of this.ctx.getWebSockets('control')) this.close(ws, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
       await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
     }
+    // Arms the daily sweep for objects that have not been woken since it existed.
+    await this.reschedule()
     return result
   }
 
@@ -137,6 +141,7 @@ export class HostRelay extends DurableObject<Env> {
     if (this.ctx.getWebSockets('control').length > 0) return { outcome: 'busy' }
     const devices = this.store.freezeForExport()
     await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
+    await this.reschedule()
     return { outcome: 'exported', assignment: this.store.assignment(), devices }
   }
 
@@ -759,7 +764,32 @@ export class HostRelay extends DurableObject<Env> {
       await this.closeSplices(() => true, RELAY_CLOSE_CODE.PEER_DROPPED, 'host control lost')
       await this.ctx.storage.put<Session>('session', { ...session, orphanedAt: null })
     }
+    if (this.config.backend === 'object') {
+      const sweepAt = await this.ctx.storage.get<number>(SWEEP_AT_KEY)
+      if (sweepAt !== undefined && sweepAt <= now && (await this.sweep(now)) === 'wiped') return
+    }
     await this.reschedule()
+  }
+
+  // Daily, object backend: the credential store's own expiry cleanup (the cells run it from the
+  // director), and a wipe of an object whose host never arrived or left more than the retention ago.
+  private async sweep(now: number): Promise<'swept' | 'wiped'> {
+    const assignment = this.store.assignment()
+    const left =
+      assignment === null ||
+      (assignment.cellId !== this.config.cellId && now - (this.store.assignmentUpdatedAt() ?? now) >= this.config.leftRetentionMs)
+    if (left && this.ctx.getWebSockets().length === 0) {
+      await this.ctx.storage.deleteAlarm()
+      await this.ctx.storage.deleteAll()
+      this.storeCache = null
+      this.backendCache = null
+      metric(this.env, 'sweep', 1, 'wiped')
+      return 'wiped'
+    }
+    await new RelayCredentialStore(this.store.database, () => now).cleanup()
+    await this.ctx.storage.put(SWEEP_AT_KEY, now + this.config.sweepIntervalMs)
+    metric(this.env, 'sweep', 1, 'swept')
+    return 'swept'
   }
 
   private async reschedule(): Promise<void> {
@@ -780,6 +810,15 @@ export class HostRelay extends DurableObject<Env> {
     }
     const session = await this.ctx.storage.get<Session>('session')
     if (session?.orphanedAt != null) next = Math.min(next, session.orphanedAt + this.config.orphanGraceMs)
+    if (this.config.backend === 'object') {
+      // The sweep keeps an alarm armed on every object with storage, so idle ones still get cleaned.
+      let sweepAt = await this.ctx.storage.get<number>(SWEEP_AT_KEY)
+      if (sweepAt === undefined) {
+        sweepAt = Date.now() + this.config.sweepIntervalMs
+        await this.ctx.storage.put(SWEEP_AT_KEY, sweepAt)
+      }
+      next = Math.min(next, sweepAt)
+    }
     if (next === NO_DEADLINE) {
       await this.ctx.storage.deleteAlarm()
       return
