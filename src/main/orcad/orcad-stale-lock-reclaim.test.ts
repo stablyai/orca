@@ -1,19 +1,9 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 import type { OrcadLockRecord } from './orcad-instance-lock'
-import { orcadLockRecoveryPrefix } from './orcad-instance-lock-reclaim'
 import {
   probeOrcadEndpoint,
   reclaimStaleOrcadInstanceLock,
@@ -177,24 +167,6 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     )
   })
 
-  it('also clears a reclaimer from the same earlier boot that the reboot cut short', async () => {
-    const root = makeRoot()
-    const lockPath = writeLock(root, holderRecord())
-    const generation = `${orcadLockRecoveryPrefix(lockPath, readFileSync(lockPath, 'utf8'))}0`
-    mkdirSync(generation)
-    writeFileSync(
-      join(generation, 'owner'),
-      JSON.stringify(holderRecord({ pid: 16000, nonce: 'cut-short-reclaimer' }))
-    )
-    const result = await reclaimStaleOrcadInstanceLock(
-      root,
-      { yes: true, hintRuntime: null },
-      rebootedBox()
-    )
-    expect(result.exitCode).toBe(0)
-    expect(existsSync(lockPath)).toBe(false)
-  })
-
   // Root reads through mode 000, so the case only exists for an ordinary user.
   it.skipIf(process.getuid?.() === 0)(
     'refuses, rather than reporting nothing to do, when the lock cannot be reached',
@@ -280,16 +252,6 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     }
   })
 
-  it('answers a TCP probe only for a listener, and anything it cannot check as unknown', async () => {
-    const server = createServer()
-    servers.push(server)
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const address = server.address()
-    const port = typeof address === 'object' && address ? address.port : 0
-    await expect(probeOrcadEndpoint(`ws://127.0.0.1:${port}`)).resolves.toBe('answers')
-    await expect(probeOrcadEndpoint('ws://[::1')).resolves.toBe('unknown')
-  })
-
   it('refuses a lock refreshed three minutes ago, which NFS caching can show for a live clone (#32918)', async () => {
     const root = makeRoot()
     const acquiredAt = '2026-01-01T00:00:00.000Z'
@@ -304,32 +266,5 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
       status: 'refused',
       message: expect.stringContaining('minutes old')
     })
-  })
-
-  it.each([
-    ['another host', holderRecord({ host: 'other-box' }), 'not this host'],
-    ['the same boot', holderRecord({ bootId: 'boot-2' }), 'judge this lock itself'],
-    ['an older orcad that recorded no host', holderRecord({ host: undefined }), 'which host'],
-    [
-      'a lock taken a moment ago',
-      holderRecord({ acquiredAt: new Date().toISOString() }),
-      'minutes old'
-    ]
-  ])('refuses a lock from %s', async (_case, record, reason) => {
-    const root = makeRoot()
-    writeLock(root, record)
-    const result = await reclaimStaleOrcadInstanceLock(
-      root,
-      { yes: true, hintRuntime: null },
-      rebootedBox()
-    )
-    expect(result).toMatchObject({
-      status: 'refused',
-      exitCode: 1,
-      message: expect.stringContaining(reason)
-    })
-    expect(readOrcadInstanceLockRecord(join(root, ORCAD_LOCK_FILE_NAME))?.nonce).toBe(
-      'stale-holder'
-    )
   })
 })

@@ -1,7 +1,7 @@
 // Full builds read window view/facts through save/Loader; workspace builds use store records. Both run restore builders only for named workspaces, merging records via workspace-layout-frame-store-patch.
 
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
 import { buildLayoutFrameSlices } from '@/store/workspace-layout-frame-slices'
 import {

@@ -13,7 +13,7 @@ import {
   mutateStoppedProfileState,
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
-import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
+import { workspaceSessionStateSchema } from '../../src/shared/workspace-session/workspace-session-schema'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   getTerminalScrollbackSnapshotPath,

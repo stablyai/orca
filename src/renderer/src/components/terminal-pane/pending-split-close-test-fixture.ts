@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-retirement'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectResult, PtyTransport } from './pty-transport-types'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
@@ -145,7 +145,6 @@ export async function preparePendingSplitClose(
     paneKittyKeyboardModesRef: { current: new Map() },
     paneLastThemeModeRef: { current: new Map() },
     paneCwdRef: { current: new Map() },
-    paneFontSizesRef: { current: new Map() },
     replayingPanesRef: { current: new Map() },
     paneTitlesRef: { current: {} },
     expandedPaneIdRef: { current: null },

@@ -1,9 +1,12 @@
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-status/presentation/agent-tab-title'
 import { tabHasProtectedTitle } from '../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../types'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,

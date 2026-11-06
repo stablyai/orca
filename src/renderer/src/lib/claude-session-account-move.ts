@@ -1,18 +1,21 @@
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+
+import { type AppState, useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
-  inspectRuntimeTerminalProcess,
-  type RuntimeTerminalProcessInspection
+  inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
+
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
+  isClientOnlyUnverifiableInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -23,7 +26,7 @@ import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
 } from '../../../shared/managed-account-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from './claude-session-pane-holders'

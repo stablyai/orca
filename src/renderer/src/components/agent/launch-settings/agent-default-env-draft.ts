@@ -1,6 +1,6 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import { tokenizeCustomCommandTemplate } from '../../../../../shared/source-control/ai/generation/commit-message-prompt'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../../../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../../../../shared/shell/launch/shell-argument-quoting'
 
 // Reject oversized pasted overrides before tokenization.
 export const AGENT_DEFAULT_ENV_DRAFT_MAX_BYTES = 8 * 1024

@@ -11,7 +11,10 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cache-entry-selection'
+import {
+  selectReviewCacheData,
+  selectReviewCacheEntry
+} from '../review/review-cache-entry-selection'
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []

@@ -1,5 +1,5 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   parseRemoteRuntimePtyId,
   isRemoteRuntimePtyId
@@ -7,9 +7,9 @@ import {
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session/workspace-session-pane-ownership'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,

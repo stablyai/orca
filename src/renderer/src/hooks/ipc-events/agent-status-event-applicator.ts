@@ -3,7 +3,7 @@ import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-l
 import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'

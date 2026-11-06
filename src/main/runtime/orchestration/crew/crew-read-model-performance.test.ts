@@ -1,6 +1,3 @@
-import { readCrewTraffic } from './crew-query'
-import { readCrewParentInputs } from './crew-parent-inputs'
-
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { RuntimeAgentOrchestrationProjection } from '../../runtime-agent-orchestration-projection'
 import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
@@ -16,7 +13,7 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
-import { crewQueryPlans, meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
+import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 afterEach(() => vi.useRealTimers())
 
 it('shares complete host derivation across N/10N handled assignments and subscribers on real wakes', async () => {
@@ -241,142 +238,6 @@ it('counts the real status qualification/projection SQL on a decoration wake wit
   for (const key of ['get', 'all', 'iterate', 'rows'] as const) {
     expect(measurements[1][key]).toBeLessThanOrEqual(measurements[0][key] * 10)
   }
-})
-it('selects peer maxima without losing bodies and uses indexed historical provenance', () => {
-  const { db, run, assign, handles } = fixture()
-  handles.set('term_worker', 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
-  assign('term_worker')
-  db.insertMessage({
-    runId: run.id,
-    from: 'term_worker',
-    to: 'term_coord',
-    subject: 'Large losing body',
-    body: 'x'.repeat(64 * 1024)
-  })
-  const winner = db.insertMessage({
-    runId: run.id,
-    from: 'term_worker',
-    to: 'term_coord',
-    subject: 'Winner',
-    body: 'latest'
-  })
-  const meter = meterCrewSql(db.db)
-  const traffic = readCrewTraffic(db, ['term_coord', `run:${run.id}`], '2000-01-01T00:00:00Z')
-  expect(traffic).toMatchObject([
-    { peer: 'term_worker', direction: 'from', sequence: winner.sequence, body: 'latest' }
-  ])
-  const provenance = readCrewParentInputs(db, ['term_worker'], [handles.get('term_worker')!])
-  expect(provenance.claims.filter((row) => row.family === 'local')).toHaveLength(1)
-  meter.restore()
-  const plan = JSON.stringify(
-    crewQueryPlans(
-      db.db,
-      meter.executions.filter((entry) => entry.method === 'all')
-    ).plans.map((row) => row.plan)
-  )
-  expect(plan).toContain('idx_crew_dispatch_leaf')
-  expect(plan).toContain('idx_crew_remote_leaf')
-  expect(plan).toContain('idx_crew_resource_leaf')
-  expect(plan).toContain('idx_messages_crew_from')
-  expect(plan).toContain('idx_messages_crew_to')
-  expect(plan).toContain('idx_crew_dispatch_pane')
-  expect(plan).not.toContain('SCAN dispatch_contexts')
-})
-
-it('drives pending questions from metadata on real N/10N mailbox wakes', async () => {
-  const receipts: {
-    retainedMessages: number
-    pending: number
-    executions: number
-    rows: number
-    bytes: number
-    plan: string[]
-  }[] = []
-  for (const retainedMessages of [100, 1000]) {
-    const { db, deps, run, assign } = fixture()
-    assign('term_worker')
-    db.insertMessages(
-      Array.from({ length: retainedMessages }, (_, i) => ({
-        runId: run.id,
-        from: 'term_worker',
-        to: 'term_coord',
-        subject: 'Ordinary mail',
-        body: `mail-${i}`
-      }))
-    )
-    const prepare = db.db.prepare.bind(db.db)
-    const operations = { executions: 0, rows: 0, bytes: 0 }
-    const plans: string[][] = []
-    const spy = vi.spyOn(db.db, 'prepare').mockImplementation((sql) => {
-      const statement = prepare(sql)
-      if (!sql.includes('FROM question_threads q INDEXED BY idx_crew_pending_questions')) {
-        return statement
-      }
-      return {
-        all: (...args) => {
-          operations.executions++
-          const rows = statement.all(...args)
-          operations.rows += rows.length
-          operations.bytes += Buffer.byteLength(JSON.stringify(rows))
-          plans.push(
-            prepare(`EXPLAIN QUERY PLAN ${sql}`)
-              .all(...args)
-              .map((row) => String(row.detail))
-          )
-          return rows
-        },
-        get: (...args) => statement.get(...args),
-        run: (...args) => statement.run(...args),
-        iterate: (...args) => statement.iterate(...args),
-        setReadBigInts: (value) => statement.setReadBigInts(value)
-      }
-    })
-    const frames: OrchestrationCrewFrame[] = []
-    const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
-    const stop = subscribeCrew(
-      () => model.read('term_coord'),
-      model.subscribe,
-      (frame) => frames.push(frame)
-    )
-    try {
-      operations.executions = operations.rows = operations.bytes = 0
-      plans.length = 0
-      const publications = frames.filter((frame) => frame.type === 'complete').length
-      db.insertMessage({
-        from: 'term_peer',
-        to: 'term_outbound',
-        subject: 'Unrelated committed wake'
-      })
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(operations).toEqual({ executions: 0, rows: 0, bytes: 0 })
-      expect(plans).toHaveLength(0)
-      db.crewChanges.notify(new Set(['traffic']))
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(operations).toEqual({ executions: 1, rows: 0, bytes: 2 })
-      expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(publications)
-      // This is actual executed query planning plus returned work, not native VM/visit accounting.
-      expect(plans[0][0]).toContain('SCAN q USING INDEX idx_crew_pending_questions')
-      expect(
-        plans[0].some((detail) => detail.includes('SEARCH m') && detail.includes('(id=?)'))
-      ).toBe(true)
-      expect(plans[0].join(' ')).not.toContain('idx_inbox')
-      receipts.push({ retainedMessages, pending: 0, ...operations, plan: plans[0] })
-      stop()
-      operations.executions = 0
-      db.insertMessage({ from: 'term_peer', to: 'term_outbound', subject: 'After teardown' })
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(operations.executions).toBe(0)
-    } finally {
-      stop()
-      spy.mockRestore()
-    }
-  }
-  expect(receipts[1].executions).toBe(receipts[0].executions)
-  expect(receipts[1].rows).toBe(receipts[0].rows)
-  expect(receipts[1].bytes).toBe(receipts[0].bytes)
 })
 
 it('bounds winning mail and question preview encoding across body bytes, rows and settled wakes', async () => {

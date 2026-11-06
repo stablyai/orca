@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 
+vi.mock('../host/native-chat-visual-guest-theme', () => ({
+  installNativeChatVisualGuestTheme: vi.fn()
+}))
+
 const mocks = vi.hoisted(() => ({
   attachGuestPolicies: vi.fn(),
   installNavigationPolicy: vi.fn(),
@@ -50,6 +54,9 @@ vi.mock(import('../plugins/panels/plugin-frame-guest-registry'), async (importOr
     mocks.installPluginFramePolicies(guest, host)
     return true
   }
+}))
+vi.mock('../browser-passwords/browser-password-guest-service', () => ({
+  attachBrowserPasswordGuest: vi.fn()
 }))
 vi.mock('../browser/document-preview/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
@@ -142,7 +149,7 @@ describe('main window webview security', () => {
       webSecurity: true
     })
     expect(preferences).not.toHaveProperty('preloadURL')
-    expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+    expect(String(preferences.preload)).toMatch(/browser-guest-preload\.js$/)
   })
 
   it('runs preloads in subframes of every local profile tab, so extensions switched on later reach it', () => {
@@ -229,7 +236,7 @@ describe('orca-preview scheme admission', () => {
       { src: 'https://example.com' } as never
     )
 
-    expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+    expect(String(preferences.preload)).toMatch(/browser-guest-preload\.js$/)
   })
 
   it('denies a preview URL whose grant is unknown or revoked', () => {

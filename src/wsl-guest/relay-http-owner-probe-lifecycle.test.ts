@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { probeAgentProcessPresence } from '../shared/agent-status/process/agent-process-presence-probe'
 

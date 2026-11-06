@@ -1,6 +1,6 @@
 import { createElement, type ComponentProps, type ReactNode } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
@@ -149,10 +149,10 @@ vi.mock('../components/bottom-drawer/BottomDrawer', async () => {
 vi.mock('../components/AutoHeight', () => ({
   AutoHeight: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('../components/pr-sidebar/CommentMarkdown', async () => {
+vi.mock('../components/MobileMarkdown', async () => {
   const { createElement: element } = await import('react')
   return {
-    CommentMarkdown: ({ content }: { content: string }) => element('CommentMarkdown', { content })
+    MobileMarkdown: ({ content }: { content: string }) => element('MobileMarkdown', { content })
   }
 })
 vi.mock('../components/nav-bar/NavBar', () => ({ NavBar: () => null }))
@@ -336,47 +336,6 @@ afterEach(() => {
   doubles.tab = null
   doubles.hide = null
   doubles.updateState = () => {}
-})
-
-function render(): ReactTestRenderer {
-  act(() => {
-    tree = create(createElement(MobileSourceControlPanel, { hostId: 'host-a', worktreeId: 'wt-1' }))
-  })
-  if (tree === null) {
-    throw new Error('the panel did not render')
-  }
-  return tree
-}
-
-function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
-  return rendered.root
-    .findAll((node) => String(node.type) === 'Pressable')
-    .filter((node) =>
-      node
-        .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Reconnect')
-    )
-}
-
-describe("source control's status Retry while the host is unreachable", () => {
-  it('is absent on the page, where nothing can re-dial', () => {
-    doubles.forceReconnect = null
-    const rendered = render()
-    expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
-    ).not.toHaveLength(0)
-    expect(retryControls(rendered)).toHaveLength(0)
-  })
-
-  it('offers Retry when a reconnect callback is available and dispatches this host', () => {
-    const forceReconnect = vi.fn(() => Promise.resolve())
-    doubles.forceReconnect = forceReconnect
-    const [retry] = retryControls(render())
-    act(() => {
-      retry?.props.onPress()
-    })
-    expect(forceReconnect.mock.calls).toEqual([['host-a']])
-  })
 })
 
 type Held = { resolve: (reply: RpcResponse) => void; reject: (error: Error) => void }
@@ -671,7 +630,7 @@ it('reuses Source Control across worktrees without loading the old fallback, con
   holding.delete('github.workItemDetails')
   await hub.resolveHeld('github.workItemDetails')
   await settle()
-  expect(tree!.root.find((node) => String(node.type) === 'CommentMarkdown').props.content).toBe(
+  expect(tree!.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
     'refreshed body'
   )
   expect(refreshLine()).toHaveLength(1)

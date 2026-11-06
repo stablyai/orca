@@ -12,7 +12,7 @@ import {
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import {
   closeTestStores,

@@ -11,7 +11,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import {
   resolveTerminalStartupCwdForWorkspace,
   type TerminalStartupCwdMissingDirFallback
-} from '../../../../shared/terminal-startup-cwd'
+} from '../../../../shared/shell/launch/terminal-startup-cwd'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,
@@ -24,7 +24,7 @@ import {
   wslMoveProjectRefForWorkspace,
   WslMoveProjectFencedError
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
+import { listLiveDaemonPtyIds } from '../../../daemon/providers/lifecycle/daemon-provider-state'
 import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
 import {
   blockedWslDistroForPath,

@@ -16,7 +16,7 @@ import { DirectWorkItemSetupDialog } from '@/components/new-workspace/DirectWork
 
 vi.doUnmock('@/lib/ensure-hooks-confirmed')
 const { useSourceControlAgentActionStart } =
-  await import('@/components/right-sidebar/useSourceControlAgentActionStart')
+  await import('@/components/right-sidebar/source-control/ai/useSourceControlAgentActionStart')
 const { startFixChecksFromDialog } =
   await import('@/components/pull-request-page/checks/fix-launch')
 const { __resetTrustPromptChainForTests } = await import('./ensure-hooks-confirmed')

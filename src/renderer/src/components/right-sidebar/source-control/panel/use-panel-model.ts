@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { openGitHubPRLinkModal } from '../../github-pr-link-modal'
+import { openGitHubPRLinkModal } from '../../hosted-review/provider-actions/github-pr-link-modal'
 import { useGitHistoryCommitActions } from '../sync/use-git-history-commit-actions'
 import { useSourceControlCommitFlows } from '../commit/use-commit-flows'
 import { useSourceControlDiscardConfirmation } from '../commit/use-discard-confirmation'

@@ -10,7 +10,7 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
-} from '@/components/sidebar/AddRemoteHostDialog'
+} from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'

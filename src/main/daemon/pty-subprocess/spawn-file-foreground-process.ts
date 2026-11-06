@@ -8,7 +8,7 @@ import {
   normalizePtyTty
 } from '../../pty/process-retirement/terminal-process-rows'
 import type { IPty } from 'node-pty'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken

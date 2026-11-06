@@ -10,7 +10,7 @@ import { spawnProcess } from '@orca/process-host'
 import { AntigravityHookService } from './hook-service'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 import { wrapPosixHookCommand } from '../agent-hooks/posix-hook-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { readAgentProcess } from '../../shared/agent-status/process/agent-process-presence-probe'
 import {
   buildSpoolHookBody,

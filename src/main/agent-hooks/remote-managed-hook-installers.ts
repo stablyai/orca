@@ -8,7 +8,7 @@ import type {
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'

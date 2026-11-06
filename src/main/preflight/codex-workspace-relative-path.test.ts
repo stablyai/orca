@@ -9,12 +9,15 @@ import { runProcess } from '@orca/process-host'
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
-} from '../runtime/structured-agent-launch-composition.test-support'
-import { readCodexCliVersion, withSupportedCodexCli } from '../codex/codex-cli-installation-error'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
+import {
+  readCodexCliVersion,
+  withSupportedCodexCli
+} from '../codex/structured/launch/codex-cli-installation-error'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { createStructuredAgentEnvironmentResolvers } from '../runtime/structured-agent-shell-environment'
-import { identityFor } from '../codex/codex-structured-session-adapter-fixture'
+import { createStructuredAgentEnvironmentResolvers } from '../runtime/agent-session/environment/structured-agent-shell-environment'
+import { identityFor } from '../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import type * as CommandResolution from '../../shared/node-cli-command-resolution'
 
 vi.mock('../startup/login-shell-environment', () => ({

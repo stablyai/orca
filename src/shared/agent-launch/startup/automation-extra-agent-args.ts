@@ -1,5 +1,9 @@
-import { agentArgTerminatorIndex } from '../../agent-session/options/agent-session-option-agent-args'
+import {
+  agentArgTerminatorIndex,
+  removeAgentArgOption
+} from '../../agent-session/options/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
+import { PI_THINKING_LEVELS } from '../../agent-session/options/structured-agent-session-effective-effort'
 import { findOptionOccurrence } from '../../command-option-occurrence'
 import {
   quoteStartupArg,
@@ -22,6 +26,10 @@ type ExtraAgentArgOption = {
   aliases: readonly string[]
   /** Accepts only values with this prefix, e.g. Codex's `-c model_reasoning_effort=`. */
   valuePrefix?: string
+  /** Accepts only these values. */
+  values?: readonly string[]
+  /** The CLI reads only `--flag value`, so `--flag=value` is split. */
+  separateValue?: true
 }
 
 const MODEL_OPTION = { kind: 'model', aliases: ['--model'] } as const
@@ -42,7 +50,11 @@ const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOp
   // Cursor composes effort into the model id, so only the model is a flag.
   cursor: [MODEL_OR_M_OPTION],
   grok: [MODEL_OR_M_OPTION, { kind: 'effort', aliases: ['--effort', '--reasoning-effort'] }],
-  omp: [MODEL_OPTION]
+  omp: [MODEL_OPTION],
+  pi: [
+    { ...MODEL_OPTION, separateValue: true },
+    { kind: 'effort', aliases: ['--thinking'], values: PI_THINKING_LEVELS, separateValue: true }
+  ]
 }
 
 export function supportsExtraAgentArgs(agent: TuiAgent): boolean {
@@ -186,6 +198,7 @@ export function parseExtraAgentArgs(args: {
   const allowed = allowedOptionList(options)
   const kinds = new Set<ExtraAgentArgKind>()
   const { tokens } = tokenized
+  const accepted: string[] = []
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token === '--') {
@@ -207,7 +220,10 @@ export function parseExtraAgentArgs(args: {
     if (!value) {
       return extraAgentArgsFailure('missingValue', { option: name })
     }
-    const { kind, valuePrefix } = match.option
+    const { kind, valuePrefix, values, separateValue } = match.option
+    if (values && !values.includes(value)) {
+      return extraAgentArgsFailure('invalid', { detail: `${name} accepts ${values.join(', ')}` })
+    }
     if (valuePrefix && (!value.startsWith(valuePrefix) || value.length === valuePrefix.length)) {
       return extraAgentArgsFailure('valueNotAllowed', {
         option: name,
@@ -220,9 +236,10 @@ export function parseExtraAgentArgs(args: {
       return extraAgentArgsFailure(kind === 'model' ? 'modelRepeated' : 'effortRepeated')
     }
     kinds.add(kind)
+    accepted.push(...(separateValue ? [name, value] : tokens.slice(index, index + match.consumed)))
     index += match.consumed - 1
   }
-  return { ok: true, tokens, kinds }
+  return { ok: true, tokens: accepted, kinds }
 }
 
 function removeDefaultsFor(
@@ -233,6 +250,12 @@ function removeDefaultsFor(
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   let result = [...tokens]
   if (!catalog) {
+    // Without launch catalog removers, the allowlisted aliases are the overridden defaults.
+    for (const option of EXTRA_AGENT_ARG_OPTIONS[agent] ?? []) {
+      if (option.kind !== 'repeatable' && kinds.has(option.kind)) {
+        result = removeAgentArgOption(agent, result, option.aliases, undefined, 'required')
+      }
+    }
     return result
   }
   if (kinds.has('model')) {

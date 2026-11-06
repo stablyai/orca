@@ -9,7 +9,7 @@ import {
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/workspace-layout-beside'
 import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
 import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load-types'

@@ -1,7 +1,7 @@
 // Owned file IDs must survive view reads/pruning just like bare paths for floating and contested files.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 import { emptyModel, WS } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayout } from './workspace-layout-model'
 import { pruneViewRecord } from './workspace-layout-view-prune'

@@ -1,20 +1,15 @@
-import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
+import {
+  claudeEffortLevel,
+  restoredClaudeStructuredSessionOptions
+} from './claude-structured-options'
 import type { ClaudeCliFlagFact } from '../../claude-cli-flag-support'
 
-const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max'
-])
 /** Saved choices replace configured flags so the CLI receives each flag once. */
 function withoutConfiguredFlag(
   options: ClaudeStructuredSdkOptions,
@@ -25,10 +20,6 @@ function withoutConfiguredFlag(
   }
   const { [flag]: _configured, ...extraArgs } = options.extraArgs
   return { ...options, extraArgs }
-}
-
-function isEffortLevel(value: string): value is EffortLevel {
-  return EFFORT_LEVELS.has(value)
 }
 
 export type ClaudeStructuredSpawnOptions = {
@@ -56,9 +47,10 @@ export function claudeStructuredSpawnOptions(input: {
   }
   const effort = saved.get('effort')
   // Without a proven flag, the first message's control applies saved effort where the CLI has one.
-  if (effort !== undefined && isEffortLevel(effort) && input.effortFlag === 'supported') {
+  const numericEffort = effort === undefined ? undefined : claudeEffortLevel(effort)
+  if (effort !== undefined && numericEffort !== undefined && input.effortFlag === 'supported') {
     options.set('effort', effort)
-    sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort }
+    sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort: numericEffort }
   }
   const fastMode = saved.get('fastMode')
   if (fastMode !== undefined) {

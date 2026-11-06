@@ -31,6 +31,9 @@ type NativeProcessInfo = {
   creationTimeMs?: number
 }
 
+/** node-addon-api's default OnError hands the callback an Error (e.g. bad_alloc) instead of rows. */
+type NativeProcessSnapshot = NativeProcessInfo[] | Error | undefined
+
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
     None: number
@@ -40,10 +43,7 @@ type WindowsProcessTreeModule = {
   /** Compiled addon capabilities; patched JS enums may sit above an older prebuilt binary. */
   supportedProcessDataFlags?: number
   getProcessCreationTime?: (pid: number) => number | undefined
-  getAllProcesses: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags?: number
-  ) => void
+  getAllProcesses: (callback: (processes: NativeProcessSnapshot) => void, flags?: number) => void
 }
 
 const requireFromMain = createRequire(__filename)
@@ -59,10 +59,7 @@ let requireNative: NativeRequire = requireFromMain
 /** Bare relay addon has no queue; nativeReadGate must serialize it to prevent concurrent native snapshots. The npm wrapper adds its own coalescing queue. */
 type WindowsProcessTreeAddon = {
   getProcessCreationTime?: (pid: number) => number | undefined
-  getProcessList: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags: number
-  ) => void
+  getProcessList: (callback: (processes: NativeProcessSnapshot) => void, flags: number) => void
   supportedProcessDataFlags?: number
 }
 
@@ -250,7 +247,8 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
         clearTimeout(deadline)
         // Only this read's callback proves its outstanding native work drained.
         unreturnedReads.delete(readId)
-        if (!processes) {
+        // A throw here escapes the addon's callback loop and kills the host (#33350).
+        if (!Array.isArray(processes)) {
           reject(new Error('windows process table returned no snapshot'))
           return
         }

@@ -86,6 +86,17 @@ export const worktreePinWrite = bindDeferredRpcOperation(
   })
 )
 
+// Rename reports refusal so the sheet can keep the text and offer Retry.
+export const worktreeDisplayNameWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-display-name',
+    method: 'worktree.set',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('display-name-written', hostScreenUnreadReplySchema)
+  })
+)
+
 export const worktreeSleep = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.sleep-or-skip',

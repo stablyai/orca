@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { Worktree } from '../../../shared/worktree/types'
 import type {

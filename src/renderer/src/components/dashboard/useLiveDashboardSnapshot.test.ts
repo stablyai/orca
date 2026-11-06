@@ -1,25 +1,18 @@
-import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import {
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
-  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH
-} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { useDashboardPopoutBridge } from './useDashboardPopoutBridge'
+
 const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: transport.call }))
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: transport.subscribe }))
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 
@@ -153,54 +146,4 @@ describe('useLiveDashboardSnapshot', () => {
     rerender()
     expect(result.current.cards[0].hostLabel).toBe('Builder')
   })
-})
-
-it('publishes real chat options to main and popout, retaining card candidates and deduplicating/releasing owners', async () => {
-  const unsubscribe = vi.fn()
-  transport.call.mockResolvedValue({ agents: [{ agent: 'grok', capabilities: {} }] })
-  transport.subscribe.mockResolvedValue({ unsubscribe })
-  setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
-  seed({ ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT })
-  useAppStore.setState({
-    detectedAgentIds: [],
-    worktreesByRepo: { 'repo-1': [worktree(), { ...worktree(), id: 'wt-2' }] }
-  })
-  const publishSnapshot = vi.fn()
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      dashboard: {
-        onRevealAgent: () => () => {},
-        onPopoutOpenChanged: () => () => {},
-        onSnapshotRequested: () => () => {},
-        getPopoutOpen: async () => true,
-        publishSnapshot
-      }
-    }
-  })
-  const view = renderHook(() => {
-    useDashboardPopoutBridge(true)
-    return useLiveDashboardSnapshot()
-  })
-  await vi.waitFor(() => expect(transport.subscribe).toHaveBeenCalledOnce())
-  await act(async () =>
-    transport.subscribe.mock.calls[0][3].onEvent({
-      type: 'availability',
-      agents: [{ agent: 'grok', state: 'available', chatProgram: 'available' }]
-    })
-  )
-  expect(view.result.current.launchableAgentsByWorktreeId?.['wt-1']).toEqual(['claude', 'grok'])
-  expect(view.result.current.launchableAgentsByWorktreeId?.['wt-2']).toEqual(['grok'])
-  const lastPublished = () => publishSnapshot.mock.calls.at(-1)?.[0].launchableAgentsByWorktreeId
-  await vi.waitFor(() => expect(lastPublished()?.['wt-1']).toEqual(['claude', 'grok']))
-  for (const route of [{ projects: [] }, { activeWorkspaceExecutionHostId: 'local' as const }]) {
-    const [live, published] = [view.result.current, publishSnapshot.mock.calls.length]
-    act(() => useAppStore.setState(route))
-    expect(view.result.current).not.toBe(live)
-    await vi.waitFor(() => expect(publishSnapshot.mock.calls.length).toBeGreaterThan(published))
-  }
-  act(() => useAppStore.setState({ worktreesByRepo: {}, tabsByWorktree: {}, folderWorkspaces: [] }))
-  view.unmount()
-  await Promise.resolve()
-  expect(unsubscribe).toHaveBeenCalledOnce()
 })

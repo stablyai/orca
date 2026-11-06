@@ -25,7 +25,7 @@ import { activateTerminalSubscribeBinaryLive } from './terminal-subscribe-binary
 import { registerTerminalSubscribeBinaryControlFrames } from './terminal-subscribe-binary-control-frames'
 const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
-  const { runtime, registration, sendBinary, ptyId, clientId, isMobile } = args
+  const { runtime, registration, sendBinary, ptyId, clientId, viewerDeviceId, isMobile } = args
   if (!sendBinary) {
     throw new Error('binary_terminal_stream_required')
   }
@@ -165,7 +165,9 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
     ptyId,
     undefined,
-    isMobile ? clientId : undefined
+    isMobile ? clientId : undefined,
+    false,
+    viewerDeviceId
   )
   unsubscribeData = () => {
     releaseViewSubscriber()
@@ -268,6 +270,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   if (registration.released) {
     return
   }
+  args.onEstablished?.()
   activateTerminalSubscribeBinaryLive(args, state)
   await streamClosed
 }

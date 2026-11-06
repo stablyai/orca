@@ -10,7 +10,7 @@ import { expect, vi, type Mock } from 'vitest'
 import { gitExecFileAsync } from '../../../src/main/git/runner'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createRuntimeAutomationService } from '../../../src/main/automations/runtime-automation-service'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import type { AutomationChatLaunchRequest } from '../../../src/main/automations/automation-chat-agent-launch'
@@ -21,11 +21,10 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_THREAD,
   HOST_TEST_LOCATION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createQueuedMessageTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createStore,
   closeTestStores,

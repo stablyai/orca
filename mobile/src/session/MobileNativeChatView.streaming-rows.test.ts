@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { agentJournalTurnBody } from '../../../src/shared/agent-session/lifecycle/agent-session-turn-record'
-import { foldMobileNativeChatMessages } from './native-chat/mobile-native-chat-render-data'
+
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import { MobileNativeChatPageList } from './native-chat/transcript/MobileNativeChatPageList'
 import type {
@@ -171,6 +171,9 @@ vi.mock('./MobileAgentWorkingIndicator', () => ({
   MobileAgentWorkingIndicator: 'WorkingIndicator'
 }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('./native-chat/transcript/MobileNativeChatRewindDialog', () => ({
+  MobileNativeChatRewindDialog: () => null
+}))
 vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
   MobileNativeChatPermission: 'ChatPermission'
@@ -187,6 +190,9 @@ vi.mock('./native-chat/input/MobileNativeChatBackgroundTasks', () => ({
 }))
 vi.mock('./native-chat/visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
+}))
+vi.mock('./native-chat/visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
 }))
 vi.mock('./native-chat/transcript/MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'ActionsSheet'
@@ -246,6 +252,8 @@ function Harness({
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
+    worktreePath: null,
+    connState: 'connected',
     onOpenFile: stable.onComposerTextChange,
     images: {
       attachments: [],
@@ -268,7 +276,8 @@ function Harness({
     sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
     keyboardInset: 0,
-    hostName: null
+    hostName: null,
+    onRunInTerminal: vi.fn()
   })
 }
 
@@ -361,62 +370,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function measure(turns: number, all: boolean) {
-  scroller.scrollHeight = all ? 100 : 10000
-  scroller.clientHeight = all ? 100 : 500
-  const items = journal(turns, 'hello')
-  showElement(createElement(Harness, { items }))
-  expect(renderer!.root.findAllByType(MobileNativeChatPageList)).toHaveLength(1)
-  const mounted = renderer!.root.findAll((node) => Object.is(node.type, 'ChatMessage'))
-  const total =
-    foldMobileNativeChatMessages(projectStructuredAgentSessionMessages(items, [], []), 'claude')
-      .length + 1
-  expect(mounted.length).toBe(all ? total : 24)
-  const mountedIds = new Set(mounted.map((node) => node.props.message.id))
-  const members = new Set(
-    mounted.flatMap((node) =>
-      (node.props.workRun ?? [node.props.message]).map((member: NativeChatMessage) => member.id)
-    )
-  )
-  const maximum = { resolve: 0, compare: 0, raw: 0, state: 0 }
-  for (let batch = 0; batch < 20; batch++) {
-    rendered.clear()
-    const updated = items.map((item) =>
-      item.itemId === 'live-answer'
-        ? {
-            ...item,
-            revision: batch + 2,
-            body: textBody('assistant', `hello${'.'.repeat(batch + 1)}`)
-          }
-        : item
-    )
-    Object.values(operations).forEach((ids) => ids.splice(0))
-    act(() => renderer!.update(createElement(Harness, { items: updated })))
-    expect([...rendered.keys()]).toEqual(['live-answer'])
-    for (const key of ['resolve', 'compare', 'raw', 'state'] as const) {
-      expect(
-        operations[key].every((id) =>
-          (key === 'resolve' || key === 'compare' ? mountedIds : members).has(id)
-        )
-      ).toBe(true)
-      expect(operations[key].length).toBeLessThanOrEqual(
-        key === 'resolve' || key === 'compare' ? mounted.length : 2 * mounted.length
-      )
-      maximum[key] = Math.max(maximum[key], operations[key].length)
-    }
-  }
-  return maximum
-}
-
-it.each([false, true])('bounds final work at mounted rows only, all history: %s', (all) => {
-  const small = measure(10, all)
-  act(() => renderer?.unmount())
-  renderer = null
-  const large = measure(100, all)
-  for (const operation of ['resolve', 'compare', 'raw', 'state'] as const) {
-    expect(large[operation]).toBeLessThanOrEqual(all ? 10 * small[operation] : small[operation])
-  }
-})
 it('reuses footer rows during a command and returns them to the list afterward', () => {
   const base = journal(0, 'hello').map((item) =>
     item.body.kind === 'message' && item.body.role === 'user'

@@ -10,7 +10,7 @@ import type {
   RuntimeDegradation
 } from './runtime-capability-degradation'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TerminalPaneLayoutNode } from './workspace-layout/terminal-tab-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionSnapshotTab,

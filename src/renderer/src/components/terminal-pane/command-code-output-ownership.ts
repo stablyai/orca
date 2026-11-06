@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 
 export function canCommandCodeOutputOwnPane(args: {
   foregroundAgent?: TerminalAgent | null

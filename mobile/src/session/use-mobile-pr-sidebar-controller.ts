@@ -164,7 +164,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!keepVisible) {
         publishState({ kind: 'loading' })
       }
-      const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
+      const refresh = !options?.background
+      const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha, refresh })
       if (!owner.live || !shouldApplyResult(seq, owner.loadSeq)) {
         return 'stale'
       }

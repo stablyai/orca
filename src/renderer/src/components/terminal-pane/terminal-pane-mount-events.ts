@@ -10,7 +10,7 @@ import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runt
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   splitPaneWithOneShotStartup,
   recordRuntimeCreatedTerminalPaneSplit
@@ -21,6 +21,11 @@ import {
   resolveTerminalPaneSplitSourceId
 } from './terminal-pane-split-request-routing'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import type { DetachTerminalPaneToNewTab } from './terminal-pane-tab-detach'
+import {
+  registerTerminalPaneMoveToNewTabHandler,
+  resolvePaneMoveTargetGroup
+} from './terminal-pane-move-request-routing'
 
 export function installTerminalPaneMountEvents(args: {
   manager: PaneManager
@@ -33,10 +38,27 @@ export function installTerminalPaneMountEvents(args: {
     persistLayoutSnapshot: () => void
     syncCanExpandState: () => void
     queueResizeAll: (focusActive: boolean) => void
+    detachPaneToNewTab?: DetachTerminalPaneToNewTab
   }
   ptyDeps: PtyConnectionDeps
 }): () => void {
   const { deps, ptyDeps } = args
+  const { detachPaneToNewTab } = deps
+  const unregisterPaneMoveHandler = detachPaneToNewTab
+    ? registerTerminalPaneMoveToNewTabHandler(deps.worktreeId, deps.tabId, async (move) => {
+        const sourcePaneId = deps.managerRef.current?.getNumericIdForLeaf(move.leafId) ?? null
+        const group = resolvePaneMoveTargetGroup(
+          useAppStore.getState(),
+          deps.worktreeId,
+          deps.tabId,
+          move
+        )
+        if (sourcePaneId === null || !group) {
+          return null
+        }
+        return detachPaneToNewTab(sourcePaneId, { ...group, targetTabId: move.targetTabId })
+      })
+    : () => {}
   const unregisterTerminalPaneSplitRequestHandler = registerTerminalPaneSplitRequestHandler(
     deps.tabId,
     deps.worktreeId,
@@ -94,7 +116,8 @@ export function installTerminalPaneMountEvents(args: {
       manager: mgr,
       getPtyIdForLeaf: (leafId) =>
         useAppStore.getState().terminalLayoutsByTabId[deps.tabId]?.ptyIdsByLeafId?.[leafId],
-      closeTab: () => closeTerminalTab(deps.tabId, { skipRunningProcessConfirm: true }),
+      closeTab: (reason) =>
+        closeTerminalTab(deps.tabId, { reason, skipRunningProcessConfirm: true }),
       closeTabPreservingPty: () => {
         const store = useAppStore.getState()
         if (detail.retireSurface && detail.leafId) {
@@ -135,6 +158,7 @@ export function installTerminalPaneMountEvents(args: {
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   return () => {
     window.removeEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
+    unregisterPaneMoveHandler()
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   }

@@ -43,6 +43,32 @@ const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>
     '--system-prompt-snapshot',
     '--tools'
   ],
+  // Pi 1.5.0 parseArgs (dist/cli/args.js); --mode, --use-theme, --tui-mode refuse dash-leading values.
+  pi: [
+    '--provider',
+    '--model',
+    '--api-key',
+    '--system-prompt',
+    '--append-system-prompt',
+    '--name',
+    '-n',
+    '--session',
+    '--session-id',
+    '--fork',
+    '--session-dir',
+    '--models',
+    '--tools',
+    '-t',
+    '--exclude-tools',
+    '-xt',
+    '--thinking',
+    '--export',
+    '--extension',
+    '-e',
+    '--skill',
+    '--prompt-template',
+    '--theme'
+  ],
   cursor: [
     '--api-key',
     '-H',
@@ -78,7 +104,7 @@ export function removeAgentArgOption(
   tokens: readonly string[],
   aliases: readonly string[],
   matchesValue: (value: string | undefined) => boolean = () => true,
-  takesValue = true
+  takesValue: boolean | 'required' = true
 ): string[] {
   const kept: string[] = []
   const required = agentRequiredValueOptions(agent)

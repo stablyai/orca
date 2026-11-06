@@ -131,7 +131,7 @@
     },
     {
       "file": "src/terminal/terminal-webview-html.web.ts",
-      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else; mobile-web-terminal-engine-closure.test.mjs is the fence."
+      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else."
     },
     {
       "file": "src/platform/dictation-capture.web.ts",
@@ -140,6 +140,10 @@
     {
       "file": "src/platform/pdf-opener.web.ts",
       "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
+    },
+    {
+      "file": "src/platform/image-actions.web.ts",
+      "reason": "The page cannot reach the clipboard, Photos or the share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share. This one stages a base64 image to the shell a chunk at a time over native.image.act, because a chat image passes the 640 KiB frame cap, then asks the shell to copy, save or share it; web images go by URL because the page cannot read cross-origin pixels. Shells that do not grant the verb get null, so the viewer offers no actions."
     },
     {
       "file": "src/platform/media-picker.web.ts",
@@ -208,6 +212,10 @@
     {
       "file": "src/platform/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
+    },
+    {
+      "file": "src/components/mobile-markdown-math-typesetter.web.ts",
+      "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
     }
   ]
 }

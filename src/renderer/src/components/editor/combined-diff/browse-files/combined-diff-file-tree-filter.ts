@@ -1,6 +1,6 @@
 import { basename } from '@/lib/path'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
 import {
   buildSourceControlTree,

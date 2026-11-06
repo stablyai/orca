@@ -14,7 +14,7 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import { hasOrcadTemplate } from '../../../orcad/orcad-artifact-materializer'

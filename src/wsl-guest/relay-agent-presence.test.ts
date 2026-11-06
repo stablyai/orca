@@ -6,7 +6,7 @@ import type * as RetrySchedulerModule from './agent-hook-result-retry-scheduler'
 import type { AgentHookResultRetryHost } from './agent-hook-result-retry-scheduler'
 import { RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 
 const probe = vi.hoisted(() =>
   vi.fn(async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable')

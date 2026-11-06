@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
-import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff/sections/diff-section-height-cache'
 import {
   getPRFileContentsRenderLimit,
   getPRFileDiffResult
@@ -8,8 +8,8 @@ import {
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
-} from '@/components/editor/large-diff-section-content'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+} from '@/components/editor/diff/large-files/large-diff-section-content'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitHubOwnerRepo,

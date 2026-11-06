@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'

@@ -3,7 +3,7 @@ import type {
   AgentType
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentRowState } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentChildRowModel } from '../../../../shared/agent-status/presentation/agent-child-row-model'
 
 export type DashboardAgentRow = {

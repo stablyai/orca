@@ -7,9 +7,9 @@ import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { useFileDeletion } from '@/components/right-sidebar/useFileDeletion'
-import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-operation-owner'
-import type { TreeNode } from '@/components/right-sidebar/file-explorer-types'
+import { useFileDeletion } from '@/components/right-sidebar/file-explorer/mutations/useFileDeletion'
+import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
+import type { TreeNode } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 
 const { confirm, toastError } = vi.hoisted(() => ({
@@ -24,11 +24,11 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
   requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('@/components/right-sidebar/fileExplorerUndoRedo', () => ({
+vi.mock('@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo', () => ({
   commitFileExplorerOp: vi.fn()
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

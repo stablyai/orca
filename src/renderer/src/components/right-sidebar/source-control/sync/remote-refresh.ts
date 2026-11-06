@@ -4,7 +4,7 @@ import {
 } from '@/lib/source-control-remote-error'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from './action-error'
-import type { RemoteOpKind } from '../../source-control-primary-action'
+import type { RemoteOpKind } from '../review/source-control-primary-action-types'
 
 export function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
   return resolveRemoteOperationErrorMessage(error, {

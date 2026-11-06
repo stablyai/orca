@@ -6,15 +6,15 @@ import {
   buildChecksPanelEligibilityGitFingerprint,
   readChecksPanelGitStatusSnapshot,
   readChecksPanelPublishActionGitStatus
-} from '../checks-panel-git-status-snapshot'
+} from './refresh/checks-panel-git-status-snapshot'
 import { resolveHostedReviewCreationProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
-import { resolveChecksPanelReviewLookup } from '../checks-panel-review-lookup-authority'
+import { resolveChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 import {
   computeChecksPanelConfirmedReadiness,
   isChecksPanelHardErrorCleared,
   type ChecksPanelConfirmedReadinessInput
-} from '../checks-panel-review-creation'
+} from './review-actions/checks-panel-review-creation'
 import {
   getPullRequestGenerationRecordKey,
   getPullRequestGenerationSeedRestoreKey,

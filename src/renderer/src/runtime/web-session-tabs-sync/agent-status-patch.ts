@@ -7,8 +7,8 @@ import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   MirroredTerminalTab,
   TerminalSurface,
@@ -74,7 +74,7 @@ export function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+    const hostEntry = remapHostAgentStatus(surface, worktreeId, retainedSurface)
     if (!hostEntry) {
       continue
     }

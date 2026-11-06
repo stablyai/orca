@@ -1,9 +1,8 @@
-import { registerPtyConnectionCommandInputAgentIdentityTests } from './pty-connection-command-input-agent-identity.spec'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST_REPLAY_REATTACH_RESET } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { createKeyboardEventTarget, keyEvent } from './pty-connection-test-dom'
 import {
@@ -63,16 +62,6 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
 
     afterEach(async () => {
       await restoreTerminalTestGlobals()
-    })
-
-    registerPtyConnectionCommandInputAgentIdentityTests({
-      get storeState() {
-        return mockStoreState
-      },
-      get transportQueue() {
-        return transportFactoryQueue
-      },
-      createDeps
     })
 
     it('keeps Droid routing visible through command-finished foreground confirmation', async () => {

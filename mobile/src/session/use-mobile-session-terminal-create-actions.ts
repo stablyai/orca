@@ -39,7 +39,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     setTerminals,
     terminalsRef,
     setSessionTabs,
-    defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     activeSessionTabId,
     setActiveSessionTabId,
@@ -65,6 +64,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       onPromptSent?: () => void
       errorToast?: string
       sourceChatFork?: { sessionId: string; agent: string }
+      /** Show the tab as a terminal even when the agent it runs would open as a chat. */
+      terminalView?: boolean
     }
   ): Promise<CreateOutcome | undefined> {
     const sourceFork = options?.sourceChatFork
@@ -191,7 +192,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       if (prev) {
         unsubscribeTerminal(prev)
       }
-      if (sourceFork) {
+      if (sourceFork || options?.terminalView) {
         scope.nativeChatController.setTabView(created.id, 'terminal')
       }
       pendingSelectionRef.current = { kind: 'tab', tabId: created.id }
@@ -213,7 +214,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       }
       if (typeof created.terminal === 'string') {
         const createdHandle = created.terminal
-        defaultTerminalHandlesToLiveInput([createdHandle])
         // Protect the new active handle until host snapshots catch up or the pane can blank.
         pendingSelectionRef.current = { kind: 'terminal', handle: createdHandle, tabId: created.id }
         activeHandleRef.current = createdHandle

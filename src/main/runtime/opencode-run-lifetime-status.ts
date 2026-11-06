@@ -6,7 +6,7 @@ import {
 } from '../../shared/agent-status/contracts/agent-status-types'
 import { FOREGROUND_COMMAND_READS } from '../../shared/foreground-command-settle'
 import { isOpenCodeRunCommand } from '../../shared/agent-status/process/opencode-headless-command'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 
 const SIGINT_EXIT_CODE = 130
 const OPENCODE_LAUNCHERS = new Set(['node', 'bun', 'bunx', 'npx', 'npm', 'pnpm', 'pnpx', 'yarn'])

@@ -78,7 +78,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
-    ...(serviceTiers ? { serviceTiers } : {})
+    ...(serviceTiers ? { serviceTiers } : {}),
+    ...(Array.isArray(row.chatEfforts)
+      ? {
+          chatEfforts: row.chatEfforts
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {})
   }
 }
 

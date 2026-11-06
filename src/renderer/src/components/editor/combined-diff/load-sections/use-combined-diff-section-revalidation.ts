@@ -4,7 +4,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git/status/git-sta
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
-} from '../../editor-autosave'
+} from '../../autosave/editor-autosave'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { buildCombinedGitStatusSnapshot } from '../resolve-changes/combined-diff-git-status-signature'

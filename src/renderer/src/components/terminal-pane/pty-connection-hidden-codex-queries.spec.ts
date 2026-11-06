@@ -7,7 +7,7 @@ import {
   POST_REPLAY_REATTACH_RESET
 } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,

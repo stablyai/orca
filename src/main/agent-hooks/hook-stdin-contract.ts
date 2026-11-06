@@ -74,6 +74,12 @@ export const POSIX_HOOK_JSON_STDIN: PosixHookStdinReader = {
   prelude: POSIX_HOOK_JSON_STDIN_PRELUDE
 }
 
+/** Same bytes as the default reader; the capture subshell becomes cat itself instead of forking it. */
+export const POSIX_HOOK_STDIN_EXEC: PosixHookStdinReader = {
+  reader: `if [ -x /bin/cat ]; then exec /bin/cat 2>/dev/null; fi; ${POSIX_HOOK_STDIN_READER}`,
+  prelude: []
+}
+
 // POSIX hooks must drain stdin before any no-op exit to prevent agent-side broken pipes.
 export function buildPosixHookPayloadCapture(
   emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit',
@@ -106,8 +112,8 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
   return [
     'spool_hook_event() {',
     eventNameVar
-      ? `  case "\${${eventNameVar}:-}" in PreToolUse|PostToolUse|PostToolUseFailure) return 0 ;; esac`
-      : '  case "$payload" in *\'"PreToolUse"\'*|*\'"PostToolUse"\'*|*\'"PostToolUseFailure"\'*) return 0 ;; esac',
+      ? `  case "\${${eventNameVar}:-}" in PreToolUse|PostToolUse|PostToolUseFailure|PostToolBatch) return 0 ;; esac`
+      : '  case "$payload" in *\'"PreToolUse"\'*|*\'"PostToolUse"\'*|*\'"PostToolUseFailure"\'*|*\'"hook_event_name":"PostToolBatch"\'*|*\'"hook_event_name": "PostToolBatch"\'*) return 0 ;; esac',
     '  [ -n "${ORCA_AGENT_HOOK_ENDPOINT:-}" ] || return 0',
     // Stale endpoint variables outside Orca must not accumulate unattributed spool records.
     '  [ -n "${ORCA_PANE_KEY:-}" ] || return 0',

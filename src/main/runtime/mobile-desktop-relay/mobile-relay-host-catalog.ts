@@ -12,8 +12,8 @@ import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../shared/workspace-creator-visibility'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session-tab-activity'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -42,13 +42,22 @@ export class MobileRelayHostCatalog {
   list(): MobileRelayHostsListResult {
     return {
       hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
-        ({ hostId, label, health, relay, stoppedOnDesktop, unavailableOnDesktop }) => ({
+        ({
+          hostId,
+          label,
+          health,
+          relay,
+          stoppedOnDesktop,
+          unavailableOnDesktop,
+          installationId
+        }) => ({
           hostId,
           label,
           health,
           relay,
           ...(stoppedOnDesktop ? { stoppedOnDesktop } : {}),
-          ...(unavailableOnDesktop ? { unavailableOnDesktop } : {})
+          ...(unavailableOnDesktop ? { unavailableOnDesktop } : {}),
+          ...(installationId ? { installationId } : {})
         })
       )
     }

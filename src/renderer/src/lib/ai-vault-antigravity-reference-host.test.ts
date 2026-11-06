@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { resolveAiVaultSessionLaunchTarget } from '@/components/right-sidebar/ai-vault-session-launch-target'
+import { resolveAiVaultSessionLaunchTarget } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-launch-target'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree

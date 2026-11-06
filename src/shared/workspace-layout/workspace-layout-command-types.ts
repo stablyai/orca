@@ -9,7 +9,7 @@ import type {
   TerminalGrid,
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
-} from '../terminal-tab-types'
+} from './terminal-tab-types'
 import type { PaneSide } from './terminal-pane-tree'
 import type { SplitRatioIntent } from './split-ratio-intents'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'

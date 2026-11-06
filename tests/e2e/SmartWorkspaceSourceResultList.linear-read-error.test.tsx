@@ -32,7 +32,7 @@ import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { credentialDecryptionMessage } from '../../src/shared/integration-credential-errors'
 import type { LinearIssue } from '../../src/shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
-import { referenceLinearIssue } from '../../src/renderer/src/components/sidebar/workspace-reference-fixtures.test-support'
+import { referenceLinearIssue } from '../../src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
 
 vi.mock('../../src/renderer/src/components/skills/setup/linear-agent-skill-install-cta', () => ({
   LinearAgentSkillInstallCta: () => null

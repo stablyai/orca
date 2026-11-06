@@ -35,7 +35,7 @@ import {
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime/remote-runtime-client'
 import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { materializeOrcadArtifact } from './orcad-artifact-materializer'
 import {
   hostServerTarget,

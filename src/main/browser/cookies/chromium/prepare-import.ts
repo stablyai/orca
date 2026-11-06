@@ -14,6 +14,7 @@ import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
 import type { ChromiumImportContext } from './import-context'
 import type { Session } from 'electron'
 import { getEncryptionKey } from '../sources/browser-cookie-key'
+import { isMacPrivacyDenial } from '../sources/browser-cookie-macos-privacy-denial'
 
 export type ChromiumImportPreparation =
   | { context: ChromiumImportContext }
@@ -30,9 +31,8 @@ export async function prepareChromiumCookieImport(
     sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
   } catch (err) {
     diag(`  Chromium snapshot failed: ${String(err)}`)
-    return {
-      result: browserCookieImportFailure('databaseCopyFailed', { browser: browser.label })
-    }
+    const code = isMacPrivacyDenial(err) ? 'macFullDiskAccess' : 'databaseCopyFailed'
+    return { result: browserCookieImportFailure(code, { browser: browser.label }) }
   }
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
@@ -82,7 +82,7 @@ export async function prepareChromiumCookieImport(
       )
     })
     const sourceKey = needsSourceKey
-      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+      ? await getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
       return {

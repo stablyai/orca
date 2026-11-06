@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 

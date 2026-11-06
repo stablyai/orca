@@ -7,7 +7,7 @@ import {
   type DeviceScreenSize
 } from './android-input-mapping'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 export function androidShellArgs(serial: string, command: readonly string[]): string[] {
   return ['-s', serial, 'shell', ...command]

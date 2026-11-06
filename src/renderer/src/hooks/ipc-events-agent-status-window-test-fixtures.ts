@@ -126,6 +126,7 @@ export function buildWindowApi(args: {
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
@@ -163,7 +164,7 @@ export function stubAuxiliaryModules(): void {
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
   vi.doMock('@/lib/editor-font-zoom', () => ({

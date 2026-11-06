@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   agentStartupDeliveryKey as deliveryKey,
   clearConsumedAgentStartupDeliveriesForTests,

@@ -11,7 +11,8 @@ import type { FeatureInteractionTelemetryBucketState } from './feature-interacti
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { ChatUiLaunchTipAudience } from './native-chat/chat-ui-launch-tip-audience'
 import type { DiffComment } from './diff-comment-types'
-import type { FolderWorkspace, WorkspaceKey } from './folder-workspaces/folder-workspace-types'
+import type { FolderWorkspace } from './folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from './workspace-scope'
 import type { GlobalSettings } from './global-settings-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
@@ -25,7 +26,7 @@ import type { SparsePreset } from './worktree/create-types'
 import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
 import type {
   OrcadMigrationImportReceipt,
@@ -83,6 +84,9 @@ export type PersistedState = {
   worktreeIdentityAliases?: Record<string, string[]>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
+  /** Parents in other stores, as saved: entries this build can't read are kept, never trusted.
+   * Separate so older builds' same-store cleanup never reads them; read through validCrossStoreLineage. */
+  crossStoreLineageByChildKey?: Record<string, unknown>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {

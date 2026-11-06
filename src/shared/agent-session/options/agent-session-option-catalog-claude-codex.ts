@@ -74,6 +74,7 @@ function parseClaudeCatalogModels(stdout: string): CatalogModel[] {
       id: model.id,
       label: model.label,
       ...(model.description ? { description: model.description } : {}),
+      ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
       options: createClaudeCatalogOptions({
         effortLevelIds: model.effortLevels,
         supportsFastMode: model.supportsFastMode

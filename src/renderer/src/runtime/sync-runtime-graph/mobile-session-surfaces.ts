@@ -1,8 +1,8 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import type { AppState } from '@/store/types'
 
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {

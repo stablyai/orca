@@ -1,7 +1,7 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
 const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
 

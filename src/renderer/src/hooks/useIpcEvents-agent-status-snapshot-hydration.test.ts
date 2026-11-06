@@ -11,8 +11,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 import type { AppState } from '../store/types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   buildStoreState,
   expectWorktreeRouting,

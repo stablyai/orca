@@ -1,12 +1,13 @@
+import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata
-} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
@@ -19,14 +20,7 @@ const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
   /** Seed resume identity before the first hook; Codex SessionStart waits for the first turn (#10923). */
-  recordLaunchResumeIdentity(event: {
-    paneKey: string
-    worktreeId?: string
-    agentType: string
-    providerSession: AgentProviderSessionMetadata
-    /** When the pane's process launched; a row reported since then is the agent's own. */
-    launchedAt: number
-  }): void {
+  recordLaunchResumeIdentity(event: LaunchResumeIdentityEvent): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
     const parsedPaneKey = parsePaneKey(paneKey)
     if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {

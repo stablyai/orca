@@ -29,7 +29,7 @@ import {
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
-} from '../right-sidebar/file-explorer-operation-owner'
+} from '../right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,

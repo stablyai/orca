@@ -159,6 +159,7 @@ describe('remote runtime pane binding ownership', () => {
         },
         activePanePtyBinding: old,
         bindProcessExitState: vi.fn(),
+        windowsPtyModel: { apply: vi.fn() },
         setPanePtyFitBinding: vi.fn(),
         registerSideEffectFactConsumerForPty: vi.fn(),
         syncHiddenRendererPtyDelivery: vi.fn(),

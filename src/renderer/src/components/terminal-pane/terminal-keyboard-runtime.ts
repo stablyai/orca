@@ -26,7 +26,7 @@ import {
 } from './terminal-captured-input-dispatch'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 import { titleHasExplicitAgentIdentity } from './title-agent-identity'

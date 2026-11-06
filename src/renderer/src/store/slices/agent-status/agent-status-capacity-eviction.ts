@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalPaneLayoutNode } from '../../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'

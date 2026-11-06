@@ -30,12 +30,15 @@ describe('classifyDispatchRejection', () => {
     ['hostRestarted', 'undelivered', null],
     ['chatClosed', 'undelivered', null],
     ['notDelivered', 'undelivered', null],
+    ['unconfirmed', 'undelivered', null],
     // Orca stopped a start that hung: the agent failed, and the message never reached it.
     ['hostStopped', 'undelivered', 'failure'],
     ['writeFailed', 'transport', 'failure'],
     ['queueFull', 'transport', 'failure'],
     // The chat's state refused a queued command when its turn to run came.
-    ['commandRefused', 'content', 'failure']
+    ['commandRefused', 'content', 'failure'],
+    // The agent had no model for the message: its own refusal, not a lost send.
+    ['modelNotSelected', 'content', 'failure']
   ] as const)('reads the written %s rejection as %s, verdict %s', (kind, category, verdict) => {
     const written = agentSessionFailureWords(agentSessionFailureFact(kind), {
       surface: 'rejection',

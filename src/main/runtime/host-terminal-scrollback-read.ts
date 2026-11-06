@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SessionReadTerminalScrollbackResult } from '../../shared/rpc-contract/session-terminal-scrollback-params'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal/replay/terminal-scrollback-limits'
 

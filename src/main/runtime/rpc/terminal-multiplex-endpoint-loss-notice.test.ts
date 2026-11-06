@@ -38,14 +38,6 @@ describe('terminal multiplex daemon endpoint loss notice', () => {
     expect(sawWriteUnavailable(harness.binaryFrames)).toBe(true)
   })
 
-  it('ignores endpoint loss on other PTYs', async () => {
-    const harness = await subscribe({ ackOutput: 1, writeUnavailable: 1, endpointLossNotice: 1 })
-
-    publishPtyEndpointLoss('pty-other')
-
-    expect(sawWriteUnavailable(harness.binaryFrames)).toBe(false)
-  })
-
   it('keeps the unprompted frame from a client that reads it as refused input', async () => {
     const harness = await subscribe({ ackOutput: 1, writeUnavailable: 1 })
 

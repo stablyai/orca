@@ -5,18 +5,19 @@ import type {
   BrowserSliceSet,
   RemovedBrowserHistory
 } from './browser-slice-contract'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
+
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
 import {
   MAX_BROWSER_HISTORY_ENTRIES,
   normalizeBrowserHistoryUrl
-} from '../../../../../shared/workspace-session-browser-history'
+} from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import {
+  type WorkspaceDocHistoryEntry,
   MAX_WORKSPACE_DOC_HISTORY_ENTRIES,
   normalizeWorkspaceDocHistoryEntries,
   normalizeWorkspaceDocHistoryTitle,
   workspaceDocHistoryEntriesEqual
-} from '../../../../../shared/workspace-doc-history'
+} from '../../../../../shared/workspace-session/workspace-doc-history'
 import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 

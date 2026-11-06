@@ -4,8 +4,8 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../contracts/agent-status-types'
-import { isWebTerminalSurfaceTabId } from '../../terminal-surface-id'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../workspace-layout/terminal-surface-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../workspace-layout/stable-pane-id'
 
 export type AgentStatusPaneIdentity = { tabId: string; paneId: string }
 

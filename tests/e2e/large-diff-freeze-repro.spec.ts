@@ -3,7 +3,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { getLargeDiffRenderLimit } from '../../src/shared/large-diff-render-limit'
-import { MAX_AUTOMATIC_DIFF_CHANGED_LINES } from '../../src/renderer/src/components/editor/combined-diff-on-demand-load'
+import { MAX_AUTOMATIC_DIFF_CHANGED_LINES } from '../../src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-on-demand-load'
 import {
   buildLargeTypeScriptFile,
   createIsolatedLargeDiffRepo,

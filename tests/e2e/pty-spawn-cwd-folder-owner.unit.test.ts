@@ -70,12 +70,12 @@ vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
     m.migrationUnsupportedPtyModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-pane-account-registry', () =>
+vi.mock('../../src/main/codex/configuration/homes/codex-pane-account-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexPaneAccountRegistryModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../src/main/codex/history/index/codex-state-db-backfill-recovery', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexBackfillRecoveryModuleMock()
   )

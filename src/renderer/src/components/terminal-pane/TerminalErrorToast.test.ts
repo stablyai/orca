@@ -17,7 +17,7 @@ import { i18n } from '@/i18n/i18n'
 import {
   formatTerminalStartFailure,
   terminalStartError
-} from '../../../../shared/terminal-start-failure'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   appendPaneTerminalError,
   clearPaneTerminalError,
@@ -30,7 +30,7 @@ import {
   PTY_ALLOCATION_HINT,
   TERMINAL_HOST_CAP_HINT,
   TERMINAL_PROCESS_LIMIT_HINT
-} from '../../../../shared/terminal-spawn-error-copy'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 import {
   TerminalErrorToast,

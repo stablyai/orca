@@ -79,7 +79,7 @@ describe('keepTextFocusThroughTaps', () => {
     expect(pressKeepsFocus(gap)).toBe(false)
   })
 
-  it('keeps a focused field through a tap on the session title text, which opens the same card', () => {
+  it('keeps a focused field through a tap on the session title text', () => {
     const host = document.createElement('div')
     const field = document.createElement('input')
     document.body.append(host, field)
@@ -87,8 +87,8 @@ describe('keepTextFocusThroughTaps', () => {
       openerRef: { current: null },
       titleRef: { current: null },
       boundaryRefs: { current: [] },
-      titleActive: false,
-      titleRequestedOpen: false,
+      active: false,
+      requestedOpen: false,
       besideTabs: true,
       onAnchorLayout: () => {},
       toggle: () => {}

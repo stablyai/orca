@@ -18,18 +18,18 @@ import {
   hostTestState,
   hostTestRecoveryCapsuleSettled,
   replaceHostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host-test-abandon'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-abandon'
+import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
@@ -43,8 +43,8 @@ const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
 function loadRuntimeModules() {
   return Promise.all([
     import('./orca-runtime'),
-    import('./orchestration/db'),
-    import('./runtime-rpc')
+    import('./orchestration/db/orchestration-db'),
+    import('./rpc/server/runtime-rpc')
   ])
 }
 

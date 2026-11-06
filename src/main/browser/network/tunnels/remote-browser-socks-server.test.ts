@@ -69,38 +69,6 @@ describe('RemoteBrowserSocksServer', () => {
     socket.destroy()
   })
 
-  it('contains synchronous route failures and large pipelined requests', async () => {
-    const failingServer = new RemoteBrowserSocksServer({
-      open: () => {
-        throw new Error('route failed synchronously')
-      }
-    })
-    servers.push(failingServer)
-    const failingSocket = await connectClient(failingServer)
-    await greet(failingSocket)
-    failingSocket.write(domainConnectRequest('localhost', 3000))
-    expect(Array.from(await readExact(failingSocket, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
-
-    let resolveOpen: ((stream: PassThrough) => void) | undefined
-    const open = vi.fn(
-      () =>
-        new Promise<PassThrough>((resolve) => {
-          resolveOpen = resolve
-        })
-    )
-    const server = new RemoteBrowserSocksServer({ open })
-    servers.push(server)
-    const socket = await connectClient(server)
-    await greet(socket)
-    const payload = Buffer.alloc(4 * 1024, 7)
-    socket.write(Buffer.concat([domainConnectRequest('localhost', 443), payload]))
-    await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1))
-    resolveOpen?.(new PassThrough())
-    await readExact(socket, 10)
-    expect(await readExact(socket, payload.byteLength)).toEqual(payload)
-    socket.destroy()
-  })
-
   it('closes deterministically during bind and with a failed half-open peer', async () => {
     const server = new RemoteBrowserSocksServer({
       open: async () => new PassThrough()

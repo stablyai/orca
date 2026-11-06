@@ -110,7 +110,7 @@ export async function loadIpcEventsHarness(
     activateAndRevealWorkspace,
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? [],
     getVisibleWorktreeShortcutTargets: () =>
       options.visibleWorktreeTargets ?? (options.visibleWorktreeIds ?? []).map((id) => ({ id }))
@@ -216,6 +216,7 @@ export async function loadIpcEventsHarness(
           listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},

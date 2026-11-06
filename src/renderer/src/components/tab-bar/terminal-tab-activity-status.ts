@@ -8,12 +8,18 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/con
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
 } from '../../../../shared/worktree-status-rollup'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 // Share sidebar pane-state resolution, excluding worktree-only retained-done promotion.
 export type TerminalTabActivityStatus = WorktreeStatus
@@ -22,7 +28,7 @@ type ProgressRingStatus = Extract<TerminalTabActivityStatus, 'working' | 'permis
 
 type PaneProgramProgress = { progress: number; updatedAt: number }
 
-type TerminalTabActivityFlags = AgentPaneActivityFlags & {
+export type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
   stalePaneIds: Set<string>
@@ -39,7 +45,7 @@ type FlagsCache = {
 // Index each pane-status snapshot once so per-tab Zustand selectors cost O(agents + tabs), not O(agents × tabs).
 let flagsCache: FlagsCache | null = null
 
-function getTerminalTabActivityFlags(
+export function getTerminalTabActivityFlags(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   agentStatusEpoch: number | undefined
 ): Map<string, TerminalTabActivityFlags> {

@@ -1,3 +1,4 @@
+vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 import type {
   HostedReviewInfo,
   HostedReviewForBranchArgs
@@ -11,7 +12,7 @@ import {
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 function installReviewRead() {
   const read = vi.fn<(args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>>()
@@ -27,9 +28,7 @@ const url = 'https://github.com/acme/orca/pull/42'
 const link = { url, slug: { owner: 'acme', repo: 'orca' }, number: 42 }
 const leaf = '11111111-1111-4111-8111-111111111111'
 const flush = async () => {
-  for (let i = 0; i < 20; i++) {
-    await Promise.resolve()
-  }
+  await vi.dynamicImportSettled()
 }
 function setup() {
   const store = createTestStore()
@@ -82,6 +81,10 @@ const context = (tabId: string) => ({
 beforeEach(() => {
   vi.clearAllMocks()
   resetRemoteRuntimeMocks()
+  Object.defineProperty(window.api, 'gh', {
+    configurable: true,
+    value: { workItemByOwnerRepo: vi.fn().mockResolvedValue(null) }
+  })
   resetWorktreeSliceModuleMemory()
 })
 describe('terminal reference evidence', () => {

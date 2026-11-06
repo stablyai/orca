@@ -17,7 +17,7 @@ import {
   writeUnverifiable,
   isSettledWrite,
   type WriteSettlement
-} from '../../../../shared/pty-write-settlement'
+} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import {
   isDrivingInputKind,
   type TerminalInputKind

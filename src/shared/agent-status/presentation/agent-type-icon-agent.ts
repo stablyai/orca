@@ -1,5 +1,5 @@
 import type { AgentType } from '../contracts/agent-status-types'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../identity/terminal-agent'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 
 const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {

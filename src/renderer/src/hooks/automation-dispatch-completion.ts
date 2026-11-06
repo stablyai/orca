@@ -15,7 +15,7 @@ import {
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
 } from './automation-agent-status-entry-change'
 import type { Worktree } from '../../../shared/worktree/types'
-import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 

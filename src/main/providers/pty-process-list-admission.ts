@@ -1,7 +1,7 @@
 import { isAgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
-import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   cloneForegroundProcessEvidence,
   isForegroundProcessEvidence

@@ -1,5 +1,5 @@
 // Build history resume lines for the execution platform and actual shell.
-import { quoteCmdDoubleQuoted } from '../../shell-argument-quoting'
+import { quoteCmdDoubleQuoted } from '../../shell/launch/shell-argument-quoting'
 import {
   isAntigravityReferenceSession,
   antigravityTranscriptReferencePrompt

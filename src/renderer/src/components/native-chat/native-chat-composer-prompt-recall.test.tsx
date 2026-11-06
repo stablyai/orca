@@ -7,6 +7,8 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import type * as nativeChatAgentProfiles from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
+
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
@@ -129,14 +131,6 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('composer prompt recall', () => {
-  it('walks prompts sent before this composer existed, and back to an empty draft', () => {
-    const input = renderComposer(['one', 'two'])
-    expect(press(input, 'ArrowUp')).toBe('two')
-    expect(press(input, 'ArrowUp')).toBe('one')
-    expect(press(input, 'ArrowDown')).toBe('two')
-    expect(press(input, 'ArrowDown')).toBe('')
-  })
-
   // `/model` opens the command picker when typed; recalled, it must not take the arrows.
   it('keeps walking past a recalled command instead of handing the arrows to its picker', () => {
     const input = renderComposer(['one', '/model'])

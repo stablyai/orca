@@ -22,4 +22,4 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
 }
 
 // Daemon worktreeId@@shortUuid IDs prevent cross-workspace reattach.
-export { isPtySessionIdOwnedByWorktree as isSessionOwnedByWorktree } from '../../../../../shared/pty-session-id-format'
+import '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'

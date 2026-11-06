@@ -1,6 +1,6 @@
 import { normalizeHookPayload } from './normalize-hook-payload'
 import { seedLegacyAgentStatusForTests, type HookListenerState } from '../listener-state'
-import { makePaneKey } from '../../stable-pane-id'
+import { makePaneKey } from '../../workspace-layout/stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const PANE_KEY = makePaneKey('tab-1', LEAF_ID)

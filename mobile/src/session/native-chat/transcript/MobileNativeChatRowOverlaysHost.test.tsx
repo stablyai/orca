@@ -8,6 +8,7 @@ import {
   type MobileNativeChatRowOverlays
 } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatConversation } from '../use-mobile-native-chat-conversation-state'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 
 vi.mock('react-native', async () => ({
   ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
@@ -24,13 +25,20 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ X: 'X' }))
 vi.mock('../../../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
+vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog: () => null }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+vi.mock('../../MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
+vi.mock('../visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
+}))
 
 let overlays: MobileNativeChatRowOverlays | null = null
+let openLink: ((url: string) => void) | null = null
 function Row(): null {
   overlays = useContext(MobileNativeChatRowOverlaysContext)
+  openLink = useContext(MarkdownLinkHandlerContext)
   return null
 }
 const chat = (conversation: MobileNativeChatConversation) => (
@@ -54,7 +62,8 @@ afterEach(() => {
 
 describe.each([
   ['picture', 'Modal', () => overlays!.openImage({ uri: 'file:///a.jpg', label: 'a photo' })],
-  ['actions sheet', 'MessageActionsSheet', () => overlays!.openActions(message)]
+  ['actions sheet', 'MessageActionsSheet', () => overlays!.openActions(message)],
+  ['link sheet', 'LinkActionSheet', () => openLink!('https://example.com')]
 ])("a row's %s", (_, type, open) => {
   function shownAcross(conversations: MobileNativeChatConversation[]): boolean[] {
     const [first, ...rest] = conversations

@@ -8,7 +8,7 @@ import {
 } from '../agent-title-glyphs'
 import { isDshTerminalTitle } from './dsh-terminal-title'
 import type { AgentStatus } from '../agent-title-core'
-import { getWrapperTitleSegments } from '../../../terminal-title-wrapper-segments'
+import { getWrapperTitleSegments } from '../terminal-title-wrapper-segments'
 
 const DSB_TITLE_RE = /(?:^| - )deepseek build$/i
 // Why: DSB separates its spinner with " - "; a Claude task can end on the same suffix.

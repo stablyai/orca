@@ -1,4 +1,4 @@
-import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type {
   RestoreSpawnIntent,
@@ -20,7 +20,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type {
@@ -256,6 +256,8 @@ export type PtyTransport = {
   getRuntimeEnvironmentId?: () => string | null
   /** Execution host captured at spawn; nested SSH differs from its outer runtime owner. */
   getExecutionHostId?: () => ExecutionHostId | null
+  /** Notifies when the execution host is learned or changes after bind, e.g. from attach metadata. */
+  onExecutionHostChange?: (listener: () => void) => () => void
   /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
   getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null

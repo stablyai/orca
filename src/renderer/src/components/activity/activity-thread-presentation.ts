@@ -17,7 +17,7 @@ import type {
   AgentStatusEntry,
   AgentStatusState
 } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { isHistoricalActivityState } from './activity-event-state'
 import type {
   ActivityEvent,

@@ -16,7 +16,7 @@ import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
 

@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId

@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/remote-runtime/remote-runtime-client'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import { packagedClaudeChatScenario } from '../../../orcad/orcad-structured-chat-scenario'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
 import { envelope } from './wsl-orcad-chat-envelope'
 import { exerciseScriptedProviderChats } from './wsl-orcad-scripted-provider-chat'

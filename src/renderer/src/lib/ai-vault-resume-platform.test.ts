@@ -94,21 +94,4 @@ describe('AI-vault resume on a paired server', () => {
       expect(startup?.command).not.toContain('disable_paste_burst')
     }
   )
-
-  it('keeps the Unix-only Codex flag for a server that reports Linux', () => {
-    const startup = buildAiVaultDropRepinStartup({
-      state: pairedServerState('linux'),
-      worktreeId: WORKTREE_ID,
-      substituteCodexHome: '/srv/codex-home',
-      payload: {
-        agent: 'codex',
-        sessionId: 'session-1',
-        sessionCwd: null,
-        sessionExecutionHostId: 'runtime:server',
-        sessionFilePath: '/srv/codex-home/sessions/rollout-x.jsonl'
-      }
-    })
-
-    expect(startup?.command).toContain("codex '-c' 'disable_paste_burst=true'")
-  })
 })

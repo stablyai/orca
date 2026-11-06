@@ -1,8 +1,8 @@
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../shared/agent-status/title/agent-title-identity'
-import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/agent-status/title/terminal-title-agent-type'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isAgentStatusFresh

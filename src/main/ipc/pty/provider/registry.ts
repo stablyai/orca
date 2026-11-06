@@ -3,14 +3,14 @@ import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
-import { colorQueryReplyColorsEqual } from '../../../../shared/pty-owner-color-query-colors'
+import { colorQueryReplyColorsEqual } from '../../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 
 export let localProvider: IPtyProvider = new LocalPtyProvider()
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null

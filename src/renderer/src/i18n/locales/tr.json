@@ -1138,7 +1138,9 @@
         "cb4d287238": "Sunucu adı",
         "3affe7de3a": "Bu tarayıcının ulaşabildiği bir Orca sunucusundan eşleştirme URL'si yapıştırın.",
         "e3bcd082ac": "Orca'ya Bağlan",
-        "mobileScopeRejected": "Bu QR kodu sınırlı (mobil) erişim sağlar. Tam web uygulamasını kullanmak için Ayarlar → Çalışma Zamanı Ortamları → Bu Orca Sunucusunu Paylaş → Yeni Bağlantı üzerinden tarayıcı erişim bağlantısını açın."
+        "mobileScopeRejected": "Bu QR kodu sınırlı (mobil) erişim sağlar. Tam web uygulamasını kullanmak için Ayarlar → Çalışma Zamanı Ortamları → Bu Orca Sunucusunu Paylaş → Yeni Bağlantı üzerinden tarayıcı erişim bağlantısını açın.",
+        "replaceSavedServer": "Bu bağlantı \"{{name}}\" ({{endpoint}}) dışında farklı bir sunucuya bağlanır. Yalnızca aşağıdaki uç noktaya güveniyorsanız bağlanın.",
+        "keepSavedServer": "Kayıtlı sunucuyu koru"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Bu çalıştırma sunucusu için Ajan Oturum Geçmişi kullanılamıyor.",
@@ -3012,7 +3014,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "İnceleme gerekiyor",
         "7698af5263": "Benimkiler",
         "94f0339621": "Bana atananlar",
         "c2268a9982": "Tümü",
@@ -3108,6 +3109,8 @@
         "loadGitHubWorkFailed": "GitHub işleri yüklenemedi.",
         "gitlabViewIssues": "Sorunlar",
         "gitlabViewMrs": "MR'ler",
+        "gitlabInvolvementEveryone": "Herkes",
+        "gitlabInvolvementReviewing": "İncelemelerim",
         "gitlabViewTodos": "Yapılacaklarım",
         "startWorkspaceFromMr": "MR {{number}} üzerinden çalışma alanı başlat",
         "startWorkspaceFromIssue": "Sorun {{number}} üzerinden çalışma alanı başlat",
@@ -3719,7 +3722,6 @@
             "e8b3741ff7": "Yok sayıldı",
             "a9957007eb": "{{value0}} öğesini yok say",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} seç",
             "b771c92598": "Seçilenleri sil",
             "7eee951968": "Çalışma alanları taranıyor",
@@ -3728,7 +3730,6 @@
             "b2c1331844": "Aktif Olmayan Çalışma Alanlarını Sil",
             "7f451a3e2c": "Temizlik önerisi yok sayılamadı",
             "662b8ec3f8": "Çalışma alanı temizlik taraması başarısız oldu",
-            "4d0b72481c": "Yok say",
             "9cc26c019d": "Kaldır",
             "0e2d235c63": "Çalışma alanı taraması hazır",
             "4a35c08764": "İncele",
@@ -3736,9 +3737,6 @@
             "1d3503357d": "Silme işlemi devam ederken bunu kapatıp geri dönebilirsiniz.",
             "4c2990886e": "{{value0}}/{{value1}} silindi",
             "86ba852118": "{{value0}}, {{value1}} başarısız oldu",
-            "deletingCount": "Silinen çalışma alanları: {{value0}}",
-            "deleteCount": "Çalışma alanları silinsin mi: {{value0}}?",
-            "selectedForDeletionCount": "Silinmek üzere seçilen: {{value0}}",
             "deleteButtonCount": "{{value0}} Sil",
             "archivedStatus": "Arşivlendi",
             "74f6c16279": "Geri"
@@ -3753,7 +3751,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commit'ler",
             "contextLabel": "Bağlam",
             "flagsLabel": "Bayraklar",
             "collapseDetails": "Ayrıntıları daralt",
@@ -4554,7 +4551,6 @@
             "5c938d39ac": "hf",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Başka hesap yok",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -6027,8 +6023,6 @@
           "expandAriaLabel": "{{repo}} için gizli worktree'leri genişlet",
           "hiding_one": "Bulunan {{count}} worktree gizleniyor",
           "hiding_other": "Bulunan {{count}} worktree gizleniyor",
-          "hidingInRepo_one": "{{repo}} içinde bulunan {{count}} worktree gizleniyor",
-          "hidingInRepo_other": "{{repo}} içinde bulunan {{count}} worktree gizleniyor",
           "keepHiddenAriaLabel_one": "{{repo}} için bulunan {{count}} worktree'yi gizli tut; proje menüsünden geri getir",
           "keepHiddenAriaLabel_other": "{{repo}} için bulunan {{count}} worktree'yi gizli tut; proje menüsünden geri getir",
           "keepHiddenTooltip": "Gizli tut - proje menüsünden geri getir",
@@ -7952,9 +7946,6 @@
           "browserExtensions": {
             "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
             "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Orkestrasyon panelini aç veya kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10155,14 +10146,6 @@
               "extension": "eklenti",
               "chrome": "chrome",
               "password": "parola yöneticisi"
-            },
-            "orchestrationPanel": {
-              "title": "Orkestrasyon paneli",
-              "description": "Her ajanın birlikte çalıştığı ajanları sohbetinin veya terminalinin yanında gösterir.",
-              "orchestration": "orkestrasyon",
-              "agents": "ajanlar",
-              "workers": "çalışanlar",
-              "manager": "yönetici"
             }
           }
         },
@@ -11914,7 +11897,7 @@
             "terminalRun": "Terminallerinizde komut çalıştırma (SSH dahil)"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir ve başka programlar çalıştırabilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayımcının kodunu Orca içinde çalıştırır. Orca neye erişebildiğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
@@ -15059,9 +15042,7 @@
           "ae3b00ca82": "GitHub görevlerini ayarla",
           "ff92d15436": "Orca, ajanlar işlerini bitirdiğinde veya yardıma ihtiyaç duyduğunda size bildirim gönderecek.",
           "b054332836": "Bildirimleri ayarla",
-          "04ae28d8ca": "Saatlerce bakacağınız görünümü seçin.",
           "f396db9f20": "Kendi evinizdeymiş gibi hissettirin",
-          "322fc50a18": "Orca her CLI ajanıyla çalışır. En sık kullanacağınızı seçin. İstediğiniz zaman değiştirin.",
           "198b148b3c": "Varsayılan ajanınızı seçin",
           "windowsTerminalTitle": "Windows terminal varsayılanlarını ayarla",
           "windowsTerminalSubtitle": "Yeni bölmeler için varsayılan kabuğu ve terminaldeki sağ tık davranışını seçin.",
@@ -15517,8 +15498,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "örn. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Özel komut",
-            "4b2fc4b80c": "Düşünme çabası",
-            "be8917699e": "Model",
             "560d4feb00": "Özel",
             "29d119fe95": "Ajan",
             "f9382b48a1": "AI yazarını etkinleştir",
@@ -17154,6 +17133,8 @@
               "25349b66fc": "Yeni Markdown Dosyası",
               "784812ca24": "Aktif çalışma alanında bir tarayıcı sekmesi açın.",
               "892bfa9339": "Yeni Tarayıcı Sekmesi",
+              "splitChatRight": "Sohbeti Sağa Böl",
+              "splitChatDown": "Sohbeti Aşağı Böl",
               "verbs": {
                 "newBrowser": "yeni tarayıcı",
                 "newBrowserTab": "yeni tarayıcı sekmesi",
@@ -17167,6 +17148,10 @@
                 "newTerminal": "yeni terminal",
                 "newTerminalTab": "yeni terminal sekmesi",
                 "newShell": "yeni shell",
+                "splitChatRight": "sohbeti sağa böl",
+                "splitChatDown": "sohbeti aşağı böl",
+                "chatPaneRight": "sohbet paneli sağda",
+                "chatPaneBelow": "sohbet paneli altta",
                 "terminalTab": "terminal sekmesi",
                 "createWorktree": "worktree oluştur",
                 "addWorktree": "worktree ekle",
@@ -17176,18 +17161,8 @@
                 "removeWorktree": "worktree kaldır",
                 "trashWorktree": "worktree'yi çöpe at",
                 "addQuickCommand": "hızlı komut ekle",
-                "newQuickCommand": "yeni hızlı komut",
-                "splitChatRight": "sohbeti sağa böl",
-                "newChatRight": "sağda yeni sohbet",
-                "chatPaneRight": "sohbet paneli sağda",
-                "splitChatDown": "sohbeti aşağı böl",
-                "newChatBelow": "altta yeni sohbet",
-                "chatPaneBelow": "sohbet paneli altta"
-              },
-              "splitChatRight": "Sohbeti Sağa Böl",
-              "splitChatRightDescription": "Sağda ayrı bir bölmede yeni bir sohbet açın.",
-              "splitChatDown": "Sohbeti Aşağı Böl",
-              "splitChatDownDescription": "Altta ayrı bir bölmede yeni bir sohbet açın."
+                "newQuickCommand": "yeni hızlı komut"
+              }
             }
           },
           "palette": {
@@ -18006,6 +17981,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Kaydedilen çalıştırma ana makinesi artık bu proje kurulumuyla eşleşmiyor."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Aracı başlatma ayarları her çalıştırmada yeni bir oturum gerektirir."
         }
       },
       "agent": {
@@ -19075,7 +19053,32 @@
           "system": "İşletim sistemiyle eşleştir",
           "dark": "Gözü yormaz",
           "light": "Parlak ve net"
-        }
+        },
+        "looks": {
+          "activeNow": "şimdi",
+          "browsePlugins": "Eklentilere göz at",
+          "browseThemePlugins": "Tema eklentilerine göz at",
+          "colorMode": "Renk modu",
+          "colorModeCaption": "Açık, koyu veya sisteminize uygun.",
+          "darkLook": "Koyu görünüm",
+          "darkLooks": "Koyu görünümler",
+          "lightLook": "Açık görünüm",
+          "lightLooks": "Açık görünümler",
+          "moreThemes": "Daha fazla tema",
+          "next": "Daha fazla görünüm",
+          "orcaDark": "Orca Koyu",
+          "orcaLight": "Orca Açık",
+          "pluginsHint": "Daha fazla tema eklenti olarak sunulur.",
+          "previous": "Önceki görünümler",
+          "showsWhenDark": "Sisteminiz koyu olduğunda gösterilir",
+          "showsWhenLight": "Sisteminiz açık olduğunda gösterilir",
+          "slotLabel": "Düzenlenecek görünüm",
+          "sourceBuiltIn": "Yerleşik",
+          "sourceCommunity": "Terminal paleti",
+          "themes": "Tema",
+          "themesCaption": "İsteğe bağlı. Uygulama temaları ve terminal paletleriyle daha ileri gidin."
+        },
+        "subtitle": "Açık veya koyu seçin, isterseniz bir tema da seçin. İkisini de istediğiniz zaman Ayarlar’dan değiştirebilirsiniz."
       },
       "integrations": {
         "capabilities": {
@@ -19311,8 +19314,6 @@
       },
       "turnDiff": {
         "partial": "Kısmi diff",
-        "showDiff": "Diff'i göster",
-        "hideDiff": "Diff'i gizle",
         "changedFiles_other": "Değiştirilen {{count}} dosya",
         "changedFiles_one": "Değiştirilen {{count}} dosya"
       },
@@ -19352,6 +19353,9 @@
       "composer": {
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
+        "previewQueue": "Sıraya al",
+        "previewSteer": "Yönlendir",
+        "previewSteerQueued": "Sıradakini yönlendir",
         "alternateQueueHint": "Sıraya almak için {{shortcut}}",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",
@@ -19632,8 +19636,6 @@
         "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
-      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
-      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
@@ -19830,7 +19832,6 @@
       "dismissDeliveryNotice": "Kapat",
       "addSelectionToChat": "Sohbete ekle",
       "messageNotSent": "Mesaj gönderilmedi",
-      "deliveryUnconfirmed": "İletim doğrulanamadı — tekrar denemeden önce sohbeti kontrol edin",
       "messageSending": "Gönderiliyor…",
       "userMessage": {
         "showFull": "Mesajın tamamını göster",
@@ -19899,8 +19900,7 @@
       "interruptedContinue": {
         "continue": "Devam et",
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
-        "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder.",
-        "unconfirmed": "{{agent}} ajanının Devam et isteğini alıp almadığı doğrulanamadı. Yeniden denemeden önce sohbeti kontrol edin."
+        "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."
@@ -20072,6 +20072,13 @@
         "hostUnavailable": "Ekin ana bilgisayarı kullanılamıyor. Yeniden bağlanıp tekrar deneyin.",
         "connectionChanged": "Bağlantı değişti. Bu eki kapatıp yeniden açın.",
         "readFailed": "Bu ek ana bilgisayarında okunamıyor. Yeniden bağlanıp tekrar deneyin. Dosya silinmiş veya değiştirilmiş olabilir."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopyalanamadı",
+        "copyIdentity": "{{value0}} kopyala",
+        "folder": "Klasör",
+        "mainCheckout": "Ana çalışma kopyası",
+        "worktree": "Worktree"
       }
     },
     "tab": {
@@ -20120,9 +20127,7 @@
         "browse": {
           "noSizes": "Henüz hiçbir çalışma alanı boyutu ölçülmedi.",
           "noSizesDescription": "Boyutlar, disk kullanımı ölçüldükten sonra görünür.",
-          "measureSizes": "Tara",
           "measureSizesTitle": "Çalışma alanı boyutlarını tara",
-          "measureSizesDescription": "Çalışma alanlarını boyuta göre karşılaştırmak, sıralamak ve filtrelemek için disk kullanımını tarayın.",
           "sizeOnDisk": "Disk üzerindeki boyut: {{value0}}",
           "checkingGitRow": "Git durumu kontrol ediliyor",
           "searchPlaceholder": "İsim, repo, branch, yol, ana makine ara",
@@ -20466,6 +20471,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Takip mesajlarını sıraya al",
+        "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
+        "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
+        "scrollToLatestOnSendSearchPosition": "konum",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
@@ -20477,7 +20485,13 @@
         "queueSearchSteer": "yönlendir",
         "shellEnvSearchVariables": "ortam değişkenleri",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "vekil sunucu"
+        "shellEnvSearchProxy": "vekil sunucu",
+        "idleStopTitle": "Boştaki ajanları şu süre sonra durdur",
+        "idleStopCopy": "Bellek boşaltmak için, sohbet bu kadar süre boşta kaldığında sohbetin ajanını sonlandırır. Sohbet kalır ve bir sonraki mesajınız ajanı yeniden başlatır. Turlar arasında arka planda çalışmaya devam eden ajanlar için Asla seçeneğini seçin.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "zaman aşımı",
+        "idleStopSearchKeepAlive": "canlı tut",
+        "idleStopNever": "Asla"
       }
     },
     "agentChildRow": {
@@ -20614,7 +20628,10 @@
       "workerAutoClose": {
         "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
         "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "keepOpen": "Açık tut"
+        "keepOpen": "Açık tut",
+        "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
+        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+        "temporaryBadge": "Geçici"
       }
     },
     "wslHostMark": {
@@ -20804,10 +20821,8 @@
       "offTerminal": "Terminali mi tercih ediyorsunuz? Terminal tam olarak desteklenmeye devam ediyor. Sohbeti seçene kadar ajanlarınız orada açılmaya devam eder.",
       "onIntro": "Sohbet arayüzü artık deneysel değil ve Orca’nın bir parçası. Ajanlarınız zengin mesajlar, görseller ve resimlerle sohbet olarak açılmaya devam ediyor.",
       "onTerminal": "Terminal de tam olarak desteklenmeye devam ediyor. İstediğiniz ajanı dilediğiniz zaman geri alabilirsiniz.",
-      "changeInSettings": "İstediğiniz zaman <link>Ayarlar → Ajanlar</link> bölümünden değiştirin.",
       "stayInTerminal": "Terminalde kal",
       "cta": "Sohbet arayüzünü kullan",
-      "saveFailed": "Sohbet arayüzü açılamadı. Ayarlar → Ajanlar bölümünden Sohbet’i seçin.",
       "demoTabTitle": "Girişi açıkla",
       "demoPrompt": "Girişin nasıl çalıştığını çıkar",
       "demoReply": "Giriş {{file}} dosyasında başlar: tarayıcı /login adresine gönderir, sunucu parolayı denetleyip bir oturum oluşturur, ardından sizi uygulamaya yönlendirir. Akış şöyle:",

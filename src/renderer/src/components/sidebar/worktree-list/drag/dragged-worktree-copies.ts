@@ -9,7 +9,8 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { AppState } from '../../../../store/types'
 import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
 import { getAllWorktreesFromState } from '../../../../store/selectors'
-import { getWorkspaceStatus } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The cards a drag picked up, by host: a twin on another host shares each card's id. */

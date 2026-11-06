@@ -6,7 +6,7 @@ import {
   isTerminalQueryReply,
   needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
-import { PtyStartupIngress } from '../../../pty-startup-ingress'
+import { PtyStartupIngress } from '../../pty/ingress/pty-startup-ingress'
 
 describe('isTerminalQueryReply', () => {
   it('routes complete Kitty graphics acknowledgements as replies', () => {

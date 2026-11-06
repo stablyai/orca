@@ -95,7 +95,7 @@ describe('useIpcEvents browser tab close routing', () => {
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
@@ -217,6 +217,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -325,7 +326,7 @@ describe('useIpcEvents browser tab close routing', () => {
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
@@ -447,6 +448,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -550,7 +552,7 @@ describe('useIpcEvents browser tab close routing', () => {
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
@@ -672,6 +674,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {

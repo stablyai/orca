@@ -3,7 +3,7 @@ import { resolveReviewRepository } from '@/lib/review-owner'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
-import { getCheckRunTabIdentity } from '@/components/editor/check-run-details-tab'
+import { getCheckRunTabIdentity } from '@/components/editor/check-details/actions/check-run-details-tab'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

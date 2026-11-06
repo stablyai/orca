@@ -19,8 +19,8 @@ import {
 } from './agent-name-token-match'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './providers/pi-compatible-synthetic-title'
-import { memoizeTitleClassification } from '../../terminal-title-classification-memo'
-import { getWrapperTitleSegments } from '../../terminal-title-wrapper-segments'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
 

@@ -11,8 +11,8 @@ import {
   SSH_HOST_NOT_SERVED_MESSAGE,
   SshHostNotServedError
 } from '../providers/ssh-host-not-served-error'
-import { RuntimeGitCommands } from './orca-runtime-git'
-import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
+import { RuntimeGitCommands } from './integrations/git/orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './integrations/git/runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   checkoutBranch: vi.fn(),
@@ -41,6 +41,21 @@ vi.mock('../git/source-control/staged-commit-context', async (importOriginal) =>
 vi.mock('../git/source-control/status-read', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getStatus: mocks.getStatus
+}))
+
+// The guard has its own real-git tests; here only the runtime's wiring to the provider matters.
+vi.mock('../git/branch-switch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  switchBranchGuarded: async (
+    _path: string,
+    branch: string,
+    _options: unknown,
+    deps: { checkout: () => Promise<unknown>; onSwitched?: () => void }
+  ) => {
+    await deps.checkout()
+    deps.onSwitched?.()
+    return { branch, previousBranch: 'main' }
+  }
 }))
 
 vi.mock('../git/checkout', () => ({
@@ -176,7 +191,7 @@ describe('RuntimeGitCommands', () => {
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
-    mocks.checkoutBranch.mockResolvedValue(undefined)
+    mocks.checkoutBranch.mockResolvedValue({ skippedPaths: [] })
 
     await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
       ok: true,

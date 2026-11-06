@@ -1,4 +1,4 @@
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import type { AgentForegroundProcessResolution } from './agent-foreground-process'
 

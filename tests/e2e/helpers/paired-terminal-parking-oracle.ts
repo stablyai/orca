@@ -5,7 +5,7 @@ import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../src/shared/
 import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
-} from '../../../src/shared/terminal-surface-id'
+} from '../../../src/shared/workspace-layout/terminal-surface-id'
 import {
   readPairedRetentionSample,
   startRendererLagProbe

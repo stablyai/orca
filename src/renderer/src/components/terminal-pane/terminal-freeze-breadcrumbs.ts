@@ -3,7 +3,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   type PtyDeliveryBreadcrumb,
   createPtyDeliveryBreadcrumbRing
-} from '../../../../shared/pty-delivery-diagnostics'
+} from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import {
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB,
   recordTerminalWebglDiagnostic,

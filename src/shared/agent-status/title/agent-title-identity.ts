@@ -19,7 +19,7 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   getPiCompatibleTitleBrand
 } from './providers/pi-compatible-synthetic-title'
-import { memoizeTitleClassification } from '../../terminal-title-classification-memo'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /** Scope prompt-cache timers to Claude title conventions. */
 function computeIsClaudeAgent(title: string): boolean {

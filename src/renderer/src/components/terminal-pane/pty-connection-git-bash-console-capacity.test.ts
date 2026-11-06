@@ -29,7 +29,7 @@ import {
   type PtyStreamPayload,
   type PtyExitPayload
 } from './pty-transport-test-harness'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { PtyTransport } from './pty-transport-types'
@@ -190,7 +190,6 @@ async function heldLaunch({
           containerRef: { current: null },
           getTabWideAgentHintLeafId: () => null,
           expandedStyleSnapshotRef: { current: new Map() },
-          paneFontSizesRef: { current: new Map() },
           paneCwdRef: { current: new Map() },
           panePtyBindingsRef: { current: new Map() },
           setTabPaneExpanded: vi.fn(),

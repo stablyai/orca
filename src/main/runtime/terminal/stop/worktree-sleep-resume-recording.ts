@@ -12,7 +12,7 @@ import {
   type PaneLaunchConfigOf
 } from './hook-status-resume-records'
 import type { ResumeRecordStatus } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
-import { applyWindowLayoutCommand } from '../../runtime-layout-apply'
+import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -24,9 +24,9 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
   /** Capture after earlier status writes so their saved copy participates in exact cleanup. */

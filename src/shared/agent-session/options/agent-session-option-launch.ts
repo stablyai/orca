@@ -205,7 +205,10 @@ function resolveModelOptionLaunch(
   }
   for (const option of modelOptions) {
     const value = modelValues[option.id]
-    if (value === undefined) {
+    if (
+      value === undefined ||
+      (agent === 'claude' && option.id === 'effort' && value === 'ultracode')
+    ) {
       continue
     }
     if (option.apply.composedIntoModel) {

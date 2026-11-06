@@ -12,7 +12,8 @@ import {
 } from '../../../../shared/terminal/input/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 import { mode2031SequenceFor } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import { PtyStartupIngress, type PtyIngressEmission } from '../../../../shared/pty-startup-ingress'
+import { PtyStartupIngress } from '../../../../shared/terminal/pty/ingress/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import {
   extractOnlyCookedEchoSafeQueryReplies,
   needsCookedEchoSafeQueryReply

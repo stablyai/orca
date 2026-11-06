@@ -1,5 +1,5 @@
 import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
-import { isTerminalResourceLimitError } from '../../../../shared/terminal-spawn-resource-error'
+import { isTerminalResourceLimitError } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-resource-error'
 
 // Legacy tab messages render as newline-joined text and need whole-run dedup; pane errors stay separate until render.
 function containsWholeLineRun(accumulated: string, message: string): boolean {

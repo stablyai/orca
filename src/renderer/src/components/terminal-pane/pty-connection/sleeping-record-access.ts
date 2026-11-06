@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/index'
 import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-record-legacy-pane-key'
-import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'
+import { neutralTerminalTitle } from '../../../../../shared/workspace-layout/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord

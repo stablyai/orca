@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mobileRelayMintFailureFromUnknown } from './mobile-relay-mint-failure'
 
-// Producer contract: src/main/runtime/mobile-cloud-relay/relay-control-timeout-classification.test.ts.
 describe('mobileRelayMintFailureFromUnknown', () => {
   it('keeps known machine-readable Relay codes for diagnostics', () => {
     expect(

@@ -13,7 +13,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,

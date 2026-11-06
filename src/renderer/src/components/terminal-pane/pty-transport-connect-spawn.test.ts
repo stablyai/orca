@@ -5,7 +5,7 @@ import {
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { ConnectCallbacks } from './pty-connection-test-pane-fixtures'
-import { terminalAttachResult } from '../../../../shared/terminal-attach-result'
+import { terminalAttachResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attach-result'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
@@ -440,7 +440,8 @@ describe('createIpcPtyTransport', () => {
     expect(writeMock).not.toHaveBeenCalled()
   })
   it('paints an old image and delayed live bytes once without claiming their newer frontier', async () => {
-    const { provenSpawnResponse } = await import('../../../../shared/terminal-spawn-response')
+    const { provenSpawnResponse } =
+      await import('../../../../shared/terminal/pty/lifecycle/terminal-spawn-response')
     const { bindPtyConnectionTestMocks } = await import('./pty-connection-mocks.spec')
     const { createInitialStoreState } = await import('./pty-connection-test-store-fixtures')
     const { buildPaneConnectionDeps } = await import('./pty-connection-test-deps')
@@ -451,7 +452,7 @@ describe('createIpcPtyTransport', () => {
     const { SearchAddon } = await import('@xterm/addon-search')
     const { SerializeAddon } = await import('@xterm/addon-serialize')
     const { PaneManager } = await import('@/lib/pane-manager/pane-manager')
-    const { isTerminalLeafId } = await import('../../../../shared/stable-pane-id')
+    const { isTerminalLeafId } = await import('../../../../shared/workspace-layout/stable-pane-id')
     const { installTerminalTestGlobals, restoreTerminalTestGlobals } =
       await import('./pty-connection-test-environment')
     const { flushAsyncTicks } = await import('./pty-connection-test-async')

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import { resolvePaneAgentOwner } from '../../../../../shared/agent-status/identity/pane-agent-owner'
-import { titleAfterInferredInterrupt } from '../../../../../shared/terminal-pane-title-reset'
+import { titleAfterInferredInterrupt } from '../../../../../shared/workspace-layout/terminal-pane-title-reset'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import {

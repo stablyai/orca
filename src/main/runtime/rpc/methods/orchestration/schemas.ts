@@ -5,9 +5,9 @@ import {
   OptionalBoolean,
   requiredString
 } from '../../../../../shared/rpc-contract/rpc-param-primitives'
-import type { TaskStatus } from '../../../orchestration/db'
-import { isGroupAddress } from '../../../orchestration/groups'
-import { MESSAGE_TYPES } from '../../../orchestration/types'
+import type { TaskStatus } from '../../../orchestration/db/orchestration-records'
+import { isGroupAddress } from '../../../orchestration/addressing/groups/group-addressing'
+import { MESSAGE_TYPES } from '../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import {
   getLifecycleGroupRecipientError,

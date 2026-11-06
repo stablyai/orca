@@ -26,19 +26,20 @@ import {
   isPiAgentTitle,
   isPiTerminalTitle,
   isGeminiTerminalTitle,
-  isGrokRotatingWorkingTitle
+  isGrokRotatingWorkingTitle,
+  type AgentStatus
 } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
-import type { AgentStatus } from './agent-title-core'
+
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
   getPiCompatibleTitleSeparatorStatus,
   getPiCompatibleSyntheticAgentStatus
 } from './providers/pi-compatible-synthetic-title'
 import { getPiStateTitleStatus } from './providers/pi-state-title-marker'
-import { getWrapperTitleSegments } from '../../terminal-title-wrapper-segments'
-import { resolveExplicitTerminalTitleAgentType } from '../../terminal-title-agent-type'
-import { memoizeTitleClassification } from '../../terminal-title-classification-memo'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
+import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /** Where a working agent settled: at rest, or on a prompt that needs the user. */
 export type AgentIdleStatus = Exclude<AgentStatus, 'working'>

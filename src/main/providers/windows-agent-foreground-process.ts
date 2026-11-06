@@ -9,7 +9,7 @@ import {
   resolveOuterWrapperForegroundIdentity,
   shouldInspectOuterWrapperForegroundProcess
 } from '../../shared/foreground-wrapper-agent'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import {
   queryWindowsPaneProcessInventory,
   type WindowsProcessCandidate,

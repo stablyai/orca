@@ -105,7 +105,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/worktree-card-meta-row.tsx",
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/metadata/worktree-card-meta-row.tsx",
     "kind": "jsx-attribute:label",
     "text": "sidebar",
     "dynamic": false,
@@ -238,14 +238,14 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/card-identity-parts.tsx",
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-identity-parts.tsx",
     "kind": "jsx-attribute:label",
     "text": "sidebar",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/card-primitives.tsx",
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-primitives.tsx",
     "kind": "object-property:title",
     "text": "text-[13px] leading-5",
     "dynamic": false,

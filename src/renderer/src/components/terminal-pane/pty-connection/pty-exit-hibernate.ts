@@ -8,7 +8,7 @@ import {
   isHostPtySleepPending
 } from '../pty-shutdown-exit-deferral'
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'

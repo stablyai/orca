@@ -3,7 +3,7 @@ import {
   isNormalizedAgentTitleStamp,
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   resolvePaneRendererPolicy,

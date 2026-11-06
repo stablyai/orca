@@ -18,7 +18,7 @@ import {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from './runtime-status'
 import { createDiffCommentsSlice } from './diffComments'
-import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()

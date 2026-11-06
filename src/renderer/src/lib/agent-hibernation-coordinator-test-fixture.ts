@@ -1,6 +1,9 @@
 import { vi, type Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
@@ -17,6 +20,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
+import type { RuntimeTerminalAttention } from '../../../shared/runtime-terminal-contracts'
 
 export const NOW = 10_000_000
 export const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -25,10 +29,18 @@ export type RuntimeEnvironmentCallStub = Mock<(args: RuntimeEnvironmentCallReque
 
 export const mockRuntimeEnvironmentCall: RuntimeEnvironmentCallStub = vi.fn()
 
+/** This window's main process: who else shows or types into its own PTYs. */
+export const mockGetTerminalAttention: Mock<
+  (ids: string[]) => Promise<Record<string, RuntimeTerminalAttention>>
+> = vi.fn(async () => ({}))
+
 vi.stubGlobal('window', {
   api: {
     runtimeEnvironments: {
       call: mockRuntimeEnvironmentCall
+    },
+    pty: {
+      getTerminalAttention: mockGetTerminalAttention
     }
   }
 })
@@ -190,5 +202,7 @@ export function resetAgentHibernationCoordinatorFixture(): void {
   resetHibernationPaneAgeForTests()
   hydrateDrivers([])
   mockRuntimeEnvironmentCall.mockReset()
+  mockGetTerminalAttention.mockReset()
+  mockGetTerminalAttention.mockImplementation(async () => ({}))
   vi.useRealTimers()
 }

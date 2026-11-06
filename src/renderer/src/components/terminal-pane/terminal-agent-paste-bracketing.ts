@@ -3,7 +3,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import type { TerminalPasteTextOptions } from './terminal-paste-model'
 

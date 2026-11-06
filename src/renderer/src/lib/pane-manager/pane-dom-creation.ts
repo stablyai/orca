@@ -6,7 +6,7 @@ import { Terminal, type ILink, type ITerminalOptions } from '@xterm/xterm'
 
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'

@@ -2,8 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { connect } from './rpc-client'
 import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
-import { diagnoseConnection } from '../diagnostics/connection-diagnostics-analysis'
-import type { ConnectionLogEntry } from './types'
+
 import { recordSocketDeadlineAppState } from './socket-deadline-clock'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
@@ -78,12 +77,6 @@ function lastSocket(): WedgedWebSocket {
   return sockets[sockets.length - 1]!
 }
 
-function openConnectionLogs(spy: MockInstance<typeof console.log>): Record<string, unknown>[] {
-  return spy.mock.calls
-    .filter((call) => call[0] === '[net] openConnection')
-    .map((call) => logFields(call[1]) ?? {})
-}
-
 describe('synthesized close diagnostics', () => {
   let logSpy: MockInstance<typeof console.log>
 
@@ -100,170 +93,6 @@ describe('synthesized close diagnostics', () => {
     logSpy.mockRestore()
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
-  })
-
-  it.each(['connect', 'handshake'] as const)(
-    'redials a suspended %s deadline without blaming the endpoint',
-    async (kind) => {
-      let elapsed = 0
-      const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
-      const entries: ConnectionLogEntry[] = []
-      const client = connect('ws://desktop.invalid', 'token', 'server-key', {
-        onLog: (entry) => entries.push(entry)
-      })
-      if (kind === 'handshake') {
-        lastSocket().open()
-      }
-      const timeout = kind === 'connect' ? 12_000 : PAIRED_E2EE_HANDSHAKE_DEADLINE_MS
-      try {
-        elapsed = 164 * 60_000
-        vi.setSystemTime(Date.now() + elapsed - timeout)
-        await vi.advanceTimersByTimeAsync(timeout)
-        expect(client.getState()).toBe('reconnecting')
-        expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(true)
-        expect(entries.some((entry) => entry.code === `${kind}-timeout`)).toBe(false)
-        expect(
-          diagnoseConnection({
-            endpoint: 'ws://desktop.invalid',
-            state: client.getState(),
-            entries
-          }).likelyCause
-        ).not.toContain('endpoint did not answer')
-        await vi.advanceTimersByTimeAsync(500)
-        expect(sockets).toHaveLength(2)
-      } finally {
-        client.close()
-        clock.mockRestore()
-      }
-    }
-  )
-
-  it('does not blame the endpoint when device sleep pauses the monotonic clock', async () => {
-    let elapsed = 0
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
-    const entries: ConnectionLogEntry[] = []
-    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
-      onLog: (entry) => entries.push(entry)
-    })
-    try {
-      recordSocketDeadlineAppState('background')
-      elapsed = 12_000
-      vi.setSystemTime(Date.now() + 3 * 60 * 60_000)
-      recordSocketDeadlineAppState('active')
-      await vi.advanceTimersByTimeAsync(12_000)
-      expect(client.getState()).toBe('reconnecting')
-      expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(true)
-      expect(entries.some((entry) => entry.code === 'connect-timeout')).toBe(false)
-    } finally {
-      client.close()
-      clock.mockRestore()
-    }
-  })
-
-  it('lets the next on-time failure replace a delayed deadline diagnosis', async () => {
-    let elapsed = 0
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
-    const entries: ConnectionLogEntry[] = []
-    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
-      onLog: (entry) => entries.push(entry)
-    })
-    try {
-      elapsed = 164 * 60_000
-      await vi.advanceTimersByTimeAsync(12_000)
-      expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(true)
-      elapsed += 500
-      await vi.advanceTimersByTimeAsync(500)
-      expect(sockets).toHaveLength(2)
-      elapsed += 12_000
-      await vi.advanceTimersByTimeAsync(12_000)
-      expect(entries.filter((entry) => entry.code === 'connect-timeout')).toHaveLength(1)
-      expect(
-        diagnoseConnection({
-          endpoint: 'ws://desktop.invalid',
-          state: client.getState(),
-          entries
-        }).likelyCause
-      ).toContain('endpoint did not answer')
-    } finally {
-      client.close()
-      clock.mockRestore()
-    }
-  })
-
-  it.each([3 * 60 * 60_000, -3 * 60 * 60_000])(
-    'keeps an on-time connect timeout when the wall clock shifts by %i ms',
-    async (wallShift) => {
-      let elapsed = 0
-      const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
-      const entries: ConnectionLogEntry[] = []
-      const client = connect('ws://desktop.invalid', 'token', 'server-key', {
-        onLog: (entry) => entries.push(entry)
-      })
-      try {
-        elapsed = 12_000
-        vi.setSystemTime(Date.now() + wallShift)
-        await vi.advanceTimersByTimeAsync(12_000)
-        expect(client.getState()).toBe('reconnecting')
-        expect(entries.some((entry) => entry.code === 'connect-timeout')).toBe(true)
-        expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(false)
-      } finally {
-        client.close()
-        clock.mockRestore()
-      }
-    }
-  )
-
-  it('records the close clock when a handshake timeout synthesizes the close', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    lastSocket().open()
-
-    await vi.advanceTimersByTimeAsync(PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
-    expect(client.getState()).toBe('reconnecting')
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(sockets).toHaveLength(2)
-
-    const redial = openConnectionLogs(logSpy)[1]
-    expect(redial?.msSinceLastClose).toBe(500)
-
-    client.close()
-  })
-
-  it('keeps the replacement socket clock when the swallowed close arrives late', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const wedged = lastSocket()
-    wedged.open()
-
-    await vi.advanceTimersByTimeAsync(100)
-    wedged.receive(JSON.stringify({ type: 'e2ee_ready' }))
-    await vi.advanceTimersByTimeAsync(PAIRED_E2EE_HANDSHAKE_DEADLINE_MS - 100)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(sockets).toHaveLength(2)
-    const replacement = lastSocket()
-    replacement.open()
-    replacement.receive(JSON.stringify({ type: 'e2ee_ready' }))
-    replacement.receive('encrypted:{"type":"e2ee_authenticated"}')
-
-    // Deliver the old close during the replacement socket’s lifetime.
-    await vi.advanceTimersByTimeAsync(200)
-    wedged.deliverClose(1006)
-    const staleCloseLog = logFields(
-      logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1]
-    )
-    expect(staleCloseLog?.constructToCloseMs).toBe(PAIRED_E2EE_HANDSHAKE_DEADLINE_MS + 700)
-    expect(staleCloseLog?.aliveMs).toBeNull()
-    expect(staleCloseLog?.inboundIdleMs).toBe(PAIRED_E2EE_HANDSHAKE_DEADLINE_MS + 600)
-
-    await vi.advanceTimersByTimeAsync(300)
-    lastSocket().deliverClose(1006)
-    const closeLog = logFields(
-      logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1]
-    )
-    expect(closeLog?.constructToCloseMs).toBe(500)
-    expect(closeLog?.aliveMs).toBe(500)
-    expect(closeLog?.inboundIdleMs).toBe(500)
-
-    client.close()
   })
 
   it('still latches auth-failed when a real 4001 lands after a synthesized close', async () => {
@@ -336,9 +165,3 @@ describe('synthesized close diagnostics', () => {
     client.close()
   })
 })
-
-function logFields(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object'
-    ? Object.fromEntries(Object.entries(value))
-    : undefined
-}

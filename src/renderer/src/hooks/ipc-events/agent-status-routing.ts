@@ -9,7 +9,7 @@ import type {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { resolveAgentStatusIdentity } from '../../../../shared/agent-status/identity/agent-status-identity'
 import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status/identity/agent-status-terminal-owner'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { useAppStore } from '../../store'
 
 export function isAgentStatusForRecentlyClosedTab(

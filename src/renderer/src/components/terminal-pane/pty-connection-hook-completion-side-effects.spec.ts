@@ -1,7 +1,7 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
@@ -146,6 +146,10 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
+      // A known server OS settles the pane's resize model, leaving only completion's subscriber.
+      mockStoreState.runtimeStatusByEnvironmentId = new Map([
+        ['env-1', { status: { hostPlatform: 'linux' as const }, checkedAt: 1 }]
+      ])
       vi.useFakeTimers()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState.agentStatusByPaneKey[paneKey] = {

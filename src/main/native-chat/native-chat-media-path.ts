@@ -7,7 +7,7 @@ import { MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS } from '../../shared/agent-sess
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimeNativeChatFileContext } from '../../shared/runtime-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   findGrokChatHistoryByCwd,
   findGrokChatHistoryBySessionId,
