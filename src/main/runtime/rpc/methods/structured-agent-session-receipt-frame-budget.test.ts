@@ -5,14 +5,13 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../shared/mobile-bridge-frame-bytes'
-import {
-  AgentSessionSubscribers,
-  type AgentSessionSubscribeInput
-} from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
+import { AgentSessionSubscribers } from '../../../native-chat/agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
+
+import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscribe-input'
 import {
   fixture,
   journals
-} from '../../../native-chat/agent-session-wire/structured-agent-session-subscriber-contract-test-fixture'
+} from '../../../native-chat/agent-session-wire/publication/subscribers/testing/structured-agent-session-subscriber-contract-test-fixture'
 import {
   clearStructuredHostStub,
   hostCalls,

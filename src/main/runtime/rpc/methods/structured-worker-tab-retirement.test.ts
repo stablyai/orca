@@ -1,4 +1,4 @@
-import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { hostTestState } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -8,7 +8,7 @@ import type { AgentSessionLease } from '../../../../shared/agent-session/lifecyc
 /** Every settlement must clear durable restore and prune live worker chat tabs; leftover tabs can reattach released sessions outside orchestration accounting. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'

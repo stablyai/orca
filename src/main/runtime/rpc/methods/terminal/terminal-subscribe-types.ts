@@ -22,6 +22,8 @@ export type TerminalSubscriptionArgs = {
   isMobile: boolean
   supportsDesktopViewportClaims: boolean
   supportsWriteUnavailable: boolean
+  /** The stream's snapshot reached the client and it is now live. */
+  onEstablished?: () => void
   missingHeadlessStateBeforeMobileFit: boolean
   rendererMountRequestedBeforePty: boolean
   serializerGenerationBeforeMobileFit: number

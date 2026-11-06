@@ -1,9 +1,11 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
-  getContextualTour,
   hasContextualTourActionStep,
+  isContextualTourStepDone
+} from '../../../../../shared/contextual-tour-action-steps'
+import {
+  getContextualTour,
   type ContextualTourId,
-  isContextualTourStepDone,
   getContextualTourStepIndex
 } from '../../../../../shared/contextual-tours'
 import {

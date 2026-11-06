@@ -2,6 +2,7 @@ import { terminalImageViewerSupported } from '../../terminal/launch/terminal-ima
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
+import { callerLaunchSource } from '../../../agent-launch/agent-started-telemetry'
 import { randomUUID } from 'node:crypto'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
@@ -10,8 +11,8 @@ import {
   AgentLaunchStructuredSessionRefusedError,
   type AgentLaunchSurfaceFactory
 } from '../../../agent-launch/agent-launch-surface-factories'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { RpcContext } from '../core'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from './structured-agent-session-gate'
@@ -133,6 +134,7 @@ export function agentLaunchSurfaceFactory(
       accountEnv
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options, agent)
+      const attributedLaunchSource = callerLaunchSource(context, launchSource)
       let promptRodeLaunchCommand = false
       const hasEarlyTab = earlyTab !== null
       if (earlyTab?.closedByUser()) {
@@ -160,7 +162,7 @@ export function agentLaunchSurfaceFactory(
         ...(launchPreferences ? { launchPreferences } : {}),
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
-        ...(launchSource ? { launchSource } : {}),
+        ...(attributedLaunchSource ? { launchSource: attributedLaunchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
         ...(accountEnv ? { accountEnv: { ...accountEnv } } : {}),
         ...(presentation && (!movesHostWindow || !hasEarlyTab || presentation === 'background')

@@ -5,7 +5,11 @@ import type {
   GitLabTaskFilter,
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
-import type { GitLabWorkItem, GitLabTodo } from '../../../../shared/gitlab-types'
+import type {
+  GitLabMRInvolvement,
+  GitLabWorkItem,
+  GitLabTodo
+} from '../../../../shared/gitlab-types'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
@@ -60,7 +64,9 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
 
   // Like Linear, fetch GitLab directly for the primary repo without GitHub’s workItemsCache/aggregation path.
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
+  const [gitlabMRInvolvement, setGitlabMRInvolvement] = useState<GitLabMRInvolvement | null>(null)
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
+  const [gitlabListQueryKey, setGitlabListQueryKey] = useState<string | null>(null)
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
   const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
@@ -99,6 +105,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     }
     return gitlabItems
   }, [gitlabItems, gitlabView])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every added field is assigned below before the model is returned.
   const nextModel = model as typeof model & {
     taskSourceManuallyChangedRef: typeof taskSourceManuallyChangedRef
     lastPageTaskSourceRef: typeof lastPageTaskSourceRef
@@ -114,8 +121,12 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     setGithubMode: typeof setGithubMode
     gitlabFilter: typeof gitlabFilter
     setGitlabFilter: typeof setGitlabFilter
+    gitlabMRInvolvement: typeof gitlabMRInvolvement
+    setGitlabMRInvolvement: typeof setGitlabMRInvolvement
     gitlabItems: typeof gitlabItems
     setGitlabItems: typeof setGitlabItems
+    gitlabListQueryKey: typeof gitlabListQueryKey
+    setGitlabListQueryKey: typeof setGitlabListQueryKey
     gitlabLoading: typeof gitlabLoading
     setGitlabLoading: typeof setGitlabLoading
     gitlabError: typeof gitlabError
@@ -149,8 +160,12 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.setGithubMode = setGithubMode
   nextModel.gitlabFilter = gitlabFilter
   nextModel.setGitlabFilter = setGitlabFilter
+  nextModel.gitlabMRInvolvement = gitlabMRInvolvement
+  nextModel.setGitlabMRInvolvement = setGitlabMRInvolvement
   nextModel.gitlabItems = gitlabItems
   nextModel.setGitlabItems = setGitlabItems
+  nextModel.gitlabListQueryKey = gitlabListQueryKey
+  nextModel.setGitlabListQueryKey = setGitlabListQueryKey
   nextModel.gitlabLoading = gitlabLoading
   nextModel.setGitlabLoading = setGitlabLoading
   nextModel.gitlabError = gitlabError

@@ -15,6 +15,7 @@ type PreviewHostRenderer = {
 type PreviewGuestRegistration = {
   host: PreviewHostRenderer
   readBoundGrantId: () => string | null
+  readDocumentUrl: () => string
 }
 
 // IPC click reports identify only a sender; bind it to a known preview and grant.
@@ -65,6 +66,11 @@ export function readDocPreviewGuestBoundGrantId(guest: Electron.WebContents): st
   return previewGuests.get(guest)?.readBoundGrantId() ?? null
 }
 
+/** URL of the guest's committed document; unlike getURL(), pushState cannot rewrite it. */
+export function readDocPreviewGuestDocumentUrl(guest: Electron.WebContents): string {
+  return previewGuests.get(guest)?.readDocumentUrl() ?? ''
+}
+
 // Preview navigation stays within its grant; only trusted preload click reports may open web links.
 export function installDocPreviewGuestPolicy(
   guest: Electron.WebContents,
@@ -73,6 +79,7 @@ export function installDocPreviewGuestPolicy(
   // Pin the guest to its first admitted grant.
   let boundGrantId: string | null = null
   let boundPageId: string | null = null
+  let documentUrl = guest.getURL()
 
   const latchGrantFromUrl = (rawUrl: string): void => {
     if (boundGrantId !== null) {
@@ -93,7 +100,8 @@ export function installDocPreviewGuestPolicy(
 
   previewGuests.set(guest, {
     host,
-    readBoundGrantId: () => boundGrantId
+    readBoundGrantId: () => boundGrantId,
+    readDocumentUrl: () => documentUrl
   })
   const forgetGuest = (): void => {
     previewGuests.delete(guest)
@@ -131,8 +139,11 @@ export function installDocPreviewGuestPolicy(
     latchGrantFromUrl(details.url)
   }
   // Catch initial loads that started before listeners were installed.
-  const latchFromCommittedUrl = (_event: Electron.Event, url: string): void =>
+  // did-navigate fires only for main-frame document commits, never in-page history changes.
+  const latchFromCommittedUrl = (_event: Electron.Event, url: string): void => {
+    documentUrl = url
     latchGrantFromUrl(url)
+  }
   // will-navigate excludes subframes, so guard them separately.
   const frameNavigationGuard = (details: {
     isMainFrame: boolean

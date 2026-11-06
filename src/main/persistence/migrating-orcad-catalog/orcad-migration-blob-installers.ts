@@ -99,7 +99,8 @@ export function installOrcadMigrationReceivedBlobs(install: OrcadMigrationBlobIn
   for (const installKind of [
     installTerminalRestoreHints,
     installShellHistory,
-    installTerminalHistory
+    installTerminalHistory,
+    removeImportedAutomationRunHistory
   ]) {
     try {
       installKind(install)
@@ -110,6 +111,17 @@ export function installOrcadMigrationReceivedBlobs(install: OrcadMigrationBlobIn
   if (firstError !== null) {
     throw firstError
   }
+}
+
+// The durable commit already holds these runs; the blob only served that commit.
+function removeImportedAutomationRunHistory(install: OrcadMigrationBlobInstall): void {
+  rmSync(
+    getOrcadMigrationReceivedBlobPath(install.root, install.migration, {
+      blobKind: 'automation-run-history',
+      key: 'migration'
+    }),
+    { force: true }
+  )
 }
 
 function installTerminalHistory(install: OrcadMigrationBlobInstall): void {

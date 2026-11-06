@@ -7,7 +7,7 @@ import {
   hostStub,
   STRUCTURED_CLIENT
 } from '../../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { createAgentModelCatalogService } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
 import {

@@ -4,7 +4,7 @@ import { conversationRecordReader } from '../../../orchestration/structured-sess
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { observeChatAssignee } from '../../../orchestration/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { exposeUtcTimestamp } from '../../../orchestration/db/utc-timestamp'

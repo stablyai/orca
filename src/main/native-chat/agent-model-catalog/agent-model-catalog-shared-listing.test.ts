@@ -5,12 +5,25 @@ import {
   type StructuredAgentResolutionOperation
 } from '../structured-agent-command-resolution'
 import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import {
+  joinHostModelListingWait,
+  isHostModelListingWaitInFlight
+} from '../../../shared/host-model-listing-waits'
 
 function listing(id: string): AgentModelCatalogSuccess {
   return {
     models: [{ id, label: id, isDefault: true, efforts: [] }],
     origin: 'probe'
   }
+}
+
+function discover(
+  service: ReturnType<typeof createAgentModelCatalogService>,
+  params: Parameters<typeof service.read>[0]
+) {
+  void service.demand(params)
+  return service.read(params)
 }
 
 function sharedListingHarness() {
@@ -333,3 +346,99 @@ it('settles each reader at its own deadline or cancellation, and stops the listi
   // Its late answer is dropped.
   expect(h.service.snapshot({ agent: 'codex', workspacePath: '/a' }).origin).toBe('unknown')
 })
+
+it.each(['cold', 'warm'] as const)(
+  'ends queued %s discovery within its original deadline and preserves existing observations',
+  async (mode) => {
+    vi.useFakeTimers()
+    const store = new AgentModelCatalogStore()
+    let failing = false
+    const run = vi.fn(
+      (
+        _home: AgentSessionAccountHome,
+        options?: { signal?: AbortSignal; workspacePath?: string }
+      ) =>
+        new Promise<AgentModelCatalogSuccess>((resolve, reject) => {
+          const timer = setTimeout(
+            () =>
+              failing
+                ? reject(new Error('offline'))
+                : resolve({
+                    ...listing(options?.workspacePath ?? 'listed'),
+                    complete: true,
+                    configured: {}
+                  }),
+            12_000
+          )
+          options?.signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer)
+              reject(new Error('stopped'))
+            },
+            { once: true }
+          )
+        })
+    )
+    const service = createAgentModelCatalogService({
+      store,
+      getConversation: () => undefined,
+      getRecord: () => undefined,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
+      // Each folder resolves its own CLI (a project-local install), so each lists separately.
+      probes: {
+        codex: Object.assign(run, {
+          resolve: async (
+            home: AgentSessionAccountHome,
+            _cwd: string,
+            _lookup?: unknown,
+            _operation?: unknown,
+            launchDirectory?: string
+          ) => ({
+            identity: launchDirectory,
+            run: (signal?: AbortSignal) => run(home, { signal, workspacePath: launchDirectory })
+          })
+        })
+      }
+    })
+    const read = (path: string, waitForListing = false) =>
+      waitForListing
+        ? service.read({ agent: 'codex', workspacePath: path, waitForListing })
+        : discover(service, { agent: 'codex', workspacePath: path })
+    const replies: unknown[] = []
+    let leave = () => {}
+    try {
+      if (mode === 'warm') {
+        const initial = read('/5', true)
+        await vi.advanceTimersByTimeAsync(12_000)
+        await initial
+        await vi.advanceTimersByTimeAsync(120_001)
+      }
+      failing = false
+      await Promise.all(['/1', '/2', '/3', '/4', '/5'].map((path) => read(path)))
+      const follow = vi.fn(() => read('/5', true))
+      const owner = { close() {} }
+      leave = joinHostModelListingWait('queued', follow, (reply) => replies.push(reply), owner)
+      const second = joinHostModelListingWait('queued', follow, () => {}, owner)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(replies[0]).not.toHaveProperty('listingInProgress')
+      expect(follow).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(7_000)
+      expect(replies.at(-1)).not.toHaveProperty('listingInProgress')
+      expect(isHostModelListingWaitInFlight('queued', owner)).toBe(false)
+      if (mode === 'warm') {
+        expect(replies.at(-1)).toMatchObject({ models: [{ id: '/5' }] })
+      } else {
+        expect(replies.at(-1)).toEqual({ origin: 'unknown' })
+      }
+      expect(run).toHaveBeenCalledTimes(mode === 'warm' ? 6 : 5)
+      second()
+    } finally {
+      leave()
+      service.stop()
+      vi.useRealTimers()
+    }
+  }
+)

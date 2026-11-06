@@ -10,15 +10,20 @@ import {
 import { routeMarkdownHref } from './markdown-href-routing'
 import { styles, type MarkdownTone } from './mobile-markdown-styles'
 import { MarkdownText } from './mobile-markdown-text'
-import { plainText } from './mobile-markdown-tree'
+import { plainText } from './mobile-markdown-plain-text'
+import { MobileMarkdownMath } from './MobileMarkdownMath'
 
 export type MarkdownInlineContext = {
   // File targets call this when viewer exists; omit to keep paths plain.
   onOpenFile?: (pathText: string) => void
   // Web links other than mail go here; the screen decides where they open.
   onOpenLink: (url: string) => void
+  /** Host-confirmed paths are already links in the tree; draw no others. */
+  filePathsLinkedInTree?: boolean
   tone: MarkdownTone
   textScale: number
+  /** Chat text: desktop chat's math delimiters and sizes; otherwise GitHub's. */
+  chatMath: boolean
 }
 
 type SpanStyle = TextProps['style']
@@ -48,10 +53,10 @@ export function openMarkdownHref(
 function renderTextRun(
   text: string,
   key: string,
-  { onOpenFile, tone }: MarkdownInlineContext,
+  { onOpenFile, filePathsLinkedInTree, tone }: MarkdownInlineContext,
   outer: SpanStyle
 ): ReactNode {
-  if (!onOpenFile) {
+  if (!onOpenFile || filePathsLinkedInTree) {
     return text
   }
   const segments = detectFilePathSegments(text)
@@ -91,6 +96,31 @@ function renderLink(
   )
 }
 
+// A span keeps its line's leading; only its own smaller size scales.
+function renderInlineCode(
+  key: string,
+  code: string,
+  ctx: MarkdownInlineContext,
+  outer: SpanStyle,
+  onPress?: () => void
+): ReactNode {
+  const size = ctx.textScale !== 1 ? { fontSize: styles.inlineCode.fontSize * ctx.textScale } : null
+  const style = [outer, styles.inlineCode, size, ctx.tone.inlineCode]
+  return onPress ? (
+    <MarkdownText
+      key={key}
+      style={[...style, styles.inlineCodeLink, ctx.tone.link]}
+      onPress={onPress}
+    >
+      {code}
+    </MarkdownText>
+  ) : (
+    <MarkdownText key={key} style={style}>
+      {code}
+    </MarkdownText>
+  )
+}
+
 function renderPhrasing(
   node: PhrasingContent,
   key: string,
@@ -107,7 +137,8 @@ function renderPhrasing(
     case 'delete': {
       const emphasis =
         node.type === 'strong'
-          ? [styles.bold, ctx.tone.text]
+          ? // A tone recolours bold text, but bold keeps its weight over a tone's weight.
+            [styles.bold, ctx.tone.text, { fontWeight: styles.bold.fontWeight }]
           : node.type === 'emphasis'
             ? styles.italic
             : styles.strike
@@ -118,39 +149,61 @@ function renderPhrasing(
         </MarkdownText>
       )
     }
-    case 'inlineCode': {
-      // A span keeps its line's leading; only its own smaller size scales.
-      const size =
-        ctx.textScale !== 1 ? { fontSize: styles.inlineCode.fontSize * ctx.textScale } : null
-      return ctx.onOpenFile && isFilePathCodeSpan(node.value) ? (
-        <MarkdownText
-          key={key}
-          style={[
-            outer,
-            styles.inlineCode,
-            size,
-            ctx.tone.inlineCode,
-            styles.inlineCodeLink,
-            ctx.tone.link
-          ]}
-          onPress={() => ctx.onOpenFile?.(normalizeFilePath(node.value.trim()))}
-        >
-          {node.value}
-        </MarkdownText>
-      ) : (
-        <MarkdownText key={key} style={[outer, styles.inlineCode, size, ctx.tone.inlineCode]}>
-          {node.value}
+    case 'inlineCode':
+      return ctx.onOpenFile && !ctx.filePathsLinkedInTree && isFilePathCodeSpan(node.value)
+        ? renderInlineCode(key, node.value, ctx, outer, () =>
+            ctx.onOpenFile?.(normalizeFilePath(node.value.trim()))
+          )
+        : renderInlineCode(key, node.value, ctx, outer)
+    case 'link': {
+      const only = node.children.length === 1 ? node.children[0] : undefined
+      return only?.type === 'inlineCode'
+        ? renderInlineCode(key, only.value, ctx, outer, () => openMarkdownHref(node.url, ctx))
+        : renderLink(key, plainText(node), node.url, ctx, outer)
+    }
+    case 'htmlSpan': {
+      const tagStyle =
+        node.tag === 'kbd'
+          ? [styles.inlineCode, styles.kbd, ctx.tone.inlineCode]
+          : node.tag === 'sup' || node.tag === 'sub'
+            ? [styles[node.tag], ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null]
+            : node.tag === 'ins'
+              ? styles.ins
+              : null
+      const spanStyle = [outer, tagStyle]
+      return (
+        <MarkdownText key={key} style={spanStyle}>
+          {renderInline(node.children, ctx, spanStyle, `${key}.`)}
         </MarkdownText>
       )
     }
-    case 'link':
-      return renderLink(key, plainText(node), node.url, ctx, outer)
+    case 'inlineMath':
+      return (
+        <MobileMarkdownMath
+          key={key}
+          value={node.value}
+          source={node.source}
+          display={false}
+          githubSizes={!ctx.chatMath}
+          style={outer}
+        />
+      )
     case 'image':
       return renderLink(key, node.alt || 'image', node.url, ctx, outer)
     case 'footnoteReference':
       return (
-        <MarkdownText key={key} style={[outer, styles.footnoteReference, ctx.tone.secondary]}>
-          {`[${node.label ?? node.identifier}]`}
+        // GitHub's raised note number.
+        <MarkdownText
+          key={key}
+          style={[
+            outer,
+            styles.sup,
+            ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null,
+            styles.footnoteReference,
+            ctx.tone.link
+          ]}
+        >
+          {node.label ?? node.identifier}
         </MarkdownText>
       )
     case 'html':

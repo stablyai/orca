@@ -9,17 +9,17 @@ import {
 import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { vi } from 'vitest'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   getStructuredAgentSessionHost,
   setStructuredAgentSessionHost
-} from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionStatusSubscriber } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionStatusSubscriber } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed-deps'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration, RpcContext, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
@@ -105,6 +105,10 @@ export function hostStub(): StructuredAgentSessionHost {
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     sessionAgent: vi.fn(() => null),
+    setUserConversationName: vi.fn(async (_sessionId: string, name: string) => ({
+      name,
+      applied: true
+    })),
     attentionReads: { sessionLocation: vi.fn(() => null) },
     journalSnapshot: vi.fn((sessionId: string) => ({
       sessionId,

@@ -21,6 +21,18 @@ import {
   useAntigravityChatSignIn
 } from '../../../provider-accounts/AntigravityChatSignInRow'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { formatTimeAgo } from '../../../status-bar/tooltip'
+
+function formatUsageReading(usage: ProviderRateLimits): string {
+  return translate(
+    'accounts.antigravity.usageReading',
+    'Session: {{session}} · Weekly: {{weekly}}',
+    {
+      session: usage.session ? `${Math.round(usage.session.usedPercent)}%` : '—',
+      weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
+    }
+  )
+}
 
 export function AntigravityAccountsSection({
   owner,
@@ -231,15 +243,7 @@ export function AntigravityAccountsSection({
           </div>
           {usage && (
             <p className="text-xs text-muted-foreground">
-              {usage.error ??
-                translate(
-                  'accounts.antigravity.usageReading',
-                  'Session: {{session}} · Weekly: {{weekly}}',
-                  {
-                    session: usage.session ? `${Math.round(usage.session.usedPercent)}%` : '—',
-                    weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
-                  }
-                )}
+              {usage.error ?? formatUsageReading(usage)}
             </p>
           )}
           {state.accounts.map((account) => (
@@ -251,6 +255,20 @@ export function AntigravityAccountsSection({
                 <p className="text-xs font-medium">
                   {account.email ?? translate('accounts.antigravity.saved', 'Saved Google account')}
                 </p>
+                {account.usage !== undefined && (
+                  <p className="text-xs text-muted-foreground">
+                    {account.usage
+                      ? translate(
+                          'accounts.antigravity.lastReading',
+                          '{{reading}} · Read {{time}}',
+                          {
+                            reading: formatUsageReading(account.usage),
+                            time: formatTimeAgo(account.usage.updatedAt)
+                          }
+                        )
+                      : translate('accounts.antigravity.noReading', 'Usage unknown: not read yet')}
+                  </p>
+                )}
                 {state.activeAccountId === account.id && (
                   <Badge variant="secondary">
                     {translate('accounts.antigravity.nativeActive', 'Native account')}

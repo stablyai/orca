@@ -279,10 +279,11 @@ describe('a chat as the assignee of orchestration dispatch', () => {
 
     const subDispatch = { task: subTask, to: 'term_worker' }
 
+    const maxDepth = vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
     expect(await refusal('orchestration.dispatch', subDispatch, PEER_CHAT)).toMatchObject({
       code: 'nested_worker_depth_exceeded'
     })
-    vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(2)
+    maxDepth.mockReturnValue(2)
     const child = await call('orchestration.dispatch', subDispatch, { sessionId: PEER_CHAT })
     expect(child.dispatch).toMatchObject({ depth: 2, creator_dispatch_id: idOf(parent.dispatch) })
   })

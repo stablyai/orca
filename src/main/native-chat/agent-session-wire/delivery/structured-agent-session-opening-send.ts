@@ -1,0 +1,37 @@
+import { structuredAgentSessionSendOpeningTurn } from '../../../../shared/agent-session/requests/structured-agent-session-opening-send'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { oldestQueuedSubmission } from '../startup/structured-agent-session-start-failure-row'
+import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
+
+/** Read opening-turn evidence from the journal fold without a snapshot. */
+export function structuredAgentSessionSendOpeningTurnInJournal(
+  journal: Pick<AgentSessionJournal, 'inputOrder' | 'visitItemsWithLinkage'>,
+  fence: number,
+  work?: Pick<StructuredAgentSessionCurrentWork, 'owesSend'> | null
+): boolean {
+  return structuredAgentSessionSendOpeningTurn(
+    work
+      ? journal.inputOrder
+          .recoverableSubmissions()
+          .filter((submission) => work.owesSend(submission))
+      : journal.inputOrder.recoverableSubmissions(),
+    (visit) =>
+      journal.visitItemsWithLinkage((itemId, sequence, body, linkage) =>
+        visit({ itemId, sequence, body, turnScope: linkage.turnScope, agentId: linkage.agentId })
+      ),
+    fence
+  )
+}
+
+/** Oldest pending send, unless an earlier send still opens its turn; settlement wakes delivery. */
+export function structuredAgentSessionNextHandover(
+  session: Pick<StructuredAgentSessionHostSession, 'journal'>,
+  fence: number,
+  work?: StructuredAgentSessionCurrentWork | null
+): ReturnType<typeof oldestQueuedSubmission> {
+  return structuredAgentSessionSendOpeningTurnInJournal(session.journal, fence, work)
+    ? undefined
+    : selectableStructuredSubmission(session.journal, work ?? null)
+}

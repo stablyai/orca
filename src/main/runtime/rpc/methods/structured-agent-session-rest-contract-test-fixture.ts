@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createRestTestRig,
-  foundRestTestChat,
-  REST_TEST_SESSION as SESSION,
-  type RestTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+  foundRestTestChat
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { RestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'

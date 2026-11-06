@@ -7,7 +7,7 @@ import type { PrSidebarData } from '../../session/mobile-pr-sidebar-state'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import { canEditPRTitle } from '../../session/pr-title-edit'
 import { AutoHeight } from '../AutoHeight'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prTabStyles as styles } from './pr-tab-styles'
 
@@ -120,7 +120,7 @@ export function PrDescription({ tab, data }: { tab: MobilePrTab; data: PrSidebar
                 setOverflows(event.nativeEvent.layout.height > COLLAPSED_DESCRIPTION_HEIGHT)
               }
             >
-              <CommentMarkdown content={body} variant="document" />
+              <PrMarkdown content={body} url={data.pr.url} document />
             </View>
           </AutoHeight>
           {overflows ? (

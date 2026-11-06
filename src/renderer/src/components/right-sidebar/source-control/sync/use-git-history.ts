@@ -17,6 +17,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget,
   activeWorktreeId,
   worktreePath,
+  branchName,
   compareBaseRef,
   isFolder,
   isBranchVisible,
@@ -27,6 +28,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
+  branchName: string
   compareBaseRef: string | null
   isFolder: boolean
   isBranchVisible: boolean
@@ -172,6 +174,8 @@ export function useSourceControlGitHistory({
   }, [
     // History uses compareBaseRef, which can move independently of effectiveBaseRef.
     activeWorktreeId,
+    // A branch switch keeps the workspace and path; the open list must follow the new branch.
+    branchName,
     compareBaseRef,
     isBranchVisible,
     isFolder,

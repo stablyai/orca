@@ -86,6 +86,10 @@ async function gitExecFileAsyncUnlocked(
         terminationState.current = new Promise<void>((resolve) => {
           reportTerminated = resolve
         })
+        options.observeChildTermination?.(
+          terminationState.current,
+          classifyGitCommand(args) !== 'read'
+        )
         const captureOptions = {
           cwd: command.cwd,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,

@@ -57,6 +57,7 @@ export async function resolveManagedRuntimeEnvironment(
       await prepareWslHostForCall(environment, preparation)
       break
     case 'network':
+    case 'ssh':
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }

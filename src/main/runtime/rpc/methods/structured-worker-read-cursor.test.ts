@@ -14,7 +14,7 @@ import type { StructuredWorkerIdentity } from '../../orchestration/terminal-auth
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 

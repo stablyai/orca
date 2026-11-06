@@ -49,6 +49,9 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-message', ()
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
+vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
+  usePublishedMachineName: () => null
+}))
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
 vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())

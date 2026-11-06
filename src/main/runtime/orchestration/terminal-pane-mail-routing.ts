@@ -19,7 +19,7 @@ import {
   orchestrationMailNotice,
   type AgentMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
+import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   structuredMailboxCustody,
   structuredSessionIdleEdgeMailboxes,

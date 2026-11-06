@@ -245,6 +245,7 @@ describe('ensureHooksConfirmed', () => {
     readIssueCommandMock.mockResolvedValue({
       status: 'error',
       source: 'local',
+      localUntracked: true,
       sharedContent: null,
       localContent: 'user content',
       effectiveContent: 'user content',
@@ -255,6 +256,25 @@ describe('ensureHooksConfirmed', () => {
 
     expect(decision).toBe('run')
     expect(pending).toHaveLength(0)
+  })
+
+  it('asks before running a local issue command not proven untracked', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      source: 'local',
+      sharedContent: null,
+      localContent: 'committed content',
+      effectiveContent: 'committed content',
+      localFilePath: ''
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('committed content')
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
   })
 
   it('approves and returns the exact issue-command bytes from one host-qualified read', async () => {

@@ -1,4 +1,4 @@
-import { createElement, useLayoutEffect, useRef, useState } from 'react'
+import { createElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -46,6 +46,9 @@ vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTa
 vi.mock('../navigation/workspace-execution-host', () => ({ useWorkspaceExecutionHost: () => ({}) }))
 vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
 vi.mock('./native-chat/MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
+vi.mock('./MobileNativeChatForkProvider', () => ({
+  MobileNativeChatForkProvider: ({ children }: { children: ReactNode }) => children
+}))
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))

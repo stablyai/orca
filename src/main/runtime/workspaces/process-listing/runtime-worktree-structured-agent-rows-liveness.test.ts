@@ -5,13 +5,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
 import { AgentHookServer, _internals } from '../../../agent-hooks/server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -52,7 +52,7 @@ afterEach(async () => {
 })
 
 /** A session parked on an approval nobody answered — the state a deliberate close leaves behind. */
-async function awaitingApproval() {
+async function awaitingApproval(rowRetired = () => false) {
   const journal = await journals.open({
     identity: {
       sessionId: SESSION,
@@ -103,6 +103,7 @@ async function awaitingApproval() {
     logger: createStructuredAgentSessionLogger(),
     sessions,
     getConversation: () => null,
+    rowRetired,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -151,6 +152,17 @@ describe('worktree ps and a closed structured chat', () => {
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(0)
     expect(row.status).toBe('inactive')
+  })
+
+  it('does not bring it back when its journal is read again', async () => {
+    let closed = false
+    const { feed, store } = await awaitingApproval(() => closed)
+    closed = true
+    feed.close(SESSION)
+
+    feed.publish(SESSION, undefined, { replay: true })
+
+    expect(worktreeFor(store).agents).toHaveLength(0)
   })
 
   it('keeps an aged host-held approval state authoritative', async () => {
