@@ -311,6 +311,13 @@ describe('PowerShell create commands', () => {
         )
       )
     ).toEqual([])
+    // A line continuation is removed, as the shell does, so a create after it still starts a command.
+    for (const command of [
+      'git push -u origin HEAD && \\\n  gh pr create --fill',
+      'GH_PROMPT_DISABLED=1 \\\r\ngh pr create --fill'
+    ]) {
+      expect(openedIn(bashTurn({ command }, GH_CREATE_OUTPUT))).toEqual([38712])
+    }
   })
 
   it('leaves cmd launches and unrecognized wrappers as text, a miss rather than a guess', () => {
