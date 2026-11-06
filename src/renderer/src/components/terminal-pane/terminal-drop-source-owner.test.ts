@@ -7,7 +7,7 @@ import {
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
 const mocks = vi.hoisted(() => {
   const state: WorktreeRuntimeOwnerState = {}

@@ -1,6 +1,6 @@
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import {

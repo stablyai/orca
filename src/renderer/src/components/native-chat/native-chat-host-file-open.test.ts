@@ -11,7 +11,7 @@ const doubles = createTerminalLinkTestDoubles()
 const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))

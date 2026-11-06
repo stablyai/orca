@@ -74,7 +74,9 @@ vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep
+}))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()

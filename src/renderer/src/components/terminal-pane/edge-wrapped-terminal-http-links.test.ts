@@ -1,6 +1,6 @@
 import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
 import { buildEdgeWrappedHttpLogicalLineCandidates } from '../../../../shared/terminal/links/edge-wrapped-terminal-http-links'
 

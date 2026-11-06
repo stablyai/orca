@@ -6,7 +6,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
 import { waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
-import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
+import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buffer'
 import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'

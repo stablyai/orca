@@ -4,7 +4,7 @@ import {
   isTerminalMiddleClickActivation
 } from './terminal-link-activation'
 import type { TerminalLinkClickBehavior } from './terminal-link-click-behavior'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   closeLinkActionRequest,
   type LinkAction,

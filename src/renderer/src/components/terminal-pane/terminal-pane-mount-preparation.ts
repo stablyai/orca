@@ -1,11 +1,12 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
+import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
+import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-tab-open'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,

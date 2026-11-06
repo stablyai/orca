@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { activateBrowserWorkspaceTab } from './browser-workspace-tab-activation'
+import { activateBrowserWorkspaceTab } from './browser/workspace/browser-workspace-tab-activation'
 import { selectWorkspaceSurface } from './workspace-surface-reveal'
 import { webClientDocPreviewRefusal } from './doc-preview-web-client'
 import { openFileInBrowserTab } from './file-preview'

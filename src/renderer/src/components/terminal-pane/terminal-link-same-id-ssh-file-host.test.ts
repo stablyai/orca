@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state.value } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree,
   activateAndRevealWorkspace: vi.fn()
 }))

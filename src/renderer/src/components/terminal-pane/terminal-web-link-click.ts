@@ -8,7 +8,7 @@ import {
   type TerminalHttpLinkActionDestinations,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 type TerminalWebLinkClickDeps = Pick<

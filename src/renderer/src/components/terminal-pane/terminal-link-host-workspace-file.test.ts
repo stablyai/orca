@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import * as filePreview from '@/lib/file-preview'
 import {
@@ -23,7 +23,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
