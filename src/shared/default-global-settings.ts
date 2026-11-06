@@ -154,6 +154,7 @@ export function buildDefaultSettings(args: {
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
+    nativeChatOpenedPullRequests: true,
     nativeChatScrollToLatestOnSend: true,
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],

@@ -20635,6 +20635,18 @@
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
         }
+      },
+      "cardKindHidden": {
+        "title": "We won't show these anymore.",
+        "description": "You can change this anytime in",
+        "settingsLink": "Settings › Chat",
+        "failed": "Could not save that setting."
+      },
+      "openedPullRequests": {
+        "one": "Opened {{name}}",
+        "hide": "Don't show opened pull requests",
+        "many_one": "Opened {{count}} pull request",
+        "many_other": "Opened {{count}} pull requests"
       }
     },
     "tab": {
@@ -21074,7 +21086,11 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "timeout",
         "idleStopSearchKeepAlive": "keep alive",
-        "idleStopNever": "Never"
+        "idleStopNever": "Never",
+        "openedPullRequestsTitle": "Show pull requests the agent opens",
+        "openedPullRequestsCopy": "A card under the turn that opened a pull request, with its title and changed lines.",
+        "openedPullRequestsSearchPr": "PR",
+        "openedPullRequestsSearchCard": "pull request card"
       }
     },
     "agentChildRow": {

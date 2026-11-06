@@ -13,6 +13,8 @@ export function createHoverPreviewCache<T>({
 }): {
   read: (key: string) => T | null
   load: (key: string, fetch: () => Promise<T | null>) => Promise<T | null>
+  /** The next load asks again; until it answers, `read` keeps the old answer. */
+  expire: (key: string) => void
 } {
   const entries = new Map<string, Entry<T>>()
   let totalBytes = 0
@@ -31,6 +33,12 @@ export function createHoverPreviewCache<T>({
   }
   return {
     read: (key) => entries.get(key)?.value ?? null,
+    expire: (key) => {
+      const entry = entries.get(key)
+      if (entry?.settledAt != null) {
+        entry.settledAt = 0
+      }
+    },
     load: (key, fetch) => {
       const cached = entries.get(key)
       if (cached && (cached.settledAt === null || Date.now() - cached.settledAt < freshMs)) {

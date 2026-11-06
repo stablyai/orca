@@ -5,6 +5,7 @@ import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRo
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
+import { NativeChatOpenedPullRequestCard } from './NativeChatOpenedPullRequestCard'
 import { NativeChatSubagentSectionHead } from './NativeChatSubagentSectionHead'
 import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
 import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sections'
@@ -74,7 +75,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       />
     )
   }
-  const { message, turnKey, status, receipt, turnDiff, workRun } = slot
+  const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun } = slot
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
@@ -136,6 +137,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       )}
       {slot.statusAbove ? null : statusRow}
       {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
+      {openedPullRequests ? (
+        <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
+      ) : null}
     </div>
   )
 })
