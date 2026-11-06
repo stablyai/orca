@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -25,7 +26,7 @@ async function createTerminalTab(page: Page): Promise<string> {
   const tabsBefore = await countRenderedTabs(page)
   const activeBefore = await getActiveTabId(page)
 
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await tabCreateMenuTrigger(page).click()
   await page
     .getByRole('menuitem', { name: /New Terminal/i })
     .first()

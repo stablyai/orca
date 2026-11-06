@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -19,7 +20,7 @@ test('opens a local HTML file URL with encoded characters from the new-tab menu'
   const url = pathToFileURL(filePath).href
   await waitForSessionReady(orcaPage)
   const worktreeId = await waitForActiveWorktree(orcaPage)
-  await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+  await tabCreateMenuTrigger(orcaPage).first().click()
   const input = orcaPage.getByRole('combobox', {
     name: 'Search open tabs, history, files, URLs, agents…',
     exact: true
@@ -101,7 +102,7 @@ test('opens a pasted HTML file URL from a paired host and reloads its assets', a
       },
       { root: testRepoPath, environmentId: client.environmentId }
     )
-    await client.page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+    await tabCreateMenuTrigger(client.page).first().click()
     const input = client.page.getByRole('combobox', {
       name: 'Search open tabs, history, files, URLs, agents…',
       exact: true
@@ -149,7 +150,7 @@ test('opens a pasted HTML file URL from a paired host and reloads its assets', a
       { worktreeId, filePath }
     )
     await expect(client.page.locator('[data-orca-browser-address-bar]:visible')).toBeFocused()
-    await client.page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+    await tabCreateMenuTrigger(client.page).first().click()
     await input.fill(pathToFileURL(filePath).href)
     await expect(client.page.getByRole('option', { name: /Open file/ })).toBeVisible()
     await input.press('Enter')

@@ -16,10 +16,7 @@ import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
-import type {
-  getProjectRuntimeShellMenuMode,
-  resolveWindowsPowerShellImplementationSetting
-} from './use-tab-bar-runtime-model'
+import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 export function useTabBarCreateMenuController({
@@ -57,11 +54,9 @@ export function useTabBarCreateMenuController({
   mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
   showWindowsShellMenu: boolean
-  projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
+  projectRuntimeShellMenuMode: TabBarRuntimeModel['projectRuntimeShellMenuMode']
   defaultWindowsShell: string
-  defaultWindowsPowerShellImplementation: ReturnType<
-    typeof resolveWindowsPowerShellImplementationSetting
-  >
+  defaultWindowsPowerShellImplementation: TabBarRuntimeModel['defaultWindowsPowerShellImplementation']
   agentDetectionTarget: AgentDetectionTarget | undefined
   windowsTerminalCapabilities: WindowsTerminalCapabilities
   onNewTerminalTab: () => void

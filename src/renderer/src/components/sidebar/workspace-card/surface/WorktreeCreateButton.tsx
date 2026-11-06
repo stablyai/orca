@@ -107,7 +107,9 @@ function WorktreeCreateMenu({
   }
   const onNewPluginFile = (newFile: ReturnType<typeof usePluginNewFiles>[number]) =>
     track(() =>
-      useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId, worktreeId)
+      useAppStore
+        .getState()
+        .openNewPluginFileInActiveWorkspace(newFile, groupId, worktreeId, executionHostId)
     )
   const model = useTabGroupWorkspaceModel({ worktreeId, groupId, executionHostId })
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId, executionHostId })
@@ -136,7 +138,11 @@ function WorktreeCreateMenu({
       ? () => track(() => commands.newSimulatorTab?.())
       : undefined,
     onNewFileTab: () =>
-      track(() => useAppStore.getState().openNewMarkdownInActiveWorkspace(groupId, worktreeId)),
+      track(() =>
+        useAppStore
+          .getState()
+          .openNewMarkdownInActiveWorkspace(groupId, worktreeId, executionHostId)
+      ),
     onOpenEntry: (entry) => track(() => commands.openEntry(entry)),
     onSetCustomTitle: commands.setTabCustomTitle,
     onSetTabColor: commands.setTabColor,

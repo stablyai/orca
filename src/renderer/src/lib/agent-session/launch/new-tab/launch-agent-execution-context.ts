@@ -1,12 +1,14 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspace-record-selectors'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolution'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { toast } from 'sonner'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../../../../shared/agent-launch/startup/agent-launch-remote'
 import '@/lib/connection-context'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import {
+  getConnectionIdForWorktreeCopy,
+  getConnectionIdFromState
+} from '@/lib/connection-owner-resolution'
 import {
   refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,

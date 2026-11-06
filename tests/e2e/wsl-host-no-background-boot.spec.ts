@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 /**
  * E9 guard: background work never starts a stopped WSL distro. A desktop with a fake WSL transport
  * (the HUB stands in for the distro's orcad) keeps a WSL project and a local one. With the distro
@@ -129,7 +130,7 @@ test.describe('E9: background work on a stopped WSL host', () => {
       // A chat in another workspace keeps streaming while the WSL one sits stopped.
       const localWorktreeId = await addLocalWorkspace(page, localProjectPath)
       await activateLocal(page, localWorktreeId)
-      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+      await tabCreateMenuTrigger(page).first().click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })
@@ -204,7 +205,7 @@ test.describe('E9: background work on a stopped WSL host', () => {
 
       // The user opens a terminal in the WSL workspace: that act alone starts the distro, once.
       await expect.poll(() => focusProject(page, wslProjectPath), { timeout: 30_000 }).toBeTruthy()
-      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+      await tabCreateMenuTrigger(page).first().click()
       await page
         .getByRole('menuitem', { name: /New Terminal/ })
         .first()

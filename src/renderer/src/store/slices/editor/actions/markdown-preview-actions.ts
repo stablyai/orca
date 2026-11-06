@@ -44,7 +44,7 @@ export function createMarkdownPreviewActions(
   | 'pinFile'
 > {
   return {
-    openNewMarkdownInActiveWorkspace: async (groupId, targetWorktreeId) => {
+    openNewMarkdownInActiveWorkspace: async (groupId, targetWorktreeId, executionHostId) => {
       const created = await createUntitledFileInActiveWorkspace(
         get,
         groupId,
@@ -61,7 +61,8 @@ export function createMarkdownPreviewActions(
             context.assertOperationCurrent
           ),
         'Failed to create untitled markdown file.',
-        targetWorktreeId
+        targetWorktreeId,
+        executionHostId
       )
       if (created) {
         get().recordFeatureInteraction('markdown-file-created')

@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { expect, test } from './helpers/orca-app'
@@ -34,7 +35,7 @@ type FaultWindow = Window & {
 // Drives the real create menu so the failure surfaces through handleNewBrowserTab's toast.
 async function startBrowserCreate(page: Page): Promise<void> {
   await page.evaluate(() => window.__store?.getState().setBrowserDefaultUrl('about:blank'))
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+  await tabCreateMenuTrigger(page).first().click()
   const newBrowserTab = page.getByRole('menuitem', { name: /New Browser Tab/i })
   await expect(newBrowserTab).toBeVisible({ timeout: 30_000 })
   await newBrowserTab.click()

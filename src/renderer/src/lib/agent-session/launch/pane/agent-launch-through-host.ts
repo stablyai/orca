@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 /** Allocate the prompt’s owning pane before mount; main plans and starts it at the pane’s real size. */
 
 import { useAppStore } from '@/store/index'

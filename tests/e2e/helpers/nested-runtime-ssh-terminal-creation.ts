@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './terminal-tab-menu'
 import { expect } from './orca-app'
 import type { PairedElectronClient } from './paired-electron-client'
 import { focusActiveTerminalInput, getTerminalContent, waitForActivePanePtyId } from './terminal'
@@ -18,9 +19,7 @@ export async function assertPairedTerminalCreation(
     const worktreeId = state?.activeWorktreeId
     return worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id) : []
   })
-  await client.page
-    .locator('[data-contextual-tour-target="tab-create-menu"]')
-    .click({ force: true })
+  await tabCreateMenuTrigger(client.page).click({ force: true })
   await client.page
     .getByRole('menuitem', { name: /New Terminal/i })
     .first()

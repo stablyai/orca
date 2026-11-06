@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 /**
  * Terminals on a WSL host whose distro stopped, with a fake WSL transport: the HUB stands in for
  * the distro's orcad. Automatic retries never boot the distro (E9); the pane's Start and a New
@@ -24,7 +25,7 @@ import {
 } from './helpers/wsl-host-fake-desktop'
 
 async function openNewTerminal(page: Page): Promise<void> {
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+  await tabCreateMenuTrigger(page).first().click()
   await page
     .getByRole('menuitem', { name: /New Terminal/ })
     .first()

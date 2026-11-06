@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 // Assert tab management through rendered DOM: setup/store writes alone previously passed despite render crashes (#1186/#1193).
 // Hidden-window drag setup may use production store actions, but final selection/order/count assertions still read DOM.
 
@@ -76,7 +77,7 @@ test.describe('Tabs', () => {
     const tabsBefore = await countRenderedTabs(orcaPage)
 
     // Hidden animated terminals can invalidate Playwright stability despite an enabled visible button.
-    await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
+    await tabCreateMenuTrigger(orcaPage).click({ force: true })
     const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
     await newTerminalMenuItem.click({ force: true })
     await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
@@ -118,7 +119,7 @@ test.describe('Tabs', () => {
       () => window.__store?.getState().openFiles.map((file) => file.id) ?? []
     )
 
-    await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
+    await tabCreateMenuTrigger(orcaPage).click({ force: true })
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
     await newMarkdownMenuItem.click({ force: true })
 

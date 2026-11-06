@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 // Completed tab and composer actions return keyboard input to the chat draft.
 
 import type { Locator } from '@stablyai/playwright-test'
@@ -42,7 +43,7 @@ test.describe('native chat composer focus', () => {
         })
       )
       .toBe(true)
-    await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+    await tabCreateMenuTrigger(page).click()
     const menu = page.getByRole('menu', { name: 'New tab', exact: true })
     const search = menu.getByRole('combobox')
     await expect(search).toBeFocused()

@@ -1,5 +1,5 @@
 import { resolveOwner } from './resolve-owner'
-import { findIndexedRepoOwnerForHost } from './worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
 import { selectWorkspaceByHostTarget } from '@/store/workspace-record-selectors'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {

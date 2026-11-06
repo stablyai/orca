@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 /**
  * E9 guard on a real WSL distro: background work never starts a stopped distro. A project inside
  * the lane's distro is opened, the distro is terminated, and a window of ordinary background work
@@ -145,7 +146,7 @@ async function expectNothingStartsTheStoppedDistro(
   timeline(`window done: ${background.length} spawns`)
   // The user opens the WSL workspace and a terminal in it: that act starts the distro.
   await activate(page, workspace.worktreeId)
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+  await tabCreateMenuTrigger(page).first().click()
   await page
     .getByRole('menuitem', { name: /New Terminal/ })
     .first()

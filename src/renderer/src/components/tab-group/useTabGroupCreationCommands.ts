@@ -111,7 +111,7 @@ export function useTabGroupCreationCommands({
     },
     // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
     newFileTab: async () => {
-      await openNewMarkdownInActiveWorkspace(groupId)
+      await openNewMarkdownInActiveWorkspace(groupId, worktreeId, executionHostId)
     },
     newTerminalTab: () => {
       void openNewTerminalTabInActiveWorkspace(groupId, worktreeId, executionHostId)

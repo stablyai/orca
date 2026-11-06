@@ -1,4 +1,4 @@
-import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from '../routing/agent-session-launch-plan'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,

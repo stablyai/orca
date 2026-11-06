@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 // A Claude chat on a managed SSH host whose CLI refuses to start says why, not only that it stopped.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -50,7 +51,7 @@ test('a Claude chat that Claude refuses to start as root names the reason', asyn
         defaultTuiAgent: 'claude'
       })
     })
-    await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+    await tabCreateMenuTrigger(page).first().click()
     await page.getByText('Claude', { exact: true }).first().click({ timeout: 60_000 })
     const chat = page.locator('[data-native-chat-root="true"]')
     await expect(chat).toBeVisible({ timeout: 60_000 })
@@ -72,7 +73,7 @@ test('a Claude chat that Claude refuses to start as root names the reason', asyn
       choice: 'ask',
       agent: 'claude'
     })
-    await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
+    await tabCreateMenuTrigger(page).first().click()
     await page.getByText('Claude', { exact: true }).first().click({ timeout: 60_000 })
     const next = page.locator('[data-native-chat-root="true"]').last()
     await next.getByRole('textbox').click()

@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 /**
  * Invariant: a plugin's new-file type appears in the tab bar + menu, creates an untitled file of
  * its extension at the workspace root seeded with its template, and opens it in the plugin's
@@ -114,7 +115,7 @@ test('a plugin new file is created from the + menu and opens in its editor', asy
     await writeSketchPlugin(pluginRoot)
     await enableDevPlugins(orcaPage, [pluginRoot])
 
-    await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
+    await tabCreateMenuTrigger(orcaPage).click({ force: true })
     const item = orcaPage.getByRole('menuitem', { name: 'New sketch' })
     await expect(item).toBeVisible({ timeout: 15_000 })
     await expect(item.locator('img[src^="orca-plugin-image://"]')).toBeVisible()
