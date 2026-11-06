@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Profiler } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -57,4 +57,42 @@ it('lets the 1 Hz tick sleep while every row has settled, with each run frozen',
   act(() => vi.advanceTimersByTime(5_000))
   expect(committed).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it("shows an agent by the provider's id, beside its own Stop, and leaves command rows inert", () => {
+  const running = (id: string, kind: 'agent' | 'command') => ({
+    id: `host-${id}`,
+    providerId: `provider-${id}`,
+    kind,
+    description: `child ${id}`,
+    state: 'working' as const,
+    membership: 'live' as const,
+    firstObservedAt: 1_000,
+    observedAt: 2_000,
+    stoppable: true,
+    invocation: { invocationId: `spawn-${id}`, generation: 1 }
+  })
+  const onShowAgent = vi.fn()
+  const onStop = vi.fn()
+  render(
+    <NativeChatBackgroundTasksStatus
+      expanded
+      onExpandedChange={() => {}}
+      isVisible
+      tasks={[]}
+      settledTasks={[]}
+      childViews={[running('a', 'agent'), running('s', 'command')]}
+      indicatorActive
+      supportsTaskStop
+      offersStopAll={false}
+      stoppingTaskIds={new Set()}
+      stoppingAll={false}
+      onStop={onStop}
+      onShowAgent={onShowAgent}
+    />
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Show child a in the conversation' }))
+  expect(onShowAgent).toHaveBeenCalledWith('provider-a')
+  expect(onStop).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: /Show child s/ })).toBeNull()
 })

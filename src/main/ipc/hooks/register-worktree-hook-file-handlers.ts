@@ -43,7 +43,8 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       }
       // Settings renders read this; only a launch (`wakeWslDistro`) may start a stopped distro.
       const result = await readIssueCommandUnlessWslStopped(repo.path, {
-        wakeWslDistro: args.wakeWslDistro
+        wakeWslDistro: args.wakeWslDistro,
+        gitOptions: () => getLocalProjectWorktreeGitOptions(store, repo)
       })
       if (result.refusedWslDistro) {
         // The Settings editor re-reads on this signal instead of staying read-only (#35778's pattern).

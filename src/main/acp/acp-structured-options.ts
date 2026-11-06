@@ -1,3 +1,4 @@
+import { acpInitializeForkSupport } from './acp-fork-support'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
@@ -60,6 +61,7 @@ export class AcpStructuredOptions {
     > = {}
   ) {}
 
+  private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
@@ -71,6 +73,13 @@ export class AcpStructuredOptions {
   readonly appliedInput = new Map<string, string>()
   readonly applied = new Map<string, string>()
   writeRevision = 0
+  /** Orca's own writes in flight; config changes outside them are the agent's own. */
+  writing = 0
+  /** While Orca's hidden model command runs, its reply belongs to it, never to the chat. */
+  commandReply: string | null = null
+  // What a launch-line or model-command selection resolved to. The agent never echoes the raw
+  // selector, so a concrete change away from this retires it; ordinary control proof never does.
+  private selectorProof: Readonly<Record<string, string | undefined>> | null = null
 
   invalidateInput(key: string): void {
     this.appliedInput.delete(key)
@@ -94,6 +103,26 @@ export class AcpStructuredOptions {
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
+    this.selectorProof = null
+  }
+
+  /** The session runs a model the launch line applied, so sends need not write it again. */
+  adoptLaunchModel(model: string): void {
+    this.appliedInput.set('model', model)
+    this.picked.add('model')
+    this.selectorProof = this.currentValues()
+  }
+
+  /** `resolvedModel` marks selector proof: the model the agent's own command reported. */
+  adoptOwnWrite(key: string, value: string, resolvedModel?: string): void {
+    this.appliedInput.set(key, value)
+    if (resolvedModel !== undefined) {
+      this.selectorProof = { ...this.currentValues(), model: resolvedModel }
+    } else if (key === 'model') {
+      this.selectorProof = null
+    } else if (this.selectorProof) {
+      this.selectorProof = { ...this.selectorProof, effort: this.currentValues().effort }
+    }
   }
 
   notePick(key: string): void {
@@ -101,8 +130,22 @@ export class AcpStructuredOptions {
   }
 
   adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
-    if (configOptions) {
-      this.configOptions = configOptions
+    if (!configOptions) {
+      return
+    }
+    this.configOptions = configOptions
+    const proof = this.selectorProof
+    if (!proof || this.writing > 0) {
+      return
+    }
+    // A role or :level selector carries thinking too; missing values are no concrete change.
+    const now = this.currentValues()
+    const drifted = (key: string) =>
+      now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
+    if (drifted('model') || drifted('effort')) {
+      this.selectorProof = null
+      this.appliedInput.delete('model')
+      this.appliedInput.delete('effort')
     }
   }
 
@@ -114,6 +157,7 @@ export class AcpStructuredOptions {
 
   /** Each process proves its own built-ins; session rows alone cannot. */
   adoptInitialize(initialized: InitializeResponse): void {
+    this.forkSupport = acpInitializeForkSupport(initialized)
     this.isBuiltin = this.dialect.builtinCommands?.(initialized) ?? (() => false)
     if (this.reportedCommands) {
       this.adoptCommands(this.reportedCommands)
@@ -154,7 +198,7 @@ export class AcpStructuredOptions {
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
-  read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
+  read(): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
     const sessionEfforts: AgentSessionOptionChoice[] = effortOption
@@ -204,6 +248,7 @@ export class AcpStructuredOptions {
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
     return {
       models,
+      forkSupport: this.forkSupport,
       current: {
         ...(currentModel ? { model: currentModel } : {}),
         ...(effortOption ? { effort: effortOption.currentValue } : {}),
@@ -254,6 +299,14 @@ export class AcpStructuredOptions {
   // Match the mode category rather than assuming an agent's config ID.
   modeConfigId(): string {
     return this.select('mode')?.id ?? 'mode'
+  }
+
+  // Only the running values, so config notifications don't project the whole catalog again.
+  private currentValues(): Readonly<Record<string, string | undefined>> {
+    return {
+      model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
+      effort: this.select('thought_level')?.currentValue
+    }
   }
 
   private select(category: string): SelectOption | null {

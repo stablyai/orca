@@ -10,7 +10,8 @@ import {
 } from './feature-tip-telemetry'
 
 export async function setAgentDefaultSurfaceFromFeatureTip(
-  surface: AgentDefaultSurface
+  surface: AgentDefaultSurface,
+  { confirmWithToast = true }: { confirmWithToast?: boolean } = {}
 ): Promise<boolean> {
   const { settings, updateSettingsOrThrow } = useAppStore.getState()
   const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
@@ -27,7 +28,7 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       source: 'launch_card',
       launch_tip_shown: true
     })
-    if (surface === 'chat') {
+    if (surface === 'chat' && confirmWithToast) {
       toast.success(
         translate(
           'featureTips.chatUiHere.switched',

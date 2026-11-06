@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
+import type { MobileNativeChatSendIntent } from './native-chat/mobile-native-chat-send'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import {
   editMobileNativeChatDraft,
@@ -30,6 +31,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   const onSendError = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
+  const holdUnconfirmed = vi.fn<(clientMessageId: string, onUnconfirmed: () => void) => void>()
 
   function Harness({ agent }: { agent: StructuredAgentId }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
@@ -38,7 +40,8 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       clearDraftForSend,
       onSendError,
       restoreRejectedDraft,
-      sendStructured
+      sendStructured,
+      holdUnconfirmed
     }).sendWithOutcome
     return null
   }
@@ -59,27 +62,37 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     resetMobileNativeChatDraftStoreForTests()
   })
 
-  it('retains transport-unknown input in the transcript without restoring the draft', async () => {
+  it('hands back an unconfirmed send with its skills beside newer picks only at the deadline', async () => {
     recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
       token: '$review',
       path: '/skills/review/SKILL.md'
     })
-    sendStructured.mockImplementation(async () => {
-      editMobileNativeChatDraft(ORIGIN.draftKey, '$newer work')
-      recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
-        token: '$newer',
-        path: '/skills/newer/SKILL.md'
-      })
-      return 'unknown'
-    })
+    sendStructured.mockImplementation(
+      async (
+        ...args: [unknown, unknown, unknown, unknown, unknown, MobileNativeChatSendIntent]
+      ) => {
+        args[5].onCreated?.('lost-id')
+        editMobileNativeChatDraft(ORIGIN.draftKey, '$newer work')
+        recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+          token: '$newer',
+          path: '/skills/newer/SKILL.md'
+        })
+        return 'unknown'
+      }
+    )
     mount('codex')
 
     await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
     expect(onSendError).not.toHaveBeenCalled()
+    expect(holdUnconfirmed).toHaveBeenCalledWith('lost-id', expect.any(Function))
+    act(() => holdUnconfirmed.mock.calls[0]![1]())
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
+    expect(onSendError).toHaveBeenCalledWith('Not confirmed. Restored to the box.')
     expect(readMobileNativeChatPickedSkills(ORIGIN.draftKey).map((skill) => skill.name)).toEqual([
-      'newer'
+      'newer',
+      'review'
     ])
   })
 })

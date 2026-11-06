@@ -9,20 +9,25 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionFailureRowWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../../../native-chat/agent-session-wire/claude-stream-json-frame-schema'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../../../native-chat/agent-session-wire/providers/claude-stream-json-frame-schema'
 import {
   type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
   unhandledProviderFrameJournalItem
-} from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
+} from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import {
   claudeRecord,
   claudeText,
   type ClaudeMessageEnvelope
 } from '../journal/claude-structured-item-translation'
 import { claudeResultOutcome } from '../../claude-result-outcome'
+import { isUnmodeledClaudeSystemFrame } from '../../../native-chat/agent-session-wire/providers/provider-frame-disposition'
+import {
+  isClaudeToolUseContent,
+  isClaudeToolResultContent
+} from '../../../../shared/claude-tool-content'
 import type { ClaudeRowStamp } from '../../claude-provisional-row-corrections'
 import {
   CLAUDE_API_RETRY_FRAME_KIND,
@@ -50,7 +55,8 @@ const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
 
 /** No row to write, so buffered output need not flush ahead of this frame. */
 export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
-  return PROGRESS_FRAME_KINDS.has(claudeProviderFrameKind(message))
+  const kind = claudeProviderFrameKind(message)
+  return PROGRESS_FRAME_KINDS.has(kind) || isUnmodeledClaudeSystemFrame(kind)
 }
 
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(
@@ -103,10 +109,10 @@ export function isModeledClaudeContent(value: unknown): boolean {
     // Local attachments replay with the base64 or file source Orca sent.
     return source?.type === 'base64' || source?.type === 'file'
   }
-  if (part.type === 'tool_use') {
+  if (isClaudeToolUseContent(part)) {
     return claudeText(part.id) !== null && claudeText(part.name) !== null
   }
-  if (part.type === 'tool_result') {
+  if (isClaudeToolResultContent(part)) {
     return claudeText(part.tool_use_id) !== null
   }
   // Redacted thinking arrives as an empty string plus a signature.

@@ -87,7 +87,7 @@ export class DeviceRegistry {
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry {
     // Never show a QR for an offer an admin removed on disk.
-    this.adoptExternalEdits()
+    this.adoptExternalEdits({ fresh: true })
     // Reuse only identical grants so re-advertisement cannot expand permissions.
     const existing = this.devices.find(
       (d): d is TokenDeviceEntry =>
@@ -133,7 +133,7 @@ export class DeviceRegistry {
     phones: readonly DelegatedPhone[]
   ): DelegatedMobileDeviceEntry[] {
     // Plan over the file as it is: an unchanged child removed on disk would skip the save's merge.
-    this.adoptExternalEdits()
+    this.adoptExternalEdits({ fresh: true })
     const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
     if (nextDevices !== this.devices) {
       this.devices = this.save(nextDevices)
@@ -157,7 +157,7 @@ export class DeviceRegistry {
   }
 
   getPendingDevice(scope: DeviceScope = 'mobile'): TokenDeviceEntry | null {
-    this.adoptExternalEdits()
+    this.adoptExternalEdits({ fresh: true })
     return (
       this.devices.find(
         (device): device is TokenDeviceEntry => isPendingTokenRow(device) && device.scope === scope
@@ -296,11 +296,11 @@ export class DeviceRegistry {
     }
   }
 
-  /** Auth checks see a removal made on disk (an admin revoke) without waiting for orcad's next save. */
-  private adoptExternalEdits(): void {
+  /** Auth checks see a disk removal (an admin revoke) within a second; `fresh` planners see it now. */
+  private adoptExternalEdits(options: { fresh?: boolean } = {}): void {
     // An unreadable load refuses everything until restart; there is nothing to merge into.
     if (!this.registryUnreadable) {
-      this.devices = this.writer.adoptExternalEdits(this.devices) ?? this.devices
+      this.devices = this.writer.adoptExternalEdits(this.devices, options) ?? this.devices
     }
   }
 

@@ -39,6 +39,9 @@ const modelCatalog = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: modelCatalog
 }))
+vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
+  usePublishedMachineName: () => null
+}))
 
 const composer = vi.hoisted((): { props: NativeChatComposerProps | null } => ({ props: null }))
 vi.mock('@/components/native-chat/NativeChatComposer', async (importOriginal) => {

@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { withoutUnprovenNewLaunchDefault } from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
 import { sourceControlActionAgentPicksModel } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import {
   readHostModelCatalogSnapshot,
-  recordHostModelCatalogSnapshot,
-  withoutUnprovenNewLaunchDefault
+  recordHostModelCatalogSnapshot
 } from '@/runtime/host-model-catalog-snapshots'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'

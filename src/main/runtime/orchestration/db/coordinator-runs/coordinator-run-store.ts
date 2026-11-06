@@ -1,4 +1,4 @@
-import type { CoordinatorStatus, CoordinatorRun } from '../../types'
+import type { CoordinatorStatus, CoordinatorRun } from '../orchestration-records'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 

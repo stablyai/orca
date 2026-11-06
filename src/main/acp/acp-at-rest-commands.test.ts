@@ -6,9 +6,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import capture from '../../shared/__fixtures__/omp-native-commands.json'
 import { buildNativeChatPickerItems } from '../../shared/native-chat/input/native-chat-picker-items'
 import { sessionReportedSkills } from '../../shared/native-chat/input/native-chat-slash-commands'
-import { AT_REST_COMMANDS_TTL_MS } from '../native-chat/agent-session-wire/at-rest-command-catalog'
+import { AT_REST_COMMANDS_TTL_MS } from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import '../../shared/priority-semaphore'
-import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
+import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   commandDiscoveryRig,
   DISCOVERY_SESSION,
@@ -16,6 +16,7 @@ import {
 } from './acp-command-discovery.test-fixture'
 import { deferred, tick } from './acp-scripted-agent.test-support'
 import { acpLaunchSpecFor } from './acp-launch-specs'
+import { readAcpForkSupport } from './acp-fork-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -511,7 +512,7 @@ it('lists OpenCode 2 commands from a session it then deletes, and never starts O
       child.agent.on('initialize', (frame) =>
         child.agent.reply(frame, {
           protocolVersion: 1,
-          agentCapabilities: { sessionCapabilities: { delete: {} } }
+          agentCapabilities: { sessionCapabilities: { delete: {}, fork: {} } }
         })
       )
       child.agent.on('session/new', (frame) => {
@@ -529,6 +530,7 @@ it('lists OpenCode 2 commands from a session it then deletes, and never starts O
   const listed = await v2.catalog.settled(openCodeRecord('opencode2'), 1_000)
   expect(listed?.map((command) => command.name)).toEqual(['init', 'itx-plan', 'compact'])
   expect(deleted).toEqual([{ sessionId: DISCOVERY_SESSION }])
+  expect(readAcpForkSupport('opencode2')).toBe('supported')
 
   const v1 = await rig(
     undefined,

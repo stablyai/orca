@@ -12,7 +12,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from '../repositories/runtime-repository-registration-controller'
 import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { RpcRequest } from './core'
-import { repoDispatcher } from './methods/repo-rpc.test-fixture'
+import { repoDispatcher } from './methods/projects/repo-rpc.test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
