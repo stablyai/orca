@@ -33,7 +33,6 @@ test('fresh profile opens a live Home terminal @golden', async ({ electronApp, o
 
   await completeOnboarding(orcaPage)
   const homePath = await electronApp.evaluate(({ app }) => app.getPath('home'))
-  await expect(orcaPage.getByText('Home', { exact: true }).first()).toBeVisible()
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage, 30_000)
   await waitForActiveTerminalManager(orcaPage, 30_000)

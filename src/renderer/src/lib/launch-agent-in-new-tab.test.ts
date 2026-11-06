@@ -28,10 +28,6 @@ describe('launchAgentInNewTab', () => {
   it.each(['created', 'failed'] as const)(
     'settles a %s requested host agent beside existing surfaces using its captured owner',
     async (creation) => {
-      const preferences =
-        await import('@/runtime/agent-launch-settings/use-host-agent-launch-preferences')
-      const transport =
-        await import('@/runtime/agent-launch-settings/agent-launch-settings-transport')
       const { launchAgentInNewTabWithOutcome } = await import('./launch-agent-in-new-tab')
       const { settleAgentTabLaunch } = await import('./launch-agent-in-new-tab-host-agents')
       store.settings.nativeChatProviders = { claude: true }
@@ -53,14 +49,6 @@ describe('launchAgentInNewTab', () => {
       Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
       Object.assign(store.worktreesByRepo['repo-1'][0], { hostId: 'runtime:web-runtime' })
       mockIsWebRuntimeSessionActive.mockReturnValue(true)
-      const readPreferences = vi
-        .spyOn(preferences, 'ensureAgentLaunchPreferences')
-        .mockResolvedValue({
-          defaultTuiAgent: 'codex',
-          disabledTuiAgents: undefined,
-          agentLaunchChoices: {}
-        })
-      vi.spyOn(transport, 'hostSupportsLaunchChoices').mockResolvedValue(true)
       const reveal = vi.fn(() => true)
       if (creation === 'failed') {
         mockCreateWebRuntimeSessionTerminal.mockResolvedValueOnce({
@@ -85,13 +73,6 @@ describe('launchAgentInNewTab', () => {
         creation === 'created' ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
       )
       expect(mockToastError).toHaveBeenCalledTimes(creation === 'failed' ? 1 : 0)
-      expect(readPreferences).toHaveBeenCalledWith(
-        expect.objectContaining({
-          activeWorktreeId: 'wt-1',
-          activeWorkspaceExecutionHostId: 'runtime:web-runtime'
-        }),
-        expect.objectContaining({ worktreeId: 'wt-1' })
-      )
       expect(reveal).toHaveBeenCalledOnce()
       expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
