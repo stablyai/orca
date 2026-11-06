@@ -171,6 +171,23 @@ it.each([5, 50])(
   }
 )
 
+it("never answers a newly picked folder with the previous folder's late listing", async () => {
+  const h = sharedListingHarness()
+  const old = h.service.read({ agent: 'codex', workspacePath: '/own-old', waitForListing: true })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  const picked = h.service.read({ agent: 'codex', workspacePath: '/own-new', waitForListing: true })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledTimes(2))
+  h.listingFor('/own-old').resolve({ ...listing('old'), complete: true, configured: {} })
+  expect(await old).toMatchObject({ models: [{ id: 'old' }] })
+  expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-new' }).origin).toBe('unknown')
+  h.listingFor('/own-new').resolve({ ...listing('new'), complete: true, configured: {} })
+  expect(await picked).toMatchObject({ models: [{ id: 'new' }] })
+  // A reader still asking for the old folder keeps its answer.
+  expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-old' })).toMatchObject({
+    models: [{ id: 'old' }]
+  })
+})
+
 it('keeps a queued shared listing for a folder that still wants it after the first gave up', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {

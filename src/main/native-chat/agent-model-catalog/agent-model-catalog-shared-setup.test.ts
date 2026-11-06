@@ -7,7 +7,7 @@ import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-m
 
 const HOME = { variable: 'CODEX_HOME', path: '/account' }
 
-function chat(sessionId: string): AgentSessionRecord {
+function chat(sessionId: string, workspaceId = 'ws'): AgentSessionRecord {
   return agentSessionRecordFixture({
     sessionId,
     provider: 'codex',
@@ -15,7 +15,7 @@ function chat(sessionId: string): AgentSessionRecord {
     location: {
       executionHostId: 'local',
       wslDistro: null,
-      workspaceId: 'ws',
+      workspaceId,
       workspaceKind: 'folder'
     }
   })
@@ -73,7 +73,7 @@ function harness() {
       return { identity: `codex in ${at}`, run }
     }
   )
-  const recordWorkspacePath = vi.fn(async () => {
+  const recordWorkspacePath = vi.fn(async (_row: { location: { workspaceId: string } }) => {
     const path = folder.path
     await once('gate')
     return path
@@ -136,9 +136,13 @@ it.each(['listing', 'setup'] as const)(
   }
 )
 
-it.each(['gate', 'cli', 'settings'] as const)(
-  'settles a waiting reader at once when its agent retires while its %s stage is stalled',
-  async (stage) => {
+it.each(
+  (['gate', 'cli', 'settings'] as const).flatMap((stage) =>
+    (['agent', 'workspace'] as const).map((retired) => [stage, retired] as const)
+  )
+)(
+  'settles a waiting reader at once when its %s stage is stalled and its %s retires',
+  async (stage, retired) => {
     vi.useFakeTimers()
     onTestFinished(() => {
       vi.useRealTimers()
@@ -153,7 +157,11 @@ it.each(['gate', 'cli', 'settings'] as const)(
         settled = true
       })
     await vi.advanceTimersByTimeAsync(0)
-    h.store.expireAgent('codex')
+    if (retired === 'agent') {
+      h.store.expireAgent('codex')
+    } else {
+      h.service.retireContext('ws')
+    }
     await vi.advanceTimersByTimeAsync(0)
     expect(settled).toBe(true)
     stalled.resolve()
@@ -181,6 +189,38 @@ it("still lists for chat b when chat a's record goes away while their shared set
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
   h.discovery.resolve(listing('shared'))
   expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
+})
+
+it('keeps one listing for a workspace on the same folder when another workspace there moves', async () => {
+  const h = harness()
+  h.records.a = chat('a', 'ws-a')
+  h.records.b = chat('b', 'ws-b')
+  const paths: Record<string, string> = { 'ws-a': '/repo', 'ws-b': '/repo' }
+  h.recordWorkspacePath.mockImplementation(async (row) => paths[row.location.workspaceId]!)
+  // A command line that runs in the chat's folder lists there, once per folder.
+  const lists: Record<string, PromiseWithResolvers<AgentModelCatalogSuccess>> = {
+    '/repo': Promise.withResolvers(),
+    '/other': Promise.withResolvers()
+  }
+  const runs: string[] = []
+  h.resolve.mockImplementation(async (_home, _cwd, _lookup, _operation, at) => ({
+    identity: `codex in ${at}`,
+    run: vi.fn(() => {
+      runs.push(at!)
+      return lists[at!]!.promise
+    })
+  }))
+  void h.service.demand({ agent: 'codex', sessionId: 'a' })
+  await vi.waitFor(() => expect(runs).toEqual(['/repo']))
+  const b = h.service.read({ agent: 'codex', sessionId: 'b', waitForListing: true })
+  paths['ws-a'] = '/other'
+  h.service.retireContext('ws-a')
+  const a = h.service.read({ agent: 'codex', sessionId: 'a', waitForListing: true })
+  await vi.waitFor(() => expect(runs).toEqual(['/repo', '/other']))
+  lists['/repo']!.resolve(listing('repo'))
+  expect(await b).toMatchObject({ models: [{ id: 'repo' }] })
+  lists['/other']!.resolve(listing('other'))
+  expect(await a).toMatchObject({ models: [{ id: 'other' }] })
 })
 
 it('ends a shorter reader at its own deadline, and a stalled refresh lists nothing after its budget', async () => {
