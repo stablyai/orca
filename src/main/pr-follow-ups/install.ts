@@ -89,13 +89,18 @@ export function installPrFollowUps(
       inventory.sync([...affected])
     }
   }
-  const targetChanged = (worktreeId: string, activity = false): void => {
+  const targetChanged = (worktreeId: string): void => {
     const target = inputs.target(worktreeId)
     if (target) {
-      schedule([...engine.targetChanged(target), ...(activity ? [target.prKey] : [])])
+      schedule(engine.targetChanged(target))
     }
   }
-  const chatActivity = followUpChatActivity(engine, targetChanged)
+  const chatActivity = followUpChatActivity(engine, (id, keys) => {
+    if (keys) {
+      schedule(keys)
+    }
+    targetChanged(id)
+  })
   let settingsKey = JSON.stringify(store.getSettings().prFollowUps)
   let inventoryWasComplete = inputs.inventoryComplete()
   const releases = [
@@ -128,10 +133,7 @@ export function installPrFollowUps(
         change.at
       )
       if (activity) {
-        schedule(engine.prKeysForIdentities([change.paneKey]))
-        void activity.catch((error: unknown) =>
-          console.error('[pr-follow-ups] activity failed', error)
-        )
+        schedule(activity)
       }
       targetChanged(change.workspace.worktreeId)
     }),
@@ -143,9 +145,16 @@ export function installPrFollowUps(
       if (facets.has('topology')) {
         // Topology recovery deliberately checks obligations that outlive their workspace.
         schedule(engine.activePrKeys())
-      } else if (facets.has('records')) {
+      } else if (facets.has('records') || facets.operationIds?.length) {
         schedule(
-          facets.recordIds ? engine.prKeysForIdentities(facets.recordIds) : engine.activePrKeys()
+          facets.recordIds || facets.recordWorkspaceIds || facets.operationIds
+            ? engine.prKeysForAuthorities(
+                facets.recordIds ?? [],
+                [],
+                facets.operationIds ?? [],
+                facets.recordWorkspaceIds ?? []
+              )
+            : engine.activePrKeys()
         )
       }
     }),

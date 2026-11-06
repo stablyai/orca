@@ -108,6 +108,8 @@ export class FollowUpInventory {
         changed.add(workspace.instanceId)
       }
     }
+    const updates: FollowUpTarget[] = []
+    const removals: { worktreeId: string; workspaceRemains?: boolean }[] = []
     for (const id of changed) {
       const old = this.byInstance.get(id)
       const workspace = nextById.get(id)
@@ -119,9 +121,7 @@ export class FollowUpInventory {
         if (!workspace) {
           this.release(id)
           if (!nextWorktrees.has(old.worktreeId)) {
-            for (const key of this.engine.targetRemoved(old.worktreeId)) {
-              affected.add(key)
-            }
+            removals.push({ worktreeId: old.worktreeId })
           }
         }
       }
@@ -130,18 +130,17 @@ export class FollowUpInventory {
         if (target) {
           this.targets.set(target.worktreeId, target)
           this.launchKeys.set(target.worktreeId, this.launchKey(target))
-          for (const key of this.engine.targetChanged(target)) {
-            affected.add(key)
-          }
+          updates.push(target)
           affected.add(target.prKey)
         } else {
-          for (const key of this.engine.targetRemoved(workspace.worktreeId, true)) {
-            affected.add(key)
-          }
+          removals.push({ worktreeId: workspace.worktreeId, workspaceRemains: true })
           affected.add('')
         }
         this.index(workspace)
       }
+    }
+    for (const key of this.engine.targetsChanged(updates, removals)) {
+      affected.add(key)
     }
     this.workspaces = next
     this.targetSnapshot = targets

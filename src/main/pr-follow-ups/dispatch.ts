@@ -95,7 +95,14 @@ export async function dispatchFollowUp(
     const current = eligibleFollowUpTargets(deps, pr.prKey)[0]
     const saved = store.pr(pr.prKey)
     const original = deps.targets(pr.prKey).find((item) => item.worktreeId === target.worktreeId)
-    if (saved && original && original.instanceId !== instanceId) {
+    if (
+      saved &&
+      original &&
+      original.instanceId !== instanceId &&
+      !eligibleFollowUpTargets(deps, pr.prKey).some(
+        (item) => item.instanceId === instanceId || item.worktreeId !== target.worktreeId
+      )
+    ) {
       saved.needsBaseline = true
       store.savePr(saved)
     }
@@ -210,7 +217,6 @@ export function settleFollowUpReceipt(
     if (receipt.status === 'accepted') {
       Object.assign(action, receipt.identity)
       action.sessionStartedAt ??= action.attemptStartedAt
-      action.workingIntervals ??= [{ start: action.sessionStartedAt }]
     }
     deps.store.saveAction(action)
     if (receipt.status === 'absent') {

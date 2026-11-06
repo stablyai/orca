@@ -27,6 +27,7 @@ import {
 } from '../agent-session-replaced-runtime'
 import {
   agentSessionStoreDraftRowWrites,
+  agentSessionStoreChangedAuthorities,
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
@@ -284,27 +285,14 @@ export class AgentSessionStoreTransactions {
                 draft.records.get(id)?.conversationName
             )
             .map(([id]) => id)
-          if (topologyChanged) {
-            const changedTabs = writes.sessionTabs
-              ? [
-                  ...new Set([
-                    ...(published.sessionTabs?.sessionIds() ?? []),
-                    ...(draft.sessionTabs?.sessionIds() ?? [])
-                  ])
-                ].filter(
-                  (id) => published.sessionTabs?.tabIdFor(id) !== draft.sessionTabs?.tabIdFor(id)
-                )
-              : []
+          if (topologyChanged || writes.operations.upsert.length) {
             sessionCrewChanges.notify(
-              Object.assign(new Set(['records'] as const), {
-                recordIds: [
-                  ...new Set([
-                    ...writes.records.remove,
-                    ...writes.records.upsert.map(([id]) => id),
-                    ...changedTabs
-                  ])
-                ]
-              })
+              Object.assign(
+                new Set<'records' | 'names'>(
+                  topologyChanged ? ['records'] : renamed.length ? ['names'] : []
+                ),
+                agentSessionStoreChangedAuthorities(published, draft, writes)
+              )
             )
           } else if (renamed.length) {
             sessionCrewChanges.notify(

@@ -118,9 +118,14 @@ describe('writing a transaction', () => {
 
   it('carries affected record identities in normal record invalidations', async () => {
     const events: string[][] = []
+    const ownership: { workspaces: readonly string[]; operations: readonly string[] }[] = []
     const release = sessionCrewChanges.subscribe((facets) => {
       if (facets.has('records')) {
         events.push([...(facets.recordIds ?? [])])
+        ownership.push({
+          workspaces: facets.recordWorkspaceIds ?? [],
+          operations: facets.operationIds ?? []
+        })
       }
     })
     try {
@@ -130,6 +135,16 @@ describe('writing a transaction', () => {
       await store.setSessionTabVisibility('affected-chat', false)
       expect(events.length).toBeGreaterThan(0)
       expect(events.every((ids) => ids.length === 1 && ids[0] === 'affected-chat')).toBe(true)
+      expect(
+        ownership.some(
+          (event) => event.operations.length > 0 && event.workspaces.includes('workspace-1')
+        )
+      ).toBe(true)
+      await store.reviseSessionOptions(
+        (record) => ({ ...record, location: { ...record.location, workspaceId: 'workspace-2' } }),
+        { sessionId: 'affected-chat' }
+      )
+      expect(ownership.at(-1)?.workspaces).toEqual(['workspace-1', 'workspace-2'])
     } finally {
       release()
     }
@@ -414,6 +429,22 @@ it.each([3, 30])(
           now: NOW + 10_000
         })
       }
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(dependencies).toHaveBeenCalledTimes(1)
+      expect(list).toHaveBeenCalledTimes(1)
+      const operationId = `${NOW}-${'9'.repeat(32)}`
+      await store.admitOperation({
+        callerKey: 'client-1',
+        operationId,
+        fingerprint: 'follow-up-launch',
+        now: NOW
+      })
+      await store.recordOperationOutcome({
+        callerKey: 'client-1',
+        operationId,
+        outcome: { status: 'failed', code: 'agent_launch_tab_closed' }
+      })
       await Promise.resolve()
       await Promise.resolve()
       expect(dependencies).toHaveBeenCalledTimes(1)

@@ -12,12 +12,19 @@ import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { installPrFollowUps } from './install'
+import { activityOverlaps } from './activity-journal'
 import { FollowUpStore } from './store'
+import { sessionCrewChanges } from '../runtime/orchestration/crew/crew-changes'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { AgentSessionStatusEvent } from '../../shared/agent-session/agent-session-wire'
 import { launchFollowUp, recoverFollowUpLaunch } from './launch'
 
 vi.mock('./launch', () => ({
   launchFollowUp: vi.fn(),
   recoverFollowUpLaunch: vi.fn().mockResolvedValue({ status: 'unconfirmed' })
+}))
+vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: vi.fn()
 }))
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -27,7 +34,13 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function installation(count: number, unresolved = false) {
+function installation(
+  count: number,
+  unresolved = false,
+  surface: 'chat' | 'terminal' = 'terminal',
+  initial = false
+) {
+  vi.mocked(recoverFollowUpLaunch).mockResolvedValue({ status: 'unconfirmed' })
   const db = new Database(':memory:')
   const records = new FollowUpStore(db)
   const now = Date.now()
@@ -95,18 +108,21 @@ function installation(count: number, unresolved = false) {
       operationId: `old-${target.prKey}`,
       status: 'accepted',
       agent: 'codex',
-      surface: 'terminal',
-      paneKey: `pane-${target.worktreeId}`,
-      sessionStartedAt: now - 100,
-      workingIntervals: [{ start: now - 100 }]
+      surface,
+      ...(surface === 'terminal'
+        ? { paneKey: `pane-${target.worktreeId}` }
+        : { sessionId: `pane-${target.worktreeId}` }),
+      sessionStartedAt: now - 100
     })
   }
   if (targets[0]) {
     records.saveAction({
       ...records.action('active-pr0')!,
       actionKey: 'uncertain-pr0',
+      operationId: 'uncertain-op-pr0',
       status: 'unconfirmed',
       paneKey: undefined,
+      sessionId: undefined,
       attemptStartedAt: now - 50
     })
   }
@@ -135,7 +151,8 @@ function installation(count: number, unresolved = false) {
     inventoryComplete: () => true,
     launchInputs: () => ({ key: 'codex:chat', agent: 'codex' }),
     recipe: () => ({ agent: 'codex', surface: 'chat' }),
-    working: (action) => (action.paneKey === 'pane-w0' ? working : 'unknown'),
+    working: (action) =>
+      [action.paneKey, action.sessionId].includes('pane-w0') ? working : 'unknown',
     live: vi.fn().mockResolvedValue(true),
     prepare
   }
@@ -157,6 +174,29 @@ function installation(count: number, unresolved = false) {
       status: 'accepted',
       identity: { sessionId: 'new-agent', surface: 'chat' }
     })
+  let chatEmit: ((event: AgentSessionStatusEvent) => void) | undefined
+  const chatSession = (identity: string, active: boolean, at: number, workspaceId = 'w0') => ({
+    sessionId: identity,
+    workspaceId,
+    agent: 'codex',
+    status: active ? ('working' as const) : ('idle' as const),
+    latestPrompt: '',
+    updatedAt: at,
+    statusStartedAt: at
+  })
+  vi.mocked(getStructuredAgentSessionHost).mockReturnValue(
+    surface === 'chat'
+      ? ({
+          subscribeStatus: (sink: { emit(event: AgentSessionStatusEvent): void }) => {
+            chatEmit = sink.emit
+            if (initial) {
+              sink.emit({ type: 'snapshot', sessions: [chatSession('pane-w0', false, now + 10)] })
+            }
+            return () => {}
+          }
+        } as unknown as NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>)
+      : null
+  )
   const host = installPrFollowUps(
     {
       getOrchestrationDb: () => ({ db }),
@@ -169,6 +209,15 @@ function installation(count: number, unresolved = false) {
       agentTransitions: {
         subscribe: (listener: typeof transition) => {
           transition = listener
+          if (initial) {
+            listener({
+              kind: 'seeded',
+              workspace: { worktreeId: 'w0', sshHostId: null },
+              paneKey: 'pane-w0',
+              phase: 'done',
+              at: now + 10
+            })
+          }
           return () => {}
         }
       }
@@ -211,15 +260,19 @@ function installation(count: number, unresolved = false) {
     status: (active: boolean, at: number) => {
       working = { working: active, at }
       targets[0] = { ...targets[0]!, workingAgent: active ? 'Codex' : null }
-      transition({
-        kind: 'moved',
-        workspace: { worktreeId: 'w0', sshHostId: null },
-        paneKey: 'pane-w0',
-        from: active ? 'done' : 'working',
-        to: active ? 'working' : 'done',
-        transition: null,
-        at
-      })
+      if (surface === 'chat') {
+        chatEmit?.({ type: 'status', session: chatSession('pane-w0', active, at) })
+      } else {
+        transition({
+          kind: 'moved',
+          workspace: { worktreeId: 'w0', sshHostId: null },
+          paneKey: 'pane-w0',
+          from: active ? 'done' : 'working',
+          to: active ? 'working' : 'done',
+          transition: null,
+          at
+        })
+      }
     },
     global: (value: boolean) => {
       enabled = value
@@ -228,6 +281,42 @@ function installation(count: number, unresolved = false) {
     project: (value: boolean) => {
       workspaces = workspaces.map((item) => ({ ...item, settings: { enabled: value } }))
       clientEvent({ type: 'reposChanged' })
+    },
+    stream: (identity: string, active: boolean, at: number, workspaceId = 'w0') => {
+      if (surface === 'chat') {
+        chatEmit?.({ type: 'status', session: chatSession(identity, active, at, workspaceId) })
+      } else {
+        transition({
+          kind: 'moved',
+          workspace: { worktreeId: workspaceId, sshHostId: null },
+          paneKey: identity,
+          from: active ? 'done' : 'working',
+          to: active ? 'working' : 'done',
+          transition: null,
+          at
+        })
+      }
+    },
+    inventory: (nextTargets: FollowUpTarget[], nextWorkspaces: FollowUpWorkspace[]) => {
+      targets = nextTargets
+      workspaces = nextWorkspaces
+      inventory({})
+    },
+    get targets() {
+      return targets
+    },
+    get workspaces() {
+      return workspaces
+    },
+    nextObservation: (head: string, at: number) => {
+      const next = {
+        ...observations.get('pr0')!,
+        headSha: head,
+        observedAt: at,
+        failingCheckNames: []
+      }
+      observations.set('pr0', next)
+      observation(next)
     },
     unchanged: () => {
       inventory({})
@@ -326,13 +415,12 @@ it.each([10, 100])(
     expect([...histories]).toEqual(['pr0'])
     expect(sql).toBeLessThan(count * 20 + 100)
     expect(rows).toBeLessThan(count * 20 + 100)
-    const intervals = h.records.action('active-pr0')!.workingIntervals!
-    expect(intervals).toHaveLength(count / 2)
-    expect(intervals.slice(0, 2)).toEqual([
-      { start: h.now - 100, end: h.now + 11 },
-      { start: h.now + 12, end: h.now + 13 }
-    ])
-    expect(intervals.at(-1)?.end).toBe(h.now + count + 9)
+    const evidence = h.records.activityWindow('i0', 'pane-w0', h.now, h.now + count + 10)
+    expect(
+      new Set(evidence.filter((event) => event.kind === 'idle').map((event) => event.at)).size
+    ).toBe(count / 2)
+    expect(activityOverlaps(evidence, h.now + 11.5, h.now + 11.9)).toBe(false)
+    expect(h.records.workingOverlap('pr0', h.now + 12, h.now + 13)).toBe(true)
   }
 )
 
@@ -354,3 +442,196 @@ it('reconciles both old and new bindings while retaining unrelated reader handle
   const keys = reconcile.mock.calls.flatMap(([keys]) => (keys ? [...keys] : []))
   expect([...new Set(keys)].sort()).toEqual(['new-pr', 'pr0'])
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'admits the synchronous initial %s snapshot before any projection',
+  async (surface) => {
+    const h = installation(1, false, surface, true)
+    expect(h.records.workingOverlap('pr0', h.now + 11, h.now + 12)).toBe(false)
+    h.stream('pane-w0', true, h.now + 20)
+    await h.flush()
+    h.nextObservation('h2', h.now + 25)
+    await h.flush()
+    expect(h.records.pr('pr0')?.generation).toBe(0)
+  }
+)
+
+it.each(['chat', 'terminal'] as const)(
+  'recovers late %s identity through an ordinary record commit without losing another session’s idle gap',
+  async (surface) => {
+    const h = installation(1, false, surface)
+    await h.flush()
+    let entered!: () => void
+    let settle!: () => void
+    const launching = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    vi.mocked(launchFollowUp).mockImplementationOnce(async () => {
+      entered()
+      await new Promise<void>((resolve) => {
+        settle = resolve
+      })
+      return { status: 'unconfirmed' }
+    })
+    h.observe(['unit'])
+    await launching
+    const action = h.records.latestAction('pr0')!
+    const at = Date.now() + 1000
+    // Both identities arrive while the operation is claimed, before any receipt identifies it.
+    h.stream('pane-w0', false, at + 1)
+    h.stream('late', true, at + 5)
+    h.stream('other', false, at + 8)
+    h.stream('late', false, at + 10)
+    h.stream('late', true, at + 20)
+    h.stream('other', false, at + 25)
+    settle()
+    await h.flush()
+    vi.mocked(recoverFollowUpLaunch).mockImplementation(async (_runtime, candidate) =>
+      candidate.operationId === action.operationId
+        ? {
+            status: 'accepted',
+            identity:
+              surface === 'chat' ? { surface, sessionId: 'late' } : { surface, paneKey: 'late' }
+          }
+        : { status: 'unconfirmed' }
+    )
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), {
+        recordIds: ['late'],
+        recordWorkspaceIds: ['w0'],
+        operationIds: [action.operationId]
+      })
+    )
+    await h.flush()
+    expect(h.records.action(action.actionKey)?.status).toBe('accepted')
+    expect(h.records.workingOverlap('pr0', at + 15, at + 18)).toBe(false)
+    expect(h.records.workingOverlap('pr0', at + 21, at + 28)).toBe(true)
+    expect(launchFollowUp).toHaveBeenCalledOnce()
+  }
+)
+
+it.each([
+  ['chat', 10],
+  ['chat', 100],
+  ['terminal', 10],
+  ['terminal', 100]
+] as const)(
+  'bounds admission and fixed-window reads through the %s adapter with %i historical transitions',
+  async (surface, count) => {
+    const h = installation(count, false, surface)
+    await h.flush()
+    let rows = 0
+    let actionWrites = 0
+    let sql = 0
+    const prepare = h.db.prepare.bind(h.db)
+    vi.spyOn(h.db, 'prepare').mockImplementation((query) => {
+      const statement = prepare(query)
+      return new Proxy(statement, {
+        get(owner, field) {
+          if (!['get', 'all', 'run'].includes(String(field))) {
+            return Reflect.get(owner, field)
+          }
+          return (...args: Database.BindValue[]) => {
+            sql++
+            if (/INSERT INTO followup_action/.test(query)) {
+              actionWrites++
+            }
+            const result = statement[field as 'all'](...args)
+            if (field !== 'run') {
+              rows += Array.isArray(result) ? result.length : result ? 1 : 0
+            }
+            return result
+          }
+        }
+      })
+    })
+    // Ordinary unrelated stream and committed-record events must not load any obligation history.
+    h.stream('unrelated', true, h.now, 'other-workspace')
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), {
+        recordIds: ['unrelated'],
+        recordWorkspaceIds: ['other-workspace']
+      })
+    )
+    await h.flush()
+    expect(sql).toBe(0)
+    for (let i = 0; i < count; i++) {
+      h.stream('pane-w0', i % 2 === 0, h.now - 90 + i / 4)
+    }
+    // The append path has no reads or action rewrites, regardless of retained history.
+    expect(rows).toBe(0)
+    expect(actionWrites).toBe(0)
+    expect(sql).toBe(count)
+    await h.flush()
+    h.stream('pane-w0', true, h.now + 10)
+    h.stream('pane-w0', false, h.now + 20)
+    rows = 0
+    expect(h.records.workingOverlap('pr0', h.now + 11, h.now + 15)).toBe(true)
+    expect(rows).toBeLessThanOrEqual(3)
+    rows = 0
+    expect(h.records.workingOverlap('pr0', h.now + 21, h.now + 25)).toBe(false)
+    expect(rows).toBeLessThanOrEqual(3)
+    // A shared PR binding retains its evidence when one instance is deleted.
+    h.records.bind('pr0', 'shared-instance')
+    await h.engine.instanceDeleted('i0')
+    expect(h.records.workingOverlap('pr0', h.now + 11, h.now + 15)).toBe(true)
+  }
+)
+
+it.each([10, 100])(
+  'finalizes shared-PR inventory membership once for %i additions, removals and resolution losses',
+  async (count) => {
+    const h = installation(1)
+    await h.flush()
+    const added = Array.from({ length: count }, (_, i) => ({
+      ...h.targets[0]!,
+      worktreeId: `new-w${i}`,
+      instanceId: `new-i${i}`
+    }))
+    const spaces = added.map((t) => ({
+      ...h.workspaces[0]!,
+      worktreeId: t.worktreeId,
+      instanceId: t.instanceId
+    }))
+    const stringify = JSON.stringify.bind(JSON)
+    let keys = 0
+    let groups = 0
+    const originalIterator = Array.prototype[Symbol.iterator]
+    // Count actual serialized membership keys and shared-group traversals at listener admission.
+    const jsonSpy = vi.spyOn(JSON, 'stringify').mockImplementation((value, ...args) => {
+      if (
+        Array.isArray(value) &&
+        value.every((v) => typeof v === 'string' && /^(new-w|w)/.test(v))
+      ) {
+        keys += value.length
+      }
+      return stringify(value, ...args)
+    })
+    Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+      if (this.length && this[0] && typeof this[0] === 'object' && 'prKey' in this[0]) {
+        groups += this.length
+      }
+      return originalIterator.call(this)
+    }
+    const measure = (targets: FollowUpTarget[], workspaces: FollowUpWorkspace[]) => {
+      keys = 0
+      groups = 0
+      h.inventory(targets, workspaces)
+      expect(keys).toBeLessThanOrEqual((count + 1) * 2)
+      expect(groups).toBeLessThanOrEqual((count + 1) * 12)
+    }
+    try {
+      measure([...h.targets, ...added], [...h.workspaces, ...spaces])
+      await h.flush()
+      measure(h.targets.slice(0, 1), h.workspaces)
+      await h.flush()
+      measure([h.targets[0]!, ...added], h.workspaces)
+      await h.flush()
+      measure(h.targets.slice(0, 1), h.workspaces.slice(0, 1))
+    } finally {
+      jsonSpy.mockRestore()
+      Array.prototype[Symbol.iterator] = originalIterator
+    }
+    await h.flush()
+  }
+)

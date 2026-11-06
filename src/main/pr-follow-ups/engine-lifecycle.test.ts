@@ -345,7 +345,8 @@ describe('follow-up recovery and instance lifecycle', () => {
     await h.engine.instanceDeleted('i1')
     expect(h.store.pr(h.target.prKey)).toBeDefined()
     h.controls.live = false
-    await h.engine.activityObserved('w1', 'pane-1', 'unknown', h.now)
+    const keys = h.engine.activityObserved('w1', 'pane-1', 'unknown', h.now)
+    await h.engine.reconcile(keys)
     expect(h.store.pr(h.target.prKey)).toBeUndefined()
   })
 })

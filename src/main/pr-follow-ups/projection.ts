@@ -10,9 +10,6 @@ export function createFollowUpProjectionState() {
     publishedInventory: '',
     entries: new Map<string, FollowUpSnapshot['workspaces'][string]>(),
     recoveryDeadlines: new Map<string, { at: number; timer: ReturnType<typeof setTimeout> }>(),
-    identityPrKeys: new Map<string, string>(),
-    activityStates: new Map<string, { state: string; queued: number }>(),
-    activeKeys: new Set<string>(),
     observations: new Map<string, string>(),
     projections: new Map<string, FollowUpProjection>(),
     published: new Map<string, string>(),
@@ -41,33 +38,8 @@ export function publishFollowUpProjection(
       recentStarts: store.recentAcceptedStarts(key, (deps.now?.() ?? Date.now()) - FOLLOW_UP_DAY),
       waitingForWindow: state.windowHolds.get(key)
     }
-    const identities = new Set(
-      projection.pending
-        .flatMap((action) => [action.sessionId, action.paneKey, action.terminalPtyId])
-        .filter(Boolean)
-    )
-    for (const old of state.projections.get(key)?.pending ?? []) {
-      for (const id of [old.sessionId, old.paneKey, old.terminalPtyId]) {
-        if (id && !identities.has(id)) {
-          state.identityPrKeys.delete(id)
-          state.activityStates.delete(id)
-        }
-      }
-    }
     state.projections.set(key, projection)
     const { pending } = projection
-    for (const action of pending) {
-      for (const identity of [action.sessionId, action.paneKey, action.terminalPtyId]) {
-        if (identity) {
-          state.identityPrKeys.set(identity, key)
-        }
-      }
-    }
-    if (pending.length) {
-      state.activeKeys.add(key)
-    } else {
-      state.activeKeys.delete(key)
-    }
     const at = Math.min(
       ...pending
         .filter((action) => action.status === 'claimed' || action.status === 'unconfirmed')

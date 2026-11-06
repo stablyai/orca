@@ -1,3 +1,4 @@
+import { followUpActivityIdentity } from './activity-journal'
 import type { FollowUpEngine } from './engine'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS } from '../../shared/agent-session/agent-session-host-authority'
@@ -17,37 +18,9 @@ export function readFollowUpActivity(
   }
 }
 
-export function recordFollowUpActivity(
-  deps: FollowUpEngineDependencies,
-  action: FollowUpAction,
-  working: boolean | 'unknown',
-  at: number
-): boolean {
-  const before = JSON.stringify(action)
-  const intervals = (action.workingIntervals ??= [
-    {
-      start: action.sessionStartedAt ?? action.attemptStartedAt,
-      ...(action.sessionEndedAt === undefined ? {} : { end: action.sessionEndedAt })
-    }
-  ])
-  const last = intervals.at(-1)
-  if (working === true && last?.end !== undefined) {
-    intervals.push({ start: at })
-  } else if (working === false && last && last.end === undefined) {
-    last.end = at
-  }
-  if (before === JSON.stringify(action)) {
-    return false
-  }
-  deps.store.saveAction(action)
-  return true
-}
-
 export async function reconcileFollowUpActions(
   deps: FollowUpEngineDependencies,
-  prKey: string,
-  recordActivity: (action: FollowUpAction, working: boolean | 'unknown', at: number) => boolean,
-  hasQueuedActivity: (action: FollowUpAction) => boolean
+  prKey: string
 ): Promise<void> {
   for (const action of deps.store.actions(prKey, true)) {
     if (action.status === 'claimed' || action.status === 'unconfirmed') {
@@ -61,20 +34,34 @@ export async function reconcileFollowUpActions(
       }
       settleFollowUpReceipt(deps, action, receipt)
     }
-    // Latest-state reads must not overtake queued timestamped transitions.
-    if (
-      action.status === 'accepted' &&
-      action.sessionEndedAt === undefined &&
-      !hasQueuedActivity(action)
-    ) {
+    if (action.status === 'accepted' && action.sessionEndedAt === undefined) {
+      const revision = deps.store.activityRevision(action.instanceId)
       const live = await deps.live(action).catch(() => 'unknown' as const)
+      // A snapshot started before admitted evidence cannot replace that evidence.
+      if (deps.store.activityRevision(action.instanceId) !== revision) {
+        continue
+      }
       if (live === false) {
         action.sessionEndedAt = deps.now?.() ?? Date.now()
-        deps.store.saveAction(action)
-        recordActivity(action, false, deps.now?.() ?? Date.now())
+        deps.store.transaction(() => {
+          deps.store.appendActivity(
+            action.instanceId,
+            followUpActivityIdentity(action),
+            'terminated',
+            action.sessionEndedAt!,
+            action.operationId
+          )
+          deps.store.saveAction(action)
+        })
       } else {
         const activity = readFollowUpActivity(deps, action)
-        recordActivity(action, activity.working, activity.at)
+        deps.store.appendActivity(
+          action.instanceId,
+          followUpActivityIdentity(action),
+          activity.working === 'unknown' ? 'unknown' : activity.working ? 'working' : 'idle',
+          activity.at,
+          action.operationId
+        )
       }
     }
   }
@@ -82,7 +69,7 @@ export async function reconcileFollowUpActions(
 
 export function followUpChatActivity(
   engine: FollowUpEngine,
-  workspaceChanged: (id: string, activity?: boolean) => void
+  workspaceChanged: (id: string, keys?: string[]) => void
 ): { refresh(): void; dispose(): void } {
   let chatHost: ReturnType<typeof getStructuredAgentSessionHost>
   let releaseChat: (() => void) | undefined
@@ -112,10 +99,7 @@ export function followUpChatActivity(
                   session.statusStartedAt ?? Date.now()
                 )
               : undefined
-          workspaceChanged(session.workspaceId, !!activity)
-          void activity?.catch((error: unknown) =>
-            console.error('[pr-follow-ups] activity failed', error)
-          )
+          workspaceChanged(session.workspaceId, activity)
         }
       }
     })

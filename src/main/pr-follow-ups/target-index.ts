@@ -1,9 +1,12 @@
 import type { FollowUpTarget } from '../../shared/pr-follow-ups/contracts'
 import type { FollowUpEngineDependencies } from './engine-contract'
 import type { createFollowUpProjectionState } from './projection'
+import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
 
 export class FollowUpTargetIndex {
+  private initialized = false
   private readonly inventoryKeys = new Map<string, string>()
+  private readonly groups = new Map<string, Map<string, FollowUpTarget>>()
   readonly byPr = new Map<string, FollowUpTarget[]>()
   readonly byWorkspace = new Map<string, FollowUpTarget>()
   constructor(
@@ -11,93 +14,134 @@ export class FollowUpTargetIndex {
     private readonly state: ReturnType<typeof createFollowUpProjectionState>
   ) {}
 
-  refreshInventory(): Set<string> {
-    const before = new Map(this.inventoryKeys)
-    this.inventoryKeys.clear()
-    const affected = new Set<string>()
-    const previous = new Map(this.byWorkspace)
-    this.byPr.clear()
-    this.byWorkspace.clear()
-    for (const target of this.host.targets()) {
-      this.byWorkspace.set(target.worktreeId, target)
-      this.inventoryKeys.set(target.worktreeId, JSON.stringify(target))
-      const items = this.byPr.get(target.prKey) ?? []
-      items.push(target)
-      this.byPr.set(target.prKey, items)
-      if (before.get(target.worktreeId) !== JSON.stringify(target)) {
-        affected.add(target.prKey)
-        const old = before.get(target.worktreeId)
-        if (old) {
-          affected.add(JSON.parse(old).prKey)
-        }
-      }
-      previous.delete(target.worktreeId)
-    }
-    for (const old of previous.values()) {
-      affected.add(old.prKey)
-      this.state.entries.delete(old.worktreeId)
-    }
-    const ids = new Set(this.host.workspaceIds())
-    this.state.inventoryProjection = JSON.stringify([...ids])
-    for (const id of this.state.entries.keys()) {
-      if (!ids.has(id)) {
-        this.state.entries.delete(id)
-      }
-    }
-    for (const id of ids) {
-      if (!this.state.entries.has(id)) {
-        this.state.entries.set(id, null)
-      }
-    }
-    return affected
-  }
-
-  targetRemoved(worktreeId: string, workspaceRemains = false): string[] {
-    const target = this.byWorkspace.get(worktreeId)
-    this.byWorkspace.delete(worktreeId)
-    this.inventoryKeys.delete(worktreeId)
-    this.state.entries.delete(worktreeId)
-    if (workspaceRemains) {
-      this.state.entries.set(worktreeId, null)
-    }
-    this.state.inventoryProjection = JSON.stringify([...this.state.entries.keys()])
-    if (!target) {
-      return []
-    }
-    this.byPr.set(
-      target.prKey,
-      (this.byPr.get(target.prKey) ?? []).filter((item) => item.worktreeId !== worktreeId)
+  private eligible(target: FollowUpTarget): boolean {
+    const settings = resolvePrFollowUps(this.host.globalSettings(), target.settings)
+    return (
+      !target.archived &&
+      settings.enabled &&
+      settings.ciFailed === 'new-agent' &&
+      target.branch === this.host.source.latest(target.prKey)?.headRefName
     )
-    return [target.prKey]
   }
 
-  targetChanged(target: FollowUpTarget): string[] {
-    const saved = this.inventoryKeys.get(target.worktreeId)
-    const old: FollowUpTarget | undefined = saved ? JSON.parse(saved) : undefined
-    const fingerprint = JSON.stringify(target)
-    if (saved === fingerprint) {
-      return []
+  batch(
+    changes: readonly FollowUpTarget[],
+    removals: readonly { worktreeId: string; workspaceRemains?: boolean }[] = []
+  ): Set<string> {
+    const affected = new Set<string>()
+    const before = new Map<string, Set<string>>()
+    let membership = false
+    const touch = (key: string) => {
+      if (affected.has(key)) {
+        return
+      }
+      affected.add(key)
+      before.set(
+        key,
+        new Set(
+          (this.byPr.get(key) ?? [])
+            .map((t) => JSON.parse(this.inventoryKeys.get(t.worktreeId)!) as FollowUpTarget)
+            .filter((t) => this.eligible(t))
+            .map((t) => t.instanceId)
+        )
+      )
     }
-    if (old) {
-      if (old.instanceId !== target.instanceId || old.prKey !== target.prKey) {
-        const pr = this.host.store.pr(target.prKey)
+    const remove = (id: string, remains = false) => {
+      const old = this.byWorkspace.get(id)
+      if (old) {
+        touch(old.prKey)
+        this.groups.get(old.prKey)?.delete(id)
+      }
+      this.byWorkspace.delete(id)
+      this.inventoryKeys.delete(id)
+      membership = this.state.entries.delete(id) || membership
+      if (remains) {
+        this.state.entries.set(id, null)
+        membership = true
+      }
+    }
+    for (const item of removals) {
+      remove(item.worktreeId, item.workspaceRemains)
+    }
+    for (const target of changes) {
+      const fingerprint = JSON.stringify(target)
+      if (this.inventoryKeys.get(target.worktreeId) === fingerprint) {
+        continue
+      }
+      const old = this.byWorkspace.get(target.worktreeId)
+      // Snapshot each affected group's eligibility before applying any of this batch.
+      if (old) {
+        touch(old.prKey)
+      }
+      touch(target.prKey)
+      if (old) {
+        this.groups.get(old.prKey)?.delete(old.worktreeId)
+      }
+      const snapshot = target
+      const group = this.groups.get(target.prKey) ?? new Map<string, FollowUpTarget>()
+      group.set(target.worktreeId, snapshot)
+      this.groups.set(target.prKey, group)
+      this.byWorkspace.set(target.worktreeId, snapshot)
+      this.inventoryKeys.set(target.worktreeId, fingerprint)
+      if (!this.state.entries.has(target.worktreeId)) {
+        this.state.entries.set(target.worktreeId, null)
+        membership = true
+      }
+    }
+    for (const key of affected) {
+      const items = [...(this.groups.get(key)?.values() ?? [])]
+      if (items.length) {
+        this.byPr.set(key, items)
+      } else {
+        this.byPr.delete(key)
+        this.groups.delete(key)
+      }
+      const eligible = items.filter((t) => this.eligible(t))
+      // A surviving eligible instance keeps PR-wide activation through relinks and selection changes.
+      if (
+        this.initialized &&
+        eligible.length &&
+        !eligible.some((t) => before.get(key)?.has(t.instanceId))
+      ) {
+        const pr = this.host.store.pr(key)
         if (pr) {
           pr.needsBaseline = true
           this.host.store.savePr(pr)
         }
       }
-      this.byPr.set(
-        old.prKey,
-        (this.byPr.get(old.prKey) ?? []).filter((item) => item.worktreeId !== old.worktreeId)
-      )
     }
-    this.byWorkspace.set(target.worktreeId, target)
-    this.inventoryKeys.set(target.worktreeId, fingerprint)
-    if (!this.state.entries.has(target.worktreeId)) {
-      this.state.entries.set(target.worktreeId, null)
+    if (membership) {
       this.state.inventoryProjection = JSON.stringify([...this.state.entries.keys()])
     }
-    this.byPr.set(target.prKey, [...(this.byPr.get(target.prKey) ?? []), target])
-    return old ? [old.prKey, target.prKey] : [target.prKey]
+    return affected
+  }
+
+  refreshInventory(): Set<string> {
+    const targets = this.host.targets()
+    const ids = new Set(targets.map((t) => t.worktreeId))
+    const affected = this.batch(
+      targets,
+      [...this.byWorkspace.keys()]
+        .filter((id) => !ids.has(id))
+        .map((worktreeId) => ({ worktreeId }))
+    )
+    const workspaces = new Set(this.host.workspaceIds())
+    for (const id of this.state.entries.keys()) {
+      if (!workspaces.has(id)) {
+        this.state.entries.delete(id)
+      }
+    }
+    for (const id of workspaces) {
+      if (!this.state.entries.has(id)) {
+        this.state.entries.set(id, null)
+      }
+    }
+    this.state.inventoryProjection = JSON.stringify([...this.state.entries.keys()])
+    this.initialized = true
+    return affected
+  }
+
+  targetChanged(target: FollowUpTarget): string[] {
+    return [...this.batch([target])]
   }
 }

@@ -83,7 +83,6 @@ export type FollowUpAction = {
   retryKey?: string
   retryCount?: number
   retryObservedAt?: number
-  workingIntervals?: { start: number; end?: number }[]
   sessionStartedAt?: number
   sessionEndedAt?: number
 }
@@ -141,6 +140,7 @@ export type FollowUpHostInputs = {
   // Inventory snapshots and their items retain identity until their follow-up inputs change.
   targets(): readonly FollowUpTarget[]
   target(worktreeId: string): FollowUpTarget | undefined
+  // Authoritatively publishes every new instance, including the first workspace of an unknown repo.
   subscribeInventory(listener: (change: { deletedInstanceId?: string }) => void): () => void
   workspaces(): readonly FollowUpWorkspace[]
   liveInstanceIds(): ReadonlySet<string>

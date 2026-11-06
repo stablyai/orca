@@ -1,12 +1,12 @@
 import { FollowUpTargetIndex } from './target-index'
 import { evaluateFollowUpObservation } from './observation'
 import { createFollowUpProjectionState, publishFollowUpProjection } from './projection'
-import { recordFollowUpActivity, reconcileFollowUpActions } from './action-lifecycle'
+import { FollowUpActivityRouter, followUpActivityIdentity } from './activity-journal'
+import { reconcileFollowUpActions } from './action-lifecycle'
 import type {
   FollowUpObservation,
   FollowUpView,
-  FollowUpTarget,
-  FollowUpAction
+  FollowUpTarget
 } from '../../shared/pr-follow-ups/contracts'
 import type { FollowUpEngineDependencies } from './engine-contract'
 export type { FollowUpEngineDependencies, FollowUpReceipt } from './engine-contract'
@@ -18,12 +18,19 @@ export class FollowUpEngine {
   private disposed = false
   private swept = false
   private readonly inventory: FollowUpTargetIndex
+  private readonly activityRouter: FollowUpActivityRouter
   private readonly projection = createFollowUpProjectionState()
   activePrKeys(): string[] {
-    return [...this.projection.activeKeys]
+    return this.activityRouter.activeKeys()
   }
-  prKeysForIdentities(identities: readonly string[]): string[] {
-    return [...new Set(identities.flatMap((id) => this.projection.identityPrKeys.get(id) ?? []))]
+
+  prKeysForAuthorities(
+    identities: readonly string[],
+    instances: readonly string[],
+    operations: readonly string[] = [],
+    workspaces: readonly string[] = []
+  ): string[] {
+    return this.activityRouter.keys(identities, instances, operations, workspaces)
   }
 
   get waitingForWindow(): boolean {
@@ -32,6 +39,8 @@ export class FollowUpEngine {
 
   private readonly deps: FollowUpEngineDependencies
   constructor(host: FollowUpEngineDependencies) {
+    this.activityRouter = new FollowUpActivityRouter(host.store)
+    host.store.actionCommitted = (action) => this.activityRouter.committed(action)
     this.inventory = new FollowUpTargetIndex(host, this.projection)
     this.deps = {
       ...host,
@@ -119,28 +128,8 @@ export class FollowUpEngine {
     this.publish(keys)
   }
 
-  private activity(action: FollowUpAction, working: boolean | 'unknown', at: number): boolean {
-    if (action.sessionEndedAt !== undefined) {
-      for (const identity of [action.sessionId, action.paneKey, action.terminalPtyId]) {
-        if (identity) {
-          this.projection.identityPrKeys.delete(identity)
-          this.projection.activityStates.delete(identity)
-        }
-      }
-    }
-    return recordFollowUpActivity(this.deps, action, working, at)
-  }
-
   private reconcileActions(prKey: string): Promise<void> {
-    return reconcileFollowUpActions(
-      this.deps,
-      prKey,
-      (action, working, at) => this.activity(action, working, at),
-      (action) =>
-        [action.sessionId, action.paneKey, action.terminalPtyId].some(
-          (id) => id && (this.projection.activityStates.get(id)?.queued ?? 0) > 0
-        )
-    )
+    return reconcileFollowUpActions(this.deps, prKey)
   }
 
   private enqueue(run: () => Promise<void>): Promise<void> {
@@ -184,18 +173,13 @@ export class FollowUpEngine {
   instanceDeleted(instanceId: string): Promise<void> {
     return this.enqueue(async () => {
       const keys = this.deps.store.deleteBinding(instanceId)
+      this.inventory.batch(
+        [],
+        [...this.inventory.byWorkspace.values()]
+          .filter((target) => target.instanceId === instanceId)
+          .map((target) => ({ worktreeId: target.worktreeId }))
+      )
       for (const key of keys) {
-        this.inventory.byPr.set(
-          key,
-          (this.inventory.byPr.get(key) ?? []).filter((target) => {
-            if (target.instanceId !== instanceId) {
-              return true
-            }
-            this.inventory.byWorkspace.delete(target.worktreeId)
-            this.projection.entries.delete(target.worktreeId)
-            return false
-          })
-        )
         const pr = this.deps.store.pr(key)
         if (pr) {
           this.deps.store.retire(pr)
@@ -210,60 +194,49 @@ export class FollowUpEngine {
     identity: string,
     working: boolean | 'unknown',
     at: number
-  ): Promise<void> | undefined {
-    const key = this.projection.identityPrKeys.get(identity)
-    const state = JSON.stringify([working, at])
-    const previous = this.projection.activityStates.get(identity)
-    if (!key || previous?.state === state) {
+  ): string[] | undefined {
+    const keys = this.activityRouter.admit(
+      worktreeId,
+      identity,
+      working === 'unknown' ? 'unknown' : working ? 'working' : 'idle',
+      at
+    )
+    if (!keys.length) {
       return undefined
     }
-    this.projection.activityStates.set(identity, { state, queued: (previous?.queued ?? 0) + 1 })
-    let changed = false
-    return this.enqueue(async () => {
-      try {
-        for (const action of this.deps.store.actions(key, true)) {
-          if (
-            action.status === 'accepted' &&
-            [action.sessionId, action.paneKey, action.terminalPtyId].includes(identity)
-          ) {
-            changed = this.activity(action, working, at) || changed
-          }
-        }
-      } finally {
-        const activity = this.projection.activityStates.get(identity)
-        if (activity) {
-          activity.queued--
-        }
-      }
-      if (!this.inventory.byWorkspace.has(worktreeId)) {
-        await this.reconcileNow([key])
-      } else if (changed) {
-        this.publish([key])
-      }
-    })
+    return keys
   }
 
   sessionEnded(identity: string, endedAt: number): Promise<void> {
-    return this.enqueue(async () => {
-      const keys = new Set<string>()
-      for (const action of this.deps.store.actionsForIdentity(identity)) {
-        if (action.status === 'accepted' && action.sessionEndedAt === undefined) {
-          action.sessionEndedAt = endedAt
+    const keys = new Set<string>()
+    for (const action of this.deps.store.actionsForIdentity(identity)) {
+      if (action.status === 'accepted' && action.sessionEndedAt === undefined) {
+        action.sessionEndedAt = endedAt
+        this.deps.store.transaction(() => {
+          this.deps.store.appendActivity(
+            action.instanceId,
+            followUpActivityIdentity(action),
+            'terminated',
+            endedAt,
+            action.operationId
+          )
           this.deps.store.saveAction(action)
-          this.activity(action, false, endedAt)
-          keys.add(action.prKey)
-        }
+        })
+        keys.add(action.prKey)
       }
-      await this.reconcileNow(keys)
-    })
+    }
+    return this.reconcile(keys)
   }
 
   snapshot() {
     return Object.fromEntries(this.projection.entries)
   }
 
-  targetRemoved(worktreeId: string, workspaceRemains = false): string[] {
-    return this.inventory.targetRemoved(worktreeId, workspaceRemains)
+  targetsChanged(
+    targets: readonly FollowUpTarget[],
+    removals: readonly { worktreeId: string; workspaceRemains?: boolean }[]
+  ): Set<string> {
+    return this.inventory.batch(targets, removals)
   }
 
   targetChanged(target: FollowUpTarget): string[] {
@@ -285,6 +258,7 @@ export class FollowUpEngine {
 
   async dispose(): Promise<void> {
     this.unsubscribe?.()
+    this.deps.store.actionCommitted = undefined
     this.disposed = true
     await this.tail
     for (const deadline of this.projection.recoveryDeadlines.values()) {

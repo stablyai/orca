@@ -130,3 +130,39 @@ export function agentSessionStoreDraftRowWrites(
     sessionTabs: tabsChanged ? { recorded: draft.sessionTabs !== null, tabs } : null
   }
 }
+
+export function agentSessionStoreChangedAuthorities(
+  published: AgentSessionStoreState,
+  draft: AgentSessionStoreState,
+  writes: AgentSessionStoreRowWrites
+) {
+  const changedTabs = writes.sessionTabs
+    ? [
+        ...new Set([
+          ...(published.sessionTabs?.sessionIds() ?? []),
+          ...(draft.sessionTabs?.sessionIds() ?? [])
+        ])
+      ].filter((id) => published.sessionTabs?.tabIdFor(id) !== draft.sessionTabs?.tabIdFor(id))
+    : []
+  const recordIds = [
+    ...new Set([
+      ...writes.records.remove,
+      ...writes.records.upsert.map(([id]) => id),
+      ...changedTabs
+    ])
+  ]
+  return {
+    recordWorkspaceIds: [
+      ...new Set(
+        recordIds
+          .flatMap((id) => [
+            published.records.get(id)?.location.workspaceId,
+            draft.records.get(id)?.location.workspaceId
+          ])
+          .filter((id): id is string => !!id)
+      )
+    ],
+    operationIds: writes.operations.upsert.map(([key]) => draft.operations.get(key)!.operationId),
+    recordIds
+  }
+}

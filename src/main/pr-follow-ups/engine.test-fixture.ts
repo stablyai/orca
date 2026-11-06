@@ -148,12 +148,14 @@ export function harness() {
       now += milliseconds
     },
     dependencies: deps,
-    restart: async () => {
+    restart: async (
+      decorate: (deps: FollowUpEngineDependencies) => FollowUpEngineDependencies = (deps) => deps
+    ) => {
       await engine.dispose()
       store.close()
       db = new Database(path)
       store = new FollowUpStore(db)
-      engine = new FollowUpEngine(deps())
+      engine = new FollowUpEngine(decorate(deps()))
       await engine.start()
     }
   }
