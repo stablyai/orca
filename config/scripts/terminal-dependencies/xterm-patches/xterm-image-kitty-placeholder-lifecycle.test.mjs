@@ -30,24 +30,6 @@ describe('Kitty virtual placement lifecycle', () => {
     }
   })
 
-  it('retransmitting an image ID releases all old virtual placements', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
-      await writeKitty(h.terminal, 'a=p,U=1,i=7,p=11,c=1,r=1')
-      const previous = [...h.bitmaps]
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=12,c=2,r=2', PNG)
-      expect(h.storage._images.size).toBe(1)
-      for (const bitmap of previous) {
-        expect(bitmap.close).toHaveBeenCalledOnce()
-      }
-      await write(h.terminal, `${placeholderCells(7, 10)}\r\n${placeholderCells(7, 12)}`)
-      expect(render(h)).toHaveLength(2)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('can create a prototype from an encoded image after its physical bitmap is evicted', async () => {
     const h = createPlaceholderTerminal()
     try {

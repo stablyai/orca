@@ -17,9 +17,9 @@ import {
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { CreatedWorktreeResult } from './worktree-create-payload'
-import { repoMatchesHostIdentity } from '../../repo-host-identity'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import {
-  getWorktreeExecutionHostId,
+  getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
@@ -72,10 +72,8 @@ export function resolveWorktreeCreateParent(
   executionHostId: ExecutionHostId
 ): WorktreeCreateParentPick {
   const isOnCreationHost = (candidate: Worktree): boolean => {
-    const repo = state.repos.find((owner) =>
-      repoMatchesHostIdentity(owner, candidate.repoId, candidate.hostId ?? executionHostId)
-    )
-    return Boolean(repo && getWorktreeExecutionHostId(candidate, repo) === executionHostId)
+    const repo = resolveReviewRepository(state.repos, candidate)
+    return Boolean(repo && getRepoExecutionHostId(repo) === executionHostId)
   }
   let picked: Worktree | undefined
   if (requestedParentWorktreeId && isWorktreeHostIdentity(requestedParentWorktreeId)) {

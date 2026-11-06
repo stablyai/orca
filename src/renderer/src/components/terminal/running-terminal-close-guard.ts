@@ -106,9 +106,14 @@ export function guardRunningTerminalClose(params: {
         confirmClose(ptyIds)
         return
       }
-      // Answered probe failures/stale handles fail open like Cmd+W; they provide no live-child evidence and must not disable closing.
+      // "Could not tell" must not kill a bound pty's work (#33265); layout-only ids are often stale leaves that never answer.
+      const boundPtyIds = new Set(useAppStore.getState().ptyIdsByTabId?.[terminalTabId] ?? [])
       const busyPtyIds = probes
-        .filter((probe) => probe.verdict === 'live')
+        .filter(
+          (probe) =>
+            probe.verdict === 'live' ||
+            (probe.verdict === 'unverifiable' && boundPtyIds.has(probe.ptyId))
+        )
         .map((probe) => probe.ptyId)
       if (busyPtyIds.length === 0) {
         closeNow()
