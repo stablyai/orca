@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  attachWebScrollDragToDismiss,
   bottomDrawerDismissMotion,
   bottomDrawerScrim,
-  shouldDismissBottomDrawer
+  shouldDismissBottomDrawer,
+  type WebScrollTouchEvent,
+  type WebScrollableTarget
 } from './bottom-drawer-drag-motion'
 
 describe('bottom drawer release', () => {
@@ -28,5 +31,67 @@ describe('bottom drawer release', () => {
     const travel = 777 + 48
     expect(bottomDrawerScrim(1, travel, 777)).toBe(1)
     expect(bottomDrawerScrim(1 - 777 / travel, travel, 777)).toBeCloseTo(0)
+  })
+
+  it('claims downward touch pulls at the top of web scroll content and leaves scrolling untouched', () => {
+    const listeners = new Map<string, (event: WebScrollTouchEvent) => void>()
+    const scroller: WebScrollableTarget = {
+      scrollTop: 0,
+      addEventListener: (type, listener) => {
+        listeners.set(type, listener)
+      },
+      removeEventListener: (type) => {
+        listeners.delete(type)
+      }
+    }
+    const scrollOffsetY = { value: 0 }
+    const detach = attachWebScrollDragToDismiss(scroller, scrollOffsetY)
+
+    const pullDownMove = {
+      touches: [{ clientY: 120 }],
+      cancelable: true,
+      preventDefault: vi.fn()
+    }
+    listeners.get('touchstart')?.({
+      touches: [{ clientY: 100 }],
+      cancelable: true,
+      preventDefault: vi.fn()
+    })
+    listeners.get('touchmove')?.(pullDownMove)
+    expect(pullDownMove.preventDefault).toHaveBeenCalledTimes(1)
+    expect(scrollOffsetY.value).toBe(0)
+
+    // Pushing upward from the top scrolls the list rather than claiming the touch for the sheet.
+    const pushUpMove = {
+      touches: [{ clientY: 80 }],
+      cancelable: true,
+      preventDefault: vi.fn()
+    }
+    listeners.get('touchstart')?.({
+      touches: [{ clientY: 100 }],
+      cancelable: true,
+      preventDefault: vi.fn()
+    })
+    listeners.get('touchmove')?.(pushUpMove)
+    expect(pushUpMove.preventDefault).not.toHaveBeenCalled()
+
+    // Pulling downward while scrolled into the list scrolls back toward the top without claiming the touch.
+    scroller.scrollTop = 48
+    const scrollBackMove = {
+      touches: [{ clientY: 130 }],
+      cancelable: true,
+      preventDefault: vi.fn()
+    }
+    listeners.get('touchstart')?.({
+      touches: [{ clientY: 100 }],
+      cancelable: true,
+      preventDefault: vi.fn()
+    })
+    listeners.get('touchmove')?.(scrollBackMove)
+    expect(scrollBackMove.preventDefault).not.toHaveBeenCalled()
+    expect(scrollOffsetY.value).toBe(48)
+
+    detach()
+    expect(listeners.size).toBe(0)
   })
 })

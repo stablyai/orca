@@ -9,6 +9,7 @@ import {
   sessionTerminalRename
 } from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import { removeRecentSessionCard } from './recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from './native-chat/composer/mobile-native-chat-draft-store'
@@ -77,6 +78,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         await sessionTerminalClose.request(client, { terminal: target.handle })
       )
       if (response.accepted) {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
+        }
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
@@ -116,6 +120,14 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted && !response.value.refused) {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(
+            hostId,
+            worktreeId,
+            tab.id,
+            tab.type === 'terminal' ? tab.terminal : undefined
+          )
+        }
         const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)
         if (chatScope && response.value.retirementConfirmed) {
           closeMobileNativeChatTabDraft(chatScope)
@@ -152,6 +164,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
+        // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
         // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         if (selectedSessionTabIdRef.current === tab.id) {

@@ -27,6 +27,7 @@ type Props = {
   visible: boolean
   title?: string
   message?: string
+  children?: ReactNode
   actions: ActionSheetAction[]
   onClose: () => void
   /** Runs once the sheet has slid away, after any closeBeforePress action. */
@@ -112,6 +113,7 @@ export function ActionSheetModal({
   visible,
   title,
   message,
+  children,
   actions,
   onClose,
   onAfterClose
@@ -146,7 +148,9 @@ export function ActionSheetModal({
         message={message}
         actions={sequencedActions}
         onClose={onClose}
-      />
+      >
+        {children}
+      </ActionSheetContent>
     </BottomDrawer>
   )
 }

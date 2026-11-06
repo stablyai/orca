@@ -7,7 +7,46 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status/contract
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import { translate } from '../i18n/mobile-i18n'
+import type { AgentDotState } from '../worktree/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import {
+  clearCatalogWorktreesForTabStatusForTests,
+  setCatalogWorktreesForTabStatus,
+  subscribeCatalogWorktreesForTabStatus
+} from './session-tab-catalog-agent-status'
+import {
+  clearTabCompletionEntriesForTests,
+  hasPendingWorktreeUnreadForTabCompletion
+} from './tab-completion-state'
+
+export { hasPendingWorktreeUnreadForTabCompletion }
+
+export {
+  buildTabCompletionKeys,
+  resolveTrackedTabCompletionState
+} from './session-tab-catalog-agent-status'
+
+export {
+  clearLatchedUnreadTabKeys,
+  isMobileSessionTabUnreadBeforeView,
+  latchInitialActiveTabUnread,
+  resolveMobileSessionTabDotState,
+  resolveRawSessionTabDotState,
+  resolveTabDoneStamp,
+  restoreLatchedUnreadTabKeys,
+  seedUnreadWorktreeSessionTabs
+} from './mobile-session-tab-unread'
+
+export { setCatalogWorktreesForTabStatus, subscribeCatalogWorktreesForTabStatus }
+
+export {
+  buildRecentSessionCardFromTab,
+  recentCardSnapshotTabs,
+  resolveLiveTabDotState,
+  syncRecentCardWithLiveTab,
+  type LiveRecentCardTab,
+  type RecentSessionCardSnapshot
+} from './recent-session-card-snapshot'
 
 export type MobileTerminalTabAgentIdentity = {
   title: string
@@ -113,4 +152,25 @@ export function getMobileSessionTabTitle(
     )
   }
   return tab.title || translate('session.terminalTabAgent.terminal', 'Terminal')
+}
+
+const VALID_AGENT_DOT_STATES: readonly AgentDotState[] = [
+  'working',
+  'monitoring',
+  'blocked',
+  'waiting',
+  'unread',
+  'done',
+  'interrupted',
+  'failed',
+  'unconfirmed'
+]
+
+export function parseAgentDotState(raw: unknown): AgentDotState | undefined {
+  return typeof raw === 'string' ? VALID_AGENT_DOT_STATES.find((state) => state === raw) : undefined
+}
+
+export function clearTabCompletionTrackerForTests(): void {
+  clearTabCompletionEntriesForTests()
+  clearCatalogWorktreesForTabStatusForTests()
 }

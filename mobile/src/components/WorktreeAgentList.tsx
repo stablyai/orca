@@ -7,13 +7,14 @@ import {
   flattenAgentRowLineage,
   type AgentRowNode
 } from '../worktree/agent-row-lineage'
+import { resolveHostAgentRowDotState } from '../session/catalog-worktree-unread-status'
 import {
   collapsedChildrenSignalState,
   isDisclosureOpen,
   partitionIdleChildren,
   toggleDisclosure
 } from '../worktree/agent-child-disclosure'
-import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-row-display'
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
@@ -92,7 +93,7 @@ export function WorktreeAgentList({
     ...node.children.map((child): ChildItem => ({
       kind: 'agent',
       key: child.row.paneKey,
-      dotState: agentDotState(child.row, now),
+      dotState: resolveHostAgentRowDotState(child.row, now),
       node: child
     }))
   ]

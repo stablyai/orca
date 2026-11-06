@@ -11,6 +11,7 @@ export type AgentDotState =
   | 'monitoring'
   | 'blocked'
   | 'waiting'
+  | 'unread'
   | 'done'
   | 'idle'
   | 'unverifiable'
@@ -28,7 +29,7 @@ export function agentDotState(
     Pick<RuntimeWorktreeAgentRow, 'workingMode' | 'hasLivePty'> &
     Parameters<typeof isAgentStatusFresh>[0],
   now: number
-): AgentDotState {
+): Exclude<AgentDotState, 'unread'> {
   const mark = agentVerdictDisplayMark(row)
   if (mark) {
     return mark
@@ -63,6 +64,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return translate('worktree.agentRowDisplay.failed', 'Failed')
     case 'unconfirmed':
       return translate('worktree.agentRowDisplay.unconfirmed', 'Couldn’t confirm')
+    case 'unread':
+      return translate('worktree.agentRowDisplay.unread', 'Unread')
     case 'done':
       return translate('worktree.agentRowDisplay.done', 'Done')
     case 'idle':

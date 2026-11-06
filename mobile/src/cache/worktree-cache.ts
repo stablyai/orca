@@ -1,4 +1,5 @@
 // Home seeds module cache so host detail renders before reconnect/fetch.
+import { setCatalogWorktreesForTabStatus } from '../session/session-tab-catalog-agent-status'
 
 type CachedWorktrees = {
   worktrees: unknown[]
@@ -30,6 +31,9 @@ export function setCachedWorktrees(
     if (oldest) {
       cache.delete(oldest)
     }
+  }
+  if (options?.proven === true) {
+    setCatalogWorktreesForTabStatus(worktrees)
   }
 }
 

@@ -1,12 +1,6 @@
 import { useCallback } from 'react'
 import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
-import {
-  type ActivePanel,
-  resolvePanelAction,
-  shouldShowSessionHeaderChecksAction,
-  panelRouteDescriptor
-} from './session-panel-host'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -14,7 +8,14 @@ import {
   workspaceRouteHref,
   workspaceRouteParams
 } from '../navigation/workspace-execution-host'
+import {
+  type ActivePanel,
+  resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
+  panelRouteDescriptor
+} from './session-panel-host'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
+import { useRecentSessionCardMenu } from './use-recent-session-card-menu'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
   const t = useMobileTranslation()
@@ -26,6 +27,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     isFloatingWorkspaceRoute,
     router,
     worktreeName,
+    showToast,
     activePanel,
     setActivePanel,
     setSessionContentRowWidth,
@@ -46,18 +48,21 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     handleCreateTerminal,
     setCreateError,
     setShowQuickCommands,
-    quickCommandsSupported,
-    showToast
+    quickCommandsSupported
   } = scope
+  const noop = () => {}
   const otherRuntimeAgentRow = {
     id: 'otherServerAgents',
     label: t('session.usePanelRouteActions.otherServerAgents', 'Agents on Another Server'),
     hint: t('session.usePanelRouteActions.pairServerHint', 'Pair that server directly'),
     icon: Bot,
     disabled: true,
-    onPress: () => {}
+    onPress: noop
   }
-  const createTabAgentActions =
+  const buildAgentRows = <T,>(
+    errorHint: string,
+    mapOption: (option: (typeof createTabAgentOptions)[number]) => T
+  ) =>
     createTabAgentLoadState === 'loading'
       ? [
           {
@@ -66,19 +71,11 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
             icon: Bot,
             disabled: true,
             loading: true,
-            onPress: () => {}
+            onPress: noop
           }
         ]
       : createTabAgentOptions.length > 0
-        ? createTabAgentOptions.map((option) => ({
-            id: `agent:${option.agent}`,
-            label: option.label,
-            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
-            onPress: () => {
-              setShowCreateTabDrawer(false)
-              void handleCreateTerminal(option.agent)
-            }
-          }))
+        ? createTabAgentOptions.map(mapOption)
         : createTabAgentLoadState === 'loaded'
           ? [
               {
@@ -86,7 +83,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 label: t('session.usePanelRouteActions.noEnabledAgents', 'No Enabled Agents'),
                 icon: Bot,
                 disabled: true,
-                onPress: () => {}
+                onPress: noop
               }
             ]
           : createTabAgentLoadState === 'other-runtime'
@@ -99,77 +96,50 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                       'session.usePanelRouteActions.presetsUnavailable',
                       'Agent Presets Unavailable'
                     ),
-                    hint: t(
-                      'session.usePanelRouteActions.checkHostHint',
-                      'Check the host connection'
-                    ),
+                    hint: errorHint,
                     icon: Bot,
                     disabled: true,
-                    onPress: () => {}
+                    onPress: noop
                   }
                 ]
               : []
+  const createTabAgentActions = buildAgentRows(
+    t('session.usePanelRouteActions.checkHostHint', 'Check the host connection'),
+    (option) => ({
+      id: `agent:${option.agent}`,
+      label: option.label,
+      renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
+      onPress: () => {
+        setShowCreateTabDrawer(false)
+        void handleCreateTerminal(option.agent)
+      }
+    })
+  )
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
-      : createTabAgentLoadState === 'loading'
-        ? [
-            {
-              id: 'detectingAgents',
-              label: t('session.usePanelRouteActions.detectingAgents', 'Detecting Agents'),
-              icon: Bot,
-              disabled: true,
-              loading: true,
-              onPress: () => {}
-            }
-          ]
-        : createTabAgentOptions.length > 0
-          ? createTabAgentOptions.map((option) => ({
-              id: `agent:${option.agent}`,
-              label: option.label,
-              hint: t('session.usePanelRouteActions.newSessionHint', 'New agent session'),
-              icon: Bot,
-              onPress: () => {
-                const delivery = pendingDiffNotesDelivery
-                setPendingDiffNotesDelivery(null)
-                if (!delivery) {
-                  return
-                }
-                void sendDiffNotesToNewAgent(delivery, async () => {
-                  await handleCreateTerminal(option.agent, {
-                    initialPrompt: delivery.prompt,
-                    onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
-                  })
-                })
+      : buildAgentRows(
+          t('session.usePanelRouteActions.copyNotesHint', 'Copy notes instead'),
+          (option) => ({
+            id: `agent:${option.agent}`,
+            label: option.label,
+            hint: t('session.usePanelRouteActions.newSessionHint', 'New agent session'),
+            icon: Bot,
+            onPress: () => {
+              const delivery = pendingDiffNotesDelivery
+              setPendingDiffNotesDelivery(null)
+              if (!delivery) {
+                return
               }
-            }))
-          : createTabAgentLoadState === 'loaded'
-            ? [
-                {
-                  id: 'noEnabledAgents',
-                  label: t('session.usePanelRouteActions.noEnabledAgents', 'No Enabled Agents'),
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              ]
-            : createTabAgentLoadState === 'other-runtime'
-              ? [otherRuntimeAgentRow]
-              : createTabAgentLoadState === 'error'
-                ? [
-                    {
-                      id: 'presetsUnavailable',
-                      label: t(
-                        'session.usePanelRouteActions.presetsUnavailable',
-                        'Agent Presets Unavailable'
-                      ),
-                      hint: t('session.usePanelRouteActions.copyNotesHint', 'Copy notes instead'),
-                      icon: Bot,
-                      disabled: true,
-                      onPress: () => {}
-                    }
-                  ]
-                : []
+              void sendDiffNotesToNewAgent(delivery, async () => {
+                await handleCreateTerminal(option.agent, {
+                  initialPrompt: delivery.prompt,
+                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
+                })
+              })
+            }
+          })
+        )
 
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {
     const width = Math.round(event.nativeEvent.layout.width)
@@ -211,6 +181,11 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
+  const showRecentSessionCardsAction = !isFloatingWorkspaceRoute
+  const showHeaderMoreButton =
+    showRecentSessionCardsAction || showAgentSessionHistoryAction || showChecksAction
+  const { recentSessionCards, jumpingRecentCardKey, handleSelectRecentSessionCard } =
+    useRecentSessionCardMenu(scope)
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   const handleOpenNewTab = () => {
     setCreateError('')
@@ -242,6 +217,11 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
+    showRecentSessionCardsAction,
+    recentSessionCards,
+    jumpingRecentCardKey,
+    handleSelectRecentSessionCard,
+    showHeaderMoreButton,
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands
