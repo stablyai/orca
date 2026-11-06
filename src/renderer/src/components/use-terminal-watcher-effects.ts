@@ -4,12 +4,15 @@ import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { findPendingWorktreeCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   canWatcherCoverParkedTerminalTab,
+  syncParkedTerminalTabWatchersForWorkspaces,
+  type ParkedTerminalTabWatcherSyncEntry
+} from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import {
   disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,
-  syncParkedTerminalTabWatchersForWorkspaces,
-  terminalWatcherLiveWorkspaceIds,
-  type ParkedTerminalTabWatcherSyncEntry
-} from './terminal-pane/terminal-parked-tab-watchers'
+  terminalWatcherLiveWorkspaceIds
+} from './terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
+
 import { useAppStore } from '@/store'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/workspace/activation/worktree-agent-activation-gate'

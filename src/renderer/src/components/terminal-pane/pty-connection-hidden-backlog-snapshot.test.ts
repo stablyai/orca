@@ -69,7 +69,7 @@ vi.mock('@/lib/pane-manager/pane-webgl-renderer', async (importOriginal) => ({
   presentPaneViewport
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 

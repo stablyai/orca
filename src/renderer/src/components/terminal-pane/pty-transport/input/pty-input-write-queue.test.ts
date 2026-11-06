@@ -18,7 +18,7 @@ import {
   extractOnlyCookedEchoSafeQueryReplies,
   needsCookedEchoSafeQueryReply
 } from '../../../../../../shared/terminal/protocol/queries/terminal-query-reply'
-import { installTerminalCapabilityReplyHandlers } from '../../terminal-capability-replies'
+import { installTerminalCapabilityReplyHandlers } from '../../emulation/terminal-capability-replies'
 import { createDeferred, flushAsyncTicks } from '../../pty-connection-test-async'
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'

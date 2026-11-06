@@ -1,3 +1,4 @@
+import { structuredAgentSessionOptionStamp } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -556,4 +557,28 @@ describe('Pi catalog refresh completion', () => {
       await settle()
     }
   )
+})
+
+it('refreshes saved planning intent from the same host status stamp without remounting', async () => {
+  let interactionMode: 'default' | 'plan' = 'default'
+  const client = optionsClient(async () => ({
+    ...OPTIONS,
+    current: { interactionMode, acceptedInputSources: { interactionMode: 'saved' } }
+  }))
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const harness = await mountOptions({
+    ...BASE,
+    client: client.client,
+    mutate,
+    sendSelection: true,
+    optionStamp: structuredAgentSessionOptionStamp({ interactionMode: 'default' })
+  })
+  expect(harness.current().sendSelection()).toEqual({ selection: { interactionMode: 'default' } })
+  interactionMode = 'plan'
+  await harness.rerender({
+    optionStamp: structuredAgentSessionOptionStamp({ interactionMode: 'plan' })
+  })
+  await settle()
+  expect(harness.current().sendSelection()).toEqual({ selection: { interactionMode: 'plan' } })
+  await harness.unmount()
 })

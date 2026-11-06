@@ -24,7 +24,7 @@ vi.mock('@/lib/pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => 
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   refitAndRefreshAllTerminalPanes: vi.fn()
 }))
-vi.mock('./terminal-fit-restore', () => ({
+vi.mock('./viewport/terminal-fit-restore', () => ({
   restoreTerminalFitToDesktop: vi.fn(),
   restoreTerminalFitsToDesktop: vi.fn()
 }))

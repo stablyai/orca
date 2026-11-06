@@ -18,7 +18,7 @@ import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState
 } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
-import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { parkedWatchersByTabId } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
 const LEAF = '22222222-2222-4222-8222-222222222222'

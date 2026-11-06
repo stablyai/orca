@@ -17585,6 +17585,8 @@
           "noRunUsageYet": "Aucune utilisation d'exécution pour l'instant",
           "noWorkspace": "Aucun espace de travail",
           "latestSavedOutput": "Dernière sortie enregistrée",
+          "fullOutputUnavailable": "Impossible de charger la sortie complète.",
+          "retryFullOutput": "Réessayer",
           "backToList": "Toutes les automatisations",
           "tableName": "Nom",
           "tableProject": "Projet",
@@ -19282,6 +19284,7 @@
         "notDoneGoalChangeIncomplete": "Impossible de terminer la modification de l’objectif. Consultez le chat."
       },
       "composer": {
+        "planMode": "Planifier",
         "imageUnavailable": "Aperçu indisponible",
         "send": "Envoyer",
         "alternateSteerHint": "{{shortcut}} pour envoyer maintenant",

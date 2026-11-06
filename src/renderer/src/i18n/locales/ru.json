@@ -18139,6 +18139,8 @@
           "noRunUsageYet": "Данных об использовании запусков пока нет",
           "noWorkspace": "Нет рабочего пространства",
           "latestSavedOutput": "Последний сохранённый вывод",
+          "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
+          "retryFullOutput": "Повторить",
           "backToList": "Все автоматизации",
           "tableName": "Название",
           "tableProject": "Проект",
@@ -19939,6 +19941,7 @@
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
       },
       "composer": {
+        "planMode": "Планирование",
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
         "previewQueue": "В очередь",

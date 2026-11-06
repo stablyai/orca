@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
-import { hasPtySerializer } from '../pty-buffer-serializer'
+import { hasPtySerializer } from '../snapshots/pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { isExpectedAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'

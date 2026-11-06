@@ -17615,6 +17615,8 @@
           "noRunUsageYet": "Henüz çalıştırma kullanımı yok",
           "noWorkspace": "Çalışma alanı yok",
           "latestSavedOutput": "En son kaydedilen çıktı",
+          "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
+          "retryFullOutput": "Yeniden dene",
           "backToList": "Tüm otomasyonlar",
           "tableName": "Ad",
           "tableProject": "Proje",
@@ -19348,6 +19350,7 @@
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
+        "planMode": "Planla",
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
         "previewQueue": "Sıraya al",

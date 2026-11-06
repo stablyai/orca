@@ -16,7 +16,7 @@ import {
   hasPreHandlerPtyExit,
   isPreHandlerPtyStateDiscarded
 } from './pty-transport/delivery/pty-pre-handler-buffer'
-import { parkedWatchersByTabId } from './terminal-parked-watcher-registry'
+import { parkedWatchersByTabId } from './parking/output-watchers/terminal-parked-watcher-registry'
 import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
 import {
   hasAddedPendingCodexPaneRestart,

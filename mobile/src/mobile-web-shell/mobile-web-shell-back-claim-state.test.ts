@@ -37,8 +37,8 @@ describe('the page claiming the device Back key', () => {
     expect(shellPageBackClaimed(reasked.session)).toBe(false)
   })
 
-  it('drops it when a page fault takes the generation off screen', () => {
-    const failed = run(claimed().session, { type: 'shell-failed', reason: 'document-load-failed' })
+  it('drops it when a refetch takes the generation off screen', () => {
+    const failed = run(claimed().session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(failed.session.state.kind).not.toBe('ready')
     expect(shellPageBackClaimed(failed.session)).toBe(false)
   })

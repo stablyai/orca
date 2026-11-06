@@ -13,14 +13,14 @@ import { registerUndeliverableWriteHandler } from '@/lib/pane-manager/terminal-w
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import { maybePushMode2031Flip } from '../terminal-mode-2031-replies'
+import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
 import { CONPTY_DA1_RESPONSE } from '../../../../../shared/conpty-device-attributes'
 import {
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers
-} from '../terminal-capability-replies'
+} from '../emulation/terminal-capability-replies'
 
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 import { buildPaneTransportOptions } from './pane-transport-options'
