@@ -8,7 +8,7 @@ const DICTATION_LANGUAGE_CODES =
 export const DICTATION_LANGUAGES: readonly string[] = DICTATION_LANGUAGE_CODES.split(' ')
 
 // SenseVoice refuses to load with any other code.
-export const SENSE_VOICE_DICTATION_LANGUAGES: readonly string[] = ['en', 'ja', 'ko', 'zh']
+export const SENSE_VOICE_DICTATION_LANGUAGES: readonly string[] = ['en', 'ja', 'ko', 'yue', 'zh']
 
 /** The code to send the engine, or undefined to let it detect the language itself. */
 export function engineDictationLanguage(
