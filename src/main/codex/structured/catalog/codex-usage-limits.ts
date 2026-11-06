@@ -16,6 +16,8 @@ import {
 
 const RATE_LIMITS_UPDATED = 'notification:account/rateLimits/updated'
 const USAGE_LIMIT_ERRORS = ['usageLimitExceeded', 'rateLimitExceeded']
+/** The last report can trail a rejection by the request that went over, so a window this full counts as the spent one. */
+const NEARLY_SPENT_PERCENT = 90
 
 type CodexAccountRateLimits = CodexRateLimitWindowsSnapshot & {
   rateLimitReachedType?: unknown
@@ -62,7 +64,7 @@ export class CodexUsageLimits {
     const text = [message, additional && additional !== message ? additional : null]
       .filter((part): part is string => part !== null)
       .join('\n')
-    const limit = this.limit()
+    const limit = this.limit(error === 'usageLimitExceeded')
     return agentSessionFailureFact('usageLimitReached', {
       ...(limit ? { usageLimit: limit } : {}),
       detail: providerDiagnostic(text, 'person')
@@ -70,21 +72,16 @@ export class CodexUsageLimits {
   }
 
   /** All spent windows must reset; report the latest only if every reset is known. */
-  private limit(): AgentSessionUsageLimit | null {
+  private limit(rejected: boolean): AgentSessionUsageLimit | null {
     const monthlyPlan = this.snapshot.planType === 'free' || this.snapshot.planType === 'go'
-    const spent = (
+    const reported = (
       [
         ['primary', monthlyPlan ? 43200 : 300],
         ['secondary', 10080]
       ] as const
     ).flatMap(([position, fallback]) => {
       const raw = this.snapshot[position]
-      if (
-        !raw ||
-        typeof raw.usedPercent !== 'number' ||
-        !Number.isFinite(raw.usedPercent) ||
-        raw.usedPercent < 100
-      ) {
+      if (!raw || typeof raw.usedPercent !== 'number' || !Number.isFinite(raw.usedPercent)) {
         return []
       }
       const duration =
@@ -99,8 +96,11 @@ export class CodexUsageLimits {
               ? ('weekly' as const)
               : ('session' as const)
           : undefined
-      return [{ window, resetsAt: raw.resetsAt }]
+      return [{ window, resetsAt: raw.resetsAt, usedPercent: raw.usedPercent }]
     })
+    const fullest = Math.max(...reported.map((entry) => entry.usedPercent))
+    const spentAt = rejected && fullest >= NEARLY_SPENT_PERCENT ? Math.min(fullest, 100) : 100
+    const spent = reported.filter((entry) => entry.usedPercent >= spentAt)
     const reached = this.snapshot.rateLimitReachedType
     const credits = typeof reached === 'string' && reached.endsWith('credits_depleted')
     const window: AgentSessionUsageLimitWindow | undefined = credits
