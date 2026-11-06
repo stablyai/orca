@@ -141,6 +141,28 @@ describe('nativeChatTurnOpenedPullRequests', () => {
       { state: 'completed' }
     )
     expect([openedIn(claude), openedIn(codex)]).toEqual([[38750], [38750]])
+    // Options before -Command, and PowerShell's own backtick escapes around quoted text.
+    expect(
+      openedIn(
+        bashTurn(
+          {
+            command:
+              "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command 'gh pr create --fill'"
+          },
+          GH_CREATE_OUTPUT
+        )
+      )
+    ).toEqual([38712])
+    expect(
+      openedIn(
+        bashTurn(
+          {
+            command: 'pwsh -Command \'Write-Output "`"; gh pr create; `""; Get-Content pr-url.txt\''
+          },
+          GH_CREATE_OUTPUT
+        )
+      )
+    ).toEqual([])
     // cmd.exe's own wrapper.
     expect(
       openedIn(

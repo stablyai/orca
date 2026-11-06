@@ -59,37 +59,50 @@ function argvCommand(input: unknown): readonly string[] | null {
 }
 
 // Codex on Windows runs `"C:\\…\\pwsh.exe" -Command 'script'`; cmd.exe takes `/c script`.
+// PowerShell options before `-Command` may take a value (`-ExecutionPolicy Bypass`).
 const WINDOWS_SHELL_WRAPPER =
-  /^\s*(?:"([^"]+)"|(\S+))\s+(?:-(?:NoProfile|NoLogo|NonInteractive)\s+)*(?:-Command|-c|\/d\s+\/s\s+\/c|\/s\s+\/c|\/c)\s+([\s\S]+)$/iu
+  /^\s*(?:"([^"]+)"|(\S+))\s+(?:-(?!Command\b|c\b)\w+(?:\s+(?![-'"])\S+)?\s+)*(?:-Command|-c|\/d\s+\/s\s+\/c|\/s\s+\/c|\/c)\s+([\s\S]+)$/iu
 const WINDOWS_SHELL_PROGRAM = /^(?:pwsh|powershell|cmd)(?:\.exe)?$/iu
+const POWERSHELL_PROGRAM = /^(?:pwsh|powershell)(?:\.exe)?$/iu
+// PowerShell escapes with a backtick, so `` `" `` is a literal quote, not one that opens text.
+const POWERSHELL_ESCAPE = /`[\s\S]/gu
+
+function programName(path: string): string {
+  return path.split(/[\\/]/).at(-1) ?? ''
+}
+
+/** A PowerShell script read with POSIX quoting: escaped characters can no longer open or close text. */
+function powershellCode(script: string): string {
+  return script.replace(POWERSHELL_ESCAPE, '_')
+}
 
 /** The script inside a PowerShell or cmd wrapper, in its own quoting undone. */
 function unwrapWindowsShell(command: string): string | null {
   const match = WINDOWS_SHELL_WRAPPER.exec(command)
-  const program = (match?.[1] ?? match?.[2])?.split(/[\\/]/).at(-1)
-  if (!match || !program || !WINDOWS_SHELL_PROGRAM.test(program)) {
+  const program = programName(match?.[1] ?? match?.[2] ?? '')
+  if (!match || !WINDOWS_SHELL_PROGRAM.test(program)) {
     return null
   }
-  const script = match[3]!.trim()
+  let script = match[3]!.trim()
   if (script.length >= 2 && script.startsWith("'") && script.endsWith("'")) {
-    return script.slice(1, -1).replaceAll("''", "'")
+    script = script.slice(1, -1).replaceAll("''", "'")
+  } else if (script.length >= 2 && script.startsWith('"') && script.endsWith('"')) {
+    script = script.slice(1, -1)
   }
-  return script.length >= 2 && script.startsWith('"') && script.endsWith('"')
-    ? script.slice(1, -1)
-    : script
+  return POWERSHELL_PROGRAM.test(program) ? powershellCode(script) : script
 }
 
 /** The script a tool call ran. An argv `[sh, -lc, script]` keeps its script whole; joining it would
  *  leave the create command after the wrapper instead of at a command start. */
 function commandScript(input: unknown): string | null {
   const argv = argvCommand(input)
-  const program = argv?.[0]?.split(/[\\/]/).at(-1) ?? ''
+  const program = programName(argv?.[0] ?? '')
   if (
     argv?.length === 3 &&
     (SHELL_PROGRAM.test(program) || WINDOWS_SHELL_PROGRAM.test(program)) &&
     (SHELL_SCRIPT_FLAG.test(argv[1]) || /^(?:-Command|\/c)$/iu.test(argv[1]))
   ) {
-    return argv[2]
+    return POWERSHELL_PROGRAM.test(program) ? powershellCode(argv[2]) : argv[2]
   }
   const command = nativeChatFullCommand(input)
   return command === null ? null : (unwrapWindowsShell(command) ?? command)
