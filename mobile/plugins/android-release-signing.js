@@ -3,8 +3,8 @@ const { withAppBuildGradle } = require('expo/config-plugins')
 // Why: Expo's template signs `release` with its public debug keystore. This adds a `release`
 // signing config read from environment variables at build time, so no key or password is ever
 // written into the generated project. Local release builds without the variables keep the debug
-// key; the release workflow sets ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true so a missing key fails
-// the build instead of shipping a debug-signed APK.
+// key; once release signing is enabled, the release workflow sets ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true
+// so a missing key fails the build instead of shipping a debug-signed APK.
 const MARKER = 'orca: release signing'
 
 const DEBUG_SIGNING_CONFIG = `        debug {

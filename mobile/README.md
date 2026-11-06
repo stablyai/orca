@@ -193,8 +193,10 @@ other catalogs may lag and fall back to English. `pnpm verify:mobile-localizatio
 `ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
 project. Without them, local release builds keep Expo's debug key.
 
-`.github/workflows/mobile-android-release.yml` requires these repository settings and fails before
-building if any is missing:
+`.github/workflows/mobile-android-release.yml` turns release signing on once the
+`ORCA_ANDROID_RELEASE_CERT_SHA256` repository variable (or `ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true`)
+is set. Until then it signs with the debug key as before and adds a warning to the run. Once it is
+on, the workflow fails before building if any of these is missing:
 
 | Name                               | Kind     | Value                                                   |
 | ---------------------------------- | -------- | ------------------------------------------------------- |
@@ -204,7 +206,7 @@ building if any is missing:
 | `ORCA_ANDROID_KEY_PASSWORD`        | secret   | key password (same as the keystore password for PKCS12) |
 | `ORCA_ANDROID_RELEASE_CERT_SHA256` | variable | the key's certificate SHA-256 fingerprint               |
 
-After the build, the workflow checks that the APK's signing certificate matches
+After a release-signed build, the workflow checks that the APK's signing certificate matches
 `ORCA_ANDROID_RELEASE_CERT_SHA256` and is not the debug key, and publishes the fingerprint in the
 release notes. Android only installs an update signed by the same key as the installed app, so
 the keystore must be backed up: losing it means no existing install can be updated in place.
