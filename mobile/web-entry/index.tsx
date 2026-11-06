@@ -33,6 +33,7 @@ import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
+import { SessionListLongPressProvider } from '../src/navigation/session-list-long-press'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
 import { RpcClientProvider } from '../src/transport/client-context.web'
@@ -61,9 +62,11 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
     }, [])
     return (
       <RpcClientProvider client={client}>
-        <RouteScreenPaintProvider report={reportRouteScreenPaint}>
-          {children}
-        </RouteScreenPaintProvider>
+        <SessionListLongPressProvider>
+          <RouteScreenPaintProvider report={reportRouteScreenPaint}>
+            {children}
+          </RouteScreenPaintProvider>
+        </SessionListLongPressProvider>
       </RpcClientProvider>
     )
   }

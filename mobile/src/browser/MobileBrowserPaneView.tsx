@@ -122,6 +122,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           disabled={controlsDisabled || !tab.canGoBack}
           label={t('common.back', 'Back')}
           onPress={goBack}
+          toSessionList
         >
           <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
         </MobileBrowserToolbarIconButton>

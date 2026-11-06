@@ -127,6 +127,7 @@ export function AutomationRunDetails(props: {
       <AutomationButton
         label={t('automations.mobile.allRuns', 'All runs')}
         onPress={props.onBack}
+        toSessionList
       />
       {history.error ? (
         <Text accessibilityRole="alert" style={styles.error}>
