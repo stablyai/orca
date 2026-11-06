@@ -1,3 +1,4 @@
+import { buildAutomationWorkspaceName } from '../../../shared/automation-workspace-name'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { findAutomationRepo } from '../../../shared/automation-repo-target'
 import { useAppStore } from '@/store'
@@ -186,7 +187,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
     automation.workspaceMode === 'new_per_run'
       ? await useAppStore.getState().createWorktree(
           runRepoId,
-          buildAutomationWorkspaceName(run.title, run.scheduledFor),
+          buildAutomationWorkspaceName(run.title, run.scheduledFor, automation.timezone),
           automation.baseBranch ?? undefined,
           automation.setupDecision ?? 'skip',
           undefined,
@@ -246,16 +247,6 @@ export async function prepareAutomationDispatchWorkspace(args: {
   context.workspaceId = worktree.id
   context.workspaceDisplayName = worktree.displayName
   return worktree
-}
-
-function buildAutomationWorkspaceName(runTitle: string, scheduledFor: number): string {
-  const slug = runTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40)
-  const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
-  return `auto-${slug || 'run'}-${stamp}`
 }
 
 export async function connectAutomationDispatchWorkspace(args: {

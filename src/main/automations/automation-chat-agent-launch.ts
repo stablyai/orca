@@ -4,7 +4,7 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch/agent-launch'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
-import { buildHeadlessAutomationWorkspaceName } from './headless-workspace-create'
+import { buildAutomationWorkspaceName } from '../../shared/automation-workspace-name'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import {
   AutomationRunLaunchError,
@@ -82,7 +82,11 @@ async function launchChat(
                 kind: 'create-worktree',
                 create: {
                   repo: `id:${target.repo.id}`,
-                  name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
+                  name: buildAutomationWorkspaceName(
+                    run.title,
+                    run.scheduledFor,
+                    automation.timezone
+                  ),
                   ...(automation.baseBranch ? { baseBranch: automation.baseBranch } : {}),
                   setupDecision: automation.setupDecision ?? 'skip',
                   activate: false,

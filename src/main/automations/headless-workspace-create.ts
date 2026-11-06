@@ -1,3 +1,4 @@
+import { buildAutomationWorkspaceName } from '../../shared/automation-workspace-name'
 import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
 import { hostQualifiedRepoSelector } from '../runtime/workspaces/catalog/runtime-repo-selector'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
@@ -8,20 +9,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
 type RuntimeCreateManagedWorktreeArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
-
-export function buildHeadlessAutomationWorkspaceName(
-  runTitle: string,
-  scheduledFor: number
-): string {
-  // Bound names for branch/path displays while retaining a deterministic run timestamp.
-  const slug = runTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40)
-  const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
-  return `auto-${slug || 'run'}-${stamp}`
-}
 
 export function buildHeadlessAutomationWorktreeCreateArgs({
   automation,
@@ -37,7 +24,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   const setup = automationTerminalLaunchInputs(automation)
   return {
     repoSelector: hostQualifiedRepoSelector(`id:${repo.id}`, getRepoExecutionHostId(repo)),
-    name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
+    name: buildAutomationWorkspaceName(run.title, run.scheduledFor, automation.timezone),
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
