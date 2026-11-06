@@ -492,7 +492,6 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
       const controller = new RuntimeWorktreeLineageController({
         getStore: () => null,
         getDb: () => null,
-        listResolvedWorktrees: async () => [],
         showTerminal: async () => {
           lineageReads++
           if (!terminalValid) {

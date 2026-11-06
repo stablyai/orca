@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 import type { Store } from '../loading-store/store'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -20,8 +18,6 @@ import { getFolderWorkspaceRootId } from '../../ipc/worktrees/folder-workspace-m
 import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { listRuntimeFolderWorkspaces } from '../../runtime/workspaces/catalog/runtime-worktree-filesystem'
 import { getRuntimeFolderWorkspaceRootId } from '../../runtime/workspaces/catalog/runtime-folder-workspace'
-import { RuntimeWorktreeLineageController } from '../../runtime/workspaces/lineage/runtime-worktree-lineage-controller'
-import type { ResolvedWorktree } from '../../runtime/workspaces/catalog/runtime-worktree-path-identity'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -152,86 +148,5 @@ describe('folder catalog identity stamps under a WSL move', () => {
     const folder = repo(STAYING, { kind: 'folder' })
     listRuntimeFolderWorkspaces(store, folder)
     expect(store.getWorktreeMeta(getRuntimeFolderWorkspaceRootId(folder))?.instanceId).toBeTruthy()
-  })
-})
-
-describe('inferred lineage hydration under a WSL move', () => {
-  function resolved(repoId: string, name: string, hostId: ExecutionHostId, taskId?: string) {
-    const path = `/ws/${repoId}/${name}`
-    const worktree: ResolvedWorktree = {
-      id: `${repoId}::${path}`,
-      repoId,
-      instanceId: `${repoId}-${hostId}-${name}#instance`,
-      hostId,
-      path,
-      head: 'abc',
-      branch: `refs/heads/${name}`,
-      isBare: false,
-      isMainWorktree: false,
-      displayName: name,
-      comment: taskId ? `working on ${taskId}` : '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git: { path, head: 'abc', branch: `refs/heads/${name}`, isBare: false, isMainWorktree: false }
-    }
-    return worktree
-  }
-
-  it('infers lineage only outside the moving local project', async () => {
-    const children = [
-      resolved(MOVING, 'child', 'local', 'task_moving'),
-      resolved(STAYING, 'child', 'local', 'task_staying'),
-      resolved(MOVING, 'child-remote', 'ssh:target-1', 'task_remote')
-    ]
-    const parents = new Map([
-      ['task_moving', resolved(MOVING, 'parent', 'local')],
-      ['task_staying', resolved(STAYING, 'parent', 'local')],
-      ['task_remote', resolved(MOVING, 'parent-remote', 'ssh:target-1')]
-    ])
-    const controller = new RuntimeWorktreeLineageController({
-      getStore: () => store,
-      getDb: () => null,
-      resolveWorktree: async () => {
-        throw new Error('unused')
-      },
-      listResolvedWorktrees: async () => children,
-      showTerminal: async () => {
-        throw new Error('unused')
-      }
-    })
-    vi.spyOn(controller, 'resolveTaskCandidate').mockImplementation(async (taskId) => {
-      const parent = parents.get(taskId)
-      return parent
-        ? {
-            source: 'orchestration-context',
-            taskId,
-            parent: {
-              type: 'worktree',
-              workspaceKey: worktreeWorkspaceKey(parent.id),
-              worktree: parent,
-              instanceId: parent.instanceId ?? null
-            }
-          }
-        : null
-    })
-
-    await controller.hydrate()
-
-    expect(store.getWorktreeLineage(children[0].id)).toBeUndefined()
-    expect(store.getWorktreeLineage(children[1].id)?.parentWorktreeId).toBe(
-      parents.get('task_staying')?.id
-    )
-    expect(store.getWorktreeLineage(children[2].id)?.parentWorktreeId).toBe(
-      parents.get('task_remote')?.id
-    )
   })
 })

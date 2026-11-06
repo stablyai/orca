@@ -68,8 +68,7 @@ function fixture() {
     getStore: () => null,
     getDb: () => db,
     showTerminal,
-    resolveWorktree,
-    listResolvedWorktrees: async () => []
+    resolveWorktree
   })
   return { controller, db, showTerminal, resolveWorktree }
 }

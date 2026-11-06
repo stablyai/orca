@@ -85,7 +85,6 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
   )
 
   ipcMain.handle('worktrees:listLineage', async () => {
-    await runtime.hydrateInferredWorktreeLineage()
     return {
       lineage: store.getAllWorktreeLineage(),
       workspaceLineage: store.getAllWorkspaceLineage(),

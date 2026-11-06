@@ -17,16 +17,12 @@ import {
 import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import {
-  readAllWorktreeMetaForHost,
-  worktreeRowTarget
-} from '../../../persistence/host-qualified-worktree-meta'
+import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
 import { assertParentInAnotherStore } from './cross-store-parent-store-check'
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
-import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
@@ -43,7 +39,6 @@ type RuntimeWorktreeLineageDependencies = {
   getStore(): RuntimeStore | null
   getDb(): OrchestrationDb | null
   resolveWorktree(selector: string): Promise<ResolvedWorktree>
-  listResolvedWorktrees(): Promise<ResolvedWorktree[]>
   showTerminal(handle: string): Promise<{ worktreeId: string }>
 }
 
@@ -261,62 +256,11 @@ export class RuntimeWorktreeLineageController {
     }
   }
 
-  async hydrate(): Promise<void> {
-    const store = this.deps.getStore()
-    if (!store?.getWorktreeLineage || !store.setWorktreeLineage) {
-      return
-    }
-    for (const worktree of await this.deps.listResolvedWorktrees()) {
-      if (
-        store.getWorktreeLineage(worktree.id) ||
-        // An inferred parent must not replace an explicit one on another machine.
-        store.getCrossStoreWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id)) ||
-        !worktree.instanceId ||
-        isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
-      ) {
-        continue
-      }
-      const taskId = worktree.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
-      if (!taskId) {
-        continue
-      }
-      const candidate = await this.resolveTaskCandidate(taskId)
-      if (
-        !candidate?.parent.instanceId ||
-        candidate.parent.type !== 'worktree' ||
-        candidate.parent.worktree.id === worktree.id
-      ) {
-        continue
-      }
-      try {
-        this.validateParent(worktree, candidate.parent.worktree)
-      } catch {
-        continue
-      }
-      const target = worktreeRowTarget(store, worktree)
-      if (!target) {
-        continue
-      }
-      store.setWorktreeLineage(target, {
-        worktreeId: worktree.id,
-        worktreeInstanceId: worktree.instanceId,
-        parentWorktreeId: candidate.parent.worktree.id,
-        parentWorktreeInstanceId: candidate.parent.instanceId,
-        origin: 'orchestration',
-        capture: { source: 'orchestration-context', confidence: 'inferred' },
-        taskId,
-        createdAt: Date.now()
-      })
-    }
-  }
-
   async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
-    await this.hydrate()
     return this.deps.getStore()?.getAllWorktreeLineage?.() ?? {}
   }
 
   async listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
-    await this.hydrate()
     return this.deps.getStore()?.getAllWorkspaceLineage?.() ?? {}
   }
 }

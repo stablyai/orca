@@ -36,10 +36,6 @@ export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithRe
     })
   }
 
-  hydrateInferredWorktreeLineage(): Promise<void> {
-    return this.worktreeLineage.hydrate()
-  }
-
   listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
     return this.worktreeLineage.listWorktreeLineage()
   }
