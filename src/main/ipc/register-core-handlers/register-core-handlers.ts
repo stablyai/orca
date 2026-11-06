@@ -96,10 +96,7 @@ import type { AutomationService } from '../../automations/service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
-import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AiVaultResumeHandlerOptions } from '../ai-vault/ai-vault-resume'
 import {
   getSavedRuntimeAiVaultHostInfos,
   deleteRuntimeAiVaultSession,
@@ -108,6 +105,7 @@ import {
   scanRuntimeAiVaultSessions
 } from '../../ai-vault/runtime-session-scanner'
 import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+import { aiVaultOrchestrationChildSessionIds } from '../../ai-vault/structured-conversation-navigation'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
@@ -138,9 +136,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeOrcaProfileSignOut?: () => void
   onAfterOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
-  prepareAiVaultSessionResume?: (
-    args: AiVaultPrepareSessionResumeArgs
-  ) => Promise<AiVaultPrepareSessionResumeResult>
+  prepareAiVaultSessionResume?: AiVaultResumeHandlerOptions['prepareSessionResume']
 }
 
 export function registerCoreHandlers(
@@ -282,6 +278,8 @@ export function registerCoreHandlers(
   registerAiVaultHandlers({
     getUserDataPath: () => app.getPath('userData'),
     ensureStructuredSessionOwnership,
+    getOrchestrationChildSessionIds: () =>
+      aiVaultOrchestrationChildSessionIds(() => runtime.getExistingOrchestrationDb()),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
@@ -299,9 +297,7 @@ export function registerCoreHandlers(
   registerNativeChatHandlers()
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {
-      await ensureStructuredAgentSessionHostUnlessRefused(() =>
-        runtime.ensureStructuredAgentSessionHost()
-      )
+      await ensureStructuredSessionOwnership()
       return getAgentSessionAttachmentStore()
     }
   })

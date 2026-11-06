@@ -43,6 +43,7 @@ export type AiVaultSessionFilterState = {
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
+  preserveStructuredSessions?: boolean
 }
 
 export type AiVaultSessionGroup = {
@@ -87,6 +88,7 @@ export function filterAiVaultSessions(
     // Hide only truly empty sessions; retain preview-inferred turns and queued/subagent recovery content so lost conversations remain visible.
     if (
       filters.hideEmptySessions &&
+      !(filters.preserveStructuredSessions && session.structuredSession) &&
       !isAiVaultSessionResumableContent(session) &&
       !isAiVaultSessionRecoverableEmpty(session)
     ) {
@@ -210,6 +212,7 @@ function matchesQuery(
   if (parsed.terms.length > 0) {
     const searchable = [
       session.title,
+      session.firstUserPrompt,
       session.sessionId,
       session.agent,
       session.branch,
