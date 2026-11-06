@@ -6,7 +6,6 @@ import { useQueryClient, type QueryKey, type UseQueryResult } from '@tanstack/re
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useHostQueries, useHostQuery } from '../query/host-query'
-import { isHostNotConnectedError } from '../query/host-query-errors'
 import { hostQueryKey, hostScopeKey } from '../query/host-query-key'
 import { hostScreenState } from '../query/host-query-screen-state'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -40,9 +39,11 @@ const NO_FOLDERS: ReadonlySet<string> = new Set()
 
 type FolderRead = Pick<UseQueryResult<DirectoryRead>, 'data' | 'error' | 'isFetching'>
 
-// Stable, so useQueries memoizes the folder reads between renders.
+// Stable, so useQueries memoizes the folder reads; a loaded folder's background refetch changes nothing here.
 function pickFolderReads(results: UseQueryResult<DirectoryRead>[]): FolderRead[] {
-  return results.map(({ data, error, isFetching }) => ({ data, error, isFetching }))
+  return results.map(({ data, error, isFetching }) =>
+    data === undefined ? { data, error, isFetching } : { data, error: null, isFetching: false }
+  )
 }
 
 // Open folders whose parents are all open: only these are on screen, so only these refetch on reconnect.
@@ -67,20 +68,30 @@ function folderPathOf(key: QueryKey): string | undefined {
     : undefined
 }
 
-// A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or the error.
+// A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
 function folderState(read: FolderRead, connState: ConnectionState): DirectoryState {
-  if (read.data?.kind === 'directory') {
-    return { entries: read.data.entries }
+  switch (hostScreenState(read, connState)) {
+    case 'data':
+      return { entries: read.data?.kind === 'directory' ? read.data.entries : [] }
+    case 'empty-loading':
+      return { entries: [], loading: true }
+    case 'empty-error':
+      return {
+        entries: [],
+        error:
+          read.error?.message ||
+          translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
+      }
+    case 'empty-connecting':
+    case 'empty-offline':
+      return {
+        entries: [],
+        error:
+          connState === 'connected'
+            ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
+            : translate('files.fileExplorerPanel.waiting', 'Waiting for desktop...')
+      }
   }
-  if (read.isFetching || !read.error) {
-    return { entries: [], loading: true }
-  }
-  const error = isHostNotConnectedError(read.error)
-    ? connState === 'connected'
-      ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
-      : translate('files.fileExplorerPanel.waiting', 'Waiting for desktop...')
-    : read.error.message
-  return { entries: [], error }
 }
 
 export function MobileFileExplorerPanel(props: {

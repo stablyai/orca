@@ -86,6 +86,19 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   return data
 }
 
+// Without a client the observer still reads the cached entry, but never fetches.
+function observerOptions<TInput extends HostQueryParams, TData>(
+  query: HostQuery<TInput, TData>,
+  client: RpcClient | null,
+  hostId: string,
+  target: HostQueryTarget,
+  input: TInput
+): UseQueryOptions<TData, Error, TData, HostQueryKey> {
+  return client
+    ? hostQueryOptions(query, client, hostId, target, input)
+    : { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
+}
+
 export function useHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>,
   host: { hostId: string; client: RpcClient | null },
@@ -99,11 +112,8 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
-    if (!client) {
-      return { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
-    }
-    const fetchOptions = hostQueryOptions(query, client, hostId, target, input)
-    return enabled ? fetchOptions : { ...fetchOptions, queryFn: skipToken }
+    const observer = observerOptions(query, client, hostId, target, input)
+    return enabled ? observer : { ...observer, queryFn: skipToken }
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({ ...queryOptions, subscribed: options?.subscribed })
 }
@@ -120,12 +130,7 @@ export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>
   useHostConnectionInvalidation(hostId, client)
   const keyHash = hashKey([target, inputs])
   const queries = useMemo(
-    (): UseQueryOptions<TData, Error, TData, HostQueryKey>[] =>
-      inputs.map((input) =>
-        client
-          ? hostQueryOptions(query, client, hostId, target, input)
-          : { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
-      ),
+    () => inputs.map((input) => observerOptions(query, client, hostId, target, input)),
     [query, client, hostId, keyHash]
   )
   return useQueries({ queries, combine })

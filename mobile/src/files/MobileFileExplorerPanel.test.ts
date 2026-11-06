@@ -140,7 +140,6 @@ function createHost(answer: (method: string, relativePath: string) => Reply) {
   const listeners = new Set<(state: ConnectionState) => void>()
   const host = {
     answer,
-    requests: [] as { method: string; relativePath: string }[],
     client: stubRpcClient({
       getState: () => state,
       onStateChange: (listener) => {
@@ -156,7 +155,6 @@ function createHost(answer: (method: string, relativePath: string) => Reply) {
           typeof params === 'object' && params !== null && 'relativePath' in params
             ? String(params.relativePath)
             : ''
-        host.requests.push({ method, relativePath })
         return host.answer(method, relativePath)
       }
     }),
