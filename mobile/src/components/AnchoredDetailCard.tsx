@@ -7,7 +7,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-/** Layer coordinates: below a trigger by the card's leading and top edges, above it by its trailing and bottom edges. */
+/** Below a trigger by the card's leading/top edges, or above it by its trailing/bottom edges. */
 export type DetailCardPlacement =
   | { side: 'below'; left: number; top: number }
   | { side: 'above'; right: number; bottom: number }
@@ -39,6 +39,7 @@ export function AnchoredDetailCardLayer({
   /** Replaces the hook's layer ref, for a caller that also needs the node. */
   layerRef?: (view: View | null) => void
 }): React.JSX.Element {
+  const reducedMotion = useReducedMotionEnabled()
   return (
     <DetailCardLayer>
       <View
@@ -52,6 +53,7 @@ export function AnchoredDetailCardLayer({
           <AnchoredDetailCard
             {...card.visual}
             {...content}
+            reducedMotion={reducedMotion}
             bounds={card.bounds}
             layerHeight={card.layerHeight}
             contentRef={card.contentRef}
@@ -79,6 +81,7 @@ function AnchoredDetailCard({
   boundaryRefs,
   active,
   obscured,
+  reducedMotion,
   onSettled,
   title,
   titleTrailing,
@@ -95,11 +98,12 @@ function AnchoredDetailCard({
   boundaryRefs: RefObject<unknown[]>
   active: boolean
   obscured: boolean
+  reducedMotion: boolean | null
   onSettled: (motion: number) => void
 } & DetailCardContent): React.JSX.Element {
   useMobileColorScheme()
   // Unknown counts as reduced, so the card never slides before the setting is read.
-  const slide = useReducedMotionEnabled() === false
+  const slide = reducedMotion === false
   const [progress] = useState(() => new Animated.Value(0))
   useLayoutEffect(() => {
     let disposed = false
