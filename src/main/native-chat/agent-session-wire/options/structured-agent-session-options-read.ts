@@ -20,10 +20,10 @@ import type {
   AgentSessionAcceptedInputSources
 } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
-import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-option-models'
 import {
   confirmedCurrentOptions,
   structuredAgentSessionCapabilityView,
+  type StructuredAgentSessionLiveOptions,
   type StructuredAgentSessionRestingOptions as RestingOptions
 } from './structured-agent-session-option-models'
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
