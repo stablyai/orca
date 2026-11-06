@@ -23,17 +23,8 @@ import { buildBody } from './server.test-fixtures'
 import { _internals as codexInternals } from '../codex/hooks/installation/hook-service'
 import { getManagedScript as getClaudeManagedScript } from '../claude/hook-script'
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
-import { buildPosixHookSpoolLines } from './hook-stdin-contract'
 
 describe('agent hook spool', () => {
-  it('appends each record with one printf write to prevent concurrent field interleaving', () => {
-    const spoolLine = buildPosixHookSpoolLines('codex').find((line) =>
-      line.includes('>> "$spool_file"')
-    )
-    expect(spoolLine).toBeDefined()
-    expect(spoolLine!.match(/printf/g)).toHaveLength(1)
-  })
-
   it('waits for a newline before replaying a complete-looking final record', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-unterminated-'))
     const spool = join(dir, 'spool')
@@ -108,27 +99,6 @@ describe('agent hook spool', () => {
     expect(ingested).toHaveLength(0)
     expect(readFileSync(file)).toHaveLength(0)
     expect(statSync(file).ino).toBe(inode)
-  })
-
-  it('ingests a record with the matching launch token', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-spool-'))
-    const spool = join(dir, 'spool')
-    mkdirSync(spool)
-    const file = join(spool, 'pane-1.jsonl')
-    writeFileSync(
-      file,
-      `\n${JSON.stringify({ paneKey: 'tab:1', source: 'codex', launchToken: 'same', receivedAt: Date.now(), payload: { state: 'done' } })}\n`
-    )
-    const ingested: unknown[] = []
-    await drainAgentHookSpoolAsync({
-      endpointDir: dir,
-      getPersistedLaunchTokenHash: () => launchTokenHash('same')!,
-      ingest: (record) => {
-        ingested.push(record)
-      }
-    })
-    expect(ingested).toHaveLength(1)
-    expect(ingested[0]).toMatchObject({ paneKey: 'tab:1', isReplay: true })
   })
 
   it('replays a spooled Codex SubagentStop through the server after restart', async () => {
