@@ -93,9 +93,9 @@ it.each([
         expect(recover).not.toHaveBeenCalled()
         expect(live).toHaveBeenCalledOnce()
         expect(rows).toBeLessThanOrEqual(20)
-        expect(reconcile.mock.calls.filter(([keys]) => keys?.length).map(([keys]) => keys)).toEqual(
-          [['pr1']]
-        )
+        expect(
+          reconcile.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => keys)
+        ).toEqual([['pr1']])
       }
       // Narrow reevaluation must not discard durable pre-acceptance capture on this owner.
       expect(
