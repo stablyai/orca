@@ -24,26 +24,27 @@ export function useWorktreeDocumentDrop(args: {
         clearWorktreeDrag()
         return
       }
+      const container = ctx.scrollRef.current
+      const target = ctx.getEligibleLineageDropTarget(
+        container
+          ? getPointerDropStatusTarget({
+              container,
+              x: event.clientX,
+              y: event.clientY
+            })
+          : NO_WORKTREE_SIDEBAR_DROP_TARGET,
+        session.pickedCopies
+      )
+      // As in dragover: an eligible parent under the pointer wins over a reorder slot.
+      if (target.lineageParentIdentity) {
+        event.preventDefault()
+        event.stopPropagation()
+        ctx.commitWorktreeLineageParentDrop(session.pickedCopies, target.lineageParentIdentity)
+        clearWorktreeDrag()
+        return
+      }
       const drop = ctx.computeWorktreeDrop(event.clientY)
       if (!drop) {
-        const container = ctx.scrollRef.current
-        const target = ctx.getEligibleLineageDropTarget(
-          container
-            ? getPointerDropStatusTarget({
-                container,
-                x: event.clientX,
-                y: event.clientY
-              })
-            : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-          session.pickedCopies
-        )
-        if (target.lineageParentIdentity) {
-          event.preventDefault()
-          event.stopPropagation()
-          ctx.commitWorktreeLineageParentDrop(session.pickedCopies, target.lineageParentIdentity)
-          clearWorktreeDrag()
-          return
-        }
         const statusDrop = target.status
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,

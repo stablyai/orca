@@ -4,8 +4,9 @@ import { getLineageRenderInfo } from '../../../../../../shared/sidebar-list/work
 
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-parent-content]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
-// Folder workspace rows take drops as parents without joining reorder groups.
-const LINEAGE_DROP_ROW_SELECTOR = `${WORKTREE_DRAG_ROW_SELECTOR}, [data-worktree-lineage-drop-target]`
+// Folder workspace rows take drops as parents without joining reorder groups. Not the card surface's
+// data-worktree-lineage-drop-target, which marks the outlined card and names no row.
+const LINEAGE_DROP_ROW_SELECTOR = `${WORKTREE_DRAG_ROW_SELECTOR}, [data-worktree-lineage-drop-row]`
 
 const REORDER_GUTTER_RATIO = 0.2
 const REORDER_GUTTER_MAX_HEIGHT_PX = 8

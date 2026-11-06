@@ -131,7 +131,7 @@ export function renderFolderWorkspaceOption(args: {
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
       data-worktree-row-key={folderWorktreeIdentity}
-      data-worktree-lineage-drop-target=""
+      data-worktree-lineage-drop-row=""
       {...(vItem
         ? {
             'data-worktree-virtual-row': true,

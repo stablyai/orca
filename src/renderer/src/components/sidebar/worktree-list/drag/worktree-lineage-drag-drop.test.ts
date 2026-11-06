@@ -41,9 +41,21 @@ describe('getWorktreeLineageDropTargetIdentity', () => {
     const { container, target } = makeTarget({ worktreeId: 'folder:f-1', top: 100, bottom: 200 })
     const row = container.firstElementChild!
     row.removeAttribute('data-worktree-drag-id')
-    row.setAttribute('data-worktree-lineage-drop-target', '')
+    row.setAttribute('data-worktree-lineage-drop-row', '')
     expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
       'ssh:box|folder:f-1'
+    )
+  })
+
+  it('keeps an outlined parent card a drop target', () => {
+    const { container, target } = makeTarget({ worktreeId: 'parent', top: 100, bottom: 200 })
+    const surface = document.createElement('div')
+    surface.setAttribute('data-worktree-lineage-drop-target', 'true')
+    const content = container.querySelector('[data-worktree-card-parent-content]')!
+    content.replaceWith(surface)
+    surface.append(content)
+    expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
+      'ssh:box|parent'
     )
   })
 })
