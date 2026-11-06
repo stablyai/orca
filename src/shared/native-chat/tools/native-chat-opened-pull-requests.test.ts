@@ -272,4 +272,21 @@ describe('PowerShell create commands', () => {
     expect(opened("pwsh -Command 'gh pr create --fill; Write-Output \"oops'")).toEqual([])
     expect(opened("pwsh -Foo -Command 'gh pr create --fill'")).toEqual([])
   })
+
+  it('reads a PowerShell tool the same, with or without its own launch wrapper', () => {
+    const viaPowerShellTool = (command: string): number[] =>
+      openedIn({
+        id: 'm1',
+        role: 'assistant',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [
+          { type: 'tool-call', name: 'PowerShell', input: { command }, callId: 'c1' },
+          { type: 'tool-result', output: GH_CREATE_OUTPUT, callId: 'c1' }
+        ]
+      })
+    expect(viaPowerShellTool("pwsh -Command 'gh pr create --fill'")).toEqual([38712])
+    expect(viaPowerShellTool('gh pr create --title "it`"s" --fill')).toEqual([38712])
+    expect(viaPowerShellTool("Write-Output 'gh pr create'")).toEqual([])
+  })
 })

@@ -98,7 +98,8 @@ export function powershellAnalysisScript(script: string): string | null {
       continue
     }
     if (char === '"') {
-      // Double quotes: a backtick escapes the next character and `""` is a quote.
+      // Double quotes: a backtick escapes the next character and `""` is a quote. A `$(…)` inside
+      // still runs, but stays text here: a create inside one is missed rather than guessed at.
       let text = ''
       index += 1
       for (;;) {
@@ -228,10 +229,6 @@ export function nativeChatToolCallScript(name: string, input: unknown): string |
   if (command === null) {
     return null
   }
-  // A tool that is PowerShell itself runs its command as a PowerShell script.
-  if (name.trim().toLowerCase() === 'powershell') {
-    return powershellAnalysisScript(command)
-  }
   const first = /^\s*(?:"([^"]+)"|(\S+))/u.exec(command)
   const launched = programName(first?.[1] ?? first?.[2] ?? '')
   if (POWERSHELL_PROGRAM.test(launched)) {
@@ -247,6 +244,10 @@ export function nativeChatToolCallScript(name: string, input: unknown): string |
         ? script.slice(1, -1)
         : script
     }
+  }
+  // A tool that is PowerShell itself runs any other command as a PowerShell script.
+  if (name.trim().toLowerCase() === 'powershell') {
+    return powershellAnalysisScript(command)
   }
   return command
 }
