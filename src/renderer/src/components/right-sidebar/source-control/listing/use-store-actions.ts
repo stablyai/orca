@@ -21,6 +21,53 @@ export function useSourceControlStoreActions() {
         : undefined
     }
     const state = useAppStore.getState()
+    const createHostedReview: AppState['createHostedReview'] = (path, input) =>
+      state.createHostedReview(path, {
+        ...input,
+        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+      })
+    const createStackedHostedReview: AppState['createStackedHostedReview'] = (path, input) =>
+      state.createStackedHostedReview(path, {
+        ...input,
+        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+      })
+    const fetchHostedReviewForBranch: AppState['fetchHostedReviewForBranch'] = (
+      path,
+      branch,
+      options
+    ) =>
+      state.fetchHostedReviewForBranch(path, branch, {
+        ...options,
+        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+      })
+    const fetchPRForBranch: AppState['fetchPRForBranch'] = (path, branch, options) =>
+      state.fetchPRForBranch(path, branch, {
+        ...options,
+        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+      })
+    const getHostedReviewCreationEligibility: AppState['getHostedReviewCreationEligibility'] = (
+      args
+    ) =>
+      state.getHostedReviewCreationEligibility({
+        ...args,
+        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+      })
+    const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries) =>
+      state.openAllDiffs(id, path, alternate, filter, entries, options)
+    const openBranchAllDiffs: AppState['openBranchAllDiffs'] = (id, path, compare, alternate) =>
+      state.openBranchAllDiffs(id, path, compare, alternate, options)
+    const openConflictReview: AppState['openConflictReview'] = (id, path, entries, source) =>
+      state.openConflictReview(id, path, entries, source, options)
+    const updateRepo: AppState['updateRepo'] = (id, updates, options) =>
+      state.updateRepo(id, updates, {
+        ...options,
+        ...(scope ? { hostId: scope.executionHostId } : {})
+      })
+    const updateWorktreeMeta: AppState['updateWorktreeMeta'] = (id, updates, options) =>
+      state.updateWorktreeMeta(id, updates, {
+        ...options,
+        ...(scope ? { executionHostId: scope.executionHostId } : {})
+      })
     return {
       allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
       allocatePullRequestGenerationRequestId: state.allocatePullRequestGenerationRequestId,
@@ -28,43 +75,20 @@ export function useSourceControlStoreActions() {
       clearDiffComments: state.clearDiffComments,
       clearDiffCommentsForFile: state.clearDiffCommentsForFile,
       commitMessageGenerationRecords,
-      createHostedReview: (path, input) =>
-        state.createHostedReview(path, {
-          ...input,
-          ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
-        }),
-      createStackedHostedReview: (path, input) =>
-        state.createStackedHostedReview(path, {
-          ...input,
-          ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
-        }),
+      createHostedReview,
+      createStackedHostedReview,
       deleteDiffComment: state.deleteDiffComment,
       enqueueGitHubPRRefresh: state.enqueueGitHubPRRefresh,
       ensureHostedReviewPushTarget: state.ensureHostedReviewPushTarget,
       fastForwardBranch: state.fastForwardBranch,
       fetchBranch: state.fetchBranch,
-      fetchHostedReviewForBranch: (path, branch, options) =>
-        state.fetchHostedReviewForBranch(path, branch, {
-          ...options,
-          ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
-        }),
-      fetchPRForBranch: (path, branch, options) =>
-        state.fetchPRForBranch(path, branch, {
-          ...options,
-          ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
-        }),
+      fetchHostedReviewForBranch,
+      fetchPRForBranch,
       fetchUpstreamStatus: state.fetchUpstreamStatus,
-      getHostedReviewCreationEligibility: (args) =>
-        state.getHostedReviewCreationEligibility({
-          ...args,
-          ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
-        }),
-      openAllDiffs: (id, path, alternate, filter, entries) =>
-        state.openAllDiffs(id, path, alternate, filter, entries, options),
-      openBranchAllDiffs: (id, path, compare, alternate) =>
-        state.openBranchAllDiffs(id, path, compare, alternate, options),
-      openConflictReview: (id, path, entries, source) =>
-        state.openConflictReview(id, path, entries, source, options),
+      getHostedReviewCreationEligibility,
+      openAllDiffs,
+      openBranchAllDiffs,
+      openConflictReview,
       openModal: state.openModal,
       openSettingsPage: state.openSettingsPage,
       openSettingsTarget: state.openSettingsTarget,
@@ -83,19 +107,11 @@ export function useSourceControlStoreActions() {
       syncBranch: state.syncBranch,
       updateCommitMessageGenerationRecord: state.updateCommitMessageGenerationRecord,
       updatePullRequestGenerationRecord: state.updatePullRequestGenerationRecord,
-      updateRepo: (id, updates, options) =>
-        state.updateRepo(id, updates, {
-          ...options,
-          ...(scope ? { hostId: scope.executionHostId } : {})
-        }),
+      updateRepo,
       updateSettings: state.updateSettings,
       updateWorktreeGitIdentity: state.updateWorktreeGitIdentity,
-      updateWorktreeMeta: (id, updates, options) =>
-        state.updateWorktreeMeta(id, updates, {
-          ...options,
-          ...(scope ? { executionHostId: scope.executionHostId } : {})
-        })
-    } satisfies Partial<AppState>
+      updateWorktreeMeta
+    }
   }, [commitMessageGenerationRecords, prGenerationRecords, scope])
 }
 
