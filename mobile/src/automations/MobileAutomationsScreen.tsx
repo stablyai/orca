@@ -1,6 +1,6 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLocalSearchParams } from 'expo-router'
 import { View } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
@@ -17,6 +17,7 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
 import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
 import { AutomationManager } from './AutomationManager'
+import { leaveThrough, type AutomationLeaveGuard } from './AutomationEditorNavigation'
 import { automationStyles as styles } from './automation-styles'
 
 export function MobileAutomationsScreen() {
@@ -33,6 +34,7 @@ export function MobileAutomationsScreen() {
   const hostTitle = useHostDisplay(host).title
   const [authority, setAuthority] = useState('paired')
   const [pickingHost, setPickingHost] = useState(false)
+  const leaveGuard = useRef<AutomationLeaveGuard | null>(null)
   const selected = servers?.find((server) => server.hostId === authority)
   const selectedClient =
     authority === 'paired' ? client : selected ? (serverClients.get(selected.hostId) ?? null) : null
@@ -78,6 +80,7 @@ export function MobileAutomationsScreen() {
         hostId={hostId}
         client={selectedClient}
         startInEditor={creating}
+        leaveGuard={leaveGuard}
         executionHost={
           authority === 'paired' ? undefined : (normalizeExecutionHostId(authority) ?? undefined)
         }
@@ -116,8 +119,12 @@ export function MobileAutomationsScreen() {
         options={hostOptions}
         selected={authority}
         onSelect={(next) => {
-          setCreating(false)
-          setAuthority(next)
+          if (next !== authority) {
+            leaveThrough(leaveGuard, () => {
+              setCreating(false)
+              setAuthority(next)
+            })
+          }
         }}
         onClose={() => setPickingHost(false)}
         searchable={hostOptions.length > 6}
