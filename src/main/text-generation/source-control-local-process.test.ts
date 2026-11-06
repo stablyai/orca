@@ -268,12 +268,11 @@ describe('context-owned one-shot settlement', () => {
   )
 
   it.each(['claude', 'custom'] as const)(
-    'preserves applicable %s plans and skips stale fallback',
+    'preserves the configured %s recipe without retrying a failed naming request',
     async (agentId) => {
       for (const currentAfterClose of [true, false]) {
         const first = createMockDiscoveryChild()
-        const second = createMockDiscoveryChild()
-        const spawnAgent = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+        const spawnAgent = vi.fn().mockReturnValue(first)
         let current = true
         const request = generateConversationName({
           context: { firstPrompt: 'Explain migrations' },
@@ -306,21 +305,8 @@ describe('context-owned one-shot settlement', () => {
         expect(spawnAgent).toHaveBeenCalledOnce()
         current = currentAfterClose
         first.emit('close', 1)
-        if (currentAfterClose && agentId !== 'custom') {
-          await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledTimes(2))
-          const before = spawnAgent.mock.calls[0]![0]
-          const after = spawnAgent.mock.calls[1]![0]
-          expect(after).toMatchObject({ binary: before.binary, cwd: before.cwd, env: before.env })
-          expect(before.args).toContain('--strict-mcp-config')
-          expect(after.args).not.toContain('--strict-mcp-config')
-          expect(after.args).toContain('selected-model')
-          second.stdout.emit('data', Buffer.from('Migration guide'))
-          second.emit('close', 0)
-          await expect(request).resolves.toMatchObject({ success: true, name: 'Migration guide' })
-        } else {
-          await expect(request).resolves.toMatchObject({ success: false })
-          expect(spawnAgent).toHaveBeenCalledOnce()
-        }
+        await expect(request).resolves.toMatchObject({ success: false })
+        expect(spawnAgent).toHaveBeenCalledOnce()
         expect(first.kill).not.toHaveBeenCalled()
       }
     }

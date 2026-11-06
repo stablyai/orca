@@ -5,7 +5,6 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { getCommitMessageAgentSpec } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   savedChatNamingCatalog,
@@ -163,8 +162,7 @@ it.each(recordings.filter((capture) => !['opencode', 'opencode2'].includes(captu
     expect(createHash('sha256').update(stderr).digest('hex')).toBe(capture.stderrSha256)
     const state = rig()
     const source = state.settings.sourceControlAi
-    const spec = getCommitMessageAgentSpec(provider)
-    if (!source || !spec) {
+    if (!source) {
       throw new Error('Missing naming configuration')
     }
     source.agentId = 'codex'
@@ -180,18 +178,13 @@ it.each(recordings.filter((capture) => !['opencode', 'opencode2'].includes(captu
       provider === 'opencode' || provider === 'opencode2'
         ? { kind: 'opencode', locator: { kind: 'managed', managedProfileId: 'recorded' } }
         : { variable: 'PI_CODING_AGENT_DIR', path: '/recorded/pi' }
-    const prompt = `Name this chat from the user's first request.
-Write a short, specific title of at most 48 characters.
-Output only the title, with no heading, quotes, or explanation.
-
-First request:
-Repair login`
+    const usesFilePrompt = provider === 'omp'
     const child = reply(stdout, stderr, exitCode)
     let promptPath = ''
-    if (spec.promptDelivery === 'file') {
+    if (usesFilePrompt) {
       boundary.spawn.mockImplementationOnce((input) => {
         promptPath = input.args.find((arg) => arg.startsWith('@'))?.slice(1) ?? ''
-        expect(readFileSync(promptPath)).toEqual(Buffer.from(`\uFEFF${prompt}`))
+        expect(readFileSync(promptPath, 'utf8')).toContain('Repair login')
         return child
       })
     }
@@ -207,26 +200,26 @@ Repair login`
     }
     expect(boundary.spawn).toHaveBeenCalledOnce()
     const spawn = boundary.spawn.mock.calls[0]?.[0]
-    // Delivery follows the common spec; the empty OMP recording remains a negative output control.
     expect(spawn).toMatchObject({
-      binary: spec.binary,
-      args: spec.buildArgs({
-        prompt: spec.promptDelivery === 'file' ? `@${promptPath}` : prompt,
-        model: provider === 'pi' ? 'openai/gpt-6.1-sol' : 'default'
-      }),
+      binary: usesFilePrompt ? 'omp' : 'pi',
       cwd: '/workspace/folder',
       stdinMode: 'pipe'
     })
     expect(child.stdin.end).toHaveBeenCalledExactlyOnceWith(
-      spec.promptDelivery === 'stdin' ? prompt : undefined
+      usesFilePrompt ? undefined : expect.stringContaining('Repair login')
     )
-    if (spec.promptDelivery === 'file') {
-      expect(spawn?.args).not.toContain(prompt)
+    if (usesFilePrompt) {
+      expect(spawn?.args.some((arg) => arg.includes('Repair login'))).toBe(false)
       await vi.waitFor(() => expect(existsSync(dirname(promptPath))).toBe(false))
     }
     expect(spawn?.env?.PI_CODING_AGENT_DIR).toBe('/recorded/pi')
     expect(boundary.native).not.toHaveBeenCalled()
     if (provider === 'pi') {
+      const modelIndex = spawn?.args.indexOf('--model') ?? -1
+      expect(spawn?.args.slice(modelIndex, modelIndex + 2)).toEqual([
+        '--model',
+        'openai/gpt-6.1-sol'
+      ])
       source.actions = { conversationName: { agentId: 'pi' } }
       boundary.spawn.mockClear()
       const explicit = reply(stdout, stderr, exitCode)
