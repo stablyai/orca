@@ -118,14 +118,10 @@ describe('commit actions', () => {
         operation === 'revert' ? 'topic change' : 'base'
       )
     })
-    it(`${operation} preserves conflicts for recovery`, async () => {
+    it(`${operation} can be aborted after a conflict, rejecting the wrong operation`, async () => {
       await commit('different\n', 'diverged')
       expect(await applyCommit(directory, operation, topic)).toEqual({ outcome: 'conflicted' })
       expect(await git('diff', '--name-only', '--diff-filter=U')).toBe('file.txt')
-    })
-    it(`${operation} can be aborted after a conflict, rejecting the wrong operation`, async () => {
-      await commit('different\n', 'diverged')
-      await applyCommit(directory, operation, topic)
       expect(await detectConflictOperation(directory)).toBe(operation)
       await expect(
         recoverSequencer(directory, operation === 'revert' ? 'cherry-pick' : 'revert', 'abort')
