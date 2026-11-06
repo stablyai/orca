@@ -299,11 +299,9 @@ describe('packaged runtime resources', () => {
       try {
         const appOutDir = join(root, 'linux-unpacked')
         const resourcesDir = join(appOutDir, 'resources')
-        await cp(
-          join(process.cwd(), 'resources', 'plugins', 'launch'),
-          join(resourcesDir, 'plugins', 'launch'),
-          { recursive: true }
-        )
+        await cp(join(process.cwd(), 'resources', 'plugins'), join(resourcesDir, 'plugins'), {
+          recursive: true
+        })
         await seedBundledRipgrep(resourcesDir)
         await seedPackagedServePayload(resourcesDir)
 

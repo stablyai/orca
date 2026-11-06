@@ -5,7 +5,12 @@ import {
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { allowPageUnload } from '../browser-guest-unload-policy'
-import { installDocPreviewGuestPolicy } from '../../document-preview/doc-preview-guest-policy'
+import {
+  installDocPreviewGuestPolicy,
+  readDocPreviewGuestBoundGrantId
+} from '../../document-preview/doc-preview-guest-policy'
+import { getDocPreviewGrant } from '../../document-preview/doc-preview-grant-registry'
+import { setupGuestEscapeForwarding } from '../input/browser-guest-escape-forwarding'
 import { installGuestDevToolsCloseShortcut } from '../browser-guest-devtools-close-shortcut'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -43,12 +48,22 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       getKeybindings: () => this.settingsResolver?.().keybindings,
       closeDevTools: () => this.closeGuestDevTools(guest)
     })
+    const disposeEscapeForwarding = setupGuestEscapeForwarding({
+      guest,
+      resolveTarget: () => {
+        const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+        const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
+        return browserPageId && renderer ? { browserPageId, renderer } : null
+      },
+      hasActiveGrabOp: (browserPageId) => this.hasActiveGrabOp(browserPageId)
+    })
 
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
       disposeDevToolsCloseShortcut()
+      disposeEscapeForwarding()
       if (!guest.isDestroyed()) {
         guest.off('audio-state-changed', forwardAudioState)
       }
@@ -79,6 +94,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    const disposeEscapeForwarding = setupGuestEscapeForwarding({
+      guest,
+      resolveTarget: () => {
+        const grantId = readDocPreviewGuestBoundGrantId(guest)
+        const browserPageId = grantId ? getDocPreviewGrant(grantId)?.browserPageId : undefined
+        return browserPageId ? { browserPageId, renderer: host } : null
+      },
+      hasActiveGrabOp: (browserPageId) => this.hasActiveGrabOp(browserPageId)
+    })
     const handleDestroyed = (): void => {
       this.cleanupGuestPolicyAttachment(guest.id)
     }
@@ -86,6 +110,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     guest.on('will-prevent-unload', allowPageUnload)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
+      disposeEscapeForwarding()
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('will-prevent-unload', allowPageUnload)
