@@ -1609,6 +1609,7 @@ async function performLocalWorktreeCreate(
     ...(checkoutExistingBranch || args.branchIntent === 'open-existing-v2'
       ? { preserveBranchOnDelete: true }
       : {}),
+    branchNameWasExplicit: Boolean(args.branchNameOverride),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...resolveWorktreeCreateDisplayNameMeta(
       requestedDisplayName,

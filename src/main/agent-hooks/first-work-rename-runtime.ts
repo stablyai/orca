@@ -65,8 +65,15 @@ export function firstWorkRenameDeps(
     canRenameOrcaCreatedBranch: (worktreeId) => {
       const meta = store.getWorktreeMeta(worktreeId)
       // A creature-like name alone cannot prove Orca owns the branch.
-      return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
+      return (
+        !!meta?.orcaCreationSource &&
+        meta.preserveBranchOnDelete !== true &&
+        meta.branchNameWasExplicit !== true
+      )
     },
+    // Affirmative provenance. A missing flag is a pre-existing worktree, not a derived name.
+    isBranchNameDerived: (worktreeId) =>
+      store.getWorktreeMeta(worktreeId)?.branchNameWasExplicit === false,
     setDisplayName: (worktreeId, displayName) => {
       rememberBranchRenameFailureOutput(worktreeId, null)
       const scope = parseWorkspaceKey(worktreeId)
