@@ -22,7 +22,16 @@ import { JournalOutcomeItemProvenance } from './journal-outcome-item-provenance'
 import { decodeJournalOutcomeItem } from './journal-outcome-codec'
 import { encodeJournalState } from './journal-state-codec'
 import { DirectJournalControl } from './journal-sql-direct-control.test-fixture'
-import { stageDirectJournalRecords } from './journal-sql-direct-stage.test-fixture'
+import {
+  stageDirectJournalRecords,
+  stageJournalProjectionRecords
+} from './journal-sql-direct-stage.test-fixture'
+import {
+  CompactJournalItems,
+  compactJournalItemColumns,
+  createCompactJournalItemSchema,
+  readCompactJournalItems
+} from './journal-sql-compact-items.test-fixture'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
@@ -296,10 +305,22 @@ it.each(['raw', 'prefix', 'marker5', 'outcome'] as const)(
     const provenance = new JournalOutcomeItemProvenance()
     const tracked = restoreJournal(database.db, sessionId, {
       admitItem: provenance.capture,
-      selection: 'recursive'
+      selection: 'recursive',
+      profile: { measure: (_phase, work) => work() }
     })!
     expect(tracked).toMatchObject({ newer: null, damage: null })
     expect(encodeJournalState(tracked.state)).toEqual(encodeJournalState(ordinary.state))
+    const compactScope = new JournalSqlScope(database.db, sessionId, 'compact')
+    createCompactJournalItemSchema(compactScope)
+    await stageJournalProjectionRecords(
+      compactScope,
+      new CompactJournalItems(tracked.state, provenance).records(),
+      compactJournalItemColumns,
+      { maxRows: 2 }
+    )
+    expect([...readCompactJournalItems(compactScope)]).toEqual([
+      ...memoryJournalMap(ordinary.state.items)
+    ])
     const direct = new DirectJournalControl(tracked.state, provenance)
     await stageDirectJournalRecords(
       new JournalSqlScope(database.db, sessionId, 'direct'),

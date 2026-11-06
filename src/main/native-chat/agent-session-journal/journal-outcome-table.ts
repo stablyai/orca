@@ -18,10 +18,12 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalEntryChange } from './journal-transition-collections'
 import type { JournalOutcomeItemAdmission } from './journal-outcome-item-provenance'
 import { iterateSelectedJournalOutcomes } from './journal-outcome-selection'
+import type { JournalRestoreProfile } from './journal-restore-profile'
 
 export type JournalOutcomeReadOptions = {
   admitItem?: JournalOutcomeItemAdmission
   selection?: 'seeks' | 'recursive'
+  profile?: JournalRestoreProfile
 }
 
 export type JournalOutcomeTransition = {
@@ -55,16 +57,23 @@ export function readJournalOutcomes(
   )
   const prefix = detachJournalNativePrefix(baseline)
   const fold = new JournalOutcomeFold(
-    options?.admitItem && { generation: source.generation, admit: options.admitItem }
+    options?.admitItem && { generation: source.generation, admit: options.admitItem },
+    options?.profile
   )
   const selected =
     options?.selection === 'recursive' ? iterateSelectedJournalOutcomes(db, source) : undefined
   try {
     let after = { field: '', key: '' }
     for (;;) {
-      const row = selected
-        ? selected.next().value
-        : newest.get(source.generation, after.field, after.key, source.through)
+      const row = options?.profile
+        ? options.profile.measure('outcome-read', () =>
+            selected
+              ? selected.next().value
+              : newest.get(source.generation, after.field, after.key, source.through)
+          )
+        : selected
+          ? selected.next().value
+          : newest.get(source.generation, after.field, after.key, source.through)
       if (!row) {
         const state = fold.finish(sessionId, epoch, source.through, baseline)
         // Tail values omit derived recovery links; only the same raw-prefix incarnation inherits one.

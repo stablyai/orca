@@ -12,6 +12,15 @@ export async function stageDirectJournalRecords(
   records: Iterable<DirectJournalRecord>,
   options: { maxRows?: number; maxBytes?: number; acknowledge?: () => Promise<void> } = {}
 ) {
+  return stageJournalProjectionRecords(scope, records, directJournalColumns, options)
+}
+
+export async function stageJournalProjectionRecords<T extends string>(
+  scope: JournalSqlScope,
+  records: Iterable<{ table: T; values: SqliteBindings }>,
+  columnsByTable: Readonly<Record<T, string>>,
+  options: { maxRows?: number; maxBytes?: number; acknowledge?: () => Promise<void> } = {}
+) {
   const statements = new Map<string, SqliteStatement>()
   const work = {
     rows: 0,
@@ -34,7 +43,7 @@ export async function stageDirectJournalRecords(
     heapUsed: initialMemory.heapUsed,
     external: initialMemory.external
   }
-  let chunk: DirectJournalRecord[] = []
+  let chunk: { table: T; values: SqliteBindings }[] = []
   let estimatedBytes = 0
   const maxRows = options.maxRows ?? 256
   const maxBytes = options.maxBytes ?? 1024 * 1024
@@ -59,12 +68,12 @@ export async function stageDirectJournalRecords(
     }
     const decodeStarted = performance.now()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this scoped sink decodes only the typed chunk serialized immediately above.
-    const decoded = deserialize(wire) as DirectJournalRecord[]
+    const decoded = deserialize(wire) as typeof chunk
     work.deserializationMs += performance.now() - decodeStarted
     const insertStarted = performance.now()
     scope.db.exec('BEGIN IMMEDIATE')
     try {
-      const groups = new Map<DirectJournalRecord['table'], DirectJournalRecord[]>()
+      const groups = new Map<T, typeof chunk>()
       for (const record of decoded) {
         const group = groups.get(record.table) ?? []
         group.push(record)
@@ -80,7 +89,7 @@ export async function stageDirectJournalRecords(
           const cacheKey = `${table}:${batch.length}`
           let statement = statements.get(cacheKey)
           if (!statement) {
-            const columns = directJournalColumns[table]
+            const columns = columnsByTable[table]
             const row = `(${Array.from({ length: width }, () => '?').join(',')})`
             statement = scope.db
               .prepare(`INSERT ${table === 'value_refs' ? 'OR IGNORE ' : ''}INTO journal_proj_${table}

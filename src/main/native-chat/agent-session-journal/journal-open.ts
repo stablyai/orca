@@ -18,6 +18,7 @@ import { parseJournalRow } from './journal-row-schema'
 
 import type Database from '../../sqlite/sync-database'
 import type { JournalOutcomeReadOptions } from './journal-outcome-table'
+import { profileJournalRestoreRows, type JournalRestoreProfile } from './journal-restore-profile'
 
 /** The physical anchor is sequence 1; later epoch rows are context boundaries. */
 const FIRST_JOURNAL_SEQUENCE = 1
@@ -64,7 +65,7 @@ export function restoreJournal(
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
-      return foldJournalFromState(db, empty)
+      return foldJournalFromState(db, empty, Infinity, 'sources', false, options?.profile)
     }
     let baseline: JournalReducerState | undefined
     if (source.prefix > 0) {
@@ -73,7 +74,8 @@ export function restoreJournal(
         empty,
         source.prefix,
         source.marker === 5 ? 'marker5' : 'sources',
-        true
+        true,
+        options?.profile
       )
       if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
         const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
@@ -98,7 +100,9 @@ export function restoreJournal(
         db,
         createJournalReducerState(sessionId, epoch),
         source.prefix,
-        'sources'
+        'sources',
+        false,
+        options?.profile
       )
       if (observations.newer || observations.damage) {
         return observations
@@ -127,16 +131,21 @@ function foldJournalFromState(
   state: JournalReducerState,
   through = Number.POSITIVE_INFINITY,
   interpretation: 'marker5' | 'sources' = 'sources',
-  deferNativeCleanup = false
+  deferNativeCleanup = false,
+  profile?: JournalRestoreProfile
 ): JournalLoad {
   const { sessionId, epoch, lastSequence } = state
-  const fold = startJournalRowFold({ sessionId, epoch, interpretation, deferNativeCleanup }, state)
-  for (const entry of iterateJournalEpochRows(
+  const fold = startJournalRowFold(
+    { sessionId, epoch, interpretation, deferNativeCleanup, profile },
+    state
+  )
+  const rows = iterateJournalEpochRows(
     db,
     sessionId,
     epoch,
     lastSequence === 0 ? Number.MIN_SAFE_INTEGER : lastSequence
-  )) {
+  )
+  for (const entry of profile ? profileJournalRestoreRows(rows, profile) : rows) {
     if (entry.seq > through || !fold.add(entry)) {
       break
     }
@@ -156,6 +165,7 @@ export function startJournalRowFold(
     interpretation?: 'marker5' | 'sources'
     deferNativeCleanup?: boolean
     originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
+    profile?: JournalRestoreProfile
   },
   state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
 ): {
@@ -171,7 +181,11 @@ export function startJournalRowFold(
 
   const add = (entry: { seq: number; rowJson: string; ts?: number }): boolean => {
     empty = false
-    const parsed = parseJournalRow(entry.rowJson, input.interpretation === 'sources')
+    const parsed = input.profile
+      ? input.profile.measure('raw-admission', () =>
+          parseJournalRow(entry.rowJson, input.interpretation === 'sources')
+        )
+      : parseJournalRow(entry.rowJson, input.interpretation === 'sources')
     if (!parsed.ok && parsed.unreadable) {
       newer = { sequence: entry.seq }
       return false
