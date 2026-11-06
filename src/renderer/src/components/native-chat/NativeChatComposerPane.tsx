@@ -17,9 +17,8 @@ import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import { useNativeChatSessionOptions } from './use-native-chat-session-options'
+import { useNativeChatComposerSessionOptions } from './use-native-chat-composer-session-options'
 import { useNativeChatDictation } from './use-native-chat-dictation'
-import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -206,27 +205,20 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const dictation = useNativeChatDictation(textareaRef, disabled)
-    const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
-      useNativeChatSessionOptionCommand({
-        agent,
-        disabled,
-        onSlashCommand,
-        onSubmitted,
-        resolveTarget
-      })
-
-    const ptySessionOptions = useNativeChatSessionOptions({
+    const sessionOptions = useNativeChatComposerSessionOptions({
       agent,
+      disabled,
+      onSlashCommand,
+      onSubmitted,
+      resolveTarget,
       terminalTabId,
       targetPtyId,
-      dispatchCommand: dispatchSessionOptionCommand,
-      onAgentPicker: onSwitchToTerminal,
+      onSwitchToTerminal,
       readTerminalScreen,
-      paneKey
+      paneKey,
+      structuredTransport
     })
-    const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptions.surface
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
-    const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptions.snapshot
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
@@ -242,12 +234,12 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const ptyCommandRouting = {
       agent,
       disabled,
-      isDispatchingSessionOption,
+      isDispatchingSessionOption: sessionOptions.isDispatching,
       resolveTarget,
       onSlashCommand,
       onSubmitted,
       answerCommandLocally,
-      sessionOptionsSurface: ptySessionOptions.surface,
+      sessionOptionsSurface: sessionOptions.pty.surface,
       trackPendingSend,
       setDraft,
       setCaret,
@@ -399,8 +391,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onDictationHoldEnd={dictation.stopHoldDictation}
           onSend={send}
           onStop={interrupt}
-          sessionOptionsSurface={sessionOptionsSurface}
-          sessionOptionsSnapshot={sessionOptionsSnapshot}
+          sessionOptionsSurface={sessionOptions.surface}
+          sessionOptionsSnapshot={sessionOptions.snapshot}
           contextUsage={contextUsageSummary}
           sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
           agent={agent}
