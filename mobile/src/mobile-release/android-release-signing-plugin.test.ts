@@ -36,6 +36,7 @@ describe('android-release-signing plugin', () => {
     const patched = patchAppBuildGradle(TEMPLATE)
 
     expect(patched).toContain('storeFile file(orcaKeystorePath)')
+    expect(patched).toContain('enableV3Signing = true')
     expect(patched).toContain('signingConfig orcaReleaseSigningConfig(signingConfigs)')
     expect(patched).toContain("System.getenv('ORCA_ANDROID_REQUIRE_RELEASE_SIGNING') == 'true'")
     // Debug builds keep the debug key; only the release build type changes.
