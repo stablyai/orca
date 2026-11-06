@@ -20,7 +20,7 @@ import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
-import { readPullRequestSidebarQuery } from './pull-request-sidebar-query'
+import { readSharedPullRequestSidebarQuery } from './shared-pr-provider-reads'
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
@@ -63,11 +63,11 @@ export async function getPRByNumber(
   options: { includeStackSummary?: boolean } = {}
 ): Promise<PullRequestLookupData | null> {
   try {
-    let sidebarData: Awaited<ReturnType<typeof readPullRequestSidebarQuery>>
+    let sidebarData: Awaited<ReturnType<typeof readSharedPullRequestSidebarQuery>>
     try {
       sidebarData =
         options.includeStackSummary || knownPullRequestData !== undefined
-          ? await readPullRequestSidebarQuery(ownerRepo, number, ghOptions)
+          ? await readSharedPullRequestSidebarQuery(ownerRepo, number, ghOptions, executionScope)
           : undefined
     } catch (error) {
       if (

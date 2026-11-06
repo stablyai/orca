@@ -226,7 +226,7 @@ it.each([
   }
 )
 
-it.each([1, 10])(
+it.each([1, 3])(
   'reuses combined exact hydration with independent context and suite populations at N=%i',
   async (n) => {
     const contextPages = 2 * n

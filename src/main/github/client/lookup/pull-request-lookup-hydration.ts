@@ -6,7 +6,7 @@ import {
   normalizePullRequestLookupData,
   type PullRequestLookupData
 } from './pull-request-lookup-data'
-import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
+import { readSharedPRCheckObservation } from './shared-pr-provider-reads'
 export async function hydratePullRequestLookupData(
   ownerRepo: OwnerRepo,
   data: PullRequestLookupData,
@@ -17,7 +17,13 @@ export async function hydratePullRequestLookupData(
   const checks =
     data.checksUnavailable === false
       ? data.statusCheckRollup
-      : await readCompletePRCheckObservation(ownerRepo, data.number, data.headRefOid, ghOptions)
+      : await readSharedPRCheckObservation(
+          ownerRepo,
+          data.number,
+          data.headRefOid,
+          ghOptions,
+          executionScope
+        )
   const hasRichMergeFields =
     'reviewDecision' in data || 'mergeStateStatus' in data || 'autoMergeRequest' in data
   const mergeMetadata =

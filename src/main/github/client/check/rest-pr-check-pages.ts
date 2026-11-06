@@ -5,6 +5,7 @@ import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
 import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
+import { PENDING_APPROVAL_ROLLUP_ROW, PR_CHECK_PAGE_LIMIT } from './pr-check-rollup'
 
 const checkRunSchema = z.object({
   id: z.number().optional(),
@@ -66,6 +67,9 @@ async function readPages<T>(
     if (rows.length === total) {
       return rows
     }
+    if (page >= PR_CHECK_PAGE_LIMIT) {
+      throw new Error('Incomplete REST PR checks response')
+    }
   }
 }
 
@@ -112,6 +116,41 @@ export function readRestPRCheckSuites(
   )
 }
 
+/** REST rows in the GraphQL rollup's field names, so both reads give a check the same identity. */
+export function restPRCheckRollupRows(
+  runs: readonly z.infer<typeof checkRunSchema>[],
+  statuses: readonly z.infer<typeof commitStatusSchema>[],
+  suites: readonly z.infer<typeof checkSuiteSchema>[]
+): unknown[] {
+  const representedSuites = new Set(
+    runs.flatMap((run) => (run.check_suite ? [run.check_suite.id] : []))
+  )
+  return [
+    ...runs.map((run) => ({
+      __typename: 'CheckRun',
+      name: run.name,
+      databaseId: run.id,
+      status: run.status,
+      conclusion: run.conclusion,
+      ...(run.check_suite ? { checkSuite: { databaseId: run.check_suite.id } } : {})
+    })),
+    ...statuses.map((status) => ({
+      ...status,
+      __typename: 'StatusContext',
+      targetUrl: status.target_url ?? null,
+      createdAt: status.created_at ?? null
+    })),
+    ...suites
+      .filter((suite) =>
+        isPendingApprovalSuiteWithoutRuns(
+          suite.conclusion,
+          suite.id !== undefined && representedSuites.has(suite.id)
+        )
+      )
+      .map(() => ({ ...PENDING_APPROVAL_ROLLUP_ROW }))
+  ]
+}
+
 export async function readRestPRCheckRollup(
   repository: GitHubApiRepository,
   headSha: string,
@@ -120,19 +159,5 @@ export async function readRestPRCheckRollup(
   const runs = await readRestPRCheckRuns(repository, headSha, options)
   const statuses = await readRestPRCommitStatuses(repository, headSha, options)
   const suites = await readRestPRCheckSuites(repository, headSha, options)
-  const representedSuites = new Set(
-    runs.flatMap((run) => (run.check_suite ? [run.check_suite.id] : []))
-  )
-  return [
-    ...runs.map((run) => ({ status: run.status, conclusion: run.conclusion })),
-    ...statuses,
-    ...suites
-      .filter((suite) =>
-        isPendingApprovalSuiteWithoutRuns(
-          suite.conclusion,
-          suite.id !== undefined && representedSuites.has(suite.id)
-        )
-      )
-      .map(() => ({ status: 'COMPLETED', conclusion: 'ACTION_REQUIRED' }))
-  ]
+  return restPRCheckRollupRows(runs, statuses, suites)
 }
