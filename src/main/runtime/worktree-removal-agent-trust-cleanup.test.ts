@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { upsertOrcaCreatedProjectTrustLevel } from '../codex/trust/toml/config-toml-trust'
+import { markAntigravityWorkspaceTrusted } from '../agent-launch/trust/agent-trust-presets'
 
 const WORKTREE_ID = 'repo-1::/tmp/worktrees/feature-r1'
 const PROJECT = '/tmp/worktrees/feature-r1'
@@ -24,7 +25,7 @@ function purgeWithMeta(meta: Record<string, unknown> = {}) {
     runtime.removeWorktreeMetadataAndHistory(store as never, worktreeId, hostId)
 }
 
-describe('worktree removal drops the Codex pretrust Orca wrote', () => {
+describe('worktree removal drops the workspace trust Orca wrote', () => {
   let userDataDir: string
   let configPath: string
   let previousUserDataPath: string | undefined
@@ -52,6 +53,38 @@ describe('worktree removal drops the Codex pretrust Orca wrote', () => {
     await purgeWithMeta()(WORKTREE_ID)
 
     expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
+  })
+
+  it('removes only the Antigravity trustedWorkspaces entry Orca appended', async () => {
+    const agyHome = join(userDataDir, 'agy-home')
+    const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
+    mkdirSync(join(agyHome, '.gemini', 'antigravity-cli'), { recursive: true })
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({ theme: 'dark', trustedWorkspaces: ['/home/me/app'] })
+    )
+    markAntigravityWorkspaceTrusted(PROJECT, agyHome)
+
+    await purgeWithMeta()(WORKTREE_ID)
+
+    expect(JSON.parse(readFileSync(settingsPath, 'utf-8'))).toEqual({
+      theme: 'dark',
+      trustedWorkspaces: ['/home/me/app']
+    })
+  })
+
+  it('keeps an Antigravity entry that was trusted before Orca saw the path', async () => {
+    const agyHome = join(userDataDir, 'agy-home')
+    const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
+    mkdirSync(join(agyHome, '.gemini', 'antigravity-cli'), { recursive: true })
+    writeFileSync(settingsPath, JSON.stringify({ trustedWorkspaces: [PROJECT] }))
+    markAntigravityWorkspaceTrusted(PROJECT, agyHome)
+
+    await purgeWithMeta()(WORKTREE_ID)
+
+    expect(JSON.parse(readFileSync(settingsPath, 'utf-8'))).toEqual({
+      trustedWorkspaces: [PROJECT]
+    })
   })
 
   it('finds the bare path behind a folder-workspace session id suffix', async () => {

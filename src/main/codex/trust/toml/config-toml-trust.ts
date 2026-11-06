@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { parse as parseToml } from 'smol-toml'
-import '../identity/codex-trust-identity'
+import { normalizeCodexTrustProjectPath } from '../identity/codex-trust-identity'
 import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
 import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
 import {
@@ -21,12 +21,7 @@ import {
   removeProjectTrustContent,
   upsertProjectTrustContent as upsertProjectTrustLevelInContent
 } from './config-toml-project-trust'
-import {
-  forgetOrcaCreatedProjectTrust,
-  getOrcaCreatedProjectTrustTable,
-  listOrcaCreatedProjectTrustConfigFiles,
-  recordOrcaCreatedProjectTrust
-} from '../../codex-project-trust-ownership'
+import { createAgentTrustOwnershipLedger } from '../../../agent-launch/trust/agent-trust-ownership-ledger'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 import { observe } from '../../configuration/codex-path-observation'
 import '../../configuration/toml/config-toml-syntax'
@@ -183,6 +178,11 @@ export function upsertProjectTrustLevel(
  * worktree's entry can be deleted later without touching a table that existed
  * at the path before Orca first wrote it.
  */
+const codexProjectTrustOwnership = createAgentTrustOwnershipLedger(
+  'codex-project-trust-created.json',
+  normalizeCodexTrustProjectPath
+)
+
 export function upsertOrcaCreatedProjectTrustLevel(
   configPath: string,
   projectPath: string,
@@ -198,7 +198,7 @@ export function upsertOrcaCreatedProjectTrustLevel(
     return
   }
   try {
-    recordOrcaCreatedProjectTrust(
+    codexProjectTrustOwnership.record(
       configPath,
       projectPath,
       findProjectTrustRemovedBytes(updated, projectPath) ?? ''
@@ -216,7 +216,7 @@ export function upsertOrcaCreatedProjectTrustLevel(
  * pass retries. Resolves once every touched file has been written.
  */
 export async function removeOrcaCreatedProjectTrustEntries(projectPath: string): Promise<void> {
-  for (const configPath of listOrcaCreatedProjectTrustConfigFiles(projectPath)) {
+  for (const configPath of codexProjectTrustOwnership.listConfigFiles(projectPath)) {
     await runExclusivelyForCodexTrustConfig(configPath, async () => {
       try {
         removeOrcaCreatedProjectTrustEntry(configPath, projectPath)
@@ -239,10 +239,10 @@ function removeOrcaCreatedProjectTrustEntry(configPath: string, projectPath: str
     return
   }
   if (observation.kind === 'absent') {
-    forgetOrcaCreatedProjectTrust(configPath, projectPath)
+    codexProjectTrustOwnership.forget(configPath, projectPath)
     return
   }
-  const ownedTable = getOrcaCreatedProjectTrustTable(configPath, projectPath)
+  const ownedTable = codexProjectTrustOwnership.getWritten(configPath, projectPath)
   const currentTable = findProjectTrustRemovedBytes(observation.value, projectPath)
   if (
     ownedTable === null ||
@@ -251,14 +251,14 @@ function removeOrcaCreatedProjectTrustEntry(configPath: string, projectPath: str
   ) {
     // Why: the bytes at the path are no longer what Orca wrote, so the record no longer vouches
     // for the table — dropping it keeps a later pass from deleting someone else's replacement.
-    forgetOrcaCreatedProjectTrust(configPath, projectPath)
+    codexProjectTrustOwnership.forget(configPath, projectPath)
     return
   }
   const updated = removeProjectTrustContent(observation.value, projectPath)
   if (updated !== observation.value) {
     writeConfigAtomically(configPath, updated)
   }
-  forgetOrcaCreatedProjectTrust(configPath, projectPath)
+  codexProjectTrustOwnership.forget(configPath, projectPath)
 }
 
 export function removeHookTrustEntries(configPath: string, keys: readonly string[]): void {

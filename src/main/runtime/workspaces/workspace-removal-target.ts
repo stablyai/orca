@@ -26,7 +26,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
-import { dropOrcaCreatedCodexPretrustForRemovedWorktree } from '../worktree-removal-codex-pretrust-cleanup'
+import { dropOrcaCreatedAgentTrustForRemovedWorktree } from '../worktree-removal-agent-trust-cleanup'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
@@ -170,7 +170,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
       // Why: path-derived ids are reused; a stale pretrust entry would pre-trust the next occupant.
-      const pretrustDrop = dropOrcaCreatedCodexPretrustForRemovedWorktree(worktreeId)
+      const pretrustDrop = dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
