@@ -225,6 +225,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         pendingFirstAgentMessageRename,
         note: trimmedNote,
         startupPlan: quickStartup.startupPlan,
+        startupRecipe: quickStartup.startupRecipe,
         quickPrompt,
         launchDraftPrompt: quickDraftPrompt,
         promptDelivery,

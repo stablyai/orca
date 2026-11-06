@@ -4,7 +4,6 @@ import {
   structuredLaunchRequestedOptions
 } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   type StructuredLaunchState,
@@ -46,11 +45,6 @@ export function prepareStructuredLaunchCreateMessage(
   if (!hostTakesExplicitOptions) {
     omitStructuredLaunchPermissionMode(state)
   }
-  // Options without a model overlay the host's remembered model selection.
-  const optionsMode: StructuredAgentSessionCreateParams['optionsMode'] =
-    hostTakesExplicitOptions && state.selection.explicit?.model !== undefined
-      ? 'replace-model-selection'
-      : undefined
   if (intent.createMessageSupport !== true) {
     prepareLegacyStructuredLaunchPrompts(intent.sessionId)
     intent.createPrepared = true
@@ -68,11 +62,10 @@ export function prepareStructuredLaunchCreateMessage(
     intent.beforeCreate = () =>
       beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
   }
-  const { options: requested, selection } = structuredLaunchCreateOptions(state)
-  const options =
-    requested && state.selection.explicit && !optionsMode
-      ? structuredLaunchCompatibleOptions(intent.agent, requested)
-      : requested
+  const { options, optionsMode, selection } = captureStructuredLaunchFirstTurn(state, {
+    hostTakesExplicitOptions,
+    selection: intent.sendSelectionSupport === true
+  })
   const params = {
     ...intent.params,
     ...(firstMessage
@@ -108,8 +101,47 @@ function omitStructuredLaunchPermissionMode(state: StructuredLaunchState): void 
   state.selection = { ...state.selection, explicit: kept }
 }
 
+type FirstTurnInput = {
+  options?: Readonly<Record<string, string>>
+  optionsMode?: 'replace-model-selection'
+  selection?: Readonly<Record<string, string>>
+}
+
+/** The first turn's options and its message's selection, read from the chat's current picks in
+ *  one synchronous step; `freeze` makes the picks they include this turn's, so a later equal pick
+ *  is a separate, next-turn choice. `selection`: the host takes a per-message selection.
+ *  `hostTakesExplicitOptions`: the host advertises the create options-mode capability. */
+export function captureStructuredLaunchFirstTurn(
+  state: StructuredLaunchState,
+  args: { hostTakesExplicitOptions: boolean; selection: boolean; freeze?: false }
+): FirstTurnInput {
+  // Options without a model overlay the host's remembered model selection.
+  const optionsMode =
+    args.hostTakesExplicitOptions && state.selection.explicit?.model !== undefined
+      ? ('replace-model-selection' as const)
+      : undefined
+  const { options: requested, selection } = structuredLaunchCreateOptions(
+    state,
+    args.selection,
+    args.freeze !== false
+  )
+  const options =
+    requested && state.selection.explicit && !optionsMode
+      ? structuredLaunchCompatibleOptions(state.intent.agent, requested)
+      : requested
+  return {
+    ...(options ? { options } : {}),
+    ...(optionsMode ? { optionsMode } : {}),
+    ...(selection ? { selection } : {})
+  }
+}
+
 /** The first turn uses held picks over the action's choices over the chat's shown selection. */
-function structuredLaunchCreateOptions(state: StructuredLaunchState): {
+function structuredLaunchCreateOptions(
+  state: StructuredLaunchState,
+  withSelection: boolean,
+  freeze: boolean
+): {
   options?: Readonly<Record<string, string>>
   selection?: Readonly<Record<string, string>>
 } {
@@ -122,7 +154,9 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
     seedsModel: intent.seedOptions?.model !== undefined
   })
   if (intent.params.resumeFrom) {
-    holdStructuredLaunchCreatePicks(state)
+    if (freeze) {
+      holdStructuredLaunchCreatePicks(state)
+    }
     const options = { ...requested, ...overlay }
     const view = structuredAgentSessionOptionView(
       firstFrame,
@@ -132,9 +166,7 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
     )
     return {
       ...(Object.keys(options).length ? { options } : {}),
-      ...(intent.sendSelectionSupport
-        ? { selection: structuredAgentSessionMessageSelection(view) }
-        : {})
+      ...(withSelection ? { selection: structuredAgentSessionMessageSelection(view) } : {})
     }
   }
   // Create has always carried options, so any host takes what the chat shows.
@@ -153,7 +185,9 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
       return [id, shown ?? encoded]
     })
   )
-  holdStructuredLaunchCreatePicks(state)
+  if (freeze) {
+    holdStructuredLaunchCreatePicks(state)
+  }
   const options =
     requested?.model !== undefined
       ? requested.model === overlay.model
@@ -166,23 +200,25 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
         }
   return {
     ...(Object.keys(options).length ? { options } : {}),
-    ...(intent.sendSelectionSupport
-      ? { selection: structuredAgentSessionMessageSelection(view) }
-      : {})
+    ...(withSelection ? { selection: structuredAgentSessionMessageSelection(view) } : {})
   }
 }
 
-/** Later picks use the normal option path without holding publication behind startup. */
+/** Later picks use the normal option path without holding publication behind startup. A host
+ *  launch released with its first turn already ran with the picks it carried; only later ones are
+ *  sent, as choices for the next turn. */
 export function publishStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
   receipt: StructuredAgentLaunchReceipt
 ): StructuredAgentLaunchReceipt | Promise<StructuredAgentLaunchReceipt> {
-  if (state.intent.createMessageSupport !== true) {
+  const released = state.intent.hostLaunch?.firstTurn
+  if (state.intent.createMessageSupport !== true && released?.phase !== 'submitted') {
     return applyStructuredLaunchExplicitOptions(state, receipt)
   }
   settleStructuredLaunchCreateOptions(state, {
     kind: 'accepted',
-    options: state.intent.params.options ?? {}
+    options:
+      (released?.phase === 'submitted' ? released.options : state.intent.params.options) ?? {}
   })
   void applyStructuredLaunchHeldOptions(state, receipt, false).catch((error: unknown) => {
     console.warn('[native-chat] applying a launch option failed', error)

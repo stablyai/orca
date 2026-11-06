@@ -149,7 +149,9 @@ export function createStructuredSessionMocks() {
     structuredAgentSessionClient: () => ({
       callStructuredAgentSession: mocks.call,
       // The pane activates the host status feed for its startup phase; nothing here drives it.
-      subscribeStructuredAgentSessionStatus: async () => ({ unsubscribe: () => {} })
+      subscribeStructuredAgentSessionStatus: async () => ({ unsubscribe: () => {} }),
+      // A host from before host-owned chat launches: creation keeps its own chat create.
+      structuredAgentSessionHostSupports: async () => false
     }),
     useStructuredAgentSession: async () => {
       return {

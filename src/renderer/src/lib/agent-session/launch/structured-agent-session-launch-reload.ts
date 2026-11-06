@@ -44,6 +44,7 @@ export function restorePersistedStructuredLaunchState(
       ...(record.hostLaunchOperationId
         ? { hostLaunchOperationId: record.hostLaunchOperationId }
         : {}),
+      ...(record.hostLaunchFirstTurn ? { hostLaunchFirstTurn: record.hostLaunchFirstTurn } : {}),
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),

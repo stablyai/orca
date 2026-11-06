@@ -5,7 +5,8 @@ import {
   resetCreateMessageFixture,
   cleanupCreateMessageFixture,
   deferred,
-  draft
+  draft,
+  target
 } from '../../structured-agent-session-launch-create-message.test-fixture'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
@@ -24,7 +25,16 @@ import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/st
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
 import { requiredSetupLaunchFailureText } from '@/lib/required-setup-launch-failure'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
-import type { AgentLaunchStatusResult } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
+import type {
+  AgentLaunchReleasePhaseStatusResult,
+  AgentLaunchStatusResult
+} from '../../../../../shared/rpc-contract/agent-launch-accept-params'
+import { renderHook } from '@testing-library/react'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
+import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
+import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -46,7 +56,10 @@ const CHAT_STARTED: AgentLaunchStatusResult = {
 
 const host = vi.hoisted(() => ({
   accept: vi.fn<(params: unknown) => Promise<unknown>>(),
-  status: vi.fn<(params: unknown, options: unknown) => Promise<AgentLaunchStatusResult>>()
+  status:
+    vi.fn<(params: unknown, options: unknown) => Promise<AgentLaunchReleasePhaseStatusResult>>(),
+  prepare: vi.fn<(params: unknown) => Promise<unknown>>(),
+  release: vi.fn<(params: unknown) => Promise<unknown>>()
 }))
 
 function hostAnswers(): void {
@@ -55,7 +68,11 @@ function hostAnswers(): void {
       ? host.accept(params)
       : method === 'agent.launchStatus'
         ? host.status(params, options)
-        : {}
+        : method === 'agent.launchPrepare'
+          ? host.prepare(params)
+          : method === 'agent.launchRelease'
+            ? host.release(params)
+            : {}
   )
 }
 
@@ -323,5 +340,248 @@ describe('the held message of a launch the host ran in a terminal', () => {
     }
     expect(draft(SESSION_ID)).toContain('Also run lint')
     expect(windowCalls()).not.toContain('agentSession.send')
+  })
+})
+
+describe('a chat whose host takes its first turn after Setup', () => {
+  const SAVED = 'orca:structuredAgentLaunches:v1'
+  const AWAITING: AgentLaunchReleasePhaseStatusResult = { state: 'awaiting-release' }
+
+  function seedCatalog(): void {
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' }
+    ]
+    recordHostModelCatalogSnapshot(target, 'codex', null, {
+      origin: 'probe',
+      fetchedAt: 1,
+      defaultHoldsInEveryWorkspace: true,
+      models: [
+        { id: 'shown-model', label: 'Shown', isDefault: true, efforts },
+        { id: 'picked-model', label: 'Picked', isDefault: false, efforts }
+      ]
+    })
+  }
+
+  function startReleaseLaunch() {
+    return startStructuredAgentLaunch('workspace-1', 'codex', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      prompt: HELD,
+      draftFromScope: SOURCE_SCOPE,
+      hostLaunch: {
+        operationId: OPERATION_ID,
+        sessionId: SESSION_ID,
+        protocol: 'release',
+        firstMessage: {
+          clientMessageId: MESSAGE_ID,
+          body: structuredAgentSessionSendBody(HELD, [])
+        },
+        accept: {
+          prompt: { text: HELD, clientMessageId: MESSAGE_ID },
+          presentation: 'focused',
+          setupReceipt: { required: true, runId: 'setup-run-1' },
+          terminalAlternative: { kind: 'agent', prompt: 'none' }
+        }
+      }
+    })
+  }
+
+  /** The launch's saved first turn, as a reload would read it. */
+  function savedFirstTurn(): Record<string, unknown> | undefined {
+    const rows: { sessionId: string; hostLaunchFirstTurn?: Record<string, unknown> }[] = JSON.parse(
+      localStorage.getItem(SAVED) ?? '[]'
+    )
+    return rows.find((row) => row.sessionId === SESSION_ID)?.hostLaunchFirstTurn
+  }
+
+  function reload(): void {
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+    resetStructuredAgentSessionSendsForTests()
+    host.status.mockReset()
+    host.release.mockReset()
+  }
+
+  beforeEach(() => {
+    // A host new enough to take a release takes every input a send carries.
+    mocks.exactSupport.mockResolvedValue(true)
+    host.status.mockReset()
+    host.release.mockReset()
+    // A chat's picks outlive its launch in this window; each case starts with none.
+    forgetStructuredSessionSelection(SESSION_ID)
+    seedCatalog()
+    host.prepare.mockResolvedValue({ operationId: OPERATION_ID, state: 'running' })
+  })
+
+  it('gives the host every pick made before Setup ended, once, and later picks to the next turn', async () => {
+    const setup = deferred<AgentLaunchReleasePhaseStatusResult>()
+    const firstTurn = deferred<AgentLaunchReleasePhaseStatusResult>()
+    host.status.mockReturnValueOnce(setup.promise).mockReturnValueOnce(firstTurn.promise)
+    const released = deferred<unknown>()
+    host.release.mockReturnValue(released.promise)
+    mocks.call.mockResolvedValue(hostHistory())
+    const launch = startReleaseLaunch()
+    const view = renderHook(() => useNativeChatProvisionalLaunch('workspace-1', SESSION_ID))
+
+    await vi.waitFor(() => expect(host.status).toHaveBeenCalledOnce())
+    // Prepared without choices, beside the terminal the host would plan for them.
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(host.prepare.mock.calls[0]![0]).toMatchObject({
+      operationId: OPERATION_ID,
+      sessionId: SESSION_ID,
+      prompt: { text: HELD, delivery: 'submit', clientMessageId: MESSAGE_ID },
+      setupReceipt: { required: true, runId: 'setup-run-1' },
+      terminalAlternative: { kind: 'agent', prompt: 'none' }
+    })
+    for (const absent of ['terminalStartup', 'chatOptions', 'sessionOptions']) {
+      expect(host.prepare.mock.calls[0]![0]).not.toHaveProperty(absent)
+    }
+    expect(host.status.mock.calls[0]![0]).toEqual({
+      operationId: OPERATION_ID,
+      waitMs: 20_000,
+      includeReleasePhase: true
+    })
+    // What the chat shows is saved as the first turn still being edited, and nothing is released.
+    expect(savedFirstTurn()).toMatchObject({ phase: 'editing' })
+    expect(view.result.current.launch?.firstTurn).toBe('editing')
+    expect(host.release).not.toHaveBeenCalled()
+
+    // Picked while Setup runs, one of them while its readiness is already on the way.
+    void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'picked-model')
+    setup.resolve(AWAITING)
+    void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
+    await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+    const input = host.release.mock.calls[0]![0]
+    expect(input).toEqual({
+      operationId: OPERATION_ID,
+      options: expect.objectContaining({ model: 'picked-model', effort: 'high' }),
+      selection: { model: 'picked-model', effort: 'high' }
+    })
+    const { operationId: _id, ...submitted } = input as Record<string, unknown>
+    expect(savedFirstTurn()).toEqual({ phase: 'submitted', ...submitted })
+
+    // The picker still takes a pick, now a choice for the next turn: it changes nothing sent.
+    view.rerender()
+    expect(view.result.current.launch?.firstTurn).toBe('submitted')
+    expect(view.result.current.firstTurnSubmitted).toBe(true)
+    expect(holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'low')).not.toBeNull()
+    released.resolve({ operationId: OPERATION_ID, state: 'running' })
+    firstTurn.resolve(CHAT_STARTED)
+    await expect(launch.launchResult).resolves.toMatchObject({ sessionId: SESSION_ID })
+    expect(host.release).toHaveBeenCalledOnce()
+    // Only the later pick goes out, through the chat's own option path, for its next turn.
+    await vi.waitFor(() =>
+      expect(mocks.call).toHaveBeenCalledWith(
+        target,
+        'agentSession.setOption',
+        expect.objectContaining({ key: 'effort', value: 'low' }),
+        expect.anything()
+      )
+    )
+    const sentOptions = mocks.call.mock.calls.filter(
+      ([, method]) => method === 'agentSession.setOption'
+    )
+    expect(sentOptions).toHaveLength(1)
+    expect(windowCalls()).not.toContain('agentSession.create')
+    expect(windowCalls()).not.toContain('agentSession.send')
+  })
+
+  it('sends the same first turn again after a lost release reply, whatever was picked since', async () => {
+    host.status
+      .mockResolvedValueOnce(AWAITING)
+      .mockResolvedValueOnce(AWAITING)
+      .mockResolvedValueOnce(CHAT_STARTED)
+    const lost = deferred<unknown>()
+    host.release
+      .mockReturnValueOnce(lost.promise)
+      .mockResolvedValueOnce({ operationId: OPERATION_ID, state: 'running' })
+    mocks.call.mockResolvedValue(hostHistory())
+    void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'picked-model')
+    const launch = startReleaseLaunch()
+    void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'picked-model')
+    await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+    void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'shown-model')
+    lost.reject(new Error('runtime_unavailable'))
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(launch.launchResult).resolves.toMatchObject({ sessionId: SESSION_ID })
+    expect(host.release).toHaveBeenCalledTimes(2)
+    expect(host.release.mock.calls[1]![0]).toEqual(host.release.mock.calls[0]![0])
+    expect(host.release.mock.calls[0]![0]).toMatchObject({ selection: { model: 'picked-model' } })
+    // One launch, one message id.
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(draft(SESSION_ID)).not.toContain(HELD)
+  })
+
+  it.each([
+    ['still being edited', 'editing', 'released from what it showed'],
+    ['already submitted', 'submitted', 'the same input sent again'],
+    ['unreadable', 'unreadable', 'never released'],
+    ['still being edited, then failed', 'failed', 'never released']
+  ] as const)('after a reload, a first turn %s is %s', async (_case, saved, _outcome) => {
+    if (saved === 'submitted') {
+      host.status.mockResolvedValueOnce(AWAITING).mockReturnValue(new Promise(() => undefined))
+      host.release.mockReturnValue(new Promise(() => undefined))
+    } else {
+      host.status.mockReturnValue(new Promise(() => undefined))
+    }
+    startReleaseLaunch()
+    await vi.waitFor(() =>
+      expect(saved === 'submitted' ? host.release : host.status).toHaveBeenCalledOnce()
+    )
+    const before = savedFirstTurn()
+    const firstRelease = host.release.mock.calls[0]?.[0]
+    if (saved === 'unreadable') {
+      const rows: Record<string, unknown>[] = JSON.parse(localStorage.getItem(SAVED) ?? '[]')
+      localStorage.setItem(
+        SAVED,
+        JSON.stringify(rows.map((row) => ({ ...row, hostLaunchFirstTurn: { phase: 'chosen' } })))
+      )
+    }
+    reload()
+    host.status
+      .mockResolvedValueOnce(
+        saved === 'failed'
+          ? { state: 'failed', code: 'agent_launch_setup_not_completed' }
+          : AWAITING
+      )
+      .mockResolvedValue(CHAT_STARTED)
+    host.release.mockResolvedValue({ operationId: OPERATION_ID, state: 'running' })
+    mocks.call.mockResolvedValue(hostHistory())
+
+    if (saved === 'editing') {
+      // Shown again from what it saved, and picked anew before the host is read.
+      restorePersistedStructuredLaunchState('workspace-1', SESSION_ID)
+      void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
+    }
+    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+    await vi.waitFor(() => expect(lifecycle()).not.toBe('pending'))
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(windowCalls()).not.toContain('agentSession.create')
+    if (saved === 'editing') {
+      // The shown choices it saved, not this machine's defaults of now.
+      expect(before).toMatchObject({ phase: 'editing' })
+      const shown = before as { selection: Record<string, string> }
+      expect(host.release).toHaveBeenCalledOnce()
+      expect(host.release.mock.calls[0]![0]).toMatchObject({
+        operationId: OPERATION_ID,
+        selection: { ...shown.selection, effort: 'high' }
+      })
+    } else if (saved === 'submitted') {
+      expect(host.release).toHaveBeenCalledExactlyOnceWith(firstRelease)
+    } else {
+      expect(host.release).not.toHaveBeenCalled()
+    }
+    // A launch with no readable first turn never asks for a phase it could not answer.
+    expect(host.status.mock.calls[0]![0]).toEqual({
+      operationId: OPERATION_ID,
+      waitMs: 20_000,
+      ...(saved === 'unreadable' ? {} : { includeReleasePhase: true })
+    })
+    if (saved === 'failed') {
+      expect(lifecycle()).toBe('failed')
+      expect(draft(SESSION_ID)).toContain(HELD)
+    }
   })
 })

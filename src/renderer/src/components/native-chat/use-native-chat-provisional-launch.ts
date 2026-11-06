@@ -25,6 +25,13 @@ export type StructuredAgentSessionLaunchView = {
   worktree?: string
   /** Its paired server has not said what create seeds yet; picks wait for it. */
   seedPending?: true
+  /** A host launch that takes its first turn after Setup: `editing` while picks still change that
+   *  turn, `submitted` once it was handed over, after which a pick is for the next turn. */
+  firstTurn?: 'editing' | 'submitted'
+}
+
+function readFirstTurnPhase(sessionId: string): 'editing' | 'submitted' | undefined {
+  return getStructuredLaunchStateBySessionId(sessionId)?.intent.hostLaunch?.firstTurn?.phase
 }
 
 function useLaunchView(
@@ -72,6 +79,11 @@ function useLaunchView(
     })
   }
   const seedPending = launching && (!selection || selection.seedPending === true)
+  const firstTurn = useSyncExternalStore(
+    subscribeStructuredAgentLaunchStatus,
+    () => (launching ? readFirstTurnPhase(sessionId) : undefined),
+    () => undefined
+  )
   return useMemo(
     () =>
       intent.kind
@@ -80,10 +92,11 @@ function useLaunchView(
             ...(selection?.seed ? { seedOptions: selection.seed } : {}),
             ...(seedPending ? { seedPending: true as const } : {}),
             ...(selection?.explicit ? { explicitOptions: selection.explicit } : {}),
-            ...(worktreeId ? { worktree: toRuntimeWorktreeSelector(worktreeId) } : {})
+            ...(worktreeId ? { worktree: toRuntimeWorktreeSelector(worktreeId) } : {}),
+            ...(firstTurn ? { firstTurn } : {})
           }
         : undefined,
-    [intent.kind, selection?.seed, selection?.explicit, seedPending, worktreeId]
+    [intent.kind, selection?.seed, selection?.explicit, seedPending, worktreeId, firstTurn]
   )
 }
 
@@ -132,6 +145,8 @@ export function useNativeChatProvisionalLaunch(
     failure,
     retry,
     starting,
+    /** The first turn went to the host after Setup; picks now are for the next turn. */
+    firstTurnSubmitted: launch?.firstTurn === 'submitted',
     sendThroughLaunch,
     transportEnabled: retainedInput || lifecycle === null || lifecycle === 'published'
   }

@@ -59,6 +59,7 @@ import { launchStructuredWorktreeSession } from './worktree-creation-structured-
 import { worktreeHostLaunch } from './worktree-creation-host-launch'
 import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { buildQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
+import { compileAgentLaunchTerminalAlternative } from '../../../shared/agent-launch/startup/agent-launch-terminal-recipe'
 import {
   CODEX_DRAFT_ONLY_TERMINAL_STARTUP,
   CODEX_PLANNED_DRAFT
@@ -507,7 +508,7 @@ describe('the terminal a host launch becomes, planned as this creation would ope
 
   /** A Codex workspace created from a linked issue, its context left unsent: the real composer plan. */
   function codexDraftOnlyRequest(): WorktreeCreationRequest {
-    const { startupPlan, telemetry } = buildQuickComposerStartup({
+    const { startupPlan, startupRecipe, telemetry } = buildQuickComposerStartup({
       agent: 'codex',
       prompt: '',
       draftPrompt: CODEX_PLANNED_DRAFT,
@@ -525,9 +526,70 @@ describe('the terminal a host launch becomes, planned as this creation would ope
       quickPrompt: '',
       promptDelivery: 'auto-submit',
       startupPlan,
+      startupRecipe,
       quickTelemetry: telemetry
     } as unknown as WorktreeCreationRequest
   }
+
+  it.each([
+    ['out of view, from the creation planner of its submit', false],
+    ['in view, from the new-tab planner', true]
+  ])(
+    'for a host that takes the first turn after Setup, sends the planner inputs %s, which plan the same terminal',
+    async (_case, foreground) => {
+      seedThisMachine()
+      const request = codexDraftOnlyRequest()
+      const args = {
+        creationId: 'creation-1',
+        request,
+        worktreeId: LOCAL_CREATED.id,
+        agent: 'codex' as const,
+        prompt: 'Explain the failure',
+        heldChatMessage: 'Explain the failure',
+        foreground
+      }
+      const accepted = worktreeHostLaunch({ ...args, identity: IDENTITY }).accept!
+      const prepared = worktreeHostLaunch({
+        ...args,
+        identity: { ...IDENTITY, protocol: 'release' }
+      })
+      expect(prepared.protocol).toBe('release')
+      const alternative = prepared.accept!.terminalAlternative!
+      expect(prepared.accept).not.toHaveProperty('terminalStartup')
+      expect(alternative).toMatchObject({
+        kind: 'planned',
+        policy: foreground
+          ? { kind: 'foreground', promptDelivery: 'auto-submit' }
+          : { kind: 'background', draftPrompt: CODEX_PLANNED_DRAFT, heldChatMessage: true }
+      })
+      expect(prepared.accept!.launchSource).toBe(accepted.launchSource)
+      // Settings changed after the handoff never reach the host's plan.
+      useAppStore.setState(({ settings }) => ({
+        settings: settings && { ...settings, agentCmdOverrides: { codex: 'cx-later' } }
+      }))
+      const heldText = 'Explain the failure'
+      // With the choices it was planned with, the host plans exactly the terminal accept carries.
+      const unchanged = compileAgentLaunchTerminalAlternative({
+        alternative,
+        heldText,
+        choices: {},
+        replaceModelSelection: false
+      })
+      expect(unchanged).toEqual({ ok: true, startup: accepted.terminalStartup })
+      // With a model and effort picked during Setup, its generated flags follow them.
+      const changed = compileAgentLaunchTerminalAlternative({
+        alternative,
+        heldText,
+        choices: { model: 'gpt-5.5', effort: 'high' },
+        replaceModelSelection: true
+      })
+      const command =
+        changed.ok && changed.startup?.kind === 'command' ? changed.startup.command : ''
+      expect(command).toMatch(/^codex /)
+      expect(command).toContain('gpt-5.5')
+      expect(command).toContain('model_reasoning_effort=high')
+    }
+  )
 
   it.each([
     ['with no message held', undefined],

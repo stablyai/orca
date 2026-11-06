@@ -1,4 +1,7 @@
-import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
+import type {
+  HostLaunchFirstTurn,
+  StructuredLaunchSurfaceAddress
+} from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredHostLaunch } from './agent-session/launch/structured-agent-session-host-launch'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -203,6 +206,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   /** A host launch from before a reload: it is read again, never accepted again. Its
    *  `firstMessage` is the held message this window still owes the user. */
   hostLaunchOperationId?: string
+  /** Its first turn, released after Setup: what the chat showed, or the exact input it sent. */
+  hostLaunchFirstTurn?: HostLaunchFirstTurn
   resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -215,6 +220,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
+  const firstTurn = args.hostLaunchOperationId ? args.hostLaunchFirstTurn : undefined
   return {
     sessionId: args.sessionId,
     worktreeId: args.worktreeId,
@@ -248,15 +254,19 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
           hostLaunch: {
             operationId: args.hostLaunchOperationId,
             sessionId: args.sessionId,
-            ...(args.firstMessage ? { firstMessage: args.firstMessage } : {})
+            ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+            ...(firstTurn ? { protocol: 'release' as const, firstTurn } : {})
           }
         }
       : {}),
-    ...(args.createMessageSupport !== undefined
-      ? args.seedOptions
-        ? { seedOptions: args.seedOptions }
-        : {}
-      : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
+    // A released first turn shows what it saved, never this machine's defaults of now.
+    ...(firstTurn
+      ? { seedOptions: firstTurn.options }
+      : args.createMessageSupport !== undefined
+        ? args.seedOptions
+          ? { seedOptions: args.seedOptions }
+          : {}
+        : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
   }
 }
 

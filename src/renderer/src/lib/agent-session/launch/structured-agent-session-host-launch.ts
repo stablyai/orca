@@ -9,10 +9,14 @@ import {
   AGENT_LAUNCH_STATUS_MAX_WAIT_MS,
   type AgentLaunchAcceptParams,
   type AgentLaunchAcceptResult,
+  type AgentLaunchReleasePhaseStatusResult,
   type AgentLaunchSetupReceipt,
-  type AgentLaunchStatusResult,
   type AgentLaunchTerminalStartupParams
 } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
+import type {
+  AgentLaunchPrepareParams,
+  AgentLaunchTerminalAlternativeParams
+} from '../../../../../shared/rpc-contract/agent-launch-release-params'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -35,6 +39,11 @@ import {
 import { requireHostPermission } from './structured-agent-session-launch-create-call'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { HostLaunchFirstTurn } from './structured-agent-session-launch-record'
+import {
+  recordHostLaunchFirstTurnBaseline,
+  releaseHostLaunchFirstTurn
+} from './structured-agent-session-host-launch-release'
 
 export type StructuredHostLaunch = {
   /** Minted once per user action and reused by every retry of it, so the host runs it at most once. */
@@ -43,6 +52,12 @@ export type StructuredHostLaunch = {
   /** The held message under the id the host's chat founds it with. Saved with the launch before
    *  accept, so a reload still holds it; dropped once the host's answer settles who has it. */
   firstMessage?: StructuredAgentSessionFirstMessage
+  /** Prepared, then released with the first turn's final choices once the host's Setup succeeded;
+   *  absent, accepted whole. Kept for the launch, and saved as `firstTurn` being present. */
+  protocol?: 'release'
+  /** The first turn release hands the host, saved with the launch; absent after a reload that
+   *  could not read it, when nothing is released and the launch is left to the host's expiry. */
+  firstTurn?: HostLaunchFirstTurn
   /** What accept carries; absent once restored after a reload, which only reads the launch. */
   accept?: {
     prompt?: { text: string; clientMessageId: string }
@@ -52,6 +67,8 @@ export type StructuredHostLaunch = {
     /** The caller's own terminal plan, which the host runs if it cannot run the chat; absent, a
      *  chat the host cannot run starts nothing. */
     terminalStartup?: AgentLaunchTerminalStartupParams
+    /** Prepare's form of it: what the planner compiles, with the released choices, on the host. */
+    terminalAlternative?: AgentLaunchTerminalAlternativeParams
     /** Who asked for the launch, as the terminal it may become is counted. */
     launchSource?: string
   }
@@ -90,7 +107,7 @@ const HOST_LAUNCH_RETRY_DELAYS_MS: readonly number[] = [100, 400, 1500]
 const HOST_LAUNCH_STATUS_TIMEOUT_MS = AGENT_LAUNCH_STATUS_MAX_WAIT_MS + 5_000
 
 type HostLaunchAnswer = Extract<
-  AgentLaunchStatusResult,
+  AgentLaunchReleasePhaseStatusResult,
   { state: 'succeeded' | 'failed' | 'unknown' }
 >
 
@@ -110,29 +127,47 @@ function acceptHostLaunch(
   accept: NonNullable<StructuredHostLaunch['accept']>
 ): Promise<AgentLaunchAcceptResult> {
   const prompt = accept.prompt?.text.trim() ? accept.prompt : undefined
-  const params: AgentLaunchAcceptParams = {
+  const params = {
     agent: intent.agent,
     operationId: hostLaunch.operationId,
-    target: { kind: 'existing', worktree: intent.params.worktree },
+    target: { kind: 'existing' as const, worktree: intent.params.worktree },
     sessionId: intent.sessionId,
     nativeChatDefault: true,
     ...(prompt ? { prompt: { ...prompt, delivery: 'submit' as const } } : {}),
     presentation: accept.presentation,
     setupReceipt: accept.setupReceipt,
-    ...(accept.terminalStartup ? { terminalStartup: accept.terminalStartup } : {}),
     ...(accept.launchSource ? { launchSource: accept.launchSource } : {})
   }
-  return callRuntimeRpc<AgentLaunchAcceptResult>(intent.target, 'agent.launchAccept', params)
+  if (hostLaunch.protocol === 'release') {
+    // The same launch without its final choices, which release brings after Setup.
+    const prepare: AgentLaunchPrepareParams = {
+      ...params,
+      terminalAlternative: accept.terminalAlternative ?? { kind: 'none' }
+    }
+    return callRuntimeRpc<AgentLaunchAcceptResult>(intent.target, 'agent.launchPrepare', prepare)
+  }
+  const acceptParams: AgentLaunchAcceptParams = {
+    ...params,
+    ...(accept.terminalStartup ? { terminalStartup: accept.terminalStartup } : {})
+  }
+  return callRuntimeRpc<AgentLaunchAcceptResult>(intent.target, 'agent.launchAccept', acceptParams)
 }
 
+/** A launch with its first turn saved asks for the release phase; one without it never does, so a
+ *  host waiting on input this window cannot supply is left to end the launch itself. */
 function readHostLaunchStatus(
   intent: StructuredAgentSessionLaunchIntent,
   operationId: string
-): Promise<AgentLaunchStatusResult> {
-  return callRuntimeRpc<AgentLaunchStatusResult>(
+): Promise<AgentLaunchReleasePhaseStatusResult> {
+  const releasable = intent.hostLaunch?.protocol === 'release' && intent.hostLaunch.firstTurn
+  return callRuntimeRpc<AgentLaunchReleasePhaseStatusResult>(
     intent.target,
     'agent.launchStatus',
-    { operationId, waitMs: AGENT_LAUNCH_STATUS_MAX_WAIT_MS },
+    {
+      operationId,
+      waitMs: AGENT_LAUNCH_STATUS_MAX_WAIT_MS,
+      ...(releasable ? { includeReleasePhase: true } : {})
+    },
     { timeoutMs: HOST_LAUNCH_STATUS_TIMEOUT_MS }
   )
 }
@@ -148,15 +183,19 @@ async function awaitHostLaunchAnswer(
   const { accept } = hostLaunch
   let accepted = accept === undefined
   let misses = 0
+  // Set by the host saying it awaits this launch's first turn; the next request releases it.
+  let releasing = false
   for (;;) {
     throwIfCancelled()
-    let answer: AgentLaunchStatusResult
+    let answer: AgentLaunchReleasePhaseStatusResult
     try {
-      answer =
-        accepted || !accept
+      answer = releasing
+        ? await releaseHostLaunchFirstTurn(intent, hostLaunch.operationId)
+        : accepted || !accept
           ? await readHostLaunchStatus(intent, hostLaunch.operationId)
           : await acceptHostLaunch(intent, hostLaunch, accept)
     } catch (error) {
+      releasing = false
       const refusal = HOST_LAUNCH_REQUEST_REFUSALS.find((code) =>
         hasRuntimeRpcErrorCode(error, code)
       )
@@ -174,8 +213,11 @@ async function awaitHostLaunchAnswer(
       accepted = true
       onAccepted()
     }
-    if (answer.state === 'running') {
-      misses = 0
+    // Awaiting its first turn: release next. A release that keeps failing still counts as a miss,
+    // so a host that keeps asking is never answered in a tight loop.
+    releasing = answer.state === 'awaiting-release'
+    if (answer.state === 'running' || answer.state === 'awaiting-release') {
+      misses = releasing ? misses : 0
       continue
     }
     if (answer.state !== 'absent') {
@@ -251,12 +293,13 @@ export async function observeStructuredHostLaunch(
   const { intent } = state
   // The held message waits with the host's Setup, not on its send's own deadline.
   prepareLegacyStructuredLaunchPrompts(intent.sessionId)
+  recordHostLaunchFirstTurnBaseline(intent)
   if (hostLaunch.accept) {
     await requireHostPermission(intent)
   }
   const answer = await awaitHostLaunchAnswer(intent, hostLaunch, throwIfCancelled, () => {
     // The host holds it now: a later read of this launch never sends accept again.
-    const { accept: _held, ...accepted } = hostLaunch
+    const { accept: _held, ...accepted } = intent.hostLaunch ?? hostLaunch
     intent.hostLaunch = accepted
   })
   throwIfCancelled()

@@ -109,7 +109,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
       ready: acceptsPicks && interactionReadyRef.current,
       providerStarting,
-      existingChat: !newLaunch || args.hasTurn === true,
+      // A first turn already handed to the host makes every later pick a next-turn choice.
+      existingChat: !newLaunch || args.hasTurn === true || launch?.firstTurn === 'submitted',
       isCurrentContext,
       ...(!transportEnabled || fence === null
         ? {

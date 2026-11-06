@@ -30,7 +30,10 @@ import {
 import { structuredAgentSessionHostSupports } from '@/runtime/structured-agent-session-client'
 import { hasNativeChatStagedFiles } from '@/components/native-chat/native-chat-draft-attachment-staging'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
-import { AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RELEASE_RUNTIME_CAPABILITY
+} from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -48,10 +51,23 @@ function creationHostTarget(request: WorktreeCreationRequest): RuntimeClientTarg
     : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
 }
 
+/** How this creation's host takes a launch it runs after Setup: prepared and released with the first
+ *  turn's final choices, accepted whole, or not at all (the shipped chat create). */
+async function hostLaunchProtocol(
+  target: RuntimeClientTarget
+): Promise<'release' | 'accept' | null> {
+  if (await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_RELEASE_RUNTIME_CAPABILITY)) {
+    return 'release'
+  }
+  return (await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY))
+    ? 'accept'
+    : null
+}
+
 /** Chosen before the workspace exists, once per creation: a host that owns its Setup wait gets the
  *  chat as its own launch, and an older one keeps the shipped chat create. A creation that chose
- *  the host's launch keeps it whatever its create reply says; one that did not never takes it up.
- *  Answers with what the create promises: the chat, or nothing. */
+ *  the host's launch keeps it, and how that host takes it, whatever its create reply says; one that
+ *  did not never takes it up. Answers with what the create promises: the chat, or nothing. */
 export async function selectChatRoute(
   creationId: string,
   request: WorktreeCreationRequest
@@ -65,17 +81,20 @@ export async function selectChatRoute(
     !request.agent ||
     request.agentLaunchRoute !== 'structured-native-chat' ||
     getProvisionedRootCreateOptions(request) ||
-    !target ||
-    !(await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY)) ||
-    !useAppStore.getState().pendingWorktreeCreations[creationId]
+    !target
   ) {
+    return {}
+  }
+  const protocol = await hostLaunchProtocol(target)
+  if (!protocol || !useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return {}
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
     hostLaunch: {
       operationId: createStructuredAgentSessionOperationId(createBrowserUuid),
       sessionId: createStructuredAgentSessionId(request.agent, createBrowserUuid),
-      clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid)
+      clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
+      ...(protocol === 'release' ? { protocol } : {})
     }
   })
   return chosen
@@ -101,9 +120,9 @@ export function recordChatSetupReceipt<T extends { worktree: unknown; agentLaunc
   return reply.worktree
 }
 
-/** What accept carries: the held message under its own id, the creation's Setup receipt, and the
- *  terminal this creation's own path would open if the host cannot run the chat. The terminal is
- *  planned once, at the first handoff; a Retry sends the same launch. */
+/** What accept (or prepare) carries: the held message under its own id, the creation's Setup
+ *  receipt, and the terminal this creation's own path would open if the host cannot run the chat.
+ *  The terminal is planned once, at the first handoff; a Retry sends the same launch. */
 export function worktreeHostLaunch(args: {
   creationId: string
   identity: HostLaunchIdentity
@@ -115,6 +134,7 @@ export function worktreeHostLaunch(args: {
   foreground: boolean
 }): StructuredHostLaunch {
   const { identity } = args
+  const release = identity.protocol === 'release'
   const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, args.worktreeId)
   const terminal =
     identity.terminal ??
@@ -122,9 +142,12 @@ export function worktreeHostLaunch(args: {
       ? planWorktreeHostLaunchTerminal({
           ...args,
           prompt: args.prompt ?? '',
-          owner
+          owner,
+          release
         })
-      : {})
+      : release
+        ? { alternative: { kind: 'none' as const } }
+        : {})
   if (!identity.terminal) {
     useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
       hostLaunch: { ...identity, terminal }
@@ -134,6 +157,7 @@ export function worktreeHostLaunch(args: {
   return {
     operationId: identity.operationId,
     sessionId: identity.sessionId,
+    ...(release ? { protocol: 'release' as const } : {}),
     ...(text
       ? {
           firstMessage: {
@@ -147,6 +171,9 @@ export function worktreeHostLaunch(args: {
       presentation: args.foreground ? 'focused' : 'background',
       setupReceipt: identity.setupReceipt ?? { required: true, runId: null },
       ...(terminal.startup ? { terminalStartup: terminal.startup } : {}),
+      ...(release
+        ? { terminalAlternative: terminal.alternative ?? { kind: 'none' as const } }
+        : {}),
       ...(terminal.launchSource ? { launchSource: terminal.launchSource } : {})
     }
   }

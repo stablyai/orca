@@ -1,6 +1,7 @@
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   validRecord,
+  parseHostLaunchFirstTurn,
   parseStructuredLaunchSurfaceAddress,
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-record'
@@ -47,10 +48,13 @@ function load(): void {
           const surfaceAddress = parseStructuredLaunchSurfaceAddress(
             'surfaceAddress' in value ? value.surfaceAddress : undefined
           )
+          const hostLaunchFirstTurn = parseHostLaunchFirstTurn(value.hostLaunchFirstTurn)
           const { seedOptions: _stored, surfaceAddress: _address, ...rest } = value
           records.set(value.sessionId, {
             ...rest,
             ...(surfaceAddress ? { surfaceAddress } : {}),
+            // Unreadable is dropped: a launch never runs on a guess at its first turn.
+            hostLaunchFirstTurn,
             ...(seedOptions ? { seedOptions } : {}),
             executionHostId:
               parseExecutionHostId(value.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID,

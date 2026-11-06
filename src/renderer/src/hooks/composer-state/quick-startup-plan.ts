@@ -35,6 +35,8 @@ export type QuickComposerStartupInput = {
 
 export type QuickComposerStartup = {
   startupPlan: AgentStartupPlan | null
+  /** The planner's own inputs behind `startupPlan`, carried in memory with the request. */
+  startupRecipe?: WorktreeCreationRequest['startupRecipe']
   backendStartup: WorktreeCreationRequest['startup']
   telemetry: AgentStartedTelemetry | null
 }
@@ -86,7 +88,10 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           ...(telemetry ? { telemetry } : {})
         }
       : undefined
-  return { startupPlan, backendStartup, telemetry }
+  const startupRecipe = inputs
+    ? { inputs, prompt, ...(draftPrompt ? { draftPrompt } : {}) }
+    : undefined
+  return { startupPlan, ...(startupRecipe ? { startupRecipe } : {}), backendStartup, telemetry }
 }
 
 export async function prepareQuickComposerStartup(
