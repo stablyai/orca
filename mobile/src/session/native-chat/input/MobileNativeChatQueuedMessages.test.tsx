@@ -5,7 +5,8 @@ import {
   type MobileQueuedMessageCard
 } from '../../mobile-structured-queued-message-cards'
 
-import { createElement } from 'react'
+import { createElement, isValidElement } from 'react'
+import type * as QueuedCardRowModule from '../../MobileQueuedMessageCardRow'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
 import {
   useMobileNativeChatLowerGeometry,
@@ -34,7 +35,7 @@ import { testOrcaSessionId } from '../../../../../src/shared/orca-session-addres
 
 const rowRenders = vi.hoisted(() => ({ count: 0 }))
 vi.mock('../../MobileQueuedMessageCardRow', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../MobileQueuedMessageCardRow')>()
+  const original = await importOriginal<typeof QueuedCardRowModule>()
   return {
     MobileQueuedMessageCardRow: (
       props: Parameters<typeof original.MobileQueuedMessageCardRow>[0]
@@ -481,6 +482,7 @@ for (const population of [10, 100]) {
       await act(async () => {
         mounted = create(render(cards), {
           createNodeMock: (element) =>
+            isValidElement<{ testID?: string }>(element) &&
             element.props.testID === 'native-chat-lower-scroll'
               ? { getScrollableNode: () => viewport }
               : element.type === 'ScrollView'
