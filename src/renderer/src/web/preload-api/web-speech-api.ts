@@ -26,6 +26,7 @@ type HostDictation = {
   pending: Float32Array[]
   sending: Promise<void> | null
   failed: boolean
+  textSoFar: string
 }
 
 type Listeners<T> = Set<(data: T) => void>
@@ -95,11 +96,16 @@ export function createWebSpeechApi(): Pick<
           seq: dictation.seq++
         })
         if (reply?.text) {
+          dictation.textSoFar = reply.text
           emit(partialListeners, { sessionId: dictation.sessionId, text: reply.text })
         }
       } catch (error) {
         dictation.failed = true
         dictation.pending = []
+        // Keep what the host already heard; this session can't be finished any more.
+        if (dictation.textSoFar) {
+          emit(finalListeners, { sessionId: dictation.sessionId, text: dictation.textSoFar })
+        }
         emit(errorListeners, { sessionId: dictation.sessionId, error: hostErrorMessage(error) })
       }
     }
@@ -107,7 +113,8 @@ export function createWebSpeechApi(): Pick<
   }
 
   return {
-    startDictation: async (modelId, _hotwords, sessionId) => {
+    // No model id, like the phone: the host dictates with the model it has selected now.
+    startDictation: async (_modelId, _hotwords, sessionId) => {
       const dictation: HostDictation = {
         sessionId,
         dictationId: `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
@@ -115,18 +122,20 @@ export function createWebSpeechApi(): Pick<
         sampleRate: 0,
         pending: [],
         sending: null,
-        failed: false
+        failed: false,
+        textSoFar: ''
       }
       active = dictation
       try {
-        await callRuntimeResult('speech.dictation.start', {
-          dictationId: dictation.dictationId,
-          modelId
-        })
+        await callRuntimeResult('speech.dictation.start', { dictationId: dictation.dictationId })
       } catch (error) {
         if (active === dictation) {
           active = null
         }
+        // A start that timed out may still finish on the host and hold its one dictation slot.
+        void callRuntimeResult('speech.dictation.cancel', {
+          dictationId: dictation.dictationId
+        }).catch(() => undefined)
         throw error
       }
     },
@@ -185,7 +194,13 @@ export function followHostVoiceSettings(
     return {}
   }
   const voice = local.voice ?? getDefaultVoiceSettings()
+  // Browsers expose no microphone on plain-http pages, so the mic stays off there.
+  const canCapture = Boolean(globalThis.navigator?.mediaDevices?.getUserMedia)
   return {
-    voice: { ...voice, enabled: host.voice.enabled === true, sttModel: host.voice.sttModel ?? '' }
+    voice: {
+      ...voice,
+      enabled: host.voice.enabled === true && canCapture,
+      sttModel: host.voice.sttModel ?? ''
+    }
   }
 }
