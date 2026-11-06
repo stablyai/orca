@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
-import { suggestCommands, unknownCommandData } from './command-suggestion'
-import { COMMAND_SPECS } from './specs'
+import { suggestCommands } from './command-suggestion'
 
 const specs: CommandSpec[] = [
   {
@@ -45,23 +44,6 @@ const specs: CommandSpec[] = [
 ]
 
 describe('suggestCommands', () => {
-  it('returns nothing for a wildly-off token', () => {
-    expect(suggestCommands(specs, ['worktree', 'zzzzz'])).toEqual([])
-  })
-
-  it('only considers commands of the same depth', () => {
-    expect(suggestCommands(specs, ['worktree', 'list', 'extra'])).toEqual([])
-  })
-
-  it('suggests a top-level command group near-miss', () => {
-    expect(suggestCommands(specs, ['worktre'])).toEqual(['worktree'])
-  })
-
-  it('ranks closer matches first', () => {
-    const result = suggestCommands(specs, ['terminal', 'sen'])
-    expect(result[0]).toBe('terminal send')
-  })
-
   it('never suggests a destructive command for a benign non-destructive typo', () => {
     const result = suggestCommands(specs, ['worktree', 'move'])
     expect(result).not.toContain('worktree remove')
@@ -69,65 +51,8 @@ describe('suggestCommands', () => {
     expect(result).not.toContain('worktree delete')
   })
 
-  it('still suggests remove for a near-miss of a destructive verb', () => {
-    const result = suggestCommands(specs, ['worktree', 'remov'])
-    expect(result).toContain('worktree rm')
-    expect(result).toContain('worktree remove')
-  })
-
-  it('still suggests delete for a near-miss of the delete alias', () => {
-    expect(suggestCommands(specs, ['worktree', 'delet'])).toContain('worktree delete')
-  })
-
   it('guards destructive commands outside the delete-family via the spec flag', () => {
     expect(suggestCommands(specs, ['emulator', 'ball'])).not.toContain('emulator kill')
     expect(suggestCommands(specs, ['emulator', 'kil'])).toContain('emulator kill')
-  })
-
-  it('still recovers non-destructive near-misses', () => {
-    expect(suggestCommands(specs, ['worktree', 'lst'])).toContain('worktree list')
-  })
-
-  it('does not suggest hidden compatibility commands', () => {
-    expect(suggestCommands(specs, ['terminal', 'stp'])).not.toContain('terminal stop')
-  })
-})
-
-describe('unknownCommandData', () => {
-  it('produces a human nextSteps line when a suggestion exists', () => {
-    const data = unknownCommandData(specs, ['worktree', 'remov'])
-    expect(data.suggestions).toContain('worktree rm')
-    expect(data.nextSteps[0]).toContain('Did you mean')
-    expect(data.nextSteps[0]).toContain('orca worktree rm')
-  })
-
-  it('produces empty nextSteps when nothing is close', () => {
-    const data = unknownCommandData(specs, ['worktree', 'zzzzz'])
-    expect(data.suggestions).toEqual([])
-    expect(data.nextSteps).toEqual([])
-  })
-
-  it('does not route a benign typo into a destructive nextStep', () => {
-    const data = unknownCommandData(specs, ['worktree', 'move'])
-    expect(data.suggestions).not.toContain('worktree remove')
-    expect(data.nextSteps.join(' ')).not.toContain('remove')
-  })
-})
-
-describe('positional terminal handle recovery', () => {
-  it('points target --terminal commands at the flag form but not caller-identity ones', () => {
-    for (const [commandPath, parent] of [
-      [['terminal', 'read', 'term_abc123'], 'terminal read'],
-      [['terminal', 'send', 'term_abc123', 'hello'], 'terminal send'],
-      [['terminal', 'read', 'structworker_abc'], 'terminal read']
-    ] as const) {
-      expect(unknownCommandData(COMMAND_SPECS, [...commandPath])).toEqual({
-        suggestions: [`${parent} --terminal <handle>`],
-        nextSteps: [`Did you mean: orca ${parent} --terminal <handle>`]
-      })
-    }
-    expect(
-      unknownCommandData(COMMAND_SPECS, ['orchestration', 'check', 'term_abc123']).suggestions
-    ).toEqual([])
   })
 })

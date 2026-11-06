@@ -19104,6 +19104,9 @@
       "composer": {
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
+        "previewQueue": "加入佇列",
+        "previewSteer": "引導",
+        "previewSteerQueued": "引導下一則",
         "alternateQueueHint": "{{shortcut}} 加入佇列",
         "noPty": "沒有作用中的終端機，請切回終端機以重新連線。",
         "locked": "輸入正被另一台裝置佔用。",

@@ -17,18 +17,15 @@ import { dispatchClaudeMessage } from './launch/claude-structured-message-option
 import { readClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
 import {
   ClaudeAcquisitionRegistry,
-  type ClaudeAcquisitionAttempt,
   type ClaudeSession,
   type ClaudeSessionExit,
   type ClaudeStructuredSessionAdapterDeps,
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
-import {
-  closeAllClaudeSessions,
-  finishClaudeCloseAfterExit
-} from './claude-structured-session-close'
+import { closeAllClaudeSessions } from './claude-structured-session-close'
 import { claudeStoppedRequestEndWait } from '../claude-request-end-wait'
 import {
+  finishClaudeCloseAfterExit,
   drainClaudeObservedExits,
   observeClaudeSessionExit,
   settleClaudeUnexpectedExit,
@@ -36,7 +33,10 @@ import {
 } from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { drainClaudeChildWork } from '../claude-child-work-evidence'
-import { emitClaudeStructuredSessionEvent } from './claude-structured-event-delivery'
+import {
+  deliverClaudeConnectionEvent,
+  emitClaudeStructuredSessionEvent
+} from './claude-structured-event-delivery'
 import {
   answerClaudeStructuredPrompt,
   cancelClaudeStructuredTurn,
@@ -87,13 +87,16 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...(naming ? { naming } : {}),
       callbacks: {
         publish: start.publish,
-        deliver: (attempt, sessionId, event) => this.deliver(attempt, sessionId, event),
+        deliver: (attempt, sessionId, event) =>
+          deliverClaudeConnectionEvent(this.sessions, this.exits, attempt, sessionId, event),
         emit: (session, _events, event) => this.emit(session, event),
         handleExit: (sessionId, attempt, error) =>
           observeClaudeSessionExit(this.exitLifecycle, sessionId, attempt, error),
         finishClose: (sessionId, attempt) =>
           finishClaudeCloseAfterExit({
             sessions: this.sessions,
+            exits: this.exits,
+            closeExit: this.releaseProviderSession,
             sessionId,
             connection: attempt.connection,
             deps: { ...this.deps, settledExitErrors: this.settledExitErrors },
@@ -107,19 +110,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       naming?.failed()
       throw claudeAcquireFailure(error)
     })
-  }
-
-  private deliver(attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void): void {
-    if (!attempt.published) {
-      attempt.buffered.push(event)
-      return
-    }
-    if (
-      this.sessions.get(sessionId)?.connection === attempt.connection ||
-      this.exits.get(sessionId)?.connection === attempt.connection
-    ) {
-      event()
-    }
   }
 
   /** Await exit publication after cleanup/cursor writes; unproven exits stay indexed for retry. */

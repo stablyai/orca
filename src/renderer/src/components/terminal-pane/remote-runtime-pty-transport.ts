@@ -3037,6 +3037,7 @@ export function createRemoteRuntimePtyTransport(
       client: { id: clientId, type: 'desktop' },
       viewport: subscribedViewport ?? undefined,
       inputSessionId: inputJournal.sessionId,
+      reportsPaneVisibility: true,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {

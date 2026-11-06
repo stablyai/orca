@@ -299,6 +299,6 @@ export abstract class RuntimeConstructionServices {
   ): Promise<PtyControllerContract.PtyControllerInventory | null>
   protected abstract getFreshExplicitAgentStatusForHandle(
     handle: string,
-    paneKeyOverride?: string | null
+    ptyId: string
   ): ReturnType<typeof selectFreshExplicitAgentStatus>
 }

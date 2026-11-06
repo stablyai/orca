@@ -138,6 +138,31 @@ export class StructuredAgentSessionEventRecovery {
 
   /** Settle/report exits without automatic restart; next-send delivery owns queued work and startup. */
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
+    if (event.type === 'retiring') {
+      const session = this.context.sessions.get(event.sessionId)
+      const child = session?.child
+      if (
+        session &&
+        child &&
+        child.fence === event.fence &&
+        child.generation === event.acquisitionGeneration &&
+        !child.close
+      ) {
+        const stopped = session.journal.stopMarks.personStopDecides(
+          session.journal.runningTurn()?.turnId ?? null,
+          event.observedAt
+        )
+        // Input joins the existing proof barrier; this records neither Stop nor root death.
+        child.close = {
+          cause: stopped ? 'user-stop' : 'host-stop',
+          reason: stopped ? null : event.reason,
+          ...(stopped ? {} : { failure: event.failure }),
+          recorded: Promise.resolve(null),
+          requestedAt: session.journal.cursor()
+        }
+      }
+      return
+    }
     if (event.type === 'options-reported') {
       return settleStructuredAgentSessionOptionsReported(this.context, event)
     }

@@ -3,7 +3,6 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
-  'src/main/linear/linear-request-recovery.test.ts',
   'src/main/linear/linear-issue-detail-deadline.test.ts',
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
@@ -27,8 +26,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
-  // Launches process.execPath as orcad's pinned runtime to measure V8 address-space reservations.
-  'src/main/managed-server/install/orcad-remote-launch-address-space.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
@@ -80,10 +77,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-provider-open.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-ready-operation-order.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-message-choices.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-messages.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-send.test.ts',
   'src/main/orcad/serve-profile-ssh-targets.test.ts',
   'src/main/runtime/orca-runtime.test.ts',
   'src/main/runtime/workspaces/startup/worktree-agent-first-surface.test.ts',
@@ -167,11 +161,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed.test.ts',
   'src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-conversation-name.test.ts',
-  'src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-first-input-identity.test.ts',
   'src/main/native-chat/structured-chat-naming.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-outgrown-child.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-permission-mode.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-legacy-import.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
