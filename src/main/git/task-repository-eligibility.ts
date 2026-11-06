@@ -2,6 +2,7 @@ import { parseGitRemoteVerboseOutput } from '../../shared/git/remotes/git-remote
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticated } from '../github/github-enterprise-repository'
 import { parseGitHubRemoteIdentity } from '../github/github-remote-identity-parsing'
+import { getGlabKnownHosts, getGlabPartialHosts } from '../gitlab/gitlab-known-host-probe'
 import { parseGitLabProjectRef } from '../gitlab/project-ref-parser'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remotes/remote-url-probe'
 import { gitExecFileAsync } from './runner'
@@ -28,9 +29,17 @@ export async function isTaskRepositoryIneligible(
     if (remotes.length === 0) {
       return false
     }
+    // glab exits non-zero when any configured host has no token, leaving logged-in hosts in the partial list.
+    const gitLabHosts =
+      provider === 'github'
+        ? [
+            ...(await getGlabKnownHosts(connectionId, localGitOptions)),
+            ...getGlabPartialHosts(connectionId, localGitOptions)
+          ]
+        : []
     for (const remote of remotes) {
       if (provider === 'github') {
-        if (!parseGitLabProjectRef(remote.url)) {
+        if (!parseGitLabProjectRef(remote.url, gitLabHosts)) {
           return false
         }
       } else {

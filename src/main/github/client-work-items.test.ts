@@ -67,6 +67,8 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('../git/command-runner/glab-exec-file', () => ({ glabExecFileAsync: vi.fn() }))
+
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
   noteRateLimitSpend: noteRateLimitSpendMock,

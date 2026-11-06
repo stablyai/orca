@@ -27,6 +27,7 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
 import { listMergeRequests } from './merge-request-list'
 import { listIssues } from './issues'
 import { _resetProjectRefCache, _resetKnownHostsCache } from './gitlab-project-ref-resolution'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
 import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
 
 function serveRemotes(repos: Record<string, Record<string, string>>): void {
@@ -131,5 +132,30 @@ describe('GitLab task project admission', () => {
     expect(result.error).toBeUndefined()
     expect(result.items).toEqual([])
     expect(glab.mock.calls.filter(([args]) => args[0] !== 'auth')).toEqual([])
+  })
+
+  it('proves a self-hosted project from the hosts glab reports', async () => {
+    serveRemotes({ '/self-hosted': { origin: 'https://git.example.com/team/project.git' } })
+    glab.mockResolvedValue({ stdout: 'git.example.com\n  ✓ Logged in to git.example.com as me\n' })
+
+    await expect(isTaskRepositoryIneligible('/self-hosted', 'github')).resolves.toBe(true)
+  })
+
+  it('proves a logged-in self-hosted project when glab fails on another host', async () => {
+    serveRemotes({ '/self-hosted': { origin: 'https://git.example.com/team/project.git' } })
+    glab.mockRejectedValue(
+      Object.assign(new Error('Command failed: glab auth status'), {
+        code: 1,
+        killed: false,
+        signal: null,
+        outputTruncated: false,
+        stdout: '',
+        stderr:
+          'gitlab.com\n  x gitlab.com: API call failed: 401\n' +
+          'git.example.com\n  ✓ Logged in to git.example.com as me (keyring)\n'
+      })
+    )
+
+    await expect(isTaskRepositoryIneligible('/self-hosted', 'github')).resolves.toBe(true)
   })
 })
