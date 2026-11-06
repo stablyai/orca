@@ -1,9 +1,11 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
+import { encodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { exchangeRemotePairingTicket } from '../../../src/shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -44,6 +46,26 @@ function pairedTicket(registry: DeviceRegistry, name: string) {
 describe('cross-version: single-use pairing tickets', () => {
   it('a released host does not advertise the exchange, so updated clients keep the code', () => {
     expect(releasedCapabilities).not.toContain(PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY)
+  })
+
+  it('Add server and the CLI save the link unchanged for a released host, without calling it', async () => {
+    const offer = {
+      v: 2 as const,
+      endpoint: 'ws://192.168.1.10:6768',
+      deviceToken: 'link-token',
+      publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+    }
+    const pairingCode = encodePairingOffer(offer)
+    const send = vi.fn()
+    await expect(
+      exchangeRemotePairingTicket({
+        pairingCode,
+        offer,
+        hostCapabilities: releasedCapabilities,
+        send
+      })
+    ).resolves.toBe(pairingCode)
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('after a downgrade, exchanged phones keep their own token and older phones their code', () => {
