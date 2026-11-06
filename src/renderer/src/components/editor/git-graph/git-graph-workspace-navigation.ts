@@ -42,6 +42,10 @@ export async function switchGitGraphWorkspace(
     return
   }
   const worktreeId = scope.worktree.id
+  const current = () =>
+    isLive() &&
+    gitGraphOwnerKey(scope) ===
+      gitGraphOwnerKey(gitGraphScope(worktreeId, useAppStore.getState(), hostId))
   try {
     const refs = await getRuntimeGitRefs(
       {
@@ -52,11 +56,7 @@ export async function switchGitGraphWorkspace(
       },
       refId
     )
-    if (
-      !isLive() ||
-      gitGraphOwnerKey(scope) !==
-        gitGraphOwnerKey(gitGraphScope(worktreeId, useAppStore.getState(), hostId))
-    ) {
+    if (!current()) {
       return
     }
     const path = refs.find((ref) => ref.id === refId)?.worktreePath
@@ -77,6 +77,13 @@ export async function switchGitGraphWorkspace(
       )
     }
   } catch {
-    /* A failed lookup cannot navigate to a stale checkout. */
+    if (current()) {
+      toast.message(
+        translate(
+          'gitGraph.workspaceCheckFailed',
+          "Couldn't check this workspace. Try again when connected."
+        )
+      )
+    }
   }
 }

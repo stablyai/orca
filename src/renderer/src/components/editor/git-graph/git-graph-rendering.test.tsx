@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-history-controller'
 import { attachClosedEditorTabCleanup } from '../model-lifetime/retention/closed-editor-tab-controller'
 import { gitGraphScope } from '@/lib/git-graph-tab'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -182,7 +183,7 @@ it('recovers silently after each later token expiry and ignores refreshes for ot
 })
 
 it.each(['local', 'ssh:A'] as const)(
-  'retains %s twin history across workspace switches, then clears it on owner removal or tab close',
+  'retains %s twin history across workspace switches, then follows its tab owner move',
   async (hostId) => {
     useAppStore.setState({
       repos: [
@@ -198,7 +199,14 @@ it.each(['local', 'ssh:A'] as const)(
       id: `${workspaceId}::git-graph`,
       worktreeId: workspaceId,
       mode: 'git-graph',
-      filePath: `${workspaceId}::git-graph`
+      filePath: `${workspaceId}::git-graph`,
+      operationProvenance: {
+        ownershipProjection: 'explicit',
+        generation: captureWorktreeOperationGenerationSnapshot({
+          executionHostId: hostId,
+          runtimeEnvironmentId: null
+        })
+      }
     } as OpenFile
     useAppStore.setState({ openFiles: [...original, file] })
     const render = () => (
@@ -246,6 +254,31 @@ it.each(['local', 'ssh:A'] as const)(
       })
       expect(gitGraphHistoryForTab(workspaceId).view.getState().result).toBeUndefined()
       expect(gitGraphHistoryForTab(workspaceId).scrollOffset).toBe(0)
+      await act(async () => root.render(render()))
+      const movedHost = hostId === 'local' ? 'ssh:A' : 'local'
+      getHistory.mockResolvedValueOnce({ ...result, refs: 'all' })
+      await act(async () =>
+        useAppStore.setState({
+          openFiles: [
+            ...original,
+            {
+              ...file,
+              operationProvenance: {
+                ownershipProjection: 'explicit',
+                generation: captureWorktreeOperationGenerationSnapshot({
+                  executionHostId: movedHost,
+                  runtimeEnvironmentId: null
+                })
+              }
+            }
+          ]
+        })
+      )
+      expect(getHistory.mock.calls.at(-1)?.[0].connectionId).toBe(
+        movedHost === 'ssh:A' ? 'A' : undefined
+      )
+      expect(gitGraphHistoryForTab(workspaceId).view.getState().selectedId).toBe('a')
+      await act(async () => root.render(null))
       useAppStore.setState({ openFiles: original })
       expect(gitGraphHistoryForTab(workspaceId).view.getState().result).toBeUndefined()
     } finally {
@@ -255,7 +288,7 @@ it.each(['local', 'ssh:A'] as const)(
   }
 )
 
-it('retrieves a distant parent in one operation without cutting off after ten pages', async () => {
+it('waits for an in-flight page before retrieving a distant parent in one operation', async () => {
   let history: ReturnType<typeof useGitGraphHistory>
   function History() {
     history = useGitGraphHistory(workspaceId)
@@ -264,7 +297,15 @@ it('retrieves a distant parent in one operation without cutting off after ten pa
   const ids = ['b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'parent']
   getHistory.mockReset().mockResolvedValueOnce({ ...result, hasMore: true, historyToken: 'pinned' })
   await act(async () => root.render(<History />))
-  for (const id of ids) {
+  let finish!: (page: GitHistoryResult) => void
+  getHistory.mockImplementationOnce(
+    () =>
+      new Promise<GitHistoryResult>((resolve) => {
+        finish = resolve
+      })
+  )
+  const loading = history!.loadMore()
+  for (const id of ids.slice(1)) {
     getHistory.mockResolvedValueOnce({
       ...result,
       items: [{ id, subject: id, message: id, parentIds: [] }],
@@ -273,7 +314,15 @@ it('retrieves a distant parent in one operation without cutting off after ten pa
     })
   }
   await act(async () => {
-    await history!.reveal('parent')
+    const revealing = history!.reveal('parent')
+    finish({
+      ...result,
+      items: [{ id: 'b', subject: 'b', message: 'b', parentIds: [] }],
+      hasMore: true,
+      historyToken: 'pinned'
+    })
+    await loading
+    await revealing
   })
   expect(history!.selectedId).toBe('parent')
   expect(history!.result?.items.map((item) => item.id)).toEqual([
@@ -373,4 +422,35 @@ it('applies checkbox choices once on picker close, with no choices returning to 
   expect(onChange).toHaveBeenCalledTimes(1)
   await act(async () => container.querySelector('button')!.click())
   expect(onChange.mock.calls.at(-1)).toEqual(['all'])
+
+  const openPicker = async () => {
+    await act(async () => container.querySelector('button')!.click())
+    await vi.waitFor(async () => {
+      await act(async () => {})
+      expect(document.querySelectorAll('[role="checkbox"]')).toHaveLength(2)
+    })
+  }
+  await act(async () => render('all'))
+  await openPicker()
+  await act(async () => document.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click())
+  await act(async () =>
+    document
+      .querySelector('[role="dialog"]')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+  )
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(onChange).toHaveBeenCalledTimes(2)
+
+  await openPicker()
+  expect(document.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('false')
+  await act(async () => document.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click())
+  await act(async () => useAppStore.setState({ worktreesByRepo: {} }))
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  await act(async () => useAppStore.setState({ worktreesByRepo: { r: [local] } }))
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(onChange).toHaveBeenCalledTimes(2)
+  await openPicker()
+  expect(document.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('false')
 })

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
@@ -14,22 +14,32 @@ import type {
 } from '../../../../../shared/git/history/git-history-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
-export function GitGraphFilter({
-  worktreeId,
-  executionHostId,
-  filter,
-  supported,
-  onChange
-}: {
+type GitGraphFilterProps = {
   worktreeId: string
   executionHostId?: ExecutionHostId
   filter: GitHistoryRefs
   supported: boolean | undefined
   onChange: (refs: GitHistoryRefs) => void
-}) {
-  const requests = useRef<{ running: boolean; pending?: () => Promise<void> }>({ running: false })
-  const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<{ owner: string; refs: GitHistoryRefs }>()
+}
+type RefRequests = { running: boolean; pending?: () => Promise<void> }
+
+export function GitGraphFilter(props: GitGraphFilterProps) {
+  const requests = useRef<RefRequests>({ running: false })
+  const scope = useGitGraphScope(props.worktreeId, props.executionHostId)
+  const owner = JSON.stringify([props.worktreeId, scope?.route, scope?.worktree.path])
+  return <GitGraphFilterForOwner key={owner} {...props} owner={owner} requests={requests} />
+}
+
+function GitGraphFilterForOwner({
+  worktreeId,
+  executionHostId,
+  filter,
+  supported,
+  onChange,
+  owner,
+  requests
+}: GitGraphFilterProps & { owner: string; requests: RefObject<RefRequests> }) {
+  const [draft, setDraft] = useState<GitHistoryRefs>()
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState<{
     owner: string
@@ -38,10 +48,8 @@ export function GitGraphFilter({
     error?: string
   }>()
   const [probe, setProbe] = useState<{ owner: string | undefined; capable: boolean | null }>()
-  const scope = useGitGraphScope(worktreeId, executionHostId)
-  const owner = JSON.stringify([worktreeId, scope?.route, scope?.worktree.path])
-  const pickerOpen = open && draft?.owner === owner
-  const draftRefs = draft?.owner === owner ? draft.refs : filter
+  const pickerOpen = draft !== undefined
+  const draftRefs = draft ?? filter
   const refs =
     pickerOpen && search?.owner === owner && search.query === query ? (search.refs ?? []) : []
   const error =
@@ -125,13 +133,13 @@ export function GitGraphFilter({
       queue.pending = undefined
       clearTimeout(timeout)
     }
-  }, [worktreeId, owner, query, pickerOpen, capable, executionHostId])
+  }, [worktreeId, owner, query, pickerOpen, capable, executionHostId, requests])
   const apply = (refs = draftRefs) => {
     const next = Array.isArray(refs) && !refs.length ? 'all' : refs
-    if (draft?.owner === owner && JSON.stringify(next) !== JSON.stringify(filter)) {
+    if (draft !== undefined && JSON.stringify(next) !== JSON.stringify(filter)) {
       onChange(next)
     }
-    setOpen(false)
+    setDraft(undefined)
     setSearch(undefined)
   }
   return (
@@ -140,8 +148,7 @@ export function GitGraphFilter({
         open={pickerOpen}
         onOpenChange={(next) => {
           if (next) {
-            setDraft({ owner, refs: filter })
-            setOpen(true)
+            setDraft(filter)
           } else {
             apply()
           }
@@ -156,7 +163,15 @@ export function GitGraphFilter({
                 : translate('gitGraph.chosenBranches', 'Chosen branches')}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 space-y-2" align="start">
+        <PopoverContent
+          className="w-80 space-y-2"
+          align="start"
+          onEscapeKeyDown={(event) => {
+            event.preventDefault()
+            setDraft(undefined)
+            setSearch(undefined)
+          }}
+        >
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => apply('all')}>
               {translate('gitGraph.allBranches', 'All branches')}
@@ -186,7 +201,7 @@ export function GitGraphFilter({
                     } else {
                       next.delete(ref.id)
                     }
-                    setDraft({ owner, refs: [...next].sort() })
+                    setDraft([...next].sort())
                   }}
                 />
                 <span className="truncate">{ref.name}</span>

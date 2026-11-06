@@ -22951,6 +22951,7 @@
     "copyBranch": "브랜치 이름 복사",
     "switchWorkspace": "워크스페이스로 전환",
     "workspaceClosed": "이 브랜치는 더 이상 다른 작업 공간에 열려 있지 않습니다.",
+    "workspaceCheckFailed": "이 작업 공간을 확인할 수 없습니다. 연결된 후 다시 시도하세요.",
     "refresh": "커밋 새로 고침",
     "branchTag": "브랜치 / 태그",
     "graph": "그래프",

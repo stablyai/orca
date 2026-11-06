@@ -23233,6 +23233,7 @@
     "copyBranch": "Branch-Namen kopieren",
     "switchWorkspace": "Zum Workspace wechseln",
     "workspaceClosed": "Dieser Branch ist nicht mehr in einem anderen Workspace geöffnet.",
+    "workspaceCheckFailed": "Dieser Workspace konnte nicht überprüft werden. Versuche es erneut, wenn die Verbindung wiederhergestellt ist.",
     "refresh": "Commits aktualisieren",
     "branchTag": "Branch / Tag",
     "graph": "Graph",

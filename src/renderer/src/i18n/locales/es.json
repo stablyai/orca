@@ -23640,6 +23640,7 @@
     "copyBranch": "Copiar nombre de rama",
     "switchWorkspace": "Cambiar al espacio de trabajo",
     "workspaceClosed": "Esta rama ya no está abierta en otro espacio de trabajo.",
+    "workspaceCheckFailed": "No se pudo comprobar este espacio de trabajo. Inténtalo de nuevo cuando haya conexión.",
     "refresh": "Actualizar commits",
     "branchTag": "Rama / Etiqueta",
     "graph": "Grafo",

@@ -42,7 +42,7 @@ export class GitGraphHistoryController {
   scrollOffset = 0
   private scope: ReturnType<typeof gitGraphScope>
   private filter: GitHistoryRefs
-  readonly executionHostId: ExecutionHostId | undefined
+  executionHostId: ExecutionHostId | undefined
   private navigation = 0
   private generation = 0
   private dirty = true
@@ -68,6 +68,7 @@ export class GitGraphHistoryController {
     if (!this.unsubscribe) {
       this.unsubscribe = useAppStore.subscribe((state, previous) => {
         if (
+          state.openFiles === previous.openFiles &&
           state.gitGraphFiltersByWorktree?.[this.worktreeId] ===
             previous.gitGraphFiltersByWorktree?.[this.worktreeId] &&
           shallow(gitGraphScopeInputs(state), gitGraphScopeInputs(previous))
@@ -88,7 +89,11 @@ export class GitGraphHistoryController {
   }
 
   private synchronize(): void {
-    const scope = gitGraphScope(this.worktreeId, useAppStore.getState(), this.executionHostId)
+    const state = useAppStore.getState()
+    const file = state.openFiles.find((file) => file.id === `${this.worktreeId}::git-graph`)
+    this.executionHostId =
+      file?.operationProvenance?.generation.route.executionHostId ?? this.executionHostId
+    const scope = gitGraphScope(this.worktreeId, state, this.executionHostId)
     const filter = filterFor(this.worktreeId)
     if (
       gitGraphOwnerKey(scope) === gitGraphOwnerKey(this.scope) &&
@@ -125,8 +130,14 @@ export class GitGraphHistoryController {
     window.removeEventListener(GIT_GRAPH_REFRESH_EVENT, this.onRefresh)
   }
 
-  switchToWorkspace = (refId: string): Promise<void> =>
-    switchGitGraphWorkspace(this.scope, refId, () => !this.disposed)
+  switchToWorkspace = (refId: string): Promise<void> => {
+    const generation = this.generation
+    return switchGitGraphWorkspace(
+      this.scope,
+      refId,
+      () => !this.disposed && generation === this.generation
+    )
+  }
 
   select = (selectedId: string): void => {
     this.navigation++
@@ -148,7 +159,9 @@ export class GitGraphHistoryController {
     this.clearReveal()
     const current = () =>
       !this.disposed && generation === this.generation && navigation === this.navigation
-    await this.pending
+    while (this.pending && current()) {
+      await this.pending
+    }
     if (!current()) {
       return -1
     }

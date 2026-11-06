@@ -23216,6 +23216,7 @@
     "copyBranch": "Dal adını kopyala",
     "switchWorkspace": "Çalışma alanına geç",
     "workspaceClosed": "Bu dal artık başka bir çalışma alanında açık değil.",
+    "workspaceCheckFailed": "Bu çalışma alanı kontrol edilemedi. Bağlandıktan sonra tekrar deneyin.",
     "refresh": "Commitleri yenile",
     "branchTag": "Dal / Etiket",
     "graph": "Grafik",

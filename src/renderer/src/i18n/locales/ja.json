@@ -22951,6 +22951,7 @@
     "copyBranch": "ブランチ名をコピー",
     "switchWorkspace": "ワークスペースに切り替え",
     "workspaceClosed": "このブランチは別のワークスペースで開かれていません。",
+    "workspaceCheckFailed": "このワークスペースを確認できませんでした。接続後にもう一度お試しください。",
     "refresh": "コミットを更新",
     "branchTag": "ブランチ / タグ",
     "graph": "グラフ",

@@ -23640,6 +23640,7 @@
     "copyBranch": "Copier le nom de la branche",
     "switchWorkspace": "Passer à l’espace de travail",
     "workspaceClosed": "Cette branche n’est plus ouverte dans un autre espace de travail.",
+    "workspaceCheckFailed": "Impossible de vérifier cet espace de travail. Réessayez une fois la connexion rétablie.",
     "refresh": "Actualiser les commits",
     "branchTag": "Branche / Tag",
     "graph": "Graphe",

@@ -22952,6 +22952,7 @@
     "copyBranch": "复制分支名称",
     "switchWorkspace": "切换到工作区",
     "workspaceClosed": "此分支已不再在其他工作区中打开。",
+    "workspaceCheckFailed": "无法检查此工作区。请在连接后重试。",
     "refresh": "刷新提交",
     "branchTag": "分支 / 标签",
     "graph": "图",

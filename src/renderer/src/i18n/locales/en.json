@@ -23951,6 +23951,7 @@
     "copyBranch": "Copy branch name",
     "switchWorkspace": "Switch to workspace",
     "workspaceClosed": "This branch isn't open in another workspace anymore.",
+    "workspaceCheckFailed": "Couldn't check this workspace. Try again when connected.",
     "refresh": "Refresh commits",
     "branchTag": "Branch / Tag",
     "graph": "Graph",
