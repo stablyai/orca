@@ -11,6 +11,8 @@ import {
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { replaceDispatchCapabilities } from '../../../../orchestration/worker-terminal-redaction'
+import { redactString } from '../../../../../observability/redactor'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService
@@ -75,9 +77,13 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  const reason =
-    formatTerminalStartFailure(args.error) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+  // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
+  const reason = redactString(
+    replaceDispatchCapabilities(
+      formatTerminalStartFailure(args.error) ??
+        (args.error instanceof Error ? args.error.message : String(args.error))
+    ).value
+  )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
