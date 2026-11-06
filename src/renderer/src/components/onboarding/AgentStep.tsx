@@ -13,9 +13,10 @@ import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { cn } from '@/lib/utils'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
+import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
 import { useAppStore } from '@/store'
 import {
+  ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID,
   resolveAntigravityInstallTarget,
   type AntigravityInstallTarget
 } from './antigravity-install-target'
@@ -68,7 +69,12 @@ export function AgentStep({
   onInstallAntigravity
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
-  const terminalTarget = useActiveSkillDiscoveryRuntimeTarget()
+  // Offer the installer only where its terminal spawns on this computer, the host detection reads.
+  const installerSpawnsLocally = useAppStore(
+    (state) =>
+      resolveTerminalPtyOwner(state, ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID, 'spawn').kind ===
+      'non-runtime'
+  )
   // Chat never runs in WSL, so Chat UI installs natively; Terminal follows agent detection.
   const detectionContext = useAppStore((state) =>
     agentSurface === 'chat' ? undefined : getLocalAgentPreflightContext(state)
@@ -76,7 +82,7 @@ export function AgentStep({
   const antigravityInstallTarget = resolveAntigravityInstallTarget(
     getRendererAppPlatform(),
     detectionContext,
-    terminalTarget?.kind === 'local'
+    installerSpawnsLocally
   )
   const gridFades = useScrollEdgeFades<HTMLElement>()
   const chatMode = agentSurface === 'chat'

@@ -12,7 +12,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import { buildSkillSetupTerminalCommand } from '@/lib/skill-runtime-command'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
-import type { AntigravityInstallTarget } from './antigravity-install-target'
+import {
+  ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID,
+  type AntigravityInstallTarget
+} from './antigravity-install-target'
 
 /** Blocks onboarding navigation while open, so leaving the step can't close a running installer. */
 export function AntigravityInstallDialog({
@@ -46,6 +49,8 @@ export function AntigravityInstallDialog({
         className="z-[120] sm:max-w-3xl"
         overlayClassName="z-[110]"
         showCloseButton={false}
+        // Focus lands in the terminal once it's ready, so an early Enter can't hit Close.
+        onOpenAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
@@ -74,7 +79,7 @@ export function AntigravityInstallDialog({
           forceHostRuntime
           title={terminalLabel}
           ariaLabel={terminalLabel}
-          worktreeId="onboarding-antigravity-install"
+          worktreeId={ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID}
           terminalTopMarginPx={0}
           autoScrollIntoView={false}
           onCommandFinished={recheck}

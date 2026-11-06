@@ -1,6 +1,12 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import type { LocalPreflightContext } from '@/lib/local-preflight-context'
-import type { LocalAgentRuntime } from '@/lib/skill-runtime-command'
+import { translate } from '@/i18n/i18n'
+import { getHostRuntimeLabel, type LocalAgentRuntime } from '@/lib/skill-runtime-command'
+import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
+
+export const ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID = brandEphemeralSetupTerminalWorktreeId(
+  'onboarding-antigravity-install'
+)
 
 // Official commands from https://antigravity.google/docs/getting-started?tab=cli
 const POSIX_INSTALL_COMMAND = 'curl -fsSL https://antigravity.google/cli/install.sh | bash'
@@ -28,16 +34,21 @@ export function resolveAntigravityInstallTarget(
     projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
       ? projectRuntime.runtime.distro
       : context?.wslDistro
-  const wsl = platform === 'win32' && Boolean(distro || context?.wslDefault)
   if (platform !== 'win32') {
     return { platform, command: POSIX_INSTALL_COMMAND, runtime: { runtime: 'host', label: '' } }
   }
   return {
     platform,
-    command: wsl ? POSIX_INSTALL_COMMAND : POWERSHELL_INSTALL_COMMAND,
+    command: distro ? POSIX_INSTALL_COMMAND : POWERSHELL_INSTALL_COMMAND,
     shellOverride: 'powershell.exe',
-    runtime: wsl
-      ? { runtime: 'wsl', wslDistro: distro ?? null, label: distro ? `WSL ${distro}` : 'WSL' }
-      : { runtime: 'host', label: 'Windows' }
+    runtime: distro
+      ? {
+          runtime: 'wsl',
+          wslDistro: distro,
+          label: translate('components.onboarding.agyInstall.wslLocation', 'WSL {{distro}}', {
+            distro
+          })
+        }
+      : { runtime: 'host', label: getHostRuntimeLabel() }
   }
 }
