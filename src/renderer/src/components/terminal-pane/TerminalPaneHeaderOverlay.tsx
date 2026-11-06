@@ -13,6 +13,12 @@ import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { NativeChatSettingsButton } from '../native-chat/NativeChatSettingsButton'
 
+/** True when the event started on one of the header's action buttons, whose own
+ *  double-click must not be reinterpreted as a rename. */
+function isPaneTitleActionTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.pane-title-actions') !== null
+}
+
 export type PaneTitleOverlayRect = {
   left: number
   top: number
@@ -147,6 +153,17 @@ export default function TerminalPaneHeaderOverlay({
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
+            onDoubleClick={(event) => {
+              // Why: an untitled pane renders no title button, so renaming it
+              // otherwise needs the context menu. Double-clicking the bar — the
+              // drag-handle strip included — is the gesture users already try.
+              if (isEditing || isPaneTitleActionTarget(event.target)) {
+                return
+              }
+              event.preventDefault()
+              onActivatePaneTitleInteraction(pane.id)
+              onStartRename(pane.id)
+            }}
             style={{
               left: overlayRect.left,
               top: overlayRect.top,
