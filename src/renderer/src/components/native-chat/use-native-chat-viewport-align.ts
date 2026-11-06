@@ -157,8 +157,13 @@ export function useNativeChatViewportAlign({
     const held = alignRef.current
     if (held !== null && 'index' in held && held.edge === 'end') {
       alignRef.current = null
+      // The virtualizer keeps reconciling its index target while the row grows; rebase it here.
+      const container = scrollRef.current
+      if (container && virtualizer.scrollElement) {
+        virtualizer.scrollToOffset(container.scrollTop, { behavior: 'auto' })
+      }
     }
-  }, [])
+  }, [scrollRef, virtualizer])
 
   return {
     alignToViewportTop,

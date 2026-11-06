@@ -448,8 +448,7 @@ describe('where a strip reveal lands', () => {
     expect(row).not.toBeNull()
     const viewBottom = scroller().scrollTop + scroller().clientHeight
     const rowBottom = transcriptRowOffset(row!) + row!.offsetHeight
-    expect(rowBottom).toBeLessThanOrEqual(viewBottom + 1)
-    expect(rowBottom).toBeGreaterThan(viewBottom - row!.offsetHeight)
+    expect(Math.abs(rowBottom - viewBottom)).toBeLessThanOrEqual(1)
     expect(screen.getByText('Lane a step 5.')).toBeInTheDocument()
 
     // A row above it measures taller only after the jump settled (late markdown, fonts): the end stays put.
@@ -460,8 +459,7 @@ describe('where a strip reveal lands', () => {
     paint()
     const settledBottom = scroller().scrollTop + scroller().clientHeight
     const settledRowBottom = transcriptRowOffset(row!) + row!.offsetHeight
-    expect(settledRowBottom).toBeLessThanOrEqual(settledBottom + 1)
-    expect(settledRowBottom).toBeGreaterThan(settledBottom - row!.offsetHeight)
+    expect(Math.abs(settledRowBottom - settledBottom)).toBeLessThanOrEqual(1)
 
     // Once the reader acts on the content (Enter on a disclosure above), the view is theirs: nothing moves it.
     fireEvent.keyDown(screen.getByRole('button', { name: /lane a/, expanded: true }), {
