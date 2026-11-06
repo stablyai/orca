@@ -1,4 +1,4 @@
-import { afterEach, vi } from 'vitest'
+import { afterEach, vi, type Mock } from 'vitest'
 import Database from '../sqlite/sync-database'
 import type {
   FollowUpHostInputs,
@@ -139,8 +139,8 @@ export function installation(
   let settings!: (updates: Record<string, unknown>) => void
   let clientEvent!: (event: RuntimeClientEvent) => void
   let observation!: (event: FollowUpObservation) => void
-  const handles: ReturnType<typeof vi.fn>[] = []
-  const prepare = vi
+  const handles: Mock<() => void>[] = []
+  const prepare: Mock<FollowUpHostInputs['prepare']> = vi
     .fn<FollowUpHostInputs['prepare']>()
     .mockImplementation(async (_o, _n, target) => ({
       agent: 'codex',
@@ -166,7 +166,7 @@ export function installation(
   }
   const source: FollowUpObservationSource = {
     registerPRWatch: () => {
-      const unregister = vi.fn()
+      const unregister = vi.fn<() => void>()
       handles.push(unregister)
       return { unregister }
     },
