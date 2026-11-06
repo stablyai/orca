@@ -9,9 +9,9 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
-import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
-import type { MobileQueuedMessageInlineEditor } from '../../use-mobile-structured-queued-edit'
+import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
 import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
@@ -33,6 +33,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   pause?: AgentSessionQueuePause | null
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
+  /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
+  agentWorking?: boolean
 }
 
 export function MobileNativeChatQueuedMessages({
@@ -45,7 +47,8 @@ export function MobileNativeChatQueuedMessages({
   onMove,
   pause,
   onResume,
-  steerHeld = false
+  steerHeld = false,
+  agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -186,7 +189,7 @@ export function MobileNativeChatQueuedMessages({
         {expanded ? (
           <MobileQueuedMessageScrollList
             messageIds={cards.map((card) => card.messageId)}
-            newestIsPersons={!cards.at(-1)?.attribution}
+            newestIsPersons={!cards.at(-1)?.from}
             inlineEditorActive={editor !== undefined}
           >
             {(reveal, drag) => {
@@ -199,6 +202,7 @@ export function MobileNativeChatQueuedMessages({
                   busy={busyIds.has(card.messageId)}
                   editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
                   steerHeld={steerHeld}
+                  agentWorking={agentWorking}
                   onSend={() => void run(card.messageId, onSend)}
                   onDelete={() => void run(card.messageId, onDelete)}
                   onMore={() => setMenuFor(card.messageId)}

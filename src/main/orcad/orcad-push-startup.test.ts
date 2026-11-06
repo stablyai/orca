@@ -3,13 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
+import type { RuntimeConstructionDependencies } from '../runtime/construction/runtime-construction-dependencies'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { DeviceRegistry } from '../runtime/device-registry'
-import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
+import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
+import { RuntimeMobileNotificationController } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 import { profileStateAccessPaths } from '../persistence/profile-state/profile-state-access-owner'
+
+const pairingReader = vi.hoisted(() => {
+  const reader: { current?: RuntimeConstructionDependencies['getPairedDeviceName'] } = {}
+  return reader
+})
 
 const state = vi.hoisted(() => ({
   root: '',
@@ -38,7 +44,7 @@ const profile = vi.hoisted(() => {
   return value
 })
 // Reconciliation writes user-global agent configs; isolate it from the real home.
-vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: state.startCodexHooks
 }))
@@ -53,7 +59,7 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: state.adoptLoginShellAgentHomes
 }))
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
@@ -92,7 +98,9 @@ vi.mock('./orcad-automations', () => ({
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
 }))
-vi.mock('../daemon/daemon-provider-state', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  daemonOwnsFreshPersistentPtys: () => false
+}))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({
   registerHeadlessPtyRuntime: async () => {}
 }))
@@ -147,6 +155,9 @@ vi.mock('../server/serve-readiness', () => ({
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
+    constructor(_store: unknown, _stats: unknown, deps: RuntimeConstructionDependencies) {
+      pairingReader.current = deps.getPairedDeviceName
+    }
     readonly sidebarFacts = null
     readonly agentTransitions = { seedRestoredRows() {} }
     attachAgentStatusStore() {
@@ -167,6 +178,7 @@ vi.mock('../runtime/orca-runtime', () => ({
       return null
     }
     syncWindowGraph() {}
+    setAgentSenderPeerKey() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
@@ -179,7 +191,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
   }
 }))
-vi.mock('../runtime/runtime-rpc', () => ({
+vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
     async start() {
       state.rpcStarted = true
@@ -231,15 +243,36 @@ afterEach(() => {
 it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-recovery-'))
   const maintenance = acquireProfileStateMaintenance(state.root)
-  const { startOrcad, parseArgs } = await import('./orcad-entry')
-  const commandArguments = await import('./orcad-command-arguments')
+  const { startOrcad } = await import('./orcad-entry')
   try {
-    expect(parseArgs).toBe(commandArguments.parseArgs)
     await expect(startOrcad({ noPairing: true, json: true })).rejects.toThrow()
     expect(state.browserProvider).not.toHaveBeenCalled()
     expect(state.rpcStarted).toBe(false)
   } finally {
     maintenance.release()
+  }
+})
+
+it('reads live pairing names from the standalone RPC registry', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-names-'))
+  state.controller = new RuntimeMobileNotificationController()
+  state.registry = new DeviceRegistry(state.root)
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    const desktop = state.registry.addDevice('Work Mac', 'runtime')
+    const [phone] = state.registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'My iPhone' }
+    ])
+    expect(pairingReader.current?.(desktop.deviceId)).toBe('Work Mac')
+    expect(pairingReader.current?.(phone!.deviceId)).toBe('My iPhone')
+    state.registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Renamed iPhone' }
+    ])
+    expect(pairingReader.current?.(phone!.deviceId)).toBe('Renamed iPhone')
+    expect(pairingReader.current?.('unpaired')).toBeNull()
+  } finally {
+    await host.stop()
   }
 })
 

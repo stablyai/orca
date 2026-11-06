@@ -38,6 +38,7 @@ export async function callRuntimeRpc<TResult>(
     expectedEnvironmentPairingRevision?: number
     expectedEnvironmentRuntimeId?: string
     beforeSend?: () => void
+    paramsForStatus?: (status: RuntimeStatus | null) => unknown
   } = {}
 ): Promise<TResult> {
   if (options.signal?.aborted) {
@@ -50,25 +51,27 @@ export async function callRuntimeRpc<TResult>(
           options.expectedEnvironmentPairingRevision
         )
       : undefined
-  if (
+  const compatibilityStatus =
     target.kind === 'environment' &&
     method !== 'status.get' &&
     options.skipCompatibilityCheck !== true
-  ) {
-    await waitForPromiseWithSignal(
-      ensureRuntimeEnvironmentCompatible(target.environmentId, {
-        ...options,
-        expectedEnvironmentPairingRevision
-      }),
-      options.signal
-    )
-  }
+      ? await waitForPromiseWithSignal(
+          ensureRuntimeEnvironmentCompatible(target.environmentId, {
+            ...options,
+            expectedEnvironmentPairingRevision
+          }),
+          options.signal
+        )
+      : null
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
-  const nextParams = options.suppressFeatureInteraction
-    ? withBrowserPaneUiRuntimeRpcSource(params)
+  const selectedParams = options.paramsForStatus
+    ? options.paramsForStatus(compatibilityStatus)
     : params
+  const nextParams = options.suppressFeatureInteraction
+    ? withBrowserPaneUiRuntimeRpcSource(selectedParams)
+    : selectedParams
   options.beforeSend?.()
   const response =
     target.kind === 'local'
@@ -80,7 +83,9 @@ export async function callRuntimeRpc<TResult>(
           timeoutMs: options.timeoutMs,
           signal: options.signal,
           expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId: options.expectedEnvironmentRuntimeId
+          expectedEnvironmentRuntimeId:
+            options.expectedEnvironmentRuntimeId ??
+            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }
@@ -92,10 +97,11 @@ export async function ensureRuntimeEnvironmentCompatible(
     reuseRecentCompatibilityFailure?: boolean
     expectedEnvironmentPairingRevision?: number
   } = {}
-): Promise<void> {
+): Promise<RuntimeStatus | null> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
-    return cached.check
+    await cached.check
+    return cached.status
   }
   const entry = compatibilityEntry()
   const check = (async () => {
@@ -121,6 +127,7 @@ export async function ensureRuntimeEnvironmentCompatible(
     if (runtimeCompatibilityChecks.get(environmentId) === entry) {
       entry.provenCompatible = true
     }
+    return entry.status
   } catch (error) {
     if (runtimeCompatibilityChecks.get(environmentId) === entry) {
       // Startup repo/group/folder bursts should pay one offline-host timeout, not three.
@@ -185,6 +192,19 @@ export async function runtimeEnvironmentSupportsCapability(
   capability: RuntimeCapability,
   timeoutMs?: number
 ): Promise<boolean> {
+  const [supported] = await runtimeEnvironmentSupportsCapabilities(
+    environmentId,
+    [capability],
+    timeoutMs
+  )
+  return supported
+}
+
+export async function runtimeEnvironmentSupportsCapabilities(
+  environmentId: string,
+  capabilities: readonly RuntimeCapability[],
+  timeoutMs?: number
+): Promise<boolean[]> {
   const trimmed = environmentId.trim()
   const cached = runtimeCompatibilityChecks.get(trimmed)
   // Capability reads must discard rejected probes like ordinary RPCs or a recovered host stays blocked until failure TTL.
@@ -197,8 +217,10 @@ export async function runtimeEnvironmentSupportsCapability(
         cached.statusCheckedAt !== null &&
         Date.now() - cached.statusCheckedAt < RUNTIME_CAPABILITY_STATUS_TTL_MS
       ) {
-        const supported = cached.status.capabilities?.includes(capability) === true
-        if (!supported) {
+        const supported = capabilities.map(
+          (capability) => cached.status?.capabilities?.includes(capability) === true
+        )
+        if (supported.includes(false)) {
           // Keep protocol proof for this legacy call; next capability decision must observe in-place upgrades.
           cached.statusCheckedAt = null
         }
@@ -209,10 +231,12 @@ export async function runtimeEnvironmentSupportsCapability(
     }
   }
   const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
-  const supported = status.capabilities?.includes(capability) === true
+  const supported = capabilities.map(
+    (capability) => status.capabilities?.includes(capability) === true
+  )
   const resolved = runtimeCompatibilityChecks.get(trimmed)
   // Why runtimeId: a status publication may have replaced the entry with its own copy.
-  if (!supported && resolved?.status?.runtimeId === status.runtimeId) {
+  if (supported.includes(false) && resolved?.status?.runtimeId === status.runtimeId) {
     resolved.statusCheckedAt = null
   }
   return supported

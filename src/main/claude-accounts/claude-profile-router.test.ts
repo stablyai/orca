@@ -36,6 +36,7 @@ import {
   installClaudeProfileRouter
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+import { claudeRoutedHomeAsync } from './claude-profile-routed-home'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 const command = vi.hoisted(() => ({ path: '/unused-claude' }))
@@ -91,11 +92,11 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
     { calls: 0, outcome: 'prepared', settle: () => {} }
   const runSetup = ({ profile }: { profile: ClaudeProfileDescriptor }) => {
     setup.calls += 1
-    mkdirSync(profile.home, { recursive: true })
+    const markSetUp = prepareClaudeProfileDirectory(dataRoot, profile, userHome)
     return new Promise<ClaudeProfileSetupReport>((resolve) => {
       setup.settle = () => {
         if (setup.outcome === 'prepared') {
-          writeFileSync(claudeProfileMarkerPath(profile), '{}')
+          markSetUp()
         }
         resolve({ outcome: setup.outcome, warnings: [], surfaces: {} })
       }
@@ -208,7 +209,14 @@ describe('ClaudeProfileRouter', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
-    writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
+    prepareClaudeProfileDirectory(
+      f.dataRoot,
+      describeClaudeProfile(f.dataRoot, 'a', {
+        executionHostId: 'local',
+        runtime: 'host'
+      }),
+      f.userHome
+    )()
     signIn(f.userHome, 'A@Example.test')
     await expect(f.router.prepareLaunch()).resolves.toMatchObject({
       configDir: join(f.userHome, '.claude'),
@@ -217,6 +225,8 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     expect(f.router.routedHome()).toBeNull()
+    expect(f.router.routedHome('identity')).toBeNull()
+    await expect(claudeRoutedHomeAsync(f.router)).resolves.toBeNull()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
 
@@ -228,6 +238,9 @@ describe('ClaudeProfileRouter', () => {
     })
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('a'))
     expect(f.router.coveredBySystemDefault('a')).toBe(false)
+    expect(f.router.routedHome()).toBe(f.home('a'))
+    expect(f.router.routedHome('identity')).toBe(f.home('a'))
+    await expect(claudeRoutedHomeAsync(f.router)).resolves.toBe(f.home('a'))
   })
 
   it('tells whether a terminal opened before routing runs another account than the selected one', () => {
@@ -247,7 +260,14 @@ describe('ClaudeProfileRouter', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
-    writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
+    prepareClaudeProfileDirectory(
+      f.dataRoot,
+      describeClaudeProfile(f.dataRoot, 'a', {
+        executionHostId: 'local',
+        runtime: 'host'
+      }),
+      f.userHome
+    )()
     signIn(f.userHome, 'b@example.test')
     const anotherAccountLaunch = f.router.prepareLaunch()
     await advanceRefreshDeadline(anotherAccountLaunch, 500)
@@ -375,11 +395,12 @@ describe('ClaudeProfileRouter', () => {
 
   it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
     const f = fixture()
-    mkdirSync(f.home('a'), { recursive: true })
     const profile = describeClaudeProfile(f.dataRoot, 'a', {
       executionHostId: 'local',
       runtime: 'host'
     })
+    prepareClaudeProfileDirectory(f.dataRoot, profile, f.userHome)()
+    rmSync(profile.home, { recursive: true })
     const cutOff = new ClaudeProfileRouter({
       getSettings: () => f.settings,
       dataRoot: f.dataRoot,
@@ -391,12 +412,18 @@ describe('ClaudeProfileRouter', () => {
       }
     })
     await expect(cutOff.prepareLaunch()).rejects.toThrow(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
+    expect(existsSync(profile.home)).toBe(true)
     expect(existsSync(claudeProfileMarkerPath(profile))).toBe(false)
 
     const launch = f.router.prepareLaunch()
     await vi.waitFor(() => expect(f.setup.calls).toBe(1))
     f.setup.settle()
     await expect(launch).resolves.toMatchObject({ configDir: f.home('a') })
+    expect(JSON.parse(readFileSync(claudeProfileMarkerPath(profile), 'utf8'))).toEqual({
+      version: 1,
+      accountId: 'a',
+      runtime: 'host'
+    })
   })
 
   it("launches a set-up, signed-in account without waiting for the login shell's env", async () => {
@@ -404,7 +431,14 @@ describe('ClaudeProfileRouter', () => {
     shell.hang = true
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
-    writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
+    prepareClaudeProfileDirectory(
+      f.dataRoot,
+      describeClaudeProfile(f.dataRoot, 'a', {
+        executionHostId: 'local',
+        runtime: 'host'
+      }),
+      f.userHome
+    )()
     signIn(f.home('a'), 'a@example.test')
     const router = new ClaudeProfileRouter({
       getSettings: () => f.settings,
@@ -420,6 +454,10 @@ describe('ClaudeProfileRouter', () => {
     const f = fixture()
     f.settings.activeClaudeManagedAccountId = 'b'
     expect(() => f.router.preparation()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+    expect(() => f.router.routedHome()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+    expect(f.router.routedHome('identity')).toBe(f.home('b'))
+    await expect(claudeRoutedHomeAsync(f.router)).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+    await expect(claudeRoutedHomeAsync(f.router, 'identity')).resolves.toBe(f.home('b'))
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     f.router.publish()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('b'))
@@ -438,6 +476,61 @@ describe('ClaudeProfileRouter', () => {
     await vi.waitFor(() => expect(f.setup.calls).toBe(1))
     f.setup.settle()
     await expect(launch).resolves.toMatchObject({ configDir: f.home('a') })
+  })
+
+  it('requires concurrent launches to finish rebuilding a home whose marker survived', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture()
+    const profile = describeClaudeProfile(f.dataRoot, 'a', {
+      executionHostId: 'local',
+      runtime: 'host'
+    })
+    prepareClaudeProfileDirectory(f.dataRoot, profile, f.userHome)()
+    rmSync(profile.home, { recursive: true })
+    const launch = f.router.prepareLaunch()
+    const failed = expect(launch).rejects.toMatchObject({ reason: 'claudeAccountSetupFailed' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(existsSync(profile.home)).toBe(true)
+    expect(existsSync(claudeProfileMarkerPath(profile))).toBe(false)
+    const joined = expect(f.router.prepareLaunch()).rejects.toMatchObject({
+      reason: 'claudeAccountSetupFailed'
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    f.setup.outcome = 'refused'
+    f.setup.settle()
+    await Promise.all([failed, joined])
+
+    f.setup.outcome = 'prepared'
+    const retry = f.router.prepareLaunch()
+    await vi.advanceTimersByTimeAsync(0)
+    f.setup.settle()
+    await expect(retry).resolves.toMatchObject({ configDir: f.home('a') })
+    expect(JSON.parse(readFileSync(claudeProfileMarkerPath(profile), 'utf8'))).toEqual({
+      version: 1,
+      accountId: 'a',
+      runtime: 'host'
+    })
+  })
+
+  it('refuses required setup when a file occupies the account home', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture()
+    mkdirSync(join(f.home('a'), '..'), { recursive: true })
+    prepareClaudeProfileDirectory(
+      f.dataRoot,
+      describeClaudeProfile(f.dataRoot, 'a', {
+        executionHostId: 'local',
+        runtime: 'host'
+      }),
+      f.userHome
+    )()
+    rmSync(f.home('a'), { recursive: true })
+    writeFileSync(f.home('a'), 'owned-file')
+    const failed = expect(f.router.prepareLaunch()).rejects.toMatchObject({
+      reason: 'claudeAccountSetupFailed'
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    await failed
   })
 
   it('injects the account with its twin, and nothing over the user’s own System default', () => {

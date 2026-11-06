@@ -1,7 +1,14 @@
+import {
+  type NativeChatPtySubmissionOutcome,
+  cancelNativeChatPtySends,
+  enqueueNativeChatPtySend,
+  resetNativeChatPtySendQueuesForTests,
+  waitForNativeChatPtyIdle
+} from './native-chat-pty-send-queue'
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import type { AskAnswerKeyGroup } from '../../../../shared/native-chat-ask-answer'
+import type { AskAnswerKeyGroup } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -16,17 +23,14 @@ import {
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../shared/native-chat-paste-bytes'
+} from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand
-} from '../../../../shared/agent-tui-command-typing'
-import {
-  cancelNativeChatPtySends,
-  enqueueNativeChatPtySend,
-  resetNativeChatPtySendQueuesForTests,
-  waitForNativeChatPtyIdle
-} from './native-chat-pty-send-queue'
+} from '../../../../shared/agent-launch/startup/agent-tui-command-typing'
+// Runtime send for native chat: clear any unsubmitted TUI line, write the framed
+// body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
+// byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 export { resetNativeChatPtySendQueuesForTests }
@@ -38,6 +42,7 @@ export type NativeChatSendHandle = {
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
+  outcome?: Promise<NativeChatPtySubmissionOutcome>
 }
 
 /** Serialize clear/body/delayed Enter per PTY; a CR sharing the paste write can be swallowed. */
@@ -59,21 +64,28 @@ export function sendNativeChatMessage(
   return enqueueNativeChatPtySend(
     ptyId,
     NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
-      clearThenWrite(ptyId, options, delay, () => {
-        if (isCancelled()) {
-          return
-        }
-        sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-        // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
-        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-          markSubmitted()
-        })
-      })
+      clearThenWrite(
+        ptyId,
+        options,
+        delay,
+        () => {
+          if (isCancelled()) {
+            return
+          }
+          markWriteStarted()
+          sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
+          // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
+          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+            sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+            markSubmitted()
+          })
+        },
+        markSubmitted
+      )
     },
     {
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
@@ -142,30 +154,42 @@ export async function typeNativeChatCommand(
   return outcome === 'accepted'
 }
 
-export function sendNativeChatTypedCommand(ptyId: string, command: string): NativeChatSendHandle {
+export function sendNativeChatTypedCommand(
+  ptyId: string,
+  command: string,
+  /** A seeded draft's clear, confirmed like a message send's; the command's own Ctrl+U reaches one line. */
+  options?: Pick<NativeChatSendOptions, 'clearInput' | 'confirmCleared'>
+): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
     ptyId,
-    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
-    ({ isCancelled, markSubmitted }) => {
+    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS + clearConfirmDurationMs(options),
+    ({ isCancelled, delay, markSubmitted }) => {
       const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
         if (!isCancelled() && outcome !== 'accepted') {
           clearUnsubmittedAgentInput(ptyId)
         }
         markSubmitted()
       }
-      void typeAgentTuiCommand({
-        command,
-        signal: controller.signal,
-        write: async (key) => {
-          if (isCancelled()) {
-            return 'rejected'
+      const typeCommand = (): void => {
+        void typeAgentTuiCommand({
+          command,
+          signal: controller.signal,
+          write: async (key) => {
+            if (isCancelled()) {
+              return 'rejected'
+            }
+            return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
+              ? 'accepted'
+              : 'rejected'
           }
-          return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
-            ? 'accepted'
-            : 'rejected'
-        }
-      }).then(finish, () => finish('rejected'))
+        }).then(finish, () => finish('rejected'))
+      }
+      if (options?.clearInput !== undefined && options.clearInput !== '') {
+        clearThenWrite(ptyId, options, delay, typeCommand, markSubmitted)
+      } else {
+        typeCommand()
+      }
     },
     {
       onCancelUnsubmitted: () => {

@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { cancelClaudeStructuredTurn } from './claude-structured-prompt-ownership'
-import { sessionFor } from './claude-structured-dispatch-test-support'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { cancelClaudeStructuredTurn } from './structured/journal/claude-structured-prompt-ownership'
+import { sessionFor } from './structured/claude-structured-dispatch-test-support'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,
@@ -12,7 +12,7 @@ import {
   fakeClaude,
   identityFor,
   type FakeConnection
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 
 function journalSink(): {
   sink: StructuredAgentSessionEventSink

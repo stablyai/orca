@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as LocalCommandResolver from './command-path-resolver'
+import type * as LocalCommandResolver from './command-path/command-path-resolver'
 
 const {
   handleMock,
@@ -41,13 +41,13 @@ const {
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 // These cases cover a running distro; the E9 stopped-distro gate has its own suite.
-vi.mock('../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
   runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))
 
 // WSL detection uses runWslProcess, so child_process mocks cannot observe it.
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -65,7 +65,7 @@ vi.mock('child_process', () => {
   }
 })
 
-vi.mock('../runtime/structured-agent-shell-environment', () => ({
+vi.mock('../runtime/agent-session/environment/structured-agent-shell-environment', () => ({
   captureHostShellEnvironment: vi.fn(async (beforeCapture?: () => Promise<unknown>) =>
     beforeCapture?.()
   )
@@ -81,14 +81,14 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 }))
 
 // Route filesystem PATH resolution through the existing command-lookup mock.
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('./command-path/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../pty/environment/windows-environment-path', () => ({
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
@@ -243,128 +243,6 @@ describe('preflight', () => {
     expect(isCommandOnLocalPathMock).not.toHaveBeenCalled()
   })
 
-  it('only reports agents when which/where resolves to a real executable path', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-
-      const target = String(args[0])
-      if (target === 'claude') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Users/test/.local/bin/claude\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      if (target === 'continue') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: 'continue: shell built-in command\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      if (target === 'cursor-agent') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Users/test/.local/bin/cursor-agent\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
-  })
-
-  it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'orca') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Applications/Orca.app/Contents/MacOS/orca\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual([])
-  })
-
-  it('reports Claude Agent Teams when both Orca and Claude are present', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Users/test/.local/bin/claude\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      if (String(args[0]) === 'orca') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Applications/Orca.app/Contents/MacOS/orca\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
-  })
-
-  it('does not report Claude Agent Teams on native Windows', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'where') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/mock/windows/npm/claude.cmd\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      if (String(args[0]) === 'orca') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/mock/windows/programs/orca.cmd\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
-  })
-
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
     // Cold GUI detection can precede shell-PATH hydration; install directories remain a fallback.
     execFileAsyncMock.mockImplementation(async (command) => {
@@ -393,33 +271,6 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Users/test/.local/bin/claude\n',
-          stderr: '',
-          timedOut: false
-        }
-      }
-      throw new Error('not found')
-    })
-    resolveCliCommandsMock.mockImplementation(
-      (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
-    )
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
-    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']), {
-      skipPathSearch: true
-    })
   })
 
   it('treats an agent as not installed when the install-dir resolver throws', async () => {

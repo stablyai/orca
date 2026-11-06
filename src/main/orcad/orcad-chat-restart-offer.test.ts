@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   CALLER,
   hostTestState
@@ -10,10 +10,10 @@ import {
   hostTestAttachParams,
   hostTestOperationId
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AgentSessionRecoveryCapsule } from '../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
 import { startOrcadWithLifecycle, stopOrcadStructuredAgentSessions } from './orcad-lifecycle'
 
-vi.mock('../runtime/structured-agent-session-runtime', () => ({
+vi.mock('../runtime/agent-session/structured-agent-session-runtime', () => ({
   stopStructuredAgentSessionRuntime: async (options: { trigger: 'quit' }) => {
     await hostTestState().host.flushAllStreamedEvents(options)
   }

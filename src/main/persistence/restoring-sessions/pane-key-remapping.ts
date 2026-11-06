@@ -1,5 +1,9 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 
 type PaneLeafRemap = Map<string, Map<string, string>>
 

@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem.test-fixture'
-import { codexHookService } from '../codex/hook-service'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 
 const BUNDLE_DIR = join(process.cwd(), 'out', 'relay', 'wsl')
 const BUNDLE_JS = join(BUNDLE_DIR, 'wsl-agent-hook-relay.js')
@@ -37,10 +37,14 @@ describe.skipIf(process.platform === 'win32')(
 
     beforeAll(() => {
       if (!existsSync(BUNDLE_JS)) {
-        execFileSync(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
-          cwd: process.cwd(),
-          stdio: 'ignore'
-        })
+        execFileSync(
+          process.execPath,
+          [join('config', 'scripts', 'remote-host-build', 'wsl-guest', 'build-wsl-guest.mjs')],
+          {
+            cwd: process.cwd(),
+            stdio: 'ignore'
+          }
+        )
       }
     }, 120_000)
 

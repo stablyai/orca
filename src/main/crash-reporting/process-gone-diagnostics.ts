@@ -4,6 +4,7 @@ import {
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
 import { getSystemMemoryDetails, memoryKBFieldMB } from './system-memory-details'
+import { getStartupRtPrioOutcome, readZeroRtTimeLimit } from '../startup/linux-rttime-limit'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,
@@ -263,6 +264,20 @@ function sampledProcessIsGone(
   )
 }
 
+// Why: an inherited zero RLIMIT_RTTIME SIGKILLs children with no dump or OOM (Omarchy without rtkit).
+function zeroRtTimeLimitCrashDetails(): Record<string, string> {
+  const limit = readZeroRtTimeLimit()
+  if (!limit) {
+    return {}
+  }
+  const rtPrio = getStartupRtPrioOutcome()
+  return {
+    rlimitRtTimeSoftUs: limit.soft,
+    rlimitRtTimeHardUs: limit.hard,
+    ...(rtPrio ? { rlimitRtPrioStartup: rtPrio } : {})
+  }
+}
+
 export function buildProcessGoneCrashDetails(
   details: Record<string, unknown>,
   crashedProcessType: string
@@ -274,7 +289,8 @@ export function buildProcessGoneCrashDetails(
   const crashDetails: CrashReportDetails = {
     ...sanitizedDetails,
     ...liveMetricDetails,
-    ...getSystemMemoryDetails()
+    ...getSystemMemoryDetails(),
+    ...zeroRtTimeLimitCrashDetails()
   }
   // Compare PID, bucket and creation time to distinguish vanished processes from PID reuse.
   const crashedBucket = metricTypeBucket(crashedProcessType)

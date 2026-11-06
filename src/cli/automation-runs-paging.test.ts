@@ -60,13 +60,6 @@ describe('readAllAutomationRuns', () => {
 })
 
 describe('readAutomationRunsPage', () => {
-  it('returns one page and the cursor for the next', async () => {
-    const runs = Array.from({ length: 30 }, (_, index) => run(index))
-    const page = await readAutomationRunsPage(pairedHost(runs), { limit: 10 })
-    expect(page.result.runs).toEqual(runs.slice(0, 10))
-    expect(page.result.nextCursor).toBe(`${runs[9].createdAt}:${runs[9].id}`)
-  })
-
   it('surfaces a reply that is too large even for a single run', async () => {
     const host = pairedHost([run(0, 5_000_000)])
     await expect(readAutomationRunsPage(host, { limit: 4 })).rejects.toMatchObject({

@@ -114,6 +114,42 @@ describe('mapCursorUsageSummary', () => {
     expect(mapped.monthly).toBeNull()
   })
 
+  it('maps a team-limited member allowance without publishing team-wide on-demand', () => {
+    const mapped = mapCursorUsageSummary(
+      parseCursorUsageSummary({
+        ...CYCLE,
+        membershipType: 'enterprise',
+        limitType: 'team',
+        isUnlimited: false,
+        individualUsage: {
+          overall: { enabled: true, used: 75_000, limit: 500_000, remaining: 425_000 }
+        },
+        teamUsage: {
+          onDemand: { enabled: true, used: 500_000, limit: 2_500_000, remaining: 2_000_000 }
+        }
+      })
+    )
+    expect(mapped.planType).toBe('enterprise')
+    expect(mapped.monthly?.usedPercent).toBe(15)
+    expect(mapped.buckets).toEqual([])
+  })
+
+  it('uses the overall allowance only when the plan pool is absent or disabled', () => {
+    const overall = { enabled: true, used: 90, limit: 100 }
+    expect(
+      mapCursorUsageSummary({
+        ...CYCLE,
+        individualUsage: { plan: { enabled: true, totalPercentUsed: 30 }, overall }
+      }).monthly?.usedPercent
+    ).toBe(30)
+    expect(
+      mapCursorUsageSummary({
+        ...CYCLE,
+        individualUsage: { plan: { enabled: false, totalPercentUsed: 0 }, overall }
+      }).monthly?.usedPercent
+    ).toBe(90)
+  })
+
   it('reports an unlimited plan without inventing a percentage', () => {
     const mapped = mapCursorUsageSummary({ ...CYCLE, isUnlimited: true, membershipType: 'ultra' })
     expect(mapped.isUnlimited).toBe(true)

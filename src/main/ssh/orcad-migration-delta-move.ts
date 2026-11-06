@@ -4,10 +4,10 @@ import {
   type OrcadMigrationSourceCutover
 } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { OrcadDeltaMoveResult } from '../../shared/orcad-managed-runtime'
-import { recordManagedOrcadMigration } from '../../shared/runtime-environment-managed-orcad-store'
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import { recordManagedOrcadMigration } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import type { KnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   abortOrcadMigrationCutover,
   commitOrcadMigrationDestination,

@@ -3,15 +3,15 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
-} from '../../runtime/agent-session-recovery-capsule'
-import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+} from '../../runtime/agent-session/records/agent-session-recovery-capsule'
+import { parseAgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
   interruptedRestart,
   QUIT_CUT_NOTICE,
@@ -430,12 +430,15 @@ describe('reading the chat against where the offer was taken', () => {
       child: null,
       journal: {
         cursor: () => ({ epoch: input.epoch ?? TAKEN.epoch, sequence: 9 }),
-        submissions: () => input.submissions ?? []
+        inputOrder: {
+          acceptedInputsAfter: (sequence: number) =>
+            (input.submissions ?? []).filter((entry) => entry.acceptedSequence > sequence)
+        }
       }
     }
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
       logger: createStructuredAgentSessionLogger(),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and accepted-input query and the child fields given here.
       sessions: new Map([[SESSION, session as never]]),
       now: () => NOW,
       enqueue: (operation) => operation()
@@ -503,14 +506,17 @@ describe('reading the chat against where the offer was taken', () => {
         child: null,
         journal: {
           cursor: () => ({ epoch: TAKEN.epoch, sequence: 9 }),
-          submissions: () => [
-            { clientMessageId: retry, acceptedSequence: 7, dispatchState: 'rejected' }
-          ]
+          inputOrder: {
+            acceptedInputsAfter: (sequence: number) =>
+              [{ clientMessageId: retry, acceptedSequence: 7, dispatchState: 'rejected' }].filter(
+                (entry) => entry.acceptedSequence > sequence
+              )
+          }
         }
       }
       const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
         logger: createStructuredAgentSessionLogger(),
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and accepted-input query and the child fields given here.
         sessions: new Map([[SESSION, session as never]]),
         now: () => afterCrash,
         enqueue: (operation) => operation()

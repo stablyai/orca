@@ -2,7 +2,7 @@ import {
   getRegisteredSshState,
   listRegisteredSshTargets
 } from '../../../ssh/targets/ssh-target-registry'
-import { getPublicSshState } from '../../public-ssh-state'
+import { getPublicSshState } from '../../hosts/platform-probe/public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 
@@ -48,7 +48,14 @@ export const CLIENT_EVENT_METHODS = [
           return state ? [{ targetId: target.id, state }] : []
         })
         // Listen before snapshotting to close reload gaps without exposing HUB-private target configuration.
-        emit({ type: 'ready', subscriptionId, snapshot: { sshStates } })
+        emit({
+          type: 'ready',
+          subscriptionId,
+          snapshot: {
+            sshStates,
+            nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps
+          }
+        })
       })
     }
   }),

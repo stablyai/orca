@@ -3,8 +3,8 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getPtyExecutionHost } from '../../../shared/terminal-execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { preserveMissingLeafRecordEntries } from '../restoring-sessions/terminal-layout-normalization'
 
 import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'

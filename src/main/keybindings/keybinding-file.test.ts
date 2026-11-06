@@ -74,7 +74,17 @@ describe('keybinding-file', () => {
         'win32',
         readKeybindingFile(filePath, 'win32').overrides
       )
-    ).toEqual(['Mod+Shift+J'])
+    ).toEqual(['Mod+Shift+F11', 'Mod+Shift+J'])
+  })
+
+  it('keeps a saved chat toggle alias when the worktree palette is reset', () => {
+    const toggle = 'terminal.toggleNativeChat'
+    writeKeybindingOverride(filePath, 'win32', 'worktree.palette', ['Mod+Alt+Y'])
+    writeKeybindingOverride(filePath, 'win32', toggle, ['Mod+Alt+K', 'Mod+Shift+J'])
+    writeKeybindingOverride(filePath, 'win32', 'worktree.palette', null)
+    expect(readKeybindingFile(filePath, 'win32').overrides).toEqual({
+      [toggle]: ['Mod+Alt+K', 'Mod+Shift+J']
+    })
   })
 
   it('resolves the user-facing keybindings path under ~/.orca', () => {

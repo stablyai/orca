@@ -7,7 +7,7 @@ import type {
   RuntimeEditorFileOpen,
   RuntimeEditorTabReveal
 } from '../../../shared/runtime-file-contracts'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import type { RuntimeNotifier } from '../runtime-notifier-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import { isChatScratchWorktreeId } from './chat-scratch-file-root'

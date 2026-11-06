@@ -10,7 +10,10 @@ import {
   clearWebSessionReorderIntent,
   recordWebSessionReorderIntent
 } from './web-session-reorder-intent'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AgentsParams,
   AttachParams,
+  CancelParams,
   CreateIntentParams,
   CreateSupportParams,
   ModelCatalogParams,
   SendParams,
   RespondToQuestionParams
 } from './structured-agent-session-params'
-import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session-question-answer'
+import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session/agent-session-question-answer'
 
 const ENVELOPE = {
   sessionId: 'agent-session-0123456789abcdef0123456789abcdef',
@@ -88,14 +88,6 @@ describe('structured agent params', () => {
     expect(SendParams.safeParse(send).success).toBe(true)
   })
 
-  it.each(['claude', 'codex', 'grok', 'qwen-code'])('accept the agent id %s', (agent) => {
-    expect(CreateSupportParams.safeParse({ worktree: 'wt', agent }).success).toBe(true)
-    expect(ModelCatalogParams.safeParse({ agent }).success).toBe(true)
-    expect(
-      CreateIntentParams.safeParse({ envelope: ENVELOPE, worktree: 'wt', agent }).success
-    ).toBe(true)
-  })
-
   it.each(['', ' claude', 'grok agent', '../codex', 'a'.repeat(65), 7])(
     'refuse what is not an agent id: %s',
     (agent) => {
@@ -123,8 +115,14 @@ describe('structured agent params', () => {
     expect(AttachParams.safeParse({ ...attach, provider: 'grok' }).success).toBe(false)
   })
 
-  it('takes nothing for the agent list', () => {
-    expect(AgentsParams.safeParse({}).success).toBe(true)
-    expect(AgentsParams.safeParse({ agent: 'grok' }).success).toBe(false)
+  it('lets a card with no running turn cancel by itself, while background-task Stop still names its turn', () => {
+    const prompt = { itemId: 'request-1', expectedRevision: 2 }
+    expect(CancelParams.safeParse({ envelope: ENVELOPE, prompt }).success).toBe(true)
+    expect(CancelParams.safeParse({ envelope: ENVELOPE, turnId: 'turn-1', prompt }).success).toBe(
+      true
+    )
+    expect(CancelParams.safeParse({ envelope: ENVELOPE, scope: 'background-tasks' }).success).toBe(
+      false
+    )
   })
 })

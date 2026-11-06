@@ -6,7 +6,7 @@ import {
 } from '../../shared/automation-list-scope'
 import type { Automation } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'

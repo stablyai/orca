@@ -7,7 +7,7 @@ const { grantDirAclAsyncMock } = vi.hoisted(() => ({
   grantDirAclAsyncMock: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('../win32-utils', async (importOriginal) => {
+vi.mock('../windows/windows-directory-acl', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, grantDirAclAsync: grantDirAclAsyncMock }
 })

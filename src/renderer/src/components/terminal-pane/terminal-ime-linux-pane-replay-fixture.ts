@@ -1,8 +1,8 @@
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable } from '@xterm/xterm'
 import { afterEach, beforeEach, vi } from 'vitest'
-import type { IDisposable } from '@xterm/xterm'
+
 import { installTerminalPaneInputHandling } from './terminal-pane-pane-input'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 
 const LINUX_UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Orca Chrome/146.0.0.0 Electron/43.7.5 Safari/537.36'

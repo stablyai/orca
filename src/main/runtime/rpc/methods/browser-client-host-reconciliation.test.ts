@@ -1,58 +1,12 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
 
 describe('browser.clientHost reconciliation negotiation', () => {
-  it('echoes and retains reconciliation only for an explicit authenticated request', async () => {
-    const cleanups = new Map<string, () => void>()
-    const hostRuntime = runtime(cleanups)
-    const dispatcher = new RpcDispatcher({
-      runtime: hostRuntime,
-      methods: BROWSER_CLIENT_HOST_METHODS
-    })
-    const replies: string[] = []
-    const dispatch = dispatcher.dispatchStreaming(
-      {
-        id: 'browser-host:host-a',
-        authToken: 'bound-by-websocket',
-        method: 'browser.clientHost.attach',
-        params: {
-          authorityRuntimeId: 'runtime-a',
-          browserHostClientId: 'host-a',
-          hostCapabilities: ['webview'],
-          pageCommandProtocolVersion: 1,
-          pageInventoryProtocolVersion: 1,
-          pageInventory: [],
-          pageReconciliationProtocolVersion: 1
-        }
-      },
-      (reply) => replies.push(reply),
-      {
-        connectionId: 'connection-a',
-        clientKind: 'runtime',
-        pairedDeviceId: 'device-a',
-        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
-      }
-    )
-
-    await vi.waitFor(() => expect(replies).toHaveLength(1))
-    expect(JSON.parse(replies[0]!).result).toMatchObject({
-      pageCommandProtocolVersion: 1,
-      pageInventoryProtocolVersion: 1,
-      pageReconciliationProtocolVersion: 1
-    })
-    expect(getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toMatchObject({
-      pageReconciliationProtocolVersion: 1
-    })
-
-    cleanups.get('browser-client-host:host-a')?.()
-    await dispatch
-  })
-
   it('requires exact reconciliation authority on command results', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)

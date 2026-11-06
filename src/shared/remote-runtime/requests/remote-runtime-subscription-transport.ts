@@ -2,7 +2,7 @@ import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
 import { throwIfSignalAborted, abortSignalReason } from '../../abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import {
   createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,

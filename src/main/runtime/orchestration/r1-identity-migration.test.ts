@@ -54,7 +54,7 @@ describe('R1 identity migration', () => {
     const v30 = new Database(dbPath)
     v30.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
     v30.exec(
-      'DROP INDEX IF EXISTS idx_dispatch_retry_of; DROP INDEX IF EXISTS idx_dispatch_resource;'
+      'DROP INDEX IF EXISTS idx_dispatch_retry_of; DROP INDEX IF EXISTS idx_dispatch_resource; DROP INDEX IF EXISTS idx_dispatch_creator_mailbox_work;'
     )
     for (const column of DISPATCH_IDENTITY_COLUMNS) {
       v30.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)

@@ -1,9 +1,9 @@
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
   admitAndRunAgentSessionMutation,
   type AgentSessionMutationRequest,
@@ -51,6 +51,7 @@ export type StructuredAgentSessionMutationContext = {
   trackProviderOperation?: <T>(operation: Promise<T>) => Promise<T>
   /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
+  readStopping: (sessionId: string) => boolean
   wakeDelivery: (sessionId: string) => void
   /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

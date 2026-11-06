@@ -9,7 +9,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -61,6 +65,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         pane: ReturnType<typeof createPane>
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -70,7 +76,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
           ...depsOverrides
         })
         const pane = createPane(2)
-        const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+        )
         return { binding, transport, deps, pane }
       }
 
@@ -169,6 +177,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         try {
           vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 200, rows: 40 })
           const { connectPanePty } = await import('./pty-connection')
+          const agentTitleMocks2 =
+            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -179,7 +189,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
           pane.terminal.cols = 82
           pane.terminal.rows = 40
 
-          connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+          connectPanePty(
+            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+          )
           await flushAsyncTicks()
           transport.resize.mockClear()
           vi.mocked(window.api.pty.getSize).mockClear()
@@ -196,6 +208,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
 
       it('repairs stale xterm grid drift on foreground output even without a pane resize', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks3 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -224,7 +238,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         } as never
         vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 62, rows: 63 })
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks3))
+        )
         await flushAsyncTicks()
         proposedGrid = { cols: 65, rows: 63 }
         vi.mocked(pane.fitAddon.fit).mockClear()
@@ -248,6 +264,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         emitFrame: (data: string) => void
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks4 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -279,7 +297,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         pane.terminal.write.mockImplementation((_data, callback) => callback?.())
         vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 62, rows: 63 })
 
-        const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks4))
+        )
         await flushAsyncTicks()
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'] })
         // Real frames are async; the shared sync rAF mock would leave the probe's frame handle stuck.
@@ -383,6 +403,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
       it('skips foreground grid drift repair while mobile owns the PTY without a fit override', async () => {
         const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks5 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -411,7 +433,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         } as never
 
         try {
-          connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+          connectPanePty(
+            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks5))
+          )
           await flushAsyncTicks()
           proposedGrid = { cols: 65, rows: 63 }
           setDriverForPty('pty-pane-2', { kind: 'mobile', clientId: 'phone-1' })
@@ -437,6 +461,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('./pty-connection')
+          const agentTitleMocks6 =
+            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -449,7 +475,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
             proposeDimensions: vi.fn(() => ({ cols: 101, rows: 33 }))
           } as never
 
-          connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+          connectPanePty(
+            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks6))
+          )
           await flushAsyncTicks()
           setFitOverride('pty-pane-2', 'mobile-fit', 40, 30)
           transport.resize.mockClear()
@@ -483,6 +511,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('./pty-connection')
+          const agentTitleMocks7 =
+            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -496,7 +526,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
             proposeDimensions: vi.fn(() => proposedGrid)
           } as never
 
-          connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+          connectPanePty(
+            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks7))
+          )
           await flushAsyncTicks()
           observer.trigger()
           await flushAsyncTicks()
@@ -535,6 +567,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('./pty-connection')
+          const agentTitleMocks8 =
+            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -547,7 +581,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
             ...pane.fitAddon,
             proposeDimensions: vi.fn(() => proposedGrid)
           } as never
-          connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+          connectPanePty(
+            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks8))
+          )
           await flushAsyncTicks()
           observer.trigger()
           await flushAsyncTicks()
@@ -579,6 +615,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('./pty-connection')
+          const agentTitleMocks9 =
+            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -593,7 +631,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
             proposeDimensions: vi.fn(() => ({ cols: 130, rows: 50 }))
           } as never
 
-          connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+          connectPanePty(
+            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
+          )
           await flushAsyncTicks()
           setDriverForPty('pty-pane-2', { kind: 'mobile', clientId: 'phone-1' })
           transport.resize.mockClear()
@@ -684,6 +724,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const getSize = vi.mocked(window.api.pty.getSize)
         getSize.mockClear()
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('remote:env-1@@terminal-2')
         transport.getConnectionId.mockReturnValue(null)
         transportFactoryQueue.push(transport)
@@ -693,7 +735,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
         const pane = createPane(2)
-        const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks10))
+        )
         transport.resize.mockClear()
 
         deps.isVisibleRef.current = visible
@@ -716,6 +760,8 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         } as unknown as Document
         const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks11 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const ptyId = 'remote:env-1@@terminal-visible'
         const transport = createMockTransport(ptyId)
         transportFactoryQueue.push(transport)
@@ -729,7 +775,13 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
           ...pane.fitAddon,
           proposeDimensions: vi.fn(() => ({ cols: 132, rows: 42 }))
         } as never
-        const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(2), deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(2),
+            bindPaneAgentTitleMocks(deps, agentTitleMocks11)
+          )
+        )
         await flushAsyncTicks()
         transport.claimViewport.mockClear()
 

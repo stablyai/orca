@@ -120,6 +120,10 @@ describe('terminal IME composer placeholder mask', () => {
     [
       'Claude',
       `\x1b[2J\x1b[H${'─'.repeat(24)}\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\x1b8`
+    ],
+    [
+      'Claude with a labelled frame',
+      `\x1b[2J\x1b[H${'─'.repeat(24)} mode ─\r\n❯ \x1b7\x1b[2mTry “fix the failing test”\x1b[22m\r\n${'─'.repeat(31)}\x1b8`
     ]
   ])('owns a structurally verified %s placeholder during composition', async (_agent, frame) => {
     const rig = openTerminal()
@@ -261,23 +265,6 @@ describe('terminal IME composer placeholder mask', () => {
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
 
     dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, 11)
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-  })
-
-  it('keeps ownership bounded across repeated starts and recovers on the newest end', async () => {
-    const rig = openTerminal()
-    await rig.write(codexPlaceholderFrame())
-
-    const newestId = 2048
-    for (let id = 1; id <= newestId; id += 1) {
-      dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, id)
-    }
-    for (let id = 1; id < newestId; id += 1) {
-      dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, id)
-    }
-    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-
-    dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, newestId)
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 })

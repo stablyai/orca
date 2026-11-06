@@ -1,22 +1,22 @@
-// Select carried history inside serialized handover to deliver each message once across devices.
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
-import type {
-  AgentJournalMessageItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   agentSessionSendCarriesStoppedHistory,
   agentSessionSendDeliversStoppedHistory,
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,
   type StoppedHistoryDelivery
-} from '../../../shared/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+// Select carried history inside serialized handover to deliver each message once across devices.
+
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 type StoppedHistoryContext = {
-  journal: Pick<AgentSessionJournal, 'submissions' | 'itemBody' | 'stoppedHistoryCarried'> & {
+  journal: Pick<AgentSessionJournal, 'inputOrder' | 'submissionBody'> & {
     context: Pick<AgentSessionJournal['context'], 'floor'>
   }
 }
@@ -35,14 +35,16 @@ export function carriedStoppedHistory(
   ) {
     return null
   }
+  const clearSequence = ctx.journal.context.floor()?.sequence ?? 0
   return selectStoppedHistory(
     agentSessionStoppedHistoryOwed({
-      submissions: ctx.journal.submissions(),
-      carried: new Map(
-        [...ctx.journal.stoppedHistoryCarried()].filter(([id]) => id !== submission.clientMessageId)
+      submissions: ctx.journal.inputOrder.stoppedHistoryInputs(
+        submission.clientMessageId,
+        clearSequence
       ),
-      clearSequence: ctx.journal.context.floor()?.sequence ?? 0,
-      body: (id) => ctx.journal.itemBody(agentJournalSubmissionKey(id))
+      carried: new Map(),
+      clearSequence,
+      body: (id) => ctx.journal.submissionBody(id)
     }),
     body
   )

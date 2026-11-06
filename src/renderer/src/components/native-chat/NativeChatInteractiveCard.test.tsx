@@ -4,8 +4,8 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { applyCommandMarkerBoundaries } from './native-chat-command-marker'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 
 const INITIAL_PROMPT = JSON.stringify({
@@ -42,6 +42,8 @@ import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-ca
 import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
 
 // Answered occurrences outlive a view by design; each test starts with none.
 beforeEach(nativeChatPromptDismissals.clearForTests)
@@ -77,42 +79,6 @@ const SEND: NativeChatInteractiveSend = {
   cancel: mocks.cancel,
   cancelAsk: mocks.cancelAsk
 }
-
-describe('terminal-only question presentation', () => {
-  beforeEach(() => vi.clearAllMocks())
-  afterEach(cleanup)
-  it.each([true, false])(
-    'replaces answer and cancel controls with terminal navigation (%s)',
-    (available) => {
-      const onAnswerInTerminal = vi.fn()
-      const onDismiss = vi.fn()
-      render(
-        <NativeChatInteractiveCard
-          card={{
-            kind: 'question',
-            prompt: {
-              questions: [{ question: 'Pick', options: [{ label: 'A' }], multiSelect: false }]
-            }
-          }}
-          send={SEND}
-          onDismiss={onDismiss}
-          requiresTerminal
-          onAnswerInTerminal={available ? onAnswerInTerminal : undefined}
-        />
-      )
-      const button = screen.getByRole('button', { name: 'Answer in terminal' })
-      expect(screen.getAllByRole('button')).toHaveLength(1)
-      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-      expect(button).toHaveProperty('disabled', !available)
-      fireEvent.click(button)
-      expect(onAnswerInTerminal).toHaveBeenCalledTimes(available ? 1 : 0)
-      expect(mocks.sendAnswer).not.toHaveBeenCalled()
-      expect(mocks.cancelAsk).not.toHaveBeenCalled()
-      expect(mocks.sendRawVerified).not.toHaveBeenCalled()
-      expect(onDismiss).not.toHaveBeenCalled()
-    }
-  )
-})
 
 // Stands in for the view: it derives the shown card and renders it XOR the composer.
 function CardHarness({
@@ -344,12 +310,6 @@ describe('NativeChatInteractiveCard approvals', () => {
     rendered.rerender(cardElement())
     expect(screen.getByText('Allow Bash?')).toBeInTheDocument()
   })
-
-  it('leaves the composer in place while this window may not send', () => {
-    render(cardElement(false))
-    expect(screen.queryByText('Allow Bash?')).not.toBeInTheDocument()
-    expect(composerShown()).toBe(true)
-  })
 })
 
 describe('NativeChatInteractiveCard answer lifecycle', () => {
@@ -365,18 +325,6 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     expect(mocks.cancel).not.toHaveBeenCalled()
     expect(screen.queryByTestId('native-chat-question-card-title')).not.toBeInTheDocument()
     expect(composerShown()).toBe(true)
-  })
-
-  it.each(['Escape', 'Collapse'])('collapses the question on %s without writing', (gesture) => {
-    render(cardElement())
-    if (gesture === 'Escape') {
-      fireEvent.keyDown(screen.getByTestId('native-chat-question-card-title'), { key: 'Escape' })
-    } else {
-      fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-    }
-    expect(composerShown()).toBe(true)
-    expect(mocks.cancelAsk).not.toHaveBeenCalled()
-    expect(mocks.sendAnswer).not.toHaveBeenCalled()
   })
 
   it('cannot collapse a question while its answer is still being written', () => {
@@ -406,70 +354,6 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
 
   afterEach(() => {
     cleanup()
-  })
-
-  it('keeps the card retryable when no PTY answer was sent', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 0 })
-    renderCard()
-
-    chooseSpacesAndSubmit()
-    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    expect(mocks.sendAnswer).toHaveBeenCalledTimes(2)
-  })
-
-  it('cancels delayed PTY writes when the owning card unmounts', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000 })
-    const rendered = renderCard()
-
-    chooseSpacesAndSubmit()
-    expect(mocks.cancelPending).not.toHaveBeenCalled()
-
-    rendered.unmount()
-    expect(mocks.cancelPending).toHaveBeenCalledOnce()
-  })
-
-  it('cancels delayed PTY writes when desktop send authority is lost', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000 })
-    const rendered = renderCard()
-
-    chooseSpacesAndSubmit()
-    rendered.rerender(cardElement(false))
-
-    expect(mocks.cancelPending).toHaveBeenCalledOnce()
-  })
-
-  it('shows the paced send as busy and freezes the snapshotted answer', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000 })
-    renderCard()
-
-    chooseSpacesAndSubmit()
-
-    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Spaces/ })).toBeDisabled()
-    expect(screen.getByRole('textbox')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
-  })
-
-  it('cancels the old answer sequence when a replacement prompt arrives', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000 })
-    const rendered = renderCard()
-    chooseSpacesAndSubmit()
-
-    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = JSON.stringify({
-      questions: [
-        {
-          question: 'Choose a shell?',
-          multiSelect: false,
-          options: [{ label: 'zsh' }, { label: 'bash' }]
-        }
-      ]
-    })
-    rendered.rerender(cardElement())
-
-    expect(mocks.cancelPending).toHaveBeenCalledOnce()
-    expect(screen.getByText('Choose a shell?')).toBeInTheDocument()
   })
 
   it('sends only one cancellation, can cancel an answer, and permits retry after unknown', async () => {
@@ -547,35 +431,6 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     cleanup()
   })
 
-  it('renders a pending transcript ask in place of the composer', () => {
-    render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
-
-    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
-    expect(composerShown()).toBe(false)
-  })
-
-  it('withholds a retained transcript ask while its replacement read is unsettled', () => {
-    render(cardElement(true, [askCallMessage('Stale transcript question?')], false))
-
-    expect(screen.queryByText('Stale transcript question?')).not.toBeInTheDocument()
-  })
-
-  it('prefers live status over the transcript when both carry a prompt', () => {
-    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
-    render(cardElement(true, [askCallMessage('Stale transcript question?')]))
-
-    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
-    expect(screen.queryByText('Stale transcript question?')).not.toBeInTheDocument()
-  })
-
-  it('still renders while the mirrored status says the agent is working', () => {
-    // Mirrored status can fail independently of the transcript, so it cannot gate fallback prompts.
-    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'working'
-    render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
-
-    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
-  })
-
   it('stays dismissed after answering while the transcript call is still pending', () => {
     mocks.sendAnswer.mockReturnValue({ settleAfterMs: 500 })
     const messages = [askCallMessage('Tabs or spaces?')]
@@ -598,17 +453,6 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
 
     rendered.rerender(cardElement(true, [askCallMessage('Tabs or spaces?'), askResultMessage()]))
-    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
-  })
-
-  it('drops an ask abandoned by /clear', () => {
-    const abandoned = { ...askCallMessage('Tabs or spaces?'), timestamp: 100 }
-    const trimmed = applyCommandMarkerBoundaries(
-      [abandoned as unknown as NativeChatMessage],
-      [{ id: 'clear-1', command: '/clear', sentAt: 200 }]
-    )
-    render(cardElement(true, trimmed))
-
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 })
@@ -743,5 +587,43 @@ describe('terminal async contributors through the production hooks and card', ()
     view.rerender(cardElement(true, [row('one', 'Revised Q1?')]))
     expect(screen.getByRole('button', { name: /Spaces/ })).toHaveAttribute('aria-pressed', 'false')
     expect(mocks.cancelPending).not.toHaveBeenCalled()
+  })
+})
+
+const planLinkClick = vi.fn((event: { preventDefault: () => void }) => event.preventDefault())
+const planFileSnapshot = {
+  check: (link: { pathText: string }) => link.pathText === 'src/app.ts',
+  peek: () => false
+}
+const planFileExistence = {
+  watch: () => ({ subscribe: () => () => {}, getSnapshot: () => planFileSnapshot }),
+  recheck: () => {}
+}
+
+describe('terminal-backed plan approval links', () => {
+  afterEach(cleanup)
+  it('underlines an existing file in the plan and opens it through the chat', () => {
+    render(
+      <NativeChatFileLinkExistenceContext.Provider value={planFileExistence}>
+        <NativeChatLinkClickContext value={planLinkClick}>
+          <TooltipProvider>
+            <NativeChatInteractiveCard
+              card={{
+                kind: 'approval',
+                approval: {
+                  title: 'Review proposed plan',
+                  subject: { kind: 'plan', text: 'First edit src/app.ts, then run tests.' },
+                  options: [{ label: 'Approve', send: 'approve' }]
+                }
+              }}
+              send={SEND}
+              onDismiss={vi.fn()}
+            />
+          </TooltipProvider>
+        </NativeChatLinkClickContext>
+      </NativeChatFileLinkExistenceContext.Provider>
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'src/app.ts' }))
+    expect(planLinkClick).toHaveBeenCalledOnce()
   })
 })

@@ -2,9 +2,10 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
-import { activateAiVaultResumeWorkspace } from '@/components/right-sidebar/ai-vault-session-resume-in-chat-launch'
-import { notifyAiVaultSessionQueued } from '@/components/right-sidebar/ai-vault-session-launch-feedback'
-import { agentLabel } from '@/components/right-sidebar/ai-vault-session-filters'
+import { activateAiVaultResumeWorkspace } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-launch'
+import { notifyAiVaultSessionQueued } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
+import '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-filters'
+import { agentLabel } from '../../../shared/ai-vault/session-display/ai-vault-session-filters'
 
 export async function launchAiVaultSessionAndReveal(
   args: Parameters<typeof launchAiVaultSessionInNewTab>[0],

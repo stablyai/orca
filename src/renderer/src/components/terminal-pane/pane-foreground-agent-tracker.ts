@@ -2,10 +2,10 @@ import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
   type RecognizedAgentProcess
-} from '../../../../shared/agent-process-recognition'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
-import { isShellProcess } from '../../../../shared/shell-process-detection'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+} from '../../../../shared/agent-status/process/agent-process-recognition'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
 import { FOREGROUND_COMMAND_READS } from '../../../../shared/foreground-command-settle'
 import type {

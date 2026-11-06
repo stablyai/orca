@@ -1,3 +1,4 @@
+import { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
 import {
   evictAgentModelCatalogEntries,
   createAgentModelCatalogEntryFactory,
@@ -6,7 +7,7 @@ import {
   agentModelCatalogEntryIsStale,
   pruneAgentModelCatalogPartialAttempts
 } from './agent-model-catalog-entry-lifetime'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 export type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
 import {
@@ -66,11 +67,20 @@ export class AgentModelCatalogStore {
   private readonly retirementRevisions = new Map<string, number>()
   private readonly retiredObservations = new Set<string>()
   private persistence: AgentModelCatalogPersistence | null = null
+  readonly efforts: ReturnType<typeof createAgentModelEffortDiscovery>
   private readonly now: () => number
 
   constructor(options?: { now?: () => number }) {
     this.now = options?.now ?? Date.now
     this.failures = new AgentModelCatalogFailures(this.now)
+    this.efforts = createAgentModelEffortDiscovery({
+      entries: this.entries,
+      refreshes: this.refreshes,
+      attempts: this.partialAttempts,
+      failed: (key) => this.hasActiveFailure(key),
+      now: this.now,
+      cap: AGENT_MODEL_CATALOG_MAX_ENTRIES
+    })
   }
 
   /** In-process listings take precedence over hydrated entries. */
@@ -192,15 +202,18 @@ export class AgentModelCatalogStore {
   /** Learn defaults only for existing catalogs; null clears facts the next chat no longer resolves. */
   recordConfiguredDefault(
     fingerprint: string,
-    choice: AgentModelCatalogConfiguredChoice | null
+    choice: AgentModelCatalogConfiguredChoice | null,
+    source?: AgentModelCatalogEntry['live']
   ): void {
     const previous = this.entries.get(fingerprint)
-    const entry = previous && entryWithConfiguredDefault(previous, choice, this.now())
-    if (!entry) {
+    const entry = previous && entryWithConfiguredDefault(previous, choice, this.now(), source)
+    if (!previous || !entry) {
       return
     }
     this.entries.set(fingerprint, entry)
-    this.persistence?.save(() => [...this.entries.values()])
+    if (agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry)) {
+      this.persistence?.save(() => [...this.entries.values()])
+    }
     this.listingWaiters.notify(fingerprint)
   }
 
@@ -230,16 +243,9 @@ export class AgentModelCatalogStore {
       this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
     }
     if (source === 'discovery' && independentAgentModelCatalog(agent)) {
-      this.partialAttempts.delete(fingerprint)
+      this.efforts.catalogAttempted(fingerprint, agent, success.complete === true)
       if (success.complete !== true) {
-        this.partialAttempts.set(fingerprint, { agent, at: this.now() })
         this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
-      }
-      while (this.partialAttempts.size > AGENT_MODEL_CATALOG_MAX_ENTRIES) {
-        const oldest = this.partialAttempts.keys().next().value
-        if (oldest !== undefined) {
-          this.partialAttempts.delete(oldest)
-        }
       }
     }
     this.evictOverCap()
@@ -254,15 +260,20 @@ export class AgentModelCatalogStore {
   refresh(
     fingerprint: string,
     agent: string,
-    listModels: () => Promise<AgentModelCatalogSuccess>,
+    listModels: (selectedModels?: readonly string[]) => Promise<AgentModelCatalogSuccess>,
     current?: () => boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    selectedModel?: string
   ): Promise<AgentModelCatalogEntry | null> {
     this.isListing(fingerprint)
     return refreshAgentModelCatalogListing({
       fingerprint,
       agent,
       listModels,
+      selectedModel,
+      maxTargets: AGENT_MODEL_CATALOG_MAX_ENTRIES,
+      targetDue: (model) => this.efforts.due(fingerprint, model),
+      targetAttempted: (model) => this.efforts.attempted(fingerprint, agent, model),
       current,
       signal,
       refreshes: this.refreshes,

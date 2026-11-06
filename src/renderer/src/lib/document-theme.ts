@@ -112,6 +112,12 @@ export type CachedPluginAppTheme = {
   tokens: Record<string, string>
 }
 
+/** What an app theme paint needs: a plugin theme, or one Orca synthesizes (Match Terminal). */
+export type AppThemePaint = Pick<PluginThemeRegistration, 'base' | 'tokens'> & {
+  id: string
+  revision: string
+}
+
 type PluginThemePaintOptions = {
   root?: PluginThemeRoot
   probe?: ColorProbe
@@ -121,8 +127,8 @@ type PluginThemePaintOptions = {
 
 const PUBLIC_TOKENS = new Set<string>(PLUGIN_APP_THEME_TOKENS)
 const appliedPluginTokens = new WeakMap<object, readonly string[]>()
-// Why: plugin themes load after discovery; repainting from this cache before first paint
-// avoids flashing the built-in theme on every launch.
+// Why: plugin themes load after discovery and Match Terminal after settings; repainting from
+// this cache before first paint avoids flashing the built-in theme on every launch.
 const PLUGIN_THEME_CACHE_KEY = 'orca.pluginAppTheme.lastApplied'
 
 function setPluginTokens(root: PluginThemeRoot, tokens: Record<string, string>): void {
@@ -139,9 +145,12 @@ function setPluginTokens(root: PluginThemeRoot, tokens: Record<string, string>):
 
 function documentBuiltIns(): Record<string, string> {
   const style = getComputedStyle(document.documentElement)
-  return Object.fromEntries(
-    PLUGIN_APP_THEME_TOKENS.map((token) => [token, style.getPropertyValue(token).trim()])
-  )
+  const read = (token: string): string => style.getPropertyValue(token).trim()
+  return {
+    ...Object.fromEntries(PLUGIN_APP_THEME_TOKENS.map((token) => [token, read(token)])),
+    // Why: chat paints an omitted link color as --callout-note, so the bubble check needs it.
+    '--text-link': read('--text-link') || read('--callout-note')
+  }
 }
 
 // Why: menus and dialogs paint a fixed glass tint, which would ignore the theme's --popover
@@ -157,7 +166,7 @@ function withFloatingSurfaces(tokens: Record<string, string>): Record<string, st
 
 /** Paints tokens that stay readable over this mode's built-ins; returns what was painted. */
 function paintPluginTokens(
-  tokens: Record<string, string>,
+  { tokens, base }: Pick<CachedPluginAppTheme, 'tokens' | 'base'>,
   options: PluginThemePaintOptions
 ): Record<string, string> {
   const root = options.root ?? document.documentElement
@@ -165,6 +174,7 @@ function paintPluginTokens(
   setPluginTokens(root, {})
   const safe = safePluginThemeTokens(
     tokens,
+    base,
     (options.builtIns ?? documentBuiltIns)(),
     options.probe ?? browserColorProbe
   )
@@ -184,20 +194,21 @@ function writeCache(storage: Storage | null, cached: CachedPluginAppTheme | null
   }
 }
 
-/** Overlays a plugin theme's safe tokens; tokens it no longer sets fall back to main.css. Call
- *  after the document's light/dark mode matches the theme's base. */
+/** Overlays an app theme's safe tokens and returns them; tokens it no longer sets fall back to
+ *  main.css. Call after the document's light/dark mode matches the theme's base. */
 export function applyPluginAppTheme(
-  theme: PluginThemeRegistration | null,
+  theme: AppThemePaint | null,
   options: PluginThemePaintOptions & { storage?: Storage | null } = {}
-): void {
+): Record<string, string> {
   const storage = options.storage === undefined ? globalThis.localStorage : options.storage
   if (!theme) {
     setPluginTokens(options.root ?? document.documentElement, {})
     writeCache(storage, null)
-    return
+    return {}
   }
-  const tokens = paintPluginTokens(theme.tokens, options)
+  const tokens = paintPluginTokens(theme, options)
   writeCache(storage, { id: theme.id, revision: theme.revision, base: theme.base, tokens })
+  return tokens
 }
 
 /** The last applied plugin theme, for painting before settings and plugins load. */
@@ -238,5 +249,5 @@ export function applyCachedPluginAppTheme(
   cached: CachedPluginAppTheme,
   options: PluginThemePaintOptions = {}
 ): void {
-  paintPluginTokens(cached.tokens, options)
+  paintPluginTokens(cached, options)
 }

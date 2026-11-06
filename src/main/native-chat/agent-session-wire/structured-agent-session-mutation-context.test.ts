@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as reducer from '../agent-session-journal/journal-reducer'
-import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import { mutateStructuredAgentSession } from './structured-agent-session-mutation-context'
 import { sendPlan } from './structured-agent-session-mutation-plans'
@@ -121,7 +120,8 @@ it('replays a queued draft after publication fails without waking delivery', asy
   expect(ctx.wakeDelivery).not.toHaveBeenCalled()
 })
 
-it('answers the same doubt on the first reply and resend when the committed row cannot fold', async () => {
+// The row commits with its fold or not at all; nothing is recorded, so a resend runs again.
+it('refuses the first reply and resend when the submission cannot fold', async () => {
   const ctx = context()
   const request = params()
   const fold = reducer.applyJournalRow
@@ -133,26 +133,12 @@ it('answers the same doubt on the first reply and resend when the committed row 
   })
   const journal = rig.host['sessions'].get(SESSION)!.journal
   const append = vi.spyOn(journal, 'appendSubmission')
-  const accepted = await sendStructuredAgentSessionTurn(ctx, CALLER, request)
+  const refused = await sendStructuredAgentSessionTurn(ctx, CALLER, request)
   const replay = await sendStructuredAgentSessionTurn(ctx, CALLER, request)
-  expect(accepted).toMatchObject({
-    ok: true,
-    replayed: true,
-    value: {
-      submission: {
-        dispatchState: 'unknown',
-        reason: DISPATCH_DOUBT_SUBMISSION_MISSING,
-        recovered: true
-      }
-    }
-  })
-  expect(replay).toEqual(accepted)
+  expect(refused).toMatchObject({ ok: false })
+  expect(replay).toMatchObject({ ok: false })
   expect(journal.submissions()).toHaveLength(0)
-  expect(
-    rig.store.readCommandReceipt({ kind: 'global' }, request.envelope.clientOperationId)
-  ).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
-  expect(append).toHaveBeenCalledOnce()
-  expect(ctx.wakeDelivery).toHaveBeenCalledOnce()
+  expect(append).toHaveBeenCalledTimes(2)
 })
 
 it('logs a throw after commit and wakes once before answering from receipt replay', async () => {

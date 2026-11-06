@@ -1,5 +1,6 @@
+import type * as CommandExecFileModule from '../git/command-runner/command-exec-file'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitRunner from '../git/runner'
 
 const {
   commandExecFileAsyncMock,
@@ -13,9 +14,13 @@ const {
   readLocalGitConfigSignatureMock: vi.fn(async () => 'sig-10284')
 }))
 
-vi.mock('../git/runner', async (importOriginal) => ({
-  ...(await importOriginal<typeof GitRunner>()),
-  commandExecFileAsync: commandExecFileAsyncMock,
+vi.mock('../git/command-runner/command-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof CommandExecFileModule>()),
+  commandExecFileAsync: commandExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

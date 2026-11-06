@@ -1,4 +1,4 @@
-import { startStructuredAgentSessionLiveRead } from '../../../../shared/structured-agent-session-live-read'
+import { startStructuredAgentSessionLiveRead } from '../../../../shared/agent-session/structured-agent-session-live-read'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   callStructuredAgentSession,

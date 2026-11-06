@@ -1,3 +1,4 @@
+import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
 import { launchAgentInWebHostTab } from '../../src/renderer/src/lib/launch-agent-web-host-tab'
 import {
   independentActionEffortPlan,
@@ -6,8 +7,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
 import {
-  createWebRuntimeAgentSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft,
+  deliverCreatedWebRuntimeAgentSessionPrompt,
   createWebRuntimeSessionTerminal
 } from '../../src/renderer/src/runtime/web-runtime-terminal-creation'
 import { peekWebSessionFocusIntent } from '../../src/renderer/src/runtime/web-session-focus-intent'
@@ -97,6 +97,7 @@ afterEach(() => resetWebSessionCloseIntentForTests())
 describe('createWebRuntimeSessionTerminal', () => {
   beforeEach(() => {
     stubTerminalCreateEnvironment(mocks)
+    mocks.getState().runtimeStatusByEnvironmentId = new Map()
   })
 
   afterEach(() => {
@@ -134,11 +135,14 @@ describe('createWebRuntimeSessionTerminal', () => {
           agent,
           worktreeId: WORKTREE_ID,
           environmentId: ENVIRONMENT_ID,
-          startupPlan: plan,
+          buildStartup: () => ({
+            startupPlan: plan,
+            pasteDraftAfterLaunch: null,
+            submitPastedPrompt: false
+          }),
           prompt: 'Fix checks',
+          sessionOptions: { effort: 'high' },
           promptDelivery: 'auto-submit',
-          pastePromptAfterReady: null,
-          submitPastedPrompt: false,
           activate: false
         })
       ).resolves.toEqual({
@@ -643,16 +647,21 @@ describe('createWebRuntimeSessionTerminal', () => {
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
-      createWebRuntimeAgentSessionTerminal({
-        worktreeId: WORKTREE_ID,
-        agentSessionKind: 'fresh',
-        agent: 'claude',
-        command: 'claude',
-        promptAfterReady: 'continue the unfinished task',
-        submitPrompt: true,
-        forcePromptPaste: true
-      })
-    ).resolves.toEqual({ outcome: { status: 'created' }, promptDelivered: true })
+      deliverCreatedWebRuntimeAgentSessionPrompt(
+        await createWebRuntimeSessionTerminalResult({
+          worktreeId: WORKTREE_ID,
+          agentSessionKind: 'fresh',
+          agent: 'claude',
+          command: 'claude'
+        }),
+        {
+          agent: 'claude',
+          promptAfterReady: 'continue the unfinished task',
+          submitPrompt: true,
+          forcePromptPaste: true
+        }
+      )
+    ).resolves.toBe(true)
 
     const createRequest = runtimeCall.mock.calls.find(
       ([request]) => request.method === 'terminal.createAgentSession'
@@ -703,14 +712,16 @@ describe('createWebRuntimeSessionTerminal', () => {
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
-      createWebRuntimeAgentSessionTerminalWithLaunchDraft({
-        worktreeId: WORKTREE_ID,
-        agentSessionKind: 'fresh',
-        agent: 'claude',
-        command: "claude --prefill 'https://github.com/o/r/issues/12'",
-        launchDraft: 'https://github.com/o/r/issues/12'
-      })
-    ).resolves.toEqual({ status: 'created' })
+      deliverCreatedWebRuntimeAgentSessionPrompt(
+        await createWebRuntimeSessionTerminalResult({
+          worktreeId: WORKTREE_ID,
+          agentSessionKind: 'fresh',
+          agent: 'claude',
+          command: "claude --prefill 'https://github.com/o/r/issues/12'"
+        }),
+        { agent: 'claude', launchDraft: 'https://github.com/o/r/issues/12' }
+      )
+    ).resolves.toBe(true)
 
     // Argv-prefill sends no paste, so only this seeds the mirrored composer.
     expect(mocks.deliverLaunchPromptToAgentTab).not.toHaveBeenCalled()

@@ -1,4 +1,4 @@
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { WslDistroStoppedCard } from './WslDistroStoppedCard'
 import {
   startHeldPanesForWslDistro,

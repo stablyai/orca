@@ -1,9 +1,9 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
-import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session-approval-blocked-path'
-import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session/agent-session-approval-blocked-path'
+import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -11,7 +11,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
-} from '../../../../../src/shared/agent-session-approval-subject'
+} from '../../../../../src/shared/agent-session/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 function MobileNativeChatPermissionImpl({
@@ -135,7 +135,7 @@ function MobileNativeChatPermissionContext({
       ) : null}
       {isPlanApprovalSubject(permission.subject) ? (
         <View>
-          <MobileMarkdown content={permission.subject.text} />
+          <MobileNativeChatMarkdown content={permission.subject.text} />
           {permission.subject.filePath ? (
             <Text style={styles.planFile}>
               {t('chat.permission.planFile', 'Plan file: {{filePath}}', {
@@ -162,7 +162,7 @@ const styles = themedStyleSheet(() => ({
     marginVertical: spacing.sm,
     padding: spacing.md,
     gap: spacing.sm,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -216,7 +216,7 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   optionPrimary: {
     backgroundColor: colors.accentBlue

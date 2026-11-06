@@ -1,4 +1,4 @@
-import type { TaskPageJiraListStateModel } from '../use-task-page-jira-list-state'
+import type { TaskPageJiraListStateModel } from './jira/use-task-page-jira-list-state'
 import { useEffect } from 'react'
 import { resolveVisibleTaskProvider } from '../../../../shared/task-providers'
 import { normalizeGitHubTaskPreset } from '../../../../shared/task-github-search'

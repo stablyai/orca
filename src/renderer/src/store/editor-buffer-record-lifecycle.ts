@@ -1,3 +1,4 @@
+import { editorSaveResourceKey } from './slices/editor/buffers/editor-buffer-identity'
 import type { StateCreator } from 'zustand'
 import {
   editorBufferMirrorMismatch,
@@ -91,7 +92,13 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   const result = reconcileEditorBufferRecords(
     input,
     (file) => editorBufferIdForFile(file, routeState),
-    keepRequest && { ...keepRequest, drafts: state.editorDrafts ?? NO_DRAFTS },
+    keepRequest && {
+      ...keepRequest,
+      drafts: state.editorDrafts ?? NO_DRAFTS,
+      resourceKeys: new Map(
+        state.openFiles.map((file) => [file.id, editorSaveResourceKey(file, state)])
+      )
+    },
     rejoin
   )
   const changed: Partial<EditorBufferState> = {}

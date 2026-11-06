@@ -3,17 +3,17 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_HOST_RESTARTED,
   DISPATCH_REJECTED_NOT_DELIVERED,
   DISPATCH_REJECTED_PROVIDER_CLOSED
-} from '../../../shared/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
-import type { StructuredAttentionState } from '../../../shared/agent-session-attention'
+} from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import type { StructuredAttentionState } from '../../../shared/agent-session/agent-session-attention'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 
 const LOCATION = {
@@ -100,7 +100,8 @@ function harness(): {
   const feed = new StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => 1_700,
-    readStatusState: () => projectStructuredAgentSessionStatusState(items, submissions, fence)
+    readStatusState: () => projectStructuredAgentSessionStatusState(items, submissions, fence),
+    readChildWork: () => []
   })
   const events: AgentSessionTurnCompletionEvent[] = []
   return {

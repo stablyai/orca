@@ -1,6 +1,6 @@
 import '../memory/host-malloc-tunables-claim'
 import process from 'node:process'
-import { main } from './orcad-entry'
+import { main } from './orcad-command-startup'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { runOrcadNativePreflightVerdict } from './orcad-native-preflight'

@@ -1,3 +1,4 @@
+import { serializeRemoteRuntimeRpcRequest } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
@@ -10,9 +11,10 @@ import {
   getFederationAckedThrough,
   type FederationAckIdentity
 } from './federation-ack-checkpoints'
-import { createIdleSyncHarness } from './federation-sync-test-harness'
+import { createIdleSyncHarness, createFederationSyncDatabase } from './federation-sync-test-harness'
 import { parseRelayedMessage, syncFederatedDispatch } from './federation-sync'
 import { getOrchestrationPeerCapabilityCache } from './orchestration-peer-capability-cache'
+import { MessageWake } from '../runtime-message-waiters'
 
 describe('federation relay parsing', () => {
   it('accepts a supported message type', () => {
@@ -151,7 +153,9 @@ describe('federation relay acknowledgments', () => {
         payload: JSON.stringify({ subject: 'Status', body: 'Still around', type: 'status' })
       }
     ]
+    const fixture = createFederationSyncDatabase()
     const federated = {
+      ...fixture.federated,
       environment_id: 'environment_windows',
       environment_name: 'windows',
       peer_fingerprint: 'windows_peer_fingerprint',
@@ -160,51 +164,39 @@ describe('federation relay acknowledgments', () => {
       to_home_imported_sequence: 0,
       to_home_acknowledged_sequence: 0
     }
-    const db = {
-      getFederatedDispatch: () => federated,
-      getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
-      getWorkerDispatch: () => ({ state: 'ready' }),
-      listPendingFederationRelay: () => [],
-      importFederatedRelayItem: ({
-        sequence,
-        message,
-        lifecycle
-      }: {
-        sequence: number
-        message: { to: string; type: 'status' | 'worker_done' }
-        lifecycle:
-          | { kind: 'none' }
-          | { kind: 'heartbeat'; at: string }
-          | { kind: 'worker_report'; outcome: 'succeeded' | 'failed' }
-          | { kind: 'rejected'; code: string; reason: string }
-      }) => {
-        const duplicate = sequence <= federated.to_home_imported_sequence
-        federated.to_home_imported_sequence = Math.max(
-          federated.to_home_imported_sequence,
-          sequence
-        )
-        return {
-          message: { to_handle: message.to, type: message.type, read: 1 },
-          duplicate,
-          ...(lifecycle.kind === 'worker_report'
-            ? { lifecycle: { action: 'settled' as const, outcome: lifecycle.outcome } }
-            : {})
-        }
-      },
-      recordFederatedHomeAcknowledgment: ({
-        remoteRuntimeEpoch: epoch,
-        sequence
-      }: {
-        remoteRuntimeEpoch: string
-        sequence: number
-      }) => {
-        federated.remote_runtime_epoch = epoch
-        federated.to_home_acknowledged_sequence = sequence
-      },
-      updateFederatedDispatchRuntimeEpoch: (_dispatchId: string, epoch: string) => {
-        federated.remote_runtime_epoch = epoch
+    const db = fixture.db
+    fixture.db.getFederatedDispatch = () => federated
+    fixture.db.getDispatchContextById = () => ({
+      ...fixture.context,
+      run_id: 'run_home',
+      task_id: 'task_home'
+    })
+    fixture.db.getWorkerDispatch = () => ({ ...fixture.worker, state: 'ready' })
+    fixture.db.listPendingFederationRelay = () => []
+    fixture.db.importFederatedRelayItem = ({ sequence, message, lifecycle }) => {
+      const duplicate = sequence <= federated.to_home_imported_sequence
+      federated.to_home_imported_sequence = Math.max(federated.to_home_imported_sequence, sequence)
+      return {
+        message: { ...fixture.message, to_handle: message.to, type: message.type, read: 1 },
+        duplicate,
+        ...(lifecycle.kind === 'worker_report'
+          ? { lifecycle: { action: 'settled' as const, outcome: lifecycle.outcome, duplicate } }
+          : {})
       }
-    } as never
+    }
+    fixture.db.recordFederatedHomeAcknowledgment = ({
+      remoteRuntimeEpoch: epoch,
+      sequence
+    }: {
+      remoteRuntimeEpoch: string
+      sequence: number
+    }) => {
+      federated.remote_runtime_epoch = epoch
+      federated.to_home_acknowledged_sequence = sequence
+    }
+    fixture.db.updateFederatedDispatchRuntimeEpoch = (_dispatchId: string, epoch: string) => {
+      federated.remote_runtime_epoch = epoch
+    }
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
@@ -419,7 +411,7 @@ describe('federation relay acknowledgments', () => {
 
     pulled = [relayItem(2)]
     await syncFederatedDispatch(runtime, dispatch.id)
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
     expect(db.getUnreadMessages(`run:${run.id}`).map((message) => message.id)).toEqual([
       'msg_federated_2'
     ])
@@ -452,7 +444,9 @@ describe('federation relay acknowledgments', () => {
         })
       }
     })
+    const fixture = createFederationSyncDatabase()
     const federated = {
+      ...fixture.federated,
       environment_id: 'environment_windows',
       environment_name: 'windows',
       peer_fingerprint: 'windows_peer_fingerprint',
@@ -461,43 +455,57 @@ describe('federation relay acknowledgments', () => {
       to_home_imported_sequence: 0,
       to_home_acknowledged_sequence: 0
     }
-    let pendingToWorker = [{ sequence: 1 }]
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb({
-      getFederatedDispatch: () => federated,
-      getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
-      importFederatedRelayItem: ({
-        sequence,
-        message,
-        lifecycle
-      }: {
-        sequence: number
-        message: { to: string; type: 'status' | 'worker_done' }
-        lifecycle:
-          | { kind: 'worker_report'; outcome: 'succeeded' | 'failed' }
-          | { kind: 'none' | 'heartbeat' | 'rejected' }
-      }) => {
-        federated.to_home_imported_sequence = sequence
-        return {
-          message: { to_handle: message.to, type: message.type },
-          duplicate: false,
-          ...(lifecycle.kind === 'worker_report'
-            ? { lifecycle: { action: 'settled', outcome: lifecycle.outcome } }
-            : {})
-        }
-      },
-      recordFederatedHomeAcknowledgment: ({ sequence }: { sequence: number }) => {
-        federated.to_home_acknowledged_sequence = sequence
-      },
-      updateFederatedDispatchRuntimeEpoch: (_dispatchId: string, runtimeEpoch: string) => {
-        federated.remote_runtime_epoch = runtimeEpoch
-      },
-      getWorkerDispatch: () => ({ state: 'ready' }),
-      listPendingFederationRelay: () => pendingToWorker,
-      acknowledgeFederationRelay: () => {
-        pendingToWorker = []
+    let pendingToWorker: ReturnType<OrchestrationDb['listPendingFederationRelay']> = [
+      {
+        dispatch_id: 'dispatch_remote',
+        direction: 'to_worker',
+        sequence: 1,
+        message_id: 'msg_pending',
+        kind: 'status',
+        payload: '{}',
+        byte_count: 2,
+        acked_at: null,
+        created_at: '2026-01-01T00:00:00.000Z'
       }
-    } as never)
+    ]
+    const runtime = new OrcaRuntimeService()
+    fixture.db.getFederatedDispatch = () => federated
+    fixture.db.getDispatchContextById = () => ({
+      ...fixture.context,
+      run_id: 'run_home',
+      task_id: 'task_home'
+    })
+    fixture.db.importFederatedRelayItem = ({ sequence, message, lifecycle }) => {
+      federated.to_home_imported_sequence = sequence
+      return {
+        message: { ...fixture.message, to_handle: message.to, type: message.type },
+        duplicate: false,
+        ...(lifecycle.kind === 'worker_report'
+          ? {
+              lifecycle: {
+                action: 'settled' as const,
+                outcome: lifecycle.outcome,
+                duplicate: false
+              }
+            }
+          : {})
+      }
+    }
+    fixture.db.recordFederatedHomeAcknowledgment = ({ sequence }: { sequence: number }) => {
+      federated.to_home_acknowledged_sequence = sequence
+    }
+    fixture.db.updateFederatedDispatchRuntimeEpoch = (
+      _dispatchId: string,
+      runtimeEpoch: string
+    ) => {
+      federated.remote_runtime_epoch = runtimeEpoch
+    }
+    fixture.db.getWorkerDispatch = () => ({ ...fixture.worker, state: 'ready' })
+    fixture.db.listPendingFederationRelay = () => pendingToWorker
+    fixture.db.acknowledgeFederationRelay = () => {
+      pendingToWorker = []
+    }
+    runtime.setOrchestrationDb(fixture.db)
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       peerFingerprint: federated.peer_fingerprint
     } as never)
@@ -692,4 +700,97 @@ describe('federation relay acknowledgments', () => {
 
     expect(ackCalls()).toHaveLength(1)
   })
+})
+
+describe('bounded outgoing answer relay', () => {
+  it.each(['drain', 'ahead', 'no-progress', 'superseded'] as const)(
+    'keeps canonical bytes and obeys durable ACK on %s',
+    async (mode) => {
+      const harness = createIdleSyncHarness(0)
+      const db = harness.runtime.getOrchestrationDb()
+      const payload = JSON.stringify({ body: '\u0001'.repeat(10000) })
+      const items = Array.from({ length: 16 }, (_, i) => ({
+        dispatch_id: 'dispatch_remote',
+        direction: 'to_worker' as const,
+        sequence: i + 1,
+        message_id: `m${i}`,
+        kind: 'control_message',
+        payload,
+        byte_count: Buffer.byteLength(payload),
+        created_at: '',
+        acked_at: null,
+        answer_sender_report: JSON.stringify({ version: 1, name: 'Known A', agent: 'codex' })
+      }))
+      let pending = items
+      db.listPendingFederationRelay = () => pending
+      const acknowledgments: number[] = []
+      db.acknowledgeFederationRelay = ({ throughSequence }) => {
+        acknowledgments.push(throughSequence)
+        pending = pending.filter((item) => item.sequence > throughSequence)
+      }
+      const calls: number[][] = []
+      let measurements = 0
+      let current = true
+      const original = harness.remoteCall.getMockImplementation()!
+      harness.remoteCall.mockImplementation(async (...args) => {
+        if (args[1] !== 'orchestration.federationImport') {
+          return original(...args)
+        }
+        const envelope = args[4]
+        const prepare = args[5]?.prepareRequest
+        if (!prepare) {
+          throw new Error('missing actual transport preparation')
+        }
+        const serialize = (params: unknown, selectedEnvelope: typeof envelope) =>
+          serializeRemoteRuntimeRpcRequest({
+            requestId: '12345678-1234-1234-1234-123456789012',
+            deviceToken: 'x'.repeat(65536),
+            method: args[1],
+            params,
+            envelope: selectedEnvelope
+          })
+        const selected = prepare({
+          params: args[2],
+          envelope,
+          measure: (params, selectedEnvelope) => {
+            measurements++
+            return Buffer.byteLength(serialize(params, selectedEnvelope))
+          }
+        })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real prefix preparer returns the supplied relay items unchanged.
+        const sent = selected.params as { items: typeof items }
+        expect(
+          Buffer.byteLength(serialize(selected.params, selected.envelope))
+        ).toBeLessThanOrEqual(786304)
+        expect(sent.items.every((item) => item.payload === payload)).toBe(true)
+        expect(selected.envelope?.orchestrationRequestId).toBe(
+          `relay_import_dispatch_remote_${sent.items.at(-1)!.sequence}`
+        )
+        calls.push(sent.items.map((item) => item.sequence))
+        if (mode === 'superseded') {
+          current = false
+        }
+        return {
+          acknowledgedThrough:
+            mode === 'ahead' ? 16 : mode === 'no-progress' ? 0 : sent.items.at(-1)!.sequence
+        }
+      })
+      await syncFederatedDispatch(harness.runtime, 'dispatch_remote', () => current)
+      expect(calls[0].length).toBeLessThan(16)
+      expect(measurements).toBeLessThanOrEqual(calls.length * 6)
+      if (mode === 'drain') {
+        expect(calls.flat()).toEqual(Array.from({ length: 16 }, (_, i) => i + 1))
+        expect(pending).toEqual([])
+      }
+      if (mode === 'ahead') {
+        expect(calls).toHaveLength(1)
+        expect(acknowledgments).toEqual([16])
+      }
+      if (mode === 'no-progress' || mode === 'superseded') {
+        expect(calls).toHaveLength(1)
+        expect(acknowledgments).toEqual([])
+        expect(pending).toHaveLength(16)
+      }
+    }
+  )
 })

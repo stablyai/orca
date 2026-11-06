@@ -7,6 +7,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
+import { requestPluginInstallCounts } from '@/store/plugin-install-counts'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -16,6 +17,22 @@ export type PluginPagePreview =
 function marketplaceError(cause: unknown, fallback: string): string {
   console.warn('[plugins] marketplace action failed:', cause)
   return fallback
+}
+
+/** Reads each listing's install preview once; a failed read is retried on the next ask. */
+export function createPluginPagePreviewCache(): PluginPreviewCache {
+  return new PluginPreviewCache((listing) =>
+    window.api.plugins
+      .previewMarketplacePlugin({
+        marketplaceSourceId: listing.marketplaceSourceId,
+        pluginKey: listing.pluginKey
+      })
+      .then((preview): PluginPagePreview => ({ ok: true, preview }))
+      .catch((cause: unknown): PluginPagePreview => {
+        console.warn('[plugins] plugin page preview failed:', cause)
+        return { ok: false }
+      })
+  )
 }
 
 /**
@@ -37,24 +54,11 @@ export function usePluginCatalog({
   const [error, setError] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
-  const [previewCache] = useState(
-    () =>
-      new PluginPreviewCache((listing) =>
-        window.api.plugins
-          .previewMarketplacePlugin({
-            marketplaceSourceId: listing.marketplaceSourceId,
-            pluginKey: listing.pluginKey
-          })
-          .then((preview): PluginPagePreview => ({ ok: true, preview }))
-          .catch((cause: unknown): PluginPagePreview => {
-            console.warn('[plugins] plugin page preview failed:', cause)
-            return { ok: false }
-          })
-      )
-  )
+  const [previewCache] = useState(createPluginPagePreviewCache)
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
+    requestPluginInstallCounts()
     try {
       const [nextSources, nextListings] = await Promise.all([
         window.api.plugins.listMarketplaces(),

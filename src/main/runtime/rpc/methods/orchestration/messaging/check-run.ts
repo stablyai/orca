@@ -1,9 +1,10 @@
 import type { MessageRow, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/formatter'
-import { exposeMessages } from './mailbox-message-receipt'
+import { deliveryReceipt, exposeMessages, handsOverBatch } from './mailbox-message-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from '../schemas'
 import { resolveRunScope } from '../runs/run-scope'
@@ -93,6 +94,9 @@ export async function checkRunMailbox(args: {
   revalidateConsumer()
 
   const pending = await checkRunPendingMail({ ...args, run, revalidateConsumer })
+  if (handsOverBatch(pending.result)) {
+    return pending.result
+  }
   try {
     revalidateConsumer()
   } catch (error) {
@@ -132,42 +136,30 @@ export async function checkRunMailbox(args: {
       : {})
   })
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
-  const readDelivery = (wakeTypes?: MessageType[]) =>
-    db.getOrCreateRunDelivery({ runId: run.id, consumerGeneration: generation, wakeTypes })
-  let peeked = params.peek ? readPeek() : []
-  if (params.peek && peeked.length > 0) {
-    return peekResult(peeked)
-  }
-  let current = params.peek ? undefined : readDelivery(params.wait ? typeFilter : undefined)
-  if (current) {
-    return {
+  const result = (batch: MailboxDeliveryBatch | undefined) =>
+    deliveryReceipt({
+      mailbox: { runId: run.id },
+      batch,
+      acknowledged,
+      format: params.format === true || params.inject === true
+    })
+  // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
+  const takeDelivery = (wakeTypes?: MessageType[]) =>
+    db.takeRunDelivery({
       runId: run.id,
-      deliveryId: current.delivery.id,
-      messages: exposeMessages(current.messages),
-      count: current.messages.length,
-      replayed: current.replayed,
-      acknowledged: acknowledged ?? null,
-      timedOut: false,
-      cancelled: false,
-      connectionLost: false,
-      ...(params.format || params.inject
-        ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
-        : {})
+      consumerGeneration: generation,
+      wakeTypes,
+      recordTaken: (taken) => args.recordMutationReceipt?.(result(taken))
+    })
+  if (params.peek) {
+    const peeked = readPeek()
+    if (peeked.length > 0 || !params.wait) {
+      return peekResult(peeked)
     }
-  }
-  if (!params.wait) {
-    if (params.peek) {
-      return peekResult([])
-    }
-    return {
-      runId: run.id,
-      deliveryId: null,
-      messages: [],
-      count: 0,
-      acknowledged: acknowledged ?? null,
-      timedOut: false,
-      cancelled: false,
-      connectionLost: false
+  } else {
+    const current = takeDelivery(params.wait ? typeFilter : undefined)
+    if (current || !params.wait) {
+      return result(current)
     }
   }
 
@@ -194,58 +186,19 @@ export async function checkRunMailbox(args: {
       'This mailbox consumer was replaced while waiting.'
     )
   }
-  if (waitResult === 'timed_out') {
-    if (params.peek) {
-      return { ...peekResult([]), timedOut: true, cancelled: false, connectionLost: false }
+  if (waitResult === 'timed_out' || waitResult === 'cancelled') {
+    const ended = {
+      timedOut: waitResult === 'timed_out',
+      cancelled: waitResult === 'cancelled',
+      connectionLost: waitResult === 'cancelled' && signal?.aborted === true
     }
-    return {
-      runId: run.id,
-      deliveryId: null,
-      messages: [],
-      count: 0,
-      acknowledged: acknowledged ?? null,
-      timedOut: true,
-      cancelled: false,
-      connectionLost: false
-    }
-  }
-  if (waitResult === 'cancelled') {
-    if (params.peek) {
-      return {
-        ...peekResult([]),
-        timedOut: false,
-        cancelled: true,
-        connectionLost: signal?.aborted === true
-      }
-    }
-    return {
-      runId: run.id,
-      deliveryId: null,
-      messages: [],
-      count: 0,
-      acknowledged: acknowledged ?? null,
-      timedOut: false,
-      cancelled: true,
-      connectionLost: signal?.aborted === true
-    }
+    return params.peek ? { ...peekResult([]), ...ended } : { ...result(undefined), ...ended }
   }
   if (params.peek) {
-    peeked = readPeek()
-    return { ...peekResult(peeked), timedOut: false, cancelled: false, connectionLost: false }
+    return { ...peekResult(readPeek()), timedOut: false, cancelled: false, connectionLost: false }
   }
-  current = readDelivery(typeFilter)
-  return {
-    runId: run.id,
-    deliveryId: current?.delivery.id ?? null,
-    messages: exposeMessages(current?.messages ?? []),
-    count: current?.messages.length ?? 0,
-    replayed: current?.replayed ?? false,
-    acknowledged: acknowledged ?? null,
-    timedOut: false,
-    cancelled: false,
-    connectionLost: false,
-    ...(params.format && current
-      ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
-      : {})
-  }
+  const batch = waitResult.share(`${address}:${generation}`, () => takeDelivery(typeFilter))
+  // A waiter that shares another's take has no take transaction, so it receipts the batch on arrival.
+  args.recordMutationReceipt?.(result(batch))
+  return result(batch)
 }

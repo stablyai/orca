@@ -137,8 +137,9 @@ describe('pr-refresh-coordinator', () => {
 
     reportVisiblePRRefreshCandidates([visibleCandidate], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
-    await refreshPRNow(candidate)
+    await refreshPRNow(candidate, 'manual', { userRefresh: true })
 
+    expect(getPRForBranchOutcomeMock.mock.calls[1]?.[5]).toMatchObject({ userRefresh: true })
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
 
     await vi.advanceTimersByTimeAsync(2_499)
@@ -148,6 +149,7 @@ describe('pr-refresh-coordinator', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+    expect(getPRForBranchOutcomeMock.mock.calls[2]?.[5]).not.toHaveProperty('userRefresh')
   })
 
   it('stops polling settled merged PRs, including repeated visibility reports', async () => {

@@ -1,9 +1,9 @@
 import type { StructuredAgentSessionReadEffects } from './structured-agent-session-read-owner-contract'
 import { sameStructuredReadTarget } from '@/attention/agent-subject-read-actions'
 import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
-import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
+import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 
 /** Records PRs a chat's tools print (e.g. `gh pr create`) on its workspace, like terminal output. */

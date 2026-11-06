@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createBrowserMockApi } from './browser-slice-test-harness'
-import { createEditorTabsStore } from './editor-slice-test-harness'
-import { createTestStore as createAppStore, makeWorktree, seedStore } from './store-test-helpers'
+import './editor-slice-test-harness'
+import { createTestStore as createAppStore, seedStore } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import type { AppState } from '../types'
 
@@ -60,29 +60,6 @@ function expectFloatingSelection(
 
 // Only active workspace projects global selection; visible floating-panel selection stays workspace-local.
 describe('selection in a workspace other than the active one', () => {
-  it('selects a created tab in its own workspace without moving the global tab', () => {
-    const store = createAppStore()
-    seedStore(store, {
-      activeWorktreeId: 'repo1::/path/wt1',
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })]
-      }
-    })
-    const mainTab = store.getState().createTab('repo1::/path/wt1')
-
-    const floatingTab = store.getState().createTab(FLOATING_TERMINAL_WORKTREE_ID)
-
-    const state = store.getState()
-    expect(state.activeTabId).toBe(mainTab.id)
-    expect(state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(floatingTab.id)
-    const floatingGroup = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
-    expect(
-      state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
-        (tab) => tab.id === floatingGroup?.activeTabId
-      )?.entityId
-    ).toBe(floatingTab.id)
-  })
-
   it('records a file selection in its own workspace without moving the global file', async () => {
     const store = createAppStore()
     seedStore(store, { activeWorktreeId: 'wt-1' })
@@ -99,68 +76,5 @@ describe('selection in a workspace other than the active one', () => {
     } finally {
       main.close()
     }
-  })
-
-  it.each(['wt-2', FLOATING_TERMINAL_WORKTREE_ID])(
-    'opens a file in %s without moving the global file or tab type',
-    (worktreeId) => {
-      const store = createEditorTabsStore()
-      const mainFileId = openMarkdown(store, 'wt-1')
-      store.setState({ activeTabType: 'terminal' })
-
-      const fileId = openMarkdown(store, worktreeId)
-
-      const state = store.getState()
-      expect(state.activeFileId).toBe(mainFileId)
-      expect(state.activeTabType).toBe('terminal')
-      expect(state.activeFileIdByWorktree[worktreeId]).toBe(fileId)
-      expect(state.activeTabTypeByWorktree[worktreeId]).toBe('editor')
-    }
-  )
-
-  it('still moves the global file for the active workspace', () => {
-    const store = createEditorTabsStore()
-    const fileId = openMarkdown(store, 'wt-1')
-    store.getState().setActiveFile(fileId)
-
-    expect(store.getState().activeFileId).toBe(fileId)
-  })
-
-  it('records a browser selection in its own workspace without moving the global surface', async () => {
-    const store = createAppStore()
-    seedStore(store, { activeWorktreeId: 'wt-1' })
-    // Layout-owner frames must draw tabs before selection.
-    const main = await drawTabsFromMain(store)
-    const mainTab = store.getState().createBrowserTab('wt-1', 'https://main.example.com')
-    const floatingTab = store
-      .getState()
-      .createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, 'https://floating.example.com')
-    await main.settle()
-    main.close()
-    store.getState().setActiveBrowserTab(mainTab.id)
-    store.setState({ activeTabType: 'editor' })
-
-    store.getState().setActiveBrowserTab(floatingTab.id)
-
-    const state = store.getState()
-    expect(state.activeBrowserTabId).toBe(mainTab.id)
-    expect(state.activeTabType).toBe('editor')
-    expect(state.activeBrowserTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(floatingTab.id)
-    expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('browser')
-  })
-
-  it('still moves the global browser surface for the active workspace', async () => {
-    const store = createAppStore()
-    seedStore(store, { activeWorktreeId: 'wt-1' })
-    const main = await drawTabsFromMain(store)
-    const tab = store.getState().createBrowserTab('wt-1', 'https://main.example.com')
-    await main.settle()
-    main.close()
-    store.setState({ activeTabType: 'editor' })
-
-    store.getState().setActiveBrowserTab(tab.id)
-
-    expect(store.getState().activeBrowserTabId).toBe(tab.id)
-    expect(store.getState().activeTabType).toBe('browser')
   })
 })

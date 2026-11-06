@@ -2,11 +2,10 @@ import {
   RELAY_HOST_CLOSE_REASON,
   type RelayHostCloseReason
 } from '../../../shared/relay-host-close-reason'
-import {
-  relayStatusCellUrl,
-  type MobileRelayStatusPublisher
-} from '../../../shared/mobile-relay-status'
-import type { RelayBrokerStatus, RelayAccessTokenRefresh } from './relay-session-broker-contract'
+import { relayStatusCellUrl } from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type * as RelayStatus from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
+
 import { shouldRetryRelayConnectionError } from './relay-http-client'
 import {
   RelayReadinessWaiters,
@@ -32,7 +31,7 @@ type RelayAuthCoordinatorOptions = {
     isCurrent: () => boolean
     refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
-  onStatus: MobileRelayStatusPublisher
+  onStatus: RelayStatus.MobileRelayStatusPublisher
   lingerMs?: number
   random?: () => number
 }
@@ -101,7 +100,7 @@ export class RelayAuthCoordinator {
   }
 
   // Derive the cell from ownership so coordinator republishes cannot blank the broker's announced cell.
-  private publish(status: RelayBrokerStatus): void {
+  private publish(status: RelayStatus.MobileRelayStatus): void {
     this.options.onStatus(
       status,
       relayStatusCellUrl(status, this.ownership?.broker?.endpoint?.cellUrl),

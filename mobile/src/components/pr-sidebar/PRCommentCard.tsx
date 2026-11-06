@@ -7,13 +7,13 @@ import type {
   GitHubReactionContent,
   PRComment
 } from '../../../../src/shared/github/comment-types'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
-import { CommentMarkdown } from './CommentMarkdown'
+import { MobileMarkdown } from '../MobileMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 
@@ -186,7 +186,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         ) : null}
         {comment.url ? (
           <Pressable
-            style={styles.openButton}
+            style={({ pressed }) => [styles.openButton, pressed && pressedStyle]}
             onPress={() => openExternalLink(comment.url)}
             hitSlop={8}
             accessibilityRole="button"
@@ -210,7 +210,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         </View>
       ) : (
         <View style={styles.body}>
-          <CommentMarkdown content={comment.body} />
+          <MobileMarkdown content={comment.body} />
           <Reactions reactions={comment.reactions} />
         </View>
       )}

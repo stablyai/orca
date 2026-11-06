@@ -1,9 +1,7 @@
 import type { AppState } from '../types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RuntimeAwareSshReadState = Pick<
   AppState,

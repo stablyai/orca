@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/worker-terminal-release-reconciliation'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { eraseRpcMethods, type RpcContext } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -104,7 +104,7 @@ describe('orchestration worker release recovery', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     const parsed = method.params ? method.params.parse(params) : undefined

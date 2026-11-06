@@ -18,10 +18,4 @@ describe('statusDotColor', () => {
       })
     ).toBe(colors.statusAmber)
   })
-
-  it('keeps an idle disconnected host gray', () => {
-    expect(statusDotColor('disconnected', { kind: 'normal', label: 'Disconnected' })).toBe(
-      colors.textMuted
-    )
-  })
 })

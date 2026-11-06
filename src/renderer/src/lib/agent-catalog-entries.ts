@@ -1,4 +1,4 @@
-import { TUI_AGENT_FAVICON_DOMAINS } from '../../../shared/tui-agent-favicon-domains'
+import { TUI_AGENT_FAVICON_DOMAINS } from '../../../shared/agent-launch/catalog/tui-agent-favicon-domains'
 import { primaryAgentCatalogEntries } from './agent-catalog-entries-primary'
 import { secondaryAgentCatalogEntries } from './agent-catalog-entries-secondary'
 import type { AgentCatalogEntry } from './agent-catalog'

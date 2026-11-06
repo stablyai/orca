@@ -30,6 +30,21 @@ export type OrcadMigrationBlobDestination = {
   stageChunk: (request: OrcadMigrationBlobChunkRequest) => Promise<OrcadMigrationBlobChunkResult>
 }
 
+/** Serve exported bytes, refusing any descriptor they were not exported as. */
+export function exportedOrcadMigrationBlobSource(
+  blobs: readonly { descriptor: OrcadMigrationBlobDescriptor; bytes: Buffer }[]
+): OrcadMigrationBlobSource {
+  return {
+    readChunk: async (descriptor, offset, maxBytes) => {
+      const blob = blobs.find((entry) => sameOrcadMigrationBlob(entry.descriptor, descriptor))
+      if (!blob) {
+        throw new Error(`orcad_migration_source_blob_changed:${descriptor.blobKind}`)
+      }
+      return blob.bytes.subarray(offset, offset + maxBytes)
+    }
+  }
+}
+
 type OrcadMigrationBlobTransfer = {
   source: OrcadMigrationBlobSource
   manifest: OrcadMigrationManifest

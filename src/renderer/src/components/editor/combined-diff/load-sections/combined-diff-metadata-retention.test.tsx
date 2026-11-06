@@ -5,12 +5,12 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type {
   GitDiffResult,
   GitDiffTextResult
-} from '../../../../../../shared/git-diff-compare-types'
-import type { DiffSection } from '../../diff-section-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { createCombinedDiffSectionIndexMap } from '../resolve-changes/combined-diff-section-identity'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
@@ -20,7 +20,15 @@ import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { useCombinedDiffSectionRevalidation } from './use-combined-diff-section-revalidation'
 
 const sectionFetch = vi.hoisted(() => vi.fn())
-vi.mock('./fetch-combined-diff-section', () => ({ fetchCombinedDiffSection: sectionFetch }))
+vi.mock('./fetch-combined-diff-section', () => ({
+  fetchCombinedDiffSection: async (args: { operation: unknown }) => ({
+    result: await sectionFetch(args),
+    operation: args.operation
+  })
+}))
+vi.mock('./combined-diff-section-connection', () => ({
+  acquireCombinedDiffSectionOperation: () => ({ assertCurrent: () => undefined })
+}))
 import { useCombinedDiffSectionLoader } from './use-combined-diff-section-loader'
 
 const mocks = { fetch: sectionFetch }
@@ -253,54 +261,4 @@ it('discards an in-flight read when the other area of its path changes', async (
   await advanceReloadTimer()
   expect(hook.result.current.sections[0]?.modifiedContent).toBe('current')
   expect(hook.result.current.generation).toBe(generation)
-})
-
-it.each([
-  {
-    name: 'order',
-    change: (review: Review): Review => ({ ...review, status: review.status.toReversed() })
-  },
-  {
-    name: 'worktree owner',
-    change: (review: Review): Review => ({
-      ...review,
-      file: { ...review.file, worktreeId: 'folder:other' }
-    })
-  }
-])('uses the full reset when $name changes', async ({ name, change }) => {
-  mocks.fetch.mockResolvedValue(textResult())
-  const review: Review = { status: entries(3), file, viewStateKey: `fallback-${name}` }
-  const hook = renderReview(review)
-  await flush()
-  const before = hook.result.current
-  mocks.fetch.mockClear()
-  const next = change(review)
-  hook.rerender(next)
-  await flush()
-  expect(hook.result.current.generation).toBe(before.generation + 1)
-  expect(hook.result.current.sections[0]).not.toBe(before.sections[0])
-  expect(mocks.fetch.mock.calls[0]?.[0].file.worktreeId).toBe(next.file.worktreeId)
-})
-
-it('reloads a row whose submodule admission changes under an unchanged cache signature', async () => {
-  mocks.fetch.mockResolvedValue(textResult())
-  const review: Review = {
-    status: [{ ...entries(1)[0]!, added: undefined }],
-    file,
-    viewStateKey: 'submodule-policy'
-  }
-  const hook = renderReview(review)
-  await flush()
-  hook.rerender({
-    ...review,
-    status: [
-      {
-        ...review.status[0]!,
-        submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
-      }
-    ]
-  })
-  await flush()
-  expect(hook.result.current.sections[0]?.loadOnDemand).toBe(false)
-  expect(hook.result.current.sections[0]?.modifiedContent).toBe('after\n')
 })

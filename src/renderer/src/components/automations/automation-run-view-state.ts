@@ -1,7 +1,12 @@
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { translate } from '@/i18n/i18n'
 
-export type AutomationRunViewAvailability = 'terminal' | 'workspace' | 'snapshot' | 'metadata'
+export type AutomationRunViewAvailability =
+  | 'chat'
+  | 'terminal'
+  | 'workspace'
+  | 'snapshot'
+  | 'metadata'
 
 export type AutomationRunViewState = {
   availability: AutomationRunViewAvailability
@@ -61,6 +66,14 @@ export function getAutomationRunViewState({
   /** The workspace's paired server holds the terminal; only it can say whether it still lives. */
   terminalOnPairedServer?: boolean
 }): AutomationRunViewState {
+  if (run.sessionKind === 'chat' && run.chatSessionId && run.workspaceId && workspaceExists) {
+    return {
+      availability: 'chat',
+      actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
+      statusLabel: translate('auto.components.automations.runViewState.runOpen', 'Run is open'),
+      canOpen: true
+    }
+  }
   const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
   // Why the pane alone: a slept run drops its PTY id but keeps its pane, which the server resumes.
   const hasPaneIdentity = Boolean(run.terminalPaneKey)

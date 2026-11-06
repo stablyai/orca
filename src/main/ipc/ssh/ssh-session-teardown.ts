@@ -4,6 +4,7 @@ import { clearSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { isSshConnectionSolelyOwnedBy } from '../../ssh/connection/ssh-connection-attribution'
 import {
   connectInFlight,
+  fenceRunningConnectAttempt,
   invalidateConnectAttempt,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
@@ -42,8 +43,8 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     // Target removal also retires its scoped browser cookie storage.
     try {
       const [partitions, storage] = await Promise.all([
-        import('../../browser/local-ssh-browser-partitions'),
-        import('../../browser/browser-route-partition-storage-runtime')
+        import('../../browser/routing/local-host-partitions/local-ssh-browser-partitions'),
+        import('../../browser/routing/partitions/browser-route-partition-storage-runtime')
       ])
       await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
       await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
@@ -80,6 +81,20 @@ export async function teardownSshTargetTransport(targetId: string): Promise<void
   }
   if (disconnect.status === 'rejected') {
     throw disconnect.reason
+  }
+}
+
+/** Caller holds the target lifecycle; the unlink already committed, so a failed hang-up only warns. */
+export async function releaseUnlinkedHostTransport(targetId: string): Promise<void> {
+  // A connect already past the lifecycle would republish the removed server; queued ones run after.
+  if (connectInFlight.has(targetId)) {
+    fenceRunningConnectAttempt(targetId)
+  }
+  clearSshHostServerStatus(targetId)
+  try {
+    await teardownSshTargetTransport(targetId)
+  } catch (err) {
+    console.warn(`[ssh] Failed to disconnect unlinked host ${targetId}: ${errorMessage(err)}`)
   }
 }
 

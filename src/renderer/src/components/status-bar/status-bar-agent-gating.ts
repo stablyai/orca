@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
 // Hide missing CLI items after detection; ZCode usage can use Desktop credentials without its TUI.

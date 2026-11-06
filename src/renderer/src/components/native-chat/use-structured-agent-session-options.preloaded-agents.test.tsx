@@ -32,15 +32,15 @@ vi.mock('@/runtime/host-structured-agents', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from '@/runtime/host-model-catalog-snapshots-sync'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
@@ -143,7 +143,7 @@ describe('a new chat of an agent with no saved pick', () => {
   afterEach(() => stop?.())
 
   it.each([
-    ['grok', { model: 'grok-4.6', label: 'grok-4.6 (saved)', effort: 'high', usable: true }],
+    ['grok', { model: 'grok-4.6', label: 'grok-4.6 (saved)', effort: null, usable: true }],
     ['opencode', { model: null, label: null, effort: null, usable: true }],
     ['omp', { model: null, label: null, effort: null, usable: true }]
   ] as const)(

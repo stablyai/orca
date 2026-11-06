@@ -14,7 +14,7 @@ import {
   SESSION,
   TEARDOWN_CURRENT
 } from './structured-agent-session-restart-resume-test-harness'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const boundary = { operationId: 'clear', afterFence: 1, clearedAt: NOW }
 const clear: AgentJournalRenderItem = {

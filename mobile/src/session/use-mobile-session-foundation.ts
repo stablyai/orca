@@ -36,12 +36,24 @@ export function useMobileSessionFoundation() {
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
-  const { client, clientId, state: connState } = useWorkspaceClient(hostId)
+  const {
+    client,
+    clientId,
+    state: connState,
+    pairedHostClient,
+    pairedHostState,
+    workspaceServer
+  } = useWorkspaceClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
-  const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
+  const {
+    name: worktreeName,
+    path: worktreePath,
+    hostId: worktreeHostId,
+    resolution: worktreeResolution
+  } = useLiveWorktreeName({
     client,
     connState,
     routeName: routeWorktreeName,
@@ -97,11 +109,16 @@ export function useMobileSessionFoundation() {
     client,
     clientId,
     connState,
+    pairedHostClient,
+    pairedHostState,
+    workspaceServer,
     hostCapabilities,
     reconnectAttempts,
     lastConnectedAt,
     forceReconnectHost,
     worktreeName,
+    worktreePath,
+    worktreeHostId,
     worktreeResolution,
     isWideLayout,
     activePanel,

@@ -1,11 +1,12 @@
 import type { vi } from 'vitest'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { AppState } from '@/store/types'
 
 export type StoreState = {
+  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
   activeWorktreeId: string | null
   tabsByWorktree: Record<
     string,
@@ -45,7 +46,7 @@ export type StoreState = {
     string,
     {
       checkedAt: number
-      status: { capabilities?: string[] } | null
+      status: { capabilities?: string[]; hostPlatform?: NodeJS.Platform } | null
     }
   >
   runtimeEnvironmentCatalogHydrated?: boolean

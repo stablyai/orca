@@ -92,8 +92,8 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
-// OMP reports compaction failure and no-ops in a normally completed turn's reply.
-const COMPACTION_FAILED = /\bcompaction failed\b/i
+// OMP reports compaction failure, no-ops and refused arguments in a normally completed turn's reply.
+const COMPACTION_FAILED = /\bcompaction failed\b|\bdoes not take focus instructions\b/i
 const COMPACTION_NOOP = /\b(?:nothing to compact|already compacted)\b/i
 
 function compactionReply(text: string): AcpCompactionReply | undefined {
@@ -115,6 +115,8 @@ function errorDetails(error: AcpAgentError): string | undefined {
 export const OMP_ACP_DIALECT: AcpDialect = {
   // OMP resolves any thinking level against the selected model (model-controls.ts setThinkingLevel).
   clampsUnlistedEffort: true,
+  // OMP offers its `ask` tool and extension dialogs only to clients that answer forms.
+  clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
   compactionReply,
   authenticationRequired: (error) => {

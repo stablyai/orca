@@ -4,7 +4,7 @@ import {
   decodeTerminalStreamJson,
   decodeTerminalStreamText,
   readTerminalStreamFrameId
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import type { TerminalUnreadableFrameResets } from './terminal-unreadable-frame-resets'
 import { translate } from '../i18n/mobile-i18n'
 

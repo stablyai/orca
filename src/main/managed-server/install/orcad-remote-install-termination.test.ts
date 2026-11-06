@@ -61,7 +61,7 @@ describe.each([
     { stage: 'version write', commands: completionCommandNumber - 1 },
     { stage: 'completion marker', commands: completionCommandNumber }
   ]
-  const install = (signal?: AbortSignal): Promise<void> =>
+  const install = (signal?: AbortSignal): Promise<unknown> =>
     installOrcadBundle(
       {
         conn,
@@ -116,7 +116,7 @@ describe.each([
       failStage(stage, commands, error)
 
       if (stage === 'locked recheck') {
-        await expect(install()).resolves.toBeUndefined()
+        await expect(install()).resolves.toBe('uploaded')
         expect(mockExec).toHaveBeenCalledTimes(completionCommandNumber + 1)
       } else {
         await expect(install()).rejects.toBe(error)
@@ -127,7 +127,7 @@ describe.each([
   )
 
   it('releases its lock once after successful completion', async () => {
-    await expect(install()).resolves.toBeUndefined()
+    await expect(install()).resolves.toBe('uploaded')
 
     expect(mockExec).toHaveBeenCalledTimes(completionCommandNumber + 1)
     expect(issuedCommands()[completionCommandNumber - 1]).toContain('.install-complete')
@@ -180,7 +180,7 @@ describe.each([
 
 describe('the install lock token', () => {
   const host = getRemoteHostPlatform('linux-x64')
-  const install = (): Promise<void> =>
+  const install = (): Promise<unknown> =>
     installOrcadBundle(
       {
         conn,

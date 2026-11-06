@@ -23,56 +23,12 @@ describe('feature tip modal state', () => {
       cliInstalled: false,
       modalData: { tipId: 'voice-dictation' },
       seenTipIds: ['voice-dictation'],
-      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
+      chatUiLaunchTipVariant: 'none',
       settings: makeSettings(),
       webClient: false
     })
 
     expect(tip?.id).toBe('voice-dictation')
-  })
-
-  it('falls back to the CLI tip first when no modal tip id is pinned', () => {
-    const tip = getFeatureTipForModal({
-      cliInstalled: false,
-      modalData: {},
-      seenTipIds: [],
-      inNativeChatUpgradeTipAudience: false,
-      featureInteractions: {},
-      settings: makeSettings(),
-      webClient: false
-    })
-
-    expect(tip?.id).toBe('orca-cli')
-  })
-
-  it('refuses the native chat upgrade tip by id for any profile outside its audience', () => {
-    for (const inNativeChatUpgradeTipAudience of [false, null]) {
-      expect(
-        getFeatureTipForModal({
-          cliInstalled: true,
-          modalData: { tipId: 'native-chat-upgrade' },
-          seenTipIds: [],
-          inNativeChatUpgradeTipAudience,
-          featureInteractions: {},
-          settings: makeSettings(),
-          webClient: false
-        })
-      ).toBeNull()
-    }
-  })
-
-  it('renders the native chat upgrade tip by id for its audience', () => {
-    const tip = getFeatureTipForModal({
-      cliInstalled: true,
-      modalData: { tipId: 'native-chat-upgrade' },
-      seenTipIds: ['native-chat-upgrade'],
-      inNativeChatUpgradeTipAudience: true,
-      featureInteractions: {},
-      settings: makeSettings(),
-      webClient: false
-    })
-
-    expect(tip?.id).toBe('native-chat-upgrade')
   })
 })

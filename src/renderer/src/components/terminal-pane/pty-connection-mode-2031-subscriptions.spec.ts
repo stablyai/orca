@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -55,16 +59,21 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         transport: ReturnType<typeof createMockTransport>
         deps: ReturnType<typeof createDeps>
         emit: (data: string, meta?: { droppedOutput?: boolean }) => void
+        reconnect: () => void
         dispose: () => void
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-id')
         const captured: {
           current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
+          onConnect?: () => void
         } = { current: null }
         transport.connect.mockImplementation(
           async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
             captured.current = callbacks.onData ?? null
+            captured.onConnect = callbacks.onConnect
             return 'pty-id'
           }
         )
@@ -76,13 +85,18 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         const pane = createPane(1)
         const manager = createManager(1)
         const deps = createDeps({ isVisibleRef: { current: true } })
-        const binding = connectPanePty(pane as never, manager as never, deps as never)
+        const binding = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+        )
         await flushAsyncTicks(6)
         return {
           transport,
           deps,
           emit: (data: string, meta?: { droppedOutput?: boolean }) =>
             captured.current?.(data, meta),
+          reconnect: () => captured.onConnect?.(),
           dispose: () => binding.dispose()
         }
       }
@@ -100,6 +114,56 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
         expect(deps.paneLastThemeModeRef.current.get(1)).toBeUndefined()
         expect(replies(transport)).toEqual([])
+        dispose()
+      })
+
+      it('catches a subscribed pane up once per mode change across repeated reconnects', async () => {
+        const { transport, emit, reconnect, dispose } = await connectVisiblePane()
+        emit('\x1b[?2031h')
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'dark' }
+        }
+        reconnect()
+        reconnect()
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'light' }
+        }
+        reconnect()
+        reconnect()
+        expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n'])
+        dispose()
+      })
+
+      it('defers to the viewer holding the grid, then catches up once on release', async () => {
+        const { transport, emit, reconnect, dispose } = await connectVisiblePane()
+        const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+        emit('\x1b[?2031h')
+        setFitOverride('pty-id', 'mobile-fit', 40, 20)
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'dark' }
+        }
+        reconnect()
+        expect(replies(transport)).toEqual([])
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        expect(replies(transport)).toEqual(['\x1b[?997;1n'])
+        // A repeated DECSET while held must not cancel the owed report.
+        setFitOverride('pty-id', 'mobile-fit', 40, 20)
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'light' }
+        }
+        emit('\x1b[?2031h')
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n'])
+        // The holder may have told the program something else, so release re-sends even an unchanged mode.
+        setFitOverride('pty-id', 'remote-desktop-fit', 40, 20)
+        setFitOverride('pty-id', 'desktop-fit', 0, 0)
+        reconnect()
+        expect(replies(transport)).toEqual(['\x1b[?997;1n', '\x1b[?997;2n', '\x1b[?997;2n'])
         dispose()
       })
 
@@ -206,6 +270,8 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
 
     it('records hidden Codex mode 2031 subscribes split across becoming visible', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -228,12 +294,15 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef,
-          paneMode2031Ref,
-          paneLastThemeModeRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef,
+            paneMode2031Ref,
+            paneLastThemeModeRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks2
+        )
       )
       await flushAsyncTicks(6)
 
@@ -252,6 +321,8 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
 
     it('does not keep mode 2031 subscribed when a skipped hidden chunk unsubscribes last', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -269,12 +340,15 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          paneMode2031Ref,
-          paneLastThemeModeRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            paneMode2031Ref,
+            paneLastThemeModeRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks3
+        )
       )
       await flushAsyncTicks(6)
 

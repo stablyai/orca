@@ -1,3 +1,4 @@
+// @protected-copy: plugin catalog suggestion banner.
 import { useEffect, useState } from 'react'
 import { Puzzle } from 'lucide-react'
 import type { PluginFileTypeHostSuggestion } from '../../../../preload/api/plugin-host-api'

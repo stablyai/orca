@@ -8,10 +8,10 @@ import { launchAgentWithPrompt, promptedLaunchNotice } from '../session/pr-ai-tr
 import { resolveMobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
 import {
   buildFixCommitFailurePrompt,
-  type MobileCommitFailureRecovery,
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
-} from './mobile-commit-failure-recovery'
+} from '../../../src/shared/source-control/recovery/source-control-commit-failure'
+import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 
 type Params = {
   client: RpcClient | null

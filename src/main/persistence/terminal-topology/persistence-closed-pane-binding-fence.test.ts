@@ -7,8 +7,8 @@ import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/te
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { _resetClosedPaneFencesForTests } from './closed-pane-binding-fence'
 import { closeLeafOrTab } from './terminal-topology-commit'
-import { captureTerminalCloseRequest } from '../../runtime/terminal-surface-close'
-import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
+import { captureTerminalCloseRequest } from '../../runtime/terminal/surface/terminal-surface-close'
+import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surface-close-target'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 
 vi.mock('electron', () => ({
