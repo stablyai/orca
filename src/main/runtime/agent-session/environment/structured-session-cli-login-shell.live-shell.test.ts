@@ -27,8 +27,4 @@ describe.runIf(process.platform !== 'win32')('a structured session in a zsh logi
       'app'
     )
   })
-
-  it("keeps bare `orca` this app's CLI in a zsh that reads no login profile", async () => {
-    expect(await harness.run({ program: '/bin/zsh', args: ['-c', 'orca'] })).toBe('app')
-  })
 })

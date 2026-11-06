@@ -13,7 +13,16 @@ export const NATIVE_CHAT_STEER_CHORD_HOLD_MS = 150
 export function useNativeChatSteerChordPreview(
   root: RefObject<HTMLElement | null>,
   /** The send's own resolver (`nativeChatComposerSendState`): `alternateSend` is undefined where the chord sends no differently. */
-  { alternateSend, hasDraft }: { alternateSend?: NativeChatFollowUpBehavior; hasDraft: boolean },
+  {
+    alternateSend,
+    hasDraft,
+    chordSteersHead
+  }: {
+    alternateSend?: NativeChatFollowUpBehavior
+    hasDraft: boolean
+    /** On an empty composer the chord sends the head card now (the keydown's own flag). */
+    chordSteersHead: boolean
+  },
   /** Present only while there is a head card to steer. */
   steerHead: (() => boolean) | undefined,
   send: (intent?: NativeChatComposerSendIntent) => void,
@@ -23,7 +32,8 @@ export function useNativeChatSteerChordPreview(
   // 'down' while the modifier is pressed alone and the delay runs; 'held' once it has passed.
   const [chord, setChord] = useState<'up' | 'down' | 'held'>('up')
   const held = chord === 'held'
-  const enabled = alternateSend !== undefined
+  const steersHead = chordSteersHead && steerHead !== undefined
+  const enabled = alternateSend !== undefined || steersHead
   useEffect(() => {
     const element = root.current
     if (!element || !enabled) {
@@ -94,11 +104,11 @@ export function useNativeChatSteerChordPreview(
   }, [held])
 
   const preview: NativeChatSteerChordPreview | null =
-    !held || !alternateSend || pickerOpen
+    !held || pickerOpen
       ? null
       : hasDraft
-        ? alternateSend
-        : alternateSend === 'steer' && steerHead
+        ? (alternateSend ?? null)
+        : steersHead
           ? 'steer-queued'
           : null
 

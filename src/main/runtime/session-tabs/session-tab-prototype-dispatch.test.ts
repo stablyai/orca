@@ -362,7 +362,8 @@ describe('session runtime reentry', () => {
     expect(project).toHaveBeenCalledExactlyOnceWith({
       ...input,
       tabId: 'structured-agent-session-session',
-      eligible: expect.any(Function)
+      eligible: expect.any(Function),
+      savedOrder: undefined
     })
     expect(project.mock.calls[0]?.[0].eligible?.()).toBe(true)
   })

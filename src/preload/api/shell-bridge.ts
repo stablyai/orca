@@ -49,8 +49,5 @@ export const shellApi = {
   pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 
   pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
-    ipcRenderer.invoke('shell:pickDirectory', args),
-
-  copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
-    ipcRenderer.invoke('shell:copyFile', args)
+    ipcRenderer.invoke('shell:pickDirectory', args)
 } satisfies PreloadApi['shell']

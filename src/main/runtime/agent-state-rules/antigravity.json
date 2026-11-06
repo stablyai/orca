@@ -27,6 +27,43 @@
       "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
     },
     {
+      "id": "composer_ready_custom_status_line",
+      "why": "A custom statusLine paints its own rows where the hint row was, so `esc to cancel` never shows. agy 1.5.2 then marks a turn only with a braille spinner row right above the composer. Status rows may hold no rule run, hint or busy hint, so hint-row layouts and garbled grids cannot match, and pickers drawn between the composer and the status rows break the run of rows.",
+      "priority": 400,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "none": [{ "regex": "^[\\u2800-\\u28ff]" }] },
+          { "regex": "^─{8,}$" },
+          { "regex": "^>$|^>\\s+[a-z][a-z-]*\\s+mode:\\s", "ignoreCase": true },
+          { "regex": "^─{8,}$" },
+          {
+            "optional": {
+              "none": [
+                { "regex": "──" },
+                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true }
+              ]
+            }
+          },
+          {
+            "optional": {
+              "none": [
+                { "regex": "──" },
+                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true }
+              ]
+            }
+          },
+          {
+            "none": [
+              { "regex": "──" },
+              { "regex": "esc to cancel|for shortcuts", "ignoreCase": true }
+            ]
+          }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
       "id": "composer_not_shown",
       "why": "A readable screen that is not the idle composer may be a picker, dialog or busy turn, which a name-only title or a quiet process cannot see.",
       "priority": 100,
