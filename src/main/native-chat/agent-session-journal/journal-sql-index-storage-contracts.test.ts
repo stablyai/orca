@@ -103,6 +103,9 @@ it('rebuilds nested per-key indexes from membership, and drops them when emptied
   const members = c.storage.set<string>('signed-out-members', 7)
   members.add('send-1')
   facts.signedOutByFence.set(7, members)
+  const otherFence = c.storage.set<string>('signed-out-members', 8)
+  otherFence.add('send-1')
+  facts.signedOutByFence.set(8, otherFence)
   c.finish()
 
   c = command()
@@ -117,6 +120,7 @@ it('rebuilds nested per-key indexes from membership, and drops them when emptied
 
   c = command()
   expect(c.storage.observationFacts().signedOutByFence.has(7)).toBe(false)
+  expect(c.storage.observationFacts().signedOutByFence.get(8)?.has('send-1')).toBe(true)
 })
 
 it('lists family members and phase members in insertion order with the same submission objects', () => {
