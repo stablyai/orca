@@ -578,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} a atteint sa limite d’utilisation.",
       "reachedNamed": "{{agent}} a atteint sa limite {{window}}.",
-      "resetsAt": "Elle se réinitialise à {{when}}.",
       "theAgent": "L'agent",
       "windowCredits": "d’utilisation supplémentaire",
       "windowSession": "de session",
       "windowWeekly": "hebdomadaire",
-      "windowWeeklyModel": "hebdomadaire du modèle"
+      "windowWeeklyModel": "hebdomadaire du modèle",
+      "switchAccount": "Changer de compte",
+      "autoContinueCancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
+      "autoContinueCancel": "Ne pas reprendre",
+      "statusResetAt": "Réinitialisé à {{time}}",
+      "statusResetsAt": "Réinitialisation à {{time}}",
+      "statusContinuesShortly": "Orca reprendra sous peu",
+      "statusContinuesThen": "Orca reprendra à ce moment-là",
+      "statusWontContinue": "Orca ne reprendra pas automatiquement"
     },
     "useImageUpload": {
       "attachFailed": "Échec de l'ajout",

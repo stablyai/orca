@@ -262,6 +262,9 @@ export function useMobileStructuredSendWithOutcome(args: {
           ? { delivery: 'queue-if-active' as const }
           : {}),
         ...captured,
+        ...(intent?.usageLimitContinuationOfTurnItemId
+          ? { usageLimitContinuationOfTurnItemId: intent.usageLimitContinuationOfTurnItemId }
+          : {}),
         deadline,
         clientMessageId: send.clientMessageId,
         onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),

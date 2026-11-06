@@ -539,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}}이(가) 사용 한도에 도달했습니다.",
       "reachedNamed": "{{agent}}이(가) {{window}} 한도에 도달했습니다.",
-      "resetsAt": "{{when}}에 초기화됩니다.",
       "theAgent": "에이전트",
       "windowCredits": "추가 사용량",
       "windowSession": "세션",
       "windowWeekly": "주간",
-      "windowWeeklyModel": "모델별 주간"
+      "windowWeeklyModel": "모델별 주간",
+      "switchAccount": "계정 전환",
+      "autoContinueCancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
+      "autoContinueCancel": "계속하지 않기",
+      "statusResetAt": "{{time}}에 재설정됨",
+      "statusResetsAt": "{{time}}에 재설정",
+      "statusContinuesShortly": "Orca가 곧 계속합니다",
+      "statusContinuesThen": "그때 Orca가 계속합니다",
+      "statusWontContinue": "Orca가 자동으로 계속하지 않습니다"
     },
     "useImageUpload": {
       "attachFailed": "첨부 실패",

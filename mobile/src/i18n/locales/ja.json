@@ -539,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}} が使用量の上限に達しました。",
       "reachedNamed": "{{agent}} が{{window}}の上限に達しました。",
-      "resetsAt": "{{when}} にリセットされます。",
       "theAgent": "Agent",
       "windowCredits": "追加使用量",
       "windowSession": "セッション",
       "windowWeekly": "週間",
-      "windowWeeklyModel": "モデル別の週間"
+      "windowWeeklyModel": "モデル別の週間",
+      "switchAccount": "アカウントを切り替え",
+      "autoContinueCancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+      "autoContinueCancel": "続けない",
+      "statusResetAt": "{{time}} にリセット済み",
+      "statusResetsAt": "{{time}} にリセット",
+      "statusContinuesShortly": "Orca がまもなく続けます",
+      "statusContinuesThen": "その時点で Orca が続けます",
+      "statusWontContinue": "Orca は自動的には続けません"
     },
     "useImageUpload": {
       "attachFailed": "添付に失敗しました。",
