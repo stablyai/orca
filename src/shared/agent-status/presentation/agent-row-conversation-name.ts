@@ -122,7 +122,7 @@ export function getAgentRowConversationName(
         aiVaultTitle &&
         aiVaultTitle.agent === agentType &&
         aiVaultTitle.sessionId === providerSessionId
-          ? aiVaultTitle.title
+          ? aiVaultTitle
           : null,
       generatedTitle: tab.generatedTitle
     },
