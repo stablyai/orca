@@ -11,7 +11,9 @@ import {
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 import {
+  finishStoredNativeChatDraft,
   handbackReceiptKey,
+  hasHandbackReceipt,
   withHandbackReceipts,
   withIdentifiedHandback
 } from './native-chat-composer-draft-custody'
@@ -97,17 +99,28 @@ export function parseEntry(entry: unknown): JournalEntry[] {
     : []
 }
 
-/** The one read of the shared journal: its raw text (for an unchanged-output check) and entries. */
+/** The one read of the shared journal: its raw text (for an unchanged-output check), its entries,
+ *  and each entry as it was read, so a writer keeping it keeps its exact text. */
 export function readNativeChatComposerDraftJournal(): {
   raw: string | null
   entries: JournalEntry[]
+  read: unknown[]
 } {
   try {
     const raw = localStorage.getItem(JOURNAL_KEY)
-    const entries: unknown = raw === null ? [] : JSON.parse(raw)
-    return { raw, entries: Array.isArray(entries) ? entries.flatMap(parseEntry) : [] }
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw)
+    const entries: JournalEntry[] = []
+    const read: unknown[] = []
+    for (const value of Array.isArray(parsed) ? parsed : []) {
+      const entry = parseEntry(value)[0]
+      if (entry) {
+        entries.push(entry)
+        read.push(value)
+      }
+    }
+    return { raw, entries, read }
   } catch {
-    return { raw: null, entries: [] }
+    return { raw: null, entries: [], read: [] }
   }
 }
 
@@ -179,7 +192,7 @@ export function releaseNativeChatComposerDraftReplaySnapshot(): void {
 
 /** Replay newer drafts and additions once, return changed drafts for persistence, and discard
  *  entries older than storage. `drafts` starts as what storage committed; a newer ordinary
- *  snapshot replaces content but keeps committed receipts it never saw. */
+ *  snapshot, a removal included, replaces content but keeps committed receipts it never saw. */
 export function replayNativeChatComposerDraftJournal(
   drafts: Map<string, StoredNativeChatComposerDraft | null>,
   entries: NativeChatComposerDraftJournalSnapshot,
@@ -199,12 +212,19 @@ export function replayNativeChatComposerDraftJournal(
       stale.push({ scopeKey: entry.scopeKey, at: entry.at, identified: false })
       continue
     }
-    const kept = committed.get(entry.scopeKey)?.handbacks ?? []
+    const base = committed.get(entry.scopeKey)
+    const kept = base?.handbacks ?? []
     drafts.set(
       entry.scopeKey,
-      entry.draft && kept.length
-        ? { ...entry.draft, handbacks: withHandbackReceipts(entry.draft.handbacks, kept) }
+      !kept.length
+        ? entry.draft
         : entry.draft
+          ? { ...entry.draft, handbacks: withHandbackReceipts(entry.draft.handbacks, kept) }
+          : finishStoredNativeChatDraft(null, {
+              handbacks: kept,
+              owner: base?.owner,
+              savedAt: entry.at
+            })
     )
     if (!entry.draft) {
       removedAt.set(entry.scopeKey, entry.at)
@@ -215,15 +235,30 @@ export function replayNativeChatComposerDraftJournal(
   for (const { scopeKey, at, addition, custody } of additions) {
     const base = drafts.get(scopeKey) ?? null
     // An identified addition is judged by its receipt, never by a newer timestamp alone.
-    if (
-      ((custody ? removedAt.get(scopeKey) : (base?.savedAt ?? removedAt.get(scopeKey))) ?? 0) >= at
-    ) {
-      stale.push({ scopeKey, at, identified: Boolean(custody) })
+    const removed = (removedAt.get(scopeKey) ?? 0) >= at
+    if (!custody && (base?.savedAt ?? removedAt.get(scopeKey) ?? 0) >= at) {
+      stale.push({ scopeKey, at, identified: false })
       continue
     }
     if (custody) {
       const scoped = materialized?.get(scopeKey) ?? new Set<string>()
       materialized?.set(scopeKey, scoped.add(handbackReceiptKey(custody.handback)))
+    }
+    if (custody && removed) {
+      // Cleared after it arrived: its content goes with that removal, its identity stays owed.
+      if (!hasHandbackReceipt(base?.handbacks, custody.handback)) {
+        drafts.set(
+          scopeKey,
+          finishStoredNativeChatDraft(base, {
+            handbacks: withHandbackReceipts(base?.handbacks, [custody.handback]),
+            sourcePaths: base?.sourcePaths,
+            owner: base?.owner,
+            savedAt: Math.max(base?.savedAt ?? 0, removedAt.get(scopeKey) ?? 0)
+          })
+        )
+        changed.add(scopeKey)
+      }
+      continue
     }
     const from = base ?? { text: '', images: [], savedAt: 0 }
     const next = custody

@@ -16,7 +16,6 @@ import {
   projectStoredNativeChatDraftCustody
 } from './native-chat-composer-draft-receipt-proof'
 import { establishNativeChatDraftBase } from './native-chat-composer-draft-base'
-import { resetNativeChatDraftRetirementsForTests } from './native-chat-composer-draft-retirement'
 import {
   noticeNativeChatDraftReceipts,
   resetNativeChatDraftReceiptEventsForTests
@@ -234,7 +233,6 @@ export function resetNativeChatComposerDraftLoadForTests(): void {
   draftCustody.clear()
   knownDraftBases.clear()
   resetNativeChatDraftReceiptEventsForTests()
-  resetNativeChatDraftRetirementsForTests()
   releaseNativeChatComposerDraftReplaySnapshot()
   startNativeChatComposerDraftJournalRunForTests()
 }

@@ -545,8 +545,15 @@ describe('retiring a receipt once its source is dead', () => {
       const { tab, crash } = await adopted('refused')
       await tab.store.nativeChatComposerDraftWritesSettled()
       journalRefuses = refuse
+      // The source's own observer hears the completion; nothing else keeps it.
+      const heard: boolean[] = []
+      const stop = tab.handback.subscribeNativeChatDraftReceiptProgress(SCOPE, RECEIPT, (next) =>
+        heard.push(next.retired)
+      )
       tab.handback.retireNativeChatDraftReceipt(SCOPE, RECEIPT)
-      expect(progress(tab).retired).toBe(retired)
+      stop()
+      expect(heard.includes(true)).toBe(retired)
+      expect(progress(tab).retired).toBe(false)
       expect(identifiedInJournal()).toBe(false)
       // One complete copy of the draft, before or after the replacement; no addition beside it.
       const entries = JSON.parse(localStorage.getItem(JOURNAL_KEY) ?? '[]')

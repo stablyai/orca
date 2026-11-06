@@ -10,23 +10,18 @@ import {
   handbackReceiptKey,
   withNativeChatDraftCustody
 } from './native-chat-composer-draft-custody'
-import { retiredNativeChatDraftReceipts } from './native-chat-composer-draft-receipt-proof'
 import { writeNativeChatComposerDraftJournalBatch } from './native-chat-composer-draft-journal-batch'
-import { identifiedJournalId } from './native-chat-composer-draft-journal'
 import { nextSavedAt, records } from './native-chat-composer-draft-memory'
 import { savedForm } from './native-chat-composer-draft-saved-form'
 import type { NativeChatDraftHandbackReceipt } from './native-chat-composer-draft-storage'
 
-/** Retirements past their discharge, waiting for a committed record without the receipt. */
-const awaitingCommit = new Set<string>()
-
-function complete(scopeKey: string, key: string): void {
+function complete(scopeKey: string, key: string, completed: string[]): void {
   const custody = draftCustody.get(scopeKey)
-  awaitingCommit.delete(identifiedJournalId(scopeKey, key))
   if (custody) {
     custody.handbacks = custody.handbacks.filter((held) => handbackReceiptKey(held) !== key)
     for (const set of [
       custody.retiring,
+      custody.discharged,
       custody.durable,
       custody.incorporated,
       custody.committed,
@@ -37,33 +32,34 @@ function complete(scopeKey: string, key: string): void {
     }
     dropEmptyNativeChatDraftCustody(scopeKey)
   }
-  const retired = retiredNativeChatDraftReceipts.get(scopeKey) ?? new Set<string>()
-  retiredNativeChatDraftReceipts.set(scopeKey, retired.add(key))
+  completed.push(key)
 }
 
-/** Advances every requested retirement of the scope as far as its witnesses allow. Returns the
- *  receipts whose stored metadata now needs a metadata-only removal. */
-export function advanceNativeChatDraftRetirements(
-  scopeKey: string
-): NativeChatDraftHandbackReceipt[] {
+/** Advances every requested retirement of the scope as far as its witnesses allow: the receipts
+ *  whose stored metadata now needs a metadata-only removal, and the keys whose retirement
+ *  completed, for their observers to hear. */
+export function advanceNativeChatDraftRetirements(scopeKey: string): {
+  metadata: NativeChatDraftHandbackReceipt[]
+  completed: string[]
+} {
   const custody = draftCustody.get(scopeKey)
+  const metadata: NativeChatDraftHandbackReceipt[] = []
+  const completed: string[] = []
   // Before the base is known the input is not yet resolved: nothing can end.
   if (!custody?.retiring.size || custody.pending.length) {
-    return []
+    return { metadata, completed }
   }
-  const metadata: NativeChatDraftHandbackReceipt[] = []
   for (const key of Array.from(custody.retiring)) {
-    const id = identifiedJournalId(scopeKey, key)
     const receipt = custody.handbacks.find((held) => handbackReceiptKey(held) === key)
-    if (awaitingCommit.has(id)) {
+    if (custody.discharged.has(key)) {
       // A committed record already leaves it out.
       if (!custody.retired.has(key) || !receipt) {
-        complete(scopeKey, key)
+        complete(scopeKey, key, completed)
       }
       continue
     }
     if (!receipt) {
-      complete(scopeKey, key)
+      complete(scopeKey, key, completed)
       continue
     }
     if (custody.committed.has(key)) {
@@ -71,7 +67,7 @@ export function advanceNativeChatDraftRetirements(
       if (!writeNativeChatComposerDraftJournalBatch({ discharge: [[scopeKey, key]] }).written) {
         continue
       }
-      awaitingCommit.add(id)
+      custody.discharged.add(key)
       custody.retired.add(key)
       metadata.push(receipt)
       continue
@@ -83,20 +79,16 @@ export function advanceNativeChatDraftRetirements(
     })
     const draft = without ? savedForm(without) : null
     const witness = writeNativeChatComposerDraftJournalBatch({
-      snapshots: new Map([[scopeKey, { draft, at: draft?.savedAt ?? nextSavedAt() }]]),
-      discharge: [[scopeKey, key]]
+      snapshots: new Map([
+        [scopeKey, { draft, at: draft?.savedAt ?? nextSavedAt(), discharge: [key] }]
+      ])
     })
     if (!witness.snapshots.has(scopeKey)) {
       continue
     }
     custody.retired.add(key)
-    complete(scopeKey, key)
+    complete(scopeKey, key, completed)
     metadata.push(receipt)
   }
-  return metadata
-}
-
-export function resetNativeChatDraftRetirementsForTests(): void {
-  awaitingCommit.clear()
-  retiredNativeChatDraftReceipts.clear()
+  return { metadata, completed }
 }

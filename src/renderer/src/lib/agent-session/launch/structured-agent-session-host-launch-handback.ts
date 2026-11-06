@@ -12,7 +12,8 @@ import {
   nativeChatDraftReceiptProgress,
   retireNativeChatDraftReceipt,
   subscribeNativeChatDraftReceiptProgress,
-  type NativeChatDraftHandbackReceipt
+  type NativeChatDraftHandbackReceipt,
+  type NativeChatDraftReceiptProgress
 } from '@/components/native-chat/native-chat-composer-draft-handback'
 import {
   structuredAgentSessionDraftScopeKey,
@@ -60,19 +61,23 @@ export function holdHostLaunchHandback(
 }
 
 /** Advances the obligation as far as its witnesses allow; anything not yet proved waits on its
- *  wake. A backup of the returned input alone never lets the launch let go of it. */
-export function reconcileHostLaunchHandback(sessionId: string): void {
+ *  wake. A backup of the returned input alone never lets the launch let go of it. The draft
+ *  delivers the receipt's completion to this obligation's own subscription, which ends it. */
+export function reconcileHostLaunchHandback(
+  sessionId: string,
+  delivered?: NativeChatDraftReceiptProgress
+): void {
   const held = obligations.get(sessionId)
   if (!held) {
     return
   }
   const { receipt, scope } = held
-  held.stopDraft ??= subscribeNativeChatDraftReceiptProgress(scope, receipt, () => {
+  held.stopDraft ??= subscribeNativeChatDraftReceiptProgress(scope, receipt, (next) => {
     if (obligations.get(sessionId) === held) {
-      reconcileHostLaunchHandback(sessionId)
+      reconcileHostLaunchHandback(sessionId, next)
     }
   })
-  const progress = nativeChatDraftReceiptProgress(scope, receipt)
+  const progress = delivered ?? nativeChatDraftReceiptProgress(scope, receipt)
   if (!progress.retired && !(progress.backed && progress.incorporated)) {
     return
   }

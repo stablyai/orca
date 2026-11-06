@@ -169,95 +169,111 @@ describe('a returned opening and a draft whose saved base the renderer has not r
     second.clearNativeChatComposerDraftsForTests()
   })
 
-  it('keeps stored custody through a stale window’s newer unload snapshot and a slow replay read', async () => {
-    const backend = storageModule.nativeChatComposerDraftStorage()
-    await store.hydrateNativeChatComposerDrafts()
-    store.updateNativeChatComposerDraft(SCOPE, { text: A, images: [] }, 'immediate')
-    await store.nativeChatComposerDraftWritesSettled()
-    vi.resetModules()
-    const secondStorage = await import('./native-chat-composer-draft-storage')
-    secondStorage.setNativeChatComposerDraftStorageForTests(backend)
-    const second = await import('./native-chat-composer-draft-store')
-    await second.hydrateNativeChatComposerDrafts()
-    second.updateNativeChatComposerDraft(
-      SCOPE,
-      { text: 'Latest typing from the other window' },
-      'deferred'
-    )
-    const parent = await released()
-    const realSet = localStorage.setItem.bind(localStorage)
-    const quota = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
-      if (key === SAVED) {
-        throw new DOMException('full', 'QuotaExceededError')
+  it.each([
+    ['its newer typing', 'Latest typing from the other window plus one keystroke'],
+    ['its clear', '']
+  ])(
+    'keeps stored custody through a stale window’s newer unload snapshot of %s and a slow replay read',
+    async (_case, latest) => {
+      const backend = storageModule.nativeChatComposerDraftStorage()
+      await store.hydrateNativeChatComposerDrafts()
+      store.updateNativeChatComposerDraft(SCOPE, { text: A, images: [] }, 'immediate')
+      await store.nativeChatComposerDraftWritesSettled()
+      vi.resetModules()
+      const secondStorage = await import('./native-chat-composer-draft-storage')
+      secondStorage.setNativeChatComposerDraftStorageForTests(backend)
+      const second = await import('./native-chat-composer-draft-store')
+      await second.hydrateNativeChatComposerDrafts()
+      second.updateNativeChatComposerDraft(
+        SCOPE,
+        { text: 'Latest typing from the other window' },
+        'deferred'
+      )
+      const parent = await released()
+      const realSet = localStorage.setItem.bind(localStorage)
+      const quota = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+        if (key === SAVED) {
+          throw new DOMException('full', 'QuotaExceededError')
+        }
+        realSet(key, value)
+      })
+      parent.resolve({ state: 'unknown' })
+      await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+      await store.nativeChatComposerDraftWritesSettled()
+      expect(heldReceipt()).toBe(true)
+      expect(savedRow()?.firstMessage).toBeTruthy()
+      expect(await backend.read(SCOPE)).toMatchObject({
+        handbacks: [expect.objectContaining(RECEIPT)]
+      })
+      // That window's database will not open before it unloads; its transaction never starts.
+      const opening = deferred<void>()
+      secondStorage.setNativeChatComposerDraftStorageForTests({
+        ...backend,
+        update: async (scope, apply) => {
+          await opening.promise
+          await backend.update(scope, apply)
+        }
+      })
+      // One more edit in the stale window, still dirty, after the hand-back committed.
+      await vi.advanceTimersByTimeAsync(1)
+      second.updateNativeChatComposerDraft(SCOPE, { text: latest }, 'deferred')
+      window.dispatchEvent(new Event('pagehide'))
+      const journal: {
+        scopeKey: string
+        at: number
+        draft?: { text: string; handbacks?: unknown }
+      }[] = JSON.parse(localStorage.getItem('orca:nativeChatComposerDraftJournal:v1') ?? '[]')
+      // A newer ordinary snapshot that never saw the receipt: the edit, or the clear's removal.
+      const snapshot = journal.find(
+        (entry) =>
+          entry.scopeKey === SCOPE && (latest ? entry.draft?.text === latest : entry.draft === null)
+      )
+      expect(snapshot).toBeDefined()
+      expect(snapshot?.draft?.handbacks).toBeUndefined()
+      expect(snapshot!.at).toBeGreaterThan(
+        ((await backend.read(SCOPE)) as { savedAt: number }).savedAt
+      )
+      opening.reject(new Error('renderer terminated before database open'))
+      second.clearNativeChatComposerDraftsForTests()
+      await Promise.resolve()
+      // This renderer restarts; the write that would repair its replayed draft reads slowly.
+      const replayRead = deferred<void>()
+      storageModule.setNativeChatComposerDraftStorageForTests({
+        ...backend,
+        update: async (scope, apply) => {
+          await replayRead.promise
+          await backend.update(scope, apply)
+        }
+      })
+      await coldReload()
+      // Already right as published, before any Retry: the newer content (empty after the clear),
+      // and the stored receipt it never saw.
+      expect(text()).toBe(latest)
+      expect(heldReceipt()).toBe(true)
+      quota.mockRestore()
+      host.status.mockReset()
+      host.status.mockResolvedValue({ state: 'unknown' })
+      expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+      await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+      expect(text()).toBe(latest)
+      replayRead.resolve()
+      await store.nativeChatComposerDraftWritesSettled()
+      expect(text()).toBe(latest)
+      expect(host.prepare).toHaveBeenCalledOnce()
+      expect(host.release).toHaveBeenCalledOnce()
+      // The source is retired, so the receipt goes too, with nothing returned; a cleared draft
+      // leaves no record at all.
+      await vi.waitFor(() => expect(heldReceipt()).toBe(false))
+      await store.nativeChatComposerDraftWritesSettled()
+      expect(text()).toBe(latest)
+      if (latest) {
+        expect(await backend.read(SCOPE)).toMatchObject({ text: latest })
+      } else {
+        expect(await backend.read(SCOPE)).toBeUndefined()
       }
-      realSet(key, value)
-    })
-    parent.resolve({ state: 'unknown' })
-    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
-    await store.nativeChatComposerDraftWritesSettled()
-    expect(heldReceipt()).toBe(true)
-    expect(savedRow()?.firstMessage).toBeTruthy()
-    expect(await backend.read(SCOPE)).toMatchObject({
-      handbacks: [expect.objectContaining(RECEIPT)]
-    })
-    // One more keystroke in the stale window, still dirty, after the hand-back committed.
-    await vi.advanceTimersByTimeAsync(1)
-    const latest = 'Latest typing from the other window plus one keystroke'
-    second.updateNativeChatComposerDraft(SCOPE, { text: latest }, 'deferred')
-    // That window unloads before its database opens; its transaction never starts.
-    const opening = deferred<void>()
-    secondStorage.setNativeChatComposerDraftStorageForTests({
-      ...backend,
-      update: async (scope, apply) => {
-        await opening.promise
-        await backend.update(scope, apply)
-      }
-    })
-    window.dispatchEvent(new Event('pagehide'))
-    const journal: {
-      scopeKey: string
-      at: number
-      draft?: { text: string; handbacks?: unknown }
-    }[] = JSON.parse(localStorage.getItem('orca:nativeChatComposerDraftJournal:v1') ?? '[]')
-    const snapshot = journal.find(
-      (entry) => entry.scopeKey === SCOPE && entry.draft?.text === latest
-    )
-    expect(snapshot?.draft?.handbacks).toBeUndefined()
-    expect(snapshot!.at).toBeGreaterThan(
-      ((await backend.read(SCOPE)) as { savedAt: number }).savedAt
-    )
-    opening.reject(new Error('renderer terminated before database open'))
-    second.clearNativeChatComposerDraftsForTests()
-    await Promise.resolve()
-    // This renderer restarts; the write that would repair its replayed draft reads slowly.
-    const replayRead = deferred<void>()
-    storageModule.setNativeChatComposerDraftStorageForTests({
-      ...backend,
-      update: async (scope, apply) => {
-        await replayRead.promise
-        await backend.update(scope, apply)
-      }
-    })
-    await coldReload()
-    // Already right as published: the newer text, and the stored receipt it never saw.
-    expect(text()).toBe(latest)
-    expect(heldReceipt()).toBe(true)
-    quota.mockRestore()
-    host.status.mockReset()
-    host.status.mockResolvedValue({ state: 'unknown' })
-    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
-    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
-    replayRead.resolve()
-    await store.nativeChatComposerDraftWritesSettled()
-    expect(text()).toBe(latest)
-    expect(await backend.read(SCOPE)).toMatchObject({ text: latest })
-    expect(host.prepare).toHaveBeenCalledOnce()
-    expect(host.release).toHaveBeenCalledOnce()
-    // The source is retired, so the receipt goes too, with nothing returned.
-    await vi.waitFor(() => expect(heldReceipt()).toBe(false))
-    await store.nativeChatComposerDraftWritesSettled()
-    expect(text()).toBe(latest)
-  })
+      expect(host.release).toHaveBeenCalledOnce()
+    }
+  )
 
   it('lets go of the opening only once the draft holds it, and returns it once through a refused backend and unload', async () => {
     const backend = storageModule.nativeChatComposerDraftStorage()

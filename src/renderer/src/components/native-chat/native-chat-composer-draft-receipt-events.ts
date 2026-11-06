@@ -70,6 +70,23 @@ export function publishNativeChatDraftReceipts(scopeKey: string): void {
   }
 }
 
+const COMPLETED: NativeChatDraftReceiptProgress = {
+  backed: true,
+  incorporated: true,
+  retired: true
+}
+
+/** A receipt's retirement completed: its current observers hear so once. Nothing keeps the
+ *  result after them; with no observer, nobody is owed it. */
+export function deliverNativeChatDraftReceiptCompletion(scopeKey: string, key: string): void {
+  const members = listeners.get(scopeKey)
+  for (const entry of Array.from(members ?? [])) {
+    if (entry.members === members && entry.key === key) {
+      entry.listener(COMPLETED)
+    }
+  }
+}
+
 /** Listeners follow their receipts to the destination of a move. */
 export function moveNativeChatDraftReceiptListeners(
   from: string,

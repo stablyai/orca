@@ -25,13 +25,18 @@ export type NativeChatDraftJournalAddition = {
 }
 
 export type NativeChatDraftJournalBatch = {
-  /** Whole snapshots (null: the draft's removal), within the whole-draft cap. */
+  /** Whole snapshots (null: the draft's removal), within the whole-draft cap. Each may discharge
+   *  identified additions of its scope (receipt keys), only if it is itself admitted. */
   readonly snapshots?: ReadonlyMap<
     string,
-    { readonly draft: StoredNativeChatComposerDraft | null; readonly at: number }
+    {
+      readonly draft: StoredNativeChatComposerDraft | null
+      readonly at: number
+      readonly discharge?: readonly string[]
+    }
   >
   readonly additions?: readonly NativeChatDraftJournalAddition[]
-  /** Identified additions to remove: [scopeKey, receipt key]. */
+  /** Identified additions to remove on their own, once a committed record carries them: [scopeKey, receipt key]. */
   readonly discharge?: readonly (readonly [string, string])[]
 }
 
@@ -50,12 +55,15 @@ const NONE: NativeChatDraftJournalWitness = {
 
 type Encoded = { readonly entry: JournalEntry; readonly text: string }
 
-function encode(entry: JournalEntry): Encoded {
-  return { entry, text: JSON.stringify(entry) }
+/** One encoding per entry; a kept entry is encoded as it was read, so its text stays exact. */
+function encode(entry: JournalEntry, read: unknown = entry): Encoded {
+  return { entry, text: JSON.stringify(read) }
 }
 
-/** One read/parse, one encoding per kept or new entry, one write. A whole snapshot carrying a
- *  receipt replaces that receipt's identified addition in the same write. */
+/** One read/parse, one encoding per kept or new entry, one write. An entry is replaced only by
+ *  an admitted replacement: a whole snapshot carrying (or discharging) a receipt removes that
+ *  receipt's identified addition, and an admitted identified addition its older copy; whatever
+ *  the caps omit leaves the copy it would have replaced. */
 export function writeNativeChatComposerDraftJournalBatch(
   batch: NativeChatDraftJournalBatch
 ): NativeChatDraftJournalWitness {
@@ -64,10 +72,19 @@ export function writeNativeChatComposerDraftJournalBatch(
   if (!snapshots.size && !additions.length && !batch.discharge?.length) {
     return NONE
   }
-  const { raw, entries } = readNativeChatComposerDraftJournal()
-  const existing = entries.map(encode)
+  const { raw, entries, read } = readNativeChatComposerDraftJournal()
+  const existing = entries.map((entry, index) => encode(entry, read[index]))
+  // Each identified addition's current copies, indexed once.
+  const copies = new Map<string, Encoded[]>()
   let used = 0
-  for (const { entry, text } of existing) {
+  for (const encoded of existing) {
+    const { entry, text } = encoded
+    const id = journalEntryId(entry)
+    if (id) {
+      const list = copies.get(id) ?? []
+      list.push(encoded)
+      copies.set(id, list)
+    }
     if (
       !isAddition(entry) &&
       entry.draft &&
@@ -96,8 +113,11 @@ export function writeNativeChatComposerDraftJournalBatch(
   )
   for (const { entry } of added) {
     if (!isAddition(entry)) {
-      for (const receipt of entry.draft?.handbacks ?? []) {
-        removedIds.add(identifiedJournalId(entry.scopeKey, handbackReceiptKey(receipt)))
+      for (const key of [
+        ...(entry.draft?.handbacks ?? []).map(handbackReceiptKey),
+        ...(snapshots.get(entry.scopeKey)?.discharge ?? [])
+      ]) {
+        removedIds.add(identifiedJournalId(entry.scopeKey, key))
       }
     }
   }
@@ -108,11 +128,29 @@ export function writeNativeChatComposerDraftJournalBatch(
       ...(addition.custody ? { custody: addition.custody } : {})
     })
   )
-  incoming.forEach(({ entry }) => {
+  let additionChars = 0
+  for (const { entry, text } of existing) {
     const id = journalEntryId(entry)
+    if (isAddition(entry) && !(id && removedIds.has(id))) {
+      additionChars += text.length + 1
+    }
+  }
+  // An identified replacement is charged its net size and admitted before its old copy goes.
+  const keptAdditions: Encoded[] = []
+  const written = new Set<string>()
+  incoming.forEach((candidate, index) => {
+    const id = journalEntryId(candidate.entry)
+    const old = id && !removedIds.has(id) ? (copies.get(id) ?? []) : []
+    const oldChars = old.reduce((sum, { text }) => sum + text.length + 1, 0)
+    if (additionChars - oldChars + candidate.text.length + 1 > MAX_JOURNAL_ADDITIONS_CHARS) {
+      return
+    }
+    keptAdditions.push(candidate)
+    additionChars += candidate.text.length + 1 - oldChars
     if (id) {
       removedIds.add(id)
     }
+    written.add(id ?? `plain:${index}`)
   })
   // A capped-out snapshot leaves its scope's last receipt-bearing copy: it may be the only proof.
   const kept = existing.filter(({ entry }) => {
@@ -125,21 +163,6 @@ export function writeNativeChatComposerDraftJournalBatch(
       !snapshots.has(entry.scopeKey) ||
       (!replaced.has(entry.scopeKey) && Boolean(entry.draft?.handbacks?.length))
     )
-  })
-  let additionChars = 0
-  for (const { entry, text } of kept) {
-    if (isAddition(entry)) {
-      additionChars += text.length + 1
-    }
-  }
-  const keptAdditions: Encoded[] = []
-  const written = new Set<string>()
-  incoming.forEach((candidate, index) => {
-    if (additionChars + candidate.text.length + 1 <= MAX_JOURNAL_ADDITIONS_CHARS) {
-      keptAdditions.push(candidate)
-      additionChars += candidate.text.length + 1
-      written.add(journalEntryId(candidate.entry) ?? `plain:${index}`)
-    }
   })
   const pieces = [...kept, ...added, ...keptAdditions].map(({ text }) => text)
   if (!writeEncodedNativeChatComposerDraftJournal(raw, pieces)) {

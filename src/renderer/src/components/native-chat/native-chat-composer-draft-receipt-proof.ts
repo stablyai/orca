@@ -106,17 +106,12 @@ export type NativeChatDraftReceiptProgress = {
   readonly retired: boolean
 }
 
-/** Receipts whose retirement completed, per scope: bounded by this run's actual hand-backs. */
-export const retiredNativeChatDraftReceipts = new Map<string, Set<string>>()
-
 export function nativeChatDraftReceiptProgressOf(
   scopeKey: string,
   receipt: NativeChatDraftHandbackReceipt
 ): NativeChatDraftReceiptProgress {
   const key = handbackReceiptKey(receipt)
-  if (retiredNativeChatDraftReceipts.get(scopeKey)?.has(key)) {
-    return { backed: true, incorporated: true, retired: true }
-  }
+  // Completion is delivered to the receipt's observers, never kept here.
   const custody = draftCustody.get(scopeKey)
   const held = hasHandbackReceipt(custody?.handbacks, receipt)
   return {

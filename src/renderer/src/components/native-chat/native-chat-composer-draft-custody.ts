@@ -40,6 +40,9 @@ export type NativeChatDraftCustody = {
   readonly added: Set<string>
   /** Retired here, not yet absent from a committed record: no write at the base keeps them. */
   readonly retired: Set<string>
+  /** Retirements whose identified addition is discharged, waiting for a committed record
+   *  without the receipt; they end with it, or with this custody. */
+  readonly discharged: Set<string>
   /** Identified additions this memory holds whose journal entries go once a commit carries it. */
   readonly journaled: Set<string>
   /** Hand-backs waiting for this scope's base; composed onto it by the one reduction below. */
@@ -104,6 +107,7 @@ export function scopeCustody(scopeKey: string, savedAt: number): NativeChatDraft
       retiring: new Set(),
       added: new Set(),
       retired: new Set(),
+      discharged: new Set(),
       journaled: new Set(),
       pending: []
     }
@@ -118,6 +122,7 @@ function isIdle(custody: NativeChatDraftCustody): boolean {
     !custody.sourcePaths.length &&
     !custody.retired.size &&
     !custody.retiring.size &&
+    !custody.discharged.size &&
     !custody.journaled.size &&
     !custody.pending.length
   )

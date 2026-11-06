@@ -16,7 +16,10 @@ import { pruneNativeChatComposerDraftJournal } from './native-chat-composer-draf
 import { draftCustody, handbackReceiptKey } from './native-chat-composer-draft-custody'
 import { confirmNativeChatDraftCustody } from './native-chat-composer-draft-receipt-proof'
 import { nativeChatDraftAtBase } from './native-chat-composer-draft-base'
-import { publishNativeChatDraftReceipts } from './native-chat-composer-draft-receipt-events'
+import {
+  deliverNativeChatDraftReceiptCompletion,
+  publishNativeChatDraftReceipts
+} from './native-chat-composer-draft-receipt-events'
 import { advanceNativeChatDraftRetirements } from './native-chat-composer-draft-retirement'
 import {
   journalOwedNativeChatDraftHandbacks,
@@ -93,14 +96,18 @@ function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown
   wakeNativeChatDraftRetirements(scopeKey)
 }
 
-/** The one wake every proof transition of a scope reaches: requested retirements advance, then
- *  the scope's own listeners hear their current progress. */
+/** The one wake every proof transition of a scope reaches: requested retirements advance, those
+ *  completed are delivered to their observers, then the scope's listeners hear their progress. */
 export function wakeNativeChatDraftRetirements(scopeKey: string, announce = true): void {
   const retiring = draftCustody.get(scopeKey)?.retiring.size ?? 0
-  for (const receipt of advanceNativeChatDraftRetirements(scopeKey)) {
+  const { metadata, completed } = advanceNativeChatDraftRetirements(scopeKey)
+  for (const receipt of metadata) {
     retireStoredNativeChatDraftReceipt(scopeKey, receipt)
   }
-  // A request alone announces only a retirement it completed, so listeners cannot loop on it.
+  for (const key of completed) {
+    deliverNativeChatDraftReceiptCompletion(scopeKey, key)
+  }
+  // A request alone announces only a retirement it advanced, so listeners cannot loop on it.
   if (announce || (draftCustody.get(scopeKey)?.retiring.size ?? 0) !== retiring) {
     publishNativeChatDraftReceipts(scopeKey)
   }

@@ -2,7 +2,10 @@
 // durability is proved by a concrete commit or journal entry and heard through one subscription.
 
 import { currentDraftScope } from './native-chat-launch-draft-source'
-import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal-batch'
+import {
+  journalNativeChatComposerDraftAddition,
+  writeNativeChatComposerDraftJournalBatch
+} from './native-chat-composer-draft-journal-batch'
 import {
   dirtyScopes,
   isNativeChatMemoryOnlyDraft,
@@ -31,12 +34,11 @@ import {
 } from './native-chat-composer-draft-custody'
 import {
   nativeChatDraftReceiptProgressOf,
-  retiredNativeChatDraftReceipts,
   type NativeChatDraftReceiptProgress
 } from './native-chat-composer-draft-receipt-proof'
 import {
   addNativeChatDraftReceiptListener,
-  publishNativeChatDraftReceipts,
+  deliverNativeChatDraftReceiptCompletion,
   setNativeChatDraftReceiptReconciler
 } from './native-chat-composer-draft-receipt-events'
 import {
@@ -183,7 +185,8 @@ export function subscribeNativeChatDraftReceiptProgress(
 }
 
 /** Requested only once the source is durably dead and its emitters revoked. The store ends the
- *  receipt only when no replay can return the input; progress reports when it has. */
+ *  receipt only when no replay can return the input, and delivers that completion to the
+ *  receipt's observers. */
 export function retireNativeChatDraftReceipt(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt
@@ -192,11 +195,12 @@ export function retireNativeChatDraftReceipt(
   const custody = draftCustody.get(scopeKey)
   const key = handbackReceiptKey(receipt)
   if (!custody || !hasHandbackReceipt(custody.handbacks, receipt)) {
-    // Nothing holds it here: nothing can return it either.
-    if (!nativeChatDraftReceiptProgressOf(scopeKey, receipt).retired) {
-      const retired = retiredNativeChatDraftReceipts.get(scopeKey) ?? new Set<string>()
-      retiredNativeChatDraftReceipts.set(scopeKey, retired.add(key))
-      publishNativeChatDraftReceipts(scopeKey)
+    // The draft's known base no longer holds it; once no journal copy can replay it, it is done.
+    if (
+      (load.complete || knownDraftBases.has(scopeKey)) &&
+      writeNativeChatComposerDraftJournalBatch({ discharge: [[scopeKey, key]] }).written
+    ) {
+      deliverNativeChatDraftReceiptCompletion(scopeKey, key)
     }
     return
   }

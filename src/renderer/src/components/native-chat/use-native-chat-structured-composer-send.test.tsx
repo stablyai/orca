@@ -31,6 +31,7 @@ import {
   setNativeChatComposerDraftStorageForTests
 } from './native-chat-composer-draft-storage'
 import { useNativeChatDraft } from './use-native-chat-draft'
+import { adoptIdentifiedNativeChatDraftInput } from './native-chat-composer-draft-handback'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { promptSkillRefs } from './native-chat-prompt-document'
@@ -216,5 +217,49 @@ describe('complete handback acceptance', () => {
     expect(fixture.transport.send).toHaveBeenNthCalledWith(2, left.text, [], {
       skills: [{ name: 'review', path: '/latest/SKILL.md' }]
     })
+  })
+
+  it('keeps a sent returned message consumed while its receipt is owed, through an unload and a cold reload', async () => {
+    const fixture = acceptanceFixture()
+    const receipt = { operationId: 'op-sent', clientMessageId: 'msg-sent' }
+    const returnedText = 'Inspect the failing test and fix it'
+    adoptIdentifiedNativeChatDraftInput(scope, receipt, { text: returnedText, images: [] }, [])
+    await nativeChatComposerDraftWritesSettled()
+    const backend = nativeChatComposerDraftStorage() as ReturnType<
+      typeof createMemoryNativeChatComposerDraftStorage
+    >
+    // From here the draft's commits are refused: only the journal can carry what Send leaves.
+    backend.refuseWrites = true
+    const hook = fixture.mount()
+    await act(async () => hook.result.current.send(hook.result.current.draft, []))
+    expect(fixture.transport.send).toHaveBeenCalledWith(returnedText, [])
+    expect(readNativeChatComposerDraft(scope).text).toBe('')
+    await nativeChatComposerDraftWritesSettled()
+    window.dispatchEvent(new Event('pagehide'))
+    hook.unmount()
+    // What Send left is journaled as content consumed with the receipt still owed, and the same
+    // return is not taken again.
+    const journal = JSON.parse(
+      localStorage.getItem('orca:nativeChatComposerDraftJournal:v1') ?? '[]'
+    )
+    expect(journal).toEqual([
+      expect.objectContaining({
+        scopeKey: scope,
+        draft: expect.objectContaining({ text: '', images: [], handbacks: [receipt] })
+      })
+    ])
+    expect(
+      adoptIdentifiedNativeChatDraftInput(scope, receipt, { text: returnedText, images: [] }, [])
+    ).toEqual({ adopted: false })
+    expect(readNativeChatComposerDraft(scope).text).toBe('')
+
+    // A cold renderer replays that disposition over the older committed message.
+    clearNativeChatComposerDraftsForTests()
+    backend.refuseWrites = false
+    setNativeChatComposerDraftStorageForTests(backend)
+    await hydrateNativeChatComposerDrafts()
+    await nativeChatComposerDraftWritesSettled()
+    expect(readNativeChatComposerDraft(scope).text).toBe('')
+    expect(backend.drafts.get(scope)?.text ?? '').toBe('')
   })
 })
