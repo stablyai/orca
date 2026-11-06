@@ -178,6 +178,24 @@ export function writeStructuredAgentLaunchRecord(
   writeRecords()
 }
 
+export function updateStructuredAgentLaunchRecords(
+  changes: Iterable<readonly [string, StructuredAgentLaunchPersistedRecord | null]>
+): void {
+  load()
+  let changed = false
+  for (const [sessionId, record] of changes) {
+    if (record) {
+      records.set(sessionId, record)
+      changed = true
+    } else if (records.delete(sessionId)) {
+      changed = true
+    }
+  }
+  if (changed) {
+    writeRecords()
+  }
+}
+
 export function deleteStructuredAgentLaunchRecord(sessionId: string): void {
   load()
   if (records.delete(sessionId)) {

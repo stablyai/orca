@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCheckLogFixture } from '../../../../../config/scripts/check-job-log-test-fixture.mjs'
+import { createCheckLogFixture } from '../../../../../config/scripts/performance/check-job-log/check-job-log-test-fixture.mjs'
 import { PR_CHECK_LOG_TAIL_BYTES, sanitizeCheckJobLogExcerpt } from './check-job-log-excerpt'
 import * as ansi from '../../../ansi-escape-sequences'
 import * as ownership from '../../../own-retained-string'

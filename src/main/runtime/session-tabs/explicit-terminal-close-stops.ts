@@ -1,11 +1,11 @@
-import type { WorktreePtyHostFence } from '../worktree-pty-host-fence'
+import type { WorktreePtyHostFence } from '../workspaces/removal/worktree-pty-host-fence'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
-import type { RuntimePtyTabCloseAuthority } from '../runtime-terminal-state-records'
+import type { RuntimePtyTabCloseAuthority } from '../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
   NO_STOP,

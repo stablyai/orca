@@ -29,8 +29,8 @@ export function resolveSshWorkspaceBrowserRouteEligibility(
   // WSL pages use the paired-runtime tunnel over wsl.exe, never SSH/localhost-forwarded routing.
   const deployment = environment && getOrcadSshDeployment(environment)
   const targetId = parsed?.kind === 'ssh' ? parsed.targetId : deployment?.sshTargetId
-  // Why: runtime-owned ephemeral SSH targets belong to the paired runtime's browser route.
-  if (!targetId || isRuntimeOwnedSshTargetId(targetId)) {
+  // Why: a recipe VM's target is never a direct workspace host, but routes pages as its deployment's.
+  if (!targetId || (parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(targetId))) {
     return null
   }
   return {

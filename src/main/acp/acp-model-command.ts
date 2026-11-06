@@ -8,6 +8,7 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { acpPromptErrorDetail } from './acp-turn-failures'
 import type { AcpAgentError } from './acp-errors'
+import { acpAgentName } from './acp-structured-agent-definitions'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import type { AcpModelCommandReply } from './acp-dialects/acp-dialect'
 import { boundAcpOptionWrite, type AcpOptionWriteBound } from './acp-session-option-write'
@@ -37,7 +38,10 @@ export async function applyAcpModelCommand(
   }
   // The command is a prompt, so a steer still interrupts the running answer before it is sent.
   if (session.turns.running) {
-    await session.turns.reserveSteer(bound.signal)
+    const withdrawn = await session.turns.reserveSteer(bound.signal)
+    if (withdrawn) {
+      throw acpWithdrawnSteer(acpAgentName(session.spec.agent), withdrawn === 'ended')
+    }
   }
   const { options } = session
   await boundAcpOptionWrite(options, { ...bound, key: 'model', value }, async () => {

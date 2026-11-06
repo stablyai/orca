@@ -22,12 +22,12 @@ import { withChatTabChanges } from './agent-session-tab-layout'
 import {
   chatTabCommandsSettled as settled,
   layoutApplyOn
-} from '../session-layout-apply.test-fixture'
+} from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 const WT = 'workspace-1'
 // Session ids are 8 to 128 characters; a shorter one is not a readable record.

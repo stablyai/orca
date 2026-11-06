@@ -21,6 +21,7 @@ function createReactHookHarness() {
       useEffect: (effect: () => void | (() => void), deps?: readonly unknown[]) => {
         effects.push({ effect, deps })
       },
+      useEffectEvent: <T extends (...args: never[]) => unknown>(callback: T): T => callback,
       useLayoutEffect: () => {},
       useRef: <T>(initialValue: T): { current: T } => {
         const index = refIndex
@@ -64,6 +65,7 @@ describe('useGrabMode', () => {
       removeEventListener: vi.fn(),
       api: {
         browser: {
+          onGuestEscape: () => () => {},
           setGrabMode,
           awaitGrabSelection: vi.fn(() => new Promise(() => {})),
           cancelGrab: vi.fn()
@@ -100,6 +102,7 @@ describe('useGrabMode', () => {
       removeEventListener: vi.fn(),
       api: {
         browser: {
+          onGuestEscape: () => () => {},
           setGrabMode: vi.fn(async () => ({ ok: false, reason: 'injection-failed' })),
           awaitGrabSelection: vi.fn(),
           cancelGrab: vi.fn()
@@ -140,7 +143,7 @@ describe('useGrabMode', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       api: {
-        browser: { setGrabMode, awaitGrabSelection, cancelGrab }
+        browser: { onGuestEscape: () => () => {}, setGrabMode, awaitGrabSelection, cancelGrab }
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
@@ -181,7 +184,7 @@ describe('useGrabMode', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       api: {
-        browser: { setGrabMode, awaitGrabSelection, cancelGrab }
+        browser: { onGuestEscape: () => () => {}, setGrabMode, awaitGrabSelection, cancelGrab }
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
@@ -238,6 +241,7 @@ describe('useGrabMode', () => {
       removeEventListener: vi.fn(),
       api: {
         browser: {
+          onGuestEscape: () => () => {},
           setGrabMode: vi.fn(async () => ({ ok: true })),
           awaitGrabSelection,
           captureSelectionScreenshot,
@@ -289,6 +293,7 @@ describe('useGrabMode', () => {
       removeEventListener: vi.fn(),
       api: {
         browser: {
+          onGuestEscape: () => () => {},
           setGrabMode,
           awaitGrabSelection: vi.fn(() => new Promise(() => {})),
           cancelGrab: vi.fn()
@@ -341,6 +346,7 @@ describe('useGrabMode', () => {
       removeEventListener: vi.fn(),
       api: {
         browser: {
+          onGuestEscape: () => () => {},
           setGrabMode,
           awaitGrabSelection: vi.fn(() => new Promise(() => {})),
           cancelGrab: vi.fn()

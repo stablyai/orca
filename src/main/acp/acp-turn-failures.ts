@@ -64,6 +64,18 @@ export function mergeAcpTurnFailureEvidence(
   }
 }
 
+/** A prompt the agent refused outright, in the words a send's rejection uses. */
+export function acpPromptRefusalFact(
+  refusal: string,
+  notSignedIn: boolean
+): SubmissionRejectionFact {
+  const detail = providerDiagnostic(refusal, 'person')
+  return agentSessionFailureFact(
+    notSignedIn ? 'notSignedIn' : 'providerRejected',
+    detail ? { detail } : {}
+  )
+}
+
 /** Agents report their own refusals as errors too; only these causes make a failure the provider's. */
 export function acpProviderFailed(evidence: AcpTurnFailureEvidence): boolean {
   return (
@@ -125,6 +137,22 @@ export function acpSignInRequiredFailure(
 ): SubmissionRejectionFact {
   const detail = providerDiagnostic(acpPromptErrorDetail(dialect, error), 'person')
   return agentSessionFailureFact('notSignedIn', detail ? { detail } : {})
+}
+
+/** Why the agent refused a prompt, as the person is told; a missing model outranks its sign-in wording. */
+export function acpPromptRejection(
+  refusal: string,
+  signedOut: boolean,
+  noModel: SubmissionRejectionFact | undefined
+): SubmissionRejectionFact {
+  if (noModel) {
+    return noModel
+  }
+  const detail = providerDiagnostic(refusal, 'person')
+  return agentSessionFailureFact(
+    signedOut ? 'notSignedIn' : 'providerRejected',
+    detail ? { detail } : {}
+  )
 }
 
 /** Deduplicate failure rows by turn, accepting later reasons when earlier reports lacked one. */

@@ -129,6 +129,7 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`,
+    ...(status.runtime.degradations ?? []).map((degradation) => `degraded: ${degradation.message}`),
     ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
   ].join('\n')
 }

@@ -16,9 +16,10 @@ import type { AgentSessionModelOption } from '../../shared/agent-session/agent-s
 import { createAcpAgentConnection } from './acp-agent-connection'
 import { acpRunFolder } from './acp-private-temp'
 import {
+  acpListingDependsOnRelease,
   acpListingNeedsChatFolder,
+  acpModelListingForRelease,
   type AcpLaunchSpec,
-  type AcpModelDiscovery,
   type AcpSessionModelDiscovery
 } from './acp-launch-specs'
 import type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
@@ -91,14 +92,14 @@ export function createAcpModelCatalogProbe(
     const release = await checkAcpLaunchVersion(
       spec,
       { command, prefixArgs, cwd, env },
-      discovery.kind === 'command' && discovery.supportsVersion !== undefined,
+      acpListingDependsOnRelease(discovery),
       deps.probeVersion
     )
     assertStructuredAgentResolutionCurrent(operation)
     if (release.status === 'tooOld') {
       throw new Error(`${spec.agent} at ${command} does not run structured chats`)
     }
-    const listing = listingFor(discovery, release.version)
+    const listing = acpModelListingForRelease(discovery, release.version)
     if (listing === null) {
       throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)
     }
@@ -186,20 +187,6 @@ export function createAcpModelCatalogProbe(
 
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
-
-type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>
-
-function listingFor(discovery: AcpModelListing, version: string | null): AcpModelListing | null {
-  if (discovery.kind !== 'command' || !discovery.supportsVersion) {
-    return discovery
-  }
-  if (version !== null && discovery.supportsVersion(version)) {
-    return discovery
-  }
-  return discovery.otherReleasesListInSession
-    ? { kind: 'session', listingNamesConfiguredModel: discovery.listingNamesConfiguredModel }
-    : null
-}
 
 async function readSessionModels(
   spec: AcpLaunchSpec,

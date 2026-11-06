@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { affectsLocalizationExtraction } from '../../localization/extraction-policy/localization-extraction-change-scope.mjs'
 import {
   classifyPrJobs,
@@ -47,7 +48,10 @@ const RATCHET_INPUTS = {
 export const VERIFY_CHECKS = [
   {
     name: 'rpc params catalog',
-    args: ['config/scripts/generate-rpc-params-catalog.mjs', '--check'],
+    args: [
+      'config/scripts/plugin-authoring/rpc-catalog/generate-rpc-params-catalog.mjs',
+      '--check'
+    ],
     inputs: ['src/main/runtime/rpc/', 'src/shared/']
   },
   {
@@ -57,29 +61,42 @@ export const VERIFY_CHECKS = [
   },
   {
     name: 'bundled skill guides',
-    args: ['config/scripts/generate-bundled-skill-guides.mjs', '--check'],
-    inputs: ['skills/', 'config/scripts/skill-stub-composition']
+    args: ['config/scripts/skills/bundle-generation/generate-bundled-skill-guides.mjs', '--check'],
+    inputs: [
+      'skills/',
+      'config/scripts/skill-stub-composition',
+      'config/scripts/skills/bundle-generation/skill-stub-composition'
+    ]
   },
   {
     name: 'skill bundle manifest',
-    args: ['config/scripts/generate-skill-bundle-manifest.mjs'],
+    args: ['config/scripts/skills/bundle-generation/generate-skill-bundle-manifest.mjs'],
     inputs: ['skills/', 'resources/skills/']
   },
   {
     name: 'localization catalogs',
     runtime: 'bun',
-    args: ['config/scripts/verify-localization-catalogs.mjs'],
-    inputs: ['src/renderer/', 'src/shared/', LOCALES, 'config/scripts/verify-localization-catalog']
+    args: ['config/scripts/localization/catalog-validation/verify-localization-catalogs.mjs'],
+    inputs: [
+      'src/renderer/',
+      'src/shared/',
+      LOCALES,
+      'config/scripts/verify-localization-catalog',
+      'config/scripts/localization/catalog-validation/verify-localization-catalog'
+    ]
   },
   {
     name: 'localization coverage',
     runtime: 'bun',
-    args: ['config/scripts/audit-localization-coverage.mjs', '--check'],
+    args: [
+      'config/scripts/localization/source-extraction/audit-localization-coverage.mjs',
+      '--check'
+    ],
     inputs: ['src/renderer/src/', LOCALES]
   },
   {
     name: 'mobile localization',
-    args: ['config/scripts/verify-mobile-localization.mjs'],
+    args: ['config/scripts/localization/catalog-validation/verify-mobile-localization.mjs'],
     inputs: [
       'mobile/app/',
       'mobile/src/',
@@ -88,15 +105,20 @@ export const VERIFY_CHECKS = [
       'mobile/locales/',
       'src/shared/ui-locale',
       'config/scripts/verify-mobile-localization',
+      'config/scripts/localization/catalog-validation/verify-mobile-localization',
       'config/scripts/verify-localization-',
+      'config/scripts/localization/catalog-validation/verify-localization-',
+      'config/scripts/localization/source-extraction/verify-localization-',
       'config/scripts/generate-runtime-required-english-catalog',
-      'config/scripts/localization-surfaces'
+      'config/scripts/localization/catalog-validation/generate-runtime-required-english-catalog',
+      'config/scripts/localization-surfaces',
+      'config/scripts/localization/catalog-validation/localization-surfaces'
     ]
   },
   {
     name: 'mobile localization coverage',
     args: [
-      'config/scripts/audit-localization-coverage.mjs',
+      'config/scripts/localization/source-extraction/audit-localization-coverage.mjs',
       '--check',
       '--source-root',
       'mobile/app',
@@ -112,23 +134,24 @@ export const VERIFY_CHECKS = [
       'mobile/src/',
       'mobile/web-entry/',
       'config/mobile-localization-coverage-allowlist.json',
-      'config/scripts/audit-localization-coverage'
+      'config/scripts/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/audit-localization-coverage'
     ]
   },
   {
     // CI's own predicate, so local and CI select this check identically.
     name: 'localization extraction',
-    args: ['config/scripts/verify-localization-extraction.mjs'],
+    args: ['config/scripts/localization/source-extraction/verify-localization-extraction.mjs'],
     matches: (files) => affectsLocalizationExtraction(files)
   },
   {
     name: 'reliability gates',
-    args: ['config/scripts/check-reliability-gates.mjs'],
+    args: ['config/scripts/static-analysis/reliability-policy/check-reliability-gates.mjs'],
     inputs: ['config/reliability-gates.jsonc']
   },
   {
     name: 'node runtime pin',
-    args: ['config/scripts/check-node-runtime-pin.mjs'],
+    args: ['config/scripts/node-runtime/pin-policy/check-node-runtime-pin.mjs'],
     inputs: [
       'src/shared/node-runtime-pin',
       'config/scripts/node-dist-archive-name',
@@ -137,7 +160,7 @@ export const VERIFY_CHECKS = [
   },
   {
     name: 'test file runners',
-    args: ['config/scripts/check-test-file-runners.mjs'],
+    args: ['config/scripts/ci/unit-selection/check-test-file-runners.mjs'],
     inputs: [
       'config/scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs',
       'tests/playwright.config.ts',
@@ -148,18 +171,20 @@ export const VERIFY_CHECKS = [
   },
   {
     name: 'mobile shared dependency versions',
-    args: ['config/scripts/check-mobile-shared-dependency-versions.mjs'],
+    args: [
+      'config/scripts/package-manager/lockfile-contracts/check-mobile-shared-dependency-versions.mjs'
+    ],
     inputs: ['mobile/package.json', 'mobile/pnpm-lock.yaml']
   },
   {
     name: 'readme local links',
-    args: ['config/scripts/check-readme-local-links.mjs'],
+    args: ['config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs'],
     inputs: ['README.md', 'docs/readme/']
   },
   {
     // Compiles Tailwind (~1.5s), so it runs only for inputs that can change the emitted CSS.
     name: 'compiled :has() restyle scope',
-    args: ['config/scripts/check-has-restyle-scope.mjs'],
+    args: ['config/scripts/static-analysis/renderer-styles/check-has-restyle-scope.mjs'],
     inputs: ['electron.vite.config.ts'],
     matches: (files) =>
       files.some((file) => /^src\/(?:renderer\/.*\.(?:css|tsx?)|shared\/.*\.css)$/.test(file))
@@ -167,7 +192,7 @@ export const VERIFY_CHECKS = [
   {
     name: 'import boundaries',
     runtime: 'bun',
-    args: ['config/scripts/check-import-boundaries.mjs'],
+    args: ['config/scripts/static-analysis/process-boundaries/check-import-boundaries.mjs'],
     inputs: [...SOURCE_ROOTS, 'config/process-host-direct-import-baseline.txt']
   },
   {
@@ -236,25 +261,29 @@ const RATCHET_SHARED_MODULES = {
 }
 
 function listRatchetChecks(scriptsDir) {
-  const scripts = new Set(listRatchetScripts(scriptsDir))
-  // `pnpm lint` runs these although CI checks them in their own steps outside run-ratchets.mjs.
-  scripts.add('check-main-sync-spawn-ratchet.mjs')
-  scripts.add('check-flaky-test-pattern-ratchet.mjs')
-  return [...scripts].sort().map((script) => ({
-    name: script.replace(/^check-|\.mjs$/g, ''),
-    args: [
-      script === 'check-main-sync-spawn-ratchet.mjs'
-        ? 'config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs'
-        : `config/scripts/${script}`
-    ],
-    inputs: RATCHET_INPUTS[script] ?? SOURCE_ROOTS,
-    matches: (files) =>
-      files.some(
-        (file) =>
-          /^config\/[^/]+-baseline\.txt$/.test(file) ||
-          RATCHET_SHARED_MODULES[file]?.includes(script)
-      )
-  }))
+  const scripts = new Map(listRatchetScripts(scriptsDir).map((file) => [path.basename(file), file]))
+  // Local lint runs these outside run-ratchets.mjs.
+  scripts.set(
+    'check-main-sync-spawn-ratchet.mjs',
+    'static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs'
+  )
+  scripts.set(
+    'check-flaky-test-pattern-ratchet.mjs',
+    'static-analysis/ratchets/test-quality/check-flaky-test-pattern-ratchet.mjs'
+  )
+  return [...scripts]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([script, file]) => ({
+      name: script.replace(/^check-|\.mjs$/g, ''),
+      args: [`config/scripts/${file.split(path.sep).join('/')}`],
+      inputs: RATCHET_INPUTS[script] ?? SOURCE_ROOTS,
+      matches: (files) =>
+        files.some(
+          (file) =>
+            /^config\/[^/]+-baseline\.txt$/.test(file) ||
+            RATCHET_SHARED_MODULES[file]?.includes(script)
+        )
+    }))
 }
 
 function isSelected(check, files) {

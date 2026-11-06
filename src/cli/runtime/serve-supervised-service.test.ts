@@ -21,6 +21,7 @@ import {
 import type { ServeInstallEvidence } from './serve-install-hold'
 import { resolveOrcadExitCode } from '../../main/orcad/orcad-exit-code'
 import { OrcadInstanceLockError } from '../../main/orcad/orcad-data-root-privacy'
+import { OrcadTerminalsNotDurableError } from '../../main/orcad/orcad-serve-supervision'
 
 /** Virtual clock: timers fire in order as soon as the loop awaits them. */
 function harness(overrides: Partial<SupervisedServeOptions> & { userDataPath: string }) {
@@ -99,6 +100,15 @@ describe('superviseServeService', () => {
     await expect(superviseServeService(again.options)).resolves.toBe(0)
     expect(rerun).toBe(0)
     expect(again.logs.join('\n')).toContain('--force')
+  })
+
+  it('names a missing terminal daemon as the reason it gave up', async () => {
+    const exitCode = resolveOrcadExitCode(new OrcadTerminalsNotDurableError('spawn failed'))
+    const h = harness({ userDataPath, runOnce: async () => exitCode })
+    await expect(superviseServeService(h.options)).resolves.toBe(0)
+    expect(readServeSupervisorBrake(userDataPath)?.gaveUp?.reason).toContain(
+      'the terminal daemon did not start'
+    )
   })
 
   it('starts over for a new build or with --force', async () => {

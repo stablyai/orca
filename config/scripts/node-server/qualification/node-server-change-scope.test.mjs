@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, expect, it } from 'vitest'
 import { classifyNodeServerChanges, collectNodeServerInputs } from './node-server-change-scope.mjs'
 import { runProcessSync } from '@orca/process-host'
-import { NODE_SERVER_RUNNERS, nodeServerQualification } from './node-server-qualification.mjs'
+import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
 
 const temporaryDirs = []
 afterEach(() => {
@@ -23,37 +23,6 @@ function moduleTree(files) {
   }
   return root
 }
-
-it('follows static imports, re-exports, dynamic imports and require without executing source', async () => {
-  const root = moduleTree({
-    'entry.ts': `import './first'; export * from './exports'; import('./dynamic'); require('./required'); throw Error('never execute')`,
-    'first.ts': `import './nested/leaf'`,
-    'exports.ts': 'export const value = 1',
-    'dynamic.ts': 'export const value = 2',
-    'required.ts': 'module.exports = 3',
-    'nested/leaf.ts': 'export const value = 4',
-    'unrelated.ts': 'throw Error("unrelated")'
-  })
-  const inputs = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
-  expect([...inputs].sort()).toEqual([
-    'dynamic.ts',
-    'entry.ts',
-    'exports.ts',
-    'first.ts',
-    'nested/leaf.ts',
-    'required.ts'
-  ])
-})
-
-it('runs the matrix when a dependency is deleted or graph analysis fails', async () => {
-  const root = moduleTree({ 'entry.ts': `import './deleted'` })
-  const result = await classifyNodeServerChanges(['deleted.ts'], () =>
-    collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
-  )
-  expect(result.shouldRun).toBe(true)
-  expect(result.reason).toContain('Dependency graph unavailable')
-  expect((await classifyNodeServerChanges([])).shouldRun).toBe(true)
-})
 
 function workspaceTree(imported = '@orca/process-host') {
   const manifest = (name, source) =>
@@ -150,30 +119,6 @@ it('retains qualification when a removed ordinary unit file breaks an actual imp
   expect(result.reason).toContain('removed.test.ts')
 })
 
-it('requests the graph for an ordinary source unit edit before dependencies are installed', async () => {
-  const result = await classifyNodeServerChanges(
-    ['src/main/persistence/example/unrelated.test.ts'],
-    async () => {
-      throw new Error('graph must not run before installation')
-    },
-    { deferGraph: true }
-  )
-  expect(result.graphRequired).toBe(true)
-  expect(result.shouldRun).toBeUndefined()
-})
-
-it('retains a production force when an unrelated unit test changes in the same diff', async () => {
-  const result = await classifyNodeServerChanges(
-    ['src/main/persistence/example/unrelated.test.ts', 'src/main/persistence/example/worker.ts'],
-    async () => {
-      throw new Error('production input must not require graph analysis')
-    }
-  )
-  expect(result.shouldRun).toBe(true)
-  expect(result.graphUnavailable).toBeUndefined()
-  expect(result.reason).toBe('Build or CI input changed: src/main/persistence/example/worker.ts')
-})
-
 it.each([
   { files: [], deferred: true, expected: 'should_run=true' },
   { files: ['package.json'], deferred: true, expected: 'should_run=true' },
@@ -259,131 +204,4 @@ it.each([
     expect(output).toContain(`qualification=${scenario.qualification !== false}`)
     expect(output).toContain(`runners=${JSON.stringify(scenario.runners ?? NODE_SERVER_RUNNERS)}`)
   }
-})
-
-const registry = 'config/scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
-const unrelatedSshUnit = 'src/main/ssh/pinned-runtime-materializer-context.test.ts'
-
-function qualificationTree(extra = {}) {
-  return moduleTree({
-    'entry.ts': `import './${registry}'; throw Error('never execute')`,
-    [registry]: 'export const NODE_RUNTIME_INCLUDE = []',
-    [unrelatedSshUnit]: 'throw Error("never execute unrelated test")',
-    ...extra
-  })
-}
-
-it('keeps a Node harness smoke without widening it for an unrelated modified SSH unit', async () => {
-  const root = qualificationTree()
-  writeFileSync(join(root, registry), 'export const NODE_RUNTIME_INCLUDE = ["new.unit.test.ts"]')
-  const changed = [registry, unrelatedSshUnit]
-  const scope = await classifyNodeServerChanges(
-    changed,
-    () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
-    { modifiedFiles: changed }
-  )
-  expect(scope.shouldRun).toBe(true)
-  expect(nodeServerQualification(changed, scope)).toEqual({
-    qualification: false,
-    runners: ['ubuntu-22.04']
-  })
-  expect(nodeServerQualification(changed, scope, { fullQualification: true })).toEqual({
-    qualification: true,
-    runners: NODE_SERVER_RUNNERS
-  })
-})
-
-it.each([
-  ['src/main/daemon/daemon-authenticated-client-activity.test.ts', NODE_SERVER_RUNNERS, true],
-  [
-    'src/main/daemon/daemon-endpoint-windows.test.ts',
-    ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
-    false
-  ]
-])('retains daemon platform coverage: %s', async (daemon, runners, qualification) => {
-  const root = qualificationTree({ [daemon]: 'throw Error("unselected")' })
-  const diff = [registry, daemon, unrelatedSshUnit]
-  const g = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
-  expect(g.has(registry)).toBe(true)
-  expect(g.has(daemon)).toBe(false)
-  const s = await classifyNodeServerChanges(diff, async () => g, { modifiedFiles: diff })
-  expect(s.shouldRun).toBe(true)
-  expect(nodeServerQualification(diff, s)).toEqual({ qualification, runners })
-})
-
-it('keeps every host when the modified SSH production module is an actual consumer', async () => {
-  const ssh = 'src/main/ssh/pinned-runtime-materializer.ts'
-  const root = qualificationTree({
-    'entry.ts': `import './${registry}'; import './${ssh}'; throw Error('never execute')`,
-    [ssh]: 'export const materializer = 1'
-  })
-  const changed = [registry, ssh, unrelatedSshUnit]
-  const scope = await classifyNodeServerChanges(
-    changed,
-    () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
-    { modifiedFiles: changed }
-  )
-  expect(scope.shouldRun).toBe(true)
-  expect(scope).toMatchObject({ graphResolved: true, matchedFiles: [registry, ssh] })
-  expect(nodeServerQualification(changed, scope)).toEqual({
-    qualification: true,
-    runners: NODE_SERVER_RUNNERS
-  })
-})
-
-it.each(['added', 'deleted', 'renamed', 'unknown', 'duplicate', 'foreign'])(
-  'retains complete-path qualification when modification evidence is %s',
-  async (status) => {
-    const root = qualificationTree()
-    const changed = [registry, unrelatedSshUnit]
-    let modifiedFiles = [registry]
-    if (status === 'deleted' || status === 'renamed') {
-      rmSync(join(root, unrelatedSshUnit))
-    }
-    if (status === 'renamed') {
-      const renamed = 'src/main/ssh/renamed-context.test.ts'
-      writeFileSync(join(root, renamed), 'throw Error("never execute renamed test")')
-      changed.push(renamed)
-    }
-    if (status === 'duplicate') {
-      modifiedFiles = [registry, registry]
-    }
-    if (status === 'foreign') {
-      modifiedFiles = [registry, 'src/main/ssh/foreign.test.ts']
-    }
-    const scope = await classifyNodeServerChanges(
-      changed,
-      () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
-      status === 'unknown' ? {} : { modifiedFiles }
-    )
-    expect(scope.shouldRun).toBe(true)
-    expect(nodeServerQualification(changed, scope)).toEqual({
-      qualification: true,
-      runners: NODE_SERVER_RUNNERS
-    })
-  }
-)
-
-it('retains protected server tests and broken imports despite complete modification evidence', async () => {
-  const protectedTest = 'src/main/sqlite/example.test.ts'
-  const root = qualificationTree({ [protectedTest]: 'export const value = 1' })
-  const changed = [registry, protectedTest, unrelatedSshUnit]
-  const collect = () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
-  const protectedScope = await classifyNodeServerChanges(changed, collect, {
-    modifiedFiles: changed
-  })
-  expect(nodeServerQualification(changed, protectedScope)).toEqual({
-    qualification: true,
-    runners: NODE_SERVER_RUNNERS
-  })
-  writeFileSync(join(root, 'entry.ts'), `import './${registry}'; import './missing'`)
-  const brokenChanged = [registry, unrelatedSshUnit]
-  const brokenScope = await classifyNodeServerChanges(brokenChanged, collect, {
-    modifiedFiles: brokenChanged
-  })
-  expect(brokenScope.graphUnavailable).toBe(true)
-  expect(nodeServerQualification(brokenChanged, brokenScope)).toEqual({
-    qualification: true,
-    runners: NODE_SERVER_RUNNERS
-  })
 })

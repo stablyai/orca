@@ -175,8 +175,9 @@ export const CancelParams = z
     if (value.prompt !== undefined && value.scope === 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
     }
-    if (value.turnId === undefined && (value.prompt !== undefined || value.scope !== undefined)) {
-      ctx.addIssue({ code: 'custom', message: 'A prompt or background-task cancel names its turn' })
+    // A card with no running turn names only itself; the host routes it.
+    if (value.turnId === undefined && value.scope !== undefined) {
+      ctx.addIssue({ code: 'custom', message: 'A background-task cancel names its turn' })
     }
   })
 

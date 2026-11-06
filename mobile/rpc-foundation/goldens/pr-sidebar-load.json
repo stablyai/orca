@@ -65,91 +65,6 @@
         "variant": "worktree-summary"
       }
     },
-    "1c1552d03dfc": {
-      "name": "github.prForBranch#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prForBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "branch": "feature",
-            "currentHeadOid": {
-              "$rpc": "null"
-            },
-            "fallbackPRNumber": 12,
-            "linkedPRNumber": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "fetchedAt": 0,
-            "kind": "found",
-            "pr": {
-              "headSha": "head-sha-1",
-              "mergeable": "MERGEABLE",
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "url": "https://x/12"
-            }
-          }
-        }
-      }
-    },
-    "4777f063108d": {
-      "name": "github.prForBranch#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prForBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "branch": "feature",
-            "currentHeadOid": {
-              "$rpc": "null"
-            },
-            "fallbackPRNumber": 12,
-            "linkedPRNumber": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
     "4b26820600b0": {
       "name": "hostedReview.forBranch#1",
       "ordinal": 3,
@@ -187,6 +102,88 @@
       "name": "worktree.show#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "734ec9d15b54": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "data": {
+          "checks": [
+            {
+              "checkRunId": 7,
+              "conclusion": "success",
+              "name": "build",
+              "observedHeadSha": {
+                "$rpc": "undefined"
+              },
+              "status": "completed",
+              "url": {
+                "$rpc": "null"
+              },
+              "workflowRunId": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "checksError": {
+            "$rpc": "null"
+          },
+          "details": {
+            "$rpc": "null"
+          },
+          "pr": {
+            "autoMergeAllowed": {
+              "$rpc": "undefined"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "checksStatus": "pending",
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "confirmedContainedHeadOid": {
+              "$rpc": "undefined"
+            },
+            "headDivergedFromMergedPRAtOid": {
+              "$rpc": "undefined"
+            },
+            "headRefName": {
+              "$rpc": "undefined"
+            },
+            "headSha": "head-sha-1",
+            "mergeMethodSettings": {
+              "$rpc": "undefined"
+            },
+            "mergeQueueRequired": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": "MERGEABLE",
+            "number": 12,
+            "prRepo": {
+              "$rpc": "undefined"
+            },
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "stack": {
+              "$rpc": "undefined"
+            },
+            "state": "open",
+            "title": "Recorded",
+            "updatedAt": "",
+            "url": "https://x/12"
+          },
+          "pushTarget": {
+            "$rpc": "null"
+          }
+        },
+        "kind": "ready"
+      }
     },
     "7cbf1de78fc1": {
       "name": "worktree.show#1",
@@ -271,83 +268,89 @@
         }
       }
     },
-    "cfed3ed2a0ae": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "data": {
-          "checks": [
-            {
-              "checkRunId": 7,
-              "conclusion": "success",
-              "name": "build",
-              "status": "completed",
-              "url": {
-                "$rpc": "null"
-              },
-              "workflowRunId": {
-                "$rpc": "undefined"
-              }
-            }
-          ],
-          "checksError": {
-            "$rpc": "null"
-          },
-          "details": {
-            "$rpc": "null"
-          },
-          "pr": {
-            "autoMergeAllowed": {
-              "$rpc": "undefined"
+    "a98f4468b85b": {
+      "name": "github.prForBranch#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
             },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
+            "fallbackPRNumber": 12,
+            "linkedPRNumber": {
+              "$rpc": "null"
             },
-            "checksStatus": "pending",
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "confirmedContainedHeadOid": {
-              "$rpc": "undefined"
-            },
-            "headDivergedFromMergedPRAtOid": {
-              "$rpc": "undefined"
-            },
-            "headRefName": {
-              "$rpc": "undefined"
-            },
-            "headSha": "head-sha-1",
-            "mergeMethodSettings": {
-              "$rpc": "undefined"
-            },
-            "mergeQueueRequired": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": "MERGEABLE",
-            "number": 12,
-            "prRepo": {
-              "$rpc": "undefined"
-            },
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "stack": {
-              "$rpc": "undefined"
-            },
-            "state": "open",
-            "title": "Recorded",
-            "updatedAt": "",
-            "url": "https://x/12"
-          },
-          "pushTarget": {
-            "$rpc": "null"
+            "repo": "id:repo-9"
           }
         },
-        "kind": "ready"
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "ccc790f6ce35": {
+      "name": "github.prForBranch#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": 12,
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "found",
+            "pr": {
+              "headSha": "head-sha-1",
+              "mergeable": "MERGEABLE",
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "url": "https://x/12"
+            }
+          }
+        }
       }
     },
     "dcec20ae0055": {
@@ -356,13 +359,16 @@
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
     },
     "e169ebaf642b": "unloaded",
-    "e7df27480ce9": {
+    "e93235fba8e6": {
       "data": {
         "checks": [
           {
             "checkRunId": 7,
             "conclusion": "success",
             "name": "build",
+            "observedHeadSha": {
+              "$rpc": "undefined"
+            },
             "status": "completed",
             "url": {
               "$rpc": "null"
@@ -437,7 +443,7 @@
       {
         "id": "branch-hint",
         "observation": {
-          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "4777f063108d"],
+          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "a98f4468b85b"],
           "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3"],
           "settlements": {
             "load": "9270aeb7d9c6"
@@ -449,7 +455,7 @@
       {
         "id": "pr",
         "observation": {
-          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "1c1552d03dfc", "4fae27394886"],
+          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "ccc790f6ce35", "4fae27394886"],
           "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3", "dcec20ae0055"],
           "settlements": {
             "load": "9270aeb7d9c6"
@@ -461,12 +467,12 @@
       {
         "id": "loaded",
         "observation": {
-          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "1c1552d03dfc", "9a7a01989014"],
+          "sender": ["07639c4f1e7f", "7cbf1de78fc1", "ccc790f6ce35", "9a7a01989014"],
           "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3", "dcec20ae0055"],
           "settlements": {
-            "load": "cfed3ed2a0ae"
+            "load": "734ec9d15b54"
           },
-          "state": "e7df27480ce9",
+          "state": "e93235fba8e6",
           "effects": ["15c9074079de"]
         }
       }

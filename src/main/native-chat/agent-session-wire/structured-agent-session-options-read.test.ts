@@ -117,6 +117,11 @@ describe('a chat at rest, read by the host', () => {
     return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
   }
 
+  it('advertises account usage for native Codex chats only', async () => {
+    expect((await readAtRest({ provider: 'codex' })).accountUsage).toBe(true)
+    expect(await readAtRest({ provider: 'claude' })).not.toHaveProperty('accountUsage')
+  })
+
   it('separates Claude fallback reports from the saved model and accepted send selection', async () => {
     const saved = { model: 'claude-opus-5-5', effort: 'high' }
     const answer = await readAtRest({ provider: 'claude', options: saved }, [], false, null, true, {

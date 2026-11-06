@@ -141,6 +141,8 @@ describe("OMP's own model command", () => {
     const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
     options.adoptSession({ configOptions: config('p/a', 'high') }, 'new')
     options.adoptLaunchModel('@worker_be')
+    // The launch line already applied the role, so the first send writes nothing for it.
+    expect(options.appliedInput.get('model')).toBe('@worker_be')
     options.adoptConfigOptions(config('p/b', 'high'))
     expect(options.appliedInput.has('model')).toBe(false)
     // A successful model option write keeps the shipped rule: observations never override it.

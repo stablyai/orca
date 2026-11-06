@@ -2,8 +2,8 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createPtySubprocess } from '../daemon/pty-subprocess'
-import { Session } from '../daemon/session'
+import { createPtySubprocess } from '../daemon/pty-subprocess/pty-subprocess'
+import { Session } from '../daemon/sessions/session'
 import { confirmRootShellAloneFromProcessTable } from './run-terminal-shell-alone'
 
 // A real daemon session on a real PTY: the process table, not a fake, decides.

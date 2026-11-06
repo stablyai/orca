@@ -31,7 +31,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 // Drive the real host/journal/adapter with fake Codex: interrupt answers precede turn/completed, so Stop settlement must prevent a transient failed turn.
 
 const CALLER = { callerKey: 'codex-interrupt-order-test' }

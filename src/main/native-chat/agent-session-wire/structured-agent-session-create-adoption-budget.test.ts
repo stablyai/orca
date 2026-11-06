@@ -24,7 +24,7 @@ import {
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directory-probe'
 import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session/agent-session-launch-directory'
-import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
+import { createClaudeStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
 

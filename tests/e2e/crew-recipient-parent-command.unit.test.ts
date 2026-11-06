@@ -1,7 +1,7 @@
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { RuntimeClientError } from '../../src/cli/runtime-client'
 import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { createOrdinaryCrewCommandFixture } from './crew-recipient-public-command.test-fixture'

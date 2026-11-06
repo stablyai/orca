@@ -38,6 +38,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-property-sche
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import { addQuoteToAgent } from '@/components/native-chat/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
 
 type OrderedSendTarget = {
@@ -52,11 +53,14 @@ export function ReviewNotesSendMenuContent({
   promptDelivery = 'submit-after-ready',
   launchSource = 'notes_send',
   onPromptDelivered,
-  onPromptHandedOff
+  onPromptHandedOff,
+  mode = 'send'
 }: {
   worktreeId: string
   groupId: string
   prompt: string
+  /** 'add-to-chat' puts the prompt where the picked or new agent takes input, never sending it. */
+  mode?: 'send' | 'add-to-chat'
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchSource?: LaunchSource
   onPromptDelivered?: () => void
@@ -175,6 +179,19 @@ export function ReviewNotesSendMenuContent({
         toast.message(currentEligibility.disabledReason)
         return
       }
+      if (mode === 'add-to-chat') {
+        void addQuoteToAgent(worktreeId, target.messageTarget, prompt).then((result) => {
+          if (result.status !== 'sent') {
+            toast.info(
+              activeAgentNotesSendFailureMessage(result.status, {
+                explicitTarget: true,
+                subject: 'selection'
+              })
+            )
+          }
+        })
+        return
+      }
 
       runNotesSend(
         () => sendMessageToAgent({ worktreeId, prompt, target: target.messageTarget }),
@@ -190,13 +207,18 @@ export function ReviewNotesSendMenuContent({
         { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
       )
     },
-    [hasPrompt, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]
+    [hasPrompt, mode, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]
   )
 
   return (
     <>
       <DropdownMenuLabel>
-        {translate('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
+        {mode === 'add-to-chat'
+          ? translate('components.native-chat.addSelectionToChat', 'Add to chat')
+          : translate(
+              'auto.components.editor.ReviewNotesSendMenuContent.03378aea75',
+              'Send notes to'
+            )}
       </DropdownMenuLabel>
       {orderedSendTargets.map(({ target, agent }) => {
         const itemProps = {
@@ -220,7 +242,7 @@ export function ReviewNotesSendMenuContent({
         groupId={groupId}
         onFocusTerminal={focusTerminalTabSurface}
         prompt={prompt}
-        promptDelivery={promptDelivery}
+        promptDelivery={mode === 'add-to-chat' ? 'draft' : promptDelivery}
         launchSource={launchSource}
         onPromptDelivered={onPromptDelivered}
         onPromptHandedOff={onPromptHandedOff}

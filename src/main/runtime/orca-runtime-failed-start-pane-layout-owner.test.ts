@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { collectLeafIds } from '../../shared/workspace-layout/terminal-pane-layout-tree'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
-import { setupLayoutOwnerRuntime, WORKTREE_ID } from './orca-runtime-layout-owner-start-fixture'
+import {
+  setupLayoutOwnerRuntime,
+  WORKTREE_ID
+} from './orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

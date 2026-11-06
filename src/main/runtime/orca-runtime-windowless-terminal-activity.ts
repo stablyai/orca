@@ -8,12 +8,12 @@ import { isRestoreSpawnIntent } from '../../shared/host-spawn-admission'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { readWorkspaceRecord, writeWorkspaceRecord } from './sidebar-inputs/sort-stamp-records'
-import { createKeyedTrailingEdgeCoalescer } from './keyed-trailing-edge-coalescer'
+import { createKeyedTrailingEdgeCoalescer } from './client/events/keyed-trailing-edge-coalescer'
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
 } from '../agent-hooks/agent-transition-detector'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace

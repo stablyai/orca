@@ -9,7 +9,7 @@ import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { paneKeyPtyId, ptyPaneKey, rememberPaneKeyForPty } from '../ipc/pty/pane/key-state'
 import { mainProcessState } from '../startup/main-process-state'
 import { driveSyntheticTitleFromHookStatus } from '../startup/synthetic-title-runtime'
-import { createLongPollServer } from './runtime-rpc-long-poll-server.test-fixture'
+import { createLongPollServer } from './rpc/server/runtime-rpc-long-poll-server.test-fixture'
 import {
   createBoundRun,
   createDatabase,

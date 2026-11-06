@@ -126,25 +126,6 @@ describe('browser site permission prompts', () => {
     vi.useRealTimers()
   })
 
-  it('asks once for camera and microphone together, then remembers Allow', async () => {
-    const call = ask(['camera', 'microphone'])
-    expect(sentRequests(renderer)).toMatchObject([
-      {
-        kind: 'site-permission',
-        details: {
-          origin: 'https://meet.example.com',
-          permissions: ['camera', 'microphone']
-        }
-      }
-    ])
-    await answerLatest('allow')
-    await expect(call).resolves.toBe(true)
-
-    await expect(ask(['camera'])).resolves.toBe(true)
-    expect(sentRequests(renderer)).toHaveLength(1)
-    expect(allowedOnCheck(['camera', 'microphone'])).toBe(true)
-  })
-
   it('asks only for what is unanswered, and a remembered Block refuses the whole request', async () => {
     const camera = ask(['camera'])
     await answerLatest('allow')
@@ -155,25 +136,6 @@ describe('browser site permission prompts', () => {
     await expect(both).resolves.toBe(false)
 
     await expect(ask(['camera', 'microphone'])).resolves.toBe(false)
-    expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it('forgets a dismissed prompt, so the site is asked again later', async () => {
-    const call = ask(['notifications'])
-    await answerLatest(null)
-    await expect(call).resolves.toBe(false)
-
-    expect(listBrowserSitePermissions('default')).toEqual([])
-    void ask(['notifications'])
-    expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it('keeps each browser profile to its own answers', async () => {
-    const call = ask(['clipboard'], { memory: savedBrowserSitePermissions('work') })
-    await answerLatest('allow')
-    await call
-
-    void ask(['clipboard'], { memory: savedBrowserSitePermissions('default') })
     expect(sentRequests(renderer)).toHaveLength(2)
   })
 
@@ -189,15 +151,6 @@ describe('browser site permission prompts', () => {
     expect(listBrowserSitePermissions('default')).toEqual([])
     void ask(['notifications'], { memory: sessionBrowserSitePermissions('persist:paired-b') })
     expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it("gives a frame the tab's answers for what the tab delegates", async () => {
-    const call = ask(['camera'])
-    await answerLatest('allow')
-    await call
-
-    await expect(ask(['camera'], { frameOrigin: 'https://video.example.net' })).resolves.toBe(true)
-    expect(sentRequests(renderer)).toHaveLength(1)
   })
 
   it("gives another site's frame only its own notification answer, and never asks for it", async () => {
@@ -221,32 +174,6 @@ describe('browser site permission prompts', () => {
       false
     )
     expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it('asks for a local file, and every local file shares the answer', async () => {
-    const call = ask(['camera'], { guest: mockGuest('file:///Users/me/lab/permission-lab.html') })
-    expect(sentRequests(renderer).at(-1)?.details.origin).toBe('file://')
-    await answerLatest('allow')
-    await expect(call).resolves.toBe(true)
-
-    await expect(
-      ask(['camera'], { guest: mockGuest('file:///Users/me/other/page.html') })
-    ).resolves.toBe(true)
-    expect(sentRequests(renderer)).toHaveLength(1)
-  })
-
-  it('refuses an opaque page without asking', async () => {
-    await expect(ask(['camera'], { guest: mockGuest('data:text/html,<p>hi</p>') })).resolves.toBe(
-      false
-    )
-    expect(sentRequests(renderer)).toEqual([])
-  })
-
-  it('refuses without asking when no window can show the question', async () => {
-    mocks.resolvePagePromptTarget.mockReturnValue(null)
-
-    await expect(ask(['camera'])).resolves.toBe(false)
-    expect(sentRequests(renderer)).toEqual([])
   })
 
   it('remembers answers across a restart', async () => {

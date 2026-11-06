@@ -47,7 +47,8 @@ export const terminalTabSchema = z.object({
     .object({
       agent: z.enum(['claude', 'codex']),
       sessionId: z.string(),
-      title: z.string()
+      title: z.string(),
+      kind: z.enum(['named', 'fallback']).optional().catch(undefined)
     })
     .nullable()
     .optional()
@@ -92,7 +93,8 @@ const tabSchema = z.object({
     .object({
       agent: z.enum(['claude', 'codex']),
       sessionId: z.string(),
-      title: z.string()
+      title: z.string(),
+      kind: z.enum(['named', 'fallback']).optional().catch(undefined)
     })
     .nullable()
     .optional()
