@@ -5,6 +5,8 @@ export const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 export const FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS = 400
 // Rolling budgets prevent many individually interactive OpenTUI redraws from starving timers.
 export const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
+// Tighter unattended cap lets isolated prompts/queries land immediately while coalescing sustained streaming bursts.
+export const FOREGROUND_UNATTENDED_IMMEDIATE_BUDGET_CHARS = 4 * 1024
 export const FOREGROUND_BUDGET_WINDOW_MS = 500
 export const INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS = 32 * 1024
 export const FOREGROUND_GRID_DRIFT_CHECK_MIN_MS = 250

@@ -41,11 +41,13 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       session.shouldSnapshotHiddenCodexOutput &&
       (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
     const synchronizedForegroundScan =
-      session.shouldProtectNativeWindowsSynchronizedOutput && foreground
+      (session.shouldHoldSynchronizedForegroundOutput ||
+        session.shouldProtectNativeWindowsSynchronizedOutput) &&
+      foreground
         ? scanSynchronizedForegroundOutput(
             data,
-            session.synchronizedForegroundMarkerTail,
-            session.synchronizedForegroundOutputActive
+            session.synchronizedForegroundMarkerTail ?? '',
+            session.synchronizedForegroundOutputActive === true
           )
         : null
     const synchronizedOutputStarted = synchronizedForegroundScan?.started === true
@@ -122,14 +124,17 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
           : synchronizedFrameLatencySensitive || session.isLatencySensitiveForegroundOutput(data),
       forceForegroundRefresh:
         foregroundOutput &&
-        (synchronizedForegroundOutput ||
+        ((session.shouldProtectNativeWindowsSynchronizedOutput && synchronizedForegroundOutput) ||
           nativeWindowsCursorRestore ||
           foregroundRenderRefreshNeeded),
       followupForegroundRefresh: nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
       // Why: xterm already queued a WebGL frame parsing this chunk; merge the repair into it instead of rendering the grid twice.
       shouldRefreshForegroundSynchronously: session.shouldRefreshForegroundSynchronously,
       stripTransientCursorShows: session.shouldProtectNativeWindowsSynchronizedOutput && foreground,
-      coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
+      coalesceForeground:
+        session.shouldProtectNativeWindowsSynchronizedOutput &&
+        synchronizedForegroundOutput &&
+        synchronizedOutputEnded,
       holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
     })
   }

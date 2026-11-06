@@ -18,6 +18,23 @@ const FRAMES: NativeChatTextRevealFrames = {
   cancel: (frame) => cancelAnimationFrame(frame)
 }
 
+function isDocumentHidden(): boolean {
+  return typeof document !== 'undefined' && document.hidden
+}
+
+function useDocumentHidden(): boolean {
+  const [hidden, setHidden] = useState(isDocumentHidden)
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    const sync = (): void => setHidden(document.hidden)
+    document.addEventListener('visibilitychange', sync)
+    return () => document.removeEventListener('visibilitychange', sync)
+  }, [])
+  return hidden
+}
+
 export type NativeChatPacedText = { text: string; revealing: boolean; fading: boolean }
 
 export function useNativeChatPacedText(
@@ -26,6 +43,8 @@ export function useNativeChatPacedText(
   streaming: boolean
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
+  const documentHidden = useDocumentHidden()
+  const immediate = reducedMotion || documentHidden
   const reveals = useContext(NativeChatReplyRevealsContext)
   const [initial] = useState<NativeChatTextReveal>(() =>
     startNativeChatTextReveal(
@@ -45,18 +64,12 @@ export function useNativeChatPacedText(
     if (streaming && nativeChatTextAppended(previous, text)) {
       setGrew(true)
     }
-    pace.current = receiveNativeChatText(
-      previous,
-      text,
-      streaming,
-      reducedMotion,
-      performance.now()
-    )
+    pace.current = receiveNativeChatText(previous, text, streaming, immediate, performance.now())
     setShown(pace.current.shown)
     reveals?.drawn.set(rowKey, pace.current)
-  }, [text, streaming, reducedMotion, reveals, rowKey])
+  }, [text, streaming, immediate, reveals, rowKey])
 
-  const behind = !reducedMotion && shown < text.length
+  const behind = !immediate && shown < text.length
   useEffect(() => {
     if (!behind) {
       if (!streaming) {
@@ -75,20 +88,24 @@ export function useNativeChatPacedText(
     )
   }, [behind, text, reveals, rowKey, streaming])
 
-  const revealing = !reducedMotion && ((streaming && grew) || behind)
+  const revealing = !immediate && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)
   useEffect(() => {
+    if (immediate) {
+      setLingering(false)
+      return
+    }
     if (revealing) {
       setLingering(true)
       return
     }
     const timer = setTimeout(() => setLingering(false), WORD_FADE_MS)
     return () => clearTimeout(timer)
-  }, [revealing])
+  }, [immediate, revealing])
 
   return {
-    text: reducedMotion ? text : text.slice(0, Math.min(shown, text.length)),
+    text: immediate ? text : text.slice(0, Math.min(shown, text.length)),
     revealing,
-    fading: !reducedMotion && (revealing || lingering)
+    fading: !immediate && (revealing || lingering)
   }
 }

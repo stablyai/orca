@@ -86,7 +86,11 @@ export function useTerminalPaneGlobalEffects({
   const renderingSuspendedByVisibilityRef = useRef(false)
   const hiddenReasonRef = useRef<TerminalHiddenReason | null>(null)
   const warmedWhileHiddenRef = useRef(false)
-  const rendererVisible = isVisible && isWorktreeActive
+  const coveredByNativeChat =
+    isChatViewMode &&
+    paneCount === 1 &&
+    Boolean(managerRef.current && activePaneIsCoveredByNativeChat(managerRef.current))
+  const rendererVisible = isVisible && isWorktreeActive && !coveredByNativeChat
   // Watch leaf → PTY rebinds even without activity/visibility changes so main grants the live PTY its interactive reserve.
   const activeLeafPtyId = useAppStore((state) => {
     const layout = state.terminalLayoutsByTabId[tabId]
@@ -217,14 +221,14 @@ export function useTerminalPaneGlobalEffects({
   ])
 
   useEffect(() => {
-    const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null
+    const ptyId = isActive && rendererVisible ? activeLeafPtyId : null
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       return
     }
     // Main prioritizes this PTY’s bounded ACK reserve; cleanup deactivates the old binding before rebind.
     window.api.pty.setActiveRendererPty?.(ptyId, true)
     return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
-  }, [isActive, isVisible, isWorktreeActive, activeLeafPtyId])
+  }, [isActive, rendererVisible, activeLeafPtyId])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {
@@ -271,15 +275,13 @@ export function useTerminalPaneGlobalEffects({
   }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
 
   useEffect(() => {
-    const onPasteText = (event: Event): void => {
-      const detail = (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail
+    const onPasteText = (event: Event): void =>
       handleTerminalProgrammaticTextPaste({
-        detail,
+        detail: (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail,
         tabId,
         getManager: () => managerRef.current,
         getPaneTransports: () => paneTransportsRef.current
       })
-    }
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
     return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
   }, [tabId, managerRef, paneTransportsRef])
