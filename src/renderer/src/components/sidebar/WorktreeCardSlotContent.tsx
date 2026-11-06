@@ -151,7 +151,7 @@ export function WorktreeCardSlotContent({
           {agentsExpanded ? (
             <SlotAgentLinesHeader label={agentCountLabel} onCollapse={toggleAgents} />
           ) : (
-            <div className="mt-[3px] min-w-0 pr-2">
+            <div className="mt-[3px] min-w-0 pr-2 pl-1">
               <CompactAgentSummaryButton
                 agents={lines.map((line) => line.agent)}
                 subjectLabel={agentCountLabel}
@@ -166,7 +166,7 @@ export function WorktreeCardSlotContent({
         agentLines
       )}
       {showLineageChildChip ? (
-        <div className="mt-[3px] flex min-w-0">
+        <div className="mt-[3px] flex min-w-0 pl-1">
           <Button
             type="button"
             variant="outline"
@@ -226,11 +226,11 @@ export function WorktreeCardSlotContent({
           </div>
           {showDetailsRow ? (
             <div
-              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-2"
+              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-2 pl-1"
               data-worktree-card-details-row=""
             >
               {presentation.hasMetaRow ? (
-                <div className="min-w-0 flex-1 pl-1">
+                <div className="min-w-0 flex-1">
                   <WorktreeCardMetaRow card={card} presentation={presentation} />
                 </div>
               ) : null}
