@@ -16,6 +16,7 @@ import type { AppState } from '../../../store/types'
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import {
+  isClientAuthoritativeAgentStatusPane,
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests,
@@ -441,6 +442,33 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         state: 'working',
         updatedAt: T0 + 1_500,
         prompt: CLIENT_PROMPT
+      })
+    })
+
+    it('replaces an ahead-clock launch seed with the host turn result (#38942)', () => {
+      const store = seedPairedClientStore()
+      // The paired client launches a Claude pane; the optimistic launch seed uses the client clock.
+      vi.setSystemTime(T0 + 500)
+      store
+        .getState()
+        .setAgentStatus(
+          MIRROR_PANE_KEY,
+          { state: 'working', prompt: 'launch seed', agentType: 'claude' },
+          'claude',
+          undefined,
+          { tabId: MIRROR_TAB_ID, worktreeId: WT }
+        )
+      // A launch seed carries no byte evidence, so it cannot claim the pane-authoritative fence.
+      expect(isClientAuthoritativeAgentStatusPane(MIRROR_PANE_KEY)).toBe(false)
+
+      // The host ends the turn on its own clock, minutes behind the skewed client.
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({ snapshotVersion: 2, hostNow: T0 - 60_000, includeAgentStatus: true }),
+        T0 + 1_000
+      )
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
+        state: 'done'
       })
     })
   })

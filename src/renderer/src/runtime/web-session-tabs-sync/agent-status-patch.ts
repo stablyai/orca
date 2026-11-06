@@ -108,10 +108,17 @@ export function buildMirroredAgentStatusPatch(
     // Cross-machine clocks cannot arbitrate live byte ownership; keep client state except host-only classes, adopting host identity below.
     const hostPiercesAuthority = hostAgentStatusPiercesClientAuthority(entry)
     const clientOwnsEntry = clientAgentStatusFencesHost(entry.paneKey, existing, entry, now)
+    // Only host-adopted or byte-owned rows share a clock with the entry; an unevidenced launch
+    // seed must never outrank host turn results across skewed clocks (#38942).
+    const clocksComparable =
+      existing !== undefined &&
+      (existing.mirroredEvidenceReceivedAt !== undefined ||
+        isClientOwnedAgentStatus(entry.paneKey, existing))
     const nextEntry =
       existing &&
       (clientOwnsEntry ||
         (!hostPiercesAuthority &&
+          clocksComparable &&
           isAgentStatusFresh(existing, now) &&
           existing.updatedAt > entry.updatedAt))
         ? {
