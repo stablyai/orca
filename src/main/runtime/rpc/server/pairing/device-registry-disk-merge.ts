@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../../../../shared/secure-file'
 import type { DeviceEntry } from './device-entry'
 import { isMissingFileError, quarantineCorruptRegistry } from './device-registry-corruption'
@@ -6,6 +6,10 @@ import { readDeviceRegistryFile, type DeviceRegistryFileRead } from './device-re
 
 // Phones recheck auth on every frame and request; one stat a second bounds a disk revoke's lag.
 const EXTERNAL_EDIT_CHECK_INTERVAL_MS = 1000
+// Another writer landed between our read and rename: re-read and re-merge, a few times at most.
+const MAX_WRITE_ATTEMPTS = 5
+// Non-atomic external writers (an admin's script) can be caught mid-write; give them a moment.
+const TORN_READ_RETRY_MS = 25
 
 /**
  * What a save may write over the file as it is now on disk. Another writer (an admin removing a
@@ -91,7 +95,12 @@ export class DeviceRegistryWriter {
       : mergeDeviceRegistrySave(current, current, disk, this.removedIds)
   }
 
-  /** Returns what was written. Security transitions pass `durable`. */
+  /**
+   * Returns what was written. Security transitions pass `durable`. The merge is published only if
+   * the file is still exactly what it was read from (compare-and-swap); otherwise another writer
+   * landed in between, so the save re-reads and re-merges. Without that, a save that read the file
+   * before an admin's revoke and renamed after it would put the revoked row back.
+   */
   write(
     before: readonly DeviceEntry[],
     next: readonly DeviceEntry[],
@@ -103,21 +112,54 @@ export class DeviceRegistryWriter {
         this.removedIds.add(deviceId)
       }
     }
-    const disk = readDeviceRegistryFile(this.registryPath)
-    // After our own quarantine the file's absence is no removal evidence, but rows another writer
-    // (the pairing CLI) added since are still kept: merge with no known baseline.
-    const baseline = this.quarantinedUntilWritten ? [] : before
-    const merged =
-      disk.unreadable || disk.corruptFilePending
-        ? [...next]
-        : mergeDeviceRegistrySave(baseline, next, disk, this.removedIds)
-    const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
     // Stat after our rename can't tell our write from one right after it; re-read once instead.
     this.readStamp = null
-    write(this.registryPath, merged)
-    this.quarantinedUntilWritten = false
-    return merged
+    for (let attempt = 1; ; attempt++) {
+      const lastAttempt = attempt >= MAX_WRITE_ATTEMPTS
+      const snapshot = readRawRegistry(this.registryPath)
+      const disk = readDeviceRegistryFile(this.registryPath)
+      if (
+        disk.corruptFilePending &&
+        !lastAttempt &&
+        snapshot !== readRawRegistry(this.registryPath)
+      ) {
+        // Still being written by someone else; a torn read proves nothing, so wait and re-read.
+        sleepSync(TORN_READ_RETRY_MS)
+        continue
+      }
+      // After our own quarantine the file's absence is no removal evidence, but rows another writer
+      // (the pairing CLI) added since are still kept: merge with no known baseline.
+      const baseline = this.quarantinedUntilWritten ? [] : before
+      const merged =
+        disk.unreadable || disk.corruptFilePending
+          ? [...next]
+          : mergeDeviceRegistrySave(baseline, next, disk, this.removedIds)
+      let unchanged = true
+      const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
+      write(this.registryPath, merged, {
+        // Last check before the rename; a lost race discards the stage and merges again.
+        shouldPublish: () =>
+          (unchanged = lastAttempt || readRawRegistry(this.registryPath) === snapshot)
+      })
+      if (unchanged) {
+        this.quarantinedUntilWritten = false
+        return merged
+      }
+    }
   }
+}
+
+/** Raw file text for compare-and-swap; null when absent, and a marker no file can equal when unreadable. */
+function readRawRegistry(registryPath: string): string | null {
+  try {
+    return readFileSync(registryPath, 'utf-8')
+  } catch (error) {
+    return isMissingFileError(error) ? null : `\u0000unreadable:${String(error)}`
+  }
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
 function fileStamp(registryPath: string): string {
