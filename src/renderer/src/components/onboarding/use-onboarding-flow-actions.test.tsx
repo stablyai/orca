@@ -20,22 +20,25 @@ const {
   detect,
   acquireChoices,
   preferences
-} = vi.hoisted(() => ({
-  track: vi.fn(),
-  launch: vi.fn(),
-  reveal: vi.fn<(...args: unknown[]) => WorkspaceActivationOutcome>(() => ({
-    opened: { primaryTabId: null }
-  })),
-  state: {
+} = vi.hoisted(() => {
+  const state: { activeWorkspaceExecutionHostId: string; settings: GlobalSettings | null } = {
     activeWorkspaceExecutionHostId: 'runtime:chosen',
-    settings: null as GlobalSettings | null
-  },
-  detect: vi.fn(),
-  acquireChoices: vi.fn(),
-  preferences: vi.fn(),
-  toastError: vi.fn(),
-  focusIntent: { cancel: vi.fn() }
-}))
+    settings: null
+  }
+  return {
+    track: vi.fn(),
+    launch: vi.fn(),
+    reveal: vi.fn<(...args: unknown[]) => WorkspaceActivationOutcome>(() => ({
+      opened: { primaryTabId: null }
+    })),
+    state,
+    detect: vi.fn(),
+    acquireChoices: vi.fn(),
+    preferences: vi.fn(),
+    toastError: vi.fn(),
+    focusIntent: { cancel: vi.fn() }
+  }
+})
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
