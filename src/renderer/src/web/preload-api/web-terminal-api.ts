@@ -13,6 +13,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
     claimViewport: () => {},
+    // Web clients have no local PTYs; runtime attention arrives through terminal.list.
+    getTerminalAttention: () => Promise.resolve({}),
     reportGeometry: () => {},
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.

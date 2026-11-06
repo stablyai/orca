@@ -155,6 +155,11 @@ export type GitHubProjectRow = {
     labels: Array<{ name: string; color: string }>
     assignees: Array<{ login: string; name: string | null }>
     parentIssue?: { number: number; title: string; url: string } | null
+    subIssuesProgress?: { completed: number; total: number; percentCompleted: number } | null
+    linkedPullRequests?: {
+      pullRequests: { number: number; title: string; url: string }[]
+      totalCount: number
+    } | null
   }
   fieldValuesByFieldId?: Record<string, GitHubProjectFieldValue>
   updatedAt: string

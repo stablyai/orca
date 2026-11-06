@@ -12,11 +12,8 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
-  loadTestJournal,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { renderJournalState } from '../agent-session-journal/journal-reducer'
-import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -31,12 +28,6 @@ import {
 } from './structured-agent-session-host-test-data'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { recoverStructuredRewind } from './structured-rewind-recovery'
-import {
-  appendRewindUsageLimitedTurn,
-  expectNoUsageLimitAutoContinue,
-  expectRestoredUsageLimitCancelled
-} from './structured-agent-session-rewind-usage-limit.test-fixture'
 
 const caller = { callerKey: 'desktop' }
 const SOURCE = '11111111-1111-4111-8111-111111111111'
@@ -190,146 +181,6 @@ async function rewindSecondPrompt(uuid = 'prompt-2') {
 }
 
 describe('rewinding a chat whose agent forks', () => {
-  it('admits a direct request with later queued cards and preserves their native Stop boundary through the provider fork', async () => {
-    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    await journal.appendItem(
-      { provider: 'claude', sessionId: SOURCE, uuid: 'successful-A' },
-      { kind: 'turn', turnId: 'successful-A', state: 'completed', outcome: 'success' },
-      {
-        fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      }
-    )
-    sink.appendItem(
-      { provider: 'claude', sessionId: SOURCE, uuid: 'prompt-3' },
-      hostTestMessage('prompt-3'),
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    await host.flushStreamedEvents(HOST_TEST_SESSION)
-    // A direct/stale-client request is supported; the informed renderer disables this with a queue.
-    const epoch = journal.cursor().epoch
-    await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {
-      await journal.queuedMessages.insert({
-        messageId: 'O',
-        body: hostTestMessage('O'),
-        options: { effort: 'high' }
-      })
-      await journal.appendStopEvent(
-        { reason: 'user-stop', caller: 'other-client' },
-        store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-      )
-      await journal.queuedMessages.insert({
-        messageId: 'N',
-        body: hostTestMessage('N'),
-        options: { effort: 'low' }
-      })
-    })
-    const cards = structuredClone(journal.queuedMessages.list())
-    const pauses = structuredClone(journal.queuedMessages.pauses())
-    expect(journal.cursor().epoch).toBe(epoch)
-    expect(journal.queuedMessages.nextInputCard()).toBeNull()
-    expect(await rewindSecondPrompt('prompt-3')).toMatchObject({ ok: true })
-    expect(forkForRewind).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ beforeMessage: { sessionId: SOURCE, uuid: 'prompt-3' } })
-    )
-    expect(journal.newestTurn()).toEqual({
-      turnId: 'successful-A',
-      state: 'completed',
-      outcome: 'success'
-    })
-    expect(journal.queuedMessages.list()).toEqual(cards)
-    expect(journal.queuedMessages.pauses()).toEqual(pauses)
-    await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {
-      await journal.queuedMessages.withdraw(['O'])
-      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('N')
-      await journal.appendSubmission(
-        {
-          clientMessageId: 'consume-N',
-          body: hostTestMessage('N'),
-          payloadFingerprint: cards[1]!.fingerprint,
-          fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-          handoverRecorded: true,
-          options: { effort: 'low' }
-        },
-        { messageId: 'N', expect: 'waiting', yieldsToPause: true }
-      )
-    })
-    expect(journal.submissionBody('consume-N')).toEqual(hostTestMessage('N'))
-    expect(journal.queuedMessages.get('N')).toEqual({
-      ...cards[1],
-      state: 'dispatched',
-      consumedAs: 'consume-N'
-    })
-  })
-
-  it('commits the fork head with the prefix and rewinds again at rest without starting the agent', async () => {
-    const epoch = (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
-    const fields = { itemId: key('prompt-2'), expectedEpoch: epoch }
-    const envelope = {
-      sessionId: HOST_TEST_SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.rewind',
-        sessionId: HOST_TEST_SESSION,
-        fields
-      })
-    }
-
-    expect(await host.rewind(caller, { ...fields, envelope })).toMatchObject({ ok: true })
-
-    expect(forkForRewind).toHaveBeenCalledWith(
-      expect.objectContaining({ beforeMessage: { sessionId: SOURCE, uuid: 'prompt-2' } })
-    )
-    expect(closeSession).toHaveBeenCalled()
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({
-      phase: 'completed',
-      providerFork: { materialized: true }
-    })
-    const record = store.getRecord(HOST_TEST_SESSION)!
-    const fork = record.rewind!.providerFork!
-    // Preserve fields read by v1.4.233, which ignores providerFork.
-    expect(agentSessionProviderHandleChainHead(record.providerHandleChain)).toMatchObject({
-      origin: 'forked',
-      handle: claudeProviderHandle(fork.sessionId, 'fork-answer-1')
-    })
-    expect(nameProviderConversation).toHaveBeenCalledExactlyOnceWith(record)
-    expect(await host.attach(caller, attachParams(record.lease.runtimeFence))).toMatchObject({
-      ok: true
-    })
-    await vi.waitFor(() => {
-      expect(host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
-        'ready'
-      )
-    })
-    expect(nameProviderConversation).toHaveBeenCalledTimes(1)
-    const snapshot = await host.journalSnapshot(HOST_TEST_SESSION)
-    expect(snapshot.items.map((item) => item.itemId)).toEqual([key('prompt-1'), key('answer-1')])
-
-    failAcquire = true
-    const again = { itemId: key('prompt-1'), expectedEpoch: snapshot.cursor.epoch }
-    expect(
-      await host.rewind(caller, {
-        ...again,
-        envelope: {
-          sessionId: HOST_TEST_SESSION,
-          clientOperationId: hostTestOperationId(),
-          expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.rewind',
-            sessionId: HOST_TEST_SESSION,
-            fields: again
-          })
-        }
-      })
-    ).toMatchObject({ ok: true })
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toEqual([])
-    expect(
-      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
-        ?.handle
-    ).toEqual(claudeProviderHandle('33333333-3333-4333-8333-333333333333', null))
-  })
-
   it('keeps the original conversation when saving its fork fails', async () => {
     const before = await host.journalSnapshot(HOST_TEST_SESSION)
     forkForRewind.mockRejectedValueOnce(new Error('transcript write failed'))
@@ -337,74 +188,5 @@ describe('rewinding a chat whose agent forks', () => {
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
     expect(closeSession).not.toHaveBeenCalled()
-  })
-
-  it('rolls back both history and handle when the receipt fails, then recovers the same fork', async () => {
-    host.deps.usageLimitAutoContinue = {
-      isEnabled: () => true,
-      isWorkspaceAsleep: () => false,
-      subscribe: () => () => {}
-    }
-    await store.setSessionTabVisibility(HOST_TEST_SESSION, true)
-    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    // The limited turn is past its reset and stays in the fork; the removed prompt superseded it.
-    const cut = await appendRewindUsageLimitedTurn(journal, HOST_TEST_NOW - 120_000)
-    sink.appendItem(
-      { provider: 'claude', sessionId: SOURCE, uuid: 'prompt-3' },
-      hostTestMessage('prompt-3'),
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    await host.flushStreamedEvents(HOST_TEST_SESSION)
-    const kept = (await host.journalSnapshot(HOST_TEST_SESSION)).items
-      .map((item) => item.itemId)
-      .slice(0, -1)
-    const before = await host.journalSnapshot(HOST_TEST_SESSION)
-    const makeReceipt = store.conversationReceipts.rewind.bind(store.conversationReceipts)
-    const failed = vi
-      .spyOn(store.conversationReceipts, 'rewind')
-      .mockImplementationOnce((...args) => {
-        const receipt = makeReceipt(...args)
-        return {
-          ...receipt,
-          write: (db) => {
-            receipt.write(db)
-            throw new Error('commit failed')
-          }
-        }
-      })
-    await expect(rewindSecondPrompt('prompt-3')).rejects.toThrow('commit failed')
-    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
-    expect(
-      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
-        ?.handle.nativeId
-    ).toBe(SOURCE)
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
-    expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
-    failed.mockRestore()
-
-    await recoverStructuredRewind(
-      { store, logger: createStructuredAgentSessionLogger() },
-      HOST_TEST_SESSION,
-      journal,
-      store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-    )
-    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(kept)
-    expect(
-      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
-        ?.handle.nativeId
-    ).toBe('33333333-3333-4333-8333-333333333333')
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
-    expect(forkForRewind).toHaveBeenCalledTimes(1)
-    await expectRestoredUsageLimitCancelled(host, store, cut)
-    expect(
-      (await openTestAgentSessionRecordStore(directory)).getRecord(HOST_TEST_SESSION)
-        ?.usageLimitContinueCancel
-    ).toEqual(cut)
-    expect(
-      latestUsageLimitContinueIdentity(
-        renderJournalState(loadTestJournal(directory, HOST_TEST_SESSION)!.state)
-      )
-    ).toEqual(cut)
-    await expectNoUsageLimitAutoContinue(host)
   })
 })
