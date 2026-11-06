@@ -344,6 +344,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
@@ -425,6 +426,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
       await expect(
         createWebRuntimeSessionTerminal({
+          environmentId: ENVIRONMENT_ID,
           worktreeId: WORKTREE_ID,
           afterTabId,
           agent,
@@ -480,6 +482,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         activate: true,
         selectWorktree: false
@@ -521,6 +524,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         launchAgent: 'codex',
         targetGroupId: 'group-left'
@@ -579,6 +583,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'resume',
         launchAgent: 'codex',
@@ -655,6 +660,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'resume',
         launchAgent: 'omp',
