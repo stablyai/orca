@@ -12,7 +12,13 @@ export function decodeGrokTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  return decodeGrokTranscriptRecord(parseJsonObject(line), fallbackId)
+}
+
+export function decodeGrokTranscriptRecord(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
   if (!record) {
     return null
   }

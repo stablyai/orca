@@ -26,7 +26,13 @@ type HistorySegment = {
 export async function readCodexLocalHistory(input: {
   filePath: string
   roots?: readonly string[]
-  visit: (line: string, fallbackId: string, selected: boolean, recordId?: string) => void
+  visit: (
+    line: string,
+    fallbackId: string,
+    selected: boolean,
+    recordId: string | undefined,
+    record: Record<string, unknown> | null
+  ) => void
 }): Promise<number> {
   const sources = await codexHistorySources(input.filePath, input.roots)
   const seen = new Set<string>()
@@ -107,7 +113,8 @@ export async function readCodexLocalHistory(input: {
           raw.line,
           transcriptFallbackId(segment.path, offset - raw.byteLength),
           segment.end === undefined,
-          segment.paginated ? `${segment.rolloutId}:${id ?? `#${ordinal - 1}`}` : undefined
+          segment.paginated ? `${segment.rolloutId}:${id ?? `#${ordinal - 1}`}` : undefined,
+          record
         )
       }
     }

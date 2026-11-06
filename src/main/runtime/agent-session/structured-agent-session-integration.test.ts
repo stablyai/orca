@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-legacy-import-worker.mock-fixture'
 import '../rpc/unused-default-rpc-methods.test-fixture'
 import { scriptedCodexCatalogSession } from '../scripted-codex-model-catalog.test-fixture'
 // Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
@@ -203,8 +204,7 @@ function attachParams(fence: number | null) {
 }
 
 function createIntentParams() {
-  const worktree = `id:${WORKSPACE}`
-  const fields = { worktree, agent: 'codex' }
+  const fields = { worktree: `id:${WORKSPACE}`, agent: 'codex' }
   return { envelope: envelope('agentSession.create', fields, null), ...fields }
 }
 

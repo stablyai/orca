@@ -35,7 +35,14 @@ export function decodeCodexTranscriptLine(
   fallbackId: string,
   options?: { historyImport: true }
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  return decodeCodexTranscriptRecord(parseJsonObject(line), fallbackId, options)
+}
+
+export function decodeCodexTranscriptRecord(
+  record: Record<string, unknown> | null,
+  fallbackId: string,
+  options?: { historyImport: true }
+): NativeChatMessage | null {
   if (!record) {
     return null
   }

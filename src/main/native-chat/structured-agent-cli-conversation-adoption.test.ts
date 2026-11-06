@@ -1,3 +1,4 @@
+import './agent-session-journal/journal-legacy-import-worker.mock-fixture'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

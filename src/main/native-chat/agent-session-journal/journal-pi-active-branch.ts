@@ -3,7 +3,7 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { asRecord, parseJsonObject, timestampMs } from '../../ai-vault/session-scanner-values'
 import Database from '../../sqlite/sync-database'
-import { decodeOmpTranscriptLine } from '../transcript-line-decoders-omp'
+import { decodeOmpTranscriptRecord } from '../transcript-line-decoders-omp'
 
 function closePiImportDatabase(db: Database.Database | null): void {
   try {
@@ -16,9 +16,14 @@ function closePiImportDatabase(db: Database.Database | null): void {
 // Spool the full tree until the saved leaf identifies the active branch.
 export function createPiTranscriptCollector<T>(
   toItem: (message: NativeChatMessage, identity: AgentJournalItemIdentity) => T,
-  identify: (line: string, lineIndex: number) => AgentJournalItemIdentity
+  identify: (record: Record<string, unknown> | null, lineIndex: number) => AgentJournalItemIdentity
 ): {
-  record(line: string, fallbackId: string, lineIndex: number): void
+  record(
+    line: string,
+    fallbackId: string,
+    lineIndex: number,
+    parsed?: Record<string, unknown> | null
+  ): void
   project(keep: (item: T) => void): Promise<void>
   close(): void
 } {
@@ -61,8 +66,8 @@ export function createPiTranscriptCollector<T>(
   let leafId: string | null = null
   let closed = false
   return {
-    record(line, fallbackId, lineIndex) {
-      const record = parseJsonObject(line)
+    record(line, fallbackId, lineIndex, parsed) {
+      const record = parsed === undefined ? parseJsonObject(line) : parsed
       if (!record) {
         return
       }
@@ -164,9 +169,10 @@ export function createPiTranscriptCollector<T>(
           }
           processedRows += 1
           processedBytes += Buffer.byteLength(row.raw_line, 'utf8')
-          const message = decodePiSessionEntryLine(row.raw_line, row.fallback_id)
+          const record = parseJsonObject(row.raw_line)
+          const message = decodePiSessionEntryRecord(record, row.fallback_id)
           if (message) {
-            keep(toItem(message, identify(row.raw_line, row.line_index)))
+            keep(toItem(message, identify(record, row.line_index)))
           }
           if (
             processedBytes >= 1024 * 1024 ||
@@ -208,7 +214,13 @@ export function decodePiSessionEntryLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  return decodePiSessionEntryRecord(parseJsonObject(line), fallbackId)
+}
+
+function decodePiSessionEntryRecord(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
   if (!record) {
     return null
   }
@@ -217,7 +229,7 @@ export function decodePiSessionEntryLine(
   }
   return asRecord(record.message)?.role === 'system'
     ? null
-    : decodeOmpTranscriptLine(line, fallbackId)
+    : decodeOmpTranscriptRecord(record, fallbackId)
 }
 
 function piSummaryMessage(

@@ -7,7 +7,7 @@ import type { NativeChatTranscriptAgent } from '../../../shared/native-chat/nati
 
 export type LegacyIdentityTracker = {
   /** Observe every raw line, including discarded ones, to keep decoder identities aligned. */
-  identify(line: string, lineIndex: number): AgentJournalItemIdentity
+  identify(record: Record<string, unknown> | null, lineIndex: number): AgentJournalItemIdentity
 }
 
 export function createLegacyIdentityTracker(input: {
@@ -16,25 +16,26 @@ export function createLegacyIdentityTracker(input: {
   sessionId: string
 }): LegacyIdentityTracker {
   if (input.transcriptAgent === 'claude') {
-    return { identify: (line, index) => claudeIdentity(line, index, input.agent, input.sessionId) }
+    return {
+      identify: (record, index) => claudeIdentity(record, index, input.agent, input.sessionId)
+    }
   }
   return {
-    identify: (line, index) => ({
+    identify: (record, index) => ({
       provider: 'legacy',
       agent: input.agent,
       sessionId: input.sessionId,
-      recordId: legacyRecordId(line, index, input.transcriptAgent === 'codex')
+      recordId: legacyRecordId(record, index, input.transcriptAgent === 'codex')
     })
   }
 }
 
 function claudeIdentity(
-  line: string,
+  record: Record<string, unknown> | null,
   lineIndex: number,
   agent: AgentType,
   sessionId: string
 ): AgentJournalItemIdentity {
-  const record = parseRecord(line)
   const uuid = stringField(record, 'uuid')
   if (!uuid) {
     return { provider: 'legacy', agent, sessionId, recordId: `#${lineIndex}` }
@@ -44,8 +45,11 @@ function claudeIdentity(
 }
 
 /** Line position is stable only within a given import; prefer stored IDs when available. */
-function legacyRecordId(line: string, lineIndex: number, nestedItem: boolean): string {
-  const record = parseRecord(line)
+function legacyRecordId(
+  record: Record<string, unknown> | null,
+  lineIndex: number,
+  nestedItem: boolean
+): string {
   const payload = record?.payload
   const item =
     nestedItem && payload && typeof payload === 'object' && 'item' in payload ? payload.item : null
@@ -55,15 +59,6 @@ function legacyRecordId(line: string, lineIndex: number, nestedItem: boolean): s
     stringField(record, 'id') ??
     stringField(record, 'uuid')
   return id ?? `#${lineIndex}`
-}
-
-function parseRecord(line: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(line)
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
-  } catch {
-    return null
-  }
 }
 
 function stringField(source: unknown, key: string): string | null {

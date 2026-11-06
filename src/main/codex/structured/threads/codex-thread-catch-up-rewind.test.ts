@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-legacy-import-worker.mock-fixture'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'

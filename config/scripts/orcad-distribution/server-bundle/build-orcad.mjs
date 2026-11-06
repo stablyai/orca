@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Package the server separately from its compatibility launcher.
+import { smokeLegacyImportWorker } from './legacy-import-worker-smoke.mjs'
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
@@ -385,6 +386,7 @@ if (graphErrors.length > 0) {
 
 /** @type {{ label: string, smoke: (outDir: string, options?: { runtimePath?: string }) => unknown }[]} */
 const workerSmokes = [
+  { label: 'history import worker', smoke: smokeLegacyImportWorker },
   { label: 'profile state worker', smoke: smokeProfileStateWorkers },
   { label: 'foreign SQLite reader worker', smoke: smokeForeignSqliteReaderWorker },
   { label: 'session scanner service', smoke: smokeSessionScannerService }

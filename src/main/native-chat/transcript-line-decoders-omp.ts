@@ -20,7 +20,13 @@ export function decodeOmpTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  return decodeOmpTranscriptRecord(parseJsonObject(line), fallbackId)
+}
+
+export function decodeOmpTranscriptRecord(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
   if (
     !record ||
     (record.type !== 'message' && record.type !== 'custom_message' && record.type !== 'compaction')

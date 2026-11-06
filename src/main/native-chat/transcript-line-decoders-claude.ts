@@ -72,7 +72,13 @@ export function decodeClaudeTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const parsed = parseJsonObject(line)
+  return decodeClaudeTranscriptRecord(parseJsonObject(line), fallbackId)
+}
+
+export function decodeClaudeTranscriptRecord(
+  parsed: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
   if (!parsed) {
     return null
   }
