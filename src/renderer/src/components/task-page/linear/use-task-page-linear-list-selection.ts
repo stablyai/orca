@@ -1,6 +1,6 @@
 import { linearIssueReadError } from '@/lib/linear-read-error'
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../shared/linear/issue-read-limits'
 import { translate } from '@/i18n/i18n'
 import type { LinearTeam } from '../../../../../shared/linear/workspace-types'
@@ -181,14 +181,22 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
   }, [availableTeams, linearIssueTeams])
 
   // Why: team IDs belong to one workspace, so a workspace switch must not leave the list filtered by stale team IDs.
-  useEffect(() => {
-    if (linearTeamOptions.length === 0) {
-      return
+  // Reconcile during render so a refreshed team list does not commit with stale team IDs first.
+  const [reconciledTeamsFor, setReconciledTeamsFor] = useState<{
+    options: typeof linearTeamOptions
+    defaults: typeof defaultLinearTeamSelection
+  } | null>(null)
+  if (
+    reconciledTeamsFor?.options !== linearTeamOptions ||
+    reconciledTeamsFor.defaults !== defaultLinearTeamSelection
+  ) {
+    setReconciledTeamsFor({ options: linearTeamOptions, defaults: defaultLinearTeamSelection })
+    if (linearTeamOptions.length > 0) {
+      setLinearTeamSelection(
+        reconcileLinearTeamSelection(linearTeamOptions, defaultLinearTeamSelection)
+      )
     }
-    setLinearTeamSelection(
-      reconcileLinearTeamSelection(linearTeamOptions, defaultLinearTeamSelection)
-    )
-  }, [linearTeamOptions, defaultLinearTeamSelection])
+  }
   const nextModel = model as typeof model & {
     defaultLinearTeamSelection: typeof defaultLinearTeamSelection
     linearTeamSelection: typeof linearTeamSelection
