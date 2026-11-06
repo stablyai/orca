@@ -26,59 +26,64 @@ afterEach(async () => {
 })
 
 // Real workers import the parser graph; allow cold module loading plus SQLite publication.
-it('indexes a non-JSONL pass larger than transfer credits without losing rows or original-message hashes', async () => {
-  root = await mkdtemp(join(tmpdir(), 'ss-worker-flow-'))
-  const path = join(root, 'index.sqlite')
-  const file = join(root, 'conversation.json')
-  const text = 'observable payload '.repeat(7000)
-  await writeFile(
-    file,
-    JSON.stringify({
-      id: 'worker-session',
-      working_dir: root,
-      messages: [
-        ...Array.from({ length: 40 }, () => ({ role: 'user', content: text })),
-        { role: 'assistant', content: 'workerneedle reached the end' }
-      ]
-    })
-  )
-  const info = await stat(file)
-  const candidate = {
-    ...syntheticCandidate({ path: file, mtimeMs: info.mtimeMs, sizeBytes: info.size }),
-    agent: 'jcode' as const
-  }
-  store = new SessionSearchWorkerStore(path, (error) => {
-    throw error
-  })
-  await store.prepare()
-  registerSessionSearchIndexConsumer(store)
-  const listed = await readWholeTranscript({ candidate, platform: process.platform })
-  await store.flush()
-  expect(listed?.messageCount).toBe(41)
-  expect(store.stateCounts()).toMatchObject({ current: 0, due: 0, failed: 0, messages: 0 })
-  expect(store.coversTranscript(candidate)).toBe(false)
-  await readWholeTranscript({ candidate, platform: process.platform, indexing: true })
-  await store.flush()
-  readers = new SessionSearchReaders(path, null)
-  expect((await readers.query({ query: 'workerneedle' })).result).toMatchObject({
-    kind: 'results',
-    hits: [{ sessionId: 'worker-session' }]
-  })
-  expect(store.coversTranscript(candidate)).toBe(true)
-  expect(store.stateCounts().failed).toBe(0)
-  const db = new SyncDatabase(path, { readonly: true })
-  try {
-    let digest = ''
-    for (let i = 0; i < 8; i++) {
-      digest = createHash('sha256').update(digest).update('\0user\0').update(text).digest('hex')
-    }
-    expect(db.prepare('SELECT content_hash, content_hash_count FROM sessions').get()).toMatchObject(
-      { content_hash: digest, content_hash_count: 8 }
+it(
+  'indexes a non-JSONL pass larger than transfer credits without losing rows or original-message hashes',
+  async () => {
+    root = await mkdtemp(join(tmpdir(), 'ss-worker-flow-'))
+    const path = join(root, 'index.sqlite')
+    const file = join(root, 'conversation.json')
+    const text = 'observable payload '.repeat(7000)
+    await writeFile(
+      file,
+      JSON.stringify({
+        id: 'worker-session',
+        working_dir: root,
+        messages: [
+          ...Array.from({ length: 40 }, () => ({ role: 'user', content: text })),
+          { role: 'assistant', content: 'workerneedle reached the end' }
+        ]
+      })
     )
-  } finally {
-    db.close()
-  }
-}, 30_000)
+    const info = await stat(file)
+    const candidate = {
+      ...syntheticCandidate({ path: file, mtimeMs: info.mtimeMs, sizeBytes: info.size }),
+      agent: 'jcode' as const
+    }
+    store = new SessionSearchWorkerStore(path, (error) => {
+      throw error
+    })
+    await store.prepare()
+    registerSessionSearchIndexConsumer(store)
+    const listed = await readWholeTranscript({ candidate, platform: process.platform })
+    await store.flush()
+    expect(listed?.messageCount).toBe(41)
+    expect(store.stateCounts()).toMatchObject({ current: 0, due: 0, failed: 0, messages: 0 })
+    expect(store.coversTranscript(candidate)).toBe(false)
+    await readWholeTranscript({ candidate, platform: process.platform, indexing: true })
+    await store.flush()
+    readers = new SessionSearchReaders(path, null)
+    expect((await readers.query({ query: 'workerneedle' })).result).toMatchObject({
+      kind: 'results',
+      hits: [{ sessionId: 'worker-session' }]
+    })
+    expect(store.coversTranscript(candidate)).toBe(true)
+    expect(store.stateCounts().failed).toBe(0)
+    const db = new SyncDatabase(path, { readonly: true })
+    try {
+      let digest = ''
+      for (let i = 0; i < 8; i++) {
+        digest = createHash('sha256').update(digest).update('\0user\0').update(text).digest('hex')
+      }
+      expect(
+        db.prepare('SELECT content_hash, content_hash_count FROM sessions').get()
+      ).toMatchObject({ content_hash: digest, content_hash_count: 8 })
+    } finally {
+      db.close()
+    }
+  },
+  // Why: these start real writer and reader worker threads (tsx-loaded) and stream multi-MiB transcripts.
+  30_000
+)
 
 it('cancels a dead writer handle and lets a fresh pass recover without failing the transcript', async () => {
   root = await mkdtemp(join(tmpdir(), 'ss-worker-recovery-'))
@@ -114,37 +119,46 @@ it('cancels a dead writer handle and lets a fresh pass recover without failing t
   expect(subject.stateCounts().failed).toBe(0)
 })
 
-it('drains a near-10-MiB JSONL record even when one synchronous emission exceeds transfer credits', async () => {
-  root = await mkdtemp(join(tmpdir(), 'ss-worker-burst-'))
-  const path = join(root, 'index.sqlite')
-  const file = join(root, 'burst.jsonl')
-  const text = `largestburstneedle ${'x '.repeat(5 * 1024 * 1024 - 1024)}`
-  const { writeClaudeTranscript } = await import('./session-search-indexer-test-fixture')
-  await writeClaudeTranscript(file, [text], 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
-  const info = await stat(file)
-  const candidate = syntheticCandidate({ path: file, mtimeMs: info.mtimeMs, sizeBytes: info.size })
-  store = new SessionSearchWorkerStore(path, (error) => {
-    throw error
-  })
-  await store.prepare()
-  registerSessionSearchIndexConsumer(store)
-  const { readResumableTranscript } =
-    await import('../ai-vault/transcripts/session-transcript-reader')
-  const { createClaudeSessionResumeState } =
-    await import('../ai-vault/scanners/claude/session-scanner-primary-parsers')
-  await readResumableTranscript({
-    candidate,
-    platform: process.platform,
-    resume: null,
-    indexing: true,
-    stateFactory: (channel) => createClaudeSessionResumeState(candidate.file, channel)
-  })
-  await store.flush()
-  expect(store.coversTranscript(candidate)).toBe(true)
-  expect(store.stateCounts().failed).toBe(0)
-  readers = new SessionSearchReaders(path, null)
-  expect((await readers.query({ query: 'largestburstneedle' })).result).toMatchObject({
-    kind: 'results',
-    hits: [{ sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }]
-  })
-}, 30_000)
+it(
+  'drains a near-10-MiB JSONL record even when one synchronous emission exceeds transfer credits',
+  async () => {
+    root = await mkdtemp(join(tmpdir(), 'ss-worker-burst-'))
+    const path = join(root, 'index.sqlite')
+    const file = join(root, 'burst.jsonl')
+    const text = `largestburstneedle ${'x '.repeat(5 * 1024 * 1024 - 1024)}`
+    const { writeClaudeTranscript } = await import('./session-search-indexer-test-fixture')
+    await writeClaudeTranscript(file, [text], 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
+    const info = await stat(file)
+    const candidate = syntheticCandidate({
+      path: file,
+      mtimeMs: info.mtimeMs,
+      sizeBytes: info.size
+    })
+    store = new SessionSearchWorkerStore(path, (error) => {
+      throw error
+    })
+    await store.prepare()
+    registerSessionSearchIndexConsumer(store)
+    const { readResumableTranscript } =
+      await import('../ai-vault/transcripts/session-transcript-reader')
+    const { createClaudeSessionResumeState } =
+      await import('../ai-vault/scanners/claude/session-scanner-primary-parsers')
+    await readResumableTranscript({
+      candidate,
+      platform: process.platform,
+      resume: null,
+      indexing: true,
+      stateFactory: (channel) => createClaudeSessionResumeState(candidate.file, channel)
+    })
+    await store.flush()
+    expect(store.coversTranscript(candidate)).toBe(true)
+    expect(store.stateCounts().failed).toBe(0)
+    readers = new SessionSearchReaders(path, null)
+    expect((await readers.query({ query: 'largestburstneedle' })).result).toMatchObject({
+      kind: 'results',
+      hits: [{ sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }]
+    })
+  },
+  // Why: these start real writer and reader worker threads (tsx-loaded) and stream multi-MiB transcripts.
+  30_000
+)
