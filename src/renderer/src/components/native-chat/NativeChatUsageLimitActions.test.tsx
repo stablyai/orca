@@ -7,6 +7,8 @@ import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActio
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
 
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -88,6 +90,7 @@ vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog'
     )
   }
 }))
+const initialStore = useAppStore.getState()
 beforeEach(() => {
   status = new Map()
   mocks.options.mockResolvedValue(mocks.readSnapshot)
@@ -107,6 +110,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  useAppStore.setState(initialStore, true)
   vi.clearAllMocks()
   vi.useRealTimers()
   mocks.follows = true
@@ -121,7 +125,8 @@ function row(
     readCurrent: true,
     canSwitchAccount: mocks.follows
   },
-  automatic?: ReturnType<typeof useNativeChatUsageLimitAutoContinue>
+  automatic?: ReturnType<typeof useNativeChatUsageLimitAutoContinue>,
+  continueUsageLimit: NativeChatOrcaStopView['continueUsageLimit'] = vi.fn()
 ) {
   const view: NativeChatOrcaStopView = {
     hostLabel: null,
@@ -132,7 +137,7 @@ function row(
     usageLimitTurnItemId: offered ? 'cut' : null,
     usageLimitAutoContinue: automatic,
     onUsageLimitHandOffStarted: automatic?.kind === 'scheduled' ? automatic.cancel : undefined,
-    continueUsageLimit: vi.fn()
+    continueUsageLimit
   }
   return (
     <TooltipProvider>
@@ -211,4 +216,39 @@ it('admits one preparation and discards it after Continue supersedes the cut', a
   await screen.findByText('Cancel hand-off')
   fireEvent.click(screen.getByText('Cancel hand-off'))
   expect(screen.queryByText('Cancel hand-off')).toBeNull()
+})
+
+it('continues the chat on the account picked from its row, without terminal restart offers', async () => {
+  const claude = (active: string) => ({
+    accounts: ['a', 'b'].map((id) => ({
+      id,
+      email: `${id}@example.com`,
+      authMethod: 'subscription-oauth' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1,
+      home: `/accounts/${id}`
+    })),
+    activeAccountId: active,
+    activeAccountIdsByRuntime: { host: active, wsl: {} }
+  })
+  mocks.snapshot.mockResolvedValue({
+    claude: claude('a'),
+    codex: { accounts: [], activeAccountId: null },
+    rateLimits: null
+  })
+  mocks.select.mockResolvedValue(claude('b'))
+  useAppStore.setState({
+    fetchSettings: vi.fn(async () => {}),
+    fetchInactiveClaudeAccountUsage: vi.fn(async () => {})
+  })
+  const continueUsageLimit = vi.fn()
+  render(row(undefined, true, 'claude', [], undefined, undefined, continueUsageLimit))
+  const trigger = await screen.findByRole('button', { name: 'Switch Account' })
+  await waitFor(() => expect(trigger).toBeEnabled())
+  fireEvent.keyDown(trigger, { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'b@example.com' }))
+  await waitFor(() => expect(continueUsageLimit).toHaveBeenCalledTimes(1))
+  expect(handleRunningClaudeSessionsAfterSwitch).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
 })
