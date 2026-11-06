@@ -191,7 +191,7 @@ export class GitGraphHistoryController {
     if (this.pending) {
       return this.pending
     }
-    const { result: previous, selectedId } = this.view.getState()
+    const previous = this.view.getState().result
     if (append && !previous?.hasMore) {
       return Promise.resolve(previous)
     }
@@ -200,8 +200,6 @@ export class GitGraphHistoryController {
       return Promise.resolve(undefined)
     }
     const generation = this.generation
-    const requestedNavigation = navigation ?? this.navigation
-    const targetId = revealId ?? selectedId
     const targetDepth = previous?.items.length ?? 0
     const filter = this.filter
     const current = () => !this.disposed && generation === this.generation
@@ -258,8 +256,8 @@ export class GitGraphHistoryController {
           }
           accumulated = { ...page, items }
           if (
-            requestedNavigation !== this.navigation ||
-            ((!targetId || ids.has(targetId)) && items.length >= targetDepth) ||
+            (!revealId && items.length >= targetDepth) ||
+            (revealId && (navigation !== this.navigation || ids.has(revealId))) ||
             !page.hasMore ||
             items.length === count
           ) {
@@ -275,25 +273,27 @@ export class GitGraphHistoryController {
       if (!current()) {
         return undefined
       }
-      const selection = this.view.getState().selectedId ?? accumulated?.items[0]?.id
-      const selectionGone =
-        !error &&
-        accumulated?.hasMore === false &&
-        requestedNavigation === this.navigation &&
-        selection !== undefined &&
-        !ids.has(selection)
+      const result = error ? previous : (accumulated ?? previous)
+      const selection = this.view.getState().selectedId
+      const selectedId =
+        result?.items.find((item) => item.id === selection)?.id ?? result?.items[0]?.id
+      const selectionGone = selection !== undefined && selection !== selectedId
+      if (selectionGone) {
+        this.scrollOffset = 0
+      }
       this.view.setState({
-        result: accumulated ?? previous,
+        result,
         error,
         loading: false,
-        selectedId: selectionGone ? accumulated?.items[0]?.id : selection
+        selectedId,
+        ...(selectionGone ? { revealId: selectedId } : {})
       })
       if (
         Array.isArray(filter) &&
-        accumulated?.resolvedRefs &&
-        JSON.stringify(filter) !== JSON.stringify(accumulated.resolvedRefs)
+        result?.resolvedRefs &&
+        JSON.stringify(filter) !== JSON.stringify(result.resolvedRefs)
       ) {
-        const refs = accumulated.resolvedRefs
+        const refs = result.resolvedRefs
         useAppStore.setState((state) => ({
           gitGraphFiltersByWorktree: {
             ...state.gitGraphFiltersByWorktree,
@@ -301,7 +301,7 @@ export class GitGraphHistoryController {
           }
         }))
       }
-      return accumulated
+      return result
     }
     const pending = run().finally(() => {
       if (this.pending === pending) {

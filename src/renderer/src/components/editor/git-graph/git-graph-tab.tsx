@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -36,21 +37,28 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
         : [],
     [result]
   )
-  const graphWidth = useMemo(
+  const maxGraphWidth = useMemo(
     () =>
-      Math.min(
-        132,
-        rows.reduce(
-          (width, row) =>
-            Math.max(
-              width,
-              (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length) + 1) * 11
-            ),
-          44
-        )
+      rows.reduce(
+        (width, row) =>
+          Math.max(
+            width,
+            (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length) + 1) * 11
+          ),
+        132
       ),
     [rows]
   )
+  const [graphWidth, setGraphWidth] = useState(132)
+  const { containerRef: graphHeader, onResizeStart } = useSidebarResize<HTMLDivElement>({
+    isOpen: true,
+    width: graphWidth,
+    minWidth: 44,
+    maxWidth: maxGraphWidth,
+    deltaSign: 1,
+    setWidth: setGraphWidth,
+    onDraftWidthChange: setGraphWidth
+  })
   const columns = `160px ${graphWidth}px minmax(200px,1fr) 120px 100px`
   const scroll = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -119,7 +127,40 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             style={{ gridTemplateColumns: columns, minWidth: graphWidth + 604 }}
           >
             <span>{translate('gitGraph.branchTag', 'Branch / Tag')}</span>
-            <span>{translate('gitGraph.graph', 'Graph')}</span>
+            <div ref={graphHeader} className="relative flex h-full items-center">
+              <span>{translate('gitGraph.graph', 'Graph')}</span>
+              <div
+                role="separator"
+                tabIndex={0}
+                aria-orientation="vertical"
+                aria-label={translate('csv.resizeColumn', 'Resize column {{column}}', {
+                  column: 2
+                })}
+                aria-valuemin={44}
+                aria-valuemax={maxGraphWidth}
+                aria-valuenow={graphWidth}
+                className="absolute inset-y-0 right-0 w-2 cursor-col-resize hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onMouseDown={onResizeStart}
+                onDoubleClick={() => setGraphWidth(132)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                    event.preventDefault()
+                    setGraphWidth(
+                      Math.max(
+                        44,
+                        Math.min(maxGraphWidth, graphWidth + (event.key === 'ArrowLeft' ? -11 : 11))
+                      )
+                    )
+                  } else if (event.key === 'Home') {
+                    event.preventDefault()
+                    setGraphWidth(132)
+                  } else if (event.key === 'End') {
+                    event.preventDefault()
+                    setGraphWidth(maxGraphWidth)
+                  }
+                }}
+              />
+            </div>
             <span>{translate('gitGraph.message', 'Message')}</span>
             <span>{translate('gitGraph.author', 'Author')}</span>
             <span>{translate('gitGraph.date', 'Date')}</span>

@@ -24,13 +24,22 @@ vi.mock('@/runtime/runtime-git-status-client', async (original) => ({
   getRuntimeGitHistory: getHistory,
   getRuntimeGitRefs: getRefs
 }))
-vi.mock('./git-graph-details', () => ({ GitGraphDetails: () => null }))
+vi.mock('@/runtime/runtime-git-diff-client', async (original) => ({
+  ...(await original<object>()),
+  getRuntimeGitCommitCompare: vi.fn(async () => ({ summary: { status: 'ready' }, entries: [] }))
+}))
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: (options: { count: number }) => ({
+  useVirtualizer: (options: { count: number; getScrollElement: () => HTMLElement | null }) => ({
     getTotalSize: () => options.count * 28,
     getVirtualItems: () =>
       Array.from({ length: options.count }, (_, index) => ({ index, start: index * 28 })),
-    measureElement: () => {}
+    measureElement: () => {},
+    scrollToIndex: (index: number) => {
+      const element = options.getScrollElement()
+      if (element) {
+        element.scrollTop = index * 28
+      }
+    }
   })
 }))
 const container = document.createElement('div')
@@ -288,6 +297,99 @@ it('keeps an older selection, loaded depth and scroll through refresh', async ()
   expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
   expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
   expect(scroll.scrollTop).toBe(2400)
+})
+
+async function loadOlderHistory() {
+  const items = Array.from({ length: 200 }, (_, index) => ({
+    id: `commit-${index}`,
+    subject: `Commit ${index}`,
+    message: `Commit ${index}`,
+    parentIds: []
+  }))
+  const page = (skip: number): GitHistoryResult => ({
+    ...result,
+    refs: 'all',
+    historyToken: 'pinned',
+    items: items.slice(skip, skip + 50),
+    hasMore: skip < 150
+  })
+  getHistory.mockReset().mockImplementation(async (_owner, options) => page(options.skip))
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+  const controller = gitGraphHistoryForTab(workspaceId)
+  await act(async () => {
+    await controller.loadMore()
+    await controller.loadMore()
+  })
+  await act(async () => {
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Commit 110')!
+      .click()
+  })
+  getHistory.mockClear()
+  return { controller, items, page }
+}
+
+it('bounds refresh to the loaded depth when the selected commit has vanished', async () => {
+  const { controller, items } = await loadOlderHistory()
+  const remaining = items.filter((item) => item.id !== 'commit-110')
+  getHistory.mockImplementation(async (_owner, options) => ({
+    ...result,
+    refs: 'all',
+    items: remaining.slice(options.skip, options.skip + 50),
+    hasMore: options.skip < 150
+  }))
+  const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
+  await act(async () => {
+    scroll.scrollTop = 2400
+    controller.scrollOffset = 2400
+    await controller.refresh()
+  })
+  expect(getHistory).toHaveBeenCalledTimes(3)
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(container.querySelector('[data-current="true"] button[title="Commit 0"]')).not.toBeNull()
+  expect(container.querySelector('aside h2')?.textContent).toBe('Commit 0')
+  expect(scroll.scrollTop).toBe(0)
+})
+
+it('keeps a newer selection and its details during refresh and after a partial failure', async () => {
+  const { controller, page } = await loadOlderHistory()
+  let finish!: (page: GitHistoryResult) => void
+  getHistory.mockResolvedValueOnce(page(0)).mockImplementationOnce(
+    () =>
+      new Promise<GitHistoryResult>((resolve) => {
+        finish = resolve
+      })
+  )
+  let refreshing!: Promise<GitHistoryResult | undefined>
+  await act(async () => {
+    refreshing = controller.refresh()
+  })
+  await act(async () => {
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Commit 120')!
+      .click()
+    finish(page(50))
+    await refreshing
+  })
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(container.querySelector('[data-current="true"] button[title="Commit 120"]')).not.toBeNull()
+  expect(container.querySelector('aside h2')?.textContent).toBe('Commit 120')
+
+  getHistory
+    .mockResolvedValueOnce(page(0))
+    .mockRejectedValueOnce(new Error('History request failed'))
+  await act(async () => {
+    await controller.refresh()
+  })
+  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(container.querySelector('[data-current="true"] button[title="Commit 120"]')).not.toBeNull()
+  expect(container.querySelector('aside h2')?.textContent).toBe('Commit 120')
 })
 
 it.each(['local', 'ssh:A'] as const)(
