@@ -7,12 +7,13 @@ const STRAIGHT_QUOTE_RE = /["'`]/
 const opensQuote = (before: string): boolean => /(^|[\s([{])["'`]$/.test(before)
 const closesQuote = (after: string): boolean => /^["'`]([^\p{L}\p{N}]|$)/u.test(after)
 
-function getFirstNonWhitespaceChar(text: string): string {
-  return Array.from(text.trimStart())[0] ?? ''
+// Two code units hold the edge code point; callers have already ruled out edge whitespace.
+function getFirstChar(text: string): string {
+  return Array.from(text.slice(0, 2))[0] ?? ''
 }
 
-function getLastNonWhitespaceChar(text: string): string {
-  return Array.from(text.trimEnd()).at(-1) ?? ''
+function getLastChar(text: string): string {
+  return Array.from(text.slice(-2)).at(-1) ?? ''
 }
 
 // Dictated text and its neighbour touch with no space between: one is empty or already spaced, either is CJK, or punctuation binds them.
@@ -20,11 +21,9 @@ function dictationJoinsWithoutSpace(previousText: string, nextText: string): boo
   if (!previousText || !nextText || /\s$/.test(previousText) || /^\s/.test(nextText)) {
     return true
   }
-  const previousChar = getLastNonWhitespaceChar(previousText)
-  const nextChar = getFirstNonWhitespaceChar(nextText)
+  const previousChar = getLastChar(previousText)
+  const nextChar = getFirstChar(nextText)
   return (
-    !previousChar ||
-    !nextChar ||
     CJK_BOUNDARY_CHAR_RE.test(previousChar) ||
     CJK_BOUNDARY_CHAR_RE.test(nextChar) ||
     NO_SPACE_BEFORE_CHAR_RE.test(nextChar) ||
@@ -38,7 +37,7 @@ export function dictationSeparators(
   text: string,
   after: string
 ): { leading: string; trailing: string } {
-  const opened = opensQuote(before)
+  const opened = opensQuote(before.slice(-2))
   const closed = closesQuote(after) && STRAIGHT_QUOTE_RE.test(before)
   return {
     leading: opened || dictationJoinsWithoutSpace(before, text) ? '' : ' ',

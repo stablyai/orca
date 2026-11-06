@@ -29,12 +29,12 @@ export function insertNativeChatComposerDraftText(
   if (!mounted?.isComposing?.() && insertMounted?.(text, { dictated: options?.dictated })) {
     return
   }
-  const separator = (draftText: string): string =>
-    options?.dictated
-      ? dictationSeparators(draftText, text, '').leading
-      : draftText && !/\s$/.test(draftText) && !/^\s/.test(text)
-        ? ' '
-        : ''
+  const separator = (draftText: string): string => {
+    if (options?.dictated) {
+      return dictationSeparators(draftText, text, '').leading
+    }
+    return draftText && !/\s$/.test(draftText) && !/^\s/.test(text) ? ' ' : ''
+  }
   const insert = <T extends NativeChatComposerDraft>(draft: T): T => {
     const next = `${draft.text}${separator(draft.text)}${text}`
     return {

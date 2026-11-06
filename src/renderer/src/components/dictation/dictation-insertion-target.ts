@@ -11,7 +11,7 @@ import {
 import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
-/** Resolves whether the text landed. */
+/** Each returns whether the text landed. */
 type ComposerInsert = (text: string) => boolean
 type TerminalInsert = (text: string, paneId: number) => Promise<boolean>
 
@@ -24,30 +24,27 @@ export type DictationInsertionTarget =
 const composerTargets = new WeakMap<HTMLElement, ComposerInsert>()
 const terminalTargets = new Map<string, TerminalInsert>()
 
-function registerTarget<K, V>(
-  targets: { get(key: K): V | undefined; set(key: K, value: V): unknown; delete(key: K): boolean },
-  key: K,
-  insert: V
-): () => void {
-  targets.set(key, insert)
-  return () => {
-    if (targets.get(key) === insert) {
-      targets.delete(key)
-    }
-  }
-}
-
 /** A late transcript lands in the composer's draft even after focus left its editor; the composer spaces it. */
 export function registerDictationComposerTarget(
   root: HTMLElement,
   insert: ComposerInsert
 ): () => void {
-  return registerTarget(composerTargets, root, insert)
+  composerTargets.set(root, insert)
+  return () => {
+    if (composerTargets.get(root) === insert) {
+      composerTargets.delete(root)
+    }
+  }
 }
 
 /** A late transcript lands in the pane it started in, even after its tab was switched away. */
 export function registerDictationTerminalTarget(tabId: string, insert: TerminalInsert): () => void {
-  return registerTarget(terminalTargets, tabId, insert)
+  terminalTargets.set(tabId, insert)
+  return () => {
+    if (terminalTargets.get(tabId) === insert) {
+      terminalTargets.delete(tabId)
+    }
+  }
 }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
@@ -100,18 +97,34 @@ function spaced(text: string, before: string, after: string): string {
   return `${leading}${text}${trailing}`
 }
 
-/** Text after the caret's own text node edge; a caret beside an element or a block boundary has no neighbour. */
-function readContentEditableNeighbours(element: HTMLElement): { before: string; after: string } {
+function readSelectionRangeIn(element: HTMLElement): Range | null {
   const selection = element.ownerDocument.getSelection()
   const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-  if (!range || !element.contains(range.startContainer)) {
+  return range && element.contains(range.commonAncestorContainer) ? range : null
+}
+
+const CONTENT_EDITABLE_BLOCK_SELECTOR =
+  'p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div'
+
+/** The selection's neighbours within its own block, so a new paragraph's start has none. */
+function readContentEditableNeighbours(element: HTMLElement): { before: string; after: string } {
+  const range = readSelectionRangeIn(element)
+  if (!range) {
     return { before: '', after: '' }
   }
-  const { startContainer, startOffset, endContainer, endOffset } = range
-  return {
-    before: startContainer instanceof Text ? startContainer.data.slice(0, startOffset) : '',
-    after: endContainer instanceof Text ? endContainer.data.slice(endOffset) : ''
+  const blockOf = (node: Node): Node => {
+    const block = (node instanceof Element ? node : node.parentElement)?.closest(
+      CONTENT_EDITABLE_BLOCK_SELECTOR
+    )
+    return block && element.contains(block) ? block : element
   }
+  const before = element.ownerDocument.createRange()
+  before.selectNodeContents(blockOf(range.startContainer))
+  before.setEnd(range.startContainer, range.startOffset)
+  const after = element.ownerDocument.createRange()
+  after.selectNodeContents(blockOf(range.endContainer))
+  after.setStart(range.endContainer, range.endOffset)
+  return { before: before.toString(), after: after.toString() }
 }
 
 /**
@@ -218,9 +231,8 @@ function insertContentEditableDictationChunk(
   if (element.ownerDocument.execCommand?.('insertText', false, text) === true) {
     return true
   }
-  const selection = element.ownerDocument.getSelection()
-  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-  if (!selection || !range || !element.contains(range.commonAncestorContainer)) {
+  const range = readSelectionRangeIn(element)
+  if (!range) {
     return false
   }
   range.deleteContents()
@@ -228,8 +240,9 @@ function insertContentEditableDictationChunk(
   range.insertNode(textNode)
   range.setStartAfter(textNode)
   range.collapse(true)
-  selection.removeAllRanges()
-  selection.addRange(range)
+  const selection = element.ownerDocument.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
   editorElement.dispatchEvent(
     new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
   )

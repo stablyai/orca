@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
 import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { insertText, type DictationInsertionTarget } from './dictation-insertion-target'
 
@@ -20,7 +21,7 @@ export function createDictationTranscriptDelivery(): DictationTranscriptDelivery
         lastLanded = text
         return
       }
-      missed = missed ? `${missed}${dictationSeparators(missed, text, '').leading}${text}` : text
+      missed += `${dictationSeparators(missed, text, '').leading}${text}`
       await copyMissedDictation(missed, target !== null)
     })
   }
@@ -31,13 +32,13 @@ async function copyMissedDictation(text: string, hadTarget: boolean): Promise<vo
   const id = 'dictation-missed-text'
   try {
     await window.api.ui.writeClipboardText(text)
-  } catch {
+  } catch (error) {
     toast.error(
       translate(
         'auto.components.dictation.dictation-transcript-delivery.lost',
         "Dictation couldn't be inserted or copied."
       ),
-      { id }
+      { id, description: describeClipboardWriteFailure(error) }
     )
     return
   }
