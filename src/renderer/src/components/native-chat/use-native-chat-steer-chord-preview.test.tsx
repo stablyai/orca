@@ -41,8 +41,14 @@ function Composer(props: Props): React.JSX.Element {
 }
 
 describe('useNativeChatSteerChordPreview', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
 
   function setup(overrides: Partial<Props> = {}) {
     const props: Props = {
@@ -104,6 +110,15 @@ describe('useNativeChatSteerChordPreview', () => {
       window.dispatchEvent(new Event('blur'))
     })
     expect(preview()).toBe('')
+  })
+
+  it('adds window listeners only for the composer holding a preview, however many chats are busy', () => {
+    const windowListeners = vi.spyOn(window, 'addEventListener')
+    const blurListeners = () => windowListeners.mock.calls.filter(([type]) => type === 'blur')
+    const busyChats = Array.from({ length: 10 }, () => setup())
+    expect(blurListeners()).toHaveLength(0)
+    busyChats[0].hold()
+    expect(blurListeners()).toHaveLength(1)
   })
 
   it.each([

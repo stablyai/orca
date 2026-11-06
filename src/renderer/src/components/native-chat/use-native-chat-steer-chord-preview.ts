@@ -48,7 +48,8 @@ export function useNativeChatSteerChordPreview(
       } else if (!event.repeat && timer === undefined) {
         timer = setTimeout(() => {
           timer = undefined
-          setHeld(true)
+          // Cmd+Tab inside the delay leaves the window before the preview would show.
+          setHeld(document.hasFocus())
         }, NATIVE_CHAT_STEER_CHORD_HOLD_MS)
       }
     }
@@ -57,27 +58,37 @@ export function useNativeChatSteerChordPreview(
         release()
       }
     }
+    element.addEventListener('keydown', onKeyDown)
+    element.addEventListener('keyup', onKeyUp)
+    element.addEventListener('focusout', release)
+    return () => {
+      element.removeEventListener('keydown', onKeyDown)
+      element.removeEventListener('keyup', onKeyUp)
+      element.removeEventListener('focusout', release)
+      // A key-up missed while the chord offered nothing must not show a stale preview later.
+      release()
+    }
+  }, [root, enabled])
+
+  useEffect(() => {
+    // Only the composer showing a preview listens, so mounted chats add no work here.
+    if (!held) {
+      return
+    }
     // macOS drops the Cmd key-up after Cmd+Tab, so leaving the window or tab also releases.
+    const release = (): void => setHeld(false)
     const onHidden = (): void => {
       if (document.hidden) {
         release()
       }
     }
-    element.addEventListener('keydown', onKeyDown)
-    element.addEventListener('keyup', onKeyUp)
-    element.addEventListener('focusout', release)
     window.addEventListener('blur', release)
     document.addEventListener('visibilitychange', onHidden)
     return () => {
-      element.removeEventListener('keydown', onKeyDown)
-      element.removeEventListener('keyup', onKeyUp)
-      element.removeEventListener('focusout', release)
       window.removeEventListener('blur', release)
       document.removeEventListener('visibilitychange', onHidden)
-      // A key-up missed while the chord offered nothing must not show a stale preview later.
-      release()
     }
-  }, [root, enabled])
+  }, [held])
 
   const preview: NativeChatSteerChordPreview | null =
     !held || !alternateSend || pickerOpen
