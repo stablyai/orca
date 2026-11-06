@@ -23,7 +23,7 @@ export type TerminalWebViewTransport = {
   post: (command: TerminalWebViewCommand & { id: number }) => void
   // Native recovery must ping the exact retained document because iOS can lose its JS state; embedded pages have no separate process.
   pingsOnForegroundRecovery: () => boolean
-  // False for an in-process document: no bridge hop to batch writes for.
+  // False for an in-process document: no bridge hop to batch writes for, and posts keep their callbacks (parse acks rely on it).
   coalesce?: boolean
 }
 

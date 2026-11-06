@@ -260,7 +260,7 @@ export function useMobileSessionTerminalSubscription(
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             writeTerminalStreamOutput({
               handle,
-              chunk: data.chunk,
+              chunk: data.chunk as string,
               terminal: getTerminalRef(handle),
               initialized: initializedHandlesRef.current.has(handle),
               settle: outputAck.owe(data)

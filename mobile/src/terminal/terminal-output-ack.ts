@@ -29,7 +29,6 @@ export function createTerminalOutputAck(args: {
 }): TerminalOutputAck {
   const asks = args.terminal?.writeWithParseAck !== undefined
   let streamToken: string | null = null
-  let epoch = 0
   let parsedUnits = 0
   let flushTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -50,10 +49,9 @@ export function createTerminalOutputAck(args: {
     cancelFlushTimer()
     if (streamToken !== null && parsedUnits > 0 && args.isCurrent()) {
       const params = { streamToken, units: parsedUnits }
-      const sentEpoch = epoch
       void args.client.sendRequest('terminal.ackOutput', params).catch((error: unknown) => {
         // Retry a refused send (bridge request cap) on the timer, never inline: an inline refusal would spin in microtasks.
-        if (!isRpcDeliveryUnknown(error) && sentEpoch === epoch) {
+        if (!isRpcDeliveryUnknown(error) && params.streamToken === streamToken) {
           parsedUnits += params.units
           armFlush()
         }
@@ -66,7 +64,6 @@ export function createTerminalOutputAck(args: {
     capabilities: asks ? { ...args.capabilities, outputAck: 1 } : args.capabilities,
     start(subscribed) {
       cancelFlushTimer()
-      epoch += 1
       parsedUnits = 0
       // Credit only after the echo: a host that didn't echo refuses `terminal.ackOutput`.
       streamToken =
@@ -75,17 +72,16 @@ export function createTerminalOutputAck(args: {
           : null
     },
     owe(event) {
-      if (streamToken === null || event.type !== 'data' || typeof event.chunk !== 'string') {
+      const units = typeof event.chunk === 'string' ? event.chunk.length : 0
+      if (streamToken === null || event.type !== 'data' || units === 0) {
         return null
       }
-      const units = event.chunk.length
-      const owedEpoch = epoch
-      let settled = false
+      // Tokens are unique per subscribe, so a replayed stream's token ignores the old stream's settles.
+      const owedToken = streamToken
       return () => {
-        if (settled || owedEpoch !== epoch || units === 0) {
+        if (owedToken !== streamToken) {
           return
         }
-        settled = true
         parsedUnits += units
         if (parsedUnits >= ACK_BATCH_UNITS) {
           flush()
@@ -100,7 +96,7 @@ export function createTerminalOutputAck(args: {
 /** Writes one Output event; output that can't be written is settled at once so its credit is not lost. */
 export function writeTerminalStreamOutput(args: {
   handle: string
-  chunk: unknown
+  chunk: string
   terminal: TerminalWebViewHandle | undefined
   initialized: boolean
   settle: (() => void) | null
@@ -110,7 +106,7 @@ export function writeTerminalStreamOutput(args: {
   if (!terminal) {
     console.log('[fit][session] data DROPPED — no terminal ref', {
       handle: handle.slice(-8),
-      chunkLen: typeof chunk === 'string' ? chunk.length : 0,
+      chunkLen: chunk.length,
       initialized: args.initialized
     })
     settle?.()
@@ -119,14 +115,14 @@ export function writeTerminalStreamOutput(args: {
   if (!args.initialized) {
     console.log('[fit][session] data RECEIVED before scrollback', {
       handle: handle.slice(-8),
-      chunkLen: typeof chunk === 'string' ? chunk.length : 0
+      chunkLen: chunk.length
     })
   }
-  if (settle && terminal.writeWithParseAck && typeof chunk === 'string') {
+  if (settle && terminal.writeWithParseAck) {
     terminal.writeWithParseAck(chunk, settle)
     return
   }
-  terminal.write(chunk as string)
+  terminal.write(chunk)
   settle?.()
 }
 
@@ -157,6 +153,7 @@ export function createTerminalDocumentWrites(
         settle()
       }
     },
+    // `coalesce: false` means an in-process document, whose posts keep the callback.
     parseAck: coalesce === false ? { writeWithParseAck } : {}
   }
 }
