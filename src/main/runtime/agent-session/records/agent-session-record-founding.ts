@@ -14,6 +14,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'accountHome'
   | 'options'
   | 'launchArgs'
+  | 'sourceTerminalArgs'
   | 'launchDirectory'
   | 'forkedFrom'
   | 'conversationName'
@@ -37,6 +38,9 @@ export function agentSessionRecordIdentityFields(
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
+    ...(identity.sourceTerminalArgs?.length
+      ? { sourceTerminalArgs: [...identity.sourceTerminalArgs] }
+      : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
     ...(conversationName ? { conversationName } : {}),
