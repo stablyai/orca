@@ -1,3 +1,5 @@
+import { isEditableTarget } from '@/lib/editable-target'
+
 type TerminalPastePaneIdentity = {
   id: number
   leafId: string
@@ -67,7 +69,21 @@ export function isTerminalPanePasteFocusCurrent({
   if (activeElement === paneContainer) {
     return true
   }
-  return paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)
+  if (paneContainer.contains(activeElement)) {
+    return isXtermHelperTextarea(activeElement)
+  }
+  // External dictation and overlays can leave focus on a non-input control; cancel only if another paste target took it.
+  return !isOtherPasteTarget(activeElement)
+}
+
+function isOtherPasteTarget(element: Element | null): boolean {
+  const tagName = element?.tagName?.toUpperCase()
+  return (
+    isXtermHelperTextarea(element) ||
+    isEditableTarget(element) ||
+    tagName === 'IFRAME' ||
+    tagName === 'WEBVIEW'
+  )
 }
 
 function isInertDocumentFocus(element: Element | null): boolean {
