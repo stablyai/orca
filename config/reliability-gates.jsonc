@@ -3485,7 +3485,7 @@
       "id": "terminal-provider.login-session-retirement",
       "title": "macOS login-session retirement preserves live daemons through transient rejection bursts",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "daemon-terminal",
       "layer": "macos-daemon-lifecycle",
       "surfaces": [
@@ -3495,47 +3495,19 @@
       ],
       "platforms": ["macos"],
       "providers": ["local-daemon"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local-daemon"],
-      "coverageNotes": "A deterministic fake clock covers short-burst recovery, sustained session death, pending-timer and in-flight-probe suspension, event-trigger preemption, resolver corroboration, and shutdown cancellation. The production-only watch remains behind the macOS GUI launch flag; SSH/headless, WSL, Linux, Windows, mobile, and relay paths are unaffected.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: A deterministic fake clock covers short-burst recovery, sustained session death, pending-timer and in-flight-probe suspension, event-trigger preemption, resolver corroboration, and shutdown cancellation. The production-only watch remains behind the macOS GUI launch flag; SSH/headless, WSL, Linux, Windows, mobile, and relay paths are unaffected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11749",
         "https://github.com/stablyai/orca/issues/7936"
       ],
       "invariant": "A GUI-spawned macOS daemon may retire for PAM rejections only after it previously accepted login wrapping, receives three conclusive rejections spanning at least one uninterrupted 120-second observation window, and observes explicitly unhealthy in-process resolver state. A conclusive acceptance or a sleep/App Nap-sized gap before or during a probe resets the rejection window to the periodic cadence, and client or PTY activity cannot shorten its scheduled backoff.",
       "oracle": "Arm the watch with an accepted probe, inject three rejections over 20 seconds plus unhealthy resolver state, then inject client and PTY activity and require zero resolver reads, zero retirement calls, and exactly four probes until the 120-second boundary. Return acceptance at that boundary and require the daemon to survive. Jump wall time by one hour while a timer is pending and while a PAM probe promise is unresolved; require rejection evidence to restart after wake, zero probes for the next 119,999 milliseconds, and recovery without retirement in both cases. Repeatedly delay timers beyond the suspension threshold for one hour and require the periodic probe bound, one live timer, and zero resolver or retirement calls. Separately keep rejecting through an uninterrupted boundary and require one retirement, while healthy or unknown resolver state suppresses it and stop aborts an in-flight resolver check.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/process-scopes/testing/macos-login-session-death-watch.test.ts --reporter=dot"
-      ],
-      "testFiles": [
-        "src/main/daemon/process-scopes/testing/macos-login-session-death-watch.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/daemon/process-scopes/testing/macos-login-session-death-watch.test.ts",
-          "assertions": [
-            "preserves the daemon when a short PAM rejection burst recovers after wake",
-            "does not count a suspended timer gap as rejection evidence",
-            "does not count suspension during an in-flight probe as rejection evidence",
-            "backs off repeated timer lateness to the periodic probe cadence",
-            "retires only after sustained conclusive rejections with a degraded resolver",
-            "suppresses retirement while resolver health is healthy or unknown, then retires on explicit degradation",
-            "stop prevents an in-flight resolver check from retiring the daemon"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-01",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/macos-login-session-death-watch.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 0.1,
-          "summary": "The focused state-machine suite passed 21 tests, including the field-shaped 20-second rejection burst, pending-timer and in-flight-probe suspension rebaselining, repeated-lateness backoff, bounded recovery retry, sustained-death convergence, resolver suppression, trigger coalescing, and shutdown cancellation.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/process-scopes/testing/macos-login-session-death-watch.test.ts --reporter=dot"
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 2,
         "scope": "deterministic login-session death-watch state-machine suite"
@@ -3558,6 +3530,7 @@
         "Keep the exact probe-count, no-early-resolver, trigger-preemption, acceptance-reset, and shutdown-abort assertions green."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "A real dead macOS GUI login session cannot be fabricated without ending the runner's login session; sustained-death coverage uses deterministic PAM and resolver oracles.",
         "The two-minute production window and one-hour pending/in-flight suspension cases are covered by fake-clock tests rather than a real sleep/wake run.",
         "No multi-process aggregate throttle is added; each stale daemon independently obeys the same non-preemptible observation window."
@@ -7253,7 +7226,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/pty-connection-hidden-tui-snapshot-replay.spec.ts: Loses rich hidden snapshot sequence replay/grid resize and forced repaint after hidden snapshot alarms, including live-trigger deduplication. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1320 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic host/parser, process-classifier, snapshot-publication, mixed-version, renderer, and macOS Electron coverage proves the local and shared paired-runtime contracts. Direct SSH intentionally publishes no shell proof and immediately preserves incumbent behavior. WSL, Windows ConPTY, Linux desktop, and paired headed/headless journeys remain gaps. The audit removed the isolated terminal-multiplex pending-escape-tail forwarding test. Its direct RPC snapshot field-copy alarm is lost; retained parser, snapshot and lifecycle suites do not establish equivalent RPC field coverage. Audit1320: src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts removed. Snapshot pending escape/alternate-screen/shell metadata forwarding and negative app-store-read alarm disappears. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1391: src/renderer/src/components/terminal-pane/pty-connection-remote-pause-drop-notice.spec.ts reduced. Lose repeated quiet switches avoiding snapshots and legacy host without drop-report capability requesting a snapshot. Retained imported registrar uses fake transport/xterm writes, exercising real gap/restore lifecycle rather than actual terminal rendering. No equivalent replacement coverage is claimed. The existing primary-selector receipt and its claims remain scoped to their unchanged sources; the broad optional command has no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1402: src/renderer/src/components/terminal-pane/pty-connection-park-reveal-model-snapshot.spec.ts reduced. Loses basic paired serialize/initial replay forwarding check; hidden alt-frame grid/precedence policy remains. No real terminal renderer claim. No equivalent replacement coverage is claimed. The existing primary-selector receipt and its claims remain scoped to their unchanged sources; the broad optional command has no new execution result. Audit1412: src/main/daemon/terminal-host-concurrent-create.test.ts reduced. Loses race deduplication, attach during unsettled ownership proof, retry after failed spawn, distinct-session parallelism, disposal waiting and shutdown retry-fencing alarms bundled with removed internal-call counts or real-time waits. No replacement-equivalence claim. src/main/daemon/terminal-checkpoint-serializer.test.ts reduced. Loses bounded native conversion/no-whole-candidate materialization and snapshot getter single-read alarms. Retained byte-size outcomes do not establish CPU/allocation bounds. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/pty-connection-hidden-tui-snapshot-replay.spec.ts: Loses rich hidden snapshot sequence replay/grid resize and forced repaint after hidden snapshot alarms, including live-trigger deduplication. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1320 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic host/parser, process-classifier, snapshot-publication, mixed-version, renderer, and macOS Electron coverage proves the local and shared paired-runtime contracts. Direct SSH intentionally publishes no shell proof and immediately preserves incumbent behavior. WSL, Windows ConPTY, Linux desktop, and paired headed/headless journeys remain gaps. The audit removed the isolated terminal-multiplex pending-escape-tail forwarding test. Its direct RPC snapshot field-copy alarm is lost; retained parser, snapshot and lifecycle suites do not establish equivalent RPC field coverage. Audit1320: src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts removed. Snapshot pending escape/alternate-screen/shell metadata forwarding and negative app-store-read alarm disappears. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1391: src/renderer/src/components/terminal-pane/pty-connection-remote-pause-drop-notice.spec.ts reduced. Lose repeated quiet switches avoiding snapshots and legacy host without drop-report capability requesting a snapshot. Retained imported registrar uses fake transport/xterm writes, exercising real gap/restore lifecycle rather than actual terminal rendering. No equivalent replacement coverage is claimed. The existing primary-selector receipt and its claims remain scoped to their unchanged sources; the broad optional command has no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1402: src/renderer/src/components/terminal-pane/pty-connection-park-reveal-model-snapshot.spec.ts reduced. Loses basic paired serialize/initial replay forwarding check; hidden alt-frame grid/precedence policy remains. No real terminal renderer claim. No equivalent replacement coverage is claimed. The existing primary-selector receipt and its claims remain scoped to their unchanged sources; the broad optional command has no new execution result. Audit1412: src/main/daemon/terminal-host-concurrent-create.test.ts reduced. Loses race deduplication, attach during unsettled ownership proof, retry after failed spawn, distinct-session parallelism, disposal waiting and shutdown retry-fencing alarms bundled with removed internal-call counts or real-time waits. No replacement-equivalence claim. src/main/daemon/terminal-checkpoint-serializer.test.ts reduced. Loses bounded native conversion/no-whole-candidate materialization and snapshot getter single-read alarms. Retained byte-size outcomes do not establish CPU/allocation bounds. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/16379"],
       "invariant": "After a TUI exits or is killed, reveal, reattach, snapshot replay, or renderer remount must not deliver terminal-owned mouse or alternate-screen protocol bytes to the surviving shell. Recovery is an ordered output barrier in the daemon session data path: an OSC 133;D completing while the alternate screen is still active pauses the stream at that exact byte boundary, a fresh execution-host process inspection proves shell ownership, and on proof a mode reset is injected as in-stream output so every consumer converges by parsing the same bytes and the queued post-boundary shell output (the prompt) lands on the normal buffer. Snapshots are pure reads. Any failure — refuted proof, timeout, queue overflow, session death, disposal — flushes the queue unmodified, preserving incumbent behavior; later command or mode bytes revoke proof. Clean alternate-screen exits prove ownership asynchronously without pausing.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Run one fixed child-TUI journey for normal exit and cleanup-free SIGKILL. Assert renderer and host normal-buffer/non-mouse state, host snapshot terminalOwner metadata, exact PTY writes with no post-exit mouse report, unrelated-pane survival, post-boundary prompt output preserved (normal exit), ordered proof invalidation, bounded settlement and bail-out flush, one inspection per unclean episode with zero scans for ordinary output, split-escape safety at every chunk boundary, and old/new client-host fallback parity.",
@@ -7352,6 +7325,7 @@
         "Keep missing-proof mixed-version behavior identical to the incumbent client path."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "A zero-width injected reset does not advance outputSequence, so the mobile renderer-snapshot stability oracle cannot detect a reset landing inside its serialize round-trip; the resulting tear is transient and self-heals on the next repaint (same exposure as the pre-existing device-attributes release emission).",
         "Bytes the dying command printed before its OSC 133;D (pre-boundary output into the still-active alternate screen, e.g. a final panic line) are discarded with the dead frame; only post-boundary shell output is preserved.",
         "Direct local provider and degraded (daemon-less) sessions get ownership proof and the renderer-side reset, but no in-stream normalization — pre-reveal prompt output is not preserved there.",
@@ -8746,7 +8720,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/pty-connection-hidden-tui-snapshot-replay.spec.ts: Loses rich hidden snapshot sequence replay/grid resize and forced repaint after hidden snapshot alarms, including live-trigger deduplication. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1391: src/renderer/src/components/terminal-pane/pty-connection-remote-pause-drop-notice.spec.ts reduced. Lose repeated quiet switches avoiding snapshots and legacy host without drop-report capability requesting a snapshot. Retained imported registrar uses fake transport/xterm writes, exercising real gap/restore lifecycle rather than actual terminal rendering. No equivalent replacement coverage is claimed. The existing primary-selector receipt and its claims remain scoped to their unchanged sources; the broad optional command has no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/pty-connection-hidden-tui-snapshot-replay.spec.ts: Loses rich hidden snapshot sequence replay/grid resize and forced repaint after hidden snapshot alarms, including live-trigger deduplication. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1391: src/renderer/src/components/terminal-pane/pty-connection-remote-pause-drop-notice.spec.ts reduced. Lose repeated quiet switches avoiding snapshots and legacy host without drop-report capability requesting a snapshot. Retained imported registrar uses fake transport/xterm writes, exercising real gap/restore lifecycle rather than actual terminal rendering. No equivalent replacement coverage is claimed. The existing primary-selector receipt and its claims remain scoped to their unchanged sources; the broad optional command has no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/pull/5240",
@@ -8895,6 +8869,7 @@
         "Record byte-identical latest-main, candidate, and candidate-revert Electron results."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Providers listed on this gate are affected identity surfaces; live integration is limited to local macOS while daemon and remote-runtime adoption also have focused contracts.",
         "The Electron oracle seeds the production hook-store contract instead of running an authenticated Codex hook end to end.",
         "The live Electron topology is local macOS only; folder workspaces, SSH, WSL, paired headed/headless servers, Linux, and Windows are not exercised by that journey.",
@@ -8928,7 +8903,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coverageNotes": "Audit1495 intentionally deletes the orphan-owner suite: explicit owner/host predicate examples are retired; no equivalent replacement coverage or fresh result is claimed. Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts: Loses obsolete pending title process races, inspection failure suppression, explicit completion precedence and delayed remote inspection alarms. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audits1301 and1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic macOS tests cover controller claims, daemon and SSH/relay operation replay, mixed-version selection, runtime ownership, exact provisional handoff, durable terminal retirement, two independent viewer mirrors, guarded adoption of legacy live PTYs, and completion classification when either the outer remote transport or authoritative host/provider process inspection becomes unreachable. The adoption harness models v1.4.150 agent/setup/shell tabs, current-generation restart and reconnect, exact handle/incarnation/worktree/host checks, topology CAS, competing clients, split-pane/group restoration, WSL ownership, and SSH owner rejection. The secondary parity repro runs independent clients against one headless remote Orca runtime over encrypted pairing and a real daemon-backed PTY, with tokened fixture-process identity separated from unrelated Codex app-server startup probes. The automated primary topology runs an isolated headed macOS Orca desktop server plus a separate paired web client and proves viewer-local fresh/resume focus, exact legacy placement, writable PTYs, unrelated-terminal survival, and host/client cleanup. SSH coverage is provider/relay contract and fault-injection coverage only; it does not substitute for paired-server coverage. Live Windows, Linux, WSL, SSH, and physical paired-Linux hosts remain gaps. The isolated intent-owner ledger suite was removed. web-runtime-session.test.ts retains exact post-create handoff confirmation only; its previous fresh/resume presentation and publication-replay assertions are no longer current references. Those direct owner-partition, cap and RPC/focus alarms are lost; other agent-session evidence does not establish equivalence. Structured handoff and adopted-leaf focus references now point to their dedicated surviving fixtures. Mixed-version recovery retains actual old-host recovery followed by a new CLI tab; its unsupported/missing-evidence tables are removed. Orphan recovery retains in-flight adoption-conflict serialization only; previous topology/pruning and absence/adoption examples are removed. These removed projection, capability and adoption-shape alarms are lost; retained cases do not replace them. Audit1301: src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts reduced. Direct dedupe eviction/count and equal receipt-position sample loses authored alarm. No equivalent replacement coverage is claimed. Audit1308: src/renderer/src/runtime/web-session-tabs-sync-agent-handoff.test.ts removed. Exact provisional replacement and post-create exit confirmation handoff pipeline alarms disappear. No equivalent replacement coverage is claimed. Audit1313: src/main/runtime/terminal-orphan-topology.test.ts: Retain actual topology merge algorithms preserving disjoint subtrees and grafted/ambiguous shared anchors with independent expected trees. Remove duplicate leaf validator and empty/no-change passthrough examples. Lose basic validation and no-group/noop characterization; no renderer layout proof. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1342: src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1495 intentionally deletes the orphan-owner suite: explicit owner/host predicate examples are retired; no equivalent replacement coverage or fresh result is claimed. Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts: Loses obsolete pending title process races, inspection failure suppression, explicit completion precedence and delayed remote inspection alarms. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audits1301 and1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic macOS tests cover controller claims, daemon and SSH/relay operation replay, mixed-version selection, runtime ownership, exact provisional handoff, durable terminal retirement, two independent viewer mirrors, guarded adoption of legacy live PTYs, and completion classification when either the outer remote transport or authoritative host/provider process inspection becomes unreachable. The adoption harness models v1.4.150 agent/setup/shell tabs, current-generation restart and reconnect, exact handle/incarnation/worktree/host checks, topology CAS, competing clients, split-pane/group restoration, WSL ownership, and SSH owner rejection. The secondary parity repro runs independent clients against one headless remote Orca runtime over encrypted pairing and a real daemon-backed PTY, with tokened fixture-process identity separated from unrelated Codex app-server startup probes. The automated primary topology runs an isolated headed macOS Orca desktop server plus a separate paired web client and proves viewer-local fresh/resume focus, exact legacy placement, writable PTYs, unrelated-terminal survival, and host/client cleanup. SSH coverage is provider/relay contract and fault-injection coverage only; it does not substitute for paired-server coverage. Live Windows, Linux, WSL, SSH, and physical paired-Linux hosts remain gaps. The isolated intent-owner ledger suite was removed. web-runtime-session.test.ts retains exact post-create handoff confirmation only; its previous fresh/resume presentation and publication-replay assertions are no longer current references. Those direct owner-partition, cap and RPC/focus alarms are lost; other agent-session evidence does not establish equivalence. Structured handoff and adopted-leaf focus references now point to their dedicated surviving fixtures. Mixed-version recovery retains actual old-host recovery followed by a new CLI tab; its unsupported/missing-evidence tables are removed. Orphan recovery retains in-flight adoption-conflict serialization only; previous topology/pruning and absence/adoption examples are removed. These removed projection, capability and adoption-shape alarms are lost; retained cases do not replace them. Audit1301: src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts reduced. Direct dedupe eviction/count and equal receipt-position sample loses authored alarm. No equivalent replacement coverage is claimed. Audit1308: src/renderer/src/runtime/web-session-tabs-sync-agent-handoff.test.ts removed. Exact provisional replacement and post-create exit confirmation handoff pipeline alarms disappear. No equivalent replacement coverage is claimed. Audit1313: src/main/runtime/terminal-orphan-topology.test.ts: Retain actual topology merge algorithms preserving disjoint subtrees and grafted/ambiguous shared anchors with independent expected trees. Remove duplicate leaf validator and empty/no-change passthrough examples. Lose basic validation and no-group/noop characterization; no renderer layout proof. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1342: src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8878",
         "https://github.com/stablyai/orca/issues/9151",
@@ -8989,12 +8964,6 @@
           "file": "src/main/providers/pty-process-inspection.test.ts",
           "assertions": [
             "dedicated provider inspection preserves failures and rejects missing PTYs instead of returning idle evidence"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts",
-          "assertions": [
-            "completion inspection rejects an unmapped session instead of borrowing the current daemon"
           ]
         },
         {
@@ -9211,6 +9180,7 @@
         "Add live SSH/WSL provider evidence before claiming full provider coverage; Docker SSH proves only the SSH provider/relay path."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "The primary headed macOS desktop-server journey is automated locally but not yet run in CI; Windows and Linux window, ConPTY, update, sleep/wake, and firewall behavior remain uncollected.",
         "Mixed-version pairings remain conservative only when the completion-aware client and strict-inspection host changes are both present; older peers retain their legacy classification behavior.",
         "The secondary headless parity harness runs on macOS with a local daemon-backed execution owner and independent short-lived encrypted RPC clients; two persistent viewer-store mirrors and reconnect ordering are joined deterministically in the cross-boundary unit test rather than mounted live.",
@@ -10076,7 +10046,7 @@
       "providers": ["local", "daemon", "wsl"],
       "coveredPlatforms": ["windows"],
       "coveredProviders": ["daemon"],
-      "coverageNotes": "Issue #8048 now has deterministic wrapper and cold-restore re-anchor tests plus a Windows PR-CI harness that drives the built daemon through 25 real ConPTY workspace-close races while an unrelated witness PTY stays alive. A Windows-only patched-node-pty test injects EAGAIN on one ConPTY input pipe and requires only that PTY to close while an unrelated PTY remains writable. Keyboard reset, CJK repaint, WSL, and full visible Electron coverage remain gaps.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Issue #8048 now has deterministic wrapper and cold-restore re-anchor tests plus a Windows PR-CI harness that drives the built daemon through 25 real ConPTY workspace-close races while an unrelated witness PTY stays alive. A Windows-only patched-node-pty test injects EAGAIN on one ConPTY input pipe and requires only that PTY to close while an unrelated PTY remains writable. Keyboard reset, CJK repaint, WSL, and full visible Electron coverage remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6541",
         "https://github.com/stablyai/orca/pull/6858",
@@ -10105,13 +10075,6 @@
           "file": "src/main/daemon/pty-subprocess/testing/pty-subprocess.test.ts",
           "assertions": [
             "graceful kill followed by force and dispose invokes Windows node-pty kill exactly once and never retries the dead child PID"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "assertions": [
-            "the first checkpoint orders recovered scrollback before synchronously emitted fresh-shell startup output",
-            "a failed atomic history seed remains non-authoritative across adapter restart and cannot overwrite the recovery files"
           ]
         },
         {
@@ -10161,6 +10124,7 @@
         "Split shell parity, keyboard reset, and CJK repaint into smaller gates if a combined gate is flaky."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Real IME composition may require a separate lower-layer/native-text-forwarding gate.",
         "The EAGAIN oracle injects the real input socket event rather than inducing kernel resource exhaustion on a packaged Windows host.",
         "The built-daemon harness proves process/session liveness but not renderer pixels; visible shell input, resize, cursor, and CJK repaint remain uncovered."
@@ -10171,7 +10135,7 @@
       "id": "terminal-performance.cold-restore-replay-budget",
       "title": "Daemon cold restore keeps replay work and retained payloads bounded",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-runtime",
       "layer": "main-daemon-unit",
       "surfaces": [
@@ -10182,9 +10146,9 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "wsl"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["daemon"],
-      "coverageNotes": "Deterministic main-process tests cover byte-bounded cache eviction and ACK release, one-at-a-time replay admission, a fixed per-turn replay budget within one large output record, UTF-16 boundary preservation, and checkpoint-only restore bypass while another replay is paused. The same HistoryReader path carries WSL context, but live WSL and cross-platform startup-scale runs remain gaps.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Deterministic main-process tests cover byte-bounded cache eviction and ACK release, one-at-a-time replay admission, a fixed per-turn replay budget within one large output record, UTF-16 boundary preservation, and checkpoint-only restore bypass while another replay is paused. The same HistoryReader path carries WSL context, but live WSL and cross-platform startup-scale runs remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/9971",
         "https://github.com/stablyai/orca/pull/9990",
@@ -10192,49 +10156,10 @@
       ],
       "invariant": "Cold restore must reproduce persisted terminal output while admitting at most one scratch-emulator replay, yielding after at most 64 Ki UTF-16 code units or 1,024 replay operations, keeping sticky restore payloads within 16 MiB, and allowing header-only checkpoint restores to bypass the replay queue.",
       "oracle": "Pause setImmediate during two single-batch restores larger than one replay slice and require exactly one admitted yield at a time, preserved text across a surrogate-pair slice boundary, and a concurrent header-only checkpoint restore to finish without consuming a replay slot. Cache tests require least-recently-used eviction, rejection of one oversized payload, and zero retained cache bytes after renderer ACK.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/history/restoration/testing/cold-restore-payload-cache.test.ts src/main/daemon/history/restoration/testing/history-reader.test.ts src/main/daemon/history/restoration/testing/terminal-history-incremental-restore.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts"
-      ],
-      "testFiles": [
-        "src/main/daemon/history/restoration/testing/cold-restore-payload-cache.test.ts",
-        "src/main/daemon/history/restoration/testing/history-reader.test.ts",
-        "src/main/daemon/history/restoration/testing/terminal-history-incremental-restore.test.ts",
-        "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/daemon/history/restoration/testing/terminal-history-incremental-restore.test.ts",
-          "assertions": [
-            "large single-batch replays yield within the record, preserve a surrogate pair at the slice boundary, and admit only one scratch replay at a time",
-            "a header-only checkpoint restore completes while an unrelated incremental replay is paused"
-          ]
-        },
-        {
-          "file": "src/main/daemon/history/restoration/testing/cold-restore-payload-cache.test.ts",
-          "assertions": [
-            "least-recently-used payloads are evicted to the aggregate byte budget",
-            "one payload larger than the entire budget is not retained"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "assertions": [
-            "StrictMode remount receives sticky cold-restore data until renderer ACK clears its retained bytes"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-07-22",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/hibernation-cold-restore-repro.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/history/restoration/testing/cold-restore-payload-cache.test.ts src/main/daemon/history/restoration/testing/history-reader.test.ts src/main/daemon/history/restoration/testing/terminal-history-incremental-restore.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "result": "passed",
-          "durationSeconds": 5.68,
-          "summary": "Five focused files passed 150 tests, including deterministic single-record replay slicing, one-at-a-time admission, UTF-16 boundary preservation, header-only queue bypass, byte-bounded LRU eviction, and ACK cleanup."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 15,
         "scope": "focused main-process cold-restore unit contract"
@@ -10257,6 +10182,8 @@
         "Add live WSL restore evidence before claiming WSL coverage."
       ],
       "knownGaps": [
+        "No active assertion references remain after this audit; surviving unaffected receipts record historical scope only.",
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "The log decoder and final headless snapshot serialization remain synchronous inside the one-at-a-time replay slot; the gate bounds replay writes, not every CPU phase.",
         "No live Electron startup-scale run currently proves first-pane paint order or end-to-end restore latency with dozens of histories.",
         "SSH, remote-runtime, relay, and mobile do not use this local daemon history reader and are unaffected."
@@ -11229,7 +11156,7 @@
       "id": "terminal-provider.daemon-startup-degraded-contract",
       "title": "Daemon startup reconcile and degraded fallback preserve provider identity",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-provider",
       "layer": "provider-contract",
       "surfaces": [
@@ -11242,9 +11169,9 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "local"],
-      "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["daemon", "local"],
-      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Acquisition-budget contracts preserve the pre-existing two-second shared RPC cap, one pending acquisition for later deadlines, one index for concurrent resolutions, post-timeout strict cleanup, and exact current-identity recovery while a legacy provider is unavailable. Scoped inventory contracts preserve established input routes while refusing ambiguous target ownership. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected. Test-value audit1293 removes src/main/daemon/daemon-inventory-routing-authority.test.ts (5 authored cases). Their isolated assertions no longer run; surviving tests are not claimed as equivalent coverage. Fresh execution against the candidate SHA is required.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Acquisition-budget contracts preserve the pre-existing two-second shared RPC cap, one pending acquisition for later deadlines, one index for concurrent resolutions, post-timeout strict cleanup, and exact current-identity recovery while a legacy provider is unavailable. Scoped inventory contracts preserve established input routes while refusing ambiguous target ownership. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected. Test-value audit1293 removes src/main/daemon/daemon-inventory-routing-authority.test.ts (5 authored cases). Their isolated assertions no longer run; surviving tests are not claimed as equivalent coverage. Fresh execution against the candidate SHA is required.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6830",
         "https://github.com/stablyai/orca/pull/6866",
@@ -11253,91 +11180,10 @@
       ],
       "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY. Scoped inventories must retain complete provider evidence and established input routes. Later reader deadlines must not supersede a pending acquisition or extend its existing two-second RPC cap; explicit identity invalidation must still permit prompt exact-owner recovery.",
       "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. Without unique incarnation proof, no attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY. After a deadline-obeying legacy provider times out a restore, a subsequent strict sweep must take a new inventory and stop a terminal created externally. Twenty later strict/diagnostic deadlines must share one provider RPC. One hundred concurrent resolutions over 4,096 rows must perform 8,192 id reads. Invalidating the current provider during a legacy scan must discover and reattach its exact live incarnation within the existing resolution budget. Unrelated ambiguity must not block scoped cleanup, while target ambiguity must still refuse it.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/routing/testing/daemon-session-owner-resolution.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/ipc/pty/pty-dead-owner-respawn.test.ts src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts --reporter=dot",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/routing/testing/daemon-session-owner-resolution.test.ts src/main/daemon/providers/routing/testing/daemon-inventory-acquisition-budget.test.ts src/main/runtime/workspaces/removal/worktree-teardown-daemon-inventory.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/ipc/pty/pty-dead-owner-respawn.test.ts src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts --reporter=dot"
-      ],
-      "testFiles": [
-        "src/main/daemon/providers/routing/testing/daemon-session-owner-resolution.test.ts",
-        "src/main/daemon/providers/routing/testing/daemon-inventory-acquisition-budget.test.ts",
-        "src/main/runtime/workspaces/removal/worktree-teardown-daemon-inventory.test.ts",
-        "src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts",
-        "src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts",
-        "src/main/ipc/pty/pty-dead-owner-respawn.test.ts",
-        "src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/daemon/providers/routing/testing/daemon-inventory-acquisition-budget.test.ts",
-          "assertions": [
-            "strict cleanup after a restore timeout freshly discovers and stops an externally created terminal",
-            "twenty increasing strict and diagnostic deadlines share one pending RPC capped at two seconds",
-            "one hundred concurrent resolutions index a 4,096-row incomplete observation once (8,192 id reads)",
-            "current identity invalidation and exact persisted reattach retain positive ownership despite a deadline-limited legacy provider"
-          ]
-        },
-        {
-          "file": "src/main/runtime/workspaces/removal/worktree-teardown-daemon-inventory.test.ts",
-          "assertions": [
-            "unrelated ambiguity permits scoped cleanup but target ambiguity or unavailable inventories refuse removal",
-            "target terminals stop and unrelated sessions survive for daemon router and degraded providers"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/routing/testing/daemon-session-owner-resolution.test.ts",
-          "assertions": [
-            "controlled concurrent inventories wait for fallback, current, and legacy authority before classifying exact persisted PTYs absent",
-            "incomplete inventory, duplicate claims, owner refusal, and identity replacement stay fail-closed with exact list and spawn counts"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts",
-          "assertions": [
-            "complete current and legacy daemon inventories prove liveness absence with one list call per adapter",
-            "one unavailable daemon inventory keeps the same missing PTY liveness unknown"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts",
-          "assertions": [
-            "repeated complete absence never dispatches the stale id to fallback or either daemon",
-            "one explicit fresh fallback PTY reattaches by its exact PTY and incarnation without another inventory",
-            "a mapped fallback-owned PTY reports live without borrowing fallback authority for unknown ids or scanning daemon inventories"
-          ]
-        },
-        {
-          "file": "src/main/ipc/pty/pty-dead-owner-respawn.test.ts",
-          "assertions": [
-            "confirmed absence retires the exact persisted binding once and creates one differently identified fresh PTY"
-          ]
-        },
-        {
-          "file": "src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts",
-          "assertions": ["unverified ownership retains the binding and creates no fresh PTY"]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-06",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/routing/testing/daemon-session-owner-resolution.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/ipc/pty/pty-dead-owner-respawn.test.ts src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 5.44,
-          "summary": "Four files passed 535 owner-resolution, router, degraded-provider, and IPC lifecycle tests. With only the resolver fix disabled, the unchanged four-file gate failed four stale-absence, identity-retry, and router-liveness assertions; restoring it passed 535 of 535."
-        },
-        {
-          "date": "2026-11-04",
-          "runner": "local",
-          "platform": "linux",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --config.verifyDepsBeforeRun=false test src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-inventory-acquisition-budget.test.ts src/main/runtime/worktree-teardown-daemon-inventory.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty/pty-dead-owner-respawn.test.ts src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/routing/testing/daemon-session-owner-resolution.test.ts src/main/daemon/providers/routing/testing/daemon-inventory-acquisition-budget.test.ts src/main/runtime/workspaces/removal/worktree-teardown-daemon-inventory.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/ipc/pty/pty-dead-owner-respawn.test.ts src/main/ipc/pty/pty-persisted-incarnation-repair.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 8.2,
-          "summary": "Test Files  7 passed (7); Tests  91 passed (91). Deterministic fixtures; no physical phone or deployed mixed-host claim."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 45,
         "scope": "provider contract unit/integration test"
@@ -11359,6 +11205,7 @@
         "Cover priorWorktreeIds so renamed worktrees are not falsely reaped."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Production startup reconcile wiring remains unproven.",
         "Prior-worktree aliases and renamed-worktree startup reconcile are not covered by the current executable corpus.",
         "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests.",
@@ -11371,7 +11218,7 @@
       "id": "terminal-provider.startup-shutdown-authority",
       "title": "Cold-start terminal shutdown targets the installed daemon provider",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-provider",
       "layer": "main-provider-contract",
       "surfaces": [
@@ -11382,66 +11229,19 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "A real daemon server over a local socket proves a fresh adapter can kill a live session before any prior client operation. Main-process tests prove renderer IPC, runtime kill, and runtime exact-stop wait for the provider swap and issue zero shutdowns to the fallback provider, while SSH spawn and kill bypass the local barrier. The same shared logic runs on Linux and Windows; live platform runs remain gaps.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: A real daemon server over a local socket proves a fresh adapter can kill a live session before any prior client operation. Main-process tests prove renderer IPC, runtime kill, and runtime exact-stop wait for the provider swap and issue zero shutdowns to the fallback provider, while SSH spawn and kill bypass the local barrier. The same shared logic runs on Linux and Windows; live platform runs remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7742",
         "https://github.com/stablyai/orca/pull/7836"
       ],
       "invariant": "A local PTY shutdown requested during desktop cold start must resolve its provider only after daemon startup settles, and a fresh daemon adapter must connect before issuing the destructive request; a fallback provider must never falsely acknowledge shutdown while the restored daemon session remains live, and SSH shutdown must not wait on local startup.",
       "oracle": "Hold the desktop provider-startup promise unresolved, request shutdown through renderer IPC and both runtime-controller entry points, install the daemon provider, and assert the fallback receives zero shutdowns while the daemon receives exactly the requested kill; prove the provider gate opens as soon as daemon authority settles even while optional hook startup remains unresolved, and prove an SSH spawn and kill complete without touching either local barrier. Separately, spawn a session through one adapter, kill it through a fresh unconnected adapter, and assert the daemon no longer lists it.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-runtime-kill-and-exit.test.ts src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts"
-      ],
-      "testFiles": [
-        "src/main/ipc/pty/pty-runtime-kill-and-exit.test.ts",
-        "src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts",
-        "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-        "src/main/startup/first-window-startup-services.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/ipc/pty/pty-runtime-kill-and-exit.test.ts",
-          "assertions": [
-            "renderer local kills issue zero fallback shutdowns before startup and target the installed daemon afterward",
-            "runtime fire-and-forget local kills issue zero fallback shutdowns before startup and target the installed daemon afterward",
-            "runtime exact local stops issue zero fallback shutdowns before startup and verify the installed daemon target stopped"
-          ]
-        },
-        {
-          "file": "src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts",
-          "assertions": [
-            "SSH spawns and kills bypass the unresolved local startup barrier and target the SSH provider"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "assertions": [
-            "a fresh unconnected adapter kills a session hosted by the live daemon and the session disappears from daemon inventory",
-            "concurrent shutdowns through a fresh adapter perform exactly one control-plus-stream handshake and remove both daemon sessions"
-          ]
-        },
-        {
-          "file": "src/main/startup/first-window-startup-services.test.ts",
-          "assertions": [
-            "daemon provider authority opens before an unresolved optional hook startup while the broader local spawn gate remains closed",
-            "the provider authority gate shares the bounded 60-second fail-open when daemon startup hangs"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-07-17",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-runtime-kill-and-exit.test.ts src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts",
-          "result": "passed",
-          "durationSeconds": 3.27,
-          "summary": "3 files and 406 tests passed, including single and concurrent real-socket fresh-adapter shutdown, one control-plus-stream handshake for burst shutdown, three deferred local provider-selection teardown paths, hook-independent provider authority, and SSH barrier bypass."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "focused main-process provider and IPC contract tests"
@@ -11464,6 +11264,7 @@
         "Attach saved red/green artifacts for all three provider-selection entry points."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "No live Electron restart-to-close journey is included; provider and IPC contracts cover the race deterministically.",
         "The bounded daemon-startup fail-open to LocalPtyProvider remains an accepted boot-over-persistence tradeoff tracked by issue #5232.",
         "Daemon process death and the resulting Windows ConPTY PowerShell FailFast are separate from provider-selection shutdown authority."
@@ -12119,7 +11920,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
-      "coverageNotes": "Audit1619 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally reduces src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts: Loses direct timestamp-formula assertion; no useful independent alarm in removed registration. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1361 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1320 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1301 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): This audit removes the browser native-keyboard fallback inventory case. Its empty-chord, absent-layout and no-op-subscription alarms are lost; retained native input evidence is not an equivalent replacement. Historical commands and results remain historical. Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, xterm preedit visibility and row-occlusion behavior, Electron/CDP preedit geometry, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. The standalone remote SnapshotStart metadata suite is removed. Its proven-zero, nonzero, absent-field and malformed-value propagation alarms are intentionally lost; retained daemon and preview consumer contracts do not establish equivalent remote projection coverage. Historical commands and results remain historical. Real Linux/Sogou OS IME automation, native Windows candidate-window placement, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps. The audit removes isolated candidate-anchor width, last-column, timer-ordering and detached-textarea examples. The retained deterministic fixtures do not observe a native candidate window or establish equivalent geometry coverage; separate Electron geometry evidence remains historical. The test-value audit removes the empty end-of-row/no-tail composition baseline from terminal-korean-midline-preedit-occlusion.spec.ts. The placeholder masking and measured row-tail occlusion registrations remain; they are not equivalent replacement coverage for the removed empty-tail alarm. No new execution or native IME evidence is claimed. Audit1301: src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts reduced. Dead-key/IME variants, Unicode/language inventories, numpad/CapsLock cases and other protocol samples lose their individual alarms. No equivalent replacement coverage is claimed. Audit1320: src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts reduced. Last-complete snapshot while layout-map/native-snapshot partial refresh settles loses its individual implementation-cache alarm. No equivalent replacement coverage is claimed. Audit1342: src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts reduced. Second Korean-layout replay, ordinary Korean/ASCII no-remap baselines and weak Option nonempty-byte alarm are dropped. No equivalent replacement coverage is claimed. Audit1361: src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts removed. Snapshot/live-proven kitty flags, replacement choice and replay idempotence in the assembled mirror. No equivalent replacement coverage is claimed. Audit1365: focused Linux unit selection passed on source head 8880357cb420c45f1b808ae545a5bc609324624d. This new result has its own exact command; historical results keep their prior scope. Intentional test losses remain recorded in knownGaps. No physical-provider, native input, rendered E2E, p95, soak or replacement-coverage claim. Audit1391: src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts reduced. Lose explicit one-read/unchanged-style work budget across 30 syllables and single-timer burst alarm. Synthetic screen bounds/terminal cursor bound retained proof to DOM anchor updates, not actual OS IME placement. src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts reduced. Lose explicit PC-101 alternate omission, multi-codepoint/control associated text filtering, lock modifier integer, shifted punctuation, standalone separator and printable nonfunctional keypad fallbacks. Retained pure encoding is a wire-contract check without host input delivery. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1396: src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts reduced. Lose standalone handled Ctrl, Shift+Space, shifted non-ASCII keydown and active-composition backspace/arrow/text/Process suppression alarms. No actual IME/PTY encoding occurs. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1402: src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts removed. Intentionally loses invalidation, focus/manual refresh gating and stale/newest generation settlement outcomes, including direct stale category suppression. No equivalent replacement or default preload input-source delivery claim. src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts removed. Intentionally loses substituted sentence punctuation, shifted/backslash/multi-unit/full-width/letter input and Kitty flag/release/report encoding alarms across14 authored registrations. No equivalent replacement or real pane/browser input delivery claim. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1619 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally reduces src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts: Loses direct timestamp-formula assertion; no useful independent alarm in removed registration. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1361 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1320 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1301 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): This audit removes the browser native-keyboard fallback inventory case. Its empty-chord, absent-layout and no-op-subscription alarms are lost; retained native input evidence is not an equivalent replacement. Historical commands and results remain historical. Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, xterm preedit visibility and row-occlusion behavior, Electron/CDP preedit geometry, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. The standalone remote SnapshotStart metadata suite is removed. Its proven-zero, nonzero, absent-field and malformed-value propagation alarms are intentionally lost; retained daemon and preview consumer contracts do not establish equivalent remote projection coverage. Historical commands and results remain historical. Real Linux/Sogou OS IME automation, native Windows candidate-window placement, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps. The audit removes isolated candidate-anchor width, last-column, timer-ordering and detached-textarea examples. The retained deterministic fixtures do not observe a native candidate window or establish equivalent geometry coverage; separate Electron geometry evidence remains historical. The test-value audit removes the empty end-of-row/no-tail composition baseline from terminal-korean-midline-preedit-occlusion.spec.ts. The placeholder masking and measured row-tail occlusion registrations remain; they are not equivalent replacement coverage for the removed empty-tail alarm. No new execution or native IME evidence is claimed. Audit1301: src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts reduced. Dead-key/IME variants, Unicode/language inventories, numpad/CapsLock cases and other protocol samples lose their individual alarms. No equivalent replacement coverage is claimed. Audit1320: src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts reduced. Last-complete snapshot while layout-map/native-snapshot partial refresh settles loses its individual implementation-cache alarm. No equivalent replacement coverage is claimed. Audit1342: src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts reduced. Second Korean-layout replay, ordinary Korean/ASCII no-remap baselines and weak Option nonempty-byte alarm are dropped. No equivalent replacement coverage is claimed. Audit1361: src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts removed. Snapshot/live-proven kitty flags, replacement choice and replay idempotence in the assembled mirror. No equivalent replacement coverage is claimed. Audit1365: focused Linux unit selection passed on source head 8880357cb420c45f1b808ae545a5bc609324624d. This new result has its own exact command; historical results keep their prior scope. Intentional test losses remain recorded in knownGaps. No physical-provider, native input, rendered E2E, p95, soak or replacement-coverage claim. Audit1391: src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts reduced. Lose explicit one-read/unchanged-style work budget across 30 syllables and single-timer burst alarm. Synthetic screen bounds/terminal cursor bound retained proof to DOM anchor updates, not actual OS IME placement. src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts reduced. Lose explicit PC-101 alternate omission, multi-codepoint/control associated text filtering, lock modifier integer, shifted punctuation, standalone separator and printable nonfunctional keypad fallbacks. Retained pure encoding is a wire-contract check without host input delivery. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1396: src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts reduced. Lose standalone handled Ctrl, Shift+Space, shifted non-ASCII keydown and active-composition backspace/arrow/text/Process suppression alarms. No actual IME/PTY encoding occurs. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1402: src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts removed. Intentionally loses invalidation, focus/manual refresh gating and stale/newest generation settlement outcomes, including direct stale category suppression. No equivalent replacement or default preload input-source delivery claim. src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts removed. Intentionally loses substituted sentence punctuation, shifted/backslash/multi-unit/full-width/letter input and Kitty flag/release/report encoding alarms across14 authored registrations. No equivalent replacement or real pane/browser input delivery claim. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
@@ -12339,10 +12140,6 @@
           ]
         },
         {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "assertions": ["daemon provider snapshots publish proven kitty flags including a known 0"]
-        },
-        {
           "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "assertions": [
             "Sogou-style Space candidate selection submits only the committed Chinese character",
@@ -12411,16 +12208,6 @@
           "result": "passed",
           "durationSeconds": 72,
           "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
-        },
-        {
-          "date": "2026-11-04",
-          "runner": "local",
-          "platform": "linux",
-          "command": "pnpm --config.verifyDepsBeforeRun=false exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/main/daemon/daemon-pty-adapter.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 8.88,
-          "summary": "Test Files  7 passed (7); Tests  151 passed (151). Source head 8880357cb420c45f1b808ae545a5bc609324624d. Focused current retained command; no live provider/native input/soak/benchmark or removed-case equivalence claim. Node24.22.0 with ORCA_BACKGROUND_LAUNCH=1 and an isolated Xvfb display.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -12445,6 +12232,7 @@
         "Pair with Windows ConPTY keyboard reset for Windows standard-key behavior."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Audit1619 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Current commands include renderer-unit coverage and a CDP-driven Electron repro; real OS IME automation may need manual or soak evidence.",
         "Textarea geometry is a deterministic lower-layer oracle for native candidate placement; no automated run observes the operating system's candidate window itself.",
@@ -13006,7 +12794,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "A deterministic isolated runtime/SQLite/RPC harness covers Run and Dispatch ownership, exact handle and remint-stable pane recipients, fixed Delivery replay and acknowledgment, restart, concurrent pollers, filtered waiters, and built-CLI parity with direct DB state. Schema v28 durably records every coordinator handle through SQLite triggers, backfills current handles on open, recreates routing triggers after old table rebuilds, and atomically canonicalizes coordinator-addressed inserts to run:<id>. A 125-row oracle and 151-row reconciliation suite cover paged old-handle backlogs, commit-without-notify recovery, duplicate Dispatch owners, cancellation, and lifecycle fencing. Federation tests use real databases, dropped acknowledgments, restart/reconnect, and protocol v1/v2 peers; duplicate read rows do not wake again. Daemon and SSH pointer settlement is deterministic, with SSH bounded at 60 seconds beyond the 20-second mux health window. No RPC parameter, stream opcode, or published payload changed. Live headed/headless paired-runtime, physical SSH, WSL, Linux, and Windows acceptance remain gaps. Audit1312 removes low-value imported specs from aggregate test drivers; old whole-driver execution receipts are archived. Retained registrations are unchanged. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1412: src/main/runtime/orchestration-mailbox-cold-park-idle.spec.ts removed. Loses fresh-output cold-park quiet continuation, same-incarnation deferred Enter, late pointer-write settlement and explicit-check batch-claim alarms, including durable delivered_at state checks mixed into registrations0/3. No equivalent coverage claim. src/main/runtime/orchestration-dispatch-mailbox-delivery.spec.ts reduced. Loses dispatch wake dedup, restart unread guidance, legacy ack behavior and ambiguous pointer write/Enter crash retention alarms. DB-only stable delivery identity does not replace those paths. src/main/runtime/orchestration-mailbox-delivery.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: A deterministic isolated runtime/SQLite/RPC harness covers Run and Dispatch ownership, exact handle and remint-stable pane recipients, fixed Delivery replay and acknowledgment, restart, concurrent pollers, filtered waiters, and built-CLI parity with direct DB state. Schema v28 durably records every coordinator handle through SQLite triggers, backfills current handles on open, recreates routing triggers after old table rebuilds, and atomically canonicalizes coordinator-addressed inserts to run:<id>. A 125-row oracle and 151-row reconciliation suite cover paged old-handle backlogs, commit-without-notify recovery, duplicate Dispatch owners, cancellation, and lifecycle fencing. Federation tests use real databases, dropped acknowledgments, restart/reconnect, and protocol v1/v2 peers; duplicate read rows do not wake again. Daemon and SSH pointer settlement is deterministic, with SSH bounded at 60 seconds beyond the 20-second mux health window. No RPC parameter, stream opcode, or published payload changed. Live headed/headless paired-runtime, physical SSH, WSL, Linux, and Windows acceptance remain gaps. Audit1312 removes low-value imported specs from aggregate test drivers; old whole-driver execution receipts are archived. Retained registrations are unchanged. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1412: src/main/runtime/orchestration-mailbox-cold-park-idle.spec.ts removed. Loses fresh-output cold-park quiet continuation, same-incarnation deferred Enter, late pointer-write settlement and explicit-check batch-claim alarms, including durable delivered_at state checks mixed into registrations0/3. No equivalent coverage claim. src/main/runtime/orchestration-dispatch-mailbox-delivery.spec.ts reduced. Loses dispatch wake dedup, restart unread guidance, legacy ack behavior and ambiguous pointer write/Enter crash retention alarms. DB-only stable delivery identity does not replace those paths. src/main/runtime/orchestration-mailbox-delivery.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4325",
         "https://github.com/stablyai/orca/issues/14522",
@@ -13198,6 +12986,7 @@
         "Accumulate stable soak runs before considering blocking promotion."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "No headed Electron restart journey was required to prove the runtime/PTY/check boundary.",
         "No daemon, paired remote-runtime, live SSH, WSL, Linux, or Windows journey has been collected.",
         "Daemon and SSH PTY writes are transport-settled but remain owner-unacknowledged; capability-negotiated owner acknowledgments are separate protocol work.",
@@ -15541,7 +15330,7 @@
       "providers": ["local", "remote-runtime", "ssh"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["local", "remote-runtime", "ssh"],
-      "coverageNotes": "Audit1516 removes package-electron-runtime-contract.test.mjs, a copied release-workflow platform and marker matrix. Its workflow wiring alarm is intentionally retired; no actual packaged watcher delivery was exercised and no equivalent replacement is claimed. Unaffected dated execution receipts retain their original scope; changed optional selectors have no fresh full-gate execution result. This audit removes the paired-web stopped-during-outage and late-ready direct-branch examples. The retained pre-ready cancellation, failed-unwatch retry and replay-continuity cases are not equivalent replacements for those ordering alarms. Current web-runtime-client.test.ts assertions below name only its retained pre-ready callback case; replay cases remain in their separate suite. Historical commands and results remain historical. Deterministic tests cover one shared healthy child per runtime process plus at most four bounded fault-quarantine children, native desktop, paired-runtime, and WSL snapshot processes sharing the same eight-physical-child reservation with typed serialized event-driven capacity recovery, including recursive re-wait when crash recovery reclaims an announced slot, one quarantine attempt per watch lifetime, generation-scoped cancellation, bounded termination with removable deadline waiters, replacement-crawl errors that cannot be blessed by a late readiness ack, pre-ready paired-web cancellation registered before an unbounded capacity wait, already-resolved and late physical-exit retry of a rejected paired-web teardown, physical desktop-install and local/SSH PTY teardown, stale-generation rejection, per-child stat bounds, final-overflow RPC delivery, and renderer eviction before terminal callbacks can retry. Destructive local and SSH removal fences both ID-derived and resolved-cwd terminal roots, including sibling-root/cwd combinations with reverse admission rollback, closes descendant relay watches before parent deletion, enumerates authoritative provider/cwd ownership, falls back to daemon spawn cwd before OSC 7, and keeps daemon/relay immediate shutdown pending until native exit or a bounded fail-closed error; a dead relay PID discovered during attach also settles concurrent shutdown before its stale entry is reaped, while Windows runtime watcher deadlines retain one removable physical-close waiter, treat Node's error-close path as positive physical-exit proof, and clear root ownership on late close. The relay policy test maps a standard repository's base, Git common directory, and worktree roots to one healthy supervisor, then proves a shared-child failure recovers those roots in separate quarantine supervisors with overflow and resumed events. Abortable capacity, quarantine, runtime-root, relay, SSH, and relay pre-install setup waits attach one reaction to each shared promise and explicitly remove 10,000 cancelled caller closures while one anchor remains. Built-entry macOS harnesses kill the desktop/runtime and SSH relay watcher children, then require automatic resubscription and later events while the host process and relay PTY survive. SSH bundles the child boundary beside relay.js, requires both artifacts for install completeness, and preserves registration-owned same-root cancellation. The test-value audit corrects the active renderer watch command/file reference to the existing runtime-file-client-watch.test.ts, whose three cases are retained unchanged. They observe synthetic subscription retry/fanout and unsubscribe/unwatch calls, not actual preload/main bookkeeping or physical watcher-process cleanup. The separate read/preview client suite loses forwarding, supplied-error and negative-only examples, retaining binary detection and Unicode SVG decoding. Historical evidence commands/results are unchanged. Test-value audit1293 removes src/main/providers/local-pty/local-pty-provider-session-inventory.test.ts (2 authored cases). Their isolated assertions no longer run; surviving tests are not claimed as equivalent coverage. Fresh execution against the candidate SHA is required. Audit1312 removes low-value imported specs from aggregate test drivers; old whole-driver execution receipts are archived. Retained registrations are unchanged. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1412: src/main/workspaces/removal/watcher-removal-gate.test.ts reduced. Loses exact removal-error compatibility with renderer predicate under shared message constants. Kept public refusal outcomes do not establish that renderer classification. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1516 removes package-electron-runtime-contract.test.mjs, a copied release-workflow platform and marker matrix. Its workflow wiring alarm is intentionally retired; no actual packaged watcher delivery was exercised and no equivalent replacement is claimed. Unaffected dated execution receipts retain their original scope; changed optional selectors have no fresh full-gate execution result. This audit removes the paired-web stopped-during-outage and late-ready direct-branch examples. The retained pre-ready cancellation, failed-unwatch retry and replay-continuity cases are not equivalent replacements for those ordering alarms. Current web-runtime-client.test.ts assertions below name only its retained pre-ready callback case; replay cases remain in their separate suite. Historical commands and results remain historical. Deterministic tests cover one shared healthy child per runtime process plus at most four bounded fault-quarantine children, native desktop, paired-runtime, and WSL snapshot processes sharing the same eight-physical-child reservation with typed serialized event-driven capacity recovery, including recursive re-wait when crash recovery reclaims an announced slot, one quarantine attempt per watch lifetime, generation-scoped cancellation, bounded termination with removable deadline waiters, replacement-crawl errors that cannot be blessed by a late readiness ack, pre-ready paired-web cancellation registered before an unbounded capacity wait, already-resolved and late physical-exit retry of a rejected paired-web teardown, physical desktop-install and local/SSH PTY teardown, stale-generation rejection, per-child stat bounds, final-overflow RPC delivery, and renderer eviction before terminal callbacks can retry. Destructive local and SSH removal fences both ID-derived and resolved-cwd terminal roots, including sibling-root/cwd combinations with reverse admission rollback, closes descendant relay watches before parent deletion, enumerates authoritative provider/cwd ownership, falls back to daemon spawn cwd before OSC 7, and keeps daemon/relay immediate shutdown pending until native exit or a bounded fail-closed error; a dead relay PID discovered during attach also settles concurrent shutdown before its stale entry is reaped, while Windows runtime watcher deadlines retain one removable physical-close waiter, treat Node's error-close path as positive physical-exit proof, and clear root ownership on late close. The relay policy test maps a standard repository's base, Git common directory, and worktree roots to one healthy supervisor, then proves a shared-child failure recovers those roots in separate quarantine supervisors with overflow and resumed events. Abortable capacity, quarantine, runtime-root, relay, SSH, and relay pre-install setup waits attach one reaction to each shared promise and explicitly remove 10,000 cancelled caller closures while one anchor remains. Built-entry macOS harnesses kill the desktop/runtime and SSH relay watcher children, then require automatic resubscription and later events while the host process and relay PTY survive. SSH bundles the child boundary beside relay.js, requires both artifacts for install completeness, and preserves registration-owned same-root cancellation. The test-value audit corrects the active renderer watch command/file reference to the existing runtime-file-client-watch.test.ts, whose three cases are retained unchanged. They observe synthetic subscription retry/fanout and unsubscribe/unwatch calls, not actual preload/main bookkeeping or physical watcher-process cleanup. The separate read/preview client suite loses forwarding, supplied-error and negative-only examples, retaining binary detection and Unicode SVG decoding. Historical evidence commands/results are unchanged. Test-value audit1293 removes src/main/providers/local-pty/local-pty-provider-session-inventory.test.ts (2 authored cases). Their isolated assertions no longer run; surviving tests are not claimed as equivalent coverage. Fresh execution against the candidate SHA is required. Audit1312 removes low-value imported specs from aggregate test drivers; old whole-driver execution receipts are archived. Retained registrations are unchanged. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1412: src/main/workspaces/removal/watcher-removal-gate.test.ts reduced. Loses exact removal-error compatibility with renderer predicate under shared message constants. Kept public refusal outcomes do not establish that renderer classification. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/5308",
         "https://github.com/stablyai/orca/issues/7547",
@@ -15563,7 +15352,6 @@
         "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
         "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts"
       ],
       "testFiles": [
@@ -15649,13 +15437,6 @@
           "assertions": [
             "one shared-promise reaction serves an anchor plus 10,000 abortable callers, and all cancelled closures detach immediately",
             "timeout and already-aborted paths remove timers, listeners, and ownership while preserving the active anchor"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "assertions": [
-            "daemon process enumeration falls back to spawn cwd before OSC 7 reports a live cwd",
-            "force-killed keep-history sleep remains cold-restorable across repeated wake cycles after physical exit"
           ]
         },
         {
@@ -16078,6 +15859,7 @@
         "Add a packaged orca serve pairing scenario that proves a connected client refreshes after child replacement."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "The fault harness bundles the real source supervisor and drives the built child, but it does not launch a packaged orca serve pairing session or exercise app.asar path resolution.",
         "The committed resource probe covers the one-child healthy pool, four-child fault-quarantine ceiling, RSS/CPU sampling, global physical-child cap, and exact-PID cleanup, but sustained six-writer event-loop-delay and CPU soak evidence is still absent.",
         "Linux native watcher fault containment is source-equivalent but not live fault-injected in this evidence run.",
@@ -16621,7 +16403,7 @@
       "id": "terminal-history.daemon-checkpoint-session-isolation",
       "title": "Daemon history checkpoints isolate stalled terminal sessions",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "daemon-terminal",
       "layer": "main-process-daemon-history",
       "surfaces": [
@@ -16631,63 +16413,19 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local-daemon", "ssh-daemon", "wsl-daemon", "paired-runtime-host"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local-daemon"],
-      "coverageNotes": "A real daemon server and adapter on macOS cover per-session isolation, same-session deadlines, post-deadline commit, aggregate overlay admission, and live-window fallback. The provider-neutral adapter has no new path or wire assumptions; a live Linux SSH-relay journey covers the unchanged remote consumer, while live Linux daemon, Windows, WSL, and paired-runtime-host journeys remain gaps.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: A real daemon server and adapter on macOS cover per-session isolation, same-session deadlines, post-deadline commit, aggregate overlay admission, and live-window fallback. The provider-neutral adapter has no new path or wire assumptions; a live Linux SSH-relay journey covers the unchanged remote consumer, while live Linux daemon, Windows, WSL, and paired-runtime-host journeys remain gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4173",
         "https://github.com/stablyai/orca/pull/14346"
       ],
       "invariant": "A stalled durable-history checkpoint may delay only its own daemon session. Warm reattach and deep snapshots degrade to the live window after five seconds, non-final background checkpoints defer after fifteen seconds, same-session writes remain serialized, non-final running plus queued work stays bounded to three per session, overlay compacts stay bounded to four across sessions, and final sleep or disconnect checkpoints remain deadline-free.",
       "oracle": "Park one session inside the real history checkpoint write, then require an unrelated warm reattach to return within two seconds with its own output while the first write remains parked. Require the stalled session to return its live window after the overlay deadline and later commit the abandoned write. Park four distinct overlay compacts, require a fifth reattach to return its live window without starting another compact, and require fast non-final RPC rejection plus both deadlines to leave diagnostic breadcrumbs.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/checkpointing/testing/daemon-checkpoint-session-queue.test.ts src/main/daemon/providers/checkpointing/testing/daemon-reattach-checkpoint-isolation.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts --reporter=dot"
-      ],
-      "testFiles": [
-        "src/main/daemon/providers/checkpointing/testing/daemon-checkpoint-session-queue.test.ts",
-        "src/main/daemon/providers/checkpointing/testing/daemon-reattach-checkpoint-isolation.test.ts",
-        "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/daemon/providers/checkpointing/testing/daemon-checkpoint-session-queue.test.ts",
-          "assertions": [
-            "same-session operations serialize while unrelated sessions run independently",
-            "deadline fallback leaves the operation running and retains later waiter ordering",
-            "operation rejection remains distinct from a deadline",
-            "running plus queued work is bounded per session and drains"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/checkpointing/testing/daemon-reattach-checkpoint-isolation.test.ts",
-          "assertions": [
-            "an unrelated session reattaches while another checkpoint remains parked",
-            "same-session deadline fallback returns the live window and logs a breadcrumb",
-            "an abandoned checkpoint commits when the stalled write resumes",
-            "four parked overlays turn away a fifth compact without blocking its reattach"
-          ]
-        },
-        {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-          "assertions": [
-            "periodic checkpoint work caps concurrent snapshot, disk operations, and admission probes at four",
-            "non-final checkpoint RPC failures retain the existing warning path",
-            "final checkpoints bypass cooldown and remain awaited"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-13",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-checkpoint-session-queue.test.ts src/main/daemon/daemon-reattach-checkpoint-isolation.test.ts src/main/daemon/daemon-pty-adapter.test.ts --reporter=dot",
-          "durationSeconds": 15,
-          "summary": "Three focused files passed, including unrelated-session reattach, five-second fallback, post-deadline durable commit, aggregate non-final admission, late-rejection diagnostics, and final-checkpoint behavior.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/checkpointing/testing/daemon-checkpoint-session-queue.test.ts src/main/daemon/providers/checkpointing/testing/daemon-reattach-checkpoint-isolation.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts --reporter=dot"
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "focused queue, real daemon-adapter isolation, and daemon adapter regression suite"
@@ -16711,6 +16449,7 @@
         "Keep per-session and aggregate admission, deadline, diagnostics, and final-checkpoint assertions green."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Live Electron evidence covers the unchanged Linux SSH-relay consumer rather than a daemon running on the SSH host.",
         "Physical Windows, WSL, Linux daemon, and paired-runtime-host journeys were not run.",
         "The reverted-source failure is established from the old process-wide call path but was not executed."
@@ -17008,7 +16747,7 @@
       "providers": ["local-daemon", "ssh-daemon", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local-daemon", "paired-runtime"],
-      "coverageNotes": "Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic policy and multiplex tests separate renderer parking from authoritative stream liveness, while runtime-graph tests cover exact parked leaf, pane runtime ID, title, multi-pane active-leaf, disposal behavior, and queued split routing to an exact cold-parked tab. A real Electron journey runs the shipped dev CLI against the app's isolated profile, proves the exact parked target alone remounts under a bounded lease, completes before the historical 10-second timeout without stealing active tab or focus, re-parks, then reveals two stable-identity panes with independent keyboard/output round trips. Focused mirror-recovery tests preserve a verified binding across pending-handle snapshots, quarantine positive PTY-identity mismatches, accept authoritative ready replacement or removal, and fence recovery to the pairing revision. Daemon attach-only tests prove a replacement runtime re-registers one active session and one history writer. Headed cold-park and headless runtime-restart paired journeys prove rendered output, input, resize convergence, process identity, authoritative close, checkpoint continuity, and post-restart history append against real daemon PTYs. The parked-leaf graph fixture now retains only PTY exit during the park handoff gap. Its standalone exact leaf/title, multi-pane active-leaf and disposal assertions were removed. web-runtime-session.test.ts no longer supplies the eager worktree-switch/post-create recovery assertion. Those alarms are lost; the remaining cold-park and recovery journeys do not establish equivalent replacement coverage. Recovery references retain old-host-to-new-tab mirroring, adoption/list recovery, blocked local ownership changes, coalescing/overtaking/global concurrency, adoption-conflict serialization and pane-resolution retries. Stable unsupported/malformed adoption tables, supplied inventory/topology/identity and verified-binding shape examples were removed. Their separate alarms are lost; remaining compositions are not equivalent coverage. Historical executed commands and results remain historical. The separate Unsubscribe-to-raw-subscriber-veto-clear sample was removed. Its exact raw-presence transition alarm is lost; remaining fake-provider streaming/attachment checks and real paired journeys do not establish equivalent replacement coverage. The deterministic second subscription is a second live connection, not a disconnect/reconnect proof. Audit1292: The entire orphan-inventory retry suite is removed. Unchanged-snapshot retry for temporarily absent, pending or attached PTYs, live-binding preservation, and consecutive-absence confirmation reset after a ready frame are lost. Mock adoption/list behavior and assembled snapshot handling did not establish actual orphan adoption or equivalent replacement coverage. Audit1342: src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts reduced. Exact global RPC concurrency4/counts for fabricated worktrees. No equivalent replacement coverage is claimed.",
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic policy and multiplex tests separate renderer parking from authoritative stream liveness, while runtime-graph tests cover exact parked leaf, pane runtime ID, title, multi-pane active-leaf, disposal behavior, and queued split routing to an exact cold-parked tab. A real Electron journey runs the shipped dev CLI against the app's isolated profile, proves the exact parked target alone remounts under a bounded lease, completes before the historical 10-second timeout without stealing active tab or focus, re-parks, then reveals two stable-identity panes with independent keyboard/output round trips. Focused mirror-recovery tests preserve a verified binding across pending-handle snapshots, quarantine positive PTY-identity mismatches, accept authoritative ready replacement or removal, and fence recovery to the pairing revision. Daemon attach-only tests prove a replacement runtime re-registers one active session and one history writer. Headed cold-park and headless runtime-restart paired journeys prove rendered output, input, resize convergence, process identity, authoritative close, checkpoint continuity, and post-restart history append against real daemon PTYs. The parked-leaf graph fixture now retains only PTY exit during the park handoff gap. Its standalone exact leaf/title, multi-pane active-leaf and disposal assertions were removed. web-runtime-session.test.ts no longer supplies the eager worktree-switch/post-create recovery assertion. Those alarms are lost; the remaining cold-park and recovery journeys do not establish equivalent replacement coverage. Recovery references retain old-host-to-new-tab mirroring, adoption/list recovery, blocked local ownership changes, coalescing/overtaking/global concurrency, adoption-conflict serialization and pane-resolution retries. Stable unsupported/malformed adoption tables, supplied inventory/topology/identity and verified-binding shape examples were removed. Their separate alarms are lost; remaining compositions are not equivalent coverage. Historical executed commands and results remain historical. The separate Unsubscribe-to-raw-subscriber-veto-clear sample was removed. Its exact raw-presence transition alarm is lost; remaining fake-provider streaming/attachment checks and real paired journeys do not establish equivalent replacement coverage. The deterministic second subscription is a second live connection, not a disconnect/reconnect proof. Audit1292: The entire orphan-inventory retry suite is removed. Unchanged-snapshot retry for temporarily absent, pending or attached PTYs, live-binding preservation, and consecutive-absence confirmation reset after a ready frame are lost. Mock adoption/list behavior and assembled snapshot handling did not establish actual orphan adoption or equivalent replacement coverage. Audit1342: src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts reduced. Exact global RPC concurrency4/counts for fabricated worktrees. No equivalent replacement coverage is claimed.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-2854",
         "https://github.com/stablyai/orca/pull/15514",
@@ -17080,13 +16819,6 @@
           ]
         },
         {
-          "file": "src/main/daemon/providers/adapter/testing/daemon-pty-adapter-cold-restore-reanchor.test.ts",
-          "assertions": [
-            "attach-only adoption registers one active session and exactly one history writer",
-            "a pre-restart checkpoint remains readable and later output appends to the same output log"
-          ]
-        },
-        {
           "file": "tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts",
           "assertions": [
             "a real headless runtime restart never empties the viewer's verified binding while the daemon PTY survives",
@@ -17130,16 +16862,6 @@
           "runner": "local",
           "platform": "macos",
           "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-pty-adapter-cold-restore-reanchor.test.ts src/main/daemon/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/daemon-pty-adapter-protocol-compatibility.test.ts src/main/daemon/daemon-pty-adapter-history-recovery.test.ts --reporter=dot",
-          "durationSeconds": 4,
-          "summary": "Four daemon files passed 99 attach-only, legacy/current protocol, history registration, checkpoint, and append-continuity tests.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-cold-restore-reanchor.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-protocol-compatibility.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-history-recovery.test.ts --reporter=dot"
-        },
-        {
-          "date": "2026-08-29",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
           "command": "pnpm exec playwright test tests/e2e/terminal-parked-cli-split.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "durationSeconds": 24,
           "summary": "A real isolated-profile Electron run passed in 23.0 seconds: the shipped CLI split the exact cold-parked renderer tab before its historical timeout, only that tab mounted and released its background lease, the decoy selection and focus remained unchanged, and both stable-identity panes completed rendered keyboard/output round trips after reveal.",
@@ -17178,6 +16900,7 @@
         "Keep exact per-leaf disposal, multi-pane identity, pending-binding retention, and full client round-trip assertions green."
       ],
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "The live paired cold-park, parked CLI split, and runtime-restart journeys are macOS-only and use a local daemon PTY; the #17297 report itself was Windows 11.",
         "Physical SSH, WSL, Linux, and Windows cold-park/restart journeys are not recorded.",
         "Persisted-empty viewer rows recover through an exact host pane resolution when the host exposes a valid UUID leaf and matching connected PTY; legacy/malformed layouts or hosts without terminal.resolvePane remain pending until a newer authoritative snapshot.",
@@ -18057,61 +17780,22 @@
       "id": "terminal-daemon.async-io-progress",
       "title": "A responding terminal daemon reports stalled asynchronous work without ending sessions",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-runtime",
       "layer": "host-renderer",
       "surfaces": ["daemon health", "terminal input", "terminal startup", "restart notice"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime", "wsl"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "daemon"],
-      "coverageNotes": "Deterministic probe, adapter and rendered notice tests; the production probe also returned stalled in the affected macOS daemon. The remaining tests do not directly cover the spawn-health precheck or diagnostic transition logging. Physical Linux/Windows/WSL/SSH and remote notices remain gaps.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Deterministic probe, adapter and rendered notice tests; the production probe also returned stalled in the affected macOS daemon. The remaining tests do not directly cover the spawn-health precheck or diagnostic transition logging. Physical Linux/Windows/WSL/SSH and remote notices remain gaps.",
       "motivatingLinks": ["docs/bug-reproductions/daemon-async-io-stall.md"],
       "invariant": "An authenticated responsive daemon must not pass its full spawn health check while asynchronous I/O is stalled. Detection owns at most one unfinished probe and never infers exit, replays input or restarts processes.",
       "oracle": "An uncompleted operation yields stalled while timers keep running; repeated checks add no work; completion restores healthy. The notice explains restart consequences and opens the existing review. Old and unreachable peers never yield a stalled verdict.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/health/testing/daemon-async-io-probe.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-async-io-health.test.ts src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx src/main/ipc/pty/pty-management-async-io-health.test.ts --maxWorkers=2"
-      ],
-      "testFiles": [
-        "src/main/daemon/health/testing/daemon-async-io-probe.test.ts",
-        "src/main/daemon/providers/adapter/testing/daemon-pty-adapter-async-io-health.test.ts",
-        "src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx",
-        "src/main/ipc/pty/pty-management-async-io-health.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/daemon/health/testing/daemon-async-io-probe.test.ts",
-          "assertions": [
-            "detects pending work while timers still run, and never adds more blocked operations",
-            "clears a stall when the original operation finally completes"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx",
-          "assertions": [
-            "shows a persistent explanation and opens the existing restart review without stopping anything",
-            "clears a proven stall on recovery, and does no work while hidden or after unmount"
-          ]
-        },
-        {
-          "file": "src/main/ipc/pty/pty-management-async-io-health.test.ts",
-          "assertions": [
-            "discards health evidence if the daemon changes while the check is pending"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-10-15",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-async-io-probe.test.ts src/main/daemon/daemon-async-io-spawn-health.test.ts src/main/daemon/daemon-pty-adapter-async-io-health.test.ts src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx src/main/ipc/pty-management-async-io-health.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/health/testing/daemon-async-io-probe.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-async-io-health.test.ts src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx src/main/ipc/pty/pty-management-async-io-health.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 0.7,
-          "summary": "26 focused tests pass, including stale-incarnation rejection, contact-loss warning retention and transition-only diagnostics. Forcing healthy on timeout makes both stall tests fail. Production probe returned stalled at 5000.8 ms in the affected daemon. Isolated real-PTY fault injection reproduced blocked input and recovery. Hidden Electron CDP notice rendering, review button and recovery dismissal checked."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 15,
         "scope": "Focused deterministic tests."
@@ -18129,6 +17813,7 @@
         "evidence": "One outstanding stat per daemon even after timeout, 30-second healthy cache, no session inventory or subprocesses; UI checks coalesce, stop while hidden and dispose on unmount."
       },
       "knownGaps": [
+        "Audit1623 removes low-value mocked daemon projections, scalar tables and duplicate terminal examples without equivalent replacement coverage. Per-source reviews record retained terminal content preservation, process ownership refusal and recovery boundaries together with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Initial runtime/native trigger and prevention fix remain unproved.",
         "Older preserved daemons require a deliberate restart before supporting this probe.",
         "Physical Linux, Windows, WSL and SSH; remote notices; collapsed sidebar surfacing."
