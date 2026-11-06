@@ -178,4 +178,17 @@ describe('mobile relay RPC session liveness', () => {
     await vi.advanceTimersByTimeAsync(8_000)
     expect(session.getState()).toBe('disconnected')
   })
+
+  it('keeps an idle relay open while a slow reply is still downloading', async () => {
+    const session = await authenticateSession()
+    await vi.advanceTimersByTimeAsync(14_000)
+    const reply = session.sendRequest('files.read', { path: 'large.png' })
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(session.getState()).toBe('connected')
+    const request = sentRequests().find(({ method }) => method === 'files.read')!
+
+    fakes.linkOptions!.onText(JSON.stringify({ id: request.id, ok: true, result: { size: 3 } }))
+    await expect(reply).resolves.toMatchObject({ ok: true, result: { size: 3 } })
+    expect(session.getState()).toBe('connected')
+  })
 })

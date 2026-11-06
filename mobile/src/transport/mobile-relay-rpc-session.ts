@@ -32,7 +32,6 @@ import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 let relayRpcSessionSequence = 0
 
@@ -179,9 +178,10 @@ export function connectMobileRelayRpcSession(args: {
   const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
+    hasRequestInFlight: () => pending.hasWritten(),
     idleProbeMs: 15_000,
     probeTimeoutMs: 4_000,
-    missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
+    missedProbeLimit: 2,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
     sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),
     onTimeout: (evidence) => {
