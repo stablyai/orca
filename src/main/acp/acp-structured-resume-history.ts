@@ -1,13 +1,6 @@
-import type { AgentSessionProviderHandleChain } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
-import {
-  isProviderTimelineTurnInNamespace,
-  providerTimelineKeyPart,
-  spelledProviderTimelineItemKey
-} from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 
 /** Missing journals count as empty; read errors or damaged/newer journals cannot prove no exchange. */
 export function nothingExchangedOn(
@@ -34,41 +27,4 @@ export function nothingExchangedOn(
     }
   }
   return true
-}
-
-/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
-export function unannouncedLosses(
-  readJournal: (sessionId: string) => JournalLoad | null,
-  sessionId: string,
-  chain: AgentSessionProviderHandleChain
-): string[] {
-  const lost = chain.flatMap((link) =>
-    link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
-  )
-  if (lost.length === 0) {
-    return []
-  }
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return []
-  }
-  if (!load) {
-    return lost
-  }
-  if (load.damage || load.newer) {
-    return []
-  }
-  const written = new Set<string>()
-  for (const itemId of load.state.items.keys()) {
-    const identity = parseAgentJournalItemKey(itemId)
-    const spelled =
-      identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
-    if (spelled !== null) {
-      written.add(spelled)
-    }
-  }
-  // Warnings survive even if the replacement session that wrote them is superseded.
-  return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }

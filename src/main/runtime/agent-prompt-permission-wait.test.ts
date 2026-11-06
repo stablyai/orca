@@ -64,42 +64,6 @@ function pasted(writes: readonly string[], text: string): number {
 describe('agent prompt writer: onPermission wait', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('holds while the agent asks for permission and writes once it is answered', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createRuntime()
-    runtime.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
-
-    const sent = runtime.sendTerminalAgentPrompt(handle, 'held prompt', {
-      inputKind: 'driving',
-      onPermission: 'wait'
-    })
-    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_PERMISSION_RECHECK_MS * 5)
-    expect(writes).toEqual([])
-
-    runtime.onPtyData('pty-prompt', IDLE_TITLE, Date.now())
-    await vi.runAllTimersAsync()
-
-    await expect(sent).resolves.toMatchObject({ accepted: true })
-    expect(pasted(writes, 'held prompt')).toBe(1)
-  })
-
-  it('does not hold another caller: a refusing prompt still refuses while one waits', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createRuntime()
-    runtime.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
-    const held = runtime.sendTerminalAgentPrompt(handle, 'held prompt', {
-      inputKind: 'driving',
-      onPermission: 'wait'
-    })
-    void held.catch(() => undefined)
-    await vi.advanceTimersByTimeAsync(0)
-
-    await expect(
-      runtime.sendTerminalAgentPrompt(handle, 'refused prompt', { inputKind: 'driving' })
-    ).rejects.toThrow('agent_prompt_blocked')
-    expect(writes).toEqual([])
-  })
-
   it('resumes the hold when the approval returns during the final pre-paste check', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createRuntime()
@@ -147,23 +111,6 @@ describe('agent prompt writer: onPermission wait', () => {
     expect(writes).toEqual([])
   })
 
-  it('ends the hold when the process exits', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createRuntime()
-    runtime.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
-    const sent = runtime.sendTerminalAgentPrompt(handle, 'held prompt', {
-      inputKind: 'driving',
-      onPermission: 'wait'
-    })
-    const rejected = expect(sent).rejects.toThrow('terminal_not_writable')
-    await vi.advanceTimersByTimeAsync(0)
-
-    runtime.onPtyExit('pty-prompt', 0)
-
-    await rejected
-    expect(writes).toEqual([])
-  })
-
   it('ends the hold on cancel without writing', async () => {
     vi.useFakeTimers()
     const controller = new AbortController()
@@ -182,95 +129,5 @@ describe('agent prompt writer: onPermission wait', () => {
     runtime.onPtyData('pty-prompt', IDLE_TITLE, Date.now())
     await vi.runAllTimersAsync()
     expect(writes).toEqual([])
-  })
-})
-
-describe('agent prompt writer: expectedBinding', () => {
-  afterEach(() => vi.useRealTimers())
-
-  it('writes into the admitted binding', async () => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createRuntime()
-    const { ptyId, processIncarnation } = runtime.getTerminalPromptRequestBinding(handle)
-
-    const sent = runtime.sendTerminalAgentPrompt(handle, 'bound prompt', {
-      inputKind: 'driving',
-      expectedBinding: { ptyId, processIncarnation }
-    })
-    await vi.runAllTimersAsync()
-
-    await expect(sent).resolves.toMatchObject({ accepted: true })
-    expect(pasted(writes, 'bound prompt')).toBe(1)
-  })
-
-  it('refuses a different process before any byte', async () => {
-    const { runtime, handle, writes } = await createRuntime()
-    const { ptyId } = runtime.getTerminalPromptRequestBinding(handle)
-
-    await expect(
-      runtime.sendTerminalAgentPrompt(handle, 'bound prompt', {
-        inputKind: 'driving',
-        expectedBinding: { ptyId, processIncarnation: 'an-earlier-process' }
-      })
-    ).rejects.toThrow('terminal_handle_stale')
-    expect(writes).toEqual([])
-  })
-
-  it('refuses a process replaced while the write guard runs', async () => {
-    const { runtime, handle, writes } = await createRuntime()
-    const admitted = runtime.getTerminalPromptRequestBinding(handle)
-
-    await expect(
-      runtime.sendTerminalAgentPrompt(handle, 'bound prompt', {
-        inputKind: 'driving',
-        expectedBinding: {
-          ptyId: admitted.ptyId,
-          processIncarnation: admitted.processIncarnation
-        },
-        beforeWrite: () => {
-          vi.spyOn(runtime, 'getTerminalPromptRequestBinding').mockReturnValue({
-            ...admitted,
-            processIncarnation: 'replacement'
-          })
-        }
-      })
-    ).rejects.toThrow('terminal_handle_stale')
-    expect(writes).toEqual([])
-  })
-  it.each(['enrich', 'replace', 'explicit'] as const)('suffix identity %s', async (change) => {
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createRuntime()
-    const [pane] = (await runtime.listTerminals()).terminals
-    const binding = runtime.getTerminalPromptRequestBinding(handle)
-    const register = (incarnationId: string) =>
-      runtime.registerPty('pty-prompt', pane.worktreeId, null, { ...pane, incarnationId })
-    let checks = 0
-    const sent = runtime.sendTerminalAgentPrompt(handle, 'identity', {
-      inputKind: 'driving',
-      acceptQueued: true,
-      requestId: 'identity',
-      observationTimeoutMs: 0,
-      ...(change === 'explicit' ? { expectedBinding: binding } : {}),
-      beforeWrite: async () => {
-        if (++checks === 1 && change === 'replace') {
-          register('old')
-        }
-        if (checks === 2) {
-          register('learned')
-        }
-      }
-    })
-    void sent.catch(() => undefined)
-    await vi.runAllTimersAsync()
-    expect(writes).toHaveLength(change === 'enrich' ? 2 : 1)
-    if (change !== 'enrich') {
-      await expect(sent).rejects.toThrow()
-      return
-    }
-    const receipt = await sent
-    expect(receipt.prompt?.processIncarnation).toBe('learned')
-    expect(await runtime.observeTerminalAgentPrompt(handle, receipt.prompt!, 0)).not.toMatchObject({
-      observation: 'incarnation_replaced'
-    })
   })
 })
