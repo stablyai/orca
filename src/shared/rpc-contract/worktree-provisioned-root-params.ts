@@ -33,6 +33,7 @@ export const WorktreeAdoptProvisionedRoot = z.object({
   createdWithAgent: create.createdWithAgent,
   comment: create.comment,
   parentWorkspace: create.parentWorkspace,
+  parentWorkspaceOrigin: create.parentWorkspaceOrigin,
   crossStoreParent: create.crossStoreParent,
   crossStoreParentInferredFrom: create.crossStoreParentInferredFrom,
   name: z.string().min(1, 'Missing workspace name'),

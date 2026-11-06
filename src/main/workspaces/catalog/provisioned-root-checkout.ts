@@ -50,6 +50,7 @@ export type ProvisionedRootRequest = Pick<
 > & {
   /** The composer's parent, resolved like a create's (`folder:<id>` or `worktree:<id>`). */
   parentWorkspace?: string
+  parentWorkspaceOrigin?: 'manual'
   crossStoreParent?: CrossStoreParentRef
   crossStoreParentInferredFrom?: CrossStoreInferredSource
   expectedRefHead?: string

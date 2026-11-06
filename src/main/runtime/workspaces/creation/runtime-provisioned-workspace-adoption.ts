@@ -21,7 +21,10 @@ export abstract class RuntimeProvisionedWorkspaceAdoption extends OrcaRuntimeWit
         ? await this.resolveLineageForWorktreeCreate(
             {
               parentWorkspace: request.parentWorkspace,
-              ...(request.parentWorkspace ? { parentWorkspaceOrigin: 'manual' as const } : {}),
+              // App-picked parents are manual; older clients send no origin for parentWorkspace.
+              ...(request.parentWorkspace || request.parentWorkspaceOrigin
+                ? { parentWorkspaceOrigin: 'manual' as const }
+                : {}),
               crossStoreParent: request.crossStoreParent,
               crossStoreParentInferredFrom: request.crossStoreParentInferredFrom,
               comment: request.comment

@@ -16,10 +16,12 @@ export function useEligibleFolderParents(child: Worktree | undefined, enabled = 
       ? s.workspaceLineageByChildKey[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey
       : undefined
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+    enabled ? s.runtimeStatusByEnvironmentId : undefined
+  )
   return useMemo(
     () =>
-      enabled && child && folderWorkspaces?.length
+      enabled && child && folderWorkspaces?.length && runtimeStatusByEnvironmentId
         ? getEligibleFolderParents({
             child,
             folderRows: folderWorkspaces.map((folder) => getFolderWorkspaceWorktree(folder)),
