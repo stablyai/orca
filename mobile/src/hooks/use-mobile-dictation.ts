@@ -22,6 +22,7 @@ import {
   startMobileDictationDesktopSession
 } from './mobile-dictation-desktop-start'
 import { rpcPayloadMember } from '../transport/rpc-reader-payload'
+import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
 import type {
   DictationStatus,
   UseMobileDictationOptions,
@@ -51,14 +52,16 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const startBufferRef = useRef(new MobileDictationStartBuffer())
   const sendHeldAudioRef = useRef(() => {})
   const stopWhenStartedRef = useRef(false)
-  const hostCancelRef = useRef<Promise<void>>(Promise.resolve())
+  const hostSettledRef = useRef<Promise<unknown>>(Promise.resolve())
   const generationRef = useRef(0)
 
-  // A new start waits for the host to drop the session it replaces, or the host refuses it as already active.
-  const cancelOnHost = (client: RpcClient, dictationId: string): Promise<void> => {
-    hostCancelRef.current = cancelDesktopDictation(client, dictationId)
-    return hostCancelRef.current
+  // The host refuses a phone's second start while its last one is still starting or closing, so each start waits for that work to settle.
+  const settleOnHost = (work: Promise<unknown>): Promise<unknown> => {
+    hostSettledRef.current = Promise.allSettled([hostSettledRef.current, work])
+    return work
   }
+  const cancelOnHost = (client: RpcClient, dictationId: string) =>
+    settleOnHost(cancelDesktopDictation(client, dictationId))
 
   useLayoutEffect(() => {
     // Native audio events can arrive before passive Effects flush, but refs
@@ -222,36 +225,38 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
     const dictationId = createMobileDictationId()
     activeIdRef.current = dictationId
-    await hostCancelRef.current
+    await probeLivenessWhileWaiting(client, hostSettledRef.current)
     if (!isCurrentGeneration()) {
       return
     }
 
-    await startMobileDictationDesktopSession({
-      client,
-      dictationId,
-      generation,
-      getCurrentGeneration: () => generationRef.current,
-      getEnabled: () => enabledRef.current,
-      getActiveId: () => activeIdRef.current,
-      clearActiveId: (id) => {
-        if (activeIdRef.current === id) {
-          activeIdRef.current = null
-        }
-      },
-      setIdle: () => applyStatus('idle'),
-      commitRecordingStart: (hostDedupesResends) => {
-        audioPhaseRef.current = 'sending'
-        pendingChunksRef.current.clear()
-        pendingAudioBudgetRef.current.reset(hostDedupesResends)
-        applyStatus('recording')
-        sendHeldAudioRef.current()
-        if (stopWhenStartedRef.current) {
-          void finishDictation(dictationSessionErrorMessage('no-speech'))
-        }
-      },
-      rollbackRecordingStart: closeDictationAudio
-    })
+    await settleOnHost(
+      startMobileDictationDesktopSession({
+        client,
+        dictationId,
+        generation,
+        getCurrentGeneration: () => generationRef.current,
+        getEnabled: () => enabledRef.current,
+        getActiveId: () => activeIdRef.current,
+        clearActiveId: (id) => {
+          if (activeIdRef.current === id) {
+            activeIdRef.current = null
+          }
+        },
+        setIdle: () => applyStatus('idle'),
+        commitRecordingStart: (hostDedupesResends) => {
+          audioPhaseRef.current = 'sending'
+          pendingChunksRef.current.clear()
+          pendingAudioBudgetRef.current.reset(hostDedupesResends)
+          applyStatus('recording')
+          sendHeldAudioRef.current()
+          if (stopWhenStartedRef.current) {
+            void finishDictation(dictationSessionErrorMessage('no-speech'))
+          }
+        },
+        rollbackRecordingStart: closeDictationAudio
+      })
+    )
   }, [applyStatus, capture, closeDictationAudio, finishDictation])
 
   // Only the user’s own cancel (reason:null) ends silently; other interruptions call onError so the tap has a visible outcome.
