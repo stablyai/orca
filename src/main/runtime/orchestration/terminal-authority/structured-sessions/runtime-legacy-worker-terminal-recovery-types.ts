@@ -1,7 +1,7 @@
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from '../release/orchestration-legacy-worker-terminal-recovery'
 import type { PtyControllerInventory } from '../../../runtime-pty-controller-contract'
 import type { ResolvedWorktree } from '../../../workspaces/catalog/runtime-worktree-path-identity'
 

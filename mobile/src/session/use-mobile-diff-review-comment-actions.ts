@@ -24,6 +24,7 @@ import {
   reviewDescriptorFromItem
 } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
+import { useMobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -146,26 +147,19 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     [persistMetadata, screenState, setActionError, setScreenState, updateReadyState, worktreeId]
   )
 
+  const { openNewNoteSheet, openEditComposer, clearSavedNote } = useMobileDiffReviewNoteDraft({
+    composerBody,
+    setComposerBody,
+    openSheet
+  })
+
   const openComposer = useCallback(
-    (lineNumber: number) => {
-      openSheet({ kind: 'composer', composer: { mode: 'create', lineNumber } })
-      setComposerBody('')
-    },
-    [openSheet, setComposerBody]
+    (lineNumber: number) =>
+      openNewNoteSheet({ kind: 'composer', composer: { mode: 'create', lineNumber } }),
+    [openNewNoteSheet]
   )
 
-  const openEditComposer = useCallback(
-    (comment: DiffComment) => {
-      openSheet({ kind: 'composer', composer: { mode: 'edit', comment } })
-      setComposerBody(comment.body)
-    },
-    [openSheet, setComposerBody]
-  )
-
-  const closeComposer = useCallback(() => {
-    closeSheet('composer')
-    setComposerBody('')
-  }, [closeSheet, setComposerBody])
+  const closeComposer = useCallback(() => closeSheet('composer'), [closeSheet])
 
   const saveComposer = useCallback(async () => {
     if (
@@ -200,7 +194,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     }
     await saveCommentsAndReviewState(result.comments, screenState.reviewState)
     closeComposer()
+    if (composer.mode === 'create') {
+      clearSavedNote(composerBody)
+    }
   }, [
+    clearSavedNote,
     closeComposer,
     composer,
     composerBody,
@@ -294,11 +292,13 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
   )
 
   return {
+    clearSavedNote,
     closeComposer,
     deleteComment,
     markReviewed,
     openComposer,
     openEditComposer,
+    openNewNoteSheet,
     saveCommentsAndReviewState,
     saveComposer,
     toggleItemViewed

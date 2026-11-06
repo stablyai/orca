@@ -10,7 +10,7 @@ import {
   truncateToolDetail
 } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
-import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
 import type { ClaudePendingPrompt } from '../../claude-prompt-registry'

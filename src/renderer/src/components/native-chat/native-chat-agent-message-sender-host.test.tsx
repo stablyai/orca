@@ -52,7 +52,7 @@ vi.mock('./NativeChatPaneFileDropSurface', () => ({
 vi.mock('../tab-group/RetainedPaneHost', () => ({
   RetainedPaneHost: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   focusRendererTerminalHandle: transport.focusRenderer
 }))

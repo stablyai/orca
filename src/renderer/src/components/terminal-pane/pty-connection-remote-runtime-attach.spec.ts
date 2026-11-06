@@ -354,7 +354,8 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks6 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -401,8 +402,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks7 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const tabId = 'web-terminal-host-tab'
@@ -448,7 +450,8 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks8 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const tabId = 'web-terminal-host-tab'
@@ -490,8 +493,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks9 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const ptyId = 'remote:stale-hub@@terminal-1'
@@ -519,8 +523,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks10 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -549,8 +554,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks11 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const setupWorktreeId =
@@ -581,7 +587,8 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks12 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const setupWorktreeId =
@@ -614,7 +621,7 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks13 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -643,8 +650,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks14 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createIpcPtyTransport } = await import('./pty-transport')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -676,8 +684,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks15 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -708,7 +717,8 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks16 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const hostPtyId = 'ssh:hub-private@@pty-2'

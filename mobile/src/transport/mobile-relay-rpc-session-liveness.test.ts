@@ -160,4 +160,54 @@ describe('mobile relay RPC session liveness', () => {
     controller.clear()
     logical.close()
   })
+
+  it('probes an idle relay and closes it when the probes go unanswered', async () => {
+    const session = await authenticateSession()
+    for (let elapsed = 0; elapsed < 30_000; elapsed += 5_000) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1]))
+      await vi.advanceTimersByTimeAsync(5_000)
+    }
+    fakes.linkOptions!.onBinary(new Uint8Array([1]))
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(sentRequests()).toEqual([
+      expect.objectContaining({ method: 'status.get', params: { probe: true } })
+    ])
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(session.getState()).toBe('disconnected')
+  })
+
+  it('keeps an idle relay open while a slow reply is still downloading', async () => {
+    const session = await authenticateSession()
+    await vi.advanceTimersByTimeAsync(14_000)
+    const reply = session.sendRequest('files.read', { path: 'large.png' })
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(session.getState()).toBe('connected')
+    const request = sentRequests().find(({ method }) => method === 'files.read')!
+
+    fakes.linkOptions!.onText(JSON.stringify({ id: request.id, ok: true, result: { size: 3 } }))
+    await expect(reply).resolves.toMatchObject({ ok: true, result: { size: 3 } })
+    expect(session.getState()).toBe('connected')
+  })
+
+  it('closes a silent relay even while requests keep going unanswered', async () => {
+    const session = await authenticateSession()
+    for (let elapsed = 0; elapsed < 60_000; elapsed += 5_000) {
+      session.sendRequest('status.get', {}).catch(() => {})
+      await vi.advanceTimersByTimeAsync(5_000)
+    }
+    expect(session.getState()).toBe('disconnected')
+  })
+
+  it('keeps an idle relay open while a stream backlog delays the probe reply', async () => {
+    const session = await authenticateSession()
+    await vi.advanceTimersByTimeAsync(15_000)
+    for (let elapsed = 0; elapsed < 12_000; elapsed += 1_000) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1]))
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(session.getState()).toBe('connected')
+  })
 })

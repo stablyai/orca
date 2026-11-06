@@ -4,7 +4,7 @@ import {
   clearedInto,
   conversationRecordReader,
   type AgentSessionRecordReader
-} from './orchestration/structured-session-lineage'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
 import {
   editPersistedTestAgentSessionStore,
@@ -16,7 +16,7 @@ import {
   AGENT_SESSION_PREDECESSOR_IDS,
   agentSessionPredecessorWorkForTest
 } from './agent-session-record-lineage'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 const unissued = (): never => {

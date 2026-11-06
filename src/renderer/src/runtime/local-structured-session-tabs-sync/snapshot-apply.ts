@@ -3,8 +3,8 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../../../shared/runtime-types'
 import { markStructuredAgentSessionLaunchesPublished } from '../../lib/agent-session/launch/structured-agent-session-launch-publication'
-import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner-state'
-import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'
+import { getExecutionHostIdForWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
 import { applyWebSessionTabsStorePatch } from '../web-session-tabs-sync/store-patch'
 import { receivedAgentSenderPublications } from '../web-session-tabs-sync/received-agent-sender-publications'

@@ -1,3 +1,4 @@
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -234,3 +235,26 @@ describe('readOpenCodeTranscriptSignal', () => {
     })
   })
 })
+
+it.each(['stop', 'tool-calls', undefined])(
+  'uses native v1 completion evidence without treating prose or tool work as terminal: %s',
+  async (finish) => {
+    const { db, path } = createTempDb()
+    applySchema(db)
+    insertMessage(db, { id: 'u1', time: 1 })
+    insertPart(db, { id: 'pu', messageId: 'u1', time: 1, data: { type: 'text', text: 'Prompt' } })
+    insertMessage(db, { id: 'a1', time: 2, role: 'assistant' })
+    insertPart(db, { id: 'pa', messageId: 'a1', time: 2, data: { type: 'text', text: 'Response' } })
+    if (finish) {
+      db.prepare('UPDATE message SET data = ? WHERE id = ?').run(
+        JSON.stringify({ role: 'assistant', time: { completed: 3 }, finish }),
+        'a1'
+      )
+    }
+    const imported = await readOpenCodeNativeChatTranscriptFull('ses-1', {
+      resolveDbPath: async () => path,
+      readPage: async (args) => readOpenCodeTranscriptPage(args)
+    })
+    expect(imported).toMatchObject({ forkTipItemIds: finish === 'stop' ? ['u1', 'a1'] : [] })
+  }
+)

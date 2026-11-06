@@ -18,7 +18,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Mock pty-transport's eager buffer registration
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn().mockReturnValue({ flush: () => '', dispose: () => {} }),
   ensurePtyDispatcher: vi.fn()
 }))

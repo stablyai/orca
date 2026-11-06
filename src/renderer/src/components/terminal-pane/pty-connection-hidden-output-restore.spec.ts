@@ -462,7 +462,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
 
       const factsHandler = await import('./terminal-side-effect-facts-handler')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))
       mockStoreState.ptyIdsByTabId = { 'tab-1': [remotePtyId] }
       mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = {

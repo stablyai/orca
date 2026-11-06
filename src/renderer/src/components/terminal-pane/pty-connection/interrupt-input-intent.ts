@@ -4,7 +4,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import { createAgentInterruptInference } from '../agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../agent-question-answered-inference'
 import type { AgentInterruptInputIntent } from '../../../../../shared/agent-status/lifecycle/agent-interrupt-intent'
-import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-paste'
+import { markTerminalBracketedPasteInterrupted } from '../input/paste/terminal-bracketed-paste'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'

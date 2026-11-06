@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
+import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
 import { subscribeToPublishedTerminalViewAttributes } from '../components/terminal-pane/terminal-view-attributes-publisher'
 import { remoteRuntimeTerminalColorPush } from '../runtime/remote-runtime-terminal-color-push'
 import { useAppStore } from '../store'
