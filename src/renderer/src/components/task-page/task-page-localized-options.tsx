@@ -71,7 +71,7 @@ export const getGitLabMRInvolvementFilters = createLocalizedCatalog(
     { id: 'authored', label: translate('auto.components.TaskPage.7698af5263', 'Mine') },
     {
       id: 'reviewing',
-      label: translate('auto.components.TaskPage.524f095d55', 'Needs review')
+      label: translate('auto.components.TaskPage.gitlabInvolvementReviewing', 'Reviewing')
     }
   ]
 )

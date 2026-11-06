@@ -1,4 +1,9 @@
-import { createRuntimeGitLabApi, type GitLabApi } from './runtime-gitlab-api'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
+import {
+  createRuntimeGitLabApi,
+  RuntimeCapabilityMissingError,
+  type GitLabApi
+} from './runtime-gitlab-api'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { forgeCredentialTarget, type ForgeRepoSelector } from './forge-credential-target'
 
@@ -13,20 +18,52 @@ function withSourceRepo(params: unknown, sourceRepoId: string | null): unknown {
     : params
 }
 
-function runtimeGitLabApi(environmentId: string, sourceRepoId: string | null): GitLabApi {
+/** Capability answers shared by one caller-owned batch (one Tasks refresh); never kept past it. */
+export type GitLabCapabilityChecks = Map<string, Promise<boolean>>
+
+function checkCapability(
+  environmentId: string,
+  capability: RuntimeCapability,
+  checks: GitLabCapabilityChecks | undefined
+): Promise<boolean> {
+  const key = `${environmentId}\0${capability}`
+  const existing = checks?.get(key)
+  if (existing) {
+    return existing
+  }
+  const check = runtimeEnvironmentSupportsCapability(environmentId, capability)
+  checks?.set(key, check)
+  return check
+}
+
+function runtimeGitLabApi(
+  environmentId: string,
+  sourceRepoId: string | null,
+  capabilityChecks: GitLabCapabilityChecks | undefined
+): GitLabApi {
   const target = { kind: 'environment', environmentId } as const
   return createRuntimeGitLabApi({
-    call: (method, params) =>
-      callRuntimeRpc(target, method, withSourceRepo(params, sourceRepoId), {
+    call: async (method, params, options) => {
+      if (
+        options?.requiredCapability &&
+        !(await checkCapability(environmentId, options.requiredCapability, capabilityChecks))
+      ) {
+        throw new RuntimeCapabilityMissingError()
+      }
+      return callRuntimeRpc(target, method, withSourceRepo(params, sourceRepoId), {
         timeoutMs: method === 'gitlab.jobTrace' ? JOB_TRACE_TIMEOUT_MS : GITLAB_RPC_TIMEOUT_MS
-      }),
+      })
+    },
     supportsCapability: (capability) =>
       runtimeEnvironmentSupportsCapability(environmentId, capability)
   })
 }
 
 /** The `gl` API on the machine that holds the repo's GitLab credentials. */
-export function gitLabApiFor(selector: ForgeRepoSelector): GitLabApi {
+export function gitLabApiFor(
+  selector: ForgeRepoSelector,
+  { capabilityChecks }: { capabilityChecks?: GitLabCapabilityChecks } = {}
+): GitLabApi {
   let target: ReturnType<typeof forgeCredentialTarget>
   try {
     target = forgeCredentialTarget(selector)
@@ -38,6 +75,10 @@ export function gitLabApiFor(selector: ForgeRepoSelector): GitLabApi {
     })
   }
   return target.kind === 'environment'
-    ? runtimeGitLabApi(target.environmentId, selector.sourceContext?.repoId?.trim() || null)
+    ? runtimeGitLabApi(
+        target.environmentId,
+        selector.sourceContext?.repoId?.trim() || null,
+        capabilityChecks
+      )
     : window.api.gl
 }

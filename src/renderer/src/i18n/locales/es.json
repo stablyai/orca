@@ -2653,6 +2653,7 @@
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
         "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Mis tareas pendientes",
         "startWorkspaceFromMr": "Iniciar espacio de trabajo desde MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espacio de trabajo desde issue {{number}}",

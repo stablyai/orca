@@ -2613,6 +2613,7 @@
         "gitlabViewIssues": "이슈",
         "gitlabViewMrs": "MR",
         "gitlabInvolvementEveryone": "모두",
+        "gitlabInvolvementReviewing": "리뷰 중",
         "gitlabViewTodos": "내 할 일",
         "startWorkspaceFromMr": "MR {{number}}에서 워크스페이스 시작",
         "startWorkspaceFromIssue": "이슈 {{number}}에서 워크스페이스 시작",

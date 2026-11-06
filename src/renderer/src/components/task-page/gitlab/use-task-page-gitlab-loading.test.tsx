@@ -22,6 +22,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 import {
   GITLAB_TASK_FETCH_CONCURRENCY,
+  gitLabListQueryKey,
   useTaskPageGitLabLoading
 } from './use-task-page-gitlab-loading'
 
@@ -36,8 +37,17 @@ const serverRepo: Repo = {
   executionHostId: 'runtime:build-box'
 }
 const glListIssues = vi.fn()
+const LIST_STATE = {
+  gitlabItems: [],
+  gitlabError: null,
+  gitlabLoading: false,
+  displayedGitLabItems: [],
+  gitlabListQueryKey: null,
+  setGitlabListQueryKey: vi.fn()
+}
 
 beforeEach(() => {
+  supportsCapability.mockReset()
   rpc.call.mockReset().mockResolvedValue({ items: [{ id: 'i1', updatedAt: '2026-10-01' }] })
   glListIssues.mockReset().mockRejectedValue(new Error('Access denied: unknown repository path'))
   Object.assign(window, { api: { gl: { listIssues: glListIssues } } })
@@ -70,7 +80,8 @@ describe('useTaskPageGitLabLoading', () => {
       setGitlabTodos: vi.fn(),
       setGitlabTodosLoading: vi.fn(),
       activeGitlabFilter: 'opened',
-      gitlabMRInvolvement: null
+      gitlabMRInvolvement: null,
+      ...LIST_STATE
     })
     const model = {
       gitlabItems,
@@ -201,7 +212,8 @@ describe('useTaskPageGitLabLoading', () => {
         setGitlabTodos: vi.fn(),
         setGitlabTodosLoading: vi.fn(),
         activeGitlabFilter: 'opened',
-        gitlabMRInvolvement: null
+        gitlabMRInvolvement: null,
+        ...LIST_STATE
       })
     )
 
@@ -219,12 +231,9 @@ describe('useTaskPageGitLabLoading', () => {
     expect(setGitlabError).not.toHaveBeenCalledWith(expect.stringContaining('Access denied'))
   })
 
-  it.each([
-    [false, 'requires a newer Orca server'],
-    [true, null]
-  ])(
-    'sends Mine to a server that supports it, else says to update (supported: %s)',
-    async (supported, expectedError) => {
+  it.each([false, true])(
+    'sends Mine only to a server that supports it, else shows an error (supported: %s)',
+    async (supported) => {
       supportsCapability.mockResolvedValue(supported)
       rpc.call.mockResolvedValue({ items: [], page: 1, perPage: 50, totalCount: 0, totalPages: 0 })
       const setGitlabError = vi.fn()
@@ -243,19 +252,20 @@ describe('useTaskPageGitLabLoading', () => {
           setGitlabTodos: vi.fn(),
           setGitlabTodosLoading: vi.fn(),
           activeGitlabFilter: 'merged',
-          gitlabMRInvolvement: 'authored'
+          gitlabMRInvolvement: 'authored',
+          ...LIST_STATE
         })
       )
 
       await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
-      if (expectedError) {
+      if (!supported) {
         expect(rpc.call).not.toHaveBeenCalledWith(
           expect.anything(),
           'gitlab.listMRs',
           expect.anything(),
           expect.anything()
         )
-        expect(setGitlabError).toHaveBeenLastCalledWith(expect.stringContaining(expectedError))
+        expect(setGitlabError).toHaveBeenLastCalledWith(expect.any(String))
       } else {
         expect(rpc.call).toHaveBeenCalledWith(
           { kind: 'environment', environmentId: 'build-box' },
@@ -264,6 +274,98 @@ describe('useTaskPageGitLabLoading', () => {
           expect.anything()
         )
       }
+    }
+  )
+
+  it("never shows the previous filter's rows while a changed filter loads", () => {
+    rpc.call.mockReturnValue(new Promise(() => {}))
+    const row: GitLabWorkItem = {
+      id: 'mr-1',
+      type: 'mr',
+      number: 1,
+      title: 'Someone else',
+      state: 'opened',
+      url: 'https://gitlab.com/group/app/-/merge_requests/1',
+      labels: [],
+      updatedAt: '2026-10-01T00:00:00Z',
+      author: null,
+      repoId: 'server-repo'
+    }
+    const everyoneKey = gitLabListQueryKey('mrs', 'opened', null, 'server-repo')
+    const { result, rerender } = renderHook(
+      ({ involvement, nonce }: { involvement: 'authored' | null; nonce: number }) =>
+        useTaskPageGitLabLoading({
+          selectedRepos: [serverRepo],
+          selectedReposKey: 'server-repo',
+          primaryRepo: serverRepo,
+          taskSource: 'gitlab',
+          setGitlabItems: vi.fn(),
+          setGitlabLoading: vi.fn(),
+          setGitlabError: vi.fn(),
+          gitlabRefreshNonce: nonce,
+          gitlabView: 'mrs',
+          setGitlabTodos: vi.fn(),
+          setGitlabTodosLoading: vi.fn(),
+          activeGitlabFilter: 'opened',
+          gitlabMRInvolvement: involvement,
+          ...LIST_STATE,
+          gitlabItems: [row],
+          displayedGitLabItems: [row],
+          gitlabListQueryKey: everyoneKey
+        }),
+      { initialProps: { involvement: null as 'authored' | null, nonce: 0 } }
+    )
+
+    rerender({ involvement: null, nonce: 1 })
+    expect(result.current.displayedGitLabItems).toEqual([row])
+
+    rerender({ involvement: 'authored', nonce: 2 })
+    expect(result.current.displayedGitLabItems).toEqual([])
+    expect(result.current.gitlabLoading).toBe(true)
+  })
+
+  it.each([12, 120])(
+    'checks an older server once per refresh for %s of its projects',
+    async (projectCount) => {
+      supportsCapability.mockResolvedValue(false)
+      const repos = Array.from({ length: projectCount }, (_, index) => ({
+        ...serverRepo,
+        id: `server-repo-${index}`
+      }))
+      const setGitlabLoading = vi.fn()
+      const { rerender } = renderHook(
+        ({ nonce }) =>
+          useTaskPageGitLabLoading({
+            selectedRepos: repos,
+            selectedReposKey: `servers-${projectCount}`,
+            primaryRepo: repos[0],
+            taskSource: 'gitlab',
+            setGitlabItems: vi.fn(),
+            setGitlabLoading,
+            setGitlabError: vi.fn(),
+            gitlabRefreshNonce: nonce,
+            gitlabView: 'mrs',
+            setGitlabTodos: vi.fn(),
+            setGitlabTodosLoading: vi.fn(),
+            activeGitlabFilter: 'opened',
+            gitlabMRInvolvement: 'authored',
+            ...LIST_STATE
+          }),
+        { initialProps: { nonce: 0 } }
+      )
+      await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
+      expect(supportsCapability).toHaveBeenCalledTimes(1)
+
+      setGitlabLoading.mockClear()
+      rerender({ nonce: 1 })
+      await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
+      expect(supportsCapability).toHaveBeenCalledTimes(2)
+      expect(rpc.call).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'gitlab.listMRs',
+        expect.anything(),
+        expect.anything()
+      )
     }
   )
 
@@ -299,7 +401,8 @@ describe('useTaskPageGitLabLoading', () => {
           setGitlabTodos: vi.fn(),
           setGitlabTodosLoading: vi.fn(),
           activeGitlabFilter: 'opened',
-          gitlabMRInvolvement: null
+          gitlabMRInvolvement: null,
+          ...LIST_STATE
         }),
       { initialProps: { refreshNonce: 0 } }
     )
@@ -356,7 +459,8 @@ describe('useTaskPageGitLabLoading', () => {
         setGitlabTodos: vi.fn(),
         setGitlabTodosLoading: vi.fn(),
         activeGitlabFilter: 'opened',
-        gitlabMRInvolvement: null
+        gitlabMRInvolvement: null,
+        ...LIST_STATE
       })
     )
   }

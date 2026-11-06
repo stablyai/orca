@@ -390,6 +390,7 @@ describe('GitLab IPC handlers', () => {
     })
 
     // The sixth argument is the search query.
+    expect(listMergeRequestsMock).toHaveBeenCalledTimes(1)
     expect(listMergeRequestsMock.mock.lastCall?.[5]).toBeUndefined()
   })
 

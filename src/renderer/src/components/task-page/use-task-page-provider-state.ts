@@ -66,6 +66,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabMRInvolvement, setGitlabMRInvolvement] = useState<GitLabMRInvolvement | null>(null)
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
+  const [gitlabListQueryKey, setGitlabListQueryKey] = useState<string | null>(null)
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
   const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
@@ -104,6 +105,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     }
     return gitlabItems
   }, [gitlabItems, gitlabView])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every added field is assigned below before the model is returned.
   const nextModel = model as typeof model & {
     taskSourceManuallyChangedRef: typeof taskSourceManuallyChangedRef
     lastPageTaskSourceRef: typeof lastPageTaskSourceRef
@@ -123,6 +125,8 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     setGitlabMRInvolvement: typeof setGitlabMRInvolvement
     gitlabItems: typeof gitlabItems
     setGitlabItems: typeof setGitlabItems
+    gitlabListQueryKey: typeof gitlabListQueryKey
+    setGitlabListQueryKey: typeof setGitlabListQueryKey
     gitlabLoading: typeof gitlabLoading
     setGitlabLoading: typeof setGitlabLoading
     gitlabError: typeof gitlabError
@@ -160,6 +164,8 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.setGitlabMRInvolvement = setGitlabMRInvolvement
   nextModel.gitlabItems = gitlabItems
   nextModel.setGitlabItems = setGitlabItems
+  nextModel.gitlabListQueryKey = gitlabListQueryKey
+  nextModel.setGitlabListQueryKey = setGitlabListQueryKey
   nextModel.gitlabLoading = gitlabLoading
   nextModel.setGitlabLoading = setGitlabLoading
   nextModel.gitlabError = gitlabError

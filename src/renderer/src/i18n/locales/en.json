@@ -3349,6 +3349,7 @@
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
         "gitlabInvolvementEveryone": "Everyone",
+        "gitlabInvolvementReviewing": "Reviewing",
         "gitlabViewTodos": "My Todos",
         "startWorkspaceFromMr": "Start workspace from MR {{number}}",
         "startWorkspaceFromIssue": "Start workspace from issue {{number}}",

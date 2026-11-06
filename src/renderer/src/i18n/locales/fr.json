@@ -2877,6 +2877,7 @@
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
         "gitlabInvolvementEveryone": "Tout le monde",
+        "gitlabInvolvementReviewing": "En relecture",
         "gitlabViewTodos": "Mes tâches",
         "startWorkspaceFromMr": "Démarrer un espace de travail depuis la MR {{number}}",
         "startWorkspaceFromIssue": "Démarrer un espace de travail depuis l’issue {{number}}",

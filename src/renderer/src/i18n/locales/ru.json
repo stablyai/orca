@@ -3213,6 +3213,7 @@
         "gitlabViewIssues": "Задачи",
         "gitlabViewMrs": "MR",
         "gitlabInvolvementEveryone": "Все",
+        "gitlabInvolvementReviewing": "На ревью",
         "gitlabViewTodos": "Мои дела",
         "startWorkspaceFromMr": "Запустить рабочее пространство из MR {{number}}",
         "startWorkspaceFromIssue": "Запустить рабочее пространство из задачи {{number}}",

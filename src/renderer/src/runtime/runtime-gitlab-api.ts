@@ -17,8 +17,16 @@ export type GitLabApi = NonNullable<PreloadApi['gl']>
 
 type GitLabApiResult<K extends keyof GitLabApi> = Awaited<ReturnType<GitLabApi[K]>>
 
+/** Thrown by a transport whose runtime answered that it lacks a call's required capability. */
+export class RuntimeCapabilityMissingError extends Error {}
+
 export type RuntimeGitLabTransport = {
-  call: <Result>(method: WebGitLabRuntimeMethod, params?: unknown) => Promise<Result>
+  // A required capability is checked on the same runtime that then serves the call.
+  call: <Result>(
+    method: WebGitLabRuntimeMethod,
+    params?: unknown,
+    options?: { requiredCapability?: RuntimeCapability }
+  ) => Promise<Result>
   supportsCapability: (capability: RuntimeCapability) => Promise<boolean>
 }
 
@@ -36,21 +44,28 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
     listMRs: async (args) => {
-      if (
-        args.involvement &&
-        !(await transport.supportsCapability(GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY))
-      ) {
-        const perPage = args.perPage ?? 20
+      if (!args.involvement) {
+        return route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args)
+      }
+      try {
+        return await transport.call<GitLabApiResult<'listMRs'>>(
+          GITLAB_WEB_RPC_METHODS.listMRs,
+          mapRepoPathArg(args),
+          { requiredCapability: GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY }
+        )
+      } catch (error) {
+        if (!(error instanceof RuntimeCapabilityMissingError)) {
+          throw error
+        }
         return {
           items: [],
           page: args.page ?? 1,
-          perPage,
+          perPage: args.perPage ?? 20,
           totalCount: 0,
           totalPages: 0,
           error: { type: 'unknown', message: GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE }
         }
       }
-      return route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args)
     },
     listWorkItems: (args) =>
       route<GitLabApiResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),

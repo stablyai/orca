@@ -308,47 +308,61 @@ describe('gitlab client — MR operations', () => {
     })
 
     it.each([
-      ['a signed-out lookup', () => Promise.reject(new Error('401 Unauthorized'))],
-      ['a lookup without a user id', () => Promise.resolve({ stdout: '{"message":"ok"}' })]
-    ])('reports an error instead of listing everyone after %s', async (_label, lookup) => {
-      glabExecFileAsyncMock.mockImplementationOnce(lookup)
+      [
+        'a signed-out lookup',
+        () => Promise.reject(new Error('401 Unauthorized')),
+        'permission_denied'
+      ],
+      [
+        'a lookup without a user id',
+        () => Promise.resolve({ stdout: '{"message":"ok"}' }),
+        'unknown'
+      ]
+    ])(
+      'reports an error instead of listing everyone after %s',
+      async (_label, lookup, expectedType) => {
+        glabExecFileAsyncMock.mockImplementationOnce(lookup)
 
-      const result = await listMergeRequests(
-        '/repo',
-        'opened',
-        1,
-        20,
-        undefined,
-        undefined,
-        null,
-        {},
-        { involvement: 'authored' }
-      )
+        const result = await listMergeRequests(
+          '/repo',
+          'opened',
+          1,
+          20,
+          undefined,
+          undefined,
+          null,
+          {},
+          { involvement: 'authored' }
+        )
 
-      expect(result.items).toEqual([])
-      expect(result.error).toBeDefined()
-      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
-      expect(releaseMock).toHaveBeenCalled()
-    })
+        expect(result.items).toEqual([])
+        expect(result.error?.type).toBe(expectedType)
+        expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+        expect(releaseMock).toHaveBeenCalled()
+      }
+    )
 
-    it('refuses the cwd fallback for a filtered list with a visible error', async () => {
-      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+    it.each([null, 'ssh-1'])(
+      'shows a visible error for a filtered list whose project is unresolved (connection %s)',
+      async (connectionId) => {
+        resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
 
-      const result = await listMergeRequests(
-        '/repo',
-        'opened',
-        1,
-        20,
-        undefined,
-        undefined,
-        null,
-        {},
-        { involvement: 'authored' }
-      )
+        const result = await listMergeRequests(
+          '/repo',
+          'opened',
+          1,
+          20,
+          undefined,
+          undefined,
+          connectionId,
+          {},
+          { involvement: 'authored' }
+        )
 
-      expect(result.error?.type).toBe('unknown')
-      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
-    })
+        expect(result.error?.type).toBe('unknown')
+        expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+      }
+    )
 
     it('falls back to glab mr list when project ref is unresolved', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({

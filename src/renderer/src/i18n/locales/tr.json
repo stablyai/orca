@@ -3109,6 +3109,7 @@
         "gitlabViewIssues": "Sorunlar",
         "gitlabViewMrs": "MR'ler",
         "gitlabInvolvementEveryone": "Herkes",
+        "gitlabInvolvementReviewing": "İncelemelerim",
         "gitlabViewTodos": "Yapılacaklarım",
         "startWorkspaceFromMr": "MR {{number}} üzerinden çalışma alanı başlat",
         "startWorkspaceFromIssue": "Sorun {{number}} üzerinden çalışma alanı başlat",
