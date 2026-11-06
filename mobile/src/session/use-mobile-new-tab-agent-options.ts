@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { runtimeStatusProbeEpoch } from '../transport/runtime-status-probe'
 import type { ConnectionState } from '../transport/types'
 import { composeWorktreeHostIdentity } from '../../../src/shared/worktree/host-qualified-identity'
 import {
@@ -15,6 +16,19 @@ import {
 } from './mobile-new-tab-agent-loader'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
+
+// A login-shell refresh resets shared desktop state; later screens on the same connection only detect.
+const probedTargets = new WeakMap<RpcClient, { epoch: string; targets: Set<string> }>()
+
+function probedThisConnection(client: RpcClient): Set<string> {
+  const epoch = runtimeStatusProbeEpoch(client)
+  let entry = probedTargets.get(client)
+  if (entry?.epoch !== epoch) {
+    entry = { epoch, targets: new Set() }
+    probedTargets.set(client, entry)
+  }
+  return entry.targets
+}
 
 export function useMobileNewTabAgentOptions(args: {
   client: RpcClient | null
@@ -44,6 +58,7 @@ export function useMobileNewTabAgentOptions(args: {
     const observedTargets = observedTargetsRef.current
     const target = `${hostId}\u0000${workspaceKey}\u0000${hostRefusesOtherRuntime}`
     const observed = observedTargets.has(target)
+    const probed = probedThisConnection(client)
     setLoadState(cached ? 'loaded' : 'loading')
     setOptions(cached?.options ?? [])
 
@@ -53,12 +68,13 @@ export function useMobileNewTabAgentOptions(args: {
         worktreeId,
         hostRefusesOtherRuntime,
         settled: observed ? cached : null,
-        refresh: !observed && Boolean(cached?.detectedAgents.length)
+        refresh: !observed && !probed.has(target) && Boolean(cached?.detectedAgents.length)
       })
       if (stale) {
         return
       }
       observedTargets.add(target)
+      probed.add(target)
       setCachedNewTabAgentInventory(hostId, workspaceKey, inventory)
       setOptions(inventory.options)
       setLoadState('loaded')
