@@ -195,7 +195,11 @@ export function AgentCatalogRow({
         </div>
 
         <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
-          {permissionChoice?.source === 'agent' && (
+          {/* Why collapsed-only: the badge exists to surface an agent's own permission while the
+              details are hidden. Expanded, the Permissions control states the same choice a line
+              below — and states it unprefixed precisely when `source` is 'agent', so the badge is
+              the same words twice. */}
+          {permissionChoice?.source === 'agent' && !cmdOpen && (
             <div className="mr-3 flex h-7 items-center">
               <button
                 type="button"
