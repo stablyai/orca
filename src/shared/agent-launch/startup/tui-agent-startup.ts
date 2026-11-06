@@ -35,19 +35,7 @@ export type AgentStartupPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
-/**
- * Build the launch plan for one agent: the command a pane runs, the process to expect, and
- * whether the prompt rides argv or is typed after start.
- *
- * The prompt's route is the agent's `promptInjectionMode`. An `argv` agent that declares an
- * `argvPromptSeparator` gets it inserted before the prompt, so prompt words are never read back
- * as flags — unless the resolved command already ends option parsing, which
- * `launchCommandEndsOptions` detects so a second `--` is not appended.
- *
- * @param args.prompt Empty is only a launch when `allowEmptyPromptLaunch` is set.
- * @param args.cmdOverrides A user's custom launch command, which may carry its own arguments.
- * @returns The plan, or `null` when the agent has no buildable launch.
- */
+/** Build one agent's launch plan; an argv agent's `argvPromptSeparator` precedes the prompt unless the command already ends options. */
 export function buildAgentStartupPlan(args: {
   agent: TuiAgent
   prompt: string
@@ -215,17 +203,7 @@ export function buildAgentStartupPlan(args: {
   }
 }
 
-/**
- * Whether the command already ends option parsing for the agent, so the prompt needs no `--`.
- *
- * Only a TRAILING terminator counts. A `--` with tokens after it belongs to a wrapper rather
- * than the agent — `env -- traecli` ends `env`'s options and then names the command, so TRAE
- * still parses the prompt as its own argument and still needs its own `--`. A required
- * option's `--` value (`--system-prompt '--'`) is not a terminator at all; that is
- * `agentArgTerminatorIndex`'s job.
- *
- * Unsure means append, which is what this builder did for every agent before the guard existed.
- */
+/** Only a trailing real `--` ends the agent's options: `env -- traecli`'s is env's, `--system-prompt '--'`'s is a value; unsure appends. */
 function launchCommandEndsOptions(
   agent: TuiAgent,
   command: string,
