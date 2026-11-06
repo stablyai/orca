@@ -3066,6 +3066,8 @@
         "loadGitHubWorkFailed": "無法載入 GitHub 工作項目。",
         "gitlabViewIssues": "議題",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "所有人",
+        "gitlabInvolvementReviewing": "審閱中",
         "gitlabViewTodos": "我的待辦事項",
         "startWorkspaceFromMr": "從 MR {{number}} 啟動工作區",
         "startWorkspaceFromIssue": "從議題 {{number}} 啟動工作區",
