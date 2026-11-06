@@ -1,3 +1,4 @@
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -364,5 +365,42 @@ describe('OMP subagent settlement', () => {
     await lifecycle(harness, 'child-1', 'completed')
 
     expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+  })
+})
+
+describe('OMP auto-learn capture', () => {
+  it('keeps the pane done while the post-turn capture runs, but reports the next turn', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_start')
+    // omp announces the capture before the agent_end that triggered it.
+    await harness.callHook('autolearn_capture_start')
+    await harness.callHook('agent_end', {})
+    await harness.callHook('tool_execution_start', { toolName: 'learn', args: {} })
+    await harness.callHook('tool_call', { toolName: 'learn', input: {} })
+    await harness.callHook('tool_execution_end', { toolName: 'learn' })
+    // Delivery is a promise chain, so one event-loop turn sends every queued post. The latest-only
+    // queue sends the newest post last, so no capture tool post followed agent_end.
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+
+    // A user turn started before the capture settles is primary work again.
+    await harness.callHook('agent_start')
+    await harness.callHook('tool_execution_start', { toolName: 'read', args: {} })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_start')
+    await harness.callHook('tool_call', { toolName: 'read', input: {} })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_call')
+    await harness.callHook('tool_execution_end', { toolName: 'read' })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_end')
+
+    // Once the capture settles, tool activity after agent_end is reported again.
+    await harness.callHook('autolearn_capture_end', { outcome: 'completed' })
+    await harness.callHook('agent_end', {})
+    await harness.callHook('tool_execution_start', { toolName: 'read', args: {} })
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_start')
   })
 })
