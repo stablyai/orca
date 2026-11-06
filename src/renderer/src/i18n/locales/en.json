@@ -5280,6 +5280,13 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "BranchStatusSegment": {
+            "switchFailed": "Could not switch branch.",
+            "ariaLabel": "Switch branch, current branch {{branch}}",
+            "searchPlaceholder": "Search branches",
+            "empty": "No branches match your search.",
+            "branchesHeading": "Branches"
           }
         }
       },
