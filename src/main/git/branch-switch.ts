@@ -2,7 +2,6 @@ import { access } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { GitStatusResult } from '../../shared/git/status/git-status-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { resolveWorktreeHostPath } from '../../shared/git/metadata/git-metadata-path'
 import { isGitWorktreeMutationInFlight } from './command-runner/git-worktree-mutation-state'
 import { resolveGitDir } from './source-control/resolve-git-dir'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
@@ -123,17 +122,20 @@ async function firstHiddenSubmoduleEdit(
   worktreePath: string,
   options: GitRuntimeOptions
 ): Promise<string | null> {
-  // No submodules, nothing hidden: skip a second working-tree walk on every switch.
-  const hostPath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
-  if (!(await exists(path.join(hostPath, '.gitmodules')))) {
+  const execution = {
+    ...gitOptionsForWorktree(worktreePath, { ...options, admissionTier: 'interactive' }),
+    env: gitOptionalLocksDisabledEnv()
+  }
+  // No gitlink in the index, nothing hidden: skip a second working-tree walk on every switch.
+  // The index decides, not `.gitmodules` on disk (sparse checkout can omit it while git still
+  // reads submodule config from the index); a failed or overflowing read probes anyway.
+  const index = await gitExecFileAsync(['ls-files', '--stage', '-z'], execution).catch(() => null)
+  if (index !== null && !index.stdout.split('\0').some((entry) => entry.startsWith('160000 '))) {
     return null
   }
   const { stdout } = await gitExecFileAsync(
     ['status', '--porcelain=v2', '--untracked-files=no', '--ignore-submodules=none'],
-    {
-      ...gitOptionsForWorktree(worktreePath, { ...options, admissionTier: 'interactive' }),
-      env: gitOptionalLocksDisabledEnv()
-    }
+    execution
   )
   for (const line of stdout.split('\n')) {
     // `1 XY S<c><m><u> …`: m means tracked edits inside (untracked ones are not listed here and a

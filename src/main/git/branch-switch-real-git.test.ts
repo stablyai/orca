@@ -101,6 +101,15 @@ describe('switchBranchGuarded', () => {
       )
       expect(await currentBranch()).toBe('main')
 
+      // Sparse checkout can omit `.gitmodules` while git still hides the submodule.
+      await git('config', 'submodule.lib.ignore', 'all')
+      await git('update-index', '--skip-worktree', '.gitmodules')
+      await rm(join(directory, '.gitmodules'))
+      await expect(switchBranchGuarded(directory, 'feature', {}, deps())).rejects.toThrow(
+        'Commit, stash or clean the changes inside submodule lib before switching branches.'
+      )
+      expect(await currentBranch()).toBe('main')
+
       // A submodule merely at another commit has nothing a switch could lose.
       const submodule = join(directory, 'lib')
       await runProcess({ program: 'git', args: ['checkout', '--', 'lib.txt'], cwd: submodule })
