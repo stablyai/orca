@@ -289,6 +289,15 @@ export class MetadataLineageOperations {
     return this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey
   }
 
+  /** A folder workspace parent replaces the child's other records at once; undefined if a twin owns the bucket. */
+  setWorkspaceParent(target: HostWorktreeTarget, lineage: WorkspaceLineage) {
+    if (!ownsRawIdBucket(this[metadataLineageOperationsContext].runtime.state, target)) {
+      return undefined
+    }
+    delete this[metadataLineageOperationsContext].runtime.state.worktreeLineageById[target.id]
+    return this.setWorkspaceLineage(lineage)
+  }
+
   setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
     const state = this[metadataLineageOperationsContext].runtime.state
     state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage

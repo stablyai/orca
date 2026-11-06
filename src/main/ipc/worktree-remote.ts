@@ -338,19 +338,36 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  const workspaceLineage = store.setWorkspaceLineage({
+  const record = {
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
     parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
-    origin: 'manual',
+    parentInstanceId:
+      parentScope.type === 'folder'
+        ? parentScope.folderWorkspaceId
+        : (parentWorktreeMeta?.instanceId ?? null),
+    origin: 'manual' as const,
     capture: {
-      source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
-      confidence: 'explicit'
+      source:
+        parentScope.type === 'worktree'
+          ? ('manual-action' as const)
+          : ('active-workspace' as const),
+      confidence: 'explicit' as const
     },
     createdAt
-  })
-  return { lineage, workspaceLineage }
+  }
+  if (parentScope.type === 'folder') {
+    // The checkout exists by now, so a same-id twin owning the bucket only warns.
+    const target = worktreeRowTarget(store, worktree)
+    const workspaceLineage = (target && store.setWorkspaceParent(target, record)) ?? null
+    if (!workspaceLineage) {
+      console.warn(
+        `[worktree-create] ${worktree.id}'s lineage is held by a workspace at the same path on another host`
+      )
+    }
+    return { lineage, workspaceLineage }
+  }
+  return { lineage, workspaceLineage: store.setWorkspaceLineage(record) }
 }
 
 /** Same refusal as the RPC create, before any checkout exists: a well-formed ref from another store. */

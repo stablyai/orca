@@ -151,11 +151,14 @@ export function recordCreatedWorktreeLineage(
     })
   }
   if (childInstanceId && store?.setWorkspaceLineage) {
-    workspaceLineage = store.setWorkspaceLineage({
+    const record: WorkspaceLineage = {
       childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
       childInstanceId,
       parentWorkspaceKey: resolution.parent.workspaceKey,
-      parentInstanceId,
+      parentInstanceId:
+        resolution.parent.type === 'folder'
+          ? resolution.parent.folderWorkspace.id
+          : parentInstanceId,
       origin: resolution.origin,
       capture: resolution.capture,
       ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
@@ -167,7 +170,20 @@ export function recordCreatedWorktreeLineage(
         ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
         : {}),
       createdAt
-    })
+    }
+    if (resolution.parent.type === 'folder') {
+      // Created already: a same-id twin owning the bucket leaves the folder link unsaved, with a warning.
+      workspaceLineage = (target && store.setWorkspaceParent?.(target, record)) ?? null
+      if (!workspaceLineage) {
+        warnings.push({
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          message:
+            'Worktree created, but its lineage is held by a workspace at the same path on another host.'
+        })
+      }
+    } else {
+      workspaceLineage = store.setWorkspaceLineage(record)
+    }
   }
   return { lineage, workspaceLineage, warnings }
 }

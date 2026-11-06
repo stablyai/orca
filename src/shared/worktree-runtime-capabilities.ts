@@ -67,6 +67,13 @@ export function assertCrossStoreLineageSupported(
   }
 }
 
+// Hosts that accept a multi-repo folder workspace as a worktree's parent in `worktree.set`.
+export const WORKTREE_FOLDER_PARENT_RUNTIME_CAPABILITY = 'worktree.lineage.folderParent' as const
+
+export function supportsFolderParent(capabilities: readonly string[] | undefined): boolean {
+  return capabilities?.includes(WORKTREE_FOLDER_PARENT_RUNTIME_CAPABILITY) === true
+}
+
 export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
@@ -87,5 +94,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY,
-  WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
+  WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY,
+  WORKTREE_FOLDER_PARENT_RUNTIME_CAPABILITY
 ] as const

@@ -17,7 +17,14 @@ import { cn } from '@/lib/utils'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from '../../workspace-card/activity/use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
-import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import {
+  getEligibleFolderParents,
+  getEligibleWorktreeParents,
+  storeAcceptsFolderParentIn
+} from './worktree-parent-candidates'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import { selectWorktreeParent, showCrossStoreParentError } from './worktree-parent-selection'
@@ -122,6 +129,9 @@ export function WorktreeParentPickerPopover({
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
   const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
+  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const suppressInitialOutsideCloseRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -139,16 +149,37 @@ export function WorktreeParentPickerPopover({
   const candidates = useMemo(
     () =>
       child
-        ? getEligibleWorktreeParents({
-            child,
-            worktrees,
-            lineageById,
-            worktreeMap,
-            repoMap,
-            parentIdentities
-          })
+        ? [
+            ...getEligibleWorktreeParents({
+              child,
+              worktrees,
+              lineageById,
+              worktreeMap,
+              repoMap,
+              parentIdentities
+            }),
+            ...getEligibleFolderParents({
+              child,
+              folderRows: (folderWorkspaces ?? []).map((folder) =>
+                getFolderWorkspaceWorktree(folder)
+              ),
+              currentParentWorkspaceKey:
+                workspaceLineageByChildKey[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey,
+              storeAcceptsFolderParent: storeAcceptsFolderParentIn(runtimeStatusByEnvironmentId)
+            })
+          ]
         : [],
-    [child, lineageById, parentIdentities, repoMap, worktreeMap, worktrees]
+    [
+      child,
+      folderWorkspaces,
+      lineageById,
+      parentIdentities,
+      repoMap,
+      runtimeStatusByEnvironmentId,
+      workspaceLineageByChildKey,
+      worktreeMap,
+      worktrees
+    ]
   )
 
   useLayoutEffect(() => {

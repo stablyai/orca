@@ -258,13 +258,21 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
-        worktree: Worktree & { lineage?: WorktreeLineage | null }
+        worktree: Worktree & {
+          lineage?: WorktreeLineage | null
+          workspaceLineage?: WorkspaceLineage | null
+        }
       }>('worktree.set', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         parentWorktree: parentWorktreeId,
         noParent
       })
-      return result.worktree.lineage ?? null
+      return {
+        lineage: result.worktree.lineage ?? null,
+        ...(result.worktree.workspaceLineage !== undefined
+          ? { workspaceLineage: result.worktree.workspaceLineage }
+          : {})
+      }
     },
     persistSortOrder: async ({ orderedIds, hostIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds, hostIds })
