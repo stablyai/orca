@@ -81,7 +81,11 @@ export type IGitProvider = {
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
   /** `skippedPaths`: files git could not replace (held open on Windows) though the switch landed. */
-  checkoutBranch(worktreePath: string, branch: string): Promise<{ skippedPaths: string[] }>
+  checkoutBranch(
+    worktreePath: string,
+    branch: string,
+    detached?: boolean
+  ): Promise<{ skippedPaths: string[] }>
   listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
   getBranchCompare(
     worktreePath: string,

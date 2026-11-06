@@ -16,15 +16,19 @@ export function assertValidBranchName(branch: string): void {
 export async function checkoutBranch(
   worktreePath: string,
   branch: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions & { detached?: boolean } = {}
 ): Promise<{ skippedPaths: string[] }> {
   assertValidBranchName(branch)
   const { stderr } = await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['checkout', branch, '--'], {
-      ...gitOptionsForWorktree(worktreePath, options),
-      // A locked file must fail the checkout, not open a prompt while the switch lock is held.
-      ...gitEnvWithoutYesNoPrompt()
-    })
+    // Peel commit targets so a hash-named branch cannot win checkout's branch lookup.
+    gitExecFileAsync(
+      ['checkout', ...(options.detached ? ['--detach', `${branch}^{commit}`] : [branch]), '--'],
+      {
+        ...gitOptionsForWorktree(worktreePath, options),
+        // A locked file must fail the checkout, not open a prompt while the switch lock is held.
+        ...gitEnvWithoutYesNoPrompt()
+      }
+    )
   )
   return { skippedPaths: parseCheckoutSkippedPaths(stderr) }
 }

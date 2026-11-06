@@ -256,6 +256,7 @@ export const GitRebaseFromBase = WorktreeSelector.extend({
 })
 
 export const GitCheckout = WorktreeSelector.extend({
+  detached: z.boolean().optional(),
   branch: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -266,7 +267,10 @@ export const GitCheckout = WorktreeSelector.extend({
         // Why: never let a branch arg be parsed as a git flag (arg injection).
         .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
     )
-})
+}).refine(
+  (params) => !params.detached || FullGitObjectId.safeParse(params.branch).success,
+  'Expected a full git object id for detached checkout'
+)
 
 export const GitRemoteFileUrl = WorktreeSelector.extend({
   relativePath: z

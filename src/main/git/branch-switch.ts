@@ -165,7 +165,8 @@ async function readRefusal(
   worktreePath: string,
   branch: string,
   options: GitRuntimeOptions,
-  deps: BranchSwitchDeps
+  deps: BranchSwitchDeps,
+  commitTarget: boolean
 ): Promise<{ refusal: string | null; previousBranch: string | null; alreadyOnTarget: boolean }> {
   const status = await deps.getStatus()
   if (status.readError !== undefined) {
@@ -176,8 +177,10 @@ async function readRefusal(
     }
   }
   const current = status.branch?.replace(/^refs\/heads\//, '')
-  const commitTarget = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(branch)
-  if (current === branch || (current === undefined && commitTarget && status.head === branch)) {
+  if (
+    (!commitTarget && current === branch) ||
+    (current === undefined && commitTarget && status.head === branch)
+  ) {
     return { refusal: null, previousBranch: null, alreadyOnTarget: true }
   }
   const refuse = (refusal: string | null) => ({
@@ -228,16 +231,22 @@ async function readRefusal(
 /** Switch a branch or commit in place, refusing when the checkout is not safe to switch. */
 export async function switchBranchGuarded(
   worktreePath: string,
-  branch: string,
+  target: string | { commitId: string },
   options: GitRuntimeOptions,
   deps: BranchSwitchDeps
 ): Promise<BranchSwitchResult> {
+  const commitTarget = typeof target !== 'string'
+  const branch = typeof target === 'string' ? target : target.commitId.toLowerCase()
+  if (commitTarget && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(branch)) {
+    throw new Error('Expected a full git object id')
+  }
   return withCheckoutLock(worktreePath, async () => {
     const { refusal, previousBranch, alreadyOnTarget } = await readRefusal(
       worktreePath,
       branch,
       options,
-      deps
+      deps,
+      commitTarget
     )
     if (refusal !== null) {
       throw new BranchSwitchRefusedError(refusal)
@@ -251,7 +260,7 @@ export async function switchBranchGuarded(
     } catch (error) {
       // Git can exit non-zero after HEAD already moved (a file it could not replace, a failing
       // post-checkout hook); that switch landed and must be recorded.
-      const landedTarget = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(branch)
+      const landedTarget = commitTarget
         ? (
             await gitExecFileAsync(
               ['rev-parse', 'HEAD'],

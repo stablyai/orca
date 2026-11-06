@@ -20,7 +20,6 @@ import {
   GitRebaseFromBase,
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
-  GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
 } from '../../../../shared/rpc-contract/git-params'
@@ -33,13 +32,6 @@ export const GIT_METHODS = [
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
-  }),
-  defineMethod({
-    name: 'git.submoduleStatus',
-    permission: 'workspace',
-    params: GitSubmoduleStatus,
-    handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
     name: 'git.refs',
@@ -91,7 +83,7 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: GitCheckout,
     handler: async (params, { runtime }) =>
-      runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
+      runtime.checkoutRuntimeGitBranch(params.worktree, params.branch, params.detached)
   }),
   defineMethod({
     name: 'git.localBranches',

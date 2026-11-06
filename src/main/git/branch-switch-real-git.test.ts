@@ -21,7 +21,10 @@ async function git(...args: string[]): Promise<string> {
 function deps(agentBlocker: string | null = null, target = 'feature'): BranchSwitchDeps {
   return {
     getStatus: () => getStatus(directory, { includeLineStats: false }),
-    checkout: () => checkoutBranch(directory, target),
+    checkout: () =>
+      checkoutBranch(directory, target, {
+        detached: /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(target)
+      }),
     getAgentBlocker: async () => agentBlocker
   }
 }
@@ -65,11 +68,28 @@ describe('switchBranchGuarded', () => {
     expect(await git('log', '-1', '--format=%s')).toBe('detached work')
   })
 
+  it('detaches at the commit even when a branch has the same full object ID as its name', async () => {
+    const oid = await git('rev-parse', 'HEAD')
+    await git('commit', '--allow-empty', '-qm', 'later')
+    await git('branch', oid)
+    await switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
+    expect(await git('log', '-1', '--format=%s')).toBe('base')
+    expect(await git('branch', '--show-current')).toBe('')
+    await switchBranchGuarded(
+      directory,
+      oid,
+      {},
+      { ...deps(), checkout: () => checkoutBranch(directory, oid) }
+    )
+    expect(await currentBranch()).toBe(oid)
+    expect(await git('log', '-1', '--format=%s')).toBe('later')
+  })
+
   it('moves between distinct reachable detached commits', async () => {
     const target = await git('rev-parse', 'HEAD')
     await git('commit', '--allow-empty', '-qm', 'later')
     await git('checkout', '--detach', '-q')
-    await switchBranchGuarded(directory, target, {}, deps(null, target))
+    await switchBranchGuarded(directory, { commitId: target }, {}, deps(null, target))
     expect(await git('log', '-1', '--format=%s')).toBe('base')
     expect(await git('branch', '--show-current')).toBe('')
   })
@@ -82,7 +102,9 @@ describe('switchBranchGuarded', () => {
     await mkdir(hooks, { recursive: true })
     await writeFile(join(hooks, 'post-checkout'), '#!/bin/sh\necho should-not-run >&2\nexit 1\n')
     await chmod(join(hooks, 'post-checkout'), 0o755)
-    await expect(switchBranchGuarded(directory, oid, {}, deps(null, oid))).resolves.toEqual({
+    await expect(
+      switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
+    ).resolves.toEqual({
       branch: oid,
       previousBranch: null
     })
@@ -96,7 +118,9 @@ describe('switchBranchGuarded', () => {
     await mkdir(hooks, { recursive: true })
     await writeFile(join(hooks, 'post-checkout'), '#!/bin/sh\necho hook-failed >&2\nexit 1\n')
     await chmod(join(hooks, 'post-checkout'), 0o755)
-    await expect(switchBranchGuarded(directory, oid, {}, deps(null, oid))).rejects.toMatchObject({
+    await expect(
+      switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
+    ).rejects.toMatchObject({
       name: 'BranchSwitchLandedWithWarningError',
       message: `Switched to ${oid}, but git reported an error: hook-failed`
     })
