@@ -5,8 +5,10 @@ import type { ScheduleTimer } from './timer-scheduler'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
-// A reachable LAN authenticates well inside this; a longer bound only holds the probe mutex while away.
-const DIRECT_PROBE_TIMEOUT_MS = 4_000
+// A reachable LAN authenticates well inside 4 s; a longer bound only holds the probe mutex while away.
+// Tailscale can cross a cold DERP route from anywhere, so it keeps the socket's own 12 s bound.
+const LAN_PROBE_TIMEOUT_MS = 4_000
+const TAILSCALE_PROBE_TIMEOUT_MS = 12_000
 // After a network change the relay redial holds the mutex for about a second.
 const ARRIVAL_BLOCKED_RETRY_MS = 500
 
@@ -51,10 +53,13 @@ export class DirectReturnProbe {
 
   // A dial begun on the previous network can only time out, so drop it uncounted and probe now.
   arrive(): void {
-    if (this.stopped || !this.hooks.canSchedule()) {
+    if (
+      this.stopped ||
+      !this.hooks.canSchedule() ||
+      !this.hooks.hysteresis.recordNetworkArrival(this.deps.now())
+    ) {
       return
     }
-    this.hooks.hysteresis.recordNetworkArrival()
     this.activeProbe?.abort()
     this.clear()
     this.schedule(0)
@@ -88,7 +93,7 @@ export class DirectReturnProbe {
     try {
       successful = await openAuthenticatedDirectEndpoint(
         this.deps.openDirect,
-        DIRECT_PROBE_TIMEOUT_MS,
+        this.deps.directPath === 'lan' ? LAN_PROBE_TIMEOUT_MS : TAILSCALE_PROBE_TIMEOUT_MS,
         controller.signal
       )
       if (this.stopped || controller.signal.aborted) {

@@ -13,6 +13,7 @@ export class MobileEndpointHysteresis {
   private cooldownUntil = 0
   private lastMigrationAt: number
   private arrived = false
+  private lastArrivalUpgradeAt = -Infinity
 
   constructor(startedAt: number) {
     this.lastMigrationAt = startedAt
@@ -31,6 +32,9 @@ export class MobileEndpointHysteresis {
         this.consecutiveDirectSuccesses >= ARRIVAL_SUCCESSES_REQUIRED &&
         observedMs >= ARRIVAL_OBSERVATION_MS
       this.arrived = !ready
+      if (ready) {
+        this.lastArrivalUpgradeAt = now
+      }
       return ready
     }
     return (
@@ -51,11 +55,15 @@ export class MobileEndpointHysteresis {
     this.resetProgress()
   }
 
-  // Lasts until the next direct failure or upgrade.
-  recordNetworkArrival(): void {
+  // Lasts until the next direct failure or upgrade. One per dwell, so Wi-Fi at the edge of range can't flap the path.
+  recordNetworkArrival(now: number): boolean {
+    if (now - this.lastArrivalUpgradeAt < MINIMUM_DWELL_MS) {
+      return false
+    }
     this.arrived = true
     this.cooldownUntil = 0
     this.resetProgress()
+    return true
   }
 
   isArrival(): boolean {

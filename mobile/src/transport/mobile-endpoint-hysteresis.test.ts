@@ -43,7 +43,7 @@ describe('mobile endpoint hysteresis', () => {
     policy.recordDirectFailure(10_000)
     expect(policy.canProbe(20_000)).toBe(false)
 
-    policy.recordNetworkArrival()
+    policy.recordNetworkArrival(20_000)
     expect(policy.canProbe(20_000)).toBe(true)
     // The network change drops the relay socket, and its redial is a migration too.
     policy.recordMigration(20_000)
@@ -52,20 +52,22 @@ describe('mobile endpoint hysteresis', () => {
     expect(policy.recordDirectSuccess(23_000)).toBe(true)
   })
 
-  it('needs three timer successes again once an arrival fails or upgrades', () => {
+  it('needs three timer successes again after an arrival fails or upgrades, and refuses another arrival within the dwell', () => {
     const failed = new MobileEndpointHysteresis(0)
-    failed.recordNetworkArrival()
+    failed.recordNetworkArrival(0)
     failed.recordDirectFailure(0)
     expect(failed.recordDirectSuccess(60_000)).toBe(false)
     expect(failed.recordDirectSuccess(63_000)).toBe(false)
     expect(failed.recordDirectSuccess(90_000)).toBe(true)
 
     const upgraded = new MobileEndpointHysteresis(0)
-    upgraded.recordNetworkArrival()
+    upgraded.recordNetworkArrival(0)
     upgraded.recordDirectSuccess(0)
     expect(upgraded.recordDirectSuccess(3_000)).toBe(true)
     upgraded.recordMigration(3_000)
     upgraded.recordMigration(10_000)
+    // Wi-Fi at the edge of range rejoins within the dwell; that arrival is refused.
+    expect(upgraded.recordNetworkArrival(10_000)).toBe(false)
     expect(upgraded.recordDirectSuccess(10_000)).toBe(false)
     expect(upgraded.recordDirectSuccess(13_000)).toBe(false)
     expect(upgraded.recordDirectSuccess(40_000)).toBe(false)
