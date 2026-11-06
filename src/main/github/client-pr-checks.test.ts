@@ -196,17 +196,14 @@ function graphQLCheckSuite(
   }
 }
 
-function expectGraphQLRollupCall(callIndex = 1, noCache = false): void {
+function expectGraphQLRollupCall(callIndex = 1): void {
   const args = ghExecFileAsyncMock.mock.calls[callIndex - 1]?.[0] as string[]
   expect(args.slice(0, 2)).toEqual(['api', 'graphql'])
   expect(args).toEqual(
     expect.arrayContaining(['-f', 'owner=acme', '-f', 'repo=widgets', '-F', 'pr=42'])
   )
-  if (noCache) {
-    expect(args).not.toContain('--cache')
-  } else {
-    expect(args).toEqual(expect.arrayContaining(['--cache', '60s']))
-  }
+  // gh's disk cache ignores the PR head, so a push would be answered with the previous head's checks.
+  expect(args).not.toContain('--cache')
   const queryArg = args.find((arg) => arg.startsWith('query='))
   expect(queryArg).toContain('statusCheckRollup')
   expect(queryArg).toContain('checkSuites')
@@ -631,7 +628,7 @@ describe('getPRChecks', () => {
     const result = await rerunPRChecks('/repo-root', 42, { failedOnly: true })
 
     expect(result).toEqual({ ok: true, count: 1 })
-    expectGraphQLRollupCall(1, true)
+    expectGraphQLRollupCall(1)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['api', '-X', 'POST', 'repos/acme/widgets/actions/runs/77/rerun-failed-jobs'],
@@ -806,11 +803,6 @@ it('carries the actual matching GraphQL commit identity rather than the requeste
     })
   )
   const checks = await getPRChecks('/repo-root', 42, 'a'.repeat(40))
-  // gh's cache key follows the expected head, so a push never serves the previous head's reply.
-  const rollupQuery = (ghExecFileAsyncMock.mock.calls[0]?.[0] as string[]).find((arg) =>
-    arg.startsWith('query=')
-  )
-  expect(rollupQuery).toContain(`# head ${'a'.repeat(40)}`)
   expect(JSON.parse(JSON.stringify(checks))).toEqual([
     {
       name: 'Build',

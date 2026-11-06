@@ -183,14 +183,12 @@ async function readPRChecks(
     if (canUseGraphQLRollup) {
       await acquire()
       try {
-        // Explicit refresh bypasses the polling cache.
-        const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
-        const cacheHead = normalizePRCheckHeadSha(headSha)
+        // No gh disk cache: its key ignores the PR head, so it served the previous head's checks after a push, and it never evicts.
+        // Orca's own head-keyed checks cache and read coalescing bound the request volume.
         const { stdout } = await ghExecFileAsync(
           [
             'api',
             'graphql',
-            ...cacheArgs,
             '-f',
             `owner=${ownerRepo.owner}`,
             '-f',
@@ -198,8 +196,7 @@ async function readPRChecks(
             '-F',
             `pr=${prNumber}`,
             '-f',
-            // The comment is ignored by the server but part of gh's cache key: after a push, a reply cached for the previous head is never served.
-            `query=${PR_CHECKS_ROLLUP_QUERY}${cacheHead ? `# head ${cacheHead}\n` : ''}`
+            `query=${PR_CHECKS_ROLLUP_QUERY}`
           ],
           ghOptions
         )
