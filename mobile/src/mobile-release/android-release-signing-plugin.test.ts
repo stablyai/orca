@@ -2,9 +2,10 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { patchAppBuildGradle } = require('../../plugins/android-release-signing.js') as {
+const plugin: {
   patchAppBuildGradle: (contents: string) => string
-}
+} = require('../../plugins/android-release-signing.js')
+const { patchAppBuildGradle } = plugin
 
 // The signing section of Expo's bare template app/build.gradle.
 const TEMPLATE = `android {
