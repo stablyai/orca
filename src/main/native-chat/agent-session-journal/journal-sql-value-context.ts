@@ -187,7 +187,7 @@ export class JournalSqlValueContext {
   }
 
   private encode(value: unknown, location: JournalSqlValueLocation) {
-    return encodeJournalSqlValue(value, location, (object) => this.objects.locations.get(object))
+    return encodeJournalSqlValue(value, location, this.objects.locations)
   }
 
   private touch(location: JournalSqlValueLocation, reinsert = false, deleted = false): void {

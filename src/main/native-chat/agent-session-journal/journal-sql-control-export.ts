@@ -107,11 +107,11 @@ export function* journalControlStateEntries(
 }
 
 function* fields(
-  memory: object,
+  memory: unknown,
   seen: Set<object>,
   path: string[]
 ): Generator<JournalControlStateEntry> {
-  if (seen.has(memory)) {
+  if (typeof memory !== 'object' || memory === null || seen.has(memory)) {
     return
   }
   seen.add(memory)
@@ -132,7 +132,7 @@ function* fields(
   }
 }
 
-function copyContainer(memory: object, sql: unknown, path: string): void {
+function copyContainer(memory: unknown, sql: unknown, path: string): void {
   if (!isImporter(sql)) {
     throw new Error(`journal control export found no SQL storage at ${path}`)
   }

@@ -20,8 +20,9 @@ export function journalSqlLocationKey(value: JournalSqlValueLocation): string {
 export function encodeJournalSqlValue(
   value: unknown,
   owner: JournalSqlValueLocation,
-  locate: (value: object) => JournalSqlValueLocation | undefined,
-  placed?: (value: object, path: string[]) => void
+  locations: WeakMap<object, JournalSqlValueLocation>,
+  /** A bulk import gives each object the first place it was saved, for later captures. */
+  place = false
 ): EncodedJournalSqlValue {
   const refs: JournalSqlValueReference[] = []
   if (value === undefined) {
@@ -34,7 +35,7 @@ export function encodeJournalSqlValue(
       return child
     }
     const path = key === '' && !paths.has(this) ? [] : [...(paths.get(this) ?? []), key]
-    const source = locate(child)
+    const source = locations.get(child)
     if (
       source &&
       source.path.length === 0 &&
@@ -44,7 +45,9 @@ export function encodeJournalSqlValue(
       refs.push({ path, source })
       return null
     }
-    placed?.(child, path)
+    if (place && !source) {
+      locations.set(child, { ...owner, path })
+    }
     paths.set(child, path)
     return child
   })

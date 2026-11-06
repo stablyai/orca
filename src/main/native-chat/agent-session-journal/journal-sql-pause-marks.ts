@@ -148,8 +148,8 @@ export class JournalSqlPauseMarks {
       return previous as T
     }
     const proxy = new Proxy(value, {
-      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy getter preserves the lazy clear-members accessor and native array methods.
       get: (target, key, receiver) => {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy getter preserves the lazy clear-members accessor and native array methods.
         const child = Reflect.get(target, key, receiver)
         return typeof child === 'object' && child !== null ? this.wrap(child) : child
       },

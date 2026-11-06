@@ -57,16 +57,7 @@ export class JournalSqlValueBulkLoad {
       this.saved!.items.storeSaved(location, item, ordinal, source)
       return
     }
-    const encoded = encodeJournalSqlValue(
-      value,
-      location,
-      (object) => this.locations.get(object),
-      (object, path) => {
-        if (!this.locations.has(object)) {
-          this.locations.set(object, { ...location, path })
-        }
-      }
-    )
+    const encoded = encodeJournalSqlValue(value, location, this.locations, true)
     this.tables.for(collection).store(location, encoded, value, true, ordinal)
   }
 

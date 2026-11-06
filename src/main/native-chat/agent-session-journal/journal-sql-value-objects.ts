@@ -81,7 +81,10 @@ export class JournalSqlValueObjects {
     const previous = this.wrapped.get(value)
     if (previous) {
       if (node && !source) {
-        this.own(value, previous, node, path)
+        const location = { ...node.location, path }
+        this.locations.set(value, location)
+        this.locations.set(previous, location)
+        this.owners.set(previous, { node, path })
       }
       return previous
     }
@@ -97,9 +100,9 @@ export class JournalSqlValueObjects {
       }
     }
     const proxy = new Proxy(value, {
-      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy trap must preserve accessors and array methods with their receiver.
       get: (target, key, receiver) => {
         const owner = this.owners.get(proxy)
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy trap must preserve accessors and array methods with their receiver.
         return this.wrap(Reflect.get(target, key, receiver), owner?.node, [
           ...(owner?.path ?? []),
           String(key)
@@ -129,18 +132,14 @@ export class JournalSqlValueObjects {
       }
     })
     if (node) {
-      this.own(value, proxy, node, path)
+      const location = { ...node.location, path }
+      this.locations.set(value, location)
+      this.locations.set(proxy, location)
+      this.owners.set(proxy, { node, path })
     }
     this.originals.set(proxy, value)
     this.wrapped.set(value, proxy)
     this.wrapped.set(proxy, proxy)
     return proxy
-  }
-
-  private own(value: object, proxy: object, node: TrackedValue, path: string[]): void {
-    const location = { ...node.location, path }
-    this.locations.set(value, location)
-    this.locations.set(proxy, location)
-    this.owners.set(proxy, { node, path })
   }
 }

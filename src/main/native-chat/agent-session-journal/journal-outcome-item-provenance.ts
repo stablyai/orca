@@ -41,8 +41,8 @@ export class JournalOutcomeItemProvenance {
         return previous as T
       }
       const proxy = new Proxy(value, {
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- The proxy must preserve normal getters and array operations.
         get(target, key, receiver) {
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- The proxy must preserve normal getters and array operations.
           const child: unknown = Reflect.get(target, key, receiver)
           const descriptor = Reflect.getOwnPropertyDescriptor(target, key)
           if (descriptor && !descriptor.configurable && descriptor.writable === false) {

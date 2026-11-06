@@ -201,14 +201,15 @@ export function countLegacyFailureDisplay() {
   ) {
     watchIndexMap(memoryJournalMap(this['facts'].overlays))
     watchIndexMap(memoryJournalMap(state.queue.cards))
-    const before = this['index']
+    // A rebuild is the first ensure, which indexes every card afresh.
+    const rebuilding = !this['facts'].initialized
     ensuring = true
     try {
       ensure.call(this, state, floor)
     } finally {
       ensuring = false
     }
-    if (this['index'] !== before) {
+    if (rebuilding && this['facts'].initialized) {
       counts[phase].indexRebuilds++
     }
   })
