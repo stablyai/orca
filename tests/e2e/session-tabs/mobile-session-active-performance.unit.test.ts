@@ -250,6 +250,7 @@ describe('active-tab selection performance contract', () => {
     async (legacy) => {
       vi.useFakeTimers()
       const normalizations = vi.spyOn(selection, 'normalizeMobileSessionTabSelection')
+      const conversions = vi.spyOn(selection, 'restoreLegacyMobileSessionNavigation')
       const measurements: number[] = []
       const identityReads: number[] = []
       for (const count of [50, 500]) {
@@ -260,9 +261,14 @@ describe('active-tab selection performance contract', () => {
           agent: 'codex',
           activate: false
         })
+        if (legacy) {
+          await runtime.listMobileSessionTabs(`id:${WT}`)
+        }
+        const retained = legacy ? (runtime.mobileSessionTabsByWorktree.get(WT)?.tabs ?? []) : []
         const next = frame(count)
         if (legacy) {
           next.tabGroups = undefined
+          next.tabs.push(...retained.map((tab) => ({ ...tab, isActive: false })))
         }
         const priorReads = countedIdentities(next.tabs)
         runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [next] })
@@ -272,10 +278,48 @@ describe('active-tab selection performance contract', () => {
         const changed = frame(count, 2)
         if (legacy) {
           changed.tabGroups = undefined
+          changed.tabs.push(...retained.map((tab) => ({ ...tab, isActive: false })))
         }
         const currentReads = countedIdentities(changed.tabs)
         priorReads.reset()
         runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [changed] })
+        if (legacy) {
+          const accepted = runtime.mobileSessionTabsByWorktree.get(WT)
+          expect(accepted?.tabGroups).toBeUndefined()
+          // Measure this admitted frame's supported read, including its conversion and delivery.
+          normalizations.mockClear()
+          conversions.mockClear()
+          priorReads.reset()
+          currentReads.reset()
+          const seen: unknown[] = []
+          const off = runtime.onMobileSessionTabsChanged((snapshot) => seen.push(snapshot))
+          expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(
+            `t-${count - 1}::leaf`
+          )
+          await vi.runAllTimersAsync()
+          expect(conversions.mock.calls).toHaveLength(1)
+          expect(conversions.mock.calls[0]?.[1]).toBe(accepted)
+          // One conversion plus public list/delivery projections; internal normalization is lexical.
+          const population = [...normalizations.mock.calls, ...conversions.mock.calls].reduce(
+            (total, [snapshot]) => total + snapshot.tabs.length,
+            0
+          )
+          expect(population).toBeLessThanOrEqual(3 * (count + 2))
+          measurements.push(population)
+          identityReads.push(priorReads.reads() + currentReads.reads())
+          const stored = runtime.mobileSessionTabsByWorktree.get(WT)
+          conversions.mockClear()
+          seen.length = 0
+          expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(
+            `t-${count - 1}::leaf`
+          )
+          await vi.runAllTimersAsync()
+          expect(conversions.mock.calls).toHaveLength(0)
+          expect(runtime.mobileSessionTabsByWorktree.get(WT)).toBe(stored)
+          expect(seen).toEqual([])
+          off()
+          continue
+        }
         await vi.runAllTimersAsync()
         expect(normalizations.mock.calls.length).toBeLessThanOrEqual(3)
         expect(normalizations.mock.calls.length).toBeGreaterThanOrEqual(2)
