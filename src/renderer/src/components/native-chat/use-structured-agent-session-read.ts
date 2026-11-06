@@ -24,6 +24,7 @@ function useReadOwnerSnapshot(
   return { owner, snapshot }
 }
 
+/** Visibility activates the stream; previews must separately disable viewed acknowledgements and workspace-link observation. */
 export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget

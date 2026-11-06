@@ -35,6 +35,7 @@ type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
   previewClassName?: string
 }
 
+/** Preview the card's validated session and preserve its host/tab identity when handing off to the workspace. */
 function AgentTerminalFrame({
   card,
   title,

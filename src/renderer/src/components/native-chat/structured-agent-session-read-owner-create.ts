@@ -37,6 +37,7 @@ export function countsTowardInitialHistory(item: AgentJournalRenderItem): boolea
   return item.body.kind !== 'status' || !item.body.providerFrame
 }
 
+/** Share history and transport across activations; workspace-link effects must use readers that are still active. */
 export function createReadOwner(
   key: string,
   sessionId: string,

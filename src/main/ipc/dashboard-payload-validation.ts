@@ -216,6 +216,7 @@ function imageIconCacheKey(icon: unknown): string | null {
     : null
 }
 
+/** Reject the whole IPC card when a supplied preview route is malformed; missing optional fields remain backward compatible. */
 function isDashboardCard(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false

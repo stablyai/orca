@@ -7,6 +7,7 @@ import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
+/** Preserve reading position when history is prepended; follow new messages only while the reader stays near the bottom. */
 export function AgentChatTranscript({
   messages,
   agentName,
