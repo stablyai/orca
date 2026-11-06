@@ -576,19 +576,19 @@ describe('terminal output credit', () => {
     expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 7 }]])
   })
 
-  it('retries an ack the bridge refused before sending it', async () => {
+  it('retries an ack the bridge refused before sending it on the next tick, not at once', async () => {
     vi.useFakeTimers()
     const { harness, parsed } = creditedTerminal({ reportsParsing: true })
     harness.fields.client.sendRequest.mockRejectedValueOnce(new Error('bridge request cap'))
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.scrollback(0, PHONE.cols, PHONE.rows)
-    harness.event(0, { type: 'data', chunk: 'hello' })
-    act(() => parsed.forEach((onParsed) => onParsed()))
-    await act(async () => vi.advanceTimersByTime(250))
+    harness.event(0, { type: 'data', chunk: 'x'.repeat(128 * 1024) })
+    await act(async () => parsed.forEach((onParsed) => onParsed()))
+    expect(acks(harness)).toHaveLength(1)
     await act(async () => vi.advanceTimersByTime(250))
     expect(acks(harness)).toEqual([
-      ['terminal.ackOutput', { streamToken: 'token-1', units: 5 }],
-      ['terminal.ackOutput', { streamToken: 'token-1', units: 5 }]
+      ['terminal.ackOutput', { streamToken: 'token-1', units: 131072 }],
+      ['terminal.ackOutput', { streamToken: 'token-1', units: 131072 }]
     ])
   })
 

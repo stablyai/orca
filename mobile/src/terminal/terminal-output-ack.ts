@@ -40,11 +40,8 @@ export function createTerminalOutputAck(args: {
     }
   }
 
-  const credit = (units: number) => {
-    parsedUnits += units
-    if (parsedUnits >= ACK_BATCH_UNITS) {
-      flush()
-    } else if (flushTimer === null) {
+  const armFlush = () => {
+    if (flushTimer === null) {
       flushTimer = setTimeout(flush, ACK_DELAY_MS)
     }
   }
@@ -55,9 +52,10 @@ export function createTerminalOutputAck(args: {
       const params = { streamToken, units: parsedUnits }
       const sentEpoch = epoch
       void args.client.sendRequest('terminal.ackOutput', params).catch((error: unknown) => {
-        // A refused send (bridge request cap) must retry or its units stay in flight on the host; a maybe-delivered one must not.
+        // Retry a refused send (bridge request cap) on the timer, never inline: an inline refusal would spin in microtasks.
         if (!isRpcDeliveryUnknown(error) && sentEpoch === epoch) {
-          credit(params.units)
+          parsedUnits += params.units
+          armFlush()
         }
       })
     }
@@ -88,7 +86,12 @@ export function createTerminalOutputAck(args: {
           return
         }
         settled = true
-        credit(units)
+        parsedUnits += units
+        if (parsedUnits >= ACK_BATCH_UNITS) {
+          flush()
+        } else {
+          armFlush()
+        }
       }
     }
   }
