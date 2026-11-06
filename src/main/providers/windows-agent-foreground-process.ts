@@ -9,9 +9,13 @@ import {
   resolveOuterWrapperForegroundIdentity,
   shouldInspectOuterWrapperForegroundProcess
 } from '../../shared/foreground-wrapper-agent'
-import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
+import {
+  isMsysExecShellProcess,
+  isShellProcess
+} from '../../shared/agent-status/process/shell-process-detection'
 import {
   queryWindowsPaneProcessInventory,
+  windowsCandidateIsAncestor,
   type WindowsProcessCandidate,
   type WindowsProcessRow
 } from './windows-foreground-process-rows'
@@ -65,7 +69,22 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
   if (!inventory) {
     return { available: false, processName: null }
   }
-  const candidates = inventory.candidates
+  let consoleRead: Promise<ReadonlySet<number> | null> | undefined
+  const readConsoleAttachedProcessIds = options.readWindowsConsoleAttachedProcessIds
+    ? () => (consoleRead ??= options.readWindowsConsoleAttachedProcessIds!())
+    : undefined
+  let candidates = inventory.candidates
+  if (
+    readConsoleAttachedProcessIds &&
+    isMsysExecShellProcess(fallbackProcess) &&
+    !windowsCandidatesContainRecognizedAgent(candidates, fallbackProcess, options.contextPaths)
+  ) {
+    // MSYS exec lets the fork stub exit, so a script-launched agent is linked to this pane only by its console.
+    const consoleProcessIds = await readConsoleAttachedProcessIds()
+    if (consoleProcessIds) {
+      candidates = [...candidates, ...inventory.collectConsoleOrphans(consoleProcessIds)]
+    }
+  }
   // Filter console membership before ambiguity checks so detached agents cannot suppress the attached input owner.
   const hasRecognizedCandidate = windowsCandidatesContainRecognizedAgent(
     candidates,
@@ -73,9 +92,9 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     options.contextPaths
   )
   let filteredCandidates = candidates
-  if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
+  if (hasRecognizedCandidate && readConsoleAttachedProcessIds) {
     // Job membership retains detached descendants; only console attachment can exclude their byte authority.
-    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds()
+    const consoleProcessIds = await readConsoleAttachedProcessIds()
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
@@ -229,21 +248,6 @@ function resolveRecognizedWindowsProcessCandidates(
     // Distinct anchors agreeing on one name still leave no single liveness anchor.
     ...(anchorProcessIds.size === 1 ? { processId: [...anchorProcessIds][0] } : {})
   }
-}
-
-function windowsCandidateIsAncestor(
-  candidate: WindowsProcessRow,
-  other: WindowsProcessRow,
-  candidatesByPid: ReadonlyMap<number, WindowsProcessRow>
-): boolean {
-  let current = candidatesByPid.get(other.ppid)
-  while (current) {
-    if (current.pid === candidate.pid) {
-      return true
-    }
-    current = candidatesByPid.get(current.ppid)
-  }
-  return false
 }
 
 function normalizeContextPaths(contextPaths: readonly string[] | undefined): string[] {
