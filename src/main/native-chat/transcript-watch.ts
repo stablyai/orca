@@ -125,10 +125,11 @@ function subscribeViaResolvePoll(
     }
     const now = Date.now()
     const interval = fallbackResolveIntervalMs(now)
-    // Without a hook path every attempt is ID discovery, so it follows the discovery cadence once slow.
+    // Without a hook or known file path every attempt is ID discovery, so it follows the discovery cadence once slow.
+    const discoversById = !exactPath && !args.filePath
     const wait = exactPath
       ? Math.min(delay, Math.max(0, interval - (now - lastFallbackResolveAt)))
-      : Math.max(delay, interval === SLOW_RESOLVE_POLL_MS ? interval : 0)
+      : Math.max(delay, discoversById && interval === SLOW_RESOLVE_POLL_MS ? interval : 0)
     pollTimer = setTimeout(() => {
       pollTimer = null
       void runAttempt()
