@@ -93,9 +93,7 @@ export async function readClipboardImagePngBase64(): Promise<string | null> {
     }
     const blob = await item.getType(imageType)
     assertClipboardImageBlobWithinLimit(blob)
-    const pngBlob =
-      imageType === 'image/png' ? blob : await convertImageBlobToPng(blob, { downscaleToFit: true })
-    return blobToBase64(pngBlob)
+    return blobToBase64(await convertImageBlobToPng(blob, { downscaleToFit: true }))
   }
   return null
 }
