@@ -62,6 +62,8 @@ async function applyAcpModelCommand(
         )
       }
       if (!('applied' in reply)) {
+        // A Stop it already reached outranks the agent's refusal: the message was never sent.
+        throwIfWithdrawn()
         throw new AcpModelCommandRefusedError(reply)
       }
       const { applied } = reply

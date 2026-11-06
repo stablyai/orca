@@ -58,7 +58,9 @@ function answersCancels(agent: AcpScriptedAgent): void {
 }
 
 // OMP: the model option refuses a role, and its own /model resolves it (builtin-modes.ts).
-async function openRoleRig(hold: { holdOption?: boolean; holdCommand?: boolean } = {}) {
+async function openRoleRig(
+  hold: { holdOption?: boolean; holdCommand?: boolean; commandReply?: string } = {}
+) {
   const spec = { ...GROK, dialect: { ...GROK.dialect, modelCommand: OMP_ACP_DIALECT.modelCommand } }
   const held = { option: () => {}, command: () => {} }
   const rig = await openAcpAdapterRig({
@@ -82,7 +84,7 @@ async function openRoleRig(hold: { holdOption?: boolean; holdCommand?: boolean }
             sessionId: PROVIDER_SESSION,
             update: {
               sessionUpdate: 'agent_message_chunk',
-              content: { type: 'text', text: 'Model set to grok-4.6.' }
+              content: { type: 'text', text: hold.commandReply ?? 'Model set to grok-4.6.' }
             }
           })
           agent.reply(frame, { stopReason: 'end_turn' })
@@ -313,11 +315,17 @@ describe('a send while a Grok prompt runs', () => {
     }
   )
 
-  it.each(['its model command runs', 'it waits to be admitted'] as const)(
-    'withdraws a role steer a Stop reaches while %s, with no turn running',
-    async (when) => {
+  it.each([
+    ['its model command runs', 'Model set to grok-4.6.'],
+    // OMP's own refusal after the Stop must not be worded as the model's failure.
+    ['its model command runs', 'Failed to set model: prompt rebuild failed'],
+    ['it waits to be admitted', 'Model set to grok-4.6.']
+  ] as const)(
+    'withdraws a role steer a Stop reaches while %s (%s), with no turn running',
+    async (when, commandReply) => {
       const admitted = Promise.withResolvers<void>()
-      const { rig, release } = await openRoleRig({ holdCommand: when === 'its model command runs' })
+      const holdCommand = when === 'its model command runs'
+      const { rig, release } = await openRoleRig({ holdCommand, commandReply })
       const role = sendRole(rig, 'role', async (enqueue) => {
         await admitted.promise
         return enqueue('own', false)
@@ -335,6 +343,25 @@ describe('a send while a Grok prompt runs', () => {
       expect(promptsSent(rig)).toEqual(['command'])
     }
   )
+
+  it('refuses a Stop with no turn running while an idle role send waits on its model option', async () => {
+    // Before the fallback this is an ordinary send: with nothing to stop, Stop is refused, not
+    // accepted and ignored. The host's Stop aborts the send's signal instead
+    // (acp-structured-host-option-hang.test.ts).
+    const { rig, release } = await openRoleRig({ holdOption: true })
+    const role = sendRole(rig, 'role')
+    await waitFor(() => expect(rig.sent('session/set_config_option')).toHaveLength(1))
+    await expect(rig.adapter.cancelTurn({ sessionId: ADAPTER_SESSION, fence: 1 })).resolves.toEqual(
+      {
+        cancelled: false,
+        refusal: { turnNotRunning: true }
+      }
+    )
+    release.option()
+    await expect(role).resolves.toEqual({ state: 'admitted' })
+    await rig.frame('session/prompt', 1)
+    expect(promptsSent(rig)).toEqual(['command', 'prompt:role'])
+  })
 
   it('withdraws a steer a Stop reaches before its cancel lands', async () => {
     const rig = await openAcpAdapterRig()
