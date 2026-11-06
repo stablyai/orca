@@ -8,6 +8,7 @@ import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/
 import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import type { RuntimeTerminalAttention } from '../../../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalBufferSnapshot } from '../records/runtime-terminal-state-records'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
 import { assertTerminalInputWithinLimitWithYield } from '../../terminal-send-payload'
@@ -57,7 +58,9 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   registerRemoteTerminalViewSubscriber(
     ptyId: string,
     isOutputPaused?: () => boolean,
-    mobileClientId?: string
+    mobileClientId?: string,
+    /** Only for views that pause output while their pane is hidden, so "unpaused" means on screen. */
+    reportsHiddenPane = false
   ): () => void {
     const isSilent =
       mobileClientId === undefined
@@ -65,7 +68,21 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
         : () =>
             isOutputPaused?.() === true ||
             !this.isMobileTerminalQueryReplyAuthority(ptyId, mobileClientId)
-    return this.terminalViewSubscribers.registerRemote(ptyId, isSilent)
+    return this.terminalViewSubscribers.registerRemote(
+      ptyId,
+      isSilent,
+      reportsHiddenPane ? isOutputPaused : undefined
+    )
+  }
+
+  /** Whether any viewer other than this host's own window shows the PTY, or the user last typed into it, from any client. */
+  getTerminalAttention(ptyId: string): RuntimeTerminalAttention {
+    return {
+      shownRemotely:
+        this.getDriver(ptyId).kind === 'mobile' ||
+        this.terminalViewSubscribers.isShownRemotely(ptyId),
+      lastInputAt: this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    }
   }
 
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */

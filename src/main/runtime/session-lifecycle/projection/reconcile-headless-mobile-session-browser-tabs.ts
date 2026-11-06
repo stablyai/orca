@@ -22,6 +22,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type { RuntimeStore } from '../../runtime-store-contract'
 import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { isServeMintedPtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
   protected abstract getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
@@ -181,7 +182,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
   }
 
   protected isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return typeof ptyId === 'string' && ptyId.startsWith('serve-')
+    return typeof ptyId === 'string' && isServeMintedPtySessionId(ptyId)
   }
 
   protected isSshOwnedPtyId(ptyId: string | null | undefined): boolean {

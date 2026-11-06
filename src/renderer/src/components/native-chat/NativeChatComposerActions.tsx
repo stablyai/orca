@@ -1,5 +1,6 @@
+import { NativeChatComposerDraftNotSavedIcon } from './NativeChatComposerDraftNotSavedIcon'
 import { memo } from 'react'
-import { ArrowUp, Check, CircleAlert, Mic, Plus, Save, Square } from 'lucide-react'
+import { ArrowUp, Check, CornerDownRight, ListEnd, Mic, Plus, Save, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -24,6 +25,7 @@ import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
@@ -48,6 +50,9 @@ export type NativeChatComposerActionsProps = {
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
   onSend: () => void
+  /** Cmd/Ctrl is held: Send names, and a click runs, what Cmd/Ctrl+Enter would do. */
+  steerPreview?: NativeChatSteerChordPreview | null
+  onSteerPreview?: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
@@ -82,6 +87,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
+  steerPreview = null,
+  onSteerPreview,
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
@@ -126,6 +133,12 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             shortcut: getScreenSubmitShortcutLabel()
           })
       : null)
+  const steerPreviewLabel =
+    steerPreview === 'queue'
+      ? translate('components.native-chat.composer.previewQueue', 'Queue')
+      : steerPreview === 'steer'
+        ? translate('components.native-chat.composer.previewSteer', 'Steer')
+        : translate('components.native-chat.composer.previewSteerQueued', 'Steer queued')
   const sendButton = editSession ? (
     <Button
       type="button"
@@ -325,7 +338,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
         ]
       : []),
     { id: 'dictation', priority: 2, content: dictation },
-    ...(draftNotSaved ? [{ id: 'draft', priority: 1, content: <DraftNotSavedIcon shown /> }] : []),
+    ...(draftNotSaved
+      ? [{ id: 'draft', priority: 1, content: <NativeChatComposerDraftNotSavedIcon shown /> }]
+      : []),
     ...(editSession
       ? [
           {
@@ -346,7 +361,29 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       focusComposer={focusComposer}
       right={right}
       primary={
-        sendHint ? (
+        steerPreview && !editSession && (steerPreview === 'steer-queued' || !sendDisabled) ? (
+          <Button
+            type="button"
+            data-native-chat-steer-preview={steerPreview}
+            aria-label={steerPreviewLabel}
+            className="group-data-[terminal=true]/toolbar:size-8 pointer-coarse:group-data-[terminal=true]/toolbar:size-10"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              // As Send: the label can change between a double-click's presses (Steer, then Steer queued).
+              if (event.detail <= 1) {
+                onSteerPreview?.()
+              }
+            }}
+            size="pill"
+          >
+            {steerPreview === 'queue' ? (
+              <ListEnd className="size-3.5" />
+            ) : (
+              <CornerDownRight className="size-3.5" />
+            )}
+            <span data-composer-primary-label>{steerPreviewLabel}</span>
+          </Button>
+        ) : sendHint ? (
           <Tooltip>
             <TooltipTrigger asChild>
               {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
@@ -363,25 +400,3 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     />
   )
 })
-
-function DraftNotSavedIcon({ shown }: { shown: boolean }): React.JSX.Element | null {
-  if (!shown) {
-    return null
-  }
-  const explanation = translate(
-    'components.native-chat.composer.draftNotSaved',
-    "This draft couldn't be saved yet. Orca keeps trying."
-  )
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span role="img" aria-label={explanation} className="inline-flex text-status-warning">
-          <CircleAlert className="size-4" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {explanation}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
