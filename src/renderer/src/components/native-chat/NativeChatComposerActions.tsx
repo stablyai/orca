@@ -251,12 +251,11 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             {translate('common.cancel', 'Cancel')}
           </Button>
         ) : null}
-        {steerPreview && !editSession ? (
+        {/* A draft Send can't take keeps its button and the reason it gives. */}
+        {steerPreview && !editSession && (steerPreview === 'steer-queued' || !sendDisabled) ? (
           <Button
             type="button"
             data-native-chat-steer-preview={steerPreview}
-            // A steer of the head card runs while the empty composer's Stop would show.
-            disabled={steerPreview !== 'steer-queued' && sendDisabled}
             onMouseDown={(event) => event.preventDefault()}
             onClick={onSteerPreview}
             size="sm"

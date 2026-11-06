@@ -48,7 +48,6 @@ import { useStructuredAgentSessionHostExecution } from './StructuredAgentSession
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
-import { headSteerableQueuedMessageCard } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   cancelStructuredPrompt,
   nativeChatStructuredStopControls
@@ -123,12 +122,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
   const hostHeld = hostSendGate.sendBlockedReason !== null
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
-  const [headSteerPreviewed, setHeadSteerPreviewed] = useState(false)
-  // The composer offers the head-card steer, and previews it, only while there is one to steer.
-  const steerableHead =
-    stopControls.stopping || hostHeld || !submits.queuedMessages.queueCapable
-      ? null
-      : headSteerableQueuedMessageCard(submits.queuedMessages.cards)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
   const needsFailureFacts =
     submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
@@ -347,7 +340,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             statedFailures={startFailures}
             steerHeld={stopControls.stopping || hostHeld}
             focusComposer={focusComposer}
-            steerPreviewed={headSteerPreviewed}
             editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
           />
           <NativeChatStructuredSessionStatus
@@ -405,8 +397,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               agent={props.agent}
               {...stopControls.composer}
               unavailableHint={install.unavailableHint}
-              steerHead={steerableHead ? submits.queuedMessages.steerHead : undefined}
-              onSteerQueuedPreview={setHeadSteerPreviewed}
+              steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
               structuredTransport={transport}
               notices={notices}
               recallSource={{ messages: session.messages, withoutImageMarkers: true }}

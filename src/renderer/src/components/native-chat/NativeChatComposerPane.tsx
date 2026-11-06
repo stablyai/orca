@@ -57,7 +57,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       launchSeed,
       structuredTransport,
       steerHead,
-      onSteerQueuedPreview,
       recallSource,
       inputOwnedByCard = false,
       notices: chatNotices,
@@ -350,14 +349,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setCaret
     })
 
-    const steerChord = useNativeChatSteerChordPreview({
-      root,
-      alternateSend: sendButton.alternateSend,
-      hasDraft: sendButton.hasDraft,
-      steerHead: editSession ? undefined : steerHead,
-      send,
-      onSteerQueuedPreview
-    })
+    const pickerOpen = autocomplete.mode !== 'none'
+    const steerChord = useNativeChatSteerChordPreview(root, sendButton, steerHead, send, pickerOpen)
 
     const draftEvents = useNativeChatDraftEvents({
       draft,

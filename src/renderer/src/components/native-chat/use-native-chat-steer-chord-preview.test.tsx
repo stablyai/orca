@@ -17,12 +17,19 @@ type Props = {
   hasDraft: boolean
   steerHead: (() => boolean) | undefined
   send: () => void
-  onSteerQueuedPreview: (previewed: boolean) => void
+  pickerOpen: boolean
 }
 
 function Composer(props: Props): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null)
-  const { preview, runPreview } = useNativeChatSteerChordPreview({ root, ...props })
+  const { alternateSend, hasDraft, steerHead, send, pickerOpen } = props
+  const { preview, runPreview } = useNativeChatSteerChordPreview(
+    root,
+    { alternateSend, hasDraft },
+    steerHead,
+    send,
+    pickerOpen
+  )
   return (
     <div ref={root}>
       <textarea aria-label="composer" />
@@ -43,7 +50,7 @@ describe('useNativeChatSteerChordPreview', () => {
       hasDraft: false,
       steerHead: vi.fn(() => true),
       send: vi.fn(),
-      onSteerQueuedPreview: vi.fn(),
+      pickerOpen: false,
       ...overrides
     }
     const view = render(<Composer {...props} />)
@@ -60,12 +67,10 @@ describe('useNativeChatSteerChordPreview', () => {
     const { props, field, button, hold, preview } = setup()
     hold()
     expect(preview()).toBe('steer-queued')
-    expect(props.onSteerQueuedPreview).toHaveBeenLastCalledWith(true)
     fireEvent.click(button)
     expect(props.steerHead).toHaveBeenCalledTimes(1)
     fireEvent.keyUp(field, { key: 'Meta' })
     expect(preview()).toBe('')
-    expect(props.onSteerQueuedPreview).toHaveBeenLastCalledWith(false)
   })
 
   it('names what Cmd+Enter does to a typed draft, and a click sends it that way', () => {
@@ -75,6 +80,13 @@ describe('useNativeChatSteerChordPreview', () => {
     fireEvent.click(button)
     expect(props.send).toHaveBeenCalledWith({ alternate: true })
     expect(props.steerHead).not.toHaveBeenCalled()
+  })
+
+  it('shows nothing when Shift is already down, since Cmd+Shift+Enter is another chord', () => {
+    const { field, preview } = setup({ hasDraft: true })
+    fireEvent.keyDown(field, { key: 'Meta', shiftKey: true })
+    act(() => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
+    expect(preview()).toBe('')
   })
 
   it('never flashes for a quick chord such as Cmd+C', () => {
@@ -96,7 +108,8 @@ describe('useNativeChatSteerChordPreview', () => {
 
   it.each([
     ['the chord queues', { alternateSend: 'queue' as const }],
-    ['there is no card to steer', { steerHead: undefined }]
+    ['there is no card to steer', { steerHead: undefined }],
+    ['a picker takes Enter', { pickerOpen: true }]
   ])('shows nothing on an empty composer where %s', (_case, overrides) => {
     const { hold, preview } = setup(overrides)
     hold()

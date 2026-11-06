@@ -10,24 +10,16 @@ export type NativeChatSteerChordPreview = NativeChatFollowUpBehavior | 'steer-qu
 export const NATIVE_CHAT_STEER_CHORD_HOLD_MS = 150
 
 /** While the chord's modifier is held alone in this composer, Send shows what Cmd/Ctrl+Enter would do. */
-export function useNativeChatSteerChordPreview({
-  root,
-  alternateSend,
-  hasDraft,
-  steerHead,
-  send,
-  onSteerQueuedPreview
-}: {
-  root: RefObject<HTMLElement | null>
-  /** The send's own resolver (`nativeChatComposerSendState`); undefined where the chord sends no differently. */
-  alternateSend: NativeChatFollowUpBehavior | undefined
-  hasDraft: boolean
+export function useNativeChatSteerChordPreview(
+  root: RefObject<HTMLElement | null>,
+  /** The send's own resolver (`nativeChatComposerSendState`): `alternateSend` is undefined where the chord sends no differently. */
+  { alternateSend, hasDraft }: { alternateSend?: NativeChatFollowUpBehavior; hasDraft: boolean },
   /** Present only while there is a head card to steer. */
-  steerHead: (() => boolean) | undefined
-  send: (intent?: NativeChatComposerSendIntent) => void
-  /** Lets the queue mark the card a press would steer. */
-  onSteerQueuedPreview?: (previewed: boolean) => void
-}): { preview: NativeChatSteerChordPreview | null; runPreview: () => void } {
+  steerHead: (() => boolean) | undefined,
+  send: (intent?: NativeChatComposerSendIntent) => void,
+  /** An open picker takes Enter, so the chord previews nothing then. */
+  pickerOpen: boolean
+): { preview: NativeChatSteerChordPreview | null; runPreview: () => void } {
   const [held, setHeld] = useState(false)
   const enabled = alternateSend !== undefined
   useEffect(() => {
@@ -35,7 +27,8 @@ export function useNativeChatSteerChordPreview({
     if (!element || !enabled) {
       return
     }
-    const chordKey = isMacPlatform() ? 'Meta' : 'Control'
+    const mac = isMacPlatform()
+    const chordKey = mac ? 'Meta' : 'Control'
     let timer: ReturnType<typeof setTimeout> | undefined
     const release = (): void => {
       clearTimeout(timer)
@@ -48,7 +41,11 @@ export function useNativeChatSteerChordPreview({
         release()
         return
       }
-      if (!event.repeat && timer === undefined) {
+      // Shift or Alt already down makes it another chord (Shift steers the head card whatever is typed).
+      const otherModifier = event.shiftKey || event.altKey || (mac ? event.ctrlKey : event.metaKey)
+      if (otherModifier) {
+        release()
+      } else if (!event.repeat && timer === undefined) {
         timer = setTimeout(() => {
           timer = undefined
           setHeld(true)
@@ -83,23 +80,13 @@ export function useNativeChatSteerChordPreview({
   }, [root, enabled])
 
   const preview: NativeChatSteerChordPreview | null =
-    !held || !alternateSend
+    !held || !alternateSend || pickerOpen
       ? null
       : hasDraft
         ? alternateSend
         : alternateSend === 'steer' && steerHead
           ? 'steer-queued'
           : null
-
-  const steerQueuedPreviewed = preview === 'steer-queued'
-  useEffect(() => {
-    if (!steerQueuedPreviewed) {
-      return
-    }
-    // Why an effect: the preview derives from props as well as keys, so the queue follows it here.
-    onSteerQueuedPreview?.(true)
-    return () => onSteerQueuedPreview?.(false)
-  }, [steerQueuedPreviewed, onSteerQueuedPreview])
 
   const runPreview = (): void => {
     if (preview === 'steer-queued') {
