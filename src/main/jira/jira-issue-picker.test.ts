@@ -121,6 +121,32 @@ describe('numeric Jira issue suggestions', () => {
     })
   })
 
+  it.each([12, 50])(
+    'keeps exact keys ahead of newer text matches across sites (limit %i)',
+    async (limit) => {
+      getClients.mockReturnValue([entry('cloud'), entry('dc', true)])
+      const exact = ['A-1799', 'B-1799'].map((key, index) => ({
+        ...issue(key),
+        fields: { summary: key, updated: `2025-01-0${index + 1}T00:00:00Z` }
+      }))
+      const text = Array.from({ length: limit }, (_, index) => issue(`TEXT-${index + 1}`))
+      jiraRequest.mockImplementation(async (client: JiraClientForSite, path: string) => {
+        if (path.includes('/issue/picker?')) {
+          return { sections: [{ issues: client.site.id === 'cloud' ? exact : [] }] }
+        }
+        return { issues: client.site.id === 'cloud' ? exact : text }
+      })
+
+      const result = await searchIssues(fallback, limit, 'all', undefined, false, suggestions)
+
+      expect(result.map(({ key }) => key)).toEqual([
+        'B-1799',
+        'A-1799',
+        ...text.slice(0, limit - 2).map(({ key }) => key)
+      ])
+    }
+  )
+
   it('rejects candidate overflow rather than silently omitting matches', async () => {
     jiraRequest
       .mockResolvedValueOnce({
