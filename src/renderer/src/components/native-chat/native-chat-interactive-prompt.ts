@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_APPROVAL_COPY as COPY,
   type NativeChatApprovalSay
-} from '../../../../shared/native-chat-interactive-prompt'
+} from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 
 const PIECES: Record<keyof typeof COPY, (values?: { value0: string }) => string> = {
   title: (values) => translate('components.native-chat.approval.title', COPY.title, values),

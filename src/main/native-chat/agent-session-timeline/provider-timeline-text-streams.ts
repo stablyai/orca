@@ -16,7 +16,6 @@ import {
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import {
-  providerTimelineEntryBytes,
   providerTimelinePlacement,
   type ProviderTimelineStream,
   type ProviderTimelineContext
@@ -31,9 +30,6 @@ import { providerTimelineKeyPart } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
 import { providerKey, providerTimelineTurnRowState, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
-
-/** Retain stopped keys until the turn boundary, within this bound. */
-const MAX_STOPPED_STREAMS = 128
 
 export class ProviderTimelineTextStreams {
   private readonly streams = new Map<string, ProviderTimelineStream>()
@@ -52,7 +48,7 @@ export class ProviderTimelineTextStreams {
     this.coalescer = createAgentSessionDeltaCoalescer({
       ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
       ...(deps.schedule ? { schedule: deps.schedule } : {}),
-      // The assembler’s shared budget already counts these protected streams.
+      // Live identities must survive until the provider closes them or their turn ends.
       isProtected: () => true,
       isDue: (id) => {
         const acceptedAt = this.byId.get(id)?.acceptedAt
@@ -117,11 +113,6 @@ export class ProviderTimelineTextStreams {
       named,
       channel: input.channel,
       producer: input.producer,
-      bytes: providerTimelineEntryBytes({
-        key: 'id' in input.item ? input.item.id : input.item.stream,
-        join: input.join,
-        producer: input.producer
-      }),
       stoppedIn: null
     }
   }
@@ -206,16 +197,6 @@ export class ProviderTimelineTextStreams {
         }
       }
     })
-  }
-
-  /** Settled-turn streams hold no budget because none of their text can land. */
-  stopSettled(journal: StructuredAgentSessionTransitionJournal): void {
-    for (const stream of this.open) {
-      const turn = this.rowTurn(stream, journal)
-      if (turn !== null && providerTimelineTurnRowState(journal, turn) === 'settled') {
-        this.stop(stream, turn)
-      }
-    }
   }
 
   planRelease(
@@ -322,12 +303,6 @@ export class ProviderTimelineTextStreams {
     this.forget(stream)
     this.stopped.delete(stream.key)
     this.stopped.set(stream.key, turnItemId)
-    for (const [oldest] of [...this.stopped].slice(
-      0,
-      Math.max(0, this.stopped.size - MAX_STOPPED_STREAMS)
-    )) {
-      this.stopped.delete(oldest)
-    }
   }
 
   private forget(stream: ProviderTimelineStream): void {

@@ -1,5 +1,5 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearProjectCreationModel } from './use-task-page-linear-project-creation'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'

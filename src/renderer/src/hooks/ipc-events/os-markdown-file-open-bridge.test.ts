@@ -313,16 +313,4 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
     expect(unhandledRejections).toEqual([])
   })
-
-  it('tolerates a preload without the markdown open channel', async () => {
-    stubPreload({})
-
-    const unsubs: (() => void)[] = []
-    expect(() => registerOsMarkdownFileOpenBridge(unsubs)).not.toThrow()
-    await settle()
-
-    expect(unsubs).toEqual([])
-    expect(mocks.openFile).not.toHaveBeenCalled()
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
 })

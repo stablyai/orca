@@ -1,3 +1,5 @@
+export const BUNDLED_SYMBOLS_FONT_FAMILY = 'Orca Nerd Font Symbols'
+
 // Cross-platform monospace chain: browsers skip fonts absent on the current OS, so listing all is safe.
 // Nerd Fonts come last to cover PUA glyphs (U+E000–U+F8FF) from OMP/Powerline that standard monospace fonts lack.
 const FALLBACK_FONTS = [
@@ -8,7 +10,7 @@ const FALLBACK_FONTS = [
   'Consolas',
   'DejaVu Sans Mono',
   'Liberation Mono',
-  'Orca Nerd Font Symbols',
+  BUNDLED_SYMBOLS_FONT_FAMILY,
   'Symbols Nerd Font Mono',
   'MesloLGS Nerd Font',
   'JetBrainsMono Nerd Font',

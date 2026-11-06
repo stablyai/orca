@@ -4,9 +4,9 @@ import {
   findReusableAutomationRun,
   type AutomationSessionTarget
 } from '../../../shared/automation-session-reuse'
-import { getPtyExecutionHost } from '../../../shared/terminal-execution-host'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { AppState } from '@/store/types'
 
 export type ReusableAutomationSession = {

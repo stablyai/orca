@@ -1,4 +1,3 @@
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from './NativeChatExpandable'
@@ -14,7 +13,7 @@ import {
   type NativeChatToolCallBlock
 } from '../../../../shared/native-chat/native-chat-types'
 import { isRenderableSubagentGroup } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 import { nativeChatToolRunHeader } from '../../../../shared/native-chat/tools/native-chat-tool-run-header'
@@ -60,7 +59,6 @@ export function NativeChatToolRun({
   activeTurnIsWorking,
   trailing,
   disclosureId,
-  onLinkClick,
   asides,
   runtimeContext
 }: {
@@ -86,7 +84,6 @@ export function NativeChatToolRun({
   trailing?: boolean
   /** Remember disclosure by message id outside the windowed row’s lifetime. */
   disclosureId?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
   asides?: NativeChatToolRunAsides
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
@@ -258,7 +255,6 @@ export function NativeChatToolRun({
             revealedDiff={revealedDiff}
             onRevealDiff={revealDiff}
             disclosureId={disclosureId}
-            onLinkClick={onLinkClick}
           />
         </NativeChatToolRunMembers>
       </NativeChatExpandable>

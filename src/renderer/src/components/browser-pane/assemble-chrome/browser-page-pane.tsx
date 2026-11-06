@@ -102,7 +102,8 @@ export function BrowserPagePane({
   )
   useEffect(() => {
     const subscribe = window.api.ui.onScrollBrowserPage
-    if (!subscribe || !pageViewportScroller || !browserTab.viewportPresetId) {
+    // Main sends these only while a preset or an agent's viewport outsizes the pane.
+    if (!subscribe || !pageViewportScroller) {
       return
     }
     return subscribe((event) => {
@@ -111,7 +112,7 @@ export function BrowserPagePane({
       }
       scrollBrowserPageViewport(browserTab.id, event.deltaX, event.deltaY)
     })
-  }, [browserTab.id, browserTab.viewportPresetId, pageViewportScroller])
+  }, [browserTab.id, pageViewportScroller])
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -374,6 +375,7 @@ export function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <BrowserPageViewportOverlays
+              isActive={isActive}
               markup={markup}
               feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}

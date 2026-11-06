@@ -30,12 +30,56 @@ export function isJournalStreamedTextRevision(
     return false
   }
   // Only text changes qualify; reasoning state changes keep FULL durability.
-  const ownerFence = state.itemFences.get(row.itemId)
   return (
     isDeepStrictEqual(
       { ...body, blocks: body.blocks.map((block) => ({ ...block, text: '' })) },
       { ...previous.body, blocks: previous.body.blocks.map((block) => ({ ...block, text: '' })) }
-    ) &&
+    ) && sameRevisionPlacement(state, row, previous)
+  )
+}
+
+/** Output revisions cannot change queue eligibility; lifecycle and unknown changes still wake it. */
+export function isJournalOutputRevision(state: JournalReducerState, row: JournalRow): boolean {
+  if (row.kind !== 'item' || row.recovered) {
+    return false
+  }
+  const previous = state.items.get(row.itemId)
+  if (!previous || !sameRevisionPlacement(state, row, previous)) {
+    return false
+  }
+  const before = previous.body
+  const after = row.body
+  if (before.kind === 'message' && after.kind === 'message') {
+    return (
+      (after.role === 'assistant' || after.role === 'reasoning') &&
+      before.role === after.role &&
+      before.sentAs === undefined &&
+      after.sentAs === undefined &&
+      before.command === undefined &&
+      after.command === undefined &&
+      before.from === undefined &&
+      after.from === undefined &&
+      before.state === after.state &&
+      before.completedAt === after.completedAt &&
+      before.blocks.every((block) => block.type === 'text') &&
+      after.blocks.every((block) => block.type === 'text')
+    )
+  }
+  if (before.kind === 'tool-call' && after.kind === 'tool-call') {
+    const { output: _beforeOutput, ...beforeFields } = before
+    const { output: _afterOutput, ...afterFields } = after
+    return isDeepStrictEqual(beforeFields, afterFields)
+  }
+  return false
+}
+
+function sameRevisionPlacement(
+  state: JournalReducerState,
+  row: Extract<JournalRow, { kind: 'item' }>,
+  previous: NonNullable<ReturnType<JournalReducerState['items']['get']>>
+): boolean {
+  const ownerFence = state.itemFences.get(row.itemId)
+  return (
     (row.ownerFence ?? ownerFence) === ownerFence &&
     (row.executionOwner === undefined ||
       row.executionOwner === state.itemExecutionOwners.get(row.itemId)) &&

@@ -1,7 +1,7 @@
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,
@@ -61,6 +61,8 @@ export type AgentSessionAttachParams = {
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
     source?: AdoptedTranscriptSource
+    /** The source conversation's title; derived, so not part of the attach fingerprint. */
+    conversationName?: string
   }
 }
 
@@ -163,10 +165,7 @@ export async function attachJournal(input: {
   const journal = await input.openConversation(input.record)
   return {
     journal,
-    unconfirmedClientMessageIds: journal
-      .submissions()
-      .filter((entry) => entry.dispatchState === 'unknown' && entry.recovered === true)
-      .map((entry) => entry.clientMessageId)
+    unconfirmedClientMessageIds: journal.inputOrder.recoveredUnknownIds()
   }
 }
 
@@ -217,6 +216,7 @@ export function reserveRequestFor(input: {
           adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
         }
       : {}),
+    conversationName: params.adopt?.conversationName,
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,

@@ -1,5 +1,5 @@
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session-options-replacement'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
 

@@ -1,8 +1,7 @@
-// Reducer and queue settlement must agree: ignored dispatch rows cannot change card state.
-
 import { agentJournalSubmissionProvenUnwritten } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+// Reducer and queue settlement must agree: ignored dispatch rows cannot change card state.
 
 /** Accepted/rejected states are terminal; late rows must never reopen them. */
 export function journalDispatchRowApplies(
@@ -28,4 +27,10 @@ export function queuedHandOffOutcome(
     return 'returned'
   }
   return agentJournalSubmissionProvenUnwritten(rejected) ? 'waiting' : 'inDoubt'
+}
+
+export function queuedHandOffInDoubt(submission: AgentJournalSubmission): boolean {
+  return submission.dispatchState === 'rejected'
+    ? queuedHandOffOutcome(submission) === 'inDoubt'
+    : journalDispatchRowApplies(submission) && !agentJournalSubmissionProvenUnwritten(submission)
 }

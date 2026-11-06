@@ -5,7 +5,7 @@ import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-par
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from './list/ListGroup'

@@ -10,7 +10,7 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../src/shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../src/shared/agent-session/journal/agent-session-journal-identity'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession

@@ -1,4 +1,3 @@
-import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
   contextTokensFromUsage,
   MAX_CONTEXT_MODEL_ID_CHARS,
@@ -6,7 +5,7 @@ import {
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
 } from '../../shared/agent-session/agent-session-context-usage'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeContextResetKind,
@@ -58,17 +57,6 @@ export class ClaudeContextFacts {
 
   markActivity(): void {
     this.activity += 1
-  }
-
-  publishActivity(kind: string, payload: unknown): void {
-    const turnId = this.turn.id
-    if (turnId === null) {
-      return
-    }
-    const text = claudeProviderFrameActivity(kind, payload)
-    if (text !== undefined) {
-      this.sink.setActivity?.(text ? { turnId, text } : null)
-    }
   }
 
   /** Observe before journaling. */

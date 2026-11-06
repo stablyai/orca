@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
+import { WorkspaceLayoutStream } from '../../runtime/terminal/surface/workspace-layout-stream'
 import type { Store } from '../loading-store/store'
 import { WindowSession } from './terminal-topology-window-session-fixture'
 import {

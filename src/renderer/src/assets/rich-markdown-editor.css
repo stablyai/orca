@@ -825,6 +825,18 @@
   background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
 }
 
+.rich-markdown-editor .selectedCell {
+  position: relative;
+}
+
+.rich-markdown-editor .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: color-mix(in srgb, var(--foreground) 13%, transparent);
+  pointer-events: none;
+}
+
 .rich-markdown-table-controls {
   position: absolute;
   inset: 0;

@@ -3,7 +3,7 @@ import {
   COMPRESSED_FRAMES_CLIENT_CAPABILITY,
   COMPRESSED_FRAME_MIN_BYTES,
   encodeCompressedFrame
-} from '../../../shared/paired-e2ee-compressed-frame'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { DesktopMobileE2EEV2OutboundItem } from './mobile-e2ee-v2-desktop-outbound'
 import type { RpcBinarySendOptions } from './rpc-binary-sender'

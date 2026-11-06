@@ -1,4 +1,4 @@
-import { stripCredentialsFromMessage } from '../../../shared/git-remote-error'
+import { stripCredentialsFromMessage } from '../../../shared/git/remotes/git-remote-error'
 import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 

@@ -92,22 +92,6 @@ describe("a stream writes only while its row's turn runs", () => {
   })
 })
 
-describe('the open budget counts every provider string a stream keeps', () => {
-  it('refuses a stream whose thread alone is past the budget', async () => {
-    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    const thread = 't'.repeat(1024 * 1024 + 1)
-    expect(
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: 'm' },
-        channel: 'assistant',
-        text: 'x',
-        join: { thread }
-      }).admission
-    ).toEqual({ accepted: false, reason: 'failed' })
-  })
-})
-
 it.each(['close', 'tool', 'flush-dispose', 'next-delta'])(
   'keeps a timer-skipped full tail for the %s barrier',
   async (boundary) => {

@@ -61,9 +61,9 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   fetchPlugins: async () => {
     const generation = ++pluginListGeneration
     clearPluginListRetryTimer()
-    // Older paired preload may lack plugins namespace; treat missing bridge as empty content.
+    // Older paired preload, or a browser client (no `list`): no plugins, so files open in Source.
     const pluginsApi = window.api?.plugins
-    if (!pluginsApi) {
+    if (!pluginsApi?.list) {
       if (generation === pluginListGeneration) {
         pluginListRetryAttempt = 0
         set({ fetchStatus: 'ready', plugins: [], panelErrors: {} })

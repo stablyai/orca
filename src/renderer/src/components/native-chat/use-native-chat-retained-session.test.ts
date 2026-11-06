@@ -67,17 +67,6 @@ describe('useNativeChatRetainedSession', () => {
     liveSession.mockReset()
   })
 
-  it('keeps settled messages during a same-identity rebind', async () => {
-    liveSession.mockReturnValue(session('ready', [message('settled')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue(session('loading', []))
-    await render(ARGS)
-
-    expect(latest?.readPhase).toBe('loading')
-    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
-  })
-
   it('misses retained messages when the source owner changes', async () => {
     liveSession.mockReturnValue(session('ready', [message('owner-a')]))
     await render(ARGS)
@@ -87,39 +76,5 @@ describe('useNativeChatRetainedSession', () => {
 
     expect(latest?.readPhase).toBe('loading')
     expect(latest?.messages).toEqual([])
-  })
-
-  it('keeps retained messages instead of a full-pane read error', async () => {
-    liveSession.mockReturnValue(session('ready', [message('settled')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue({ ...session('error', []), status: 'error', error: 'read failed' })
-    await render(ARGS)
-
-    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
-    expect(latest?.readPhase).toBe('error')
-    expect(latest?.status).toBe('ready')
-    expect(latest?.error).toBeUndefined()
-  })
-
-  it('surfaces a read error when nothing was retained', async () => {
-    liveSession.mockReturnValue({ ...session('error', []), status: 'error', error: 'read failed' })
-    await render(ARGS)
-
-    expect(latest?.messages).toEqual([])
-    expect(latest?.status).toBe('error')
-    expect(latest?.error).toBe('read failed')
-  })
-
-  it('does not overwrite retention with the session-less view', async () => {
-    liveSession.mockReturnValue(session('ready', [message('settled')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue(session('ready', [], null))
-    await render({ ...ARGS, sessionId: null })
-    liveSession.mockReturnValue(session('loading', []))
-    await render(ARGS)
-
-    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
   })
 })

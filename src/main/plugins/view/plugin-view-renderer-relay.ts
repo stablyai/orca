@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
-import { addFanoutListener, addFanoutListeners } from '../../event-listener-fanout'
+import { addFanoutListener, addFanoutListeners } from '../../runtime/events/event-listener-fanout'
 import {
   PLUGIN_VIEW_REPLY_CHANNEL,
   PLUGIN_VIEW_REQUEST_CHANNEL,

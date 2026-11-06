@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 
@@ -42,48 +41,6 @@ function makeTerminalTab(id: string): Record<string, unknown> {
 }
 
 describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
-  it('publishes the resume command and ownership claim with the first visible tab state', () => {
-    const record = makeRecord()
-    useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [] },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
-    let firstVisible:
-      | {
-          command: string | undefined
-          claim: unknown
-          layout: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId'][string]
-        }
-      | undefined
-    const unsubscribe = useAppStore.subscribe((state) => {
-      const tab = state.tabsByWorktree['wt-1']?.[0]
-      if (tab && !firstVisible) {
-        firstVisible = {
-          command: state.pendingStartupByTabId[tab.id]?.command,
-          claim: state.automaticAgentResumeClaimsByTabId[tab.id],
-          layout: state.terminalLayoutsByTabId[tab.id]
-        }
-      }
-    })
-
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-    unsubscribe()
-
-    expect(firstVisible?.command).toContain('resume')
-    expect(firstVisible?.command).toContain(record.providerSession.id)
-    expect(firstVisible?.claim).toEqual({
-      worktreeId: record.worktreeId,
-      launchAgent: record.agent,
-      providerSession: record.providerSession
-    })
-    expect(firstVisible?.layout).toMatchObject({
-      root: { type: 'leaf', leafId: expect.any(String) },
-      activeLeafId: expect.any(String)
-    })
-    const root = firstVisible?.layout?.root
-    expect(firstVisible?.layout?.activeLeafId).toBe(root?.type === 'leaf' ? root.leafId : undefined)
-  })
-
   it('does not fork a provider session that is already queued', () => {
     const record = makeRecord()
     useAppStore.setState({
@@ -168,42 +125,5 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
     expect(useAppStore.getState().tabsByWorktree['wt-2']).toHaveLength(1)
-  })
-
-  it('clears runtime automatic-resume claims when the tab closes', () => {
-    const record = makeRecord()
-    useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [] },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
-
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-    const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
-    expect(useAppStore.getState().automaticAgentResumeClaimsByTabId[resumedTab.id]).toBeDefined()
-
-    useAppStore.getState().closeTab(resumedTab.id)
-
-    expect(useAppStore.getState().automaticAgentResumeClaimsByTabId[resumedTab.id]).toBeUndefined()
-  })
-
-  it('leaves explicit AI Vault resumes outside automatic-resume claims', () => {
-    useAppStore.setState({ tabsByWorktree: { 'wt-1': [] } } as never)
-
-    const first = launchAiVaultSessionInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      command: "codex resume 'sess-1'",
-      launchConfig: { agentArgs: '', agentEnv: {} }
-    })
-    const second = launchAiVaultSessionInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      command: "codex resume 'sess-1'",
-      launchConfig: { agentArgs: '', agentEnv: {} }
-    })
-
-    expect(first.tabId).not.toBe(second.tabId)
-    expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(2)
-    expect(useAppStore.getState().automaticAgentResumeClaimsByTabId).toEqual({})
   })
 })

@@ -17,8 +17,8 @@ import {
 import { readlink, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
-import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { serializedParentDirectoryKey } from '../../filesystem/destination-serialized-local-rename'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import {
   assertLocalWriteTargetIsRegularFile,
   FileTooLargeError,

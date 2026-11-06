@@ -1,64 +1,61 @@
 import { createAdaptorServer } from '@hono/node-server'
-import {
-  hasAdmissionCapacity,
-  HostDataAuthSchema,
-  parseRelayHostCapabilities,
-  RELAY_ASSIGNMENT_LEASE_HEADER,
-  RELAY_ADMISSION_BUDGETS,
-  RELAY_HOST_CAPABILITIES_HEADER,
-  RELAY_CLOSE_CODE,
-  RELAY_DEFAULT_REGION,
-  RELAY_PROTOCOL_LIMITS,
-  RelayAuthSchema,
-  cellPlacementCeiling
-} from '@orca-cloud/relay-contract'
+import { hasAdmissionCapacity, RELAY_ADMISSION_BUDGETS, cellPlacementCeiling } from '@orca-cloud/relay-contract/admission-budgets'
+import { HostDataAuthSchema, parseRelayHostCapabilities, RELAY_ASSIGNMENT_LEASE_HEADER, RELAY_HOST_CAPABILITIES_HEADER } from '@orca-cloud/relay-contract/control-messages'
+import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
+import { RELAY_DEFAULT_REGION } from '@orca-cloud/relay-contract/relay-regions'
+import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
+import { RelayAuthSchema } from '@orca-cloud/relay-contract/credential-messages'
 import type { IncomingMessage } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
-import { CellAdmitEffectiveWriter } from './cell-admit-effective-writer.js'
-import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
+import { CellAdmitEffectiveWriter } from './cell/reservations/cell-admit-effective-writer.js'
+import {
+  RESERVE_DEAD_MAN_BOOT_GRACE_MS,
+  ReserveDeadMan,
+  reserveDeadManWindowMs
+} from './cell/reservations/cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { classifyAssignmentLease } from './assignment/assignment-lease.js'
-import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
-import { CellReserveBook } from './cell-reserve-book.js'
-import type { DemoteRequest, ReserveRequest } from './cell-reserve-contract.js'
+import { defaultIntakePerSec, type CellFlags } from './cell/control-flags/cell-flags.js'
+import { CellReserveBook } from './cell/reservations/cell-reserve-book.js'
+import type { DemoteRequest, ReserveRequest } from './cell/reservations/cell-reserve-contract.js'
 import { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
-import { RelayCredentialStore } from './credential-store.js'
+import { RelayCredentialStore } from './credentials/credential-store.js'
 import {
   readRelayDatabasePoolOldestWaitMs,
   readRelayDatabasePoolPressure,
   type RelayDatabase
-} from './database.js'
-import { HostSessionRegistry } from './host-session-registry.js'
-import { observeRelayDatabase } from './observed-relay-database.js'
-import { RelayObservability } from './relay-observability.js'
-import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
-import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
-import { PlacementLoadBand } from './placement-load-band.js'
-import type { AppliedControlFlags } from './relay-control-flag-channel.js'
-import { createRelayLocalReadiness } from './relay-local-readiness.js'
-import { createRelayReadiness } from './relay-readiness.js'
-import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
-import { createStaleIfErrorJWKSet } from './stale-if-error-jwks.js'
-import { closeRelayWebSocket } from './relay-websocket-close.js'
-import { ShadowDirectoryCompare } from './shadow-directory-compare.js'
-import { type ShadowSeatPoller, startShadowSeatPoller } from './shadow-seat-directory.js'
-import { CellReserveClient } from './cell-reserve-client.js'
-import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
-import { ReserveAssignment } from './reserve-assignment.js'
-import { ReservePlacer } from './reserve-placement.js'
-import { ReserveRehome, ReserveRehomeSwitch } from './reserve-rehome.js'
+} from './database/database.js'
+import { HostSessionRegistry } from './connections/host-session-registry.js'
+import { observeRelayDatabase } from './database/observed-relay-database.js'
+import { RelayObservability } from './observability/relay-observability.js'
+import { combineRegionalRehomeSafety } from './assignment/regional-rehome/regional-rehome-safety.js'
+import { RelayConnectionLedger, type RelayConnectionUpgrade } from './connections/relay-connection-ledger.js'
+import { PlacementLoadBand } from './assignment/reserve-placement/placement-load-band.js'
+import type { AppliedControlFlags } from './cell/control-flags/relay-control-flag-channel.js'
+import { createRelayLocalReadiness } from './process-lifecycle/relay-local-readiness.js'
+import { createRelayReadiness } from './process-lifecycle/relay-readiness.js'
+import { createRelayTokenVerifier, readBearer } from './authentication/relay-token-verifier.js'
+import { createStaleIfErrorJWKSet } from './authentication/stale-if-error-jwks.js'
+import { closeRelayWebSocket } from './connections/relay-websocket-close.js'
+import { ShadowDirectoryCompare } from './cell/seats/shadow-directory-compare.js'
+import { type ShadowSeatPoller, startShadowSeatPoller } from './cell/seats/shadow-seat-directory.js'
+import { CellReserveClient } from './cell/reservations/cell-reserve-client.js'
+import { googleMetadataIdentityToken, reusedIdentityToken } from './authentication/google-metadata-identity-token.js'
+import { ReserveAssignment } from './assignment/reserve-placement/reserve-assignment.js'
+import { ReservePlacer } from './assignment/reserve-placement/reserve-placement.js'
+import { ReserveRehome, ReserveRehomeSwitch } from './assignment/reserve-placement/reserve-rehome.js'
 import {
   reconcileReserveLedger,
   RESERVE_LEDGER_RECONCILE_MS,
   ReserveLedgerWriter
-} from './reserve-ledger-writer.js'
-import { ProcessQueuedByteBudget } from './splice-forwarder.js'
+} from './assignment/reserve-placement/reserve-ledger-writer.js'
+import { ProcessQueuedByteBudget } from './connections/splice-forwarder.js'
 
 // Malformed upgrade paths must return client errors; an uncaught listener URIError kills the process.
 function decodePathSegment(value: string): string | null {
@@ -347,7 +344,13 @@ export function createRelayServer(
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
   const reserveDeadMan = reserveBook
-    ? new ReserveDeadMan(config.cellId, options.now, reserveDeadManWindowMs(config.cellId))
+    ? new ReserveDeadMan(
+        config.cellId,
+        options.now,
+        reserveDeadManWindowMs(config.cellId),
+        undefined,
+        RESERVE_DEAD_MAN_BOOT_GRACE_MS
+      )
     : null
   const effectiveAdmitMode = (): 'db' | 'reserve' => {
     const applied = options.cellFlags?.()

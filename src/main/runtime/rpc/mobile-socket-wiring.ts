@@ -1,11 +1,13 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
-import type { DeviceEntry, DeviceRegistry } from '../device-registry'
-import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from '../ephemeral-device-rows'
-import { devicePrincipalOf } from '../device-principal'
+import type { DeviceEntry } from './server/pairing/device-entry'
+import type { DeviceRegistry } from './server/pairing/device-registry'
+import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from './server/pairing/ephemeral-device-rows'
+import { devicePrincipalOf } from './server/pairing/device-principal'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
+import { E2EEChannel } from './e2ee-channel'
+import type { E2EEAuthenticatedDevice } from './server/mobile-e2ee-authenticated-device'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RpcBinarySender } from './rpc-binary-sender'
@@ -175,6 +177,12 @@ export class MobileSocketWiring {
     message: MobileSocketPayload,
     metadata: MobileSocketTransportMetadata
   ): void {
+    const socket = this.authenticatedSockets.get(ws)
+    if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
+      ws.close(4001, 'Unauthorized')
+      this.handleClose(ws)
+      return
+    }
     let channel = this.channels.get(ws)
     if (!channel) {
       const connectionId = randomBytes(8).toString('hex')

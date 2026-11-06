@@ -1,5 +1,5 @@
 // Model profile sessions by host, including routed layout commands and write notifications.
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'

@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../filesystem/durable-file-write'
 import { bestEffortFsyncDirectorySync } from '../../shared/secure-file'
 
 /** A tiny profile-scoped marker selects HTTP/2 before the first Electron session without reparsing multi-MB settings before Store startup. Profile identity prevents cross-profile reuse. */

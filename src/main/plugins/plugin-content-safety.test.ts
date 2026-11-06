@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -70,6 +71,25 @@ describe('declared plugin artifacts', () => {
     await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toEqual({
       ok: true
     })
+  })
+
+  it('refuses a declared path that differs from the file only by case', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, 'locales'))
+    await writeFile(join(root, 'locales', 'pt-BR.json'), '{}')
+    const pluginManifest = manifest({
+      contributes: { languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-br.json' }] }
+    })
+
+    const result = await validateDeclaredPluginArtifacts(root, pluginManifest)
+    expect(result).toMatchObject({ ok: false })
+    // Why conditional: only case-insensitive filesystems (APFS, NTFS) resolve the wrong spelling.
+    if (existsSync(join(root, 'locales', 'pt-br.json'))) {
+      expect(result).toMatchObject({ error: expect.stringContaining('is spelled "pt-BR.json"') })
+      await expect(
+        validateDeclaredPluginArtifacts(root, pluginManifest, { allowCaseMismatch: true })
+      ).resolves.toEqual({ ok: true })
+    }
   })
 
   it('requires declared files to exist and be regular files', async () => {

@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
 
@@ -509,27 +510,73 @@ it('keeps indirect continuation discovery independent from direct exact selectio
   ).toHaveLength(0)
 })
 
-it('consumes removed-workspace reveal once with existing workspace feedback and no presentation', async () => {
-  mocks.call.mockImplementation(async (_host, method) =>
-    method === 'orchestration.partyLocation'
-      ? { location: { kind: 'chat', sessionId: 'sender', worktreeId: 'workspace' } }
-      : method === 'agentSession.reveal'
-        ? { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
-        : { ok: true }
-  )
-  expect(
-    await activateAiVaultStructuredSession(
-      { structuredSession: { sessionId: 'sender', workspaceId: 'workspace' } },
-      undefined,
-      TARGET
+it.each([
+  {
+    agent: 'claude',
+    host: { kind: 'local' },
+    workspaceKind: undefined,
+    locale: 'en',
+    message: 'The worktree was deleted.'
+  },
+  {
+    agent: 'codex',
+    host: TARGET,
+    workspaceKind: 'git-worktree',
+    locale: 'en',
+    message: 'The worktree was deleted.'
+  },
+  {
+    agent: 'claude',
+    host: TARGET,
+    workspaceKind: 'folder',
+    locale: 'en',
+    message: 'The folder workspace was removed.'
+  },
+  {
+    agent: 'codex',
+    host: TARGET,
+    workspaceKind: 'folder',
+    locale: 'fr',
+    message: 'L’espace de travail de type dossier a été retiré.'
+  }
+] as const)(
+  'shows one $locale removed-$workspaceKind toast for $agent History Resume without presenting a tab',
+  async ({ agent, host, workspaceKind, locale, message }) => {
+    await loadRendererUiLanguage(locale)
+    await i18n.changeLanguage(locale)
+    mocks.state.unifiedTabsByWorktree = {}
+    mocks.call.mockImplementation(async (_host, method) =>
+      method === 'orchestration.partyLocation'
+        ? { location: { kind: 'chat', sessionId: 'sender', worktreeId: 'workspace' } }
+        : method === 'agentSession.reveal'
+          ? {
+              ok: false,
+              refusal: {
+                code: 'agent_session_workspace_removed',
+                ...(workspaceKind ? { details: { workspaceKind } } : {})
+              }
+            }
+          : { ok: true }
     )
-  ).toBe(true)
-  expect(toast.error).toHaveBeenCalledExactlyOnceWith('This workspace is no longer available.')
-  expect(mocks.navigate).not.toHaveBeenCalled()
-  expect(mocks.activateTab).not.toHaveBeenCalled()
-  expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
-    'session.tabs.list',
-    'orchestration.partyLocation',
-    'agentSession.reveal'
-  ])
-})
+    try {
+      expect(
+        await activateAiVaultStructuredSession(
+          { agent, structuredSession: { sessionId: 'sender', workspaceId: 'workspace' } },
+          undefined,
+          host
+        )
+      ).toBe(true)
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(message)
+      expect(mocks.navigate).not.toHaveBeenCalled()
+      expect(mocks.activateTab).not.toHaveBeenCalled()
+      expect(mocks.apply).not.toHaveBeenCalled()
+      expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
+        ...(host.kind === 'environment' ? ['session.tabs.list'] : []),
+        'orchestration.partyLocation',
+        'agentSession.reveal'
+      ])
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  }
+)

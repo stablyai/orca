@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { resolveClaudeStructuredInvocation } from '../claude/structured/launch/claude-structured-launch-resolution'
 import { resolveClaudeStructuredLaunchHome } from '../claude/structured/launch/claude-structured-launch-home'
-import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
+import { resolveStructuredClaudeAccountHomePath } from '../runtime/agent-session/environment/structured-agent-account-home'
 import {
   installClaudeProfileRouter,
   withClaudeProfileTerminalEnv
@@ -74,7 +74,7 @@ async function launchHomes(f: ReturnType<typeof coveredAccount>) {
       .CLAUDE_CONFIG_DIR,
     chat: await resolveClaudeStructuredLaunchHome(f.router, chatEnv, '/recorded'),
     chatEnv: chatEnv.CLAUDE_CONFIG_DIR,
-    chatRecord: resolveStructuredClaudeAccountHomePath({
+    chatRecord: await resolveStructuredClaudeAccountHomePath({
       launchEnv: {},
       wslDistro: null,
       getClaudeConfigDirectory: () => f.router.systemDefaultHome()

@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { MobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
@@ -35,6 +36,7 @@ type Args = {
   openScreen: (screen: PrTabScreen) => void
   /** The next-step bar's actions engine and launcher, shared so the bar and the tab agree. */
   shared: { actions: MobilePrActions; triage: MobilePrAiTriage }
+  hostConnection: HostConnectionInputs
 }
 
 // The hub's wiring of the PR tab: its state, Create PR follow-through, sheet openers and ⋯ menu.
@@ -51,7 +53,8 @@ export function useMobileSourceControlPrTab({
   onRefresh,
   openersRef,
   openScreen,
-  shared
+  shared,
+  hostConnection
 }: Args) {
   const t = useMobileTranslation()
   const { client, connState, status, worktreeLabel, loadStatus, branchCompareResult } = state
@@ -64,8 +67,8 @@ export function useMobileSourceControlPrTab({
       ? {
           kind: 'blocked',
           message: t(
-            'pullRequest.prViewPanel.providerUnavailable',
-            'Hosted review panel unavailable for this provider.'
+            'pullRequest.prViewPanel.githubRemoteRequired',
+            'This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.'
           )
         }
       : prBranch === null
@@ -122,7 +125,9 @@ export function useMobileSourceControlPrTab({
           : false,
     state: prTabState,
     refetch: refetchPr,
+    rereadAfterWrite: prController.rereadPRSidebarAfterWrite,
     client,
+    hostConnection,
     connState,
     worktreeId,
     gitBranch: prBranch,

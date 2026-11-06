@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { UIEventHandler } from 'react'
 import {
   distanceFromBottom,
+  geometryOf,
+  hasMeasurableViewport,
   isNearBottom,
   NATIVE_CHAT_FOLLOW_REARM_PX,
   nextFollowingEnd,
@@ -16,20 +18,9 @@ import type {
   NativeChatTranscriptScroll,
   NativeChatTranscriptScrollOptions
 } from './native-chat-transcript-scroll-types'
+import type { NativeChatAlignEdge } from './use-native-chat-viewport-align'
 
 export type { NativeChatTranscriptScroll } from './native-chat-transcript-scroll-types'
-
-function geometryOf(element: HTMLElement): ScrollGeometry {
-  return {
-    scrollTop: element.scrollTop,
-    scrollHeight: element.scrollHeight,
-    clientHeight: element.clientHeight
-  }
-}
-
-function hasMeasurableViewport(element: HTMLElement | null): element is HTMLElement {
-  return element !== null && element.clientHeight > 0
-}
 
 export function useNativeChatTranscriptScroll({
   scrollRef,
@@ -243,11 +234,18 @@ export function useNativeChatTranscriptScroll({
     setShowJump(false)
   }, [clearForwardedScroll, scrollToEndWhenMeasurable])
 
+  const readerAtEnd = useCallback(() => {
+    const element = scrollRef.current
+    return (
+      followingRef.current || (hasMeasurableViewport(element) && isNearBottom(geometryOf(element)))
+    )
+  }, [scrollRef])
+
   const scrollMessageToTop = useCallback(
-    (element: HTMLElement) => {
+    (element: HTMLElement, edge?: NativeChatAlignEdge) => {
       clearForwardedScroll()
       followingRef.current = false
-      alignToViewportTop(element)
+      alignToViewportTop(element, edge)
     },
     [alignToViewportTop, clearForwardedScroll]
   )
@@ -317,6 +315,7 @@ export function useNativeChatTranscriptScroll({
     showJump,
     onScroll,
     scrollToBottom,
+    readerAtEnd,
     scrollMessageToTop,
     readerLeavesEnd,
     forwardedGesture

@@ -1,0 +1,44 @@
+import { EventEmitter } from 'node:events'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { MacUpdater } from 'electron-updater/out/MacUpdater'
+
+// Exercise the real updater: mocks cannot catch upstream changes that deadlock supervised serve.
+describe('electron-updater MacUpdater staging contract', () => {
+  it('stages Squirrel from quitAndInstall, not from the finished download, when autoInstallOnAppQuit is off', async () => {
+    const nativeUpdater = Object.assign(new EventEmitter(), {
+      checkForUpdates: vi.fn(),
+      setFeedURL: vi.fn()
+    })
+    const updater = {
+      autoInstallOnAppQuit: false,
+      squirrelDownloadedUpdate: false,
+      nativeUpdater,
+      server: null,
+      _logger: { info: vi.fn(), warn: vi.fn() },
+      debug: vi.fn(),
+      dispatchUpdateDownloaded: vi.fn(),
+      handleUpdateDownloaded: vi.fn(),
+      closeServerIfExists(): void {
+        MacUpdater.prototype['closeServerIfExists'].call(this)
+      }
+    }
+
+    // Register cleanup before awaiting a staging call that could hang on regression.
+    onTestFinished(() => updater.closeServerIfExists())
+
+    await MacUpdater.prototype['updateDownloaded'].call(
+      updater,
+      { info: { size: 1 }, url: new URL('https://example.invalid/Orca-arm64-mac.zip') },
+      { downloadedFile: 'unread-because-size-is-known.zip' }
+    )
+    expect(updater.dispatchUpdateDownloaded).toHaveBeenCalledOnce()
+    expect(nativeUpdater.checkForUpdates).not.toHaveBeenCalled()
+
+    MacUpdater.prototype.quitAndInstall.call(updater)
+
+    expect(nativeUpdater.checkForUpdates).toHaveBeenCalledOnce()
+    expect(updater.handleUpdateDownloaded).not.toHaveBeenCalled()
+    nativeUpdater.emit('update-downloaded')
+    expect(updater.handleUpdateDownloaded).toHaveBeenCalledOnce()
+  })
+})

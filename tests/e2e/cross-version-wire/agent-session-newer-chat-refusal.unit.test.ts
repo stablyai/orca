@@ -9,7 +9,7 @@ import {
 import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-identity'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import {

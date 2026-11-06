@@ -1,14 +1,19 @@
 import type { SmartTier } from './sidebar-list/sort-stamps'
-import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
-import type { AgentMainAgentStatus } from './main-agent-status'
+import type {
+  AgentStatusState,
+  AgentType,
+  AgentWorkingMode
+} from './agent-status/contracts/agent-status-types'
+import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
-import type { CheckStatus } from './github/pull-request-types'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
+import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
+  CrossStoreWorkspaceLineage,
   WorkspaceLineage,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -77,6 +82,8 @@ export type RuntimeWorktreePsSummary = {
   parentWorktreeInstanceId?: string
   parentWorktreeId: string | null
   childWorktreeIds: string[]
+  /** This row's parent in another Orca store; lineage fields above stay null for it, so older readers show it standalone. */
+  crossStoreParent?: CrossStoreWorkspaceLineage
   displayName: string
   workspaceStatus: string
   sortOrder: number
@@ -97,6 +104,7 @@ export type RuntimeWorktreePsSummary = {
     title?: string
     url?: string
     checksStatus?: CheckStatus
+    checksSummary?: ProviderCheckSummary
   } | null
   linkedLinearIssue: string | null
   linkedGitLabMR: number | null
@@ -171,6 +179,8 @@ export type RuntimeWorktreeRecord = Worktree & {
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store (worktree.show); older hosts omit it. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   git: GitWorktreeInfo
 }
 
@@ -178,6 +188,7 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
   startupTerminal?: CreateWorktreeResult['startupTerminal']

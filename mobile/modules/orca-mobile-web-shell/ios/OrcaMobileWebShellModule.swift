@@ -18,8 +18,19 @@ public class OrcaMobileWebShellModule: Module {
       presenter.present(controller, animated: true)
     }.runOnQueue(.main)
 
+    AsyncFunction("shareImage") { (url: URL, _: String) in
+      guard let presenter = self.appContext?.utilities?.currentViewController() else {
+        throw ImagePresenterUnavailableException()
+      }
+      presentImageShareSheet(url: url, from: presenter)
+    }.runOnQueue(.main)
+
+    AsyncFunction("saveImageToPhotos") { (url: URL, _: String, promise: Promise) in
+      saveImageToPhotoLibrary(url: url, promise: promise)
+    }
+
     View(OrcaMobileWebShellView.self) {
-      Events("onLoadState", "onBridgeMessage", "onExternalNavigation")
+      Events("onLoadState", "onBridgeMessage", "onExternalNavigation", "onBackEdgeSwipe")
 
       Prop("generationDirectory") { (view: OrcaMobileWebShellView, value: String) in
         view.setGenerationDirectory(value)
@@ -31,6 +42,10 @@ public class OrcaMobileWebShellModule: Module {
 
       Prop("bridgeEnabled") { (view: OrcaMobileWebShellView, value: Bool) in
         view.setBridgeEnabled(value)
+      }
+
+      Prop("backEdgeSwipe") { (view: OrcaMobileWebShellView, value: Bool) in
+        view.setBackEdgeSwipe(value)
       }
 
       AsyncFunction("postBridgeMessage") {

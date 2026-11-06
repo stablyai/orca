@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { vi } from 'vitest'
 import type {
   AgentSessionLease,
@@ -15,7 +15,7 @@ import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fix
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { TerminalIdentityReadContext } from '../terminal/query/terminal-identity-read-context'
 import { OrchestrationDb } from '../orchestration/db'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'

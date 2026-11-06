@@ -39,7 +39,9 @@ export async function checkpointJournalRig(
   })
   const deferred = createDeferredStructuredAgentSessionEventSink({
     ...testEventSinkLogging('recovery'),
-    watermarks: options.watermarks
+    watermarks: options.watermarks,
+    // A live session binds provider reading control before streaming.
+    readingControl: { pauseReading: () => {}, resumeReading: () => {} }
   })
   const publish: Mock<StructuredAgentSessionEventTarget['publish']> =
     vi.fn<StructuredAgentSessionEventTarget['publish']>()

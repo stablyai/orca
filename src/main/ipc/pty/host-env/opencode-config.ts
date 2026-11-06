@@ -4,11 +4,11 @@ import {
 } from '../../../opencode/legacy-shared-config-dir'
 import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
 import { resolveOpenCodeSourceConfigDir } from './pi-agent'
-import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-launch/startup/agent-overlay-env'
 import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveOpenCodeConfigDirectory } from '../../../../shared/opencode-config-directory'
-import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
+import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup/shell-startup-env'
 import type { BuildPtyHostEnvOptions } from './types'
 
 type OpenCodeSourceConfig = {

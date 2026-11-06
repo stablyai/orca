@@ -1,7 +1,7 @@
 import { BrowserError } from '../browser-error'
 import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
-import { assertRemoteCliPageAccess } from '../remote-cli-page-admission'
+import { assertRemoteCliPageAccess } from '../routing/input-ownership/remote-cli-page-admission'
 import type { ActionEffectsHost } from './agent-browser-action-effects'
 
 const EFFECTS_SNAPSHOT_TIMEOUT_MS = 5_000

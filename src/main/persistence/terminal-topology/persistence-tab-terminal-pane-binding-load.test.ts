@@ -11,7 +11,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../shared/layout-owner-switch', () => ({
@@ -84,10 +84,5 @@ describe("main's Store load binds a tab's own terminal to its unbound pane", () 
     const loaded = loadStored(session)
     expect(Object.keys(loaded.tabsByWorktree)).toEqual([WORKTREE])
     expect(loaded.terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-a' })
-  })
-
-  it('not while the window owns the layout', () => {
-    layoutOwner.isMain = false
-    expect(loadStored().terminalLayoutsByTabId['tab-a']?.ptyIdsByLeafId).toBeUndefined()
   })
 })

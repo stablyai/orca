@@ -115,7 +115,10 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
     conversationCommands:
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
-    files: nativeChatFiles
+    compactInstructions:
+      nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
+    files: nativeChatFiles,
+    threadGoal: nativeChatController.nativeChatThreadGoal
   })
 
   useEffect(() => {

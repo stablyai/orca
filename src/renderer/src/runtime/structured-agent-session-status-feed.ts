@@ -5,7 +5,7 @@ import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agen
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames
-} from '../../../shared/agent-session-conversation-names'
+} from '../../../shared/agent-session/agent-session-conversation-names'
 import {
   AgentSessionAssociationObservation,
   foldAgentSessionStatusEvent,

@@ -1,7 +1,7 @@
 import type {
   PairedE2EEAuthReply,
   PairedE2EEClientHandshake
-} from '../../../shared/paired-e2ee-client-handshake'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { resolveWebRuntimeAuthRejection } from './web-runtime-auth-verdict'
 import {
@@ -13,7 +13,7 @@ import {
   sealWebRuntimePlanAuth,
   type WebRuntimeConnectionState
 } from './web-runtime-connection-frame-router'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { WEB_PAIRED_E2EE_PRIMITIVES } from './web-paired-e2ee-primitives'
 import {
   tokenOnlyCredentialSource,
@@ -30,6 +30,8 @@ export type WebRuntimeConnectionLifecycle = {
   credential?: WebRuntimeCredentialSource
   // Why: only the primary socket registers a key; helper sockets reuse it once active.
   allowKeyMigration?: boolean
+  crewAttempt?: true
+  assertCurrent?: () => void
 }
 
 /** How one web transport authenticates each socket it opens (token, key, or a key migration). */
@@ -81,14 +83,14 @@ export class WebRuntimeConnectionAuth {
     fallbackToken: string
     isCurrent: () => boolean
     send: (frame: string) => void
-    fail: () => void
+    fail: (error: unknown) => void
   }): Promise<void> {
     this.readyAccepted = true
     let frame: string
     try {
       frame = await sealWebRuntimePlanAuth(args.handshake, this.plan, args.fallbackToken)
-    } catch {
-      args.fail()
+    } catch (error) {
+      args.fail(error)
       return
     }
     if (args.isCurrent()) {
@@ -141,5 +143,55 @@ export class WebRuntimeConnectionAuth {
     if (this.plan?.kind === 'migrate' && !this.readyAccepted) {
       this.credential.migrationUnavailable()
     }
+  }
+}
+
+export async function handleRejectedWebRuntimeAuth(
+  reply: Parameters<WebRuntimeConnectionAuth['rejected']>[0],
+  {
+    auth,
+    lifecycle,
+    getSocket,
+    isClosed,
+    failSetup,
+    failAuth,
+    close
+  }: {
+    auth: WebRuntimeConnectionAuth
+    lifecycle: WebRuntimeConnectionLifecycle
+    getSocket: () => WebSocket | null
+    isClosed: () => boolean
+    failSetup: (error: unknown) => void
+    failAuth: (error: WebRuntimeClientError) => void
+    close: () => void
+  }
+): Promise<void> {
+  const socket = getSocket()
+  let outcome: Awaited<ReturnType<WebRuntimeConnectionAuth['rejected']>>
+  try {
+    lifecycle.assertCurrent?.()
+    outcome = await auth.rejected(reply)
+    if (lifecycle.crewAttempt && getSocket() === socket && !isClosed()) {
+      lifecycle.assertCurrent?.()
+    }
+  } catch (error) {
+    if (!lifecycle.crewAttempt) {
+      throw error
+    }
+    if (getSocket() === socket && !isClosed()) {
+      failSetup(error)
+    }
+    return
+  }
+  if (lifecycle.crewAttempt && (getSocket() !== socket || isClosed())) {
+    return
+  }
+  if (outcome.kind === 'failed') {
+    failAuth(outcome.error)
+  }
+  if (lifecycle.crewAttempt) {
+    close()
+  } else {
+    socket?.close()
   }
 }

@@ -46,17 +46,29 @@ function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup
   return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
 }
 
-export function getTaskSourceContextSummary(args: {
-  provider: TaskProvider
+type RepoBackedTaskSourceSummaryArgs = {
   providerLabel: string
-  repoContexts?: readonly TaskSourceContext[]
+  repoContexts: readonly TaskSourceContext[]
+  /** Resolved list sources; null names no repository. Saved project identity is not the list's source. */
+  repoIdentities: readonly (TaskProviderIdentity | null)[]
   hostAvailability?: readonly TaskSourceHostAvailability[]
   hostLabelById?: HostLabelLookup
-  accountHostId?: ExecutionHostScope | null
   selectedRepoCount?: number
-  linearWorkspaceName?: string | null
-  jiraSiteName?: string | null
-}): TaskSourceContextSummary {
+}
+
+export function getTaskSourceContextSummary(
+  args:
+    | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
+    | {
+        provider: Extract<TaskProvider, 'linear' | 'jira'>
+        providerLabel: string
+        hostAvailability?: readonly TaskSourceHostAvailability[]
+        hostLabelById?: HostLabelLookup
+        accountHostId?: ExecutionHostScope | null
+        linearWorkspaceName?: string | null
+        jiraSiteName?: string | null
+      }
+): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
@@ -116,22 +128,16 @@ export function getTaskSourceAvailabilityNotice(args: {
   }
 }
 
-function getRepoBackedTaskSourceSummary(args: {
-  providerLabel: string
-  repoContexts?: readonly TaskSourceContext[]
-  hostAvailability?: readonly TaskSourceHostAvailability[]
-  hostLabelById?: HostLabelLookup
-  selectedRepoCount?: number
-}): TaskSourceContextSummary {
-  const contexts = args.repoContexts ?? []
+function getRepoBackedTaskSourceSummary(
+  args: RepoBackedTaskSourceSummaryArgs
+): TaskSourceContextSummary {
+  const contexts = args.repoContexts
   const hostLabels = uniqueLabels(
     contexts.map((context) => getHostLabel(context.hostId, args.hostLabelById))
   )
   const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
   const availabilityLabel = getAvailabilityLabel(unavailableHosts)
-  const identityLabels = uniqueLabels(
-    contexts.map((context) => getProviderIdentityLabel(context.providerIdentity))
-  )
+  const identityLabels = uniqueLabels(args.repoIdentities.map(getProviderIdentityLabel))
   const accountLabels = uniqueLabels(contexts.map((context) => context.accountLabel))
   const repoCount = args.selectedRepoCount ?? contexts.length
   const hostLabel =

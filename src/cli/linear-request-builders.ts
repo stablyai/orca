@@ -146,7 +146,7 @@ export function buildIssueRequest(
     current: input ? false : flags.get('current') === true,
     workspaceId,
     include: includes,
-    depth: clampLinearIssueDepth(requestedDepth),
+    depth: includes.children ? clampLinearIssueDepth(requestedDepth) : 0,
     context: buildLinearCurrentContext(cwd, remote)
   }
 }

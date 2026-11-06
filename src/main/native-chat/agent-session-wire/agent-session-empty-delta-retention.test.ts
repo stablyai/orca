@@ -1,6 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import { createCodexStructuredItemStreams } from '../../codex/codex-structured-item-streams'
+import { createCodexStructuredItemStreams } from '../../codex/structured/items/codex-structured-item-streams'
 import { createAgentSessionDeltaCoalescer } from './agent-session-delta-coalescer'
 
 describe('empty streamed deltas', () => {

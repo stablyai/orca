@@ -1,19 +1,22 @@
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type {
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
-} from '../../shared/ai-vault-session-title'
-import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-session-title'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { listAiVaultSessions } from '../ai-vault/cached-session-list'
 import { deleteAiVaultSessionForRemoteClient } from '../ai-vault/host-session-delete'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
-import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-titles/session-title-resolver'
 
 export class RuntimeAiVaultCommands {
   constructor(

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
-import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
+import { detectAgentStatusFromTitle } from '../../shared/agent-status/title/agent-title-status'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

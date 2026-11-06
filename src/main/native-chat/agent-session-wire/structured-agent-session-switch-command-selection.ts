@@ -9,7 +9,7 @@ import type {
   AgentSessionSwitchDeadline,
   AgentSessionSwitchResult,
   AgentSessionSwitchReceipt
-} from '../../../shared/agent-session-switch-execution'
+} from '../../../shared/agent-session/requests/agent-session-switch-execution'
 
 // Commands outlive the read handle they may close themselves.
 export type SwitchCommand = {

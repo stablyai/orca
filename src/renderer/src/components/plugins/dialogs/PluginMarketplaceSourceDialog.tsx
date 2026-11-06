@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
@@ -39,12 +39,14 @@ export function PluginMarketplaceSourceDialog({
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
     if (!open) {
       setBusyAction(null)
       setError(null)
     }
-  }, [open])
+  }
 
   const add = async (): Promise<void> => {
     if (!url.trim() || !gitRef.trim() || busyAction) {

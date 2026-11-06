@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { createCodexStructuredItemStreams } from '../../codex/codex-structured-item-streams'
+import { createCodexStructuredItemStreams } from '../../codex/structured/items/codex-structured-item-streams'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 

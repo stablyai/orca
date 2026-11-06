@@ -3,7 +3,7 @@ import { View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { TextField } from './composer-input/TextField'
 import {
   buildTerminalShortcutKey,

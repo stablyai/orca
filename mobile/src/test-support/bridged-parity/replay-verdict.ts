@@ -3,27 +3,27 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import { absentResultExplainsResiduals } from './absent-result-evidence'
 import { classifyBridgedParity } from './divergence-classes'
-import { divergingFields, recordingWithoutRpcMeta } from './divergence-evidence'
+import { divergingFields } from './divergence-evidence'
 
 export type BridgedReplay = {
   recording: Recording | null
+  comparison?: Recording
+  didThrow: boolean
   thrown: unknown
-  pairs: BridgePortPair<RpcClient>[]
+  pairs: Pick<BridgePortPair<RpcClient>, 'toShell' | 'toPage' | 'diagnostics' | 'hostDiagnostics'>[]
 }
 
-function certifyReplay(
+function replayDifference(
   expected: Recording,
   scenarios: readonly RecordingScenario[],
-  run: BridgedReplay,
-  replyMeta: boolean
+  run: BridgedReplay
 ) {
-  const actual =
-    run.recording && (replyMeta ? recordingWithoutRpcMeta(run.recording, true) : run.recording)
+  const actual = run.comparison ?? run.recording
   const fields = actual ? divergingFields(expected, actual) : []
-  if (!actual || run.thrown !== null) {
+  if (run.didThrow || !actual) {
     return { name: 'unclassified' as const, fields }
   }
-  if (fields.length === 0) {
+  if (!fields.length) {
     return { name: 'identical' as const, fields }
   }
   return {
@@ -35,7 +35,8 @@ function certifyReplay(
         expected,
         actual,
         scenarios,
-        run.pairs
+        run.pairs,
+        run.recording!
       ),
       paramsMismatch: null,
       refusalReleasedStream: false
@@ -44,15 +45,15 @@ function certifyReplay(
   }
 }
 
-/** Each replay must explain its own complete residuals before the counterfactual labels the pair. */
+// Callers verify any declared probe projection before passing a comparison view.
 export function strictReplayVerdict(
   expected: Recording,
   scenarios: readonly RecordingScenario[],
   run: BridgedReplay,
   asIf: BridgedReplay
 ) {
-  const original = certifyReplay(expected, scenarios, run, false)
-  const replyMeta = certifyReplay(expected, scenarios, asIf, true)
+  const original = replayDifference(expected, scenarios, run)
+  const replyMeta = replayDifference(expected, scenarios, asIf)
   const name =
     original.name === 'unclassified' || replyMeta.name === 'unclassified'
       ? 'unclassified'

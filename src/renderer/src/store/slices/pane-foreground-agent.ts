@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 
 /** 'launch-record': the daemon's launch identity on reattach, which can outlive the process. */
 export type PaneForegroundAgentEvidence = 'process-read' | 'launch-record'

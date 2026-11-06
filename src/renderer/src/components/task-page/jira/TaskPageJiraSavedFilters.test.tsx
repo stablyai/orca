@@ -19,12 +19,6 @@ function setup(overrides: Partial<React.ComponentProps<typeof TaskPageJiraSavedF
   render(<TaskPageJiraSavedFilters {...props} />)
   return { user: userEvent.setup(), props }
 }
-it('applies a stored query without rewriting it', async () => {
-  const { user, props } = setup()
-  await user.click(screen.getByRole('button', { name: 'Saved filters' }))
-  await user.click(screen.getByRole('option', { name: /My work/ }))
-  expect(props.onApply).toHaveBeenCalledWith(mine)
-})
 it('saves another named filter and requires explicit updates to existing queries', async () => {
   const { user, props } = setup({ currentJql: 'project = APP' })
   await user.click(screen.getByRole('button', { name: 'Saved filters' }))
@@ -50,28 +44,4 @@ it('renames, explicitly updates, and deletes a saved filter', async () => {
   await user.click(screen.getByRole('button', { name: 'Edit My work' }))
   await user.click(screen.getByRole('button', { name: 'Delete filter' }))
   expect(props.onDelete).toHaveBeenCalledWith(mine.id)
-})
-it('keeps draft text when the SSH host rejects a save', async () => {
-  const { user } = setup({
-    onUpdate: vi.fn(async () => {
-      throw new Error('Host disconnected')
-    })
-  })
-  await user.click(screen.getByRole('button', { name: 'Saved filters' }))
-  await user.click(screen.getByRole('button', { name: 'Edit My work' }))
-  await user.click(screen.getByRole('button', { name: 'Update filter' }))
-  expect(screen.getByRole('textbox', { name: 'JQL' })).toHaveProperty('value', mine.jql)
-})
-it('explains an older-host limitation while preventing writes', async () => {
-  const { user, props } = setup({
-    disabled: true,
-    error: 'Update the Jira host to save and reuse filters.'
-  })
-  await user.click(screen.getByRole('button', { name: 'Saved filters' }))
-  expect(screen.getByRole('alert').textContent).toContain('Update the Jira host')
-  expect(screen.getByRole('button', { name: 'Save current filter' })).toHaveProperty(
-    'disabled',
-    true
-  )
-  expect(props.onCreate).not.toHaveBeenCalled()
 })

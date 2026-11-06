@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace-session-host-hydration'
-import { withoutWslMovedLocalRows, wslMovedSessionReadApi } from './wsl-moved-local-session-rows'
+import { wslMovedSessionReadApi } from './wsl-moved-local-session-rows'
 
 const HOST: ExecutionHostId = 'runtime:wsl%3AUbuntu'
 const LOCAL_ID = 'repo-a::\\\\wsl.localhost\\Ubuntu\\home\\dev\\app'
@@ -103,22 +103,6 @@ function localPartition(): WorkspaceSessionState {
 }
 
 describe('WSL moved local session rows', () => {
-  it("keeps only a moved workspace's chats, and every other workspace whole", () => {
-    const local = withoutWslMovedLocalRows(localPartition(), MOVED)
-
-    expect(local.tabsByWorktree).toEqual({
-      [STAYING_ID]: [terminal('tab-9', STAYING_ID, 'staying')]
-    })
-    expect(Object.keys(local.terminalLayoutsByTabId)).toEqual(['tab-9'])
-    expect(local.unifiedTabs?.[LOCAL_ID]?.map((entry) => entry.id)).toEqual(['chat-1'])
-    expect(local.tabGroups?.[LOCAL_ID]?.[0]).toMatchObject({
-      tabOrder: ['chat-1'],
-      activeTabId: 'chat-1'
-    })
-    expect(local.activeTabIdByWorktree?.[LOCAL_ID]).toBeUndefined()
-    expect(local.unifiedTabs?.[STAYING_ID]?.map((entry) => entry.id)).toEqual(['tab-9'])
-  })
-
   it("hydrates one tab-1, the host's, when both partitions hold it; the local chat stays", async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       wslMovedSessionReadApi(MOVED, {

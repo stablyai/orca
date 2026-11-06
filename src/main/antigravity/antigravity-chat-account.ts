@@ -8,10 +8,14 @@ import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisit
 import { RevisionedState } from '../runtime/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/acp-launch-gate'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
 const retained = new ProviderAcquisitionStarts<SignInOwner>()
-const folder = hostFolderAccountBinding('GEMINI_HOME', 'antigravity-chat', ['antigravity-acp'])
+const folder = hostFolderAccountBinding('GEMINI_HOME', ANTIGRAVITY_CHAT_HOME_FOLDER, [
+  ANTIGRAVITY_ACP_HOME
+])
 
 export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity')
 

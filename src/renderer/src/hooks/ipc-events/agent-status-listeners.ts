@@ -3,7 +3,7 @@ import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   RefusedPaneResume
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore

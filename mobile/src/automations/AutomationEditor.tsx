@@ -7,7 +7,7 @@ import { useAutomationTargetDrafts } from './use-automation-target-drafts'
 import { Text, View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileAutomation } from './automation-reply-schema'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
 import type { MobileNewTabAgentOption } from '../session/mobile-new-tab-agent-options'
 import { AutomationAdvancedFields } from './AutomationAdvancedFields'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
@@ -148,12 +148,15 @@ export function AutomationEditor(props: {
     props.onDraftChange(draft)
   }, [draft, props.onDraftChange])
 
-  const agentOptions = agents.map((option) => ({ value: option.agent, label: option.label }))
+  const agentOptions: { value: string; label: string }[] = agents.map((option) => ({
+    value: option.agent,
+    label: option.label
+  }))
   if (draft.agentId && !agentOptions.some((option) => option.value === draft.agentId)) {
     agentOptions.unshift({
       value: draft.agentId,
       label: t('automations.mobile.savedAgent', '{{agent}} (saved)', {
-        agent: MOBILE_TUI_AGENT_LABELS[draft.agentId]
+        agent: mobileTuiAgentLabel(draft.agentId)
       })
     })
   }

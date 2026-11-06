@@ -84,6 +84,7 @@ describe('useMobileStructuredAgentSession transcript', () => {
       rendered.hook = useMobileStructuredAgentSession({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's request, subscription and connection members are provided.
         client: client as RpcClient,
+        pairedHostClient: null,
         sessionId: 'session-1',
         enabled: true,
         connected: true,

@@ -1,4 +1,4 @@
-import { newChatPermissionModeForSettings } from '../../../shared/agent-chat-permission-mode'
+import { newChatPermissionModeForSettings } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { homedir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
@@ -7,8 +7,8 @@ import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-setting
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { resolveAgentPermission } from '../../../shared/tui-agent-permission-choice'
-import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import { resolveAgentPermission } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedState['settings'] {
   const defaults = getDefaultPersistedState(homedir())

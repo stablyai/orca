@@ -10,7 +10,7 @@ import { SheetHeader } from '../nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../SheetPrimaryButton'
 import { ListGroup, ListRow } from '../list/ListGroup'
 import { MobileSwitch } from '../MobileSwitch'
-import { normalizeHostedReviewHeadRef } from '../../../../src/shared/hosted-review-refs'
+import { normalizeHostedReviewHeadRef } from '../../../../src/shared/source-control/hosted-review/hosted-review-refs'
 import { hostedReviewCopy } from '../../source-control/hosted-review-copy'
 import {
   mobileHostedReviewCreateIntentProgressMessage,

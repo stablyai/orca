@@ -9,7 +9,7 @@ import {
 import {
   pluginPanelActDriver,
   type PluginPanelActDriver
-} from '../../right-sidebar/plugin-panel-act-driver'
+} from '../../right-sidebar/plugin-panels/health/plugin-panel-act-driver'
 import { runPluginPanelActs } from './plugin-view-acts'
 import {
   PLUGIN_PANEL_ACT_FIRST_DRAW_MS,

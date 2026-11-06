@@ -8,8 +8,8 @@ export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const
 
 export type AgentSessionQueuedMessagePausedReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
 
-/** stopped pauses all automatic sends until Resume or a new turn starts. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
-export type AgentSessionQueuePause = { reason: 'stopped' }
+/** Stop/failure pause automatic sends until Resume or a new turn starts. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
+export type AgentSessionQueuePause = { reason: 'stopped' | 'failed' }
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
 export type AgentSessionQueuePublicationFields = {

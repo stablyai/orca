@@ -15,7 +15,7 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch-model-preferences'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
 // A real Orca session ID: a minted worker's preamble names it by this, not its handle.

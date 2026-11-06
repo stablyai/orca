@@ -21,7 +21,7 @@ import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew
 import { CrewFrame, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID } from '../db/contract-constants'

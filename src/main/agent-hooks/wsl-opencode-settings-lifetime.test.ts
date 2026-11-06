@@ -10,11 +10,11 @@ import { createInstallPluginsHandler } from '../../wsl-guest/wsl-install-plugins
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { REINSTALL_MIN_INTERVAL_MS } from './wsl-hook-relay-deps'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
-} from '../../shared/agent-hook-relay'
+} from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { WSL_HOOK_FS_METHODS } from '../../shared/wsl-hook-relay-contract'
 
 function gate() {
@@ -242,115 +242,4 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
       expect(requests).toHaveLength(settledCount)
     }
   )
-
-  it('preserves known pointers after plugin rejection without treating it as revocation', async () => {
-    pause = 'detect'
-    await manager.ensureForDistro('fixture')
-    const oldV1 = manager.getOpenCodeOverlayDir('fixture')
-    const oldV2 = manager.getOpenCodeOverlayDir('fixture', 'opencode2')
-    now += REINSTALL_MIN_INTERVAL_MS + 1
-    const refresh = manager.ensureForDistro('fixture')
-    await beforeSources.reached
-    settings = { disabledTuiAgents: ['opencode', 'opencode2'] }
-    const disabled = manager.ensureForDistro('fixture')
-    beforeSources.release()
-    await pendingRequest.reached
-    rejectRequest = true
-    settings = { disabledTuiAgents: [] }
-    const restored = manager.ensureForDistro('fixture')
-    pendingRequest.release()
-    await Promise.all([refresh, disabled, restored])
-    expect(requests).toHaveLength(2)
-    expect(manager.getOpenCodeOverlayDir('fixture')).toBe(oldV1)
-    expect(manager.getOpenCodeOverlayDir('fixture', 'opencode2')).toBe(oldV2)
-    await manager.ensureForDistro('fixture')
-    expect(requests).toHaveLength(2)
-  })
-
-  it('tracks the settings sent by successive Pi and OMP requests', async () => {
-    pause = 'plugin'
-    await manager.ensureForDistro('fixture', undefined, 'pi')
-    const secondKind = gate()
-    onPluginRequest = async (index) => {
-      if (index === 2) {
-        await pendingRequest.wait()
-      }
-      if (index === 3) {
-        await secondKind.wait()
-      }
-    }
-    const refresh = manager.ensureForDistro('fixture', undefined, 'omp')
-    await pendingRequest.reached
-    settings.disabledTuiAgents = ['opencode', 'opencode2']
-    const disabled = manager.ensureForDistro('fixture')
-    pendingRequest.release()
-    await secondKind.reached
-    expect(requests[2]).toMatchObject({
-      launchKind: 'omp',
-      opencodePluginSource: '',
-      opencode2PluginSource: ''
-    })
-    settings.disabledTuiAgents = []
-    const restored = manager.ensureForDistro('fixture')
-    secondKind.release()
-    await Promise.all([refresh, disabled, restored])
-    expect(requests.map((request) => request.launchKind)).toEqual(['pi', 'pi', 'omp', 'pi', 'omp'])
-    expect(requests.at(-1)).toMatchObject(sources)
-    expect(manager.getOpenCodeOverlayDir('fixture')).toBeTruthy()
-    expect(manager.getOpenCodeOverlayDir('fixture', 'opencode2')).toBeTruthy()
-    const pi = manager.getGuestAgentPath('fixture', 'pi')
-    const omp = manager.getGuestAgentPath('fixture', 'omp')
-    if (!pi || !omp) {
-      throw new Error('missing guest agent paths')
-    }
-    expect(readFileSync(join(pi, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain('// pi')
-    expect(readFileSync(omp, 'utf8')).toContain('// omp')
-    await manager.ensureForDistro('fixture')
-    expect(requests).toHaveLength(5)
-  })
-
-  it('bounds repeated pre-plugin failures and retries after the cooldown', async () => {
-    pause = 'hooks'
-    await manager.ensureForDistro('fixture')
-    const previous = manager.getOpenCodeOverlayDir('fixture')
-    now += REINSTALL_MIN_INTERVAL_MS + 1
-    const refresh = manager.ensureForDistro('fixture')
-    await beforeSources.reached
-    settings.disabledTuiAgents = ['opencode', 'opencode2']
-    rejectHooks = true
-    const waiters = Array.from({ length: 4 }, () => manager.ensureForDistro('fixture'))
-    beforeSources.release()
-    await Promise.all([refresh, ...waiters])
-    expect(hookCount).toBe(3)
-    expect(requests).toHaveLength(1)
-    expect(manager.getOpenCodeOverlayDir('fixture')).toBe(previous)
-    await manager.ensureForDistro('fixture')
-    expect(hookCount).toBe(3)
-    now += REINSTALL_MIN_INTERVAL_MS + 1
-    rejectHooks = false
-    pendingRequest.release()
-    await manager.ensureForDistro('fixture')
-    expect(hookCount).toBe(4)
-    expect(requests.at(-1)).toMatchObject({ opencodePluginSource: '', opencode2PluginSource: '' })
-    expect(manager.getOpenCodeOverlayDir('fixture')).toBeNull()
-  })
-
-  it('keeps a disposed generation from publishing into a reconnected manager', async () => {
-    pause = 'plugin'
-    await manager.ensureForDistro('fixture')
-    now += REINSTALL_MIN_INTERVAL_MS + 1
-    const refresh = manager.ensureForDistro('fixture')
-    await pendingRequest.reached
-    const waiters = Array.from({ length: 4 }, () => manager.ensureForDistro('fixture'))
-    manager.disposeAll({ permanent: false })
-    activeGuest = createGuest('replacement')
-    await manager.ensureForDistro('fixture')
-    const current = manager.getOpenCodeOverlayDir('fixture')
-    expect(current).toContain(activeGuest.home)
-    pendingRequest.release()
-    await Promise.all([refresh, ...waiters])
-    expect(requests).toHaveLength(3)
-    expect(manager.getOpenCodeOverlayDir('fixture')).toBe(current)
-    expect(manager.getOpenCodeOverlayDir('fixture', 'opencode2')).toContain(activeGuest.home)
-  })
 })

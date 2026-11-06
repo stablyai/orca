@@ -1,5 +1,5 @@
 import { GitMerge, GitPullRequestClosed, GitPullRequestDraft, type LucideIcon } from 'lucide-react'
-import type { HostedReviewState } from '../../../../shared/hosted-review'
+import type { HostedReviewState } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 /** Every review surface renders state from here; `unknown` means we have a number but no fetched state. */
 export type ReviewStateForDisplay = HostedReviewState | 'unknown' | null | undefined

@@ -1,4 +1,4 @@
-import { startAgentSessionCommandMenuQuery } from '../../../src/shared/agent-session-command-menu-query'
+import { startAgentSessionCommandMenuQuery } from '../../../src/shared/agent-session/agent-session-command-menu-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'

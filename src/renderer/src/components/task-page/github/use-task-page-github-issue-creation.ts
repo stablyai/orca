@@ -64,6 +64,17 @@ export function useTaskPageGitHubIssueCreation<Model extends TaskPageGitHubIssue
     }
     setNewIssueSubmitting(true)
     try {
+      const sourceReady = await useAppStore
+        .getState()
+        .githubSourceCollections.awaitSave(newIssueTargetRepo)
+      // Why: the awaited save's own toast already reports its failure; any other unsafe target is this press's.
+      if (sourceReady === 'save-failed') {
+        return
+      }
+      if (!sourceReady()) {
+        toast.error(translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.'))
+        return
+      }
       const result = newIssueRuntimeTarget
         ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
             newIssueRuntimeTarget,

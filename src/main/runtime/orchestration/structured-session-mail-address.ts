@@ -10,7 +10,7 @@
  * points its mail starts it again. For mail, a conversation has ended only when its chat was closed.
  */
 
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
 import type { OrchestrationDb } from './db'
@@ -61,6 +61,11 @@ export function structuredSessionMailReach(
     resolveLineageRunningSession(store, record.sessionId),
     (id) => Boolean(addressableSessionParty(id, db, canonicalStore)),
     () => {
+      // One keyed question per check, never every visible tab to find one.
+      const retired = store.isSessionTabRetired
+      if (retired) {
+        return { present: true, isListed: (id: string) => !retired(id) }
+      }
       const visible = store.getVisibleSessionTabIndex?.()
       return visible
         ? { present: visible.present, isListed: (id: string) => visible.sessionIds.includes(id) }

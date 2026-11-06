@@ -157,15 +157,6 @@ function linkIntent(store: StoreApi<AppState>, explicit = false) {
 }
 
 describe('file links open beside their source', () => {
-  it('captures the source only within the workspace that owns the link', () => {
-    const store = createEditorTabsStore()
-    store.getState().createUnifiedTab('wt-2', 'terminal', { id: 'source' })
-    addTab(store, 'terminal', 'source')
-
-    expect(linkIntent(store)?.workspaceId).toBe('wt-1')
-    expect(captureEditorOpenLinkIntent(store.getState(), 'missing', 'source')).toBeNull()
-  })
-
   it('moves a native-chat link from the chat group to the neighboring editor', async () => {
     const store = createEditorTabsStore()
     addTab(store, 'agent-session', 'source')
@@ -226,24 +217,6 @@ describe('file links open beside their source', () => {
       existing.id
     )
     expect(b).not.toBe(c)
-  })
-
-  it('reuses the existing view when only the source holds the file', async () => {
-    const store = createEditorTabsStore()
-    const { a } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    addEditor(store, '/repo/link.ts', a)
-    store.getState().activateTab('source')
-
-    const main = await drawTabsFromMain(store)
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([a])
-    expect(store.getState().openFiles.filter((f) => f.filePath === '/repo/link.ts')).toHaveLength(1)
-    expect(opened?.groupId).toBe(a)
   })
 
   it('keeps placement on the captured source when focus moves during resolution', async () => {

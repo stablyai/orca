@@ -1,11 +1,14 @@
 import { isDeepStrictEqual } from 'node:util'
-import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { prepareJournalOutcomeWrite } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournal } from './journal-open'
+import type Database from '../../sqlite/sync-database'
+import type { JournalOperationReceipt } from './journal-row-writer'
+import { journalStoppedUsageLimitCut } from './journal-stopped-usage-limit-cut'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 
 // A full restore per check: development samples each chat so long streams stay responsive.
 const DEVELOPMENT_VERIFY_INTERVAL_MS = 60_000
@@ -22,13 +25,26 @@ export class JournalWriteProjection {
       database: JournalHostDatabase
       state: () => JournalReducerState
       adopt: (state: JournalReducerState) => void
+      withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
     }
   ) {}
 
   /** The callback is invoked only after the outer transaction has committed. */
-  prepare(db: Database.Database, rows: readonly JournalRow[], savedAt: number): () => void {
-    const transition = prepareJournalOutcomeWrite(db, this.deps.state(), rows, savedAt)
-    return () => this.deps.adopt(transition.adopt())
+  prepare(
+    db: Database.Database,
+    rows: readonly JournalRow[],
+    savedAt: number,
+    finishFold?: (draft: JournalReducerState) => void
+  ): () => void {
+    const transition = prepareJournalOutcomeWrite(db, this.deps.state(), rows, savedAt, finishFold)
+    // A stopped cut and its withdrawal commit together, so no reader sees it schedulable.
+    const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
+    const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined
+    withdrawal?.write(db)
+    return () => {
+      withdrawal?.committed()
+      this.deps.adopt(transition.adopt())
+    }
   }
 
   /** Runs after commit notification, never in the adopt path. */

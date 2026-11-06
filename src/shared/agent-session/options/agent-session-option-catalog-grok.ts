@@ -3,7 +3,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
 import { parseGrokModelList } from '../../grok-model-list-probe'
 
 // Omit none (untranslated), minimal and max (never advertised by a grok menu) from the canonical effort ladder.

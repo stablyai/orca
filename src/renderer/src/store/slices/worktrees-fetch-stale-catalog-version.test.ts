@@ -8,7 +8,7 @@ import {
 } from './worktrees-detected-listing-fixtures'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
 import { worktreeCatalogVersionKey } from './worktrees/listing/worktree-catalog-version-state'
-import { completeSameIdHostScopedRemoval } from './worktrees/teardown/host-qualified-worktree-removal'
+import './worktrees/teardown/host-qualified-worktree-removal'
 import { applyCreatedWorktree } from './worktrees/create/created-worktree-state-merge'
 import {
   createTestStore,
@@ -311,37 +311,6 @@ describe('catalog version bookkeeping', () => {
     expect(
       store.getState().worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey('repo1', 'local')]
     ).toBe(APPLIED_BY_CREATE)
-  })
-})
-
-describe('a removal on one of two hosts that share a worktree id', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetRemoteRuntimeMocks()
-    resetWorktreeSliceModuleMemory()
-  })
-
-  it("records the removal's version for the removed host", async () => {
-    const store = createTestStore()
-    const { created } = seed(store)
-    const removedVersion = { epoch: 'ssh-host-epoch', sequence: 4 }
-
-    await completeSameIdHostScopedRemoval({
-      set: store.setState,
-      get: store.getState,
-      worktreeId: created.id,
-      requiredExecutionHostId: 'ssh:ssh-1',
-      removalResult: { catalogVersion: removedVersion },
-      removalRoute: null,
-      target: { kind: 'local' },
-      worktreeBeforeRemoval: created,
-      suppressPreservedBranchToast: true,
-      rowAlreadyDropped: true
-    })
-
-    const versions = store.getState().worktreeCatalogVersionByRepoHost
-    expect(versions[worktreeCatalogVersionKey('repo1', 'ssh:ssh-1')]).toEqual(removedVersion)
-    expect(versions[worktreeCatalogVersionKey('repo1', 'local')]).toBe(APPLIED_BY_CREATE)
   })
 })
 

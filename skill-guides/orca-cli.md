@@ -97,6 +97,7 @@ Other common commands:
 ORCA repo list --json
 ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
+ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
@@ -115,6 +116,8 @@ ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --jso
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; folder workspaces have no Git worktrees or source control. With `--environment`, pass an absolute path on that server.
 
 Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
 
@@ -237,6 +240,7 @@ Terminal rules:
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
+- A chat tab has no terminal handle, so `terminal rename` cannot rename it. Use `ORCA chat rename --session <sessionId> --name "New Name" --json` with the `sessionId` `agent launch` printed; inside a chat, omit `--session` to rename that chat.
 - `terminal create --title` and `terminal rename` set the tab title, which `terminal list` reports under `visualLayouts`. `terminal set-pane-title` sets one pane's title, reported as `terminals[].paneTitle`. `terminals[].title` may be the tab title or the running program's own title, which agents repaint constantly, so never match on it to re-find a terminal.
 - `terminals[].agentIdentity`, when present, is only the agent type (e.g. `codex`), not a session identity, so two Codex panes share it. To find a specific agent's terminal, join `worktree ps --json` `agents[].paneKey` (`<tabId>:<leafId>`) to the `tabId` and `leafId` of a `terminal list` row to get its handle.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.

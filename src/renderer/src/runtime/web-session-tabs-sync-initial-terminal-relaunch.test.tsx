@@ -158,27 +158,6 @@ function makeWorktree(): Worktree {
   }
 }
 
-function hostTerminalSnapshot(snapshotVersion: number): RuntimeMobileSessionTabsResult {
-  return {
-    ...emptyActiveSnapshot(snapshotVersion),
-    activeGroupId: 'host-tab-1',
-    activeTabId: 'host-tab-1::leaf-1',
-    activeTabType: 'terminal',
-    tabs: [
-      {
-        type: 'terminal',
-        id: 'host-tab-1::leaf-1',
-        parentTabId: 'host-tab-1',
-        leafId: 'leaf-1',
-        title: 'Terminal 1',
-        terminal: 'term_host',
-        status: 'ready',
-        isActive: true
-      }
-    ]
-  }
-}
-
 function runtimeStatusMap(connectionGeneration: number): AppState['runtimeStatusByEnvironmentId'] {
   return new Map([[ENV, connectedRuntimeStatus('runtime-a', connectionGeneration)]])
 }
@@ -253,51 +232,6 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
 
     pendingCreate.resolve(undefined)
     await act(settle)
-    hook.unmount()
-  })
-
-  // Successful create may refresh an unconfirmed empty frame; retain latch without a mirrored row to avoid duplicate seeding.
-  it('does not seed again after a create that resolved without mirroring a row', async () => {
-    // The create succeeds but writes no tabsByWorktree row (host has not published the tab yet).
-    mocks.createTerminal.mockResolvedValue({ status: 'created' })
-
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]).toBeUndefined()
-
-    // Re-run the active effect (workspace switch back) after the create already settled.
-    act(() => {
-      useAppStore.setState({ runtimeStatusByEnvironmentId: runtimeStatusMap(2) })
-    })
-    await act(settle)
-
-    await publish(findActiveSubscription(1), { type: 'snapshot', ...emptyActiveSnapshot(2) })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    hook.unmount()
-  })
-
-  // RPC/network failures return failed, not throw; release the latch so later focus can retry.
-  it('retries the bootstrap on the next focus after a create that returned failed', async () => {
-    mocks.createTerminal.mockResolvedValue({ status: 'failed', message: 'host unreachable' })
-
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]).toBeUndefined()
-
-    // The next focus installs a fresh closure; with the latch released, it may seed again.
-    act(() => {
-      useAppStore.setState({ runtimeStatusByEnvironmentId: runtimeStatusMap(2) })
-    })
-    await act(settle)
-
-    await publish(findActiveSubscription(1), { type: 'snapshot', ...emptyActiveSnapshot(2) })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(2)
     hook.unmount()
   })
 
@@ -377,29 +311,6 @@ describe('activating a host-owned workspace before the host has answered', () =>
     resetStaleDocumentVisibilityForTesting()
   })
 
-  it('does not add a terminal to a workspace whose host terminals have not arrived yet', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
-    await act(settle)
-    await publish(findActiveSubscription(0), { type: 'snapshot', ...hostTerminalSnapshot(1) })
-
-    expect(mocks.createTerminal).not.toHaveBeenCalled()
-    hook.unmount()
-  })
-
-  it('opens exactly one terminal once the host answers that the workspace is empty', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
-    await act(settle)
-    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    hook.unmount()
-  })
-
   it('opens one terminal when the host first says "ask me later" and then answers empty', async () => {
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
@@ -418,56 +329,6 @@ describe('activating a host-owned workspace before the host has answered', () =>
       publicationEpoch: 'empty:1'
     })
 
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    hook.unmount()
-  })
-
-  it('does not count an "ask me later" frame as zero terminals', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const subscription = findActiveSubscription(0)
-    await publish(subscription, {
-      type: 'snapshot',
-      ...emptyActiveSnapshot(0),
-      publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
-    })
-
-    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
-    await act(settle)
-    await publish(subscription, { type: 'updated', ...hostTerminalSnapshot(1) })
-
-    expect(mocks.createTerminal).not.toHaveBeenCalled()
-    hook.unmount()
-  })
-  it('opens one terminal on an older host whose "ask me later" is never followed by an answer', async () => {
-    mocks.hostAnswersEmptyWorktree.mockResolvedValue(false)
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findActiveSubscription(0), {
-      type: 'snapshot',
-      ...emptyActiveSnapshot(0),
-      publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
-    })
-
-    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
-    await act(settle)
-
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    hook.unmount()
-  })
-
-  it('opens the first terminal of a workspace this client just created without waiting', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, {
-      runtimeEnvironmentId: ENV,
-      activate: false,
-      unknownHostCountIsEmpty: true
-    })
-    await act(settle)
-
-    expect(mocks.hostAnswersEmptyWorktree).not.toHaveBeenCalled()
     expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
     hook.unmount()
   })

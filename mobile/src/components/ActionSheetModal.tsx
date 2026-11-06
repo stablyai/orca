@@ -4,7 +4,7 @@ import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from './list/ListGroup'
 
 export type ActionSheetAction = {
@@ -29,6 +29,8 @@ type Props = {
   message?: string
   actions: ActionSheetAction[]
   onClose: () => void
+  /** Runs once the sheet has slid away, after any closeBeforePress action. */
+  onAfterClose?: () => void
 }
 
 function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon): LucideIcon {
@@ -106,7 +108,14 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
   )
 }
 
-export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
+export function ActionSheetModal({
+  visible,
+  title,
+  message,
+  actions,
+  onClose,
+  onAfterClose
+}: Props) {
   const pendingActionRef = useRef<(() => void) | null>(null)
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
@@ -128,6 +137,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
         const pendingAction = pendingActionRef.current
         pendingActionRef.current = null
         pendingAction?.()
+        onAfterClose?.()
       }}
       dragContentToDismiss
     >

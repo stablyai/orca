@@ -6,6 +6,7 @@ import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
+import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
@@ -17,6 +18,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../transport/use-host-profile'
 import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
@@ -109,14 +111,30 @@ export function MobileSessionActiveContent({
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
-    createTabBusy
+    createTabBusy,
+    handleCreateBrowserRef,
+    isFloatingWorkspaceRoute
   } = controller
+  // Why: a browser tab needs a real worktree and a connected host known to stream it; elsewhere
+  // only the phone's browser is offered, so the sheet never shows a choice that would refuse.
+  const canOpenUrlInOrca =
+    client !== null &&
+    controller.presentedConnState === 'connected' &&
+    !isFloatingWorkspaceRoute &&
+    browserScreencastSupported === true
+  const openUrlInOrca = useMemo(
+    () =>
+      canOpenUrlInOrca ? (url: string) => void handleCreateBrowserRef.current?.(url) : undefined,
+    [canOpenUrlInOrca, handleCreateBrowserRef]
+  )
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
+  const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
   )
+  const openNativeChatAccounts = useOpenHostAccounts(controller.router, hostId)
   const navigateToSender = useCallback(
     (senderWorktreeId: string, paneKey: string) => {
       const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
@@ -327,6 +345,8 @@ export function MobileSessionActiveContent({
               <MobileNativeChatOverlay
                 controller={nativeChatController}
                 imageSource={nativeChatImageSource}
+                worktreePath={controller.worktreePath}
+                connState={controller.connState}
                 activeSessionTabId={controller.activeSessionTab?.id}
                 onOpenFile={handleNativeChatFileTap}
                 images={nativeChatImages}
@@ -347,6 +367,17 @@ export function MobileSessionActiveContent({
                 keyboardInset={keyboardLift}
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                onOpenUrlInOrca={openUrlInOrca}
+                hostOutage={nativeChatHostOutage}
+                onRunInTerminal={(command) =>
+                  void controller.handleCreateTerminal(undefined, {
+                    startupCommand: command,
+                    startupCommandDelivery: 'shell-ready',
+                    terminalView: true
+                  })
+                }
+                // Accounts open on the paired host, so a chat another server runs offers none.
+                onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
               />
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>

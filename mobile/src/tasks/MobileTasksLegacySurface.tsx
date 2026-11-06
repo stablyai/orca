@@ -11,11 +11,11 @@ import {
   AlertTriangle,
   colors,
   ActionSheetModal,
-  BottomDrawerModalHost,
   GitBranch,
   ConfirmModal,
   useMobileColorScheme
 } from './mobile-tasks-dependencies'
+import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   getHostedReviewMergeMethodLabel,

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from './provider-timeline-budget'
 import {
   assistantText,
   backgroundTask,
@@ -110,9 +109,9 @@ describe('one canonical row per provider item', () => {
     ])
   })
 
-  it('keeps every open stream’s whole text while the budget holds them, and refuses the next', async () => {
+  it('keeps early named text when more than 128 other streams remain open', async () => {
     const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    for (let index = 0; index < MAX_PROVIDER_TIMELINE_OPEN_ENTRIES; index += 1) {
+    for (let index = 0; index < 160; index += 1) {
       rig.assembler.apply({
         type: 'text.delta',
         item: { id: `m${index}` },
@@ -127,7 +126,7 @@ describe('one canonical row per provider item', () => {
         channel: 'assistant',
         text: 'A'
       }).admission
-    ).toEqual({ accepted: false, reason: 'failed' })
+    ).toEqual({ accepted: true })
     rig.assembler.apply({ type: 'text.delta', item: { id: 'm0' }, channel: 'assistant', text: 'B' })
     rig.assembler.flush()
     expect(messageText((await rig.row(providerItemId('item', 'm0')))?.body)).toBe('AB')
