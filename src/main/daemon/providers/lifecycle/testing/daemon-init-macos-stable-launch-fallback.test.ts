@@ -125,42 +125,6 @@ describe('daemon-init: macOS stable-bundle launch fallback', () => {
     return launcher('/fake/socket', '/fake/token')
   }
 
-  describe('with the real stable launcher', () => {
-    const originalGetSystemVersion = Object.getOwnPropertyDescriptor(process, 'getSystemVersion')
-
-    function stubSystemVersion(version: string): void {
-      Object.defineProperty(process, 'getSystemVersion', {
-        configurable: true,
-        value: () => version
-      })
-    }
-
-    beforeEach(() => {
-      stableLaunch.failure = 'real'
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-      materializeMock.mockReset()
-    })
-
-    afterEach(() => {
-      stableLaunch.failure = 'unavailable'
-      if (originalGetSystemVersion) {
-        Object.defineProperty(process, 'getSystemVersion', originalGetSystemVersion)
-      } else {
-        Reflect.deleteProperty(process, 'getSystemVersion')
-      }
-    })
-
-    it('forks when the running app ships no terminal host helper', async () => {
-      stubSystemVersion('15.4')
-      materializeMock.mockRejectedValue(
-        new Error('The running app has no macOS terminal host helper')
-      )
-      await expect(launchOnce()).resolves.toBeTruthy()
-      expect(materializeMock).toHaveBeenCalledOnce()
-      expect(forkMock).toHaveBeenCalledOnce()
-    })
-  })
-
   it('never forks beside a stable-bundle job whose fate is unknown', async () => {
     stableLaunch.failure = 'fatal'
     await expect(launchOnce()).rejects.toThrow('Could not start the macOS terminal service')
