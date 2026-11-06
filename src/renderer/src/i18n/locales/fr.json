@@ -6004,7 +6004,6 @@
           "savedInProjectSettings": "Enregistré dans les <settings>paramètres de ce projet</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Enregistrer le setup local",
           "3933401d28": "Configurer",
           "31b8b01a45": "Paramètres",
           "4a98f907ae": "Réessayer",
@@ -6019,7 +6018,15 @@
           "5bfd5c8779": "Ignorer les scripts de setup",
           "detectedFromSource": "Détecté dans <source>{{source}}</source>",
           "ignoresSharedSetup": "Ce dépôt ignore les scripts de setup partagés de <yaml>orca.yaml</yaml>. Ajoutez une commande locale ou changez la source dans les paramètres.",
-          "foundSetupCommandIn": "Une commande de setup a été trouvée dans <source>{{source}}</source>. Enregistrez-la pour l’exécuter pour les nouveaux worktrees."
+          "foundSetupCommandIn": "Une commande de setup a été trouvée dans <source>{{source}}</source>. Enregistrez-la pour l’exécuter pour les nouveaux worktrees.",
+          "reviewSetupScript": "Vérifier le script de setup"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Vérifier le script de setup",
+          "description": "Une fois enregistré, il s'exécute chaque fois qu'Orca crée un worktree pour {{repo}}.",
+          "setupScript": "Script de setup",
+          "archiveScript": "Script d'archivage",
+          "save": "Enregistrer le setup local"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Annuler",

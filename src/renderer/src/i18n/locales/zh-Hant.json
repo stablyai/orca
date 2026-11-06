@@ -6005,7 +6005,6 @@
           "savedInProjectSettings": "已儲存於此<settings>專案的設定</settings>中"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "儲存本機設定",
           "3933401d28": "設定",
           "31b8b01a45": "設定",
           "4a98f907ae": "重試",
@@ -6020,7 +6019,15 @@
           "5bfd5c8779": "關閉設定指令碼",
           "detectedFromSource": "從 <source>{{source}}</source> 偵測到",
           "ignoresSharedSetup": "此存放庫會忽略共用的 <yaml>orca.yaml</yaml> 設定指令碼。請新增本機命令，或在「設定」中變更來源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。"
+          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。",
+          "reviewSetupScript": "檢查設定指令碼"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "檢查設定指令碼",
+          "description": "儲存後，Orca 每次為 {{repo}} 建立工作樹時都會執行此指令碼。",
+          "setupScript": "設定指令碼",
+          "archiveScript": "封存指令碼",
+          "save": "儲存本機設定"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "取消",

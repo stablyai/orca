@@ -5765,7 +5765,6 @@
           "savedInProjectSettings": "Guardado en los <settings>ajustes de este proyecto</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Guardar configuración local",
           "3933401d28": "Configurar",
           "31b8b01a45": "Ajustes",
           "4a98f907ae": "Reintentar",
@@ -5780,7 +5779,15 @@
           "5bfd5c8779": "Descartar scripts de configuración",
           "detectedFromSource": "Detectado en <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositorio ignora los scripts de configuración compartidos de <yaml>orca.yaml</yaml>. Añade un comando local o cambia la fuente en Ajustes.",
-          "foundSetupCommandIn": "Se encontró un comando de configuración en <source>{{source}}</source>. Guárdalo para ejecutarlo en los nuevos worktrees."
+          "foundSetupCommandIn": "Se encontró un comando de configuración en <source>{{source}}</source>. Guárdalo para ejecutarlo en los nuevos worktrees.",
+          "reviewSetupScript": "Revisar script de configuración"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Revisar script de configuración",
+          "description": "Al guardarlo, se ejecutará cada vez que Orca cree un worktree para {{repo}}.",
+          "setupScript": "Script de configuración",
+          "archiveScript": "Script de archivado",
+          "save": "Guardar configuración local"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancelar",

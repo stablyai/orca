@@ -6148,7 +6148,6 @@
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Yerel kurulumu kaydet",
           "3933401d28": "Yapılandır",
           "31b8b01a45": "Ayarlar",
           "4a98f907ae": "Yeniden dene",
@@ -6163,7 +6162,15 @@
           "5bfd5c8779": "Kurulum betiklerini kapat",
           "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin."
+          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
+          "reviewSetupScript": "Kurulum betiğini incele"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Kurulum betiğini incele",
+          "description": "Kaydedildiğinde, Orca {{repo}} için her worktree oluşturduğunda bu çalışır.",
+          "setupScript": "Kurulum betiği",
+          "archiveScript": "Arşiv betiği",
+          "save": "Yerel kurulumu kaydet"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "İptal",
