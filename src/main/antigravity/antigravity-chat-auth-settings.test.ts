@@ -171,7 +171,7 @@ it('keeps committed account settings readable while sign-in holds the launch gat
     async () => {
       antigravityChatSignIn.set({
         auth: 'unknown',
-        flow: { flowId: 'signing-in', phase: 'waiting' }
+        flow: { flowId: 'signing-in', owner: 'fixture-client', phase: 'waiting' }
       })
       expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
     }

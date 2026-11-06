@@ -1,5 +1,5 @@
 import {
-  readAntigravityChatSignInRevision,
+  readAntigravityChatSignInSnapshot,
   subscribeAntigravityChatSignIns
 } from '@/runtime/antigravity-chat-sign-in-status'
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
@@ -49,8 +49,8 @@ function AuthForm({
   const id = useId()
   const edited = useRef(false)
   const reads = useRef(0)
-  const revision = useSyncExternalStore(subscribeAntigravityChatSignIns, () =>
-    readAntigravityChatSignInRevision(owner)
+  const observation = useSyncExternalStore(subscribeAntigravityChatSignIns, () =>
+    readAntigravityChatSignInSnapshot(owner)
   )
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState<AntigravityChatAuthConfig | null>(null)
@@ -99,7 +99,7 @@ function AuthForm({
     return () => {
       current = false
     }
-  }, [environmentId, supported, attempt, revision])
+  }, [environmentId, supported, attempt, observation])
   const draft =
     method === 'oauth-business'
       ? { method, gcpProject: project, gcpLocation: location }

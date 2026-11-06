@@ -5,26 +5,39 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { callAntigravityChatAuthConfig } from '@/runtime/runtime-antigravity-accounts-client'
+import { observeAntigravityChatSignIn } from '@/runtime/antigravity-chat-sign-in-status'
+import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/runtime-rpc-subscribe'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-const status = vi.hoisted(() => ({ revision: 0, listeners: new Set<() => void>() }))
-vi.mock('@/runtime/antigravity-chat-sign-in-status', () => ({
-  readAntigravityChatSignInRevision: () => status.revision,
-  subscribeAntigravityChatSignIns: (listener: () => void) => {
-    status.listeners.add(listener)
-    return () => status.listeners.delete(listener)
-  }
+const streams = vi.hoisted(() => ({
+  handlers: new Map<string, RuntimeRpcSubscriptionHandlers>(),
+  releases: [] as (() => void)[]
 }))
+const key = (owner: RuntimeClientTarget): string =>
+  owner.kind === 'local' ? 'local' : owner.environmentId
+function follow(owner: RuntimeClientTarget): void {
+  streams.releases.push(observeAntigravityChatSignIn(owner))
+}
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => 'supported'
 }))
 vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
-  callAntigravityChatAuthConfig: vi.fn()
+  callAntigravityChatAuthConfig: vi.fn(),
+  callAntigravityChatSignIn: vi.fn(),
+  subscribeAntigravityChatSignIn: vi.fn(
+    async (owner: RuntimeClientTarget, handlers: RuntimeRpcSubscriptionHandlers) => {
+      streams.handlers.set(owner.kind === 'local' ? 'local' : owner.environmentId, handlers)
+      handlers.onEvent({ revision: 0, auth: 'unknown', flow: null })
+      return { unsubscribe: () => {} }
+    }
+  )
 }))
 afterEach(() => {
   cleanup()
-  vi.resetAllMocks()
-  status.revision = 0
-  status.listeners.clear()
+  streams.releases.splice(0).forEach((release) => release())
+  streams.handlers.clear()
+  vi.mocked(callAntigravityChatAuthConfig).mockReset()
+  vi.useRealTimers()
 })
 
 it('applies a complete Enterprise choice to the selected execution host, keeping inputs on save failure', async () => {
@@ -34,6 +47,7 @@ it('applies a complete Enterprise choice to the selected execution host, keeping
     .mockResolvedValueOnce(personal)
     .mockRejectedValueOnce(new Error('Could not save account settings'))
   const user = userEvent.setup()
+  follow(target)
   render(<AntigravityChatAuthForm owner={target} disabled={false} />)
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   await user.click(screen.getByRole('combobox'))
@@ -60,12 +74,13 @@ it('follows another client’s account change while mounted and allows Personal 
       gcpLocation: 'us-central1'
     })
   const user = userEvent.setup()
-  render(<AntigravityChatAuthForm owner={{ kind: 'local' }} disabled={false} />)
+  const target = { kind: 'environment', environmentId: 'connected-client-change' } as const
+  follow(target)
+  render(<AntigravityChatAuthForm owner={target} disabled={false} />)
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   expect(screen.getByRole('button', { name: 'Apply account settings' })).toBeDisabled()
   await act(async () => {
-    status.revision++
-    status.listeners.forEach((listener) => listener())
+    streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
   })
   await waitFor(() =>
     expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project')
@@ -73,4 +88,31 @@ it('follows another client’s account change while mounted and allows Personal 
   await user.click(screen.getByRole('combobox'))
   await user.click(screen.getByRole('option', { name: 'Google account (personal)' }))
   expect(screen.getByRole('button', { name: 'Apply account settings' })).toBeEnabled()
+})
+
+it('refreshes the saved method after reconnecting to a restarted host with the same revision', async () => {
+  const target = { kind: 'environment', environmentId: 'restarted-host' } as const
+  vi.mocked(callAntigravityChatAuthConfig)
+    .mockResolvedValueOnce({ method: 'oauth-personal' })
+    .mockResolvedValue({
+      method: 'oauth-business',
+      gcpProject: 'persisted-enterprise-project',
+      gcpLocation: 'us-central1'
+    })
+  follow(target)
+  render(<AntigravityChatAuthForm owner={target} disabled={false} />)
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  expect(screen.getByRole('button', { name: 'Apply account settings' })).toBeDisabled()
+  vi.useFakeTimers()
+  await act(async () => {
+    streams.handlers.get(key(target))?.onClose()
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  vi.useRealTimers()
+  await waitFor(() =>
+    expect(screen.getByLabelText('Google Cloud project')).toHaveValue(
+      'persisted-enterprise-project'
+    )
+  )
+  expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
 })
