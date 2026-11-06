@@ -155,3 +155,19 @@ describe('runtime host status E2E routing', () => {
     ).not.toContain(spec)
   })
 })
+
+describe('agent descendant kill E2E routing', () => {
+  const spec = 'tests/e2e/agent-descendant-process-kill.spec.ts'
+  it.each([
+    'src/main/pty/process-retirement/pty-descendant-termination.ts',
+    'src/main/daemon/sessions/terminal-descendant-shutdown.ts',
+    'src/main/claude/agent-view/agent-view-service.ts'
+  ])('routes %s', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain(spec)
+  })
+  it('skips unit tests', () => {
+    expect(
+      selectPrE2eSpecs(['src/main/pty/process-retirement/pty-descendant-termination.test.ts'])
+    ).not.toContain(spec)
+  })
+})
