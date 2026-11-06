@@ -88,6 +88,8 @@ export class FollowUpActivityRouter {
 
   keys(authorities: readonly FollowUpActivityAuthority[]): string[] {
     const keys = new Set<string>()
+    const expandedInstances = new Set<string>()
+    const expandedWorkspaces = new Set<string>()
     const add = (matches: Iterable<string>) => {
       for (const key of matches) {
         keys.add(this.actions.get(key)!.prKey)
@@ -103,9 +105,15 @@ export class FollowUpActivityRouter {
       if (precise.size) {
         add(precise)
       } else {
-        add(this.instances.get(entry.instanceId ?? '') ?? [])
+        if (entry.instanceId && !expandedInstances.has(entry.instanceId)) {
+          expandedInstances.add(entry.instanceId)
+          add(this.instances.get(entry.instanceId) ?? [])
+        }
         for (const workspace of entry.workspaceIds ?? []) {
-          add(this.workspaces.get(workspace) ?? [])
+          if (!expandedWorkspaces.has(workspace)) {
+            expandedWorkspaces.add(workspace)
+            add(this.workspaces.get(workspace) ?? [])
+          }
         }
       }
     }
