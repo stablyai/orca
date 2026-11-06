@@ -7,8 +7,9 @@ import { runProcessSync } from '@orca/process-host'
 assert.equal(process.platform, 'win32', 'This smoke check requires Windows and an NSIS compiler')
 const compiler = process.argv[2]
 assert.ok(compiler, 'Pass the path to makensis.exe')
-const scratch = mkdtempSync(join(tmpdir(), 'Orca runtime lock '))
-assert.equal(dirname(scratch), tmpdir())
+const scratchPrefix = join(tmpdir(), 'Orca runtime lock ')
+const scratch = mkdtempSync(scratchPrefix)
+assert.equal(dirname(scratch), dirname(scratchPrefix))
 const header = resolve(import.meta.dirname, '../../../nsis/orca-process-check.nsh')
 const includes = resolve(
   import.meta.dirname,
