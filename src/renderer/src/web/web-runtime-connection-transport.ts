@@ -166,11 +166,11 @@ export class WebRuntimeConnectionTransport {
     })
   }
 
-  handleSocketClosed(closedWs: WebSocket): void {
+  handleSocketClosed(closedWs: WebSocket, closeCode?: number): void {
     if (this.ws !== closedWs) {
       return
     }
-    this.auth.socketClosed()
+    this.auth.socketClosed(closeCode)
     this.ws = null
     this.handshake = null
     this.timers.clear('connect')
@@ -233,7 +233,6 @@ export class WebRuntimeConnectionTransport {
     this.handshake = null
     installWebRuntimeSocket({
       socket,
-      connection: this.connection,
       plan,
       auth: this.auth,
       timers: this.timers,
