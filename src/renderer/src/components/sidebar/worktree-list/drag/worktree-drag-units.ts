@@ -1,5 +1,5 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -22,22 +22,31 @@ type WorktreeDragUnitRow =
   | { type: 'pending-creation' }
   | { type: 'folder-workspace' }
 
-/** Unit members are host identities, matching getWorktreeDragGroups. */
+/** Unit members are host identities, matching getWorktreeDragGroups: each row joins its own
+ * section's group, and a unit is a row with the deeper rows under it. A folder workspace's children
+ * start at depth 1 under a folder row that joins no group, so depth is relative to the unit's root. */
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
-  let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  const unitsByKey = new Map<
+    string,
+    (WorktreeDragUnitGroup['units'][number] & { depth: number })[]
+  >()
+  const groupUnits = (key: string) => {
+    let units = unitsByKey.get(key)
+    if (!units) {
+      units = []
+      unitsByKey.set(key, units)
+      groups.push({ key, units, worktreeIds: [] })
+    }
+    return units
+  }
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
   for (const row of rows) {
     if (row.type === 'header') {
-      current = { key: row.key, units: [] }
-      groups.push({
-        key: current.key,
-        units: current.units,
-        worktreeIds: current.units.map((unit) => unit.worktreeId)
-      })
+      groupUnits(row.key)
       continue
     }
     if (
@@ -53,24 +62,19 @@ export function getWorktreeDragUnitGroups(
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
       continue
     }
-    if (!current) {
-      current = { key: ALL_GROUP_KEY, units: [] }
-      groups.push({
-        key: current.key,
-        units: current.units,
-        worktreeIds: current.units.map((unit) => unit.worktreeId)
-      })
-    }
-    if (row.depth > 0 && current.units.length > 0) {
-      current.units.at(-1)!.worktreeIds.push(worktreeKey)
+    const units = groupUnits(row.sectionKey)
+    const last = units.at(-1)
+    if (last && row.depth > last.depth) {
+      last.worktreeIds.push(worktreeKey)
       continue
     }
-    current.units.push({ worktreeId: worktreeKey, worktreeIds: [worktreeKey] })
+    units.push({ worktreeId: worktreeKey, worktreeIds: [worktreeKey], depth: row.depth })
   }
 
   return groups
     .map((group) => ({
-      ...group,
+      key: group.key,
+      units: group.units.map(({ worktreeId, worktreeIds }) => ({ worktreeId, worktreeIds })),
       worktreeIds: group.units.map((unit) => unit.worktreeId)
     }))
     .filter((group) => group.worktreeIds.length > 0)

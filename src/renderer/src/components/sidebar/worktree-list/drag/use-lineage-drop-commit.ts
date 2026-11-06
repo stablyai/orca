@@ -20,6 +20,7 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getEligibleFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
@@ -169,13 +170,33 @@ export function useWorktreeLineageDropCommit(args: {
         worktreeMap,
         cyclicLineageIds
       })
+      // A row nested under a folder workspace unnests the same way.
+      for (const identity of sourceGroup.worktreeIds) {
+        const id = getWorktreeIdFromHostIdentity(identity)
+        const parent = parentIdentities?.get(identity)
+        if (
+          unnestArgs.draggedIds.includes(id) &&
+          !ids.includes(id) &&
+          parent !== undefined &&
+          parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
+        ) {
+          ids.push(id)
+        }
+      }
       if (ids.length === 0) {
         return
       }
       // Why: dropping a nested card on a reorder line is the un-nest escape hatch; clear only the dragged children.
       void unnestWorktrees(ids, updateWorktreeLineage)
     },
-    [cyclicLineageIds, updateWorktreeLineage, worktreeDragGroups, worktreeLineageById, worktreeMap]
+    [
+      cyclicLineageIds,
+      parentIdentities,
+      updateWorktreeLineage,
+      worktreeDragGroups,
+      worktreeLineageById,
+      worktreeMap
+    ]
   )
 
   return {
