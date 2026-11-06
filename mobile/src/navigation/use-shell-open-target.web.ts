@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigationContainerRef, usePathname, useRouter } from 'expo-router'
+import { useNavigationContainerRef, useRouter } from 'expo-router'
 // Expo Router's own stack router, the one Navigator falls back to; not re-exported from the package root.
 import { StackRouter } from 'expo-router/build/layouts/StackClient'
 // The store router.push resolves hrefs through; reading it keeps one resolver for both open paths.
@@ -63,14 +63,17 @@ function shellOpenStackRouter(
         const [only, ...others] = partial.routes
         const params: Record<string, unknown> = { ...only?.params }
         const target = params[BRIDGE_OPEN_ROUTE_PARAM]
-        const opened =
-          partial.stale !== false &&
-          others.length === 0 &&
-          typeof target === 'string' &&
-          opensHere(target)
-            ? stackRouteForHref(target, config.routeNames)
-            : null
-        if (only === undefined || opened === null || typeof target !== 'string') {
+        if (
+          only === undefined ||
+          others.length > 0 ||
+          partial.stale === false ||
+          typeof target !== 'string' ||
+          !opensHere(target)
+        ) {
+          return router.getRehydratedState(partial, config)
+        }
+        const opened = stackRouteForHref(target, config.routeNames)
+        if (opened === null) {
           return router.getRehydratedState(partial, config)
         }
         onSpliced(target)
@@ -84,7 +87,7 @@ function shellOpenStackRouter(
   }
 }
 
-function pathnameOf(href: string): string {
+function decodedPathnameOf(href: string): string {
   try {
     return decodeURIComponent(new URL(href, 'orca-page://document').pathname)
   } catch {
@@ -98,8 +101,6 @@ export function useShellOpenTarget(): StackRouterFactory {
   const client = usePageBridgeClient()
   const router = useRouter()
   const navigation = useNavigationContainerRef()
-  const pathname = useRef('')
-  pathname.current = usePathname()
   // What the router put in the stack, so a later init only opens a different target.
   const spliced = useRef<string | null>(null)
   const [stackRouter] = useState(() =>
@@ -125,7 +126,7 @@ export function useShellOpenTarget(): StackRouterFactory {
         return
       }
       // Already on top: a second copy would only stack the same screen under itself.
-      if (pathnameOf(target) === pathname.current) {
+      if (decodedPathnameOf(target) === store.getRouteInfo().pathname) {
         return
       }
       // A route update can land before the root navigator is ready; Expo Router refuses to route until then.

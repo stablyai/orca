@@ -77,15 +77,9 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
   const nodes = useRef(new Map<string, HTMLElement>())
-  const mounted = useRef(new Set<string>())
-  const [paintedKey, setPaintedKey] = useState<string | null>(null)
-  const waiting = useRef(false)
-  // Only a paint that releases a waiting route re-renders the stack; every other screen's paint is ignored.
-  const onPainted = useCallback((routeKey: string) => {
-    if (waiting.current) {
-      setPaintedKey(routeKey)
-    }
-  }, [])
+  // Until a screen paints, only the top is drawn: the host list under a shell-opened target must not compete with it.
+  const [released, setReleased] = useState(false)
+  const release = useCallback(() => setReleased(true), [])
 
   // Derive during render so a pop’s first frame still contains its outgoing screen.
   if (shown.routes !== routes) {
@@ -104,17 +98,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const underKey = transition?.kind === 'push' ? transition.underKey : null
   // Keep one keyed sibling list so moving the leaving screen to the end preserves its mount.
   const slots = transition?.kind === 'pop' ? [...routes, transition.leaving] : routes
-  // A route that starts beneath the top (the host list under a shell-opened target) mounts once the top paints, so its requests don't compete.
-  const drawn = slots.filter(
-    (route) => route.key === topKey || paintedKey === topKey || mounted.current.has(route.key)
-  )
-
-  useLayoutEffect(() => {
-    for (const route of drawn) {
-      mounted.current.add(route.key)
-    }
-    waiting.current = drawn.length < slots.length
-  })
+  const drawn = released ? slots : slots.filter((route) => route.key === topKey)
 
   // Start before paint so screens never flash at rest before sliding.
   useLayoutEffect(() => {
@@ -144,7 +128,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
             routeKey={route.key}
             nodes={nodes.current}
             visible={route.key === topKey || leaving || route.key === underKey}
-            onPainted={onPainted}
+            onPainted={released ? null : release}
           >
             {descriptor?.render()}
           </StackScreen>
@@ -164,21 +148,24 @@ function StackScreen({
   routeKey: string
   nodes: Map<string, HTMLElement>
   visible: boolean
-  onPainted: (routeKey: string) => void
+  onPainted: (() => void) | null
   children: ReactNode
 }) {
   useMobileColorScheme()
   const transparent = isOverlayPageRoute(usePathname())
   const reportToDocument = useRouteScreenPaintReporter()
-  // Pass the screen's paint on to the document's one report, and learn it here too.
+  // Pass the screen's paint on to the document's one report, and learn it here too while the stack waits for it.
   const report = useCallback(() => {
     const cancelDocument = reportToDocument()
-    const cancelOwn = reportAfterFirstPaint(FRAMES, () => onPainted(routeKey))
+    if (onPainted === null) {
+      return cancelDocument
+    }
+    const cancelOwn = reportAfterFirstPaint(FRAMES, onPainted)
     return () => {
       cancelDocument()
       cancelOwn()
     }
-  }, [reportToDocument, onPainted, routeKey])
+  }, [reportToDocument, onPainted])
   return (
     <View
       ref={(view: unknown) => {
