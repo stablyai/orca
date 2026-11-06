@@ -17,15 +17,15 @@ import {
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
 
-// A login-shell refresh resets shared desktop state; later screens on the same connection only detect.
-const probedTargets = new WeakMap<RpcClient, { epoch: string; targets: Set<string> }>()
+// A login-shell refresh resets shared desktop state, so it runs once per workspace per connection.
+const refreshedTargets = new WeakMap<RpcClient, { epoch: string; targets: Set<string> }>()
 
-function probedThisConnection(client: RpcClient): Set<string> {
+function refreshedThisConnection(client: RpcClient): Set<string> {
   const epoch = runtimeStatusProbeEpoch(client)
-  let entry = probedTargets.get(client)
+  let entry = refreshedTargets.get(client)
   if (entry?.epoch !== epoch) {
     entry = { epoch, targets: new Set() }
-    probedTargets.set(client, entry)
+    refreshedTargets.set(client, entry)
   }
   return entry.targets
 }
@@ -58,7 +58,8 @@ export function useMobileNewTabAgentOptions(args: {
     const observedTargets = observedTargetsRef.current
     const target = `${hostId}\u0000${workspaceKey}\u0000${hostRefusesOtherRuntime}`
     const observed = observedTargets.has(target)
-    const probed = probedThisConnection(client)
+    const refreshed = refreshedThisConnection(client)
+    const refresh = !observed && !refreshed.has(target) && Boolean(cached?.detectedAgents.length)
     setLoadState(cached ? 'loaded' : 'loading')
     setOptions(cached?.options ?? [])
 
@@ -68,13 +69,15 @@ export function useMobileNewTabAgentOptions(args: {
         worktreeId,
         hostRefusesOtherRuntime,
         settled: observed ? cached : null,
-        refresh: !observed && !probed.has(target) && Boolean(cached?.detectedAgents.length)
+        refresh
       })
       if (stale) {
         return
       }
       observedTargets.add(target)
-      probed.add(target)
+      if (refresh) {
+        refreshed.add(target)
+      }
       setCachedNewTabAgentInventory(hostId, workspaceKey, inventory)
       setOptions(inventory.options)
       setLoadState('loaded')

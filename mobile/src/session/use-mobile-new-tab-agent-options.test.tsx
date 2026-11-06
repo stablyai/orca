@@ -136,12 +136,16 @@ describe('useMobileNewTabAgentOptions', () => {
   it("refreshes the host's agents once per connection, and shows a refusal over the cached ones", async () => {
     const host: FakeHost = { agents: () => claude, connectedAt: 1 }
     const client = createClient(host)
-    for (let screen = 0; screen < 2; screen++) {
+    for (let screen = 0; screen < 3; screen++) {
       const earlier = mountDrawer('host-refusal')
       await earlier.render(client, true)
       earlier.unmount()
     }
-    expect(probes(client)).toEqual(['preflight.detectAgents', 'preflight.detectAgents'])
+    expect(probes(client)).toEqual([
+      'preflight.detectAgents',
+      'preflight.refreshAgents',
+      'preflight.detectAgents'
+    ])
 
     host.connectedAt = 2
     host.agents = () => ({
@@ -156,6 +160,7 @@ describe('useMobileNewTabAgentOptions', () => {
 
     expect(probes(client)).toEqual([
       'preflight.detectAgents',
+      'preflight.refreshAgents',
       'preflight.detectAgents',
       'preflight.refreshAgents'
     ])
