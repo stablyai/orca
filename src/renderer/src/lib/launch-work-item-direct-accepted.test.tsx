@@ -485,8 +485,9 @@ it('Start work reports one truthful recovery before a remote agent has been sele
     preferences.snapshot = { defaultTuiAgent: 'codex', disabledTuiAgents: [] }
     expect(
       readAgentLaunchPreferencesForWorkspace(useAppStore.getState(), {
-        kind: 'project',
-        repoId: 'repo-1'
+        kind: 'git-worktree',
+        repoId: 'repo-1',
+        executionHostId: 'runtime:hub-a'
       }).defaultTuiAgent
     ).toBe('codex')
     const table = projectRelationsTableFixture()
