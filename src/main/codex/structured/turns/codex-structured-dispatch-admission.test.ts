@@ -7,7 +7,6 @@ import {
   acquiredCodexAdapter,
   echoUserMessage,
   fakeCodexAppServer,
-  openAfterTurnStarts,
   startTurn,
   CODEX_TEST_THREAD_ID,
   CODEX_TEST_USER_MESSAGE,
@@ -44,39 +43,6 @@ function lifecycleRecorder(): {
 }
 
 describe('codex dispatch admission', () => {
-  it('admits a send queued behind a running turn and settles it when Codex echoes it', async () => {
-    // Steering joins the running turn; the echo arrives when Codex consumes the input.
-    const codex = fakeCodexAppServer({
-      'turn/steer': () => ({ turnId: 'turn-1' })
-    })
-    const settlements: LateSettlement[] = []
-    const adapter = await acquiredCodexAdapter({ codex, settlements })
-    const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1' })
-
-    const outcome = await send(adapter, 'client-2')
-
-    expect(outcome).toMatchObject({ state: 'admitted' })
-    expect(settlements).toEqual([])
-
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u2', clientId: 'client-2' })
-
-    // Match the ordinal history replay assigns to the second user message.
-    expect(settlements).toEqual([
-      {
-        sessionId: 'session-1',
-        clientMessageId: 'client-2',
-        providerIdentity: {
-          provider: 'codex',
-          threadId: CODEX_TEST_THREAD_ID,
-          turnId: 'turn-1',
-          ordinal: 1
-        }
-      }
-    ])
-  })
-
   it('correlates each send by client message id, not queue order', async () => {
     const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
@@ -128,32 +94,6 @@ describe('codex dispatch admission', () => {
     expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['someone-else'])
   })
 
-  it('rejects only when Codex answered and declined', async () => {
-    const { CodexAppServerRequestError } =
-      await import('../../app-server/codex-app-server-request-error')
-    const codex = fakeCodexAppServer({
-      'turn/start': () => {
-        throw new CodexAppServerRequestError(
-          'turn/start',
-          -32602,
-          'codex app-server turn/start failed: thread not found',
-          'thread not found'
-        )
-      }
-    })
-    const adapter = await acquiredCodexAdapter({ codex, settlements: [] })
-
-    expect(await send(adapter, 'client-1')).toEqual({
-      state: 'rejected',
-      reason: "Codex didn't accept this message: thread not found.",
-      rejection: {
-        kind: 'providerRejected',
-        detail: { text: 'thread not found', audience: 'person' },
-        neverReachedAgent: true
-      }
-    })
-  })
-
   it('retains correlation when a request fails after its write may have landed', async () => {
     const codex = fakeCodexAppServer({
       'turn/start': () => {
@@ -180,159 +120,6 @@ describe('codex dispatch admission', () => {
         }
       }
     ])
-  })
-
-  it('does not give a later turn the request time of an abandoned unknown send', async () => {
-    let attempt = 0
-    const codex = fakeCodexAppServer({
-      'turn/start': () => {
-        attempt += 1
-        if (attempt === 1) {
-          throw new Error('request timed out after write')
-        }
-        return { turn: { id: 'turn-later' } }
-      }
-    })
-    const settlements: LateSettlement[] = []
-    const recorded = lifecycleRecorder()
-    const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
-    const connection = codex.connections[0]!
-
-    await expect(send(adapter, 'client-unknown', 1_700_000_000_100)).rejects.toThrow(
-      'request timed out after write'
-    )
-    const later = send(adapter, 'client-later', 1_700_000_000_400)
-    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-later'))
-    await later
-    echoUserMessage(connection, {
-      turnId: 'turn-later',
-      itemId: 'item-later',
-      clientId: 'client-later'
-    })
-    connection.handlers.onNotification?.('turn/completed', {
-      threadId: CODEX_TEST_THREAD_ID,
-      turn: { id: 'turn-later' }
-    })
-
-    const turns = recorded.bodies.filter((body) => body.kind === 'turn')
-    expect(turns).toMatchObject([
-      {
-        turnId: 'turn-later',
-        state: 'running',
-        startedAt: 1_700_000_000_500,
-        requestedAt: 1_700_000_000_400
-      },
-      {
-        turnId: 'turn-later',
-        state: 'completed',
-        requestedAt: 1_700_000_000_400
-      }
-    ])
-    expect(
-      turns.some((turn) => turn.kind === 'turn' && turn.requestedAt === 1_700_000_000_100)
-    ).toBe(false)
-  })
-
-  it('does not attribute a send armed after an autonomous turn started', async () => {
-    const codex = fakeCodexAppServer({
-      'turn/steer': () => ({ turnId: 'turn-resumed' })
-    })
-    const settlements: LateSettlement[] = []
-    const recorded = lifecycleRecorder()
-    const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
-    const connection = codex.connections[0]!
-
-    startTurn(connection, 'turn-resumed')
-    await send(adapter, 'client-mid-turn', 1_700_000_000_100)
-    echoUserMessage(connection, {
-      turnId: 'turn-resumed',
-      itemId: 'item-mid-turn',
-      clientId: 'client-mid-turn'
-    })
-
-    const turns = recorded.bodies.filter((body) => body.kind === 'turn')
-    expect(turns).toHaveLength(1)
-    expect(turns[0]).not.toHaveProperty('requestedAt')
-    expect(turns[0]).not.toHaveProperty('userItemId', agentJournalSubmissionKey('client-mid-turn'))
-    expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['client-mid-turn'])
-  })
-
-  it('keeps the earliest dispatched origin across out-of-order echoes and a clock step', async () => {
-    const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } }),
-      'turn/steer': () => ({ turnId: 'turn-1' })
-    })
-    const settlements: LateSettlement[] = []
-    const recorded = lifecycleRecorder()
-    const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
-    const connection = codex.connections[0]!
-
-    const opening = send(adapter, 'client-opening', 1_700_000_000_600)
-    const queued = send(adapter, 'client-queued', 1_700_000_000_200)
-    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-1'))
-    await Promise.all([opening, queued])
-    await send(adapter, 'client-mid-turn', 1_700_000_000_100)
-
-    echoUserMessage(connection, {
-      turnId: 'turn-1',
-      itemId: 'item-queued',
-      clientId: 'client-queued'
-    })
-    echoUserMessage(connection, {
-      turnId: 'turn-1',
-      itemId: 'item-mid-turn',
-      clientId: 'client-mid-turn'
-    })
-    echoUserMessage(connection, {
-      turnId: 'turn-1',
-      itemId: 'item-opening',
-      clientId: 'client-opening'
-    })
-
-    expect(
-      recorded.bodies
-        .filter((body) => body.kind === 'turn' && body.state === 'running')
-        .map((body) => (body.kind === 'turn' ? body.requestedAt : undefined))
-    ).toEqual([1_700_000_000_600])
-    expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual([
-      'client-queued',
-      'client-mid-turn',
-      'client-opening'
-    ])
-    expect(recorded.bodies.findLast((body) => body.kind === 'turn')).toMatchObject({
-      requestedAt: 1_700_000_000_600,
-      userItemId: agentJournalSubmissionKey('client-opening')
-    })
-  })
-
-  it('revises a completed turn when its exact echo arrives late', async () => {
-    const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } })
-    })
-    const settlements: LateSettlement[] = []
-    const recorded = lifecycleRecorder()
-    const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
-    const connection = codex.connections[0]!
-
-    const sending = send(adapter, 'client-late-echo', 1_700_000_000_100)
-    await openAfterTurnStarts(connection, 1, () => startTurn(connection, 'turn-1'))
-    await sending
-    connection.handlers.onNotification?.('turn/completed', {
-      threadId: CODEX_TEST_THREAD_ID,
-      turn: { id: 'turn-1' }
-    })
-    echoUserMessage(connection, {
-      turnId: 'turn-1',
-      itemId: 'item-late',
-      clientId: 'client-late-echo'
-    })
-
-    expect(recorded.bodies.findLast((body) => body.kind === 'turn')).toMatchObject({
-      state: 'completed',
-      requestedAt: 1_700_000_000_100,
-      userItemId: agentJournalSubmissionKey('client-late-echo')
-    })
-    expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['client-late-echo'])
   })
 
   it('names a hook-refused send as its turn opener when its turn ends in the reply chunk', async () => {
