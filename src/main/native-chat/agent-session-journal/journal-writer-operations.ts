@@ -31,6 +31,7 @@ import {
   rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import { holdUnsentSends } from './journal-unsent-send-hold'
+import { openJournalWriterSession } from './journal-writer-open'
 import {
   journalSubmissionSelected,
   type JournalSubmissionSelector
@@ -90,6 +91,7 @@ export type JournalWriterInputOperation =
       body: AgentJournalMessageItem
       options: JournalItemAppendOptions
     }
+  | { kind: 'open' }
 
 /** Recovery tries every send; earlier settlements stay committed when a later one fails, as they
  *  do on the host, so a failure is part of the answer rather than a rollback. */
@@ -191,6 +193,11 @@ export async function runJournalWriterOperation(
         receipt ? composeJournalOperationReceipts(goal, receipt) : goal
       )
     }
+    case 'open':
+      if (receipt) {
+        throw new Error('journal opens carry no receipt')
+      }
+      return openJournalWriterSession(session)
     case 'item-claiming':
       if (receipt) {
         throw new Error('journal attachment-claiming items carry no receipt')

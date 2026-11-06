@@ -3,6 +3,7 @@ import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/ag
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { decodeJournalOutcomeItem } from './journal-outcome-codec'
+import { lostLiveWorkJournalBody } from './journal-subagent-liveness'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type {
@@ -175,20 +176,23 @@ export class JournalSqlItemValues {
     this.scope.db
       .prepare(`INSERT INTO journal_proj_items
       (session_id, generation, entry_key, incarnation, ordinal, sequence, sequence_index,
-       revision, kind, turn_id, turn_item_id, opener_item_id, root, subagent_id, context_clear, byte_size)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       revision, kind, turn_id, turn_item_id, opener_item_id, root, subagent_id, context_clear, byte_size,
+       live_work)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id, generation, entry_key) DO UPDATE SET
       incarnation=excluded.incarnation, ordinal=excluded.ordinal, sequence=excluded.sequence,
       sequence_index=excluded.sequence_index, revision=excluded.revision, kind=excluded.kind,
       turn_id=excluded.turn_id, turn_item_id=excluded.turn_item_id,
       opener_item_id=excluded.opener_item_id, root=excluded.root,
-      subagent_id=excluded.subagent_id, context_clear=excluded.context_clear, byte_size=excluded.byte_size`)
+      subagent_id=excluded.subagent_id, context_clear=excluded.context_clear, byte_size=excluded.byte_size,
+      live_work=excluded.live_work`)
       .run(
         ...this.scope.prefix,
         location.key,
         location.incarnation,
         ordinal,
-        ...journalSqlItemMetadata(item, bytes)
+        ...journalSqlItemMetadata(item, bytes),
+        Number(lostLiveWorkJournalBody(item.body) !== null)
       )
   }
 }

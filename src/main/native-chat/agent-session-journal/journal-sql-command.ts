@@ -8,6 +8,7 @@ import { runJournalWriterOperation } from './journal-writer-operations'
 import { planJournalWriterRows } from './journal-writer-plan'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
+import { claimJournalSqlProjection, recordJournalSqlWatermark } from './journal-sql-meta'
 
 export class JournalSqlCommand {
   constructor(
@@ -34,6 +35,9 @@ export class JournalSqlCommand {
     if (!this.db.isTransaction) {
       throw new Error('journal SQL command requires its transaction')
     }
+    if (command.operation.kind === 'open') {
+      claimJournalSqlProjection(this.db, command.target)
+    }
     const session = this.session(command, command.savedAt ?? savedAt)
     const effects: JournalWriterEffectResult[] = []
     const receipt: JournalOperationReceipt | undefined = command.effects?.length
@@ -49,6 +53,7 @@ export class JournalSqlCommand {
       : undefined
     const value = await runJournalWriterOperation(session, command.operation, receipt)
     const { rows: _rows, goals, ...commit } = await session.finish()
+    recordJournalSqlWatermark(this.db, command.target.sessionId)
     return {
       ...commit,
       effects,

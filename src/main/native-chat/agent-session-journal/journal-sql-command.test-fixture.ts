@@ -4,6 +4,7 @@ import {
   createJournalTablesSql
 } from './journal-database-schema'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
+import { publishJournalSqlGeneration } from './journal-sql-meta'
 import { publishJournalSessionEpoch } from './journal-row-table'
 import {
   advanceJournalOutcomeSource,
@@ -40,12 +41,6 @@ export function seedJournalSqlCommands(db: Database.Database) {
     (state) => journalInputOrder(state).cards.ensure(state)
   )
   advanceJournalOutcomeSource(db, 'session', 'epoch', 1)
-  db.prepare('INSERT INTO journal_proj_meta VALUES (?, ?, ?, ?, ?)').run(
-    'session',
-    'epoch',
-    'projection',
-    1,
-    'open-token'
-  )
+  publishJournalSqlGeneration(db, 'session', 'projection', 'open-token')
   return { source, initial }
 }

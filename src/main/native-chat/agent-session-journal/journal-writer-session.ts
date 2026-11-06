@@ -146,6 +146,16 @@ export class JournalWriterSession {
     }
   }
 
+  /** Items whose saved body still shows live work, in item map order. */
+  liveWorkItemKeys(): string[] {
+    const scope = this.lastScope ?? this.scope()
+    return this.db
+      .prepare(`SELECT entry_key FROM journal_proj_items INDEXED BY journal_proj_items_live_work
+      WHERE session_id=? AND generation=? AND live_work=1 ORDER BY ordinal`)
+      .all(...scope.prefix)
+      .map((row) => JSON.parse(String(row.entry_key)) as string)
+  }
+
   private mailUnavailable(from: AgentMessageSource | undefined): boolean {
     if (!from || !orchestrationMailNotice(from)) {
       return false
