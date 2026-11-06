@@ -263,6 +263,25 @@ describe('detectTerminalComposerDraft', () => {
     ).toBeNull()
   })
 
+  it("reads Codex's sub-agent view placeholder as an empty composer", () => {
+    const placeholder = 'Viewing sub-agent \u2014 direct input is disabled'
+    expect(
+      detectTerminalComposerDraft({
+        rows: [`\u203a ${placeholder}`],
+        typedRows: ['\u203a'],
+        promptGlyphBoldRows: [true],
+        rowsBelow: ['', 'gpt-6.1-sol xhigh \u00b7 /tmp/project'],
+        typedRowsBelow: ['', ''],
+        rowsBelowWrapped: [false, false],
+        beforeCursor: '\u203a ',
+        afterCursor: '',
+        rawAfterCursor: placeholder,
+        cursorHidden: false,
+        cursorViewportRow: 4
+      })
+    ).toBeNull()
+  })
+
   it('keeps a draft continuation containing a middle dot', () => {
     expect(
       detectTerminalComposerDraft({

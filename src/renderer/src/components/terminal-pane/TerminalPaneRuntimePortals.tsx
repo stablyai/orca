@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import CodexRestartChip from '../CodexRestartChip'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
+import { CodexAgentSwitchCover } from './CodexAgentSwitchCover'
 import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 import { ClaudeDiffPanelNoticeBanner } from './ClaudeDiffPanelNoticeBanner'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
@@ -79,6 +80,12 @@ export function TerminalPaneCodexRestartPortals({
               ptyId={ptyId}
               tabId={tabId}
               leafId={pane.leafId}
+            />
+            <CodexAgentSwitchCover
+              key={`codex-agent-switch-${pane.id}`}
+              tabId={tabId}
+              leafId={pane.leafId}
+              background={controller.paneTitleBackground}
             />
             <ClaudeOldTerminalBanner
               key={`claude-old-terminal-${pane.id}-${ptyId}`}

@@ -1,14 +1,15 @@
 import { readTranscriptSlice } from '../../../native-chat/wsl-transcript-fs-access'
 import type { WslTranscriptFsTaskPriority } from '../../../native-chat/wsl-transcript-fs-gate'
+import { asRecord } from '../../../ai-vault/session-scanner-record-value'
 
 const ROLLOUT_READ_LIMIT = 64 * 1024
 
-/** Interactive resume uses exact priority; bulk AI Vault scans must not starve it. */
-export async function readCodexRolloutSessionMetaId(
+/** The rollout's first-line session_meta record. Interactive resume uses exact priority; bulk AI Vault scans must not starve it. */
+export async function readCodexRolloutSessionMeta(
   filePath: string,
   signal?: AbortSignal,
   priority: WslTranscriptFsTaskPriority = 'exact'
-): Promise<string | null> {
+): Promise<Record<string, unknown> | null> {
   let head: Buffer
   try {
     // The transcript gate bounds stalled WSL reads; missing or pruned rollouts cannot abort a scan (#15453).
@@ -25,25 +26,26 @@ export async function readCodexRolloutSessionMetaId(
     return null
   }
   try {
-    const record = JSON.parse(firstLine) as {
-      type?: unknown
-      id?: unknown
-      session_id?: unknown
-      thread_id?: unknown
-      payload?: { id?: unknown; session_id?: unknown; thread_id?: unknown }
-    }
-    if (record.type !== 'session_meta') {
-      return null
-    }
-    const id =
-      record.payload?.id ??
-      record.payload?.session_id ??
-      record.payload?.thread_id ??
-      record.id ??
-      record.session_id ??
-      record.thread_id
-    return typeof id === 'string' && id.length > 0 ? id : null
+    const record = asRecord(JSON.parse(firstLine))
+    return record?.type === 'session_meta' ? record : null
   } catch {
     return null
   }
+}
+
+export async function readCodexRolloutSessionMetaId(
+  filePath: string,
+  signal?: AbortSignal,
+  priority: WslTranscriptFsTaskPriority = 'exact'
+): Promise<string | null> {
+  const record = await readCodexRolloutSessionMeta(filePath, signal, priority)
+  const payload = asRecord(record?.payload)
+  const id =
+    payload?.id ??
+    payload?.session_id ??
+    payload?.thread_id ??
+    record?.id ??
+    record?.session_id ??
+    record?.thread_id
+  return typeof id === 'string' && id.length > 0 ? id : null
 }

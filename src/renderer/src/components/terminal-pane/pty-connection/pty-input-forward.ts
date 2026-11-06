@@ -7,6 +7,7 @@ import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/qu
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { isCodexAgentSwitching } from '@/lib/codex-child-row-view'
 import { getAppliedSizeReadE2eDelayMs } from '../pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from '../pty-size-reassertion'
 import { isPaneReplaying } from '../replay-guard'
@@ -56,6 +57,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     // Mobile driver lock withholds desktop input until explicit Take back restores input and dimensions.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
+      session.clearPendingTerminalInputIntent()
+      return
+    }
+    // Keys typed under the switch cover would land in Codex's picker and could pick a row.
+    if (isCodexAgentSwitching(session.cacheKey)) {
       session.clearPendingTerminalInputIntent()
       return
     }

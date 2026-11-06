@@ -1,8 +1,15 @@
 import { resolve } from 'node:path'
-import { getAiVaultWslHomeDirs } from '../../ai-vault/cached-session-list'
+import {
+  codexSessionsDirs,
+  configuredAdditionalCodexHomePaths,
+  getAiVaultWslHomeDirs
+} from '../../ai-vault/cached-session-list'
 import { listAiVaultSubagentSessionsInBackground } from '../../ai-vault/scan-service/session-scanner-background'
 import { claudeProjectsRootDirs } from '../../ai-vault/session-scanner-roots'
-import { sessionRowRootDirs } from '../../ai-vault/session-scanner-agent-sources'
+import {
+  sessionRowRootDirs,
+  AI_VAULT_AGENT_SOURCES
+} from '../../ai-vault/session-scanner-agent-sources'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
@@ -17,7 +24,7 @@ export async function listAiVaultSubagentSessions(
   // Untyped malformed IPC input follows the empty-result rejection contract.
   if (
     !args ||
-    (args.agent !== 'claude' && args.agent !== 'omp') ||
+    (args.agent !== 'claude' && args.agent !== 'omp' && args.agent !== 'codex') ||
     typeof args.parentFilePath !== 'string' ||
     !args.parentFilePath.trim()
   ) {
@@ -33,9 +40,22 @@ export async function listAiVaultSubagentSessions(
   const roots =
     args.agent === 'claude'
       ? claudeProjectsRootDirs({ wslHomeDirs })
-      : sessionRowRootDirs('omp', {}, wslHomeDirs)
-  if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
+      : args.agent === 'codex'
+        ? // Containment only needs configured homes; the running-distro probe stays with full scans.
+          AI_VAULT_AGENT_SOURCES.codex!.rootDirs(
+            {
+              additionalCodexSessionsDirs: codexSessionsDirs(configuredAdditionalCodexHomePaths())
+            },
+            wslHomeDirs
+          )
+        : sessionRowRootDirs('omp', {}, wslHomeDirs)
+  const sessionsRoot = roots.find((root) => isPathInsideOrEqual(resolve(root), parentFilePath))
+  if (!sessionsRoot) {
     return { sessions: [], issues: [] }
   }
-  return listAiVaultSubagentSessionsInBackground({ agent: args.agent, parentFilePath })
+  return listAiVaultSubagentSessionsInBackground({
+    agent: args.agent,
+    parentFilePath,
+    ...(args.agent === 'codex' ? { sessionsRoot } : {})
+  })
 }
