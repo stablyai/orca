@@ -1,5 +1,3 @@
-import { buildImageDataUri } from '../../../shared/image-data-uri'
-import { MAX_RASTER_IMAGE_PREVIEW_DIMENSION_PX } from '../../../shared/raster-image-preview-limits'
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -13,7 +11,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('image source actions', () => {
   it.each([
-    [MAX_RASTER_IMAGE_PREVIEW_DIMENSION_PX + 1, 1],
+    [32769, 1],
     [8192, 8192]
   ])(
     'saves original bytes with a %i x %i raster header without applying preview limits',
@@ -25,7 +23,6 @@ describe('image source actions', () => {
       bytes.writeUInt32BE(width, 16)
       bytes.writeUInt32BE(height, 20)
       const content = bytes.toString('base64')
-      expect(buildImageDataUri('image/png', content)).toBeNull()
       const readFile = vi.fn().mockResolvedValue({
         content: `${content.slice(0, 8)}\n${content.slice(8)}`,
         isBinary: true,

@@ -1,3 +1,4 @@
+import { svgMarkupDataUri } from '../../../../../shared/file-preview/svg-document'
 import { abortSignalReason } from '../../../../../shared/abort-signal-reason'
 import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -80,7 +81,11 @@ export async function convertImageBlobToPng(
   { downscaleToFit = false }: { downscaleToFit?: boolean } = {}
 ): Promise<Blob> {
   assertClipboardImageByteLengthWithinLimit(blob.size)
-  const url = URL.createObjectURL(blob)
+  // SVG HTML labels taint a canvas when loaded from a blob URL.
+  const url =
+    blob.type.split(';', 1)[0] === 'image/svg+xml'
+      ? svgMarkupDataUri(await blob.text())
+      : URL.createObjectURL(blob)
   try {
     const image = new Image()
     image.src = url
@@ -105,6 +110,8 @@ export async function convertImageBlobToPng(
       (png) => png.size
     )
   } finally {
-    URL.revokeObjectURL(url)
+    if (url.startsWith('blob:')) {
+      URL.revokeObjectURL(url)
+    }
   }
 }

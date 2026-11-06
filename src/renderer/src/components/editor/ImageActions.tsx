@@ -35,7 +35,10 @@ import {
   isLocalPathOpenBlocked,
   type LocalPathOpenOwner
 } from '@/lib/files/os-open/local-path-open-guard'
-import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/files/os-open/reveal-in-file-manager'
+import {
+  getRevealInFileManagerLabel,
+  revealInFileManager
+} from '@/lib/files/os-open/reveal-in-file-manager'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export type ImageActionSource = {
@@ -59,16 +62,31 @@ export function ImageActionsScope({
 }
 type Props = { src: string | null | undefined; title: string; imageSource?: ImageActionSource }
 
+async function runImageAction(
+  action: () => Promise<unknown>,
+  setBusy: (busy: boolean) => void,
+  errorMessage: string
+): Promise<void> {
+  setBusy(true)
+  try {
+    await action()
+  } catch {
+    toast.error(errorMessage)
+  } finally {
+    setBusy(false)
+  }
+}
+
 function useImageActions({ src, title, imageSource }: Props) {
   const t = useTranslate()
   const enabled = useContext(ImageActionsEnabledContext)
   const [open, setOpen] = useState(false)
-  const readRef = useRef<ReadImageSource | null>(null)
+  const [capturedSource, setCapturedSource] = useState<ReadImageSource | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (!enabled) {
       setOpen(false)
-      readRef.current = null
+      setCapturedSource(null)
     }
   }, [enabled])
   const web = isWebClientLocation()
@@ -78,7 +96,7 @@ function useImageActions({ src, title, imageSource }: Props) {
   const local = !web && owner !== undefined && !isLocalPathOpenBlocked(owner)
   const items: { label: string; disabled?: boolean; run: () => Promise<unknown> }[] = []
   const read = (): Promise<Blob> => {
-    const image = readRef.current ?? imageSource?.read ?? (src ? captureImageSource(src) : null)
+    const image = capturedSource ?? imageSource?.read ?? (src ? captureImageSource(src) : null)
     if (!image) {
       throw new Error('Image unavailable')
     }
@@ -134,7 +152,11 @@ function useImageActions({ src, title, imageSource }: Props) {
           'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
           'Open with default app'
         ),
-        run: () => window.api.shell.openPath(path, ownerHostId)
+        run: async () => {
+          if (!(await window.api.shell.openFilePath(path, ownerHostId))) {
+            throw new Error('Could not open image')
+          }
+        }
       })
     }
   }
@@ -148,20 +170,17 @@ function useImageActions({ src, title, imageSource }: Props) {
         return
       }
       setOpen(nextOpen)
-      readRef.current = nextOpen
+      const captured = nextOpen
         ? (imageSource?.read ?? (src ? captureImageSource(src) : null))
         : null
+      setCapturedSource(() => captured)
     },
-    run: async (action: () => Promise<unknown>) => {
-      setBusy(true)
-      try {
-        await action()
-      } catch {
-        toast.error(t('components.editor.imageActions.failed', 'Image action failed'))
-      } finally {
-        setBusy(false)
-      }
-    }
+    run: (action: () => Promise<unknown>) =>
+      runImageAction(
+        action,
+        setBusy,
+        t('components.editor.imageActions.failed', 'Image action failed')
+      )
   }
 }
 
