@@ -123,8 +123,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   try {
     // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
     const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
-    // Read after the await so a local voice change made meanwhile (microphone) survives.
-    const runtimeSettings = followHostVoiceSettings(getStoredSettings(), result.settings)
+    const runtimeSettings = followHostVoiceSettings(local, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
