@@ -1,3 +1,4 @@
+import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../../src/shared/native-chat/native-chat-hermes-capability'
 import { MessageSquare, SquareTerminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { translate } from '../../i18n/mobile-i18n'
@@ -12,6 +13,7 @@ export function getMobileNativeChatToggleActions(args: {
   terminalHandle: string | null
   tabs: readonly ToggleTab[]
   isTabChatView: (tabId: string) => boolean
+  hostCapabilities?: readonly string[] | null
   nativeChatTranscriptIsLocalReadable: boolean
   onClose: () => void
   onToggle: (tabId: string) => void
@@ -20,7 +22,14 @@ export function getMobileNativeChatToggleActions(args: {
   const tab = terminalHandle
     ? tabs.find((candidate) => candidate.terminal === terminalHandle)
     : null
-  if (!tab || !resolveMobileNativeChat(tab, args.nativeChatTranscriptIsLocalReadable)) {
+  if (
+    !tab ||
+    !resolveMobileNativeChat(
+      tab,
+      args.nativeChatTranscriptIsLocalReadable,
+      args.hostCapabilities?.includes(HERMES_TRANSCRIPT_RUNTIME_CAPABILITY) === true
+    )
+  ) {
     return []
   }
   const isChat = isTabChatView(tab.id)

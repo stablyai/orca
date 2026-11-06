@@ -9,7 +9,7 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
 
 /** Per-card conversion hold; unknown reasons remain held, retired reasons derive from queue pauses. */
-export type QueuedMessageHoldReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
+export type QueuedMessageHoldReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED | 'editing'
 
 /** Edited legacy uncertain deliveries require explicit Send; publish as a plain hold. */
 export const QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED = 'delivery_unconfirmed'

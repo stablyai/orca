@@ -1,4 +1,5 @@
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
+import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../../src/shared/native-chat/native-chat-hermes-capability'
 import { mobileNativeChatDraftDestination } from './composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -192,11 +193,13 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
 
   function Harness({
     connState = 'connected',
+    hostCapabilities = [],
     tab = null,
     activeHandle = 'term-1',
     inputLeaseReady = true
   }: {
     connState?: ConnectionState
+    hostCapabilities?: readonly string[]
     tab?: unknown
     activeHandle?: string | null
     inputLeaseReady?: boolean
@@ -205,6 +208,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       client: clientStub as unknown as RpcClient,
       pairedHostClient: null,
       connState,
+      hostCapabilities,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: tab as never,
@@ -240,6 +244,21 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     renderer = null
     controller = null
   })
+
+  it.each([false, true])(
+    'opens Hermes terminal chat only with host support: %s',
+    async (supported) => {
+      await act(async () => {
+        renderer?.update(
+          createElement(Harness, {
+            tab: { type: 'terminal', id: 'hermes', terminal: 'term-1', launchAgent: 'hermes' },
+            hostCapabilities: supported ? [HERMES_TRANSCRIPT_RUNTIME_CAPABILITY] : []
+          })
+        )
+      })
+      expect(controller?.showNativeChat).toBe(supported)
+    }
+  )
 
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {
     markMobileNativeChatInputStale('term-1')

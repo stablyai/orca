@@ -2291,7 +2291,9 @@
       "emptySubtitle": "Ask {{agent}} to inspect code, explain output, or make a change.",
       "errorTitle": "Could not load conversation",
       "errorSubtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
-      "defaultAgentLabel": "the agent"
+      "defaultAgentLabel": "the agent",
+      "hermesStartingTitle": "Connecting to Hermes…",
+      "hermesStartingSubtitle": "The conversation will appear when Hermes is ready."
     },
     "nativeChatToggleAction": {
       "switchToTerminalView": "Switch to terminal view",

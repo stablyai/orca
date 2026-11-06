@@ -4,9 +4,15 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
-import type { RpcResponse, RpcSuccess } from '../../../transport/types'
+import type { RpcResponse } from '../../../transport/types'
 import { resetMobileNativeChatStaleInputForTests } from '../mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
+import {
+  makeClient,
+  methodNotFound,
+  ok,
+  sendResult
+} from './mobile-native-chat-image-attachment-test-client'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
 // Stub the media seam so direct Expo imports would expose unsupported Flow syntax and fail the transform.
@@ -16,44 +22,6 @@ vi.mock('../../../../../src/shared/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: () => `img-${++ids.next}`
 }))
 vi.mock('../../../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
-
-function ok(id: string, result: unknown): RpcSuccess {
-  return { id, ok: true, result, _meta: { runtimeId: 'r' } }
-}
-function methodNotFound(id: string): RpcResponse {
-  return {
-    id,
-    ok: false,
-    error: { code: 'method_not_found', message: 'no' },
-    _meta: { runtimeId: 'r' }
-  }
-}
-function sendResult(accepted: boolean): RpcSuccess {
-  return { id: 'send', ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }
-}
-
-function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): Pick<
-  RpcClient,
-  'sendRequest'
-> & {
-  calls: { method: string; params: Record<string, unknown> }[]
-} {
-  const calls: { method: string; params: Record<string, unknown> }[] = []
-  return {
-    calls,
-    sendRequest: vi.fn(async (method: string, params?: unknown) => {
-      if (method === 'terminal.read') {
-        return ok('read', {})
-      }
-      calls.push({ method, params: params as Record<string, unknown> })
-      const response = responses.shift()
-      if (!response) {
-        throw new Error(`unexpected request: ${method}`)
-      }
-      return response
-    })
-  }
-}
 
 type HookArgs = Parameters<typeof useMobileNativeChatImageAttachments>[0]
 type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>
@@ -151,6 +119,23 @@ describe('useMobileNativeChatImageAttachments', () => {
       const deadline = baseSend.mock.calls[0]?.[2] as number
       expect(deadline - Date.now()).toBe(5_300)
       expect(baseSend.mock.calls[0]?.[4]).toBe(pressedAt)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('passes the Hermes startup budget through to the text send', async () => {
+    vi.useFakeTimers()
+    try {
+      const client = makeClient([])
+      const baseSend = vi.fn().mockResolvedValue('accepted')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test only calls the mocked sendRequest member.
+      mount(baseArgs({ client: client as unknown as RpcClient, agent: 'hermes', baseSend }))
+      const pressedAt = Date.now()
+      await act(async () => {
+        await hook!.sendNativeChat('hello')
+      })
+      expect(baseSend.mock.calls[0]?.[2]).toBe(pressedAt + 75_000)
     } finally {
       vi.useRealTimers()
     }

@@ -280,7 +280,7 @@ export async function readOpenCodeTranscriptPageViaWorker(
     sessionId: string
     limit: number
     beforeMessageRowId?: number
-    agent?: 'zcode'
+    agent?: 'zcode' | 'hermes'
   },
   signal?: AbortSignal
 ) {
@@ -305,7 +305,7 @@ export async function readOpenCodeTranscriptSignalViaWorker(
   args: {
     dbPath: string
     sessionId: string
-    agent?: 'zcode'
+    agent?: 'zcode' | 'hermes'
   },
   signal?: AbortSignal
 ) {

@@ -17,6 +17,7 @@ import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-ac
 import { useMobileNativeChatPromptController } from '../use-mobile-native-chat-prompt-controller'
 import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { terminalQueueFields, useMobileTerminalChatQueue } from './use-mobile-terminal-chat-queue'
 
 export function useMobileNativeChatController(args: {
   client: RpcClient | null
@@ -29,6 +30,7 @@ export function useMobileNativeChatController(args: {
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  hostCapabilities?: readonly string[] | null
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
@@ -149,8 +151,14 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   })
 
+  const terminalQueue = useMobileTerminalChatQueue({
+    ...args,
+    appendText: appendComposerText,
+    enabled: !activeChatStructured && activeChatAgent === 'hermes' && inputSendable
+  })
   const terminalTurn = useMobileNativeChatTerminalTurn({
     status: nativeChatStatus,
+    terminalActivity: terminalQueue.activity,
     resolution: activeChatResolution,
     session: activeChatStructured ? null : nativeChatSession,
     latestPendingId: chatPending.at(-1)?.id ?? null,
@@ -280,11 +288,18 @@ export function useMobileNativeChatController(args: {
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
-    nativeChatSendFollowUp: activeChatStructured ? structuredNativeChat.sendFollowUp : null,
+    ...terminalQueueFields({
+      structured: activeChatStructured,
+      queue: terminalQueue,
+      structuredFollowUp: structuredNativeChat.sendFollowUp,
+      bind: [captureSendOrigin, clearDraftForSend, handleNativeChatSendWithOutcome],
+      structuredSend: structuredNativeChatSend,
+      plain: { send: handleNativeChatSend, sendWithOutcome: handleNativeChatSendWithOutcome }
+    }),
     nativeChatStreamingText: terminalTurn.streamingText,
     ...prompts,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
-    nativeChatQueued: structuredNativeChat.queued,
+    nativeChatQueued: terminalQueue.enabled ? terminalQueue.controls : structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
     nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
     nativeChatInterruptedContinue: activeChatStructured
@@ -293,12 +308,6 @@ export function useMobileNativeChatController(args: {
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
-    handleNativeChatSend: activeChatStructured
-      ? structuredNativeChatSend.send
-      : handleNativeChatSend,
-    handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredNativeChatSend.sendWithOutcome
-      : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
