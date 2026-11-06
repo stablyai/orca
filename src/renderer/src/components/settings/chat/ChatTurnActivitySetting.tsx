@@ -1,5 +1,8 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { nativeChatShowsTurnDiffSummary } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  nativeChatShowsCiResultLines,
+  nativeChatShowsTurnDiffSummary
+} from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -27,6 +30,7 @@ export function ChatTurnActivitySetting({
   }
   const turnDiffsShown = nativeChatShowsTurnDiffSummary(settings)
   const openedPullRequestsShown = settings.nativeChatOpenedPullRequests !== false
+  const ciResultLinesShown = nativeChatShowsCiResultLines(settings)
   return (
     <section id="chat-turn-activity" className="space-y-3">
       <SettingsSubsectionHeader title={getChatTurnActivityTitle()} />
@@ -61,6 +65,20 @@ export function ChatTurnActivitySetting({
                 onChange={() =>
                   updateSettings({ nativeChatOpenedPullRequests: !openedPullRequestsShown })
                 }
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.ciResultLines}
+              id={entries.ciResultLines.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.ciResultLines.title}
+                description={entries.ciResultLines.description}
+                checked={ciResultLinesShown}
+                ariaLabel={entries.ciResultLines.title}
+                onChange={() => updateSettings({ nativeChatCiResultLines: !ciResultLinesShown })}
               />
             </SearchableSetting>
           </div>
