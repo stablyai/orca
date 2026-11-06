@@ -19,7 +19,6 @@ const NOTE = { agentArgs: '--dangerously-skip-permissions --verbose', agentEnv: 
 // A hand-typed resume in a paired pane must not replay the retired launch's bypass.
 it('a paired host retiring a launch ends its note for OSC updates and cold restore', () => {
   const store = createTestStore()
-  store.setState({ tabsByWorktree: { wt: [] } } as unknown as Partial<AppState>)
   const osc = () =>
     store
       .getState()
@@ -32,6 +31,7 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
         { providerSession: SESSION, launchToken: 'launch-1' }
       )
   const frame = (launchAttested: boolean) => {
+    const agentStatus = { ...store.getState().agentStatusByPaneKey[PANE]!, updatedAt: Date.now() }
     const surface = {
       type: 'terminal' as const,
       id: `host-tab::${LEAF}`,
@@ -42,27 +42,14 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
       status: 'ready' as const,
       terminal: 'terminal-1',
       launchAttested,
-      agentStatus: {
-        ...store.getState().agentStatusByPaneKey[PANE]!,
-        updatedAt: Date.now() + 1
-      }
+      agentStatus
     }
     const state = store.getState() as unknown as WebSessionTabsSyncState
     store.setState({
       ...buildMirroredAgentStatusPatch(state, [], [surface], [], 'env', 'wt', new Set(), Date.now())
     } as Partial<AppState>)
   }
-  const coldRestoreCommand = () => {
-    const state = store.getState()
-    const launchConfig = state.getAgentLaunchConfigForStatusEntry(state.agentStatusByPaneKey[PANE]!)
-    return buildAgentResumeStartupPlan({
-      agent: 'claude',
-      providerSession: SESSION,
-      cmdOverrides: {},
-      ...resolveResumeLaunchRecipe(launchConfig, 'claude', SESSION),
-      platform: 'linux'
-    })?.launchCommand
-  }
+  const note = () => store.getState().sleepingAgentSessionsByPaneKey[PANE]?.launchConfig
 
   store.getState().registerAgentLaunchConfig(PANE, NOTE, {
     agentType: 'claude',
@@ -73,10 +60,22 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
   osc()
   frame(true)
   osc()
-  expect(store.getState().sleepingAgentSessionsByPaneKey[PANE]?.launchConfig).toEqual(NOTE)
+  expect(note()).toEqual(NOTE)
 
   frame(false)
   osc()
-  expect(store.getState().sleepingAgentSessionsByPaneKey[PANE]?.launchConfig).toBeUndefined()
-  expect(coldRestoreCommand()).toBe("claude '--resume' 'conversation-1'")
+  expect(note()).toBeUndefined()
+  const state = store.getState()
+  const coldRestore = buildAgentResumeStartupPlan({
+    agent: 'claude',
+    providerSession: SESSION,
+    cmdOverrides: {},
+    ...resolveResumeLaunchRecipe(
+      state.getAgentLaunchConfigForStatusEntry(state.agentStatusByPaneKey[PANE]!),
+      'claude',
+      SESSION
+    ),
+    platform: 'linux'
+  })
+  expect(coldRestore?.launchCommand).toBe("claude '--resume' 'conversation-1'")
 })

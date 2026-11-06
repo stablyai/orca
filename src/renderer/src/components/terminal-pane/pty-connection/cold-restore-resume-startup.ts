@@ -78,8 +78,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
         ? sleepingRecord
         : undefined
-    // A live invocation takes the one decision's answer, none included; only without one does the
-    // saved record of the same conversation stand on its own.
+    // A live invocation takes the decision's answer, none included; only otherwise the saved record.
     const launchConfig = entry
       ? state.getAgentLaunchConfigForStatusEntry(entry)
       : matchingSleepingRecord?.launchConfig

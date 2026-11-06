@@ -116,7 +116,6 @@ export function getLaunchConfigForEntry(
 ): SleepingAgentLaunchConfig | undefined {
   const registryEntry = state.agentLaunchConfigByPaneKey[entry.paneKey]
   return invocationLaunchConfig({
-    statement: undefined,
     launchAttested: entry.launchAttested,
     registry: registryEntryMatchesStatus({
       entry: registryEntry,
@@ -137,12 +136,9 @@ export function getLaunchConfigForEntry(
   })
 }
 
-/** The one answer to which note belongs to a pane's current invocation. The launch owner's
- *  statement (a note, or null for none) decides; without one its earlier word stands, where none is
- *  final and yes keeps this launch's registry or saved note. With no owner word at all (an older
- *  host), the same conversation keeps the saved note, as before. */
+/** Every reader's note for a pane's invocation: the owner's word decides; without one, the same conversation. */
 export function invocationLaunchConfig(args: {
-  statement: SleepingAgentLaunchConfig | null | undefined
+  statement?: SleepingAgentLaunchConfig | null
   launchAttested: boolean | undefined
   registry: SleepingAgentLaunchConfig | undefined
   record: AppState['sleepingAgentSessionsByPaneKey'][string] | undefined
@@ -183,14 +179,13 @@ export function retiresLaunch(
   return next.launchAttested === false && existing?.launchAttested !== false
 }
 
+type PaneNoteCopies = Partial<
+  Pick<AppState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
+>
+
 /** An accepted retirement ends the pane's note: its launch registry entry and its saved record's note. */
-export function retirePaneLaunchNote(
-  state: Partial<Pick<AppState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>>,
-  paneKey: string
-): Partial<Pick<AppState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>> {
-  const patch: Partial<
-    Pick<AppState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
-  > = {}
+export function retirePaneLaunchNote(state: PaneNoteCopies, paneKey: string): PaneNoteCopies {
+  const patch: PaneNoteCopies = {}
   if (state.agentLaunchConfigByPaneKey?.[paneKey]) {
     const { [paneKey]: _retired, ...rest } = state.agentLaunchConfigByPaneKey
     patch.agentLaunchConfigByPaneKey = rest

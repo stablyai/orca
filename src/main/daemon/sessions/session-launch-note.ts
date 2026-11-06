@@ -7,8 +7,7 @@ import type {
   DaemonLaunchNoteChange
 } from '../protocol/daemon-launch-note-protocol'
 
-/** Main's live launch in this session, so a reattach re-arms only an unretired one. Also retired
- *  on command-finished here, since the launch can finish while main is down. */
+/** Main's live launch here; retired on command-finished too, since it can finish while main is down. */
 export class SessionLaunchNote {
   current: DaemonLaunchNote | null = null
   private retirement: Osc133CommandFinishedScanner | null = null

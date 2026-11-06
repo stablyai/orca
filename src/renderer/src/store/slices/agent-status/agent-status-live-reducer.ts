@@ -67,8 +67,7 @@ export function reduceAgentStatusLiveUpdate(
       [paneKey]: { ...registryEntry, identity: { ...registryEntry.identity, providerSession } }
     }
   }
-  // Launch tokens authorize only the session they started; a completed turn, changed provider id
-  // or the owner retiring the launch consumes them.
+  // A completed turn, changed provider id or the owner retiring the launch consumes its token.
   if (
     (providerSessionChanged ||
       (entry.state === 'done' && entry.sessionBoundary !== true) ||

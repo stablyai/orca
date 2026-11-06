@@ -20,8 +20,7 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     }
   }
 
-  /** The daemon retires a finished launch even while main is down, and the agent still in the
-   *  foreground covers shells without that marker; anything else, including every Windows read, declines. */
+  /** Re-arm an unretired launch only while an agent holds the foreground; anything else declines. */
   protected async rearmReattachedLaunch(
     ptyId: string,
     pty: RuntimePtyWorktreeRecord,

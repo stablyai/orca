@@ -9,9 +9,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-/** A client restoring a pane this host ran: the host's note for that source pane, else the
- *  unrecorded rule with the mode this host's hooks saw there. Never this host's current settings,
- *  and never the client's partial Arguments: neither is the launch that ran. */
+/** The source pane's note on this host, else the unrecorded rule; never current settings or client Arguments. */
 export function resolveSavedRestoreLaunchRecipe(args: {
   agent: TuiAgent
   providerSession: AgentProviderSessionMetadata

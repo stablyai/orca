@@ -6,8 +6,7 @@ import {
 
 /** A pane's projected agent status as a session-tabs frame publishes it. The frame names its
  *  worktree on every agent: a restored row without a live PTY names none, and clients decide row
- *  ownership (and retraction) by worktree. The turn stamp travels on the tab, not the status, as
- *  does the owner's launch fact for the frame's PTY, so a paired client drops a retired launch's note. */
+ *  ownership (and retraction) by worktree. The turn stamp and owner's launch fact travel on the tab. */
 export function frameAgentStatus(
   projected: (AgentStatusEntry & { turnCompletedAt?: number }) | undefined,
   worktreeId: string,

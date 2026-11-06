@@ -6,10 +6,7 @@ export type PtyLaunchFacts = Pick<
   'launchToken' | 'launchAgent' | 'launchConfig'
 >
 
-/** The recipe of the Orca launch still running in this PTY as `agent`, the only proof that a saved
- *  note belongs to the agent there now. Main admits the launch token at spawn and retires it when
- *  that command finishes; a daemon reattach re-arms it only for the same unretired launch, so an
- *  agent typed into the shell gets none and resumes by the unrecorded rule. */
+/** The note of the Orca launch main still holds for this PTY as `agent`; a typed agent gets none. */
 export function attestedLaunchConfig(
   pty: PtyLaunchFacts | null | undefined,
   agent: string | null | undefined
