@@ -106,9 +106,10 @@ export async function getFolderWorkspaceMissingRepoError(
 ): Promise<RuntimeClientError | undefined> {
   const explicitParent = getOptionalStringFlag(flags, 'parent-worktree')?.replace(/^id:/, '')
   const parsedParent = explicitParent ? parseWorkspaceKey(explicitParent) : null
-  // The terminal's folder is the parent only when the command names none.
+  // The terminal's folder is the parent only when the command names none, or names it as active.
+  const namesCaller = !explicitParent || explicitParent === 'active' || explicitParent === 'current'
   const inferredFolder =
-    !explicitParent && flags.get('no-parent') !== true && !client.isRemote
+    namesCaller && flags.get('no-parent') !== true && !client.isRemote
       ? getCallerFolderWorkspaceKey()
       : undefined
   const folderKey =

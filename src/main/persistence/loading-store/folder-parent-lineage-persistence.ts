@@ -44,10 +44,9 @@ export class FolderParentLineagePersistence {
  */
 export function dropInferredParentsOverFolderParents(
   worktreeLineageById: Record<string, WorktreeLineage>,
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>,
-  worktreeIds: Iterable<string> = Object.keys(worktreeLineageById)
+  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
 ): void {
-  for (const worktreeId of worktreeIds) {
+  for (const worktreeId of Object.keys(worktreeLineageById)) {
     const lineage = worktreeLineageById[worktreeId]
     const row = workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
     // Saved worktree rows load unvalidated; a malformed one must not fail the whole load.
