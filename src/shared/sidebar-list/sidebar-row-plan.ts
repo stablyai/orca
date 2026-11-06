@@ -62,6 +62,7 @@ type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: W
 
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
 export type SidebarRowPlanInputs = {
+  hideEmptyProjects?: boolean
   groupBy: WorktreeGroupBy
   sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
@@ -129,6 +130,14 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     list.push(creation)
     pendingByRepo.set(creation.repoId, list)
   }
+  const keptProjects =
+    inputs.hideEmptyProjects && groupBy === 'repo'
+      ? new Set(
+          [...worktrees.map((worktree) => worktree.repoId), ...pendingByRepo.keys()].map(
+            (repoId) => getProjectGroupingForRepo(repoId, repoMap, projectIndex).key
+          )
+        )
+      : null
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   const occurrencePlan = buildWorktreeOccurrencePlan({
@@ -167,7 +176,9 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               repoOrder,
               projectOrderBy,
               folderWorkspaces: renderableFolderWorkspaces
-            })
+            }).filter(
+              ([key, group]) => !keptProjects || group.items.length > 0 || keptProjects.has(key)
+            )
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
       }
@@ -294,6 +305,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     }
 
     appendProjectGroupSections(sectionContext, {
+      hideEmptyProjects: inputs.hideEmptyProjects,
       orderedGroups,
       projectGroups,
       folderWorkspaces: renderableFolderWorkspaces,

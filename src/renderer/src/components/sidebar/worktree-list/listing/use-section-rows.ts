@@ -84,8 +84,10 @@ function createSidebarHostOptionsSelector() {
   }
 }
 
+/** Keep filtered project membership and row ownership separate from host/collapse presentation so hidden rows do not change registrations. */
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
+  const hideEmptyProjects = useAppStore((s) => s.hideEmptyProjects)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
@@ -100,13 +102,21 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const placeholderRepoIds = useMemo(
     () =>
       getEmptyProjectPlaceholderRepoIds({
+        hideEmptyProjects,
         groupBy: args.groupBy,
         repos: args.visibleReposForRows,
         worktreesByRepo,
         visibleWorktrees: worktrees,
         filterRepoIds: args.filterRepoIds
       }),
-    [args.filterRepoIds, args.groupBy, args.visibleReposForRows, worktrees, worktreesByRepo]
+    [
+      hideEmptyProjects,
+      args.filterRepoIds,
+      args.groupBy,
+      args.visibleReposForRows,
+      worktrees,
+      worktreesByRepo
+    ]
   )
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.
@@ -145,6 +155,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
+        hideEmptyProjects,
         groupBy: args.groupBy,
         sortBy: args.sortBy,
         worktrees,
@@ -171,6 +182,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         filterRepoIds: args.filterRepoIds
       }),
     [
+      hideEmptyProjects,
       args.groupBy,
       args.sortBy,
       worktrees,

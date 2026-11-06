@@ -144,6 +144,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
           hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
           hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+          hideEmptyProjects: ui.hideEmptyProjects === true,
           hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".

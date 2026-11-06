@@ -75,6 +75,8 @@ export type PersistedUIState = {
   hideAutomationGeneratedWorkspaces?: boolean
   /** Hide workspaces created through `orca worktree create`. */
   hideCliCreatedWorkspaces?: boolean
+  /** Omit project headers with no visible workspaces, preserving nonempty ancestor groups. */
+  hideEmptyProjects?: boolean
   /** Hide workspaces sitting on a detached HEAD; folder workspaces (no head at all) are unaffected. */
   hideDetachedHeadWorkspaces?: boolean
   /** Hide workspaces with known provenance from another paired device or the host UI. */

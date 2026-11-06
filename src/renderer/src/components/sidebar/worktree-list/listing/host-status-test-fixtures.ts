@@ -92,6 +92,7 @@ export const worktree = makeWorktree('workspace', 'Workspace', {
 })
 export const visibilityArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
   filterState: {
+    hideEmptyProjects: false,
     showSleepingWorkspaces: true,
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,

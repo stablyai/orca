@@ -53,6 +53,7 @@ type RevealContext = {
 
 /** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
+  hideEmptyProjects: () => {},
   filterRepoIds: ({ state, worktree }) => {
     if (!worktree.id.startsWith('folder:') && !state.filterRepoIds.includes(worktree.repoId)) {
       state.setFilterRepoIds([...state.filterRepoIds, worktree.repoId])

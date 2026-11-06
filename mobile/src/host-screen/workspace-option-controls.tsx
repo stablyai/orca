@@ -339,5 +339,6 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
   hideAutomationGeneratedWorkspaces: filterSwitch('hideAutomationGeneratedWorkspaces'),
   hideCliCreatedWorkspaces: filterSwitch('hideCliCreatedWorkspaces'),
   hideWorkspacesFromOtherDevices: filterSwitch('hideWorkspacesFromOtherDevices'),
+  hideEmptyProjects: filterSwitch('hideEmptyProjects'),
   hideDetachedHeadWorkspaces: filterSwitch('hideDetachedHeadWorkspaces')
 }

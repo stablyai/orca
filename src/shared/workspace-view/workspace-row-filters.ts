@@ -8,6 +8,7 @@ import {
 
 /** Persisted Workspace options filters shared across surfaces. */
 export type WorkspaceRowFilters = WorkspaceKindSwitches & {
+  hideEmptyProjects?: boolean
   hideSleepingWorkspaces: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
@@ -20,6 +21,7 @@ export type WorkspaceRowFilters = WorkspaceKindSwitches & {
 /** Exhaustive mapping from each filter to its PersistedUIState field. */
 export const WORKSPACE_ROW_FILTER_UI_FIELDS = {
   hideSleepingWorkspaces: 'hideSleepingWorkspaces',
+  hideEmptyProjects: 'hideEmptyProjects',
   alwaysShowDefaultBranchWorkspace: 'alwaysShowDefaultBranchWorkspace',
   hideDefaultBranchWorkspace: 'hideDefaultBranchWorkspace',
   hideAutomationGeneratedWorkspaces: 'hideAutomationGeneratedWorkspaces',
@@ -38,6 +40,7 @@ export const WORKSPACE_ROW_FILTER_KEYS = Object.keys(
 /** Every filter off, the default-branch exemption on, every project and host shown. */
 export const NO_WORKSPACE_ROW_FILTERS: WorkspaceRowFilters = {
   hideSleepingWorkspaces: false,
+  hideEmptyProjects: false,
   alwaysShowDefaultBranchWorkspace: true,
   hideDefaultBranchWorkspace: false,
   hideAutomationGeneratedWorkspaces: false,
@@ -150,13 +153,16 @@ export function changedWorkspaceRowFilters(
   return changed
 }
 
+/** Compare omitted optional filters using migration defaults: main-checkout exemption on, hide-empty off. */
 function comparableFilterValue(
   filters: WorkspaceRowFilters,
   key: keyof WorkspaceRowFilters
 ): WorkspaceRowFilters[keyof WorkspaceRowFilters] {
   return key === 'alwaysShowDefaultBranchWorkspace'
     ? filters.alwaysShowDefaultBranchWorkspace !== false
-    : filters[key]
+    : key === 'hideEmptyProjects'
+      ? filters.hideEmptyProjects === true
+      : filters[key]
 }
 
 /** The filters set away from their defaults: what Clear filters resets. */

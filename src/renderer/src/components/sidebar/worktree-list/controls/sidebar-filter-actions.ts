@@ -8,6 +8,7 @@ import type { AppState } from '../../../../store/types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../../../shared/execution-host'
 
 export type SidebarFilterState = {
+  hideEmptyProjects?: boolean
   showSleepingWorkspaces: boolean
   filterRepoIds: readonly string[]
   hideDefaultBranchWorkspace: boolean
@@ -24,6 +25,7 @@ export type SidebarFilterState = {
 export function sidebarWorkspaceRowFilters(state: SidebarFilterState): WorkspaceRowFilters {
   return {
     hideSleepingWorkspaces: !state.showSleepingWorkspaces,
+    hideEmptyProjects: state.hideEmptyProjects,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
@@ -44,6 +46,7 @@ export function selectSidebarFilterState(
 ): Pick<AppState, keyof SidebarFilterState> {
   return {
     showSleepingWorkspaces: state.showSleepingWorkspaces,
+    hideEmptyProjects: state.hideEmptyProjects,
     filterRepoIds: state.filterRepoIds,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
@@ -63,6 +66,7 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
 export type SidebarFilterSetters = Pick<
   AppState,
   | 'setShowSleepingWorkspaces'
+  | 'setHideEmptyProjects'
   | 'setAlwaysShowDefaultBranchWorkspace'
   | 'setHideDefaultBranchWorkspace'
   | 'setHideAutomationGeneratedWorkspaces'
@@ -78,6 +82,7 @@ const RESET_SIDEBAR_FILTER: Record<
   keyof WorkspaceRowFilters,
   (store: SidebarFilterSetters) => void
 > = {
+  hideEmptyProjects: (store) => store.setHideEmptyProjects(false),
   hideSleepingWorkspaces: (store) =>
     store.setShowSleepingWorkspaces(!NO_WORKSPACE_ROW_FILTERS.hideSleepingWorkspaces),
   alwaysShowDefaultBranchWorkspace: (store) =>
