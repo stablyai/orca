@@ -94,10 +94,8 @@ describe('orca cli worktree awareness', () => {
         ['worktree', 'set', '--worktree', child, '--parent-worktree', 'folder:folder-1', '--json'],
         '/tmp/repo'
       )
-      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['status.get'])
-      expect(JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error.message).toContain(
-        'Update Orca on this computer to move a workspace under a folder workspace.'
-      )
+      expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+      expect(JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error.code).toBe('invalid_argument')
       process.exitCode = priorExitCode
 
       callMock.mockReset()
