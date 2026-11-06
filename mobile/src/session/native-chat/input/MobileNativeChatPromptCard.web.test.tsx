@@ -26,7 +26,13 @@ it('reveals a question already pending when the lower region mounts', async () =
       observers.add(this)
       deliver.set(this, () =>
         callback(
-          Array.from(this.nodes, (target) => ({ target }) as ResizeObserverEntry),
+          Array.from(this.nodes, (target): ResizeObserverEntry => ({
+            target,
+            contentRect: target.getBoundingClientRect(),
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: []
+          })),
           this
         )
       )
