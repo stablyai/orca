@@ -24,6 +24,10 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     capabilities: {
       // ACP has no stable rewind or goal methods.
       rewind: false,
+      // Imported tips need native terminal evidence; Grok's importer does not observe it yet.
+      ...(spec.transcriptImport && ['omp', 'opencode', 'opencode2'].includes(spec.agent)
+        ? { fork: 'tip' as const }
+        : {}),
       compact: spec.compaction === true,
       compactInstructions: spec.compactionInstructions === true,
       threadGoal: false,

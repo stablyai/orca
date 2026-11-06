@@ -8,7 +8,10 @@ import { useNativeChatRowTypography } from './use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { nativeChatScrollsToLatestOnSend } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  nativeChatScrollsToLatestOnSend,
+  nativeChatShowsTurnDiffSummary
+} from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
@@ -57,6 +60,8 @@ import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/ag
 import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
+import { useNativeChatTurnOpenedPullRequests } from './use-native-chat-turn-opened-pull-requests'
+import { NativeChatPullRequestChangeContext } from './NativeChatOpenedPullRequestCard'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
@@ -153,7 +158,13 @@ export function NativeChatMessageList({
     latestTurn
   )
   const { messages: rows, turnKeys, liveTurnKey } = turnRows
-  const turnDiffs = useNativeChatTurnDiffs(turnRows, subagentRowsInOrder, subagentSections.pathOf)
+  const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
+  const turnDiffs = useNativeChatTurnDiffs(
+    showTurnDiffs ? turnRows : null,
+    subagentRowsInOrder,
+    subagentSections.pathOf
+  )
+  const openedPullRequests = useNativeChatTurnOpenedPullRequests(turnRows, subagentRowsInOrder)
   // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
   const thinking = useMemo(
     () => isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),
@@ -180,6 +191,7 @@ export function NativeChatMessageList({
     receipts,
     turnStatuses,
     turnDiffs,
+    openedPullRequests: openedPullRequests.byTurn,
     expandedTurnKeys: expandedTurnIds,
     isWorking,
     lifecycleWorking,
@@ -297,6 +309,7 @@ export function NativeChatMessageList({
     revealedDiff: navigationRequest.revealedDiff,
     taskListPredecessors,
     expandedTurnIds,
+    latestTurnKey: turnKeys.findLast((key) => key !== undefined),
     deliveryNotices,
     runtimeContext,
     onToggleExpandedTurn: toggleExpandedTurn,
@@ -307,59 +320,61 @@ export function NativeChatMessageList({
 
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
-      <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
-        <div className="relative min-h-0 flex-1">
-          <div
-            ref={scrollRef}
-            onScroll={onScroll}
-            onCopy={copyChatMathSelection}
-            {...readerInput.scrollerProps}
-            // Measurement finds this named scroll root independently of utility classes.
-            data-native-chat-scroll
-            aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
-            // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-            className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            {showOlderHistory ? (
-              <NativeChatOlderHistoryRow
-                olderHistory={olderHistory}
-                loadingEarlier={loadingEarlier}
-              />
-            ) : null}
-            <div className={nativeChatTranscriptOuterClass(rail.visible)}>
-              <div
-                ref={measureContent}
-                data-native-chat-transcript-column
-                // Shares the composer's maximum width; rail clearance and the 5px inner inset narrow constrained panes.
-                className={NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}
-              >
-                <NativeChatTranscriptItems
-                  slots={slots}
-                  loadedMessageIds={loadedMessageIds}
-                  context={rowContext}
-                  window={transcriptWindow}
-                  forwardGesture={readerInput.forwardedGesture}
+      <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
+        <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={scrollRef}
+              onScroll={onScroll}
+              onCopy={copyChatMathSelection}
+              {...readerInput.scrollerProps}
+              // Measurement finds this named scroll root independently of utility classes.
+              data-native-chat-scroll
+              aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
+              // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              {showOlderHistory ? (
+                <NativeChatOlderHistoryRow
+                  olderHistory={olderHistory}
+                  loadingEarlier={loadingEarlier}
                 />
-                {liveLine ? (
-                  <NativeChatTurnActivityLine line={liveLine} />
-                ) : tailRow === 'awaiting-input' ? (
-                  <NativeChatAwaitingInputRow subject={null} pending />
-                ) : null}
-                <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+              ) : null}
+              <div className={nativeChatTranscriptOuterClass(rail.visible)}>
+                <div
+                  ref={measureContent}
+                  data-native-chat-transcript-column
+                  // Shares the composer's maximum width; rail clearance and the 5px inner inset narrow constrained panes.
+                  className={NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}
+                >
+                  <NativeChatTranscriptItems
+                    slots={slots}
+                    loadedMessageIds={loadedMessageIds}
+                    context={rowContext}
+                    window={transcriptWindow}
+                    forwardGesture={readerInput.forwardedGesture}
+                  />
+                  {liveLine ? (
+                    <NativeChatTurnActivityLine line={liveLine} />
+                  ) : tailRow === 'awaiting-input' ? (
+                    <NativeChatAwaitingInputRow subject={null} pending />
+                  ) : null}
+                  <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                </div>
               </div>
             </div>
+            <NativeChatMessageRail
+              rail={rail}
+              scrollRef={scrollRef}
+              onSelect={navigation.selectRailItem}
+              onReaderScroll={readerInput.railWheel}
+              pendingId={navigation.pendingRailId}
+            />
+            <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
           </div>
-          <NativeChatMessageRail
-            rail={rail}
-            scrollRef={scrollRef}
-            onSelect={navigation.selectRailItem}
-            onReaderScroll={readerInput.railWheel}
-            pendingId={navigation.pendingRailId}
-          />
-          <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
+          <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
         </div>
-        <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
-      </div>
+      </NativeChatPullRequestChangeContext.Provider>
     </NativeChatDisclosureContext.Provider>
   )
 }

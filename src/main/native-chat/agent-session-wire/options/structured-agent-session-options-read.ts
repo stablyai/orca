@@ -1,3 +1,4 @@
+import { readAcpForkSupport } from '../../../acp/acp-fork-support'
 import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
@@ -29,8 +30,6 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/agent-session-model-efforts'
-
-import './structured-agent-session-option-intent'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
@@ -235,6 +234,12 @@ export async function readStructuredAgentSessionOptions(
   return {
     ...options,
     ...recovery,
+    forkSupport:
+      capabilities?.fork === 'checkpoint'
+        ? 'supported'
+        : capabilities?.fork === 'tip'
+          ? (live?.forkSupport ?? readAcpForkSupport(agent))
+          : 'unsupported',
     ...(supportsSessionAccountUsage(record) ? { accountUsage: true as const } : {}),
     ...(live?.effortFixed
       ? {

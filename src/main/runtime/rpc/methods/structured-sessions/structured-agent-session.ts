@@ -49,6 +49,7 @@ import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './conversation/str
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './history/structured-agent-session-conversation-outline'
 import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './history/structured-agent-session-item'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './catalog/structured-agent-session-options-read'
+import '../structured-agent-session-schemas'
 import {
   AttachParams,
   CancelParams,
@@ -62,10 +63,9 @@ import {
   SubscribeParams,
   UnsubscribeParams
 } from '../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import { sendStructuredAgentSessionForClient } from './conversation/structured-agent-session-send-compatibility'
+import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
+import { runConversationCommandForClient } from '../structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -91,13 +91,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.conversationCommand',
     permission: 'workspace',
     params: ConversationCommandParams,
-    handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
-      await ensureHostInstalled(ctx)
-      const host = requireSessionHost(ctx, params.envelope.sessionId)
-      await host.revealSession(params.envelope.sessionId)
-      return host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
-    }
+    handler: runConversationCommandForClient
   }),
   defineMethod({
     name: 'agentSession.createSupport',
@@ -270,7 +264,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       })
       if (stream.isClosed()) {
         dispose()
+        return
       }
+      recordMobileViewOpened(ctx, {
+        surface: 'chat',
+        viewKey: `agentSession:${params.sessionId}`,
+        agent: () => host.sessionAgent(params.sessionId)
+      })
     }
   }),
   defineMethod({

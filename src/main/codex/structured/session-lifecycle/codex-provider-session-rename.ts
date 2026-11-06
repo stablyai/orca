@@ -118,8 +118,8 @@ export async function renameCodexProviderSession(input: {
 export async function runCodexProviderAppServer<T>(
   record: AgentSessionRecord,
   invocation: CodexProviderInvocationDeps,
-  options: { timeoutMs: number; signal?: AbortSignal },
-  body: (rpc: CodexAppServerRpc) => Promise<T>
+  options: { timeoutMs: number; signal?: AbortSignal; experimentalApi?: boolean },
+  body: (rpc: CodexAppServerRpc, cwd: string) => Promise<T>
 ): Promise<T> {
   const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
   const cwd = await codexProviderProbeCwd(record, invocation)
@@ -144,6 +144,6 @@ export async function runCodexProviderAppServer<T>(
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
       ...options
     },
-    body
+    (rpc) => body(rpc, cwd)
   )
 }

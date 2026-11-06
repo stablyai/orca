@@ -118,7 +118,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
         {
           id: args.subscriptionId,
           authToken: 'desktop-ipc',
@@ -127,7 +127,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         (response) => {
           if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-            event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
+            event.sender.send(channel, response)
           }
         },
         {

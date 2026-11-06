@@ -1,3 +1,4 @@
+import { readForkMarker } from '../../agent-session-fork-marker'
 import { structuredAgentSessionOwnerStatus } from '../../host/structured-agent-session-owner-status'
 import type { AgentSessionCurrentRequestsRead } from '../../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from '../../observations/agent-session-current-requests'
@@ -56,6 +57,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const result = readStructuredAgentSessionHistoryResult({
       journal,
       record: this.deps.store.getConversation(request.sessionId),
+      forkMarker: readForkMarker(this.deps.store, request.sessionId),
       request,
       scope,
       reader,

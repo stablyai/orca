@@ -1,7 +1,7 @@
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type { AgentSessionPublishedWork } from '../../observations/agent-session-published-work'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { Subscriber } from './structured-agent-session-subscribers'
+import type { Subscriber } from './agent-session-subscribe-input'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent

@@ -11,7 +11,7 @@ import {
   type AgentSessionPublishedWork
 } from '../../observations/agent-session-published-work'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
-import type { Subscriber } from './structured-agent-session-subscribers'
+import type { Subscriber } from './agent-session-subscribe-input'
 
 /** Restatements cannot share a history page's already allocated byte budget. */
 export function refreshPublishedWork(
