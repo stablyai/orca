@@ -59,25 +59,52 @@ describe('ensureChatUiLaunchTipCohort', () => {
   })
 
   it.each([
-    { draw: 0, cohort: 'control' },
-    { draw: 1, cohort: 'control' },
-    { draw: 2, cohort: 'control' },
     { draw: 3, cohort: 'control' },
-    { draw: 4, cohort: 'control' },
-    { draw: 5, cohort: 'control' },
-    { draw: 6, cohort: 'control' },
-    { draw: 7, cohort: 'treatment' },
-    { draw: 8, cohort: 'treatment' },
-    { draw: 9, cohort: 'treatment' }
+    { draw: 4, cohort: 'treatment' }
   ])('assigns draw $draw to $cohort and keeps the frozen cohort', ({ draw, cohort }) => {
     vi.mocked(crypto.randomInt).mockImplementationOnce(() => draw)
     const store = makeStore({})
     expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
-    expect(crypto.randomInt).toHaveBeenNthCalledWith(1, 10)
-    expect(store.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
+    expect(store.getSettings().telemetry?.chatUiLaunchTipRolloutCohort).toBe(cohort)
+    expect(store.getSettings().telemetry?.chatUiLaunchTipCohort).toBeUndefined()
     expect(store.getSettings().telemetry?.installId).toBe('install')
     expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
-    expect(store.updateSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    { draw: 3, cohort: 'control', targeting: undefined, emphasis: undefined },
+    { draw: 4, cohort: 'treatment', targeting: { mode: 'all' }, emphasis: 'normal' }
+  ])(
+    'expands an existing control to $cohort once at draw $draw',
+    ({ draw, cohort, targeting, emphasis }) => {
+      vi.mocked(crypto.randomInt).mockImplementationOnce(() => draw)
+      const store = makeStore({ chatUiLaunchTipCohort: 'control' })
+      expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
+      expect(store.getSettings().telemetry?.chatUiLaunchTipRolloutCohort).toBe(cohort)
+      expect(store.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+      expect(store.getSettings().telemetry?.chatUiLaunchTipButtonEmphasis).toBe(emphasis)
+
+      vi.mocked(crypto.randomInt).mockImplementation(() => 6)
+      expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
+      expect(store.getSettings().telemetry?.chatUiLaunchTipRolloutCohort).toBe(cohort)
+      expect(store.getSettings().telemetry?.chatUiLaunchTipCohort).toBe('control')
+      expect(experimentCohortProps(store)).toMatchObject({
+        chat_ui_launch_tip_v1: 'control',
+        chat_ui_launch_tip_rollout_v1: cohort
+      })
+    }
+  )
+
+  it('waits for consent before expanding an existing control', () => {
+    const store = makeStore({ chatUiLaunchTipCohort: 'control', optedIn: false })
+    vi.mocked(crypto.randomInt).mockImplementationOnce(() => 6)
+    expect(ensureChatUiLaunchTipCohort(store)).toBe('control')
+    expect(store.getSettings().telemetry?.chatUiLaunchTipRolloutCohort).toBeUndefined()
+
+    store.getSettings().telemetry!.optedIn = true
+    expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
+    expect(store.getSettings().telemetry?.chatUiLaunchTipCohort).toBe('control')
+    expect(store.getSettings().telemetry?.chatUiLaunchTipRolloutCohort).toBe('treatment')
   })
 
   it.each([0, 1])('freezes button emphasis draw %s independently', (draw) => {
@@ -150,13 +177,14 @@ describe('ensureChatUiLaunchTipCohort', () => {
   )
 
   it.each([
-    'control',
     'treatment-center',
     'treatment',
     'treatment-live-switch',
     'treatment-swapped-buttons'
   ] as const)('preserves existing %s assignments', (cohort) => {
-    const store = makeStore({ chatUiLaunchTipCohort: cohort })
+    const store = makeStore({
+      chatUiLaunchTipCohort: cohort
+    })
     expect(ensureChatUiLaunchTipCohort(store)).toBe(cohort)
     expect(crypto.randomInt).not.toHaveBeenCalled()
     expect(store.updateSettings).not.toHaveBeenCalled()
@@ -176,7 +204,8 @@ describe('ensureChatUiLaunchTipCohort', () => {
       const props = experimentCohortProps(store)
       expect(props).toEqual({
         onboarding_language_v1: 'treatment',
-        chat_ui_launch_tip_v1: cohort,
+        chat_ui_launch_tip_v1: undefined,
+        chat_ui_launch_tip_rollout_v1: cohort,
         chat_ui_launch_tip_targeting_v1: 'not-switched',
         chat_ui_launch_tip_button_emphasis_v1: 'normal'
       })
@@ -203,7 +232,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
     const cohort = ensureChatUiLaunchTipCohort(pending)
     expect(['control', 'treatment']).toContain(cohort)
     expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
-    expect(pending.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
+    expect(pending.getSettings().telemetry?.chatUiLaunchTipRolloutCohort).toBe(cohort)
   })
 
   it('releases a pending profile unenrolled after the banner is declined, so the tip shows as before', () => {

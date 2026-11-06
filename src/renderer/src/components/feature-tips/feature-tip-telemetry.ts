@@ -38,7 +38,9 @@ export function trackCmdJPaletteFeatureTipAcknowledged(source: CmdJPaletteFeatur
 export type ChatUiFeatureTipAction = EventProps<'chat_ui_feature_tip_action'>['action']
 type ShownChatUiLaunchTipVariant = Exclude<ChatUiLaunchTipVariant, 'none'>
 
-const CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION = 'corner-card-v3'
+function chatUiLaunchTipExperimentVersion(settings: Pick<GlobalSettings, 'telemetry'> | null) {
+  return settings?.telemetry?.chatUiLaunchTipRolloutCohort ? 'corner-card-v3' : 'corner-card-v2'
+}
 
 const CHAT_UI_TIP_TELEMETRY_VARIANT = {
   'chat-ui-off': 'chat_ui_off',
@@ -48,24 +50,28 @@ const CHAT_UI_TIP_TELEMETRY_VARIANT = {
   EventProps<'chat_ui_feature_tip_shown'>['variant']
 >
 
-export function trackChatUiFeatureTipShown(variant: ChatUiLaunchTipVariant): void {
+export function trackChatUiFeatureTipShown(
+  variant: ChatUiLaunchTipVariant,
+  settings: Pick<GlobalSettings, 'telemetry'> | null
+): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_shown', {
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
-      launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION
+      launch_tip_experiment_version: chatUiLaunchTipExperimentVersion(settings)
     })
   }
 }
 
 export function trackChatUiFeatureTipAction(
   variant: ChatUiLaunchTipVariant,
-  action: ChatUiFeatureTipAction
+  action: ChatUiFeatureTipAction,
+  settings: Pick<GlobalSettings, 'telemetry'> | null
 ): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_action', {
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
       action,
-      launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION
+      launch_tip_experiment_version: chatUiLaunchTipExperimentVersion(settings)
     })
   }
 }
@@ -75,7 +81,7 @@ export function isChatUiLaunchTipHeldOut(
   settings: Pick<GlobalSettings, 'telemetry'> | null
 ): boolean {
   const telemetry = settings?.telemetry
-  const cohort = telemetry?.chatUiLaunchTipCohort
+  const cohort = telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort
   return (
     cohort === 'control' ||
     ((cohort === 'treatment' ||
@@ -91,10 +97,11 @@ export function isChatUiLaunchTipHeldOut(
 export function shouldSuppressAutomaticChatUiLaunchTip(
   settings: Pick<GlobalSettings, 'telemetry' | 'agentDefaultSurface'> | null
 ): boolean {
-  return (
-    normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat' ||
-    isChatUiLaunchTipHeldOut(settings)
-  )
+  const telemetry = settings?.telemetry
+  if (telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort) {
+    return isChatUiLaunchTipHeldOut(settings)
+  }
+  return normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat'
 }
 
 export function trackChatUiFeatureTipExposure(
@@ -103,9 +110,12 @@ export function trackChatUiFeatureTipExposure(
 ): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_exposure', {
-      launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION,
+      launch_tip_experiment_version: chatUiLaunchTipExperimentVersion(settings),
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
-      launch_tip_cohort: settings?.telemetry?.chatUiLaunchTipCohort ?? 'unassigned',
+      launch_tip_cohort:
+        settings?.telemetry?.chatUiLaunchTipRolloutCohort ??
+        settings?.telemetry?.chatUiLaunchTipCohort ??
+        'unassigned',
       shown: !shouldSuppressAutomaticChatUiLaunchTip(settings),
       ...(settings?.telemetry?.chatUiLaunchTipTargeting
         ? { targeting: settings.telemetry.chatUiLaunchTipTargeting.mode }

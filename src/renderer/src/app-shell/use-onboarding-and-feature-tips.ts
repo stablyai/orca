@@ -158,7 +158,7 @@ export function useOnboardingAndFeatureTips() {
     } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
       trackCmdJPaletteFeatureTipShown('app_open')
     } else if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
-      trackChatUiFeatureTipShown(chatUiLaunchTipVariant)
+      trackChatUiFeatureTipShown(chatUiLaunchTipVariant, settings ?? null)
     }
     // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
