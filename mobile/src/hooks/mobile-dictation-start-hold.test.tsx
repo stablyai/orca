@@ -81,7 +81,12 @@ describe('speech before the desktop answers start', () => {
       mic.emit(Uint8Array.from([4]))
       await settle()
     })
-    const dictationId = (start[0].args[1] as { dictationId: string }).dictationId
+    const startParams = start[0].args[1]
+    const dictationId =
+      typeof startParams === 'object' && startParams !== null && 'dictationId' in startParams
+        ? startParams.dictationId
+        : undefined
+    expect(dictationId).toMatch(/^mobile-dictation-/)
     expect(held.dictation?.status).toBe('recording')
     expect(rpc.requests.map(chunkParams)).toEqual([
       { dictationId, audioBase64: 'AQID', sampleRate: 16000, seq: 0 },
