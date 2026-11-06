@@ -4,6 +4,7 @@ import { clearSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { isSshConnectionSolelyOwnedBy } from '../../ssh/connection/ssh-connection-attribution'
 import {
   connectInFlight,
+  fenceRunningConnectAttempt,
   invalidateConnectAttempt,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
@@ -80,6 +81,20 @@ export async function teardownSshTargetTransport(targetId: string): Promise<void
   }
   if (disconnect.status === 'rejected') {
     throw disconnect.reason
+  }
+}
+
+/** Caller holds the target lifecycle; the unlink already committed, so a failed hang-up only warns. */
+export async function releaseUnlinkedHostTransport(targetId: string): Promise<void> {
+  // A connect already past the lifecycle would republish the removed server; queued ones run after.
+  if (connectInFlight.has(targetId)) {
+    fenceRunningConnectAttempt(targetId)
+  }
+  clearSshHostServerStatus(targetId)
+  try {
+    await teardownSshTargetTransport(targetId)
+  } catch (err) {
+    console.warn(`[ssh] Failed to disconnect unlinked host ${targetId}: ${errorMessage(err)}`)
   }
 }
 
