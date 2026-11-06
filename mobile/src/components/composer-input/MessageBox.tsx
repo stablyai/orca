@@ -28,6 +28,8 @@ type MessageBoxProps = Omit<
   leading?: ReactNode
   /** Controls at the end of the action row, before Send. */
   trailing?: ReactNode
+  /** Centered in the gap between leading and trailing. */
+  middle?: ReactNode
   monospace?: boolean
   /** One pill-shaped row with its controls beside the text, for short replies. */
   inline?: boolean
@@ -45,6 +47,7 @@ export function MessageBox({
   sendAccessibilityLabel,
   leading,
   trailing,
+  middle,
   monospace = false,
   inline = false,
   style,
@@ -100,7 +103,7 @@ export function MessageBox({
       {hasActions ? (
         <View style={[styles.actionRow, inline && styles.inlineActions]}>
           {leading}
-          <View style={styles.actionSpacer} />
+          {middle ?? <View style={styles.actionSpacer} />}
           {trailing}
           {onSend ? (
             <ComposerSendButton

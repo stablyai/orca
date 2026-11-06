@@ -48,6 +48,7 @@ import {
 } from './MobileNativeChatComposerMic'
 import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
+import { MobileNativeChatActionGap } from './MobileNativeChatActionGap'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -107,6 +108,10 @@ type Props = MobileNativeChatMicProps & {
   onNeedSkills?: () => void
   /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
   stop?: { onStop?: () => void; held: boolean } | null
+  /** At the screen's bottom edge: even margins and bottom corners that follow the screen's. */
+  fitScreenCorners?: boolean
+  /** On the iPhone Duo: whether the chat runs across the status column, and the switch for it. */
+  widthToggle?: { expanded: boolean; onToggle: () => void } | null
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
@@ -148,7 +153,9 @@ export function MobileNativeChatComposer({
   skillDiscovery,
   onNeedSkills,
   stop = null,
-  sendFollowUp = null
+  sendFollowUp = null,
+  fitScreenCorners = false,
+  widthToggle = null
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -285,6 +292,7 @@ export function MobileNativeChatComposer({
     }
   }
 
+  const usage = editSession ? null : agent
   return (
     <View>
       {menu.rows.length > 0 ? (
@@ -294,9 +302,16 @@ export function MobileNativeChatComposer({
           nestedScrollEnabled={editSession ? true : undefined}
         />
       ) : null}
-      <View style={styles.composerInset} testID="native-chat-composer-inset">
+      <View
+        style={fitScreenCorners ? styles.composerInsetCornerFit : styles.composerInset}
+        testID="native-chat-composer-inset"
+      >
         {goal.strip}
-        <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
+        <View
+          {...contextRing.barProps}
+          style={fitScreenCorners ? styles.barCornerFit : styles.bar}
+          testID="native-chat-composer"
+        >
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -370,8 +385,7 @@ export function MobileNativeChatComposer({
                 }}
               />
             ) : null}
-            <View style={inputStyles.actionSpacer} />
-            {contextRing.ring}
+            <MobileNativeChatActionGap agent={usage} ring={contextRing.ring} toggle={widthToggle} />
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}

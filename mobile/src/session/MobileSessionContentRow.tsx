@@ -10,6 +10,16 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
+import {
+  ComposerUsageClientContext,
+  ComposerUsageTabAgentContext
+} from '../composer-usage/composer-usage-client-context'
+import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
+import {
+  sideStripMargin,
+  sideStripPadding,
+  useSessionSideStripInset
+} from './session-side-strip-inset'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -25,13 +35,23 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     setCreateWarningState,
     createWarning,
     dictation,
-    handleSessionContentRowLayout
+    handleSessionContentRowLayout,
+    client,
+    connState
   } = controller
+  const tabAgent =
+    (controller.activeSessionTab &&
+      getMobileTerminalTabHostAgentIdentity(controller.activeSessionTab, controller.terminals)) ??
+    null
+  const strip = useSessionSideStripInset(canDockPanel && activePanel !== null)
   return (
-    <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
+    <View
+      style={[styles.sessionContentRow, sideStripPadding(strip.row)]}
+      onLayout={handleSessionContentRowLayout}
+    >
       <View style={styles.sessionContentMain}>
         {createWarning ? (
-          <View style={styles.createWarningBanner}>
+          <View style={[styles.createWarningBanner, sideStripMargin(strip.main)]}>
             <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />
             <Text style={styles.createWarningText}>{createWarning}</Text>
             <Pressable
@@ -47,9 +67,15 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
             </Pressable>
           </View>
         ) : null}
-        <MobileSessionActiveContent controller={controller} />
-        {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-        <MobileSessionCommandDock controller={controller} />
+        <ComposerUsageClientContext.Provider value={connState === 'connected' ? client : null}>
+          <ComposerUsageTabAgentContext.Provider value={tabAgent}>
+            <MobileSessionActiveContent controller={controller} />
+            {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
+            <View style={sideStripMargin(strip.main)}>
+              <MobileSessionCommandDock controller={controller} />
+            </View>
+          </ComposerUsageTabAgentContext.Provider>
+        </ComposerUsageClientContext.Provider>
         <MobileDictationStatusAnnouncement dictation={dictation} />
       </View>
       {canDockPanel && activePanel !== null && (
