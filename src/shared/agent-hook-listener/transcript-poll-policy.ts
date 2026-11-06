@@ -1,11 +1,9 @@
-import { statSync } from 'node:fs'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
 import { hasPendingCodexSubagentIdentity } from '../codex-subagent-roster'
-import { isSameAgentProcess } from '../agent-status/process/agent-process-presence'
 import { parseHookEnvelope } from './hook-envelope'
 
 export function shouldPollHookTranscript(
@@ -28,47 +26,21 @@ export function shouldPollHookTranscript(
   return false
 }
 
-// A quiet Muse log backs off while periodic presence checks can prove its owner exited.
-const MUSE_IDLE_PROBE_MS = 60_000
-const MUSE_POLL_MAX_DELAY_MS = 30_000
+const MUSE_POLL_MS = 1_000
+// Why: a Muse session killed before Stop leaves a log nobody writes. Silence cannot prove exit (a
+// live quiet session may still log a question), so back off to one stat per 5s instead of stopping.
+const MUSE_QUIET_POLL_MAX_MS = 5_000
 
-export type TranscriptPollIdle = { mark?: string; delay: number; probedAt: number }
-
-export function advanceTranscriptPollIdle(
-  source: AgentHookSource,
-  mark: string | undefined,
-  idle: TranscriptPollIdle | undefined,
-  now: number
-): { idle?: TranscriptPollIdle; action: 'poll' | 'probe' } {
-  if (source !== 'muse') {
-    return { action: 'poll' }
-  }
-  if (!idle || idle.mark !== mark) {
-    return { idle: { mark, delay: 1_000, probedAt: now }, action: 'poll' }
-  }
-  idle = { ...idle, delay: Math.min(idle.delay * 2, MUSE_POLL_MAX_DELAY_MS) }
-  if (now - idle.probedAt >= MUSE_IDLE_PROBE_MS) {
-    return { idle: { ...idle, probedAt: now }, action: 'probe' }
-  }
-  return { idle, action: 'poll' }
+/** Log growth, a status change, or any hook for the session restores the 1s cadence. */
+export function nextMusePollDelay(previousMs?: number, quiet = false): number {
+  return quiet ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, MUSE_QUIET_POLL_MAX_MS) : MUSE_POLL_MS
 }
 
-export function museTranscriptStamp(state: HookListenerState, paneKey: string): string | undefined {
-  const cursor = state.musePaneStateByPaneKey.get(paneKey)?.log?.cursor
-  const path = cursor?.filePath
-  if (!path) {
-    return undefined
-  }
-  try {
-    const stat = statSync(path)
-    return stat.isFile() && stat.size === cursor.offset
-      ? `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
-      : undefined
-  } catch {
-    return undefined
-  }
+export function museLogOffset(state: HookListenerState, paneKey: string): number | undefined {
+  return state.musePaneStateByPaneKey.get(paneKey)?.log?.cursor.offset
 }
 
+/** The pane of an ignored hook (e.g. PermissionRequest) from the active Muse session, whose poll it re-arms. */
 export function museHookPollPane(
   state: HookListenerState,
   body: unknown,
@@ -86,30 +58,6 @@ export function museHookPollPane(
     typeof session === 'string' &&
     session === row.providerSession?.id
     ? hook.paneKey
-    : undefined
-}
-
-/** A probe can restate a live row (e.g. suspension flip) with no hook to re-arm its poll; returns that row. */
-export function presenceRestatedPollRow<T extends AgentHookEventPayload>(
-  state: HookListenerState,
-  polled: T,
-  pending: { original: AgentHookEventPayload } | undefined
-): T | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers store rows of their own enriched type.
-  const row = state.lastStatusByPaneKey.get(polled.paneKey) as T | undefined
-  // A pending poll for any other row was re-armed by a newer hook.
-  if (!row || row === polled || (pending && pending.original !== polled)) {
-    return undefined
-  }
-  const owner = row.agentPresence
-  const prior = polled.agentPresence?.process
-  const sameOwner = !owner?.process || !prior || isSameAgentProcess(owner.process, prior)
-  return !owner?.ended &&
-    sameOwner &&
-    row.payload.agentType === polled.payload.agentType &&
-    row.payload.state === polled.payload.state &&
-    row.providerSession?.id === polled.providerSession?.id
-    ? row
     : undefined
 }
 

@@ -37,8 +37,9 @@ function createSessionLog(home: string): string {
   return logPath
 }
 
-// Ctrl-Z/fg makes the idle presence probe restate the row; no hook arrives to re-arm the poll.
-it('keeps polling a quiet Muse session and re-arms on an ignored hook', async () => {
+// A killed or quiet session writes no hook, so the poll backs off; a hook the listener ignores
+// (PermissionRequest) must still restore the 1s poll so a log-only question shows promptly.
+it('an ignored Muse hook after a quiet spell surfaces a log-only question within a second', async () => {
   vi.useFakeTimers()
   dataHome = mkdtempSync(join(tmpdir(), 'relay-muse-poll-'))
   vi.stubEnv('XDG_DATA_HOME', dataHome)
@@ -48,17 +49,10 @@ it('keeps polling a quiet Muse session and re-arms on an ignored hook', async ()
     upsertBoundedAgentHookStatus(state, event)
     return state.lastStatusByPaneKey.get(event.paneKey)
   }
-  const checkAgentPresence = vi.fn(async (paneKey: string) => {
-    const row = state.lastStatusByPaneKey.get(paneKey)
-    if (row) {
-      store({ ...row, agentPresence: { agent: 'muse', suspended: true } })
-    }
-  })
   const scheduler = new AgentHookResultRetryScheduler({
     state,
     env: 'production',
     isListening: () => true,
-    checkAgentPresence,
     applyEvent: (event) => store(event)
   })
   const body = {
@@ -80,10 +74,6 @@ it('keeps polling a quiet Muse session and re-arms on an ignored hook', async ()
   }
   scheduler.scheduleTranscriptPoll('muse', body, stored)
 
-  await vi.advanceTimersByTimeAsync(100_000)
-  expect(checkAgentPresence).toHaveBeenCalledWith(PANE_KEY)
-  expect(state.lastStatusByPaneKey.get(PANE_KEY)?.agentPresence?.suspended).toBe(true)
-
   await vi.advanceTimersByTimeAsync(31 * 60_000)
   appendFileSync(
     logPath,
@@ -102,7 +92,7 @@ it('keeps polling a quiet Muse session and re-arms on an ignored hook', async ()
     ...body,
     payload: { ...body.payload, hook_event_name: 'PermissionRequest' }
   })
-  await vi.advanceTimersByTimeAsync(2_000)
+  await vi.advanceTimersByTimeAsync(1_000)
   expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('waiting')
   scheduler.clearAll()
 })

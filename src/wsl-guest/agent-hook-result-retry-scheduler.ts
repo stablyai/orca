@@ -11,14 +11,12 @@ import type { HookListenerState } from '../shared/agent-hook-listener/listener-s
 import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 import {
-  advanceTranscriptPollIdle,
   museHookPollPane,
-  museTranscriptStamp,
-  presenceRestatedPollRow,
+  museLogOffset,
+  nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
-  transcriptPollUpdate,
-  type TranscriptPollIdle
+  transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
@@ -33,7 +31,7 @@ type TranscriptPoll = {
   original: AgentHookEventPayload
   env?: string
   version?: string
-  idle?: TranscriptPollIdle
+  delayMs?: number
 }
 
 export type AgentHookResultRetryHost = {
@@ -41,8 +39,6 @@ export type AgentHookResultRetryHost = {
   env: string
   /** Why: must be read live — a retry armed before stop() must not resurrect on a downed server. */
   isListening: () => boolean
-  /** An exited owner is republished as ended, which supersedes its transcript poll. */
-  checkAgentPresence: (paneKey: string) => Promise<void>
   applyEvent: (
     event: AgentHookEventPayload,
     source: AgentHookSource,
@@ -126,7 +122,7 @@ export class AgentHookResultRetryScheduler {
     original: AgentHookEventPayload,
     env?: string,
     version?: string,
-    idle?: TranscriptPollIdle
+    delayMs?: number
   ): void {
     if (source === 'claude') {
       return
@@ -139,6 +135,8 @@ export class AgentHookResultRetryScheduler {
       this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
+    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
+    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
       original.paneKey,
       {
@@ -147,11 +145,10 @@ export class AgentHookResultRetryScheduler {
         original,
         env,
         version,
-        idle
+        delayMs: museDelayMs
       },
       hookTranscriptWatchPath(this.host.state, source, original.paneKey),
-      source === 'muse' ? (idle?.delay ?? 1_000) : undefined,
-      source === 'muse' && !idle
+      museDelayMs
     )
   }
 
@@ -170,7 +167,7 @@ export class AgentHookResultRetryScheduler {
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original, env, version, idle } = poll
+    const { source, body, original, env, version } = poll
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
@@ -180,37 +177,22 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
-    const stamp = source === 'muse' ? museTranscriptStamp(this.host.state, paneKey) : undefined
-    let next = original
-    if (!stamp || stamp !== idle?.mark) {
-      const event =
-        source === 'codex'
-          ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
-          : normalizeHookPayload(this.host.state, source, body, this.host.env)
-      if (!event) {
-        return
-      }
-      const update = transcriptPollUpdate(source, original, event)
-      const applied = update ? this.host.applyEvent(update, source, env, version) : original
-      if (!applied) {
-        return
-      }
-      next = applied
+    const logOffset = source === 'muse' ? museLogOffset(this.host.state, paneKey) : undefined
+    const event =
+      source === 'codex'
+        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
+        : normalizeHookPayload(this.host.state, source, body, this.host.env)
+    if (!event) {
+      return
     }
-    const advanced = advanceTranscriptPollIdle(source, stamp, idle, Date.now())
-    if (advanced.action === 'probe') {
-      void this.host.checkAgentPresence(paneKey).then(() => {
-        const row = presenceRestatedPollRow(
-          this.host.state,
-          next,
-          this.transcriptPollScheduler.peek(paneKey)
-        )
-        if (row && this.host.isListening()) {
-          this.scheduleTranscriptPoll(source, body, row, env, version, advanced.idle)
-        }
-      })
+    const update = transcriptPollUpdate(source, original, event)
+    // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
+    const next = update ? this.host.applyEvent(update, source, env, version) : original
+    if (next) {
+      const quiet = !update && museLogOffset(this.host.state, paneKey) === logOffset
+      const delayMs = source === 'muse' ? nextMusePollDelay(poll.delayMs, quiet) : undefined
+      this.scheduleTranscriptPoll(source, body, next, env, version, delayMs)
     }
-    this.scheduleTranscriptPoll(source, body, next, env, version, advanced.idle)
   }
 
   scheduleAssistantMessageRetry(

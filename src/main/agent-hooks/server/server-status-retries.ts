@@ -8,14 +8,12 @@ import {
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
-  advanceTranscriptPollIdle,
   museHookPollPane,
-  museTranscriptStamp,
-  presenceRestatedPollRow,
+  museLogOffset,
+  nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
-  transcriptPollUpdate,
-  type TranscriptPollIdle
+  transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
@@ -30,7 +28,7 @@ type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: EnrichedAgentHookEventPayload
-  idle?: TranscriptPollIdle
+  delayMs?: number
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -113,7 +111,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload,
-    idle?: TranscriptPollIdle
+    delayMs?: number
   ): void {
     if (source === 'claude') {
       return
@@ -126,12 +124,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
+    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
+    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
       original.paneKey,
-      { source, body, original, idle },
+      { source, body, original, delayMs: museDelayMs },
       hookTranscriptWatchPath(this.state, source, original.paneKey),
-      source === 'muse' ? (idle?.delay ?? 1_000) : undefined,
-      source === 'muse' && !idle
+      museDelayMs
     )
   }
 
@@ -147,7 +146,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original, idle } = poll
+    const { source, body, original } = poll
     // Recheck ownership at callback time; newer events supersede this payload even if children remain.
     if (
       paneKey !== original.paneKey ||
@@ -156,38 +155,21 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const stamp = source === 'muse' ? museTranscriptStamp(this.state, paneKey) : undefined
-    let next = original
-    if (!stamp || stamp !== idle?.mark) {
-      const normalized =
-        source === 'codex'
-          ? pollCodexTranscriptStatus(this.state, original, body, this.env)
-          : normalizeHookPayload(this.state, source, body, this.env)
-      if (!normalized) {
-        return
-      }
-      const update = transcriptPollUpdate(source, original, normalized)
-      const applied = update ? this.applyNormalizedStatus(update) : original
-      if (!applied) {
-        return
-      }
-      next = applied
+    const logOffset = source === 'muse' ? museLogOffset(this.state, paneKey) : undefined
+    const normalized =
+      source === 'codex'
+        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
+        : normalizeHookPayload(this.state, source, body, this.env)
+    if (!normalized) {
+      return
     }
-    const advanced = advanceTranscriptPollIdle(source, stamp, idle, Date.now())
-    if (advanced.action === 'probe') {
-      // An exited owner is reconciled, which clears this poll.
-      void this.checkAgentPresence(paneKey).then(() => {
-        const row = presenceRestatedPollRow(
-          this.state,
-          next,
-          this.transcriptPollScheduler.peek(paneKey)
-        )
-        if (row && this.server) {
-          this.scheduleTranscriptPoll(source, body, row, advanced.idle)
-        }
-      })
+    const update = transcriptPollUpdate(source, original, normalized)
+    const next = update ? this.applyNormalizedStatus(update) : original
+    if (next) {
+      const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
+      const delayMs = source === 'muse' ? nextMusePollDelay(poll.delayMs, quiet) : undefined
+      this.scheduleTranscriptPoll(source, body, next, delayMs)
     }
-    this.scheduleTranscriptPoll(source, body, next, advanced.idle)
   }
 
   protected scheduleAssistantMessageRetry(
