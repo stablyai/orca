@@ -1,4 +1,4 @@
-export const DICTATION_SILENCE_STOP_MS = 60_000
+const DICTATION_SILENCE_STOP_MS = 60_000
 
 /**
  * Calls onSilence once a minute passes with no speech; returns a cancel.

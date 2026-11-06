@@ -5,10 +5,12 @@ import { watchDictationSilence } from '../../../../shared/dictation-silence-stop
 
 // A forgotten toggle mic stays open; a held push-to-talk key or button ends the session on release.
 export function useDictationSilenceStop(
-  watching: boolean,
+  listening: boolean,
+  dictationMode: string | undefined,
   getLastSpeechAt: () => number,
   stopDictation: () => void
 ): void {
+  const watching = listening && dictationMode !== 'hold'
   const stopForSilence = useEffectEvent(() => {
     toast.message(
       translate(
