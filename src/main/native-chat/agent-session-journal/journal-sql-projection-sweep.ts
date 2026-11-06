@@ -48,7 +48,7 @@ export function deleteJournalSqlProjectionPage(
       .prepare(`DELETE FROM "${name}" WHERE (${key}) IN (
         SELECT ${key} FROM "${name}" WHERE ${scope} LIMIT ?)`)
       .run(...values, budget).changes
-    budget -= removed
+    budget -= Number(removed)
     if (budget === 0) {
       return true
     }

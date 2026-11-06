@@ -147,7 +147,7 @@ it.each([
           {
             command: {
               target: { sessionId: 'session', epoch: 'epoch', ownerToken: `open-${index}` },
-              operation: { kind: 'open' },
+              operation: { kind: 'open' as const },
               facts: { identity }
             },
             normal: false
