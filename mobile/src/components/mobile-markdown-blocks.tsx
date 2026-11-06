@@ -87,9 +87,12 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
           ) : (
             // A GitHub task's read-only box, centred on the item's first line.
             <View
+              // ARIA props, which react-native-web reads too; a read-only box takes no keyboard stop.
               accessible
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: Boolean(item.checked), disabled: true }}
+              focusable={false}
+              role="checkbox"
+              aria-checked={Boolean(item.checked)}
+              aria-disabled
               style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
             >
               {item.checked ? (
