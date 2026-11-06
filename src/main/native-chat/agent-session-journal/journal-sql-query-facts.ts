@@ -60,16 +60,16 @@ export class JournalSqlQueryFacts {
     const { scope } = this.context
     scope.db
       .prepare(`UPDATE journal_proj_items SET hidden=(
-      EXISTS(SELECT 1 FROM journal_proj_values WHERE session_id=? AND generation=?
-        AND collection='inputs.rejections' AND entry_key=?) AND
-      NOT EXISTS(SELECT 1 FROM journal_proj_values WHERE session_id=? AND generation=?
-        AND collection='inputs.presentations' AND entry_key=?))
+      EXISTS(SELECT 1 FROM journal_proj_input_rejections WHERE session_id=? AND epoch=?
+        AND input_id=? AND current=1) AND
+      NOT EXISTS(SELECT 1 FROM journal_proj_input_presentations WHERE session_id=? AND epoch=?
+        AND input_id=? AND current=1))
       WHERE session_id=? AND generation=? AND entry_key=?`)
       .run(
         ...scope.prefix,
-        key,
+        String(JSON.parse(key)),
         ...scope.prefix,
-        key,
+        String(JSON.parse(key)),
         ...scope.prefix,
         journalSqlEntryKey(agentJournalSubmissionKey(String(JSON.parse(key))))
       )

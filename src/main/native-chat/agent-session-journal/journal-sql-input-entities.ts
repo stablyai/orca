@@ -3,6 +3,22 @@ import type { JournalSqlValueLocation } from './journal-sql-value-codec'
 import { writeJournalSqlInputEntityColumns } from './journal-sql-input-entity-columns'
 
 const INPUT_ENTITIES = {
+  'inputs.rejections': {
+    table: 'journal_proj_input_rejections',
+    id: 'input_id',
+    counter: 'rejections'
+  },
+  'inputs.presentations': {
+    table: 'journal_proj_input_presentations',
+    id: 'input_id',
+    counter: 'presentations'
+  },
+  'inputs.handovers': {
+    table: 'journal_proj_input_handovers',
+    id: 'input_id',
+    counter: 'handovers'
+  },
+  'inputs.ends': { table: 'journal_proj_input_ends', id: 'input_id', counter: 'endings' },
   submissions: {
     table: 'journal_proj_submissions',
     id: 'client_message_id',

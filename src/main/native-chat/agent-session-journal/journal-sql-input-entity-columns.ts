@@ -9,6 +9,9 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation } from './journal-sql-value-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type { JournalInputSource } from './journal-input-source-schema'
+import type { JournalDispatchRow } from './journal-row-schema'
+import type { JournalQueueRow } from './journal-queue-events'
+import type { JournalInputEnd } from './journal-input-obligations'
 
 export function writeJournalSqlInputEntityColumns(
   scope: JournalSqlScope,
@@ -92,6 +95,61 @@ export function writeJournalSqlInputEntityColumns(
         baseline === undefined ? 'absent' : baseline.coordinate === null ? 'null' : 'coordinate',
         baseline?.coordinate?.epoch ?? null,
         baseline?.coordinate?.sequence ?? null,
+        ...key
+      )
+  } else if (location.collection === 'inputs.rejections') {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rejection storage retains a dispatch event or its restored submission.
+    const rejection = value as JournalDispatchRow | AgentJournalSubmission
+    const event = 'kind' in rejection ? rejection : undefined
+    const send = 'kind' in rejection ? undefined : rejection
+    scope.db
+      .prepare(`UPDATE journal_proj_input_rejections SET source_kind=?, source_epoch=?, source_seq=?,
+          fence=?, dispatch_state=?, provider_item_id=? WHERE session_id=? AND epoch=? AND input_id=? AND incarnation=?`)
+      .run(
+        event ? 'dispatch' : 'submission',
+        event?.epoch ?? null,
+        event?.seq ?? send?.submittedSequence ?? null,
+        rejection.fence,
+        event?.state ?? send?.dispatchState ?? null,
+        rejection.providerItemId,
+        ...key
+      )
+  } else if (location.collection === 'inputs.presentations') {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: presentation storage retains these three declared event/card forms.
+    const presentation = value as JournalDispatchRow | JournalQueueRow | QueuedMessageRow
+    const event = 'kind' in presentation ? presentation : undefined
+    const card = 'kind' in presentation ? undefined : presentation
+    scope.db
+      .prepare(`UPDATE journal_proj_input_presentations SET source_kind=?, source_epoch=?, source_seq=?,
+          fence=?, dispatch_state=?, message_id=?, queue_operation=?
+          WHERE session_id=? AND epoch=? AND input_id=? AND incarnation=?`)
+      .run(
+        event?.kind ?? 'card',
+        event?.epoch ?? null,
+        event?.seq ?? null,
+        event?.fence ?? null,
+        event?.kind === 'dispatch' ? event.state : null,
+        event?.kind === 'queue' ? event.messageId : (card?.messageId ?? null),
+        event?.kind === 'queue' ? event.change.op : null,
+        ...key
+      )
+  } else if (location.collection === 'inputs.handovers') {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handovers retain the admitted dispatch row.
+    const event = value as JournalDispatchRow
+    scope.db
+      .prepare(`UPDATE journal_proj_input_handovers SET source_epoch=?, source_seq=?, fence=?, dispatch_state=?
+          WHERE session_id=? AND epoch=? AND input_id=? AND incarnation=?`)
+      .run(event.epoch, event.seq, event.fence, event.state, ...key)
+  } else if (location.collection === 'inputs.ends') {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: input end storage owns the declared end evidence.
+    const end = value as JournalInputEnd
+    scope.db
+      .prepare(`UPDATE journal_proj_input_ends SET end_kind=?, turn_id=?, stop_reason=?
+          WHERE session_id=? AND epoch=? AND input_id=? AND incarnation=?`)
+      .run(
+        end.kind,
+        end.kind === 'item' ? end.turnId : null,
+        end.kind === 'stop' ? end.event.reason : null,
         ...key
       )
   } else if (location.collection === 'inputs.sources') {

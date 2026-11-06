@@ -1,14 +1,14 @@
 import { afterEach, expect, it } from 'vitest'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+import {
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+  type AgentJournalRenderItem,
+  type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
-import type { JournalDispatchRow } from './journal-row-schema'
 import { journalInputOrder } from './journal-input-order'
 import { encodeJournalOutcomes, journalOutcomeScalars } from './journal-outcome-codec'
 import { journalOutcomeScalarJson } from './journal-outcome-scalars'
@@ -96,7 +96,18 @@ it('keeps fence candidates including ended sends, alias insertion order, strict 
   state.items.set(agentJournalSubmissionKey('ended'), item(agentJournalSubmissionKey('ended'), 1))
   state.inputs.candidates.set('other', { ...send('other'), fence: 2 })
   state.inputs.ended.add('ended')
-  state.inputs.handovers.set('other', { fence: 1 } as JournalDispatchRow)
+  state.inputs.handovers.set('other', {
+    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    epoch: 'epoch',
+    seq: 2,
+    ts: 1,
+    fence: 1,
+    kind: 'dispatch',
+    clientMessageId: 'other',
+    state: 'pending',
+    providerItemId: null,
+    reason: null
+  })
   state.aliases.set('provider-2', 'native')
   state.aliases.set('provider-1', 'native')
   state.aliases.set('foreign', 'another')

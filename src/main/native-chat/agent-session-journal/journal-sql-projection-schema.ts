@@ -10,6 +10,7 @@ import { journalSqlDomainCounterSchema } from './journal-sql-domain-counter-sche
 import { journalSqlPrimitiveFactSchema } from './journal-sql-primitive-fact-schema'
 import { journalSqlInputObservationSchema } from './journal-sql-input-observation-schema'
 import { journalSqlMembershipSchema } from './journal-sql-membership-schema'
+import { journalSqlInputEventSchema } from './journal-sql-input-event-schema'
 
 export function journalSqlProjectionSchema(): string {
   return (
@@ -22,6 +23,7 @@ export function journalSqlProjectionSchema(): string {
     journalSqlPrimitiveFactSchema() +
     journalSqlInputObservationSchema() +
     journalSqlMembershipSchema() +
+    journalSqlInputEventSchema() +
     journalSqlQuerySchema() +
     journalSqlPauseSchema() +
     journalSqlMetaSchema()
