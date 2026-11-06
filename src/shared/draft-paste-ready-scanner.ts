@@ -22,6 +22,7 @@ const CLAUDE_COMPOSER_PROMPT = '❯\u00a0'
 // only while idle at its prompt, where a `❯` + NBSP glyph is unlikely.
 const DECSET_COLOR_PALETTE_UPDATES = '\x1b[?2031h'
 const DECRST_COLOR_PALETTE_UPDATES = '\x1b[?2031l'
+const ANTIGRAVITY_COMPOSER_HINT = '? for shortcuts'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -85,6 +86,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     marker: ZCODE_COMPOSER_BOX_CORNER,
     // ZCode banner animates indefinitely; keep quiet fallback for inline builds whose alt-screen marker never arms.
     quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // agy's composer hint row; its trust dialog and a shell prompt never draw it. No quiet fallback:
+  // the shell prompt's 2004h would arm it before agy starts. Evidence: agy 1.2.14 and 1.5.2 startups.
+  'antigravity-composer-prompt': {
+    markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: DECRST_BRACKETED_PASTE,
+    marker: ANTIGRAVITY_COMPOSER_HINT,
+    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
