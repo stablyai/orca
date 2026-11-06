@@ -9,25 +9,20 @@ export type NativeChatPinnedRowsInput = {
   count: number
   /** Mount reveal targets before their cards expand and report scroll positions. */
   revealIndex?: number | null
-  /** Keep the New marker mounted so it can reveal itself and detect reader replies. */
-  newRowsMarkerIndex?: number | null
 }
 
 /** Pin the live tail for aria-live announcements and measured-height accuracy during streaming. */
 export function nativeChatPinnedRowIndexes({
   count,
-  revealIndex,
-  newRowsMarkerIndex
+  revealIndex
 }: NativeChatPinnedRowsInput): ReadonlySet<number> {
   const pinned = new Set<number>()
   if (count <= 0) {
     return pinned
   }
   pinned.add(count - 1)
-  for (const index of [revealIndex, newRowsMarkerIndex]) {
-    if (index != null && index >= 0 && index < count) {
-      pinned.add(index)
-    }
+  if (revealIndex != null && revealIndex >= 0 && revealIndex < count) {
+    pinned.add(revealIndex)
   }
   return pinned
 }

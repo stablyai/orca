@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { nativeChatDockedTaskList } from '../../../../shared/native-chat/input/native-chat-task-list-state'
 import { NativeChatTaskList } from './NativeChatTaskList'
-import { nativeChatTaskListState } from './native-chat-task-list-state'
 
 export function NativeChatDockedTaskList({
   messages
 }: {
   messages: readonly NativeChatMessage[]
 }): React.JSX.Element | null {
-  const { list } = useMemo(() => nativeChatTaskListState(messages), [messages])
-  if (!list || list.tasks.length === 0) {
+  const list = useMemo(() => nativeChatDockedTaskList(messages), [messages])
+  if (!list) {
     return null
   }
   return (

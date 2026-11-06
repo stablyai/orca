@@ -1,6 +1,6 @@
 import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
@@ -20,9 +20,12 @@ import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
+import { registerPluginViewIpcBridge } from './plugin-view-ipc-bridge'
+import { registerPreflightWslRetryIpcBridge } from './preflight-wsl-retry-ipc-bridge'
 import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
+import { registerClaudeAccountSwitchIpcBridge } from './claude-account-switch-ipc-bridge'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { registerSessionTabIpcBridge } from './session-tab-ipc-bridge'
 import { registerSettingsAndSidebarIpcBridge } from './settings-sidebar-ipc-bridge'
@@ -94,6 +97,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerQuitAndStopAllSessionsIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
+  registerPreflightWslRetryIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
@@ -134,6 +138,8 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerBrowserTabActivateIpcBridge(unsubs)
   registerTabLifecycleIpcBridge(unsubs)
   registerRateLimitIpcBridge(unsubs)
+  registerPluginViewIpcBridge(unsubs)
+  registerClaudeAccountSwitchIpcBridge(unsubs)
   const stopDirectSshStateBridge = registerDirectSshStateIpcBridge(unsubs)
   registerZoomIpcBridge(unsubs)
   const agentStatusBridge = registerAgentStatusIpcBridge(unsubs)

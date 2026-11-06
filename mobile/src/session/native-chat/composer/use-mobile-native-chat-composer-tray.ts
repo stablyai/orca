@@ -1,6 +1,8 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
+import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
+import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps
@@ -22,12 +24,14 @@ export const NO_COMPOSER_TRAY: MobileNativeChatComposerTray = {}
 
 export function useMobileNativeChatComposerTray({
   queued,
+  taskList,
   backgroundTasks
 }: {
   queued: MobileNativeChatQueuedMessagesProps & {
     /** One card list per conversation: a pending action in one never disables another's. */
     sessionKey: string
   }
+  taskList: NativeChatTaskList | null
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
@@ -41,13 +45,21 @@ export function useMobileNativeChatComposerTray({
     pause,
     onResume,
     sessionKey,
-    steerHeld
+    steerHeld,
+    agentWorking
   } = queued
   return useMemo(
     () => ({
       content: createElement(
         Fragment,
         null,
+        taskList
+          ? createElement(MobileNativeChatDockedTaskList, {
+              key: `${sessionKey}:docked-task-list`,
+              list: taskList,
+              conversationKey: sessionKey
+            })
+          : null,
         backgroundTasks
           ? // Use distinct conversation keys so pending actions stay scoped and each tray section survives changes to the other.
             createElement(MobileNativeChatBackgroundTasks, {
@@ -66,12 +78,14 @@ export function useMobileNativeChatComposerTray({
           onMove,
           pause,
           onResume,
-          steerHeld
+          steerHeld,
+          agentWorking
         })
       ),
       composerInputRef
     }),
     [
+      taskList,
       backgroundTasks,
       cards,
       composerInputRef,
@@ -84,7 +98,8 @@ export function useMobileNativeChatComposerTray({
       onSend,
       pause,
       sessionKey,
-      steerHeld
+      steerHeld,
+      agentWorking
     ]
   )
 }

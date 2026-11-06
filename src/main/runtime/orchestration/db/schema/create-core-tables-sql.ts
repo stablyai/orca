@@ -191,8 +191,12 @@ CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   last_recovery_at         TEXT,
   archive_source           TEXT,
   archive_status           TEXT,
+  auto_release_at          TEXT,
+  auto_release_dispatch_id TEXT,
   created_at               TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at               TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at               TEXT NOT NULL DEFAULT (datetime('now')),
+  -- JSON: the agent conversation a closed worker reopens in (WorkerResumeSession).
+  resume_session           TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_terminal_resources_owner
@@ -206,9 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_identity
 CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
   ON worker_terminal_resources(release_state);
 
--- One live agent-session operation id per structured worker mailbox. Persisted because the id is
--- the send's idempotency key: re-minting it after a restart would re-deliver an already-queued
--- pointer as a second turn.
+-- Read and written only by builds that sent chats a count notice per mailbox; kept for them.
 CREATE TABLE IF NOT EXISTS structured_pointer_operations (
   mailbox_handle    TEXT PRIMARY KEY,
   session_id        TEXT NOT NULL,
@@ -216,6 +218,18 @@ CREATE TABLE IF NOT EXISTS structured_pointer_operations (
   batch_fingerprint  TEXT NOT NULL,
   minted_at_ms      INTEGER NOT NULL
 );
+
+-- One row per orchestration message a chat session holds but has not yet been handed. Persisted
+-- because the operation id is the send's idempotency key and the only way to find its queued card.
+CREATE TABLE IF NOT EXISTS structured_mail_sends (
+  mailbox_handle TEXT NOT NULL,
+  message_id     TEXT NOT NULL,
+  session_id     TEXT NOT NULL,
+  operation_id   TEXT NOT NULL,
+  minted_at_ms   INTEGER NOT NULL,
+  PRIMARY KEY (mailbox_handle, message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_session ON structured_mail_sends(session_id);
 
 CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   dispatch_id   TEXT PRIMARY KEY,

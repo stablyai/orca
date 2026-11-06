@@ -1,0 +1,113 @@
+diff --git a/src/domobserver.ts b/src/domobserver.ts
+--- a/src/domobserver.ts
++++ b/src/domobserver.ts
+@@ -235,7 +235,7 @@
+       view.input.lastFocus = 0
+       selectionToDOM(view)
+       this.currentSelection.set(sel)
+-      view.scrollToSelection()
++      view.scrollToSelection("focus")
+     } else if (from > -1 || newSel) {
+       if (from > -1) {
+         view.docView.markDirty(from, to)
+diff --git a/src/index.ts b/src/index.ts
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -234,11 +234,11 @@
+   }
+ 
+   /// @internal
+-  scrollToSelection() {
++  scrollToSelection(reason?: "focus") {
+     let startDOM = this.domSelectionRange().focusNode
+     if (!startDOM || !this.dom.contains(startDOM.nodeType == 1 ? startDOM : startDOM.parentNode)) {
+       // Ignore selections outside the editor
+-    } else if (this.someProp("handleScrollToSelection", f => f(this))) {
++    } else if (this.someProp("handleScrollToSelection", f => f(this, reason))) {
+       // Handled
+     } else if (this.state.selection instanceof NodeSelection) {
+       let target = this.docView.domAfterPos(this.state.selection.from)
+@@ -675,7 +675,7 @@
+   /// the selection into view. A handler function may return false to
+   /// indicate that it did not handle the scrolling and further
+   /// handlers or the default behavior should be tried.
+-  handleScrollToSelection?: (this: P, view: EditorView) => boolean
++  handleScrollToSelection?: (this: P, view: EditorView, reason?: "focus") => boolean
+ 
+   /// Determines whether an in-editor drag event should copy or move
+   /// the selection. When not given, the event's `altKey` property is
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -4864,7 +4864,7 @@
+             view.input.lastFocus = 0;
+             selectionToDOM(view);
+             this.currentSelection.set(sel);
+-            view.scrollToSelection();
++            view.scrollToSelection("focus");
+         }
+         else if (from > -1 || newSel) {
+             if (from > -1) {
+@@ -5626,10 +5626,10 @@
+     /**
+     @internal
+     */
+-    scrollToSelection() {
++    scrollToSelection(reason) {
+         let startDOM = this.domSelectionRange().focusNode;
+         if (!startDOM || !this.dom.contains(startDOM.nodeType == 1 ? startDOM : startDOM.parentNode)) ;
+-        else if (this.someProp("handleScrollToSelection", f => f(this))) ;
++        else if (this.someProp("handleScrollToSelection", f => f(this, reason))) ;
+         else if (this.state.selection instanceof NodeSelection) {
+             let target = this.docView.domAfterPos(this.state.selection.from);
+             if (target.nodeType == 1)
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -4565,7 +4565,7 @@
+         view.input.lastFocus = 0;
+         selectionToDOM(view);
+         this.currentSelection.set(sel);
+-        view.scrollToSelection();
++        view.scrollToSelection("focus");
+       } else if (from > -1 || newSel) {
+         if (from > -1) {
+           view.docView.markDirty(from, to);
+@@ -5195,11 +5195,11 @@
+     }
+   }, {
+     key: "scrollToSelection",
+-    value: function scrollToSelection() {
++    value: function scrollToSelection(reason) {
+       var _this17 = this;
+       var startDOM = this.domSelectionRange().focusNode;
+       if (!startDOM || !this.dom.contains(startDOM.nodeType == 1 ? startDOM : startDOM.parentNode)) ;else if (this.someProp("handleScrollToSelection", function (f) {
+-        return f(_this17);
++        return f(_this17, reason);
+       })) ;else if (this.state.selection instanceof prosemirrorState.NodeSelection) {
+         var target = this.docView.domAfterPos(this.state.selection.from);
+         if (target.nodeType == 1) scrollRectIntoView(this, target.getBoundingClientRect(), startDOM);
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -718,7 +718,7 @@
+     indicate that it did not handle the scrolling and further
+     handlers or the default behavior should be tried.
+     */
+-    handleScrollToSelection?: (this: P, view: EditorView) => boolean;
++    handleScrollToSelection?: (this: P, view: EditorView, reason?: "focus") => boolean;
+     /**
+     Determines whether an in-editor drag event should copy or move
+     the selection. When not given, the event's `altKey` property is
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -718,7 +718,7 @@
+     indicate that it did not handle the scrolling and further
+     handlers or the default behavior should be tried.
+     */
+-    handleScrollToSelection?: (this: P, view: EditorView) => boolean;
++    handleScrollToSelection?: (this: P, view: EditorView, reason?: "focus") => boolean;
+     /**
+     Determines whether an in-editor drag event should copy or move
+     the selection. When not given, the event's `altKey` property is

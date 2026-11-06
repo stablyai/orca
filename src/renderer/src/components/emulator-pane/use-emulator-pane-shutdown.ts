@@ -2,7 +2,7 @@ import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { EMULATOR_LOCAL_SHUTDOWN_EVENT } from './use-emulator-pane-session-events'
-import { emulatorPaneErrorMessage } from './emulator-pane-error-message'
+import { emulatorShutdownErrorText } from './emulator-pane-error-copy'
 
 type UseEmulatorPaneShutdownArgs = {
   loading: boolean
@@ -46,11 +46,7 @@ export function useEmulatorPaneShutdown({
         )
         void refreshDevices()
       } catch (e: unknown) {
-        const msg = emulatorPaneErrorMessage(
-          e,
-          'Could not shut down the emulator. Try again, or stop it from your emulator manager.'
-        )
-        setError(msg)
+        setError(emulatorShutdownErrorText(e))
       } finally {
         if (mountedRef.current) {
           setLoading(false)

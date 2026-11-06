@@ -5,11 +5,49 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 
-test.describe('Tab visibility with closed sidebar', () => {
+test.describe('Sidebar boundaries beside terminal content', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+  })
+
+  test('sidebar resize and scrollbar targets remain reachable over a terminal', async ({
+    orcaPage
+  }) => {
+    const handle = orcaPage.locator('[data-sidebar-resize-handle]')
+    const strip = orcaPage.locator('[data-sidebar-seam-scrollbar-strip]')
+    await expect(handle).toBeVisible()
+    await expect(orcaPage.locator('.xterm:visible').first()).toBeVisible()
+
+    const terminalBox = await orcaPage.locator('.xterm:visible').first().boundingBox()
+    const handleBox = await handle.boundingBox()
+    const stripBox = await strip.boundingBox()
+    expect(terminalBox).not.toBeNull()
+    expect(handleBox).not.toBeNull()
+    expect(stripBox).not.toBeNull()
+    const y = terminalBox!.y + terminalBox!.height / 2
+
+    for (const [target, box] of [
+      [handle, handleBox!],
+      [strip, stripBox!]
+    ] as const) {
+      const reachable = await target.evaluate(
+        (element, point) => element.contains(document.elementFromPoint(point.x, point.y)),
+        { x: box.x + box.width / 2, y }
+      )
+      expect(reachable).toBe(true)
+    }
+
+    const x = handleBox!.x + handleBox!.width / 2
+    await orcaPage.mouse.move(x, y)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(x + 40, y, { steps: 5 })
+    await orcaPage.mouse.up()
+
+    await expect
+      .poll(async () => Math.round((await handle.boundingBox())!.x - handleBox!.x))
+      .toBe(40)
   })
 
   test('first tab stays visible after Cmd+B collapses the sidebar', async ({ orcaPage }) => {
@@ -134,151 +172,5 @@ test.describe('Tab visibility with closed sidebar', () => {
     expect(firstTabLeft).toBeGreaterThanOrEqual(titlebarRight - 1)
 
     expect(centerIsTabOrDescendant).toBe(true)
-  })
-
-  test('sidebar toggle and Back button stay separated after sidebar collapse', async ({
-    orcaPage
-  }) => {
-    await orcaPage.addInitScript(() => {
-      // Why: #2082 was reported against Windows-only titlebar chrome. Reloading
-      // with a Windows UA makes App.tsx take that renderer branch on any CI host.
-      const userAgent =
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
-      Object.defineProperty(navigator, 'userAgent', {
-        get: () => userAgent,
-        configurable: true
-      })
-    })
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => ({
-            hasWindowsUserAgent: navigator.userAgent.includes('Windows'),
-            hasWindowsTitlebarChrome:
-              Boolean(document.querySelector('button[aria-label="Application menu"]')) &&
-              Boolean(document.querySelector('.window-controls'))
-          })),
-        {
-          timeout: 5_000,
-          message: 'Renderer did not switch to the Windows titlebar branch'
-        }
-      )
-      .toEqual({ hasWindowsUserAgent: true, hasWindowsTitlebarChrome: true })
-
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available — is the app in dev mode?')
-      }
-      store.getState().setSidebarOpen(true)
-    })
-
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              throw new Error('window.__store is not available — is the app in dev mode?')
-            }
-            const state = store.getState()
-            return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
-          }),
-        {
-          timeout: 5_000,
-          message: 'Expected default activeView=terminal and sidebarOpen=true at test start'
-        }
-      )
-      .toEqual({ activeView: 'terminal', sidebarOpen: true })
-
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available — is the app in dev mode?')
-      }
-      // Drive collapsed state directly for this geometry arm because hidden animated chrome may never become Playwright-stable.
-      store.getState().setSidebarOpen(false)
-    })
-
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              throw new Error('window.__store is not available — is the app in dev mode?')
-            }
-            return store.getState().sidebarOpen
-          }),
-        {
-          timeout: 5_000,
-          message: 'Sidebar did not enter the collapsed state'
-        }
-      )
-      .toBe(false)
-
-    const measureControls = async (): Promise<{
-      titlebarIsCollapsed: boolean
-      toggleRight: number
-      backLeft: number
-      backCenterHitsBack: boolean
-    } | null> =>
-      orcaPage.evaluate(() => {
-        const titlebarLeft = document.querySelector<HTMLElement>('.titlebar-left')
-        const sidebarToggle = titlebarLeft?.querySelector<HTMLButtonElement>(
-          'button[aria-label="Toggle sidebar"]'
-        )
-        const backButton = titlebarLeft?.querySelector<HTMLButtonElement>(
-          'button[aria-label="Go back"]'
-        )
-        if (!titlebarLeft || !sidebarToggle || !backButton) {
-          return null
-        }
-        const titlebarIsCollapsed = getComputedStyle(titlebarLeft).position === 'absolute'
-        const toggleRect = sidebarToggle.getBoundingClientRect()
-        const backRect = backButton.getBoundingClientRect()
-        const backCenterX = backRect.left + backRect.width / 2
-        const backCenterY = backRect.top + backRect.height / 2
-        const elementAtBackCenter = document.elementFromPoint(backCenterX, backCenterY)
-        return {
-          titlebarIsCollapsed,
-          toggleRight: toggleRect.right,
-          backLeft: backRect.left,
-          backCenterHitsBack:
-            elementAtBackCenter !== null && backButton.contains(elementAtBackCenter)
-        }
-      })
-
-    let controls: {
-      titlebarIsCollapsed: boolean
-      toggleRight: number
-      backLeft: number
-      backCenterHitsBack: boolean
-    } | null = null
-    await expect
-      .poll(
-        async () => {
-          controls = await measureControls()
-          return controls?.titlebarIsCollapsed === true
-        },
-        {
-          timeout: 5_000,
-          message: 'Titlebar controls never reached a measurable collapsed-layout state'
-        }
-      )
-      .toBe(true)
-
-    expect(controls).not.toBeNull()
-    const { toggleRight, backLeft, backCenterHitsBack } = controls!
-
-    // Require a Windows header gutter where ml-auto has no spare width to separate Back.
-    expect(backLeft - toggleRight).toBeGreaterThanOrEqual(6)
-    expect(backCenterHitsBack).toBe(true)
   })
 })

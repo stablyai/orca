@@ -117,7 +117,8 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
 
     await vi.advanceTimersByTimeAsync(1)
     expect(terminateTreeMock).toHaveBeenCalledWith(child, {
-      site: 'source-control-text-generation'
+      site: 'source-control-text-generation',
+      supervised: true
     })
     await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
     await stopped

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
-import type { Store } from '../../../src/main/persistence'
+import type { Store } from '../../../src/main/persistence/loading-store/store'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'

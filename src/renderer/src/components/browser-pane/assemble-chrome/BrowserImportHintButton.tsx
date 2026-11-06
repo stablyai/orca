@@ -23,6 +23,7 @@ import { getBrowserCookieImportSourceLabels } from '../../../../../shared/browse
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
@@ -108,7 +109,7 @@ export function BrowserImportHintButton({
         )
         return
       }
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     },
     [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser]
   )
@@ -130,7 +131,7 @@ export function BrowserImportHintButton({
       return
     }
     if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }, [effectiveProfileId, importCookiesToProfile])
 

@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createRepoSlice } from './repos'
@@ -54,6 +54,7 @@ import { createStructuredChatSleptAtSlice } from './structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../editor-buffer-record-lifecycle'
+import { withAgentConversationRetention } from '../agent-conversation-retention'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 export { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 export {
@@ -64,15 +65,20 @@ export {
   makeTabGroup
 } from './store-session-test-harness'
 
-export function createTestStore() {
+const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
+  withEditorBufferRecords(withAgentConversationRetention(creator), check)
+
+export function createTestStore(
+  isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
+) {
   // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
-    withEditorBufferRecords<AppState>(
+    withTestStorePolicies(
       (...a) => ({
         ...createRepoSlice(...a),
         ...createSparsePresetsSlice(...a),
         ...createWorktreeSlice(...a),
-        ...createTerminalSlice(...a),
+        ...createTerminalSlice(...a, isClaudeAgent),
         ...createTabsSlice(...a),
         ...createUISlice(...a),
         ...createSettingsSlice(...a),

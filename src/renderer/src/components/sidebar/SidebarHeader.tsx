@@ -14,11 +14,13 @@ import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCount
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
+  projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
-  activityOptionsTarget
+  activityOptionsTarget,
+  projectsCollapseTarget
 }: SidebarHeaderProps) {
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
@@ -56,8 +58,11 @@ const SidebarHeader = React.memo(function SidebarHeader({
   )
 
   return (
-    <div className="mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
+      <div
+        className="flex min-w-0 items-center"
+        data-contextual-tour-target={groupBy === 'repo' ? 'projects-collapse-all' : undefined}
+      >
         <span
           // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
           className="min-w-0 truncate select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
@@ -65,6 +70,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
         >
           {sidebarTitle}
         </span>
+        {/* WorktreeList portals the collapse-all toggle here; it owns the rendered project rows. */}
+        <div ref={projectsCollapseTarget} className="flex shrink-0 items-center empty:hidden" />
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Popover

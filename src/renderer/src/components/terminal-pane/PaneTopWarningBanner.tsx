@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { TriangleAlert, type LucideIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -57,10 +59,32 @@ export function PaneBannerLearnMore({ onClick }: { onClick: () => void }): React
   )
 }
 
-/** The warning strip across the top of a terminal pane, with its actions and optional Dismiss. */
+type PaneTopBannerTone = 'warning' | 'neutral' | 'accent'
+
+const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: string }> = {
+  warning: {
+    stripClass:
+      'border-status-warning-border bg-background bg-[linear-gradient(var(--status-warning-background),var(--status-warning-background))]',
+    iconClass: 'text-status-warning'
+  },
+  neutral: {
+    stripClass: 'border-border bg-card',
+    iconClass: 'text-muted-foreground'
+  },
+  accent: {
+    stripClass:
+      'border-theme-accent/30 bg-background bg-[linear-gradient(color-mix(in_srgb,var(--color-theme-accent)_10%,transparent),color-mix(in_srgb,var(--color-theme-accent)_10%,transparent))]',
+    iconClass: 'text-theme-accent'
+  }
+}
+
+/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
 export function PaneTopWarningBanner({
   title,
   body,
+  tone = 'warning',
+  icon,
+  badge,
   primaryAction,
   onDismiss,
   onDontShowAgain,
@@ -68,6 +92,11 @@ export function PaneTopWarningBanner({
 }: {
   title: string
   body?: React.ReactNode
+  tone?: PaneTopBannerTone
+  /** Replaces the warning icon; neutral and accent show none without it. */
+  icon?: LucideIcon
+  /** A short label set before the title, e.g. what kind of pane this is. */
+  badge?: string
   primaryAction: React.ReactNode
   onDismiss?: () => void
   onDontShowAgain?: () => void
@@ -77,27 +106,46 @@ export function PaneTopWarningBanner({
   useEffect(() => {
     onShown?.()
   }, [onShown])
+  const Icon = icon ?? (tone === 'warning' ? TriangleAlert : null)
+  const toneClasses = TONE_CLASSES[tone]
 
   return (
     <div
       ref={ref}
       role="status"
-      // Why pr-16: the pane's own split/close controls float over its top-right corner.
-      className="pane-top-banner @container border-b border-status-warning-border bg-status-warning-background py-2 pr-16 pl-3 text-xs"
+      // Why pr-24: an agent pane floats four controls (hand off, chat, split, close) over its top-right corner.
+      className={cn(
+        'pane-top-banner @container border-b py-2 pr-24 pl-3 text-xs',
+        toneClasses.stripClass
+      )}
     >
       {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
-          <TriangleAlert
-            className="mt-0.5 size-4 shrink-0 text-status-warning"
-            aria-hidden="true"
-          />
+          {Icon ? (
+            <Icon
+              className={cn('mt-0.5 size-4 shrink-0', toneClasses.iconClass)}
+              aria-hidden="true"
+            />
+          ) : null}
           <div className="min-w-0 leading-5">
-            <p className="font-medium text-foreground">{title}</p>
+            <p className="font-medium text-foreground">
+              {badge ? (
+                <Badge variant="paneLabel" className="mr-1.5">
+                  {badge}
+                </Badge>
+              ) : null}
+              {title}
+            </p>
             {body ? <p className="text-muted-foreground">{body}</p> : null}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1 @[44rem]:shrink-0 @max-[44rem]:mt-1.5 @max-[44rem]:pl-6.5">
+        <div
+          className={cn(
+            'flex flex-wrap items-center gap-1 @[44rem]:shrink-0 @max-[44rem]:mt-1.5',
+            Icon && '@max-[44rem]:pl-6.5'
+          )}
+        >
           {primaryAction}
           {onDontShowAgain ? (
             <Button type="button" variant="ghost" size="xs" onClick={onDontShowAgain}>

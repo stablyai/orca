@@ -5,30 +5,33 @@ import {
   agentSessionFailureFact,
   type AgentSessionFailureFact,
   type SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalMessageItem,
   type AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { agentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import {
+  agentSessionCompactCommandText,
+  type AgentSessionConversationCommand
+} from '../../../shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
+import { agentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
@@ -37,23 +40,24 @@ import type {
 } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
 import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
 
-export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
-
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 
-export function structuredAgentSessionCompactBody(): AgentJournalMessageItem {
+export function structuredAgentSessionCompactBody(instructions?: string): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: '/compact' }],
-    command: { name: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND }
+    blocks: [{ type: 'text', text: agentSessionCompactCommandText(instructions) }],
+    command: {
+      name: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+      ...(instructions ? { instructions } : {})
+    }
   }
 }
 
@@ -63,6 +67,7 @@ type AwaitedSubmission = Pick<
 >
 
 export type StructuredAgentSessionAwaitedCommandJournal = {
+  inputOrder?: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
   submissions?: () => readonly AwaitedSubmission[]
   itemBody: AgentSessionJournal['itemBody']
 }
@@ -72,7 +77,9 @@ export function structuredAgentSessionAwaitedCommand(
   journal: StructuredAgentSessionAwaitedCommandJournal
 ): AgentSessionConversationCommand | undefined {
   let oldest: AwaitedSubmission | undefined
-  for (const submission of journal.submissions?.() ?? []) {
+  for (const submission of journal.inputOrder?.recoverableSubmissions() ??
+    journal.submissions?.() ??
+    []) {
     if (
       submission.dispatchState === 'pending' &&
       (oldest === undefined || (submission.acceptedSequence ?? 0) < (oldest.acceptedSequence ?? 0))
@@ -111,12 +118,12 @@ export function isStructuredAgentSessionStopNote(itemId: string): boolean {
 
 /** Read Stop from the journal so cached state cannot outlive the command. */
 export function structuredAgentSessionCommandWasStopped(
-  journal: Pick<AgentSessionJournal, 'snapshot'>,
+  journal: Pick<AgentSessionJournal, 'itemsRead'>,
   turnId: string
 ): boolean {
   const { itemId } = structuredAgentSessionCommandTurn(turnId.slice('compact:'.length))
   return journal
-    .snapshot()
+    .itemsRead()
     .items.some(
       (item) =>
         item.turnScope?.kind === 'turn' &&
@@ -172,12 +179,13 @@ export async function handOverStructuredAgentSessionCommand(
     return
   }
   const { turn, running } = await openCommandTurn(ctx, submission)
+  const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running }
+      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.
@@ -234,9 +242,7 @@ export function structuredAgentSessionHandoverOrigin(
   journal: AgentSessionJournal,
   submission: AgentJournalSubmission
 ): number {
-  const handedOver = journal
-    .submissions()
-    .find((entry) => entry.clientMessageId === submission.clientMessageId)
+  const handedOver = journal.submission(submission.clientMessageId)
   return handedOver?.handedOverAt ?? submission.submittedAt
 }
 
@@ -304,8 +310,9 @@ function commandBlocked(
   if (!record) {
     return agentSessionFailureFact('hostFault')
   }
-  // Validate capability even if a client sends an unadvertised command.
-  if (!ctx.agents.capabilities(record.provider)?.compact) {
+  // Validate capability even if a client sends an unadvertised command or instructions.
+  const capabilities = ctx.agents.capabilities(record.provider)
+  if (!capabilities?.compact || (body.command.instructions && !capabilities.compactInstructions)) {
     return agentSessionFailureFact('commandRefused')
   }
   const refusal = conversationCommandBlocked(

@@ -3,11 +3,10 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import {
   getRevealInFileManagerLabel,
-  getWorkspaceFileRevealOwner,
+  getOpenFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
 import { translate } from '@/i18n/i18n'
@@ -19,12 +18,7 @@ export function EditorFileLocationMenuItems({
   file: OpenFile
   onCopyPath: () => void
 }): React.JSX.Element {
-  const revealOwner = useAppStore((state) =>
-    getWorkspaceFileRevealOwner(state, file.worktreeId, {
-      connectionId: file.externalSshTargetId ?? getConnectionIdFromState(state, file.worktreeId),
-      runtimeEnvironmentId: file.runtimeEnvironmentId
-    })
-  )
+  const revealOwner = useAppStore((state) => getOpenFileRevealOwner(state, file))
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
 
   return (

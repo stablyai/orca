@@ -1,7 +1,7 @@
 /**
  * What the extension preload installs on `chrome`/`browser`. Main's namespace registry is the
  * authority (it validates every call); this list only tells the preload which functions and events
- * to create before extension code runs. A test pins it to main's registry.
+ * to create before extension code runs.
  *
  * Why written out here: this module is bundled into a sandboxed preload whose `require` resolves
  * only 'electron', so importing shared code would emit a chunk the context cannot load.
@@ -9,6 +9,7 @@
 
 export const PRELOAD_BROWSER_EXTENSION_INVOKE_CHANNEL = 'browserExtension:invoke'
 export const PRELOAD_BROWSER_EXTENSION_EVENT_CHANNEL = 'browserExtension:event'
+export const PRELOAD_BROWSER_EXTENSION_FRAME_LIFETIME_CHANNEL = 'browserExtension:frameLifetime'
 
 export type BrowserExtensionSurfaceMethod = {
   /**

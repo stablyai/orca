@@ -1,23 +1,20 @@
+import type { AgentSessionMutationResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type {
-  AgentSessionMutationResult,
-  AgentSessionWireRefusalCode
-} from '../../../src/shared/agent-session-wire'
-import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
-import {
-  agentSessionRefusalNotice,
-  agentSessionWriteFailureNotice,
-  agentSessionWriteNoticeEnglish,
-  agentSessionWriteNoticeParts
-} from '../../../src/shared/agent-session-refusal-notice'
+  AgentSessionWireRefusalCode,
+  AgentSessionRefusalReference
+} from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { agentSessionWriteNoticeParts } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   agentSessionWriteKindForMethod,
   readAgentSessionErrorRefusal,
+  type AgentSessionWriteFailure,
   type AgentSessionWriteKind
-} from '../../../src/shared/agent-session-write-failure'
+} from '../../../src/shared/agent-session/failures/agent-session-write-failure'
+import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
@@ -28,8 +25,13 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue; cursor?: AgentJournalCursor }
-  | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  | { status: 'failed'; message: string }
+  | {
+      status: 'refused'
+      code: AgentSessionWireRefusalCode
+      message: string
+      failure: AgentSessionWriteFailure
+    }
+  | { status: 'failed'; message: string; failure: AgentSessionWriteFailure }
   | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
@@ -61,7 +63,7 @@ export function agentSessionReadFailureRefusal(failure: unknown) {
 }
 
 export function agentSessionReadRefusalText(refusal: AgentSessionRefusalReference): string {
-  return agentSessionWriteNoticeEnglish(
+  return mobileAgentSessionWriteNoticeText(
     agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
   )
 }
@@ -170,17 +172,18 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     ) {
       return { status: 'unknown' }
     }
-    return result.ok
-      ? { status: 'accepted', value: result.value, cursor: result.cursor }
-      : {
-          status: 'refused',
-          code: result.refusal.code,
-          message: agentSessionRefusalNotice(
-            result.refusal,
-            phoneWriteKind(fingerprintMethod, fields),
-            context
-          )
-        }
+    if (result.ok) {
+      return { status: 'accepted', value: result.value, cursor: result.cursor }
+    }
+    const failure = agentSessionRefusalFailure(result.refusal)
+    return {
+      status: 'refused',
+      code: result.refusal.code,
+      message: mobileAgentSessionWriteNoticeText(
+        agentSessionWriteNoticeParts(failure, phoneWriteKind(fingerprintMethod, fields), context)
+      ),
+      failure
+    }
   } catch (error) {
     const answered =
       error instanceof AgentSessionRpcResponseError
@@ -190,9 +193,10 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       // The host turned the request away before running it; its text is written for a log.
       return {
         status: 'failed',
-        message: agentSessionWriteNoticeEnglish(
+        message: mobileAgentSessionWriteNoticeText(
           agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields), context)
-        )
+        ),
+        failure: answered
       }
     }
     if (
@@ -204,7 +208,10 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return {
       status: 'failed',
-      message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod, fields))
+      message: mobileAgentSessionWriteNoticeText(
+        agentSessionWriteNoticeParts({ kind: 'failed' }, phoneWriteKind(fingerprintMethod, fields))
+      ),
+      failure: { kind: 'failed' }
     }
   }
 }

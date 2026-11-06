@@ -1,8 +1,10 @@
+import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -11,6 +13,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
+import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
@@ -33,7 +36,7 @@ import {
   buildSidebarHostOptions,
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
-} from '../../sidebar-host-options'
+} from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
@@ -55,7 +58,7 @@ function createSidebarHostOptionsSelector() {
       state.runtimeEnvironments,
       hostLabelOverrides,
       state.wslHostStatuses,
-      settings?.experimentalWslHosts === true,
+      selectWslHostsServing(state),
       state.wslHostServerFiles === 'missing'
     ]
     if (shallow(inputs, nextInputs)) {
@@ -71,7 +74,7 @@ function createSidebarHostOptionsSelector() {
       runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: settings?.experimentalWslHosts === true,
+      wslHostsEnabled: selectWslHostsServing(state),
       wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
     })
     if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
@@ -84,6 +87,7 @@ function createSidebarHostOptionsSelector() {
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -136,17 +140,22 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
 
   const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
+  // Same-id registrations on two hosts: each row and project header needs its own host's.
+  const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
         groupBy: args.groupBy,
+        sortBy: args.sortBy,
         worktrees,
         repoMap,
+        repoOfWorktree,
         prGroupOf: createSidebarPRGroupReader(repoMap, args.prCache),
         repoOrder,
         workspaceStatuses: args.workspaceStatuses,
         projectOrderBy: args.projectOrderBy,
         lineageById: args.worktreeLineageById,
+        lineageParentIdentities,
         worktreeMap: args.worktreeMap,
         nestLineage: true,
         projectGroups: args.visibleProjectGroupsForRows,
@@ -163,14 +172,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      args.sortBy,
       worktrees,
       repoMap,
+      repoOfWorktree,
       args.prCache,
       defaultHostId,
       repoOrder,
       args.workspaceStatuses,
       args.projectOrderBy,
       args.worktreeLineageById,
+      lineageParentIdentities,
       args.worktreeMap,
       args.projectGrouping,
       args.visibleProjectGroupsForRows,

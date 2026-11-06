@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { StatusRetryButton } from './status-retry-button'
 
 export function TooManyChangesBanner({
@@ -27,7 +27,7 @@ export function TooManyChangesBanner({
           {translate(
             'auto.components.right.sidebar.SourceControl.tooManyChanges',
             'Too many changes detected. Only the first {{value0}} changes are shown.',
-            { value0: limit.toLocaleString() }
+            { value0: limit.toLocaleString(getIntlLocale()) }
           )}
         </span>
       </div>

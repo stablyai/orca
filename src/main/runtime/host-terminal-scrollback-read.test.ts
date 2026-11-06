@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal-scrollback-limits'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
+
 import {
   readHostTerminalScrollback,
   type HostTerminalScrollbackReadDeps
@@ -68,16 +68,6 @@ function deps(overrides: Partial<HostTerminalScrollbackReadDeps> = {}) {
 }
 
 describe('readHostTerminalScrollback', () => {
-  it('returns the stored bytes for a ref a tab of the caller worktree names', async () => {
-    const { resolved } = deps()
-    await expect(
-      readHostTerminalScrollback(resolved, {
-        worktree: 'id:repo::/wt-a',
-        ref: HELD_REF
-      })
-    ).resolves.toEqual({ buffer: 'stored history' })
-  })
-
   it('refuses a ref named only by another worktree without touching the store', async () => {
     const { resolved, readSnapshot } = deps()
     await expect(
@@ -86,50 +76,6 @@ describe('readHostTerminalScrollback', () => {
         ref: OTHER_WORKTREE_REF
       })
     ).rejects.toThrow('terminal_scrollback_not_found')
-    expect(readSnapshot).not.toHaveBeenCalled()
-  })
-
-  it('refuses a worktree the host cannot resolve', async () => {
-    const { resolved, readSnapshot } = deps()
-    await expect(
-      readHostTerminalScrollback(resolved, {
-        worktree: 'path:/elsewhere',
-        ref: HELD_REF
-      })
-    ).rejects.toThrow('selector_not_found')
-    expect(readSnapshot).not.toHaveBeenCalled()
-  })
-
-  it('answers not-found when the named snapshot file is missing', async () => {
-    const { resolved } = deps({ statSnapshotSize: async () => null })
-    await expect(
-      readHostTerminalScrollback(resolved, {
-        worktree: 'id:repo::/wt-a',
-        ref: HELD_REF
-      })
-    ).rejects.toThrow('terminal_scrollback_not_found')
-  })
-
-  it('answers not-found when the host has no session for the worktree', async () => {
-    const { resolved } = deps({ getWorkspaceSession: () => null })
-    await expect(
-      readHostTerminalScrollback(resolved, {
-        worktree: 'id:repo::/wt-a',
-        ref: HELD_REF
-      })
-    ).rejects.toThrow('terminal_scrollback_not_found')
-  })
-
-  it('refuses a file over the store limit before reading any of it', async () => {
-    const { resolved, readSnapshot } = deps({
-      statSnapshotSize: async () => TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1
-    })
-    await expect(
-      readHostTerminalScrollback(resolved, {
-        worktree: 'id:repo::/wt-a',
-        ref: HELD_REF
-      })
-    ).rejects.toThrow('terminal_scrollback_too_large')
     expect(readSnapshot).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,7 @@
-import type { DraftPasteReadySignal, TuiAgentConfig } from './tui-agent-config'
+import type {
+  DraftPasteReadySignal,
+  TuiAgentConfig
+} from './agent-launch/catalog/tui-agent-config-types'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
 

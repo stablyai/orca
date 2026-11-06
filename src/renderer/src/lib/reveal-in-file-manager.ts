@@ -11,6 +11,8 @@ import {
 } from './local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { getConnectionIdFromState } from './connection-owner-resolution'
+import type { AppState } from '@/store/types'
 
 /** Menu label for showing a path in the OS file manager, as each platform names it. */
 export function getRevealInFileManagerLabel(): string {
@@ -44,6 +46,21 @@ export function getWorkspaceFileRevealOwner(
     return routeOwner
   }
   return getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? 'unresolved'
+}
+
+/** Owner of an open editor file, as the editor header resolves it for Reveal and Copy Path. */
+export function getOpenFileRevealOwner(
+  state: AppState,
+  file: {
+    worktreeId: string
+    externalSshTargetId?: string | null
+    runtimeEnvironmentId?: string | null
+  }
+): ExecutionHostId | 'unresolved' {
+  return getWorkspaceFileRevealOwner(state, file.worktreeId, {
+    connectionId: file.externalSshTargetId ?? getConnectionIdFromState(state, file.worktreeId),
+    runtimeEnvironmentId: file.runtimeEnvironmentId
+  })
 }
 
 /** Shows a path in the OS file manager when this computer can reach it, and says why when it cannot. */

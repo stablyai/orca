@@ -1,5 +1,6 @@
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
-import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import '../../shared/protocol-version'
+import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { CommandHandler } from '../dispatch'
 import { formatTerminalSend, printResult, terminalSendWarnings } from '../format'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'

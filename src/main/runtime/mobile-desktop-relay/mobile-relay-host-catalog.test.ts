@@ -4,12 +4,12 @@ import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -59,9 +59,11 @@ function fakeHosts(
     id: string
     name: string
     snapshot: RuntimeHostStatusSnapshot
-    orcadDeployment?: { sshTargetId: string }
+    orcadDeployment?: { sshTargetId: string } | { kind: 'wsl' }
     runtimeId?: string | null
     pairedDeviceId?: string
+    stoppedOnDesktop?: true
+    unavailableOnDesktop?: true
   }[]
 ) {
   const state = {
@@ -76,10 +78,20 @@ function fakeHosts(
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
       environments: state.environments.map(
-        ({ id, name, orcadDeployment, runtimeId, pairedDeviceId }) => ({
+        ({
           id,
           name,
           orcadDeployment,
+          runtimeId,
+          pairedDeviceId,
+          stoppedOnDesktop,
+          unavailableOnDesktop
+        }) => ({
+          id,
+          name,
+          orcadDeployment,
+          stoppedOnDesktop,
+          unavailableOnDesktop,
           pairingRevision: state.pairingRevision,
           runtimeId: runtimeId === undefined ? 'runtime-a' : runtimeId,
           pairedDeviceId
@@ -178,6 +190,30 @@ describe('mobile relay host catalog', () => {
     ])
     const renamed = catalog(hosts, new Map([['ssh:devbox', 'Build box']])).catalog
     expect(renamed.list().hosts.map((host) => host.label)).toEqual(['Build box'])
+  })
+
+  it('marks a WSL host stopped on the desktop only once the desktop confirmed the stop', () => {
+    const wsl = {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      snapshot: snapshot('wsl:ubuntu', 'unreachable'),
+      orcadDeployment: { kind: 'wsl' as const }
+    }
+    const unconfirmed = {
+      hostId: 'runtime:wsl%3Aubuntu',
+      label: 'Ubuntu (WSL)',
+      health: 'connecting',
+      relay: 'unavailable'
+    }
+    expect(catalog(fakeHosts([wsl]).hosts).catalog.list().hosts).toEqual([unconfirmed])
+    const stopped = fakeHosts([{ ...wsl, stoppedOnDesktop: true }]).hosts
+    expect(catalog(stopped).catalog.list().hosts).toEqual([
+      { ...unconfirmed, stoppedOnDesktop: true }
+    ])
+    const notConnected = fakeHosts([{ ...wsl, unavailableOnDesktop: true }]).hosts
+    expect(catalog(notConnected).catalog.list().hosts).toEqual([
+      { ...unconfirmed, unavailableOnDesktop: true }
+    ])
   })
 
   it('does not list a managed server while its SSH host is reached over the SSH relay', () => {

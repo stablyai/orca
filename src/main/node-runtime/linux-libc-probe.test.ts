@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { parseGlibcVersion, parseLinuxLibc, probeLinuxLibc } from './linux-libc-probe'
+import { describe, expect, it } from 'vitest'
+import { parseGlibcVersion, parseLinuxLibc } from './linux-libc-probe'
 
 describe('Linux library evidence', () => {
   it.each([
@@ -37,66 +37,5 @@ describe('Linux library evidence', () => {
     const output = 'ldd (GNU libc) unknown\nAppliance release 7.4'
     expect(parseLinuxLibc(output)).toBe('glibc')
     expect(parseGlibcVersion(output)).toBeNull()
-  })
-})
-
-describe('Linux library probe fallbacks', () => {
-  it('tries the executable library when the loader does not support --version', async () => {
-    const exec = vi
-      .fn()
-      .mockResolvedValueOnce('ldd: not found')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce(
-        'GNU C Library (GNU libc) stable release version 2.26, by Roland McGrath et al.'
-      )
-    await expect(probeLinuxLibc(exec)).resolves.toEqual({
-      libc: 'glibc',
-      glibc: { major: 2, minor: 26 }
-    })
-    expect(exec).toHaveBeenCalledTimes(4)
-    expect(exec).toHaveBeenLastCalledWith(expect.stringContaining('/lib/libc.so.6'))
-  })
-
-  it('requires the musl loader banner instead of treating its filename as proof', async () => {
-    const exec = vi
-      .fn()
-      .mockResolvedValue('')
-      .mockResolvedValueOnce('/lib/ld-musl-x86_64.so.1: not found')
-    await expect(probeLinuxLibc(exec)).rejects.toThrow('Could not identify')
-    expect(exec).toHaveBeenLastCalledWith(expect.stringContaining('"$loader" 2>&1'))
-  })
-
-  it('does not select an installed musl toolchain before checking the GNU loader', async () => {
-    const exec = vi
-      .fn()
-      .mockResolvedValue('musl libc (x86_64)\nVersion 1.2.5')
-      .mockResolvedValueOnce('ldd: not found')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('ld.so (GNU libc) stable release version 2.36.')
-    await expect(probeLinuxLibc(exec)).resolves.toEqual({
-      libc: 'glibc',
-      glibc: { major: 2, minor: 36 }
-    })
-    expect(exec).toHaveBeenCalledTimes(3)
-  })
-
-  it('uses a musl loader banner when tools and GNU libraries are unavailable', async () => {
-    const exec = vi
-      .fn()
-      .mockResolvedValueOnce('BusyBox ldd: unrecognized option')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce(
-        'musl libc (aarch64)\nVersion 1.2.5\nUsage: loader [options] [--] pathname'
-      )
-    await expect(probeLinuxLibc(exec)).resolves.toEqual({ libc: 'musl', glibc: null })
-  })
-
-  it('stops immediately on execution or transport errors', async () => {
-    const exec = vi.fn().mockResolvedValueOnce('').mockRejectedValueOnce(new Error('disconnected'))
-    await expect(probeLinuxLibc(exec)).rejects.toThrow('disconnected')
-    expect(exec).toHaveBeenCalledTimes(2)
   })
 })

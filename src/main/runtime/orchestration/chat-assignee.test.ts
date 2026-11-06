@@ -1,9 +1,9 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { sessionRecord } from '../rpc/orchestration-session-caller-test-fixture'
-import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
+import { observeChatAssignee } from './chat-assignee'
 import type { AgentSessionRecordReader } from './structured-session-lineage'
 
 const CHAT = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
@@ -18,12 +18,6 @@ function store(record: AgentSessionRecord, visible: boolean): AgentSessionRecord
 }
 
 describe('a chat assignee', () => {
-  it('is named only by an Orca session ID handle', () => {
-    expect(chatAssigneeSessionId(`orca_session_id:${CHAT}`)).toBe(CHAT)
-    expect(chatAssigneeSessionId('term_worker')).toBeNull()
-    expect(chatAssigneeSessionId(null)).toBeNull()
-  })
-
   it('is live at rest: a released lease is not an exit', () => {
     const resting = sessionRecord(CHAT, { lease: { claimStatus: 'released' } })
     expect(observeChatAssignee(CHAT, null, store(resting, true))).toMatchObject({

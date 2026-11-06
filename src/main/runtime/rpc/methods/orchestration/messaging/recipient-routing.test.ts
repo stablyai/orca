@@ -8,7 +8,11 @@ import type { RpcContext, RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { resolveBareOrchestrationRecipient } from './recipient-routing'
+import {
+  createRootDispatch,
+  reattachDispatchConsumer
+} from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 type SendWarning = { code: string; recipient: string; message: string }
 type SendResult = {
@@ -46,6 +50,51 @@ describe('orchestration recipient routing oracle', () => {
   }
 
   afterEach(() => harness.cleanup())
+
+  it('keeps complete Dispatch branch precedence and ambiguity through the shared selector', () => {
+    setup()
+    const leaf = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+    const pane = `tab_exact:${leaf}`
+    const exact = createRootDispatch(db, db.createTask({ spec: 'exact' }).id, 'term_exact', pane)
+    const suffix = createRootDispatch(
+      db,
+      db.createTask({ spec: 'suffix' }).id,
+      'term_suffix',
+      'tab_prior:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    )
+    const handle = createRootDispatch(
+      db,
+      db.createTask({ spec: 'handle' }).id,
+      'term_selected',
+      'tab_other:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    )
+    // Retained rows can collide after remint; ordinary creation refuses an already occupied pane.
+    db.db
+      .prepare('UPDATE dispatch_contexts SET assignee_pane_key = ? WHERE id = ?')
+      .run(`tab_prior:${leaf}`, suffix.id)
+    const reads = vi.spyOn(db.db, 'prepare')
+    expect(db.getActiveDispatchMailboxOwners('term_selected', pane).map((row) => row.id)).toEqual([
+      handle.id
+    ])
+    expect(reads).toHaveBeenCalledTimes(1)
+    reads.mockClear()
+    expect(db.getActiveDispatchMailboxOwners('term_missing', pane).map((row) => row.id)).toEqual([
+      exact.id
+    ])
+    expect(reads).toHaveBeenCalledTimes(2)
+    reads.mockClear()
+    expect(
+      db.getActiveDispatchMailboxOwners('term_missing', `tab_reminted:${leaf}`).map((row) => row.id)
+    ).toEqual([suffix.id, exact.id])
+    expect(reads).toHaveBeenCalledTimes(3)
+    mockTerminalPaneKeys((candidate) =>
+      candidate === 'term_missing' ? `tab_reminted:${leaf}` : null
+    )
+    expect(
+      resolveBareOrchestrationRecipient({ runtime, db, handle: 'term_missing' })
+    ).toMatchObject({ ok: false, code: 'recipient_ambiguous' })
+    expect(db.getInbox()).toEqual([])
+  })
 
   it('rejects an unknown terminal without creating an unread row', async () => {
     setup()
@@ -243,6 +292,50 @@ describe('orchestration recipient routing oracle', () => {
       ctx
     )) as { messages: { id: string }[] }
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
+  })
+
+  it('reaches a terminal still bound to an older Run through its Dispatch in the named Run', async () => {
+    setup()
+    const pane = 'tab_former:leaf_former'
+    const olderRun = db.createRun({
+      objective: 'Older Run this terminal coordinated',
+      coordinatorHandle: 'term_former',
+      coordinatorPaneKey: pane
+    })
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'now a worker', runId: senderRunId }).id,
+      'term_former',
+      pane
+    )
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord' ? harness.coordinatorPaneKey : handle === 'term_former' ? pane : null
+    )
+
+    const sent = await call({
+      from: 'term_coord',
+      to: 'term_former',
+      run: senderRunId,
+      subject: 'instructions'
+    })
+
+    expect(sent).toMatchObject({
+      message: { run_id: olderRun.id, to_handle: `run:${olderRun.id}` },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
+    expect(
+      await harness.call('orchestration.check', { terminal: 'term_former', peek: true }, ctx)
+    ).toMatchObject({ messages: [{ subject: 'instructions' }] })
+
+    // A replaced process no longer holds that Dispatch, so nothing would read the mail.
+    reattachDispatchConsumer(db, {
+      dispatchId: dispatch.id,
+      paneKey: pane,
+      processIncarnation: 'replaced:pty:1'
+    })
+    await expect(
+      call({ from: 'term_coord', to: 'term_former', run: senderRunId, subject: 'lost' })
+    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
   })
 
   it('keeps same-Run historical coordinator routing from the canonical mailbox change', async () => {

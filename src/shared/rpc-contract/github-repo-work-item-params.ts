@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RepoSelector } from './github-repo-target-params'
+import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 
 export const WorkItemsList = RepoSelector.extend({
@@ -24,10 +24,16 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   // Preserve Enterprise host through parsing for host-qualified gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
+  type: z.enum(['issue', 'pr']),
+  // Older hosts strip it and answer with the full lookup.
+  preview: z.boolean().optional()
 })
 
-export const WorkItemDetails = WorkItem
+export const WorkItemDetails = WorkItem.extend({
+  ownerRepo: SlugRepo.optional(),
+  canonical: z.boolean().optional(),
+  expectedGhAccount: OptionalGhAccountExpectation
+})
 
 export const WorkItemsCount = RepoSelector.extend({
   query: OptionalString

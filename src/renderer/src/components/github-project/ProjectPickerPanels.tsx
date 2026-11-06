@@ -174,7 +174,10 @@ export function ProjectPickerPartialFailures({
           { failureCount: failures.length }
         )
   const detail = failures
-    .map((failure) => `${failure.owner === '*' ? 'orgs' : failure.owner}: ${failure.message}`)
+    .map(
+      (failure) =>
+        `${failure.owner === '*' ? translate('projectViews.picker.organizations', 'Organizations') : failure.owner}: ${failure.message}`
+    )
     .join('\n')
   return (
     <div

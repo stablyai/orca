@@ -11,6 +11,16 @@ import type { DictationCapture } from './dictation-capture-contract'
 
 const screen = nativeMicrophoneScreenLock
 
+// Never throw: unmount calls this bare and `end` must not reject, so wake-tag release and desktop cancel still run.
+function releaseMicrophone(): void {
+  screen.release()
+  try {
+    tearDown()
+  } catch (error) {
+    console.error('Failed to tear down the audio session', error)
+  }
+}
+
 const nativeDictationCapture: DictationCapture = {
   open: async () => {
     const permission = await requestMicrophonePermissionsAsync()
@@ -25,24 +35,9 @@ const nativeDictationCapture: DictationCapture = {
     return { ok: true }
   },
   begin: () => toggleRecording(true),
-  // Native events already delivered the tail. Catch binding throws inside this async cleanup because void callers’ synchronous try cannot catch rejections.
-  end: async () => {
-    screen.release()
-    try {
-      toggleRecording(false)
-    } catch (error) {
-      console.error('Failed to stop microphone recording', error)
-    }
-  },
-  // Unmount calls release bare; catch failures so wake-tag release and desktop cancel can still run.
-  release: () => {
-    screen.release()
-    try {
-      tearDown()
-    } catch (error) {
-      console.error('Failed to tear down the audio session', error)
-    }
-  },
+  // Native events already delivered the tail. Tear down, not just mute, so other apps' audio resumes; the next open re-initializes.
+  end: async () => releaseMicrophone(),
+  release: releaseMicrophone,
   onChunk: (handler) =>
     addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
       const raw = event.data

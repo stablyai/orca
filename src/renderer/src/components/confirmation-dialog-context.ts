@@ -8,6 +8,7 @@ export type ConfirmationDialogField = {
   label: string
   type?: 'text' | 'password'
   autoComplete?: string
+  defaultValue?: string
 }
 
 export type ConfirmationDialogOptions = {

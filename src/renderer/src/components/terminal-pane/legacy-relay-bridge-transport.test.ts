@@ -219,6 +219,24 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(transport.getPtyId()).toBe('remote:env-1@@t-1')
   })
 
+  it('leaves a bridged pane’s host-return reopen alone, and forwards it once the pane runs on orcad', async () => {
+    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
+    const bridgedInner = innerTransport()
+    bridgedInner.reopenAfterHostReturned = vi.fn(() => true)
+    const bridged = createLegacyRelayBridgeTransport(PTY, bridgedInner)
+    await bridged.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    expect(bridged.reopenAfterHostReturned?.()).toBe(false)
+    expect(bridgedInner.reopenAfterHostReturned).not.toHaveBeenCalled()
+
+    bridge.attach.mockResolvedValueOnce({ status: 'exited' })
+    const inner = innerTransport()
+    inner.reopenAfterHostReturned = vi.fn(() => true)
+    const forwarded = createLegacyRelayBridgeTransport(PTY, inner)
+    await forwarded.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    expect(forwarded.reopenAfterHostReturned?.()).toBe(true)
+    expect(inner.reopenAfterHostReturned).toHaveBeenCalledOnce()
+  })
+
   it('keeps an unreachable terminal bound and reattaches once the relay answers', async () => {
     bridge.attach.mockResolvedValueOnce({ status: 'unverifiable' })
     const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())

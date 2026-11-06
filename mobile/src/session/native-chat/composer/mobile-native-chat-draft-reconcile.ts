@@ -1,16 +1,16 @@
 import {
   isImageRefBlock,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../../../../src/shared/native-chat-image-transcript-markers'
-import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat-pending-occurrence'
-import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat-pending-sends'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-occurrence'
+import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 
 export type UnconfirmedSend = {
   draftKey: string

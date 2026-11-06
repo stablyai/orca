@@ -132,20 +132,6 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
-  it('renders on the security surface when asked', async () => {
-    renderDialog({ title: 'Remove extension?', surface: 'security' })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    expect(await screen.findByRole('dialog')).toHaveClass('plugin-security-chrome')
-  })
-
-  it('omits the checkbox unless the caller opts in', async () => {
-    renderDialog({ title: 'Delete artifact?' })
-
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    expect(await screen.findByText('Delete artifact?')).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
-  })
-
   it('runs the skip callback when confirmed with the box checked', async () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({

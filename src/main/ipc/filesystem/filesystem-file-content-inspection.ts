@@ -2,7 +2,7 @@ import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
 } from '../../../shared/file-preview-kind'
-import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
+import { localLogFileIdentity } from '../../ai-vault/transcripts/local-log-tail-reader'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
 import {
   fileTooLargeError,
@@ -17,6 +17,8 @@ export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
 
 export type LocalFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean

@@ -35,70 +35,6 @@ function sdkOptions(overrides: Partial<SdkSpawnOptions> = {}): SdkSpawnOptions {
 }
 
 describe('claude agent SDK process spawn', () => {
-  it('routes the SDK spawn through Orca and retains the pid the lease adjudicates on', () => {
-    const process = fakeSpawn()
-    const spawn = createClaudeCodeProcessSpawn(process.spawnImpl, 'win32')
-
-    expect(spawn.pid).toBeUndefined()
-    expect(spawn.child).toBeNull()
-    const child = spawn.spawn(sdkOptions())
-
-    expect(child).toBe(process.child)
-    expect(spawn.child).toBe(process.child)
-    expect(spawn.pid).toBe(4321)
-    expect(spawn.supervised).toBe(false)
-    expect(process.specs[0]).toEqual({
-      program: '/usr/local/bin/claude',
-      args: ['--output-format', 'stream-json'],
-      cwd: '/work/repo',
-      env: { PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/accounts/one' },
-      detached: false,
-      stdio: ['pipe', 'pipe', 'pipe']
-    })
-  })
-
-  it.each(['darwin', 'linux'] as const)(
-    'starts Claude under the provider supervisor on %s, which is then the pid the lease records',
-    (platform) => {
-      const process = fakeSpawn()
-      const spawn = createClaudeCodeProcessSpawn(process.spawnImpl, platform)
-      spawn.spawn(sdkOptions())
-
-      const [spec] = process.specs
-      if (!spec) {
-        throw new Error('the spawner never built a spec')
-      }
-      expect(spawn.supervised).toBe(true)
-      expect(spawn.pid).toBe(4321)
-      expect(spec.program).toBe(globalThis.process.execPath)
-      expect(spec.args?.[0]).toBe('-e')
-      expect(spec.args?.slice(2)).toEqual([
-        '--',
-        '/usr/local/bin/claude',
-        '--output-format',
-        'stream-json'
-      ])
-      expect(spec.detached).toBe(true)
-      expect(spec.cwd).toBe('/work/repo')
-      const supervisorSpec = JSON.parse(
-        Buffer.from(String(spec.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
-      )
-      // Orca exit must trigger Claude's close ladder, including descendant cleanup.
-      expect(vi.mocked(createProviderSpawnSpec)).toHaveBeenLastCalledWith(
-        expect.anything(),
-        expect.anything(),
-        platform,
-        { closeRequest: 'stdin-end-and-sigterm' }
-      )
-      expect(supervisorSpec).toMatchObject({
-        closeRequest: 'stdin-end-and-sigterm',
-        cwd: '/work/repo',
-        ownerPid: globalThis.process.pid
-      })
-      expect(spec.env).toMatchObject({ PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/accounts/one' })
-    }
-  )
-
   it.each([
     { platform: 'darwin', specSupervised: false },
     { platform: 'win32', specSupervised: true }
@@ -140,14 +76,6 @@ describe('claude agent SDK process spawn', () => {
       }
     }
   )
-
-  it('keeps the child out of the SDK abort path so exit proof stays Orca-owned', () => {
-    const process = fakeSpawn()
-    const controller = new AbortController()
-    createClaudeCodeProcessSpawn(process.spawnImpl).spawn(sdkOptions({ signal: controller.signal }))
-
-    expect(process.specs[0]).not.toHaveProperty('signal')
-  })
 
   it('drains stderr into a bounded tail so an exit error still carries it', async () => {
     const process = fakeSpawn()

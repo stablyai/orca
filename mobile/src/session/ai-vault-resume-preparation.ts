@@ -1,12 +1,13 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   isAiVaultPrepareSessionResumeUnavailableError,
   isLegacySharedCodexHome,
   isPerAccountManagedCodexHome
-} from '../../../src/shared/ai-vault-resume-preparation'
+} from '../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import { aiVaultResumePreparationRun } from './mobile-session-launch-operations'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
 // Why: without an explicit timeout, a socket drop mid-resume parks the request
 // on the reconnect waiter for the full reconnect budget, pinning the spinner.
@@ -43,7 +44,11 @@ export async function prepareMobileAiVaultSessionResume(
       return session
     }
     throw new Error(
-      response.error?.message || 'Could not prepare this legacy Codex session. Retry resume.'
+      response.error?.message ||
+        translate(
+          'session.aiVaultResumePreparation.prepareFailed',
+          'Could not prepare this legacy Codex session. Retry resume.'
+        )
     )
   }
   const result = aiVaultResumePreparationRun.interpret(response)

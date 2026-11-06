@@ -3,9 +3,9 @@
 import { createHash } from 'node:crypto'
 import { setImmediate } from 'node:timers/promises'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import { agentSessionHostStatusBody } from '../../../shared/agent-session/view/agent-session-host-status-rows'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-lifecycle-mutation'
 import type {
   StructuredAgentSessionEventSink,
@@ -135,7 +135,7 @@ export async function runHistoryCatchUp<View>(input: {
   assertCurrent?: () => void
   timeoutMs: number
   logger?: StructuredAgentSessionLogger
-  readView: (history: StructuredAgentSessionHistoryJournal) => View
+  readView: (history: StructuredAgentSessionHistoryJournal, signal: AbortSignal) => View
   /** Reject commits if saved facts changed since planning. */
   sameView: (planned: View, current: View) => boolean
   prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
@@ -176,7 +176,7 @@ export async function runHistoryCatchUp<View>(input: {
     }
     const epoch = history.epoch
     let planned: { view: View } | undefined
-    const view = (): View => (planned ??= { view: input.readView(history) }).view
+    const view = (): View => (planned ??= { view: input.readView(history, controller.signal) }).view
     const plan = await waitForPromiseWithSignal(
       input.prepare({
         view,
@@ -212,7 +212,7 @@ export async function runHistoryCatchUp<View>(input: {
             if (
               current.epoch !== epoch ||
               sink.journalHistory?.() !== history ||
-              !input.sameView(view(), input.readView(history))
+              !input.sameView(view(), input.readView(history, controller.signal))
             ) {
               return []
             }

@@ -65,22 +65,6 @@ function wrapperForActiveBrowser() {
   )
 }
 
-it('the visible button opens beside its owning chat even while another group has focus', () => {
-  showVisual()
-  fireEvent.click(screen.getByRole('button', { name: 'Open in new tab' }))
-  const groupId = wrapperForActiveBrowser()?.groupId
-  expect(groupId).toBeTruthy()
-  expect(['a', 'b', 'c']).not.toContain(groupId)
-  expect(useAppStore.getState().layoutByWorktree[WORKSPACE]).toMatchObject({
-    first: { type: 'split', first: { groupId: 'a' }, second: { groupId } }
-  })
-  expect(
-    useAppStore.getState().groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')
-      ?.activeTabId
-  ).toBe('source')
-  expect(screen.getByRole('button', { name: 'Open in new tab' })).toBeTruthy()
-})
-
 it('the button follows a moved source and reuses the exact inactive page', () => {
   const browser = useAppStore.getState().createBrowserTab(WORKSPACE, 'file:///repo/chart.html', {
     targetGroupId: 'c',

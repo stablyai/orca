@@ -1,27 +1,32 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
-import { appendOrderedGroups } from './group-sections'
-import type { SectionAppendContext } from './group-sections'
+import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
+
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
   getMixedWorktreeHostContextLabels,
   getNoticeHostContextLabels
 } from './host-labels'
-import { buildProjectGroupingIndex, getProjectGroupingForRepo } from '../project-section-grouping'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo,
+  type ProjectSectionModel
+} from '../project-section-grouping'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
 } from '../worktree-occurrence-plan'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
-import type { ProjectSectionModel } from '../project-section-grouping'
+
 import {
   appendProjectGroupSections,
   getProjectGroupOccurrencePaths
@@ -47,15 +52,18 @@ import type {
   SidebarPRGroupReader,
   WorktreeGroupBy
 } from './row-types'
-import { orderMainWorktreeFirst, getRenderedNaturalAnchorRepoIds } from './section-order'
+import { orderMainWorktreeFirst } from './section-order'
+import { appendImportedWorktreeLines } from './imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
 export type SidebarRowPlanInputs = {
   groupBy: WorktreeGroupBy
+  sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
@@ -66,6 +74,8 @@ export type SidebarRowPlanInputs = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectOrderBy: ProjectOrderBy
   lineageById: Record<string, WorktreeLineage>
+  /** Parents resolved once over every visible store's complete rows; nesting reuses them. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   projectGroups: readonly ProjectGroup[]
@@ -85,6 +95,7 @@ export type SidebarRowPlanInputs = {
 export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const {
     groupBy,
+    sortBy,
     worktrees,
     repoMap,
     repoOfWorktree,
@@ -93,6 +104,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     workspaceStatuses,
     projectOrderBy,
     lineageById,
+    lineageParentIdentities,
     worktreeMap,
     nestLineage,
     projectGroups,
@@ -123,7 +135,13 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     rows: worktrees,
     identityOf: getWorktreeHostIdentity,
     childrenByParentIdentity: nestLineage
-      ? getSidebarLineageChildren(worktrees, lineageById, worktreeMap, filterRepoIds)
+      ? getSidebarLineageChildren(
+          worktrees,
+          lineageById,
+          worktreeMap,
+          filterRepoIds,
+          lineageParentIdentities
+        )
       : new Map<string, Worktree[]>(),
     isPinned: (worktree) => worktree.isPinned === true,
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
@@ -164,7 +182,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           placement: key === PINNED_GROUP_KEY ? 'pinned' : 'natural',
           items:
             groupBy === 'repo' && key !== PINNED_GROUP_KEY
-              ? orderMainWorktreeFirst(group.items)
+              ? orderMainWorktreeFirst(group.items, sortBy)
               : group.items,
           revealPath: { key, parent: revealPath }
         }
@@ -199,28 +217,17 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       projectIndex,
       hostLabelById
     )
-    const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
-      groupBy,
-      worktrees: naturalWorktrees,
-      repoMap,
-      prGroupOf,
-      collapsedGroups,
-      workspaceStatuses,
-      projectGrouping
-    })
     emitPinnedGroup(
       pinnedSectionWorktrees,
       repoOf,
       defaultHostId,
       collapsedGroups,
-      renderedNaturalAnchorRepoIds,
-      importedWorktreesByRepo,
-      groupBy !== 'repo',
       result,
       occurrencePlan,
-      noticeHostContextLabelByRepoId,
       mixedWorktreeHostContextLabels
     )
+    const withImportedLines = (rows: Row[]): Row[] =>
+      appendImportedWorktreeLines(rows, { importedWorktreesByRepo, defaultHostId, hostLabelById })
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
@@ -257,7 +264,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           }
         }
       }
-      return result
+      return withImportedLines(result)
     }
 
     const sectionContext: SectionAppendContext = {
@@ -283,7 +290,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
         sectionContext,
         groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
       )
-      return result
+      return groupBy === 'repo' ? result : withImportedLines(result)
     }
 
     appendProjectGroupSections(sectionContext, {

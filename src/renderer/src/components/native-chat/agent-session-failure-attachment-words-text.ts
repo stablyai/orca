@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_FAILURE_COPY as COPY,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const ATTACHMENT_FAILURE_PIECES = {
   attachmentEmpty: () =>
@@ -47,6 +47,12 @@ export const ATTACHMENT_FAILURE_PIECES = {
     translate('components.native-chat.failureWords.attachmentNoSource', COPY.attachmentNoSource),
   attachmentInvalid: () =>
     translate('components.native-chat.failureWords.attachmentInvalid', COPY.attachmentInvalid),
+  attachmentsExpired: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentsExpired',
+      COPY.attachmentsExpired,
+      values
+    ),
   attachmentUnreadable: () =>
     translate('components.native-chat.failureWords.attachmentUnreadable', COPY.attachmentUnreadable)
 } satisfies Partial<

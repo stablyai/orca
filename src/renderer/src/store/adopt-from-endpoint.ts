@@ -1,5 +1,5 @@
 // Stamp endpoint ownership once: paired server rows use runtime:E, local-app rows retain their named hosts; per-kind arms select owner fields.
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'

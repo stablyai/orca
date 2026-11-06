@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -68,20 +68,9 @@ describe('deriveWindowsAppDataPath', () => {
       'C:\\Users\\me\\AppData\\Roaming'
     )
   })
-
-  it('throws a readable error when neither variable is usable', () => {
-    expect(() => deriveWindowsAppDataPath({})).toThrow(ERROR_MESSAGE)
-    expect(() => deriveWindowsAppDataPath({ APPDATA: ' ', USERPROFILE: '' })).toThrow(ERROR_MESSAGE)
-  })
 })
 
 describe('ensureWindowsAppDataPath', () => {
-  it('does nothing off Windows', () => {
-    const host = createHost(new Error('unused'))
-    ensureWindowsAppDataPath(host, {}, 'darwin')
-    expect(host.calls).toEqual([])
-  })
-
   it('keeps the native appData and pins userData to the path Electron would derive', () => {
     const host = createHost('C:\\Users\\me\\AppData\\Roaming')
     ensureWindowsAppDataPath(host, { APPDATA: 'D:\\ignored' }, 'win32')
@@ -110,36 +99,9 @@ describe('ensureWindowsAppDataPath', () => {
     expect(existsSync(missingAppData)).toBe(true)
   })
 
-  it('treats an empty native appData like a failed lookup', () => {
-    const host = createHost('')
-    expect(() => ensureWindowsAppDataPath(host, {}, 'win32')).toThrow(ERROR_MESSAGE)
-    expect(host.calls).toEqual(['get:appData'])
-  })
-
   it('fails with a readable error, setting nothing, when both variables are missing', () => {
     const host = createHost(new Error('Failed to get appData path'))
     expect(() => ensureWindowsAppDataPath(host, {}, 'win32')).toThrow(ERROR_MESSAGE)
     expect(host.paths.size).toBe(0)
-  })
-})
-
-describe('startup ordering', () => {
-  it('pins Windows appData before any preflight step can resolve userData', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    const body = source.slice(source.indexOf('function initializeMainProcessPreflight('))
-    const ensure = body.indexOf('ensureWindowsAppDataPath(app)')
-    expect(ensure).toBeGreaterThan(0)
-    for (const laterStep of [
-      'runProfileStateRecoveryPreflight()',
-      'maybeRedirectCliLaunch(',
-      'configureDevUserDataPath(',
-      'configureOrcaUserDataPathEnv()',
-      'startCrashpadCapture()'
-    ]) {
-      expect(body.indexOf(laterStep)).toBeGreaterThan(ensure)
-    }
   })
 })

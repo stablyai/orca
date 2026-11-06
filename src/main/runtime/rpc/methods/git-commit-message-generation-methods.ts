@@ -1,6 +1,6 @@
 import { defineMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   GitDiscoverCommitMessageModels,
   GitGenerateCommitMessage,
@@ -64,6 +64,7 @@ function buildCommitMessageGenerationOverride(params: {
 export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generateCommitMessage',
+    requires: ['accounts'],
     permission: 'workspace',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {

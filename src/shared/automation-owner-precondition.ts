@@ -4,12 +4,15 @@ import type { Automation } from './automations-types'
 import type { AutomationExecutionTargetSelection } from './automation-execution-target'
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
 import {
+  AUTOMATION_ORPHAN_ISSUES,
   projectAutomationSelector,
+  automationCapturedHostIssue,
   type AutomationListItemSelector,
   type AutomationProjectionContext
 } from './automation-list-scope'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
+  AUTOMATION_CAPTURED_HOST_REFUSALS,
   AutomationOwnerConflictError
 } from './automation-owner-conflict'
 import { sanitizeSshTargetGeneration } from './ssh-target-generation'
@@ -26,6 +29,14 @@ export type AutomationOwnerPrecondition = {
 /** Where a create or a selector-moving update wants the record to land. */
 export type AutomationDestination = {
   selector: { kind: 'self' } | { kind: 'ssh'; targetId: string; targetGeneration: number }
+}
+
+/** Optional caller preconditions an update is checked against before anything is written. */
+export type AutomationUpdatePreconditions = {
+  expectedOwner?: AutomationOwnerPrecondition
+  destination?: AutomationDestination
+  /** Sent by an edit whose explicit setup choice relies on the stored mode still being new-per-run. */
+  expectedWorkspaceMode?: 'new_per_run'
 }
 
 export type AutomationOwnerFenceOperation = 'read' | 'mutate' | 'execute'
@@ -60,8 +71,17 @@ function conflict(code: keyof typeof AUTOMATION_OWNER_CONFLICT_CODES): never {
 export function assertAutomationOwnerFence(input: AutomationOwnerFenceInput): void {
   const stored = projectAutomationSelector(input.automation, input.context)
   const expected = input.expectedOwner?.selector
+  if (expected && expected.kind !== stored.kind) {
+    conflict('ownerChanged')
+  }
   if (stored.kind === 'orphan' && input.operation === 'execute') {
-    conflict('targetRemoved')
+    const issue = automationCapturedHostIssue(input.automation, input.context)
+    throw new AutomationOwnerConflictError(
+      AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved,
+      issue && issue !== AUTOMATION_ORPHAN_ISSUES.targetMissing
+        ? AUTOMATION_CAPTURED_HOST_REFUSALS[issue]
+        : undefined
+    )
   }
   if (!expected) {
     // Require owner capture for fenced SSH mutations/execution; only reads, Self and generation-less legacy SSH remain callable bare.
@@ -73,9 +93,6 @@ export function assertAutomationOwnerFence(input: AutomationOwnerFenceInput): vo
       conflict('fencingRequired')
     }
     return
-  }
-  if (expected.kind !== stored.kind) {
-    conflict('ownerChanged')
   }
   if (
     expected.kind === 'ssh' &&
@@ -100,6 +117,18 @@ export function assertAutomationDestination(
   }
   if (context.sshTargetGeneration(selector.targetId) !== selector.targetGeneration) {
     conflict('invalidDestination')
+  }
+}
+
+/** Compare with the stored record: the controller can synthesize workspaceMode from an older read. */
+export function assertAutomationWorkspaceModePrecondition(
+  automation: Pick<Automation, 'workspaceMode'>,
+  expected: AutomationUpdatePreconditions['expectedWorkspaceMode']
+): void {
+  if (expected && automation.workspaceMode !== expected) {
+    throw new Error(
+      'This automation now runs in an existing worktree, so nothing was changed. Pass --workspace-mode new-per-run or omit --setup.'
+    )
   }
 }
 

@@ -1,4 +1,4 @@
-import type { AgentSessionArgumentProblem } from '../../shared/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../shared/agent-session/agent-session-argument-problem'
 import { findInErrorChain } from '../provider-process/provider-error-chain'
 
 /** Expose only the option name; saved values may contain secrets. */

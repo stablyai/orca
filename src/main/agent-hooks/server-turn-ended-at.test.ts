@@ -81,25 +81,6 @@ describe('the host-stamped turn end', () => {
     expect(row()).not.toHaveProperty('turnEndedAt')
   })
 
-  it('keeps a Grok end across a session reset and the idle reminder that follows it', async () => {
-    const turn = { sessionId: 'session-1', promptId: 'prompt-1' }
-    await post({ hookEventName: 'user_prompt_submit', ...turn, prompt: 'go' }, '/hook/grok')
-    await post({ hookEventName: 'stop', ...turn, lastAssistantMessage: 'Shipped.' }, '/hook/grok')
-    const ended = row()?.turnEndedAt
-    expect(ended).toEqual(expect.any(Number))
-
-    await post({ hookEventName: 'session_start', sessionId: 'session-2' }, '/hook/grok')
-    await post(
-      { hookEventName: 'notification', sessionId: 'session-2', notificationType: 'idle_prompt' },
-      '/hook/grok'
-    )
-    expect(row()).toMatchObject({
-      state: 'done',
-      turnEndedAt: ended,
-      turnEndDisposition: 'identified'
-    })
-  })
-
   it('ends Codex turns by turn id, with or without a prompt hook in between', async () => {
     const codex = (payload: Record<string, unknown>) => post(payload, '/hook/codex')
     await codex({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-a', prompt: 'Plan it' })
@@ -184,22 +165,31 @@ describe('the host-stamped turn end', () => {
   })
 
   it("keeps a relay's own end, never mints an older relay's, and restates none over an inferred cancel", () => {
-    const grok = { paneKey: PANE, tabId: 'tab-1', source: 'grok' as const, hasExplicitPrompt: true }
+    const gemini = {
+      paneKey: PANE,
+      tabId: 'tab-1',
+      source: 'gemini' as const,
+      hasExplicitPrompt: true
+    }
     const working = {
       state: 'working' as const,
       prompt: 'Fix it',
-      agentType: 'grok' as const,
+      agentType: 'gemini' as const,
       mainAgent: { state: 'working' as const, stateStartedAt: 1 }
     }
-    const stop = { ...grok, hookEventName: 'stop', payload: { ...working, state: 'done' as const } }
+    const stop = {
+      ...gemini,
+      hookEventName: 'AfterAgent',
+      payload: { ...working, state: 'done' as const }
+    }
     server.ingestRemote(stop, 'wsl-old')
     expect(row()).not.toHaveProperty('turnEndedAt')
-    server.ingestRemote({ ...grok, hookEventName: 'user_prompt_submit', payload: working }, 'wsl')
+    server.ingestRemote({ ...gemini, hookEventName: 'BeforeAgent', payload: working }, 'wsl')
     server.ingestRemote({ ...stop, turnEndedAt: 42, turnEndDisposition: 'ambiguous' }, 'wsl')
     expect(row()).toMatchObject({ turnEndedAt: 42, turnEndDisposition: 'ambiguous' })
 
     // The relay never learns a non-Claude cancel inferred here, so its late cancel hook carries an end.
-    server.ingestRemote({ ...grok, hookEventName: 'user_prompt_submit', payload: working }, 'wsl')
+    server.ingestRemote({ ...gemini, hookEventName: 'BeforeAgent', payload: working }, 'wsl')
     const turn = row()!
     expect(
       server.inferInterrupt({
@@ -207,7 +197,7 @@ describe('the host-stamped turn end', () => {
         baselineUpdatedAt: turn.receivedAt,
         baselineStateStartedAt: turn.stateStartedAt,
         baselinePrompt: turn.prompt,
-        baselineAgentType: 'grok',
+        baselineAgentType: 'gemini',
         intent: 'ctrl-c'
       })
     ).toBe(true)
@@ -219,8 +209,8 @@ describe('the host-stamped turn end', () => {
     }
     server.ingestRemote(
       {
-        ...grok,
-        hookEventName: 'stop_cancelled',
+        ...gemini,
+        hookEventName: 'AfterAgent',
         turnEndedAt: 50,
         turnEndDisposition: 'identified',
         payload: { ...working, state: 'done', mainAgent }
@@ -246,13 +236,13 @@ describe('the host-stamped turn end', () => {
       { ...lateStop, payload: { ...lateStop.payload, lastAssistantMessage: 'Done.' } },
       'wsl'
     )
-    server.ingestRemote({ ...lateStop, hookEventName: 'notification' }, 'wsl')
+    server.ingestRemote({ ...lateStop, hookEventName: 'Notification' }, 'wsl')
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: cancelled?.stateStartedAt })
     expect(row()).not.toHaveProperty('turnEndedAt')
 
     // The next turn reaches main as working first, so its end is the relay's again.
     const next = { ...working, prompt: 'Again' }
-    server.ingestRemote({ ...grok, hookEventName: 'user_prompt_submit', payload: next }, 'wsl')
+    server.ingestRemote({ ...gemini, hookEventName: 'BeforeAgent', payload: next }, 'wsl')
     server.ingestRemote(
       {
         ...stop,

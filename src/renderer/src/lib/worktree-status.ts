@@ -1,4 +1,5 @@
-import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import { translate } from '@/i18n/i18n'
+import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import {
@@ -6,14 +7,14 @@ import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafIdFromRoot
 } from '../../../shared/runtime-pane-title-leaf-id'
-import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
-import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
+import { containsAgentSpinnerGlyph } from '../../../shared/agent-status/title/agent-title-glyphs'
+import { isSyntheticAgentPermissionTitle } from '../../../shared/agent-status/title/synthetic-agent-title'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
@@ -31,15 +32,33 @@ type WorktreeStatusHeuristicOptions = {
 }
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
-  active: 'Active',
-  working: 'Working',
-  monitoring: 'Monitoring background tasks',
-  permission: 'Needs permission',
-  failed: 'Failed',
-  interrupted: 'Interrupted',
-  unconfirmed: 'Couldn’t confirm',
-  done: 'Done',
-  inactive: 'Inactive'
+  get active() {
+    return translate('workspace.activity.active', 'Active')
+  },
+  get working() {
+    return translate('workspace.activity.working', 'Working')
+  },
+  get monitoring() {
+    return translate('workspace.activity.monitoring', 'Monitoring background tasks')
+  },
+  get permission() {
+    return translate('workspace.activity.permission', 'Needs permission')
+  },
+  get failed() {
+    return translate('workspace.activity.failed', 'Failed')
+  },
+  get interrupted() {
+    return translate('workspace.activity.interrupted', 'Interrupted')
+  },
+  get unconfirmed() {
+    return translate('workspace.activity.unconfirmed', 'Couldn’t confirm')
+  },
+  get done() {
+    return translate('workspace.activity.done', 'Done')
+  },
+  get inactive() {
+    return translate('workspace.activity.inactive', 'Inactive')
+  }
 }
 
 export function getWorktreeStatus(

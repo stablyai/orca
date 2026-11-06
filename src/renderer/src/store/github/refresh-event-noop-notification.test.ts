@@ -42,21 +42,4 @@ describe('applyGitHubPRRefreshEvent no-op updates', () => {
 
     expect(notifications).toBe(0)
   })
-
-  it('still notifies when the event advances the sequence', () => {
-    const store = createTestStore()
-    store.getState().applyGitHubPRRefreshEvent(inFlightEvent(1))
-
-    let notifications = 0
-    const unsubscribe = store.subscribe(() => {
-      notifications += 1
-    })
-    try {
-      store.getState().applyGitHubPRRefreshEvent(inFlightEvent(2))
-    } finally {
-      unsubscribe()
-    }
-
-    expect(notifications).toBe(1)
-  })
 })

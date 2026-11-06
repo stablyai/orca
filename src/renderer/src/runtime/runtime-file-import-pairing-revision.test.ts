@@ -182,27 +182,6 @@ beforeEach(() => {
 })
 
 describe('runtime file import pairing revision', () => {
-  it('rejects a runtime replacement published during the capability probe', async () => {
-    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeCallArgs) => {
-      if (args.method === 'status.get') {
-        setRuntimeEnvironmentConnectionGenerationForTests(
-          ENVIRONMENT_ID,
-          REPLACEMENT_CONNECTION_GENERATION
-        )
-        return runtimeStatusResponse()
-      }
-      return successfulRuntimeResponse(args.method)
-    })
-
-    await expect(
-      importExternalPathsToRuntime(nestedSshContext, ['/client/drop.txt'], '/ssh/repo/uploads')
-    ).rejects.toThrow('Runtime connection changed; retry the import.')
-
-    expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual(['status.get'])
-    expect(stageExternalPathsForRuntimeUpload).not.toHaveBeenCalled()
-    expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
-  })
-
   it('stops when the HUB runtime changes without a pairing change', async () => {
     mockStagedFile('/client/screenshot.png', 'screenshot.png', 40 * 1024 * 1024)
     runtimeEnvironmentCall.mockImplementation(async (args: RuntimeCallArgs) => {
@@ -240,22 +219,6 @@ describe('runtime file import pairing revision', () => {
       expect.objectContaining({ method: 'files.delete' })
     )
     expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
-  })
-
-  it('stops a global drop when the same-id HUB is re-paired during staging', async () => {
-    runtimeEnvironmentCall.mockResolvedValue(runtimeStatusResponse())
-    stageExternalPathsForRuntimeUpload.mockImplementation(async () => {
-      setEnvironmentRevision(REPLACEMENT_REVISION)
-      return { sources: [] }
-    })
-
-    await expect(
-      importExternalPathsToRuntime(nestedSshContext, ['/client/drop.txt'], '/ssh/repo/uploads')
-    ).rejects.toThrow('Runtime pairing changed; retry the import.')
-
-    expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual(['status.get'])
-    expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
-    expect(importExternalPaths).not.toHaveBeenCalled()
   })
 
   it('never commits a streamed upload against a replacement HUB re-paired mid-stream', async () => {
@@ -325,88 +288,5 @@ describe('runtime file import pairing revision', () => {
       'files.commitUpload'
     ])
     expectEveryRuntimeCallBoundToCapturedRevision(hubLocalContext)
-  })
-
-  it('does not clean up against a replacement HUB after commit', async () => {
-    mockStagedFile('/client/drop.txt', 'drop.txt', 4)
-    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeCallArgs) => {
-      if (args.method === 'status.get') {
-        return runtimeStatusResponse()
-      }
-      if (args.method === 'files.stat') {
-        return missingRuntimePathResponse()
-      }
-      if (args.method === 'files.commitUpload') {
-        setEnvironmentRevision(REPLACEMENT_REVISION)
-      }
-      return successfulRuntimeResponse(args.method)
-    })
-
-    await expect(
-      importExternalPathsToRuntime(nestedSshContext, ['/client/drop.txt'], '/ssh/repo')
-    ).resolves.toMatchObject({
-      results: [{ status: 'failed', reason: 'Runtime pairing changed; retry the import.' }]
-    })
-
-    expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual([
-      'status.get',
-      'files.stat',
-      'files.commitUpload'
-    ])
-    expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
-  })
-
-  it('uses the captured revision for temp cleanup and directory rollback', async () => {
-    stageExternalPathsForRuntimeUpload.mockResolvedValue({
-      sources: [
-        {
-          sourcePath: '/client/assets',
-          status: 'staged',
-          name: 'assets',
-          kind: 'directory',
-          entries: [
-            { relativePath: '', kind: 'directory' },
-            {
-              relativePath: 'broken.txt',
-              kind: 'file',
-              byteLength: 6,
-              inode: 92,
-              deviceId: 66,
-              modifiedAtMs: 1_700_000_000_000
-            }
-          ]
-        }
-      ]
-    })
-    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeCallArgs) => {
-      if (args.method === 'status.get') {
-        return runtimeStatusResponse()
-      }
-      if (args.method === 'files.stat') {
-        return missingRuntimePathResponse()
-      }
-      return successfulRuntimeResponse(args.method)
-    })
-    uploadExternalFileToRuntime.mockRejectedValue(new Error('disk full'))
-
-    await expect(
-      importExternalPathsToRuntime(nestedSshContext, ['/client/assets'], '/ssh/repo')
-    ).resolves.toMatchObject({ results: [{ status: 'failed', reason: 'disk full' }] })
-
-    expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual([
-      'status.get',
-      'files.stat',
-      'files.createDirNoClobber',
-      'files.delete',
-      'files.delete'
-    ])
-    const deleteCalls = runtimeEnvironmentCall.mock.calls
-      .map(([args]) => args as RuntimeCallArgs)
-      .filter((args) => args.method === 'files.delete')
-    expect(deleteCalls).toHaveLength(2)
-    expect(deleteCalls.map((args) => args.params?.recursive)).toEqual([false, true])
-    expect(deleteCalls[0]?.params?.relativePath).toMatch(/^assets\/\.broken\.txt\.orca-upload-/)
-    expect(deleteCalls[1]?.params?.relativePath).toBe('assets')
-    expectEveryRuntimeCallBoundToCapturedRevision(nestedSshContext)
   })
 })

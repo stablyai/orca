@@ -8,7 +8,7 @@ import {
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationSnapshotChunkResult
 } from '../../shared/orcad-migration/orcad-migration-scrollback'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 export type OrcadMigrationSnapshotSource = Pick<Store, 'readOrcadMigrationSourceSnapshotChunk'>
 

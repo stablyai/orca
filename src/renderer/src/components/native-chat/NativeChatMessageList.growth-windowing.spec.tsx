@@ -2,7 +2,7 @@ import { act, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import {
   NATIVE_CHAT_BOTTOM_THRESHOLD_PX,

@@ -2,7 +2,7 @@
 // gets a row in the phone and old-client tab lists.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../workspace-session/workspace-session-pane-ownership'
 import { editorFileKey } from '../workspace-layout-editor-tab-file'
 import { projectSessionTabs, type SessionTabsFacts } from './old-client-session-tabs-projection'
 import { build, testContext, WS } from '../workspace-layout-command.test-fixture'

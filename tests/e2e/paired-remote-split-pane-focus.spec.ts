@@ -1,4 +1,4 @@
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import type { RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { expect, test } from './helpers/orca-app'
 import {

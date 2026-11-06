@@ -1,16 +1,18 @@
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  type AgentProviderSessionMetadata,
+  agentProviderSessionsEqual
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
@@ -51,6 +53,7 @@ export function createReadOwner(
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Map<symbol, StructuredAgentSessionReadEffects>()
   const listeners = new Set<() => void>()
+  const commandListeners = new Set<() => void>()
   let disposed = false
   const activity = createStructuredAgentSessionReadActivity(
     () => !disposed,
@@ -197,7 +200,15 @@ export function createReadOwner(
       subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {
+        const lostCommands =
+          snapshot.state.commands != null && 'commands' in event && event.commands === null
         apply({ type: 'event', event, ...options })
+        if (
+          event.type !== 'end' &&
+          (event.commandsChanged || options?.opensSubscription || lostCommands)
+        ) {
+          commandListeners.forEach((listener) => listener())
+        }
         observePRLinks(event, effects.getState)
       },
       applyError: (message, refusal) => {
@@ -225,8 +236,20 @@ export function createReadOwner(
 
   let owner: StructuredAgentSessionReadOwner
   const deleteIfUnused = (): void => {
-    if (activations.size === 0 && listeners.size === 0 && !activity.retained()) {
+    const subscriptions = activations.size + listeners.size + commandListeners.size
+    if (subscriptions === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
+    }
+  }
+  const subscribeTo = (collection: Set<() => void>, listener: () => void): (() => void) => {
+    if (disposed) {
+      return () => {}
+    }
+    adoptStructuredReadOwner(key, owner)
+    collection.add(listener)
+    return () => {
+      collection.delete(listener)
+      deleteIfUnused()
     }
   }
   owner = {
@@ -269,9 +292,11 @@ export function createReadOwner(
       activity.dispose()
       activations.clear()
       listeners.clear()
+      commandListeners.clear()
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
+    subscribeCommandsChanged: (listener) => subscribeTo(commandListeners, listener),
     loadOlder: createStructuredAgentSessionOlderPageLoader({
       target,
       sessionId,
@@ -280,17 +305,7 @@ export function createReadOwner(
       apply,
       captureHistoryReadGuard: () => captureActiveHistoryReadGuard()
     }),
-    subscribe: (listener) => {
-      if (disposed) {
-        return () => {}
-      }
-      adoptStructuredReadOwner(key, owner)
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-        deleteIfUnused()
-      }
-    }
+    subscribe: (listener) => subscribeTo(listeners, listener)
   }
   return owner
 }

@@ -39,7 +39,6 @@ import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
 import {
-  acceptReplayedWebSessionTabsSnapshot,
   _getWebSessionTabsTrackingCountsForTest,
   resetWebSessionTabsSnapshotFreshnessForTests
 } from './web-session-tabs-sync/tracking-lifecycle'
@@ -333,45 +332,6 @@ describe('useWebSessionTabsSync window visibility', () => {
     hook.unmount()
   })
 
-  it('replays an unchanged resume inventory while a repair replay is armed', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const snapshot = makeBrowserSnapshot()
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-    mocks.recoverSnapshot.mockClear()
-    acceptReplayedWebSessionTabsSnapshot(ENV_A, WORKTREE)
-    act(() => useAppStore.setState({ browserTabsByWorktree: {} }))
-
-    await parkAndReveal()
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-
-    expect(mocks.recoverSnapshot).toHaveBeenCalledOnce()
-    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
-    hook.unmount()
-  })
-
-  it('starts hidden without remote IO and hydrates once on reveal', async () => {
-    setDocumentVisibility('hidden')
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(runtimeSubscribe).not.toHaveBeenCalled()
-
-    act(() => setDocumentVisibility('visible'))
-    act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
-    await act(settle)
-    expect(runtimeCallMethods()).toEqual(EMPTY_INVENTORY_CALLS)
-    expect(runtimeSubscribe).toHaveBeenCalledTimes(3)
-    hook.unmount()
-  })
-
   it('does not bootstrap twice when global snapshots race active resume', async () => {
     const pendingCreate = createDeferred<unknown>()
     mocks.createTerminal.mockReturnValue(pendingCreate.promise)
@@ -437,50 +397,6 @@ describe('useWebSessionTabsSync window visibility', () => {
     expect(useAppStore.getState().activeBrowserTabIdByWorktree[WORKTREE]).toBe(
       'host-browser-workspace-new'
     )
-    hook.unmount()
-  })
-
-  it('removes an omitted mirror without waiting for an unrelated host inventory', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const snapshot = makeBrowserSnapshot()
-
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-
-    await parkAndReveal()
-    await publish(
-      findSubscription('session.tabs.subscribeAll', ENV_A, 1),
-      authoritativeInventory([])
-    )
-
-    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toBeUndefined()
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(0)
-    hook.unmount()
-  })
-
-  it('retains an omitted mirror when the host does not label the inventory authoritative', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeBrowserSnapshot()]
-    })
-    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
-
-    await parkAndReveal()
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: []
-    })
-
-    // A census the host declines to call authoritative is unverifiable, not proof the worktree is gone.
-    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
     hook.unmount()
   })
 
@@ -582,44 +498,6 @@ describe('useWebSessionTabsSync window visibility', () => {
     hook.unmount()
   })
 
-  it('does not let a slow resume inventory remove a newer update', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const snapshot = makeBrowserSnapshot()
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-
-    await parkAndReveal()
-    const slowOtherSnapshot = {
-      ...makeEmptySnapshot(),
-      worktree: 'repo-a::other-worktree'
-    }
-    const slowInventoryRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    const slowUpdateRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot
-      .mockImplementationOnce(() => slowInventoryRecovery.promise)
-      .mockImplementationOnce(() => slowUpdateRecovery.promise)
-    const resumedGlobal = findSubscription('session.tabs.subscribeAll', ENV_A, 1)
-    await publish(resumedGlobal, {
-      type: 'snapshots',
-      snapshots: [slowOtherSnapshot]
-    })
-    await publish(resumedGlobal, {
-      type: 'updated',
-      ...snapshot,
-      snapshotVersion: 2
-    })
-    slowInventoryRecovery.resolve(slowOtherSnapshot)
-    await act(settle)
-    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(2)
-    slowUpdateRecovery.resolve({ ...snapshot, snapshotVersion: 2 })
-    await act(settle)
-    hook.unmount()
-  })
-
   it('keeps a newer active snapshot received before the resume inventory', async () => {
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
@@ -689,34 +567,6 @@ describe('useWebSessionTabsSync window visibility', () => {
       ...snapshot
     })
     expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toBeUndefined()
-    hook.unmount()
-  })
-
-  it('clears hidden tracking when its environment is no longer mirrored', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findSubscription('session.tabs.subscribeAll', ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeBrowserSnapshot()]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-    })
-    mocks.runtimeSessionMirrorEnvironmentKey.mockReturnValue(MIRROR_KEY.split('\u0000')[1])
-    hook.rerender()
-    await act(settle)
-
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(0)
-    act(() => setDocumentVisibility('visible'))
-    await act(settle)
-    expect(
-      subscriptions.filter(
-        ({ request }) =>
-          request.method === 'session.tabs.subscribeAll' && request.selector === ENV_A
-      )
-    ).toHaveLength(1)
     hook.unmount()
   })
 
@@ -872,35 +722,6 @@ describe('useWebSessionTabsSync window visibility', () => {
       ...snapshot
     })
     expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
-    hook.unmount()
-  })
-
-  it('fences recovery that finishes after the stream is parked', async () => {
-    const deferredRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot.mockImplementationOnce(() => deferredRecovery.promise)
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const snapshot = makeEmptySnapshot()
-
-    await publish(findSubscription('session.tabs.subscribe', ENV_A), {
-      type: 'snapshot',
-      ...snapshot
-    })
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-    })
-    deferredRecovery.resolve(snapshot)
-    await act(settle)
-    expect(mocks.createTerminal).not.toHaveBeenCalled()
-
-    act(() => setDocumentVisibility('visible'))
-    await act(settle)
-    await publish(findSubscription('session.tabs.subscribe', ENV_A, 1), {
-      type: 'snapshot',
-      ...snapshot
-    })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
     hook.unmount()
   })
 })

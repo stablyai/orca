@@ -1,25 +1,16 @@
-import { constants } from 'node:fs'
-import type { ReadStream } from 'node:fs'
-import { lstat, open, readdir, realpath } from 'node:fs/promises'
+import { lstat, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
-import { finished } from 'node:stream/promises'
 import { promisify } from 'node:util'
 import type { SFTPWrapper } from 'ssh2'
-import { latchLateSftpStreamErrors, type SftpStreamErrorLatch } from './sftp-stream-late-error'
-import { sftpSessionClosedError } from './ssh-file-transfer-abort'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
+import { SFTP_UPLOAD_IN_FLIGHT_BYTES, uploadFileWithWindow } from './sftp-file-upload'
+import { latchLateSftpStreamErrors } from './sftp-stream-late-error'
+import {
+  createLinkedSshFileTransferSignal,
+  raceSftpFileTransferWithAbort
+} from './ssh-file-transfer-abort'
 
-// Buffer 2 MiB so ssh2 _writev pipelines requests instead of waiting one RTT per chunk, matching fastPut's 64 × 32 KiB window.
-export const SFTP_UPLOAD_IN_FLIGHT_BYTES = 2 * 1024 * 1024
-
-/** On dead links CLOSE may never reply; session close must settle transfer and close its local file handle. */
-function watchSessionClose(sftp: SFTPWrapper): { closed: Promise<'closed'>; release: () => void } {
-  let onClose: () => void = () => {}
-  const closed = new Promise<'closed'>((resolve) => {
-    onClose = () => resolve('closed')
-  })
-  sftp.once('close', onClose)
-  return { closed, release: () => sftp.removeListener('close', onClose) }
-}
+export { SFTP_UPLOAD_IN_FLIGHT_BYTES, uploadFile } from './sftp-file-upload'
 
 function mkdirSftp(
   sftp: SFTPWrapper,
@@ -36,93 +27,6 @@ function mkdirSftp(
       }
     })
   })
-}
-
-export async function uploadFile(
-  sftp: SFTPWrapper,
-  localPath: string,
-  remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
-): Promise<void> {
-  const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-  let handleClose: Promise<void> | undefined
-  let readStream: ReadStream | undefined
-  let writeStream: ReturnType<SFTPWrapper['createWriteStream']> | undefined
-  let writeStreamErrors: SftpStreamErrorLatch | undefined
-  const sessionClosed = watchSessionClose(sftp)
-  const closeHandle = (): Promise<void> => {
-    handleClose ??= handle.close()
-    return handleClose
-  }
-  try {
-    options?.signal?.throwIfAborted()
-    const statResult = await lstat(localPath)
-    if (statResult.isSymbolicLink() || !statResult.isFile()) {
-      throw new Error(`Unsupported upload source: ${localPath}`)
-    }
-    const openedStat = await handle.stat()
-    if (
-      !openedStat.isFile() ||
-      openedStat.size !== statResult.size ||
-      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
-      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
-    ) {
-      throw new Error(`File changed during upload: ${localPath}`)
-    }
-    // Validate local source before creating any remote file.
-    writeStream = sftp.createWriteStream(remotePath, {
-      flags: options?.exclusive ? 'wx' : 'w',
-      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
-    })
-    // Late OPEN replies can throw from ssh2's parser; keep an error listener beyond settlement (#15479).
-    writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
-    readStream = handle.createReadStream({ autoClose: false })
-    // finished removes read listeners; retain an error sink for abort-after-EOF while finished owns transfer outcome.
-    readStream.on('error', () => {})
-    const abortTransfer = (): void => {
-      const reason =
-        options?.signal?.reason instanceof Error
-          ? options.signal.reason
-          : Object.assign(new Error('Upload aborted'), { name: 'AbortError' })
-      readStream?.destroy(reason)
-      writeStream?.destroy()
-      void closeHandle().catch(() => {})
-    }
-    options?.signal?.addEventListener('abort', abortTransfer, { once: true })
-    if (options?.signal?.aborted) {
-      abortTransfer()
-    }
-    try {
-      const readDone = finished(readStream, { cleanup: true }).catch((error: unknown) => {
-        writeStream?.destroy()
-        throw error
-      })
-      const writeDone = finished(writeStream, { cleanup: true }).catch((error: unknown) => {
-        readStream?.destroy(error instanceof Error ? error : undefined)
-        throw error
-      })
-      readStream.pipe(writeStream)
-      const results = await Promise.race([
-        Promise.allSettled([readDone, writeDone]),
-        sessionClosed.closed
-      ])
-      if (results === 'closed') {
-        throw sftpSessionClosedError()
-      }
-      const failure = results.find((result) => result.status === 'rejected')
-      if (failure?.status === 'rejected') {
-        throw failure.reason
-      }
-    } finally {
-      options?.signal?.removeEventListener('abort', abortTransfer)
-    }
-  } finally {
-    sessionClosed.release()
-    writeStreamErrors?.markTransferSettled()
-    readStream?.destroy()
-    writeStream?.destroy()
-    await closeHandle()
-  }
 }
 
 export function uploadBuffer(
@@ -205,11 +109,102 @@ export async function uploadDirectory(
   localDir: string,
   remoteDir: string,
   root = localDir,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options?: { exclusive?: boolean; signal?: AbortSignal; endSession?: () => void }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
-  // Canonicalize root like entries; symlinks, junctions and Windows 8.3 paths otherwise look escaped.
-  await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, await realpath(root), options)
+  const failure = new AbortController()
+  const linked = createLinkedSshFileTransferSignal(
+    options?.signal ? [options.signal, failure.signal] : [failure.signal]
+  )
+  const active = new Set<Promise<void>>()
+  let reservedBytes = 0
+  let capacityWaiter: (() => void) | undefined
+  const wakeProducer = (): void => {
+    const waiter = capacityWaiter
+    capacityWaiter = undefined
+    waiter?.()
+  }
+  linked.signal.addEventListener('abort', wakeProducer, { once: true })
+  let firstError: Error | undefined
+  let sessionClosed = false
+  const onSessionClose = (): void => {
+    sessionClosed = true
+  }
+  sftp.prependOnceListener('close', onSessionClose)
+  const fail = (error: unknown): void => {
+    if (!linked.signal.aborted) {
+      firstError = error instanceof Error ? error : new Error(String(error))
+      failure.abort(firstError)
+    }
+  }
+  const upload = async (
+    localPath: string,
+    remotePath: string,
+    size: number,
+    rootRealPath: string
+  ): Promise<void> => {
+    const window = Math.min(SFTP_UPLOAD_IN_FLIGHT_BYTES, Math.max(64 * 1024, size))
+    while (active.size >= 4 || reservedBytes + window > SFTP_UPLOAD_IN_FLIGHT_BYTES) {
+      linked.signal.throwIfAborted()
+      await new Promise<void>((resolve) => {
+        capacityWaiter = resolve
+      })
+    }
+    await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
+    linked.signal.throwIfAborted()
+    reservedBytes += window
+    const transfer = uploadFileWithWindow(sftp, localPath, remotePath, window, {
+      exclusive: options?.exclusive,
+      signal: linked.signal
+    })
+      .catch(fail)
+      .finally(() => {
+        reservedBytes -= window
+        active.delete(transfer)
+        wakeProducer()
+      })
+    active.add(transfer)
+  }
+  const run = (async (): Promise<void> => {
+    try {
+      // Canonicalize root like entries; symlinks, junctions and Windows 8.3 paths otherwise look escaped.
+      const rootRealPath = await realpath(root)
+      await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, rootRealPath, {
+        ...options,
+        signal: linked.signal,
+        upload: (localPath, remotePath, size) => upload(localPath, remotePath, size, rootRealPath)
+      })
+    } catch (error) {
+      fail(error)
+    }
+    await Promise.all(active)
+    linked.signal.throwIfAborted()
+  })()
+  try {
+    await raceSftpFileTransferWithAbort(
+      run,
+      linked.signal,
+      (onClose) => {
+        if (sessionClosed) {
+          onClose()
+        } else {
+          sftp.once('close', onClose)
+        }
+        if (options?.endSession) {
+          options.endSession()
+        } else {
+          sftp.end()
+        }
+        return () => sftp.removeListener('close', onClose)
+      },
+      () => firstError ?? createSshOperationAbortError()
+    )
+  } finally {
+    sftp.removeListener('close', onSessionClose)
+    linked.signal.removeEventListener('abort', wakeProducer)
+    wakeProducer()
+    linked.dispose()
+  }
 }
 
 async function uploadDirectoryWithinRoot(
@@ -217,17 +212,22 @@ async function uploadDirectoryWithinRoot(
   localDir: string,
   remoteDir: string,
   rootRealPath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options: {
+    exclusive?: boolean
+    signal: AbortSignal
+    upload: (localPath: string, remotePath: string, size: number) => Promise<void>
+  }
 ): Promise<void> {
-  options?.signal?.throwIfAborted()
+  options.signal.throwIfAborted()
   await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
   const entries = await readdir(localDir, { withFileTypes: true })
   for (const entry of entries) {
-    options?.signal?.throwIfAborted()
+    options.signal.throwIfAborted()
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = `${remoteDir}/${entry.name}`
     await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
     const statResult = await lstat(localPath)
+    options.signal.throwIfAborted()
 
     // Reject symlinks/special files again after pre-scan to close replacement races that could upload unrelated local data.
     if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
@@ -238,7 +238,7 @@ async function uploadDirectoryWithinRoot(
       await mkdirSftp(sftp, remotePath, { allowExisting: !options?.exclusive })
       await uploadDirectoryWithinRoot(sftp, localPath, remotePath, rootRealPath, options)
     } else {
-      await uploadFile(sftp, localPath, remotePath, options)
+      await options.upload(localPath, remotePath, statResult.size)
     }
   }
 }

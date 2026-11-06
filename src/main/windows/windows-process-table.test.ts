@@ -334,6 +334,24 @@ describe('windows process table', () => {
     await expect(readWindowsProcessTableFresh()).rejects.toThrow()
   })
 
+  it('rejects, without throwing inside the addon callback, a snapshot that failed natively', async () => {
+    // node-addon-api reports a failed worker (e.g. bad_alloc) by passing an Error; a throw inside the addon's
+    // callback loop is uncaught and ends the terminal host with every PTY on it (#33350).
+    let thrown: unknown
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => {
+      try {
+        cb(new Error('bad allocation'))
+      } catch (error) {
+        thrown = error
+      }
+    })
+    resetWindowsProcessTableForTests()
+    const read = readWindowsProcessTableFresh()
+    await vi.waitFor(() => expect(getAllProcesses).toHaveBeenCalled())
+    expect(thrown).toBeUndefined()
+    await expect(read).rejects.toThrow(/no snapshot/)
+  })
+
   it('rejects an empty snapshot rather than reporting an idle machine', async () => {
     // A blocked snapshot can return [] without error; it must not prove a live root dead.
     getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb([]))

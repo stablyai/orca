@@ -4,11 +4,6 @@
   "family": "settings.repo-metadata",
   "namedDeltas": [],
   "values": {
-    "19b2979d7fc2": {
-      "name": "repo.list#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
     "1e027d0127f3": {
       "name": "host.platform#1",
       "ordinal": 7,
@@ -143,51 +138,6 @@
       "ordinal": 12,
       "value": []
     },
-    "4b6956e45bac": {
-      "name": "repo.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "repos": [
-              {
-                "connectionId": "ssh-1",
-                "displayName": "Remote",
-                "id": "repo-1"
-              },
-              {
-                "connectionId": "ssh-1",
-                "displayName": "Remote folder",
-                "id": "repo-2"
-              }
-            ]
-          }
-        }
-      }
-    },
     "6e0383a0869e": {
       "name": "desktopRepos",
       "ordinal": 3,
@@ -277,6 +227,53 @@
       "ordinal": 10,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
     },
+    "c3c6784789e2": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "connectionId": "ssh-1",
+                "displayName": "Remote",
+                "id": "repo-1"
+              },
+              {
+                "connectionId": "ssh-1",
+                "displayName": "Remote folder",
+                "id": "repo-2"
+              }
+            ]
+          }
+        }
+      }
+    },
     "d23c5c4cde9a": {
       "desktopRepos": [
         {
@@ -317,6 +314,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f2274efe8aa6": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\",\"params\":{\"afterSnapshotId\":null}}"
     }
   },
   "recording": {
@@ -325,8 +327,8 @@
       {
         "id": "single-host-without-label-lookups",
         "observation": {
-          "sender": ["4b6956e45bac", "35960f0ff1b9", "902c0b2ed3ce", "7c508088602c"],
-          "payloads": ["19b2979d7fc2", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
+          "sender": ["c3c6784789e2", "35960f0ff1b9", "902c0b2ed3ce", "7c508088602c"],
+          "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -338,8 +340,8 @@
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["4b6956e45bac", "2207323d0bd5", "302f82cb9a68", "1e027d0127f3"],
-          "payloads": ["19b2979d7fc2", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
+          "sender": ["c3c6784789e2", "2207323d0bd5", "302f82cb9a68", "1e027d0127f3"],
+          "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"

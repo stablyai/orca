@@ -1,6 +1,6 @@
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
-import { forgetCodexPaneAccount } from '../../../codex/codex-pane-account-registry'
+import { forgetCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { agentHookServer } from '../../../agent-hooks/server'

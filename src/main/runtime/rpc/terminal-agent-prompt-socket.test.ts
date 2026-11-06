@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import './unused-default-rpc-methods.test-fixture'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -6,25 +8,51 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
+import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { STATUS_METHODS } from './methods/status'
 import { OrchestrationDb } from '../orchestration/db'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { OrcaRuntimeRpcServer } from './server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
-import { bindPaneFirst } from '../bind-first-pane.test-fixture'
-import * as inputAdmission from '../terminal-input-admission'
+import { bindPaneFirst } from '../orca-runtime-tests/bind-first-pane.test-fixture'
+import * as inputAdmission from '../terminal/input/terminal-input-admission'
 import { writePtyFromRuntimeController } from '../../ipc/pty/runtime/operations'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 
-vi.mock('../../git/worktree', () => {
-  const read = async () => [
-    { path: '/tmp/worktree-a', head: 'abc', branch: 'prompt', isBare: false, isMainWorktree: false }
-  ]
-  return { listWorktrees: read, listWorktreesStrict: read }
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const read = async () => [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'prompt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return { listWorktrees: read, listWorktreesStrict: read }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 it.each(['before', 'after', 'paired', 'orchestration'] as const)(

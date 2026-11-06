@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/update-status-types'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -86,10 +87,13 @@ export function UpdateAvailableRichContent({
             <button
               type="button"
               className="text-xs text-muted-foreground/70 underline hover:text-foreground inline"
-              onClick={() => void window.api.shell.openUrl(release.releaseNotesUrl)}
+              onClick={(event) => openAppHttpLink(release.releaseNotesUrl, { event })}
             >
-              +{releasesBehind - 1}{' '}
-              {translate('auto.components.UpdateCard.ccd8b0a793', 'more since your last update')}
+              {translate(
+                'auto.components.UpdateCard.moreSinceLastUpdate',
+                '+{{count}} more since your last update',
+                { count: releasesBehind - 1 }
+              )}
             </button>
           </>
         )}
@@ -97,7 +101,7 @@ export function UpdateAvailableRichContent({
       <button
         type="button"
         className="text-xs text-muted-foreground underline hover:text-foreground self-start"
-        onClick={() => void window.api.shell.openUrl(release.releaseNotesUrl)}
+        onClick={(event) => openAppHttpLink(release.releaseNotesUrl, { event })}
       >
         {translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
       </button>
@@ -157,7 +161,7 @@ export function UpdateAvailableSimpleContent({
         <button
           type="button"
           className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
-          onClick={() => void window.api.shell.openUrl(releaseUrl)}
+          onClick={(event) => openAppHttpLink(releaseUrl, { event })}
         >
           {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
         </button>

@@ -1,5 +1,6 @@
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
 import { MEDIA_FILE_MIME_TYPES } from './media-file-extensions'
+import { isKnownRasterImageMimeType } from './raster-image-preview-limits'
 
 export type FilePreviewKind = 'image' | 'pdf' | 'audio' | 'video'
 export type FilePreview = { kind: FilePreviewKind; mimeType: string }
@@ -32,7 +33,18 @@ export function filePreviewForPath(filePath: string): FilePreview | null {
   return null
 }
 
-/** Viewers that read a URL by byte range, so a remote file streams instead of arriving whole. */
+/** Images an image element without an SVG engine (React Native's) can draw. */
+export function isRasterImagePath(filePath: string): boolean {
+  const preview = filePreviewForPath(filePath)
+  return preview?.kind === 'image' && isKnownRasterImageMimeType(preview.mimeType)
+}
+
+/** Audio and video always stream by range; their players can't take base64. */
 export function streamsPreviewByRange(preview: FilePreview | null): boolean {
   return preview?.kind === 'audio' || preview?.kind === 'video'
+}
+
+/** Images and PDFs read a URL when their viewer asks, and base64 elsewhere (diffs, the web client). */
+export function isDocumentPreview(preview: FilePreview | null): boolean {
+  return preview?.kind === 'image' || preview?.kind === 'pdf'
 }

@@ -1,7 +1,7 @@
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 /** Seed an empty cleanup slice from main’s snapshot; render the full list immediately while background rescan reconciles it. */
 export async function hydrateWorkspaceCleanupScanFromCache({

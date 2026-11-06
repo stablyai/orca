@@ -1,5 +1,5 @@
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentJournalApprovalSubject } from '../../shared/agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN

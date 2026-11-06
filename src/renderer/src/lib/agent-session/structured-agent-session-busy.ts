@@ -1,13 +1,12 @@
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { agentChildWorkLiveness } from '../../../../shared/agent-status-child-work-liveness'
-import type {
-  AgentSessionStatusSummary,
-  AgentSessionHistoryResult
-} from '../../../../shared/agent-session-wire'
-import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { agentChildWorkLiveness } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import {
+  getStructuredAgentSessionLaunchLifecycle,
+  structuredAgentSessionLaunchHasRetainedInput
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -15,6 +14,10 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
 import type { StructuredAgentSessionAdmission } from '@/components/native-chat/structured-agent-session-read-owner-contract'
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionHistoryResult
+} from '../../../../shared/agent-session/agent-session-wire'
 
 function summaryBusy(summary: AgentSessionStatusSummary | null | undefined): boolean {
   return (
@@ -62,7 +65,8 @@ export function admitStructuredAgentSession(
     if (
       (status && status !== 'done') ||
       launch === 'pending' ||
-      launch === 'visibility-unknown' ||
+      (launch === 'visibility-unknown' &&
+        !structuredAgentSessionLaunchHasRetainedInput(workspaceId, tab.entityId)) ||
       getStructuredAgentSessionPendingSends(tab.entityId).some(
         (entry) => entry.phase === 'sending'
       ) ||

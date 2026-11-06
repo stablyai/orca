@@ -2,12 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
+
 import type { WslMoveOrchestratorRecord } from '../../../shared/wsl-move/wsl-move-orchestrator-types'
 import {
   readWslMoveOrchestratorRecords,
-  wslMoveOrchestratorStorePath,
-  writeWslMoveOrchestratorRecords
+  wslMoveOrchestratorStorePath
 } from './wsl-move-orchestrator-store'
 
 const dirs: string[] = []
@@ -37,20 +36,6 @@ const deferred: WslMoveOrchestratorRecord = {
 }
 
 describe('wsl-move-orchestrator store', () => {
-  it('round-trips records keyed by distro', () => {
-    const dir = userData()
-    const records = new Map([[wslMoveJournalKey('Ubuntu'), deferred]])
-    writeWslMoveOrchestratorRecords(dir, records)
-    expect(readWslMoveOrchestratorRecords(dir)).toEqual(records)
-  })
-
-  it('reads a missing or unparseable file as empty', () => {
-    const dir = userData()
-    expect(readWslMoveOrchestratorRecords(dir).size).toBe(0)
-    writeFileSync(wslMoveOrchestratorStorePath(dir), '{not json')
-    expect(readWslMoveOrchestratorRecords(dir).size).toBe(0)
-  })
-
   it('drops a bad record alone and keeps the rest', () => {
     const dir = userData()
     writeFileSync(

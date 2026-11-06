@@ -9,15 +9,12 @@ export function registerWorkerReleaseOwnershipGuardTests(): void {
     beforeEach(() => harness.setup())
     afterEach(() => harness.cleanup())
 
-    it('does not release a terminal the user took over', async () => {
+    it('does not release a terminal the user kept open', async () => {
       const { dispatchId } = await harness.startSettledWorker('succeeded')
-      const takeover = (await harness.call('orchestration.workerTerminalUserInput', {
-        paneKey: harness.workerPaneKey
-      })) as { changed: number }
-      expect(takeover.changed).toBe(1)
-      expect(harness.db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe(
-        'user_owned'
-      )
+      await harness.call('orchestration.workerKeepOpen', {
+        paneKey: harness.workerPaneKey,
+        keep: true
+      })
 
       // The agent process later exits on its own; the user's pane and scrollback remain.
       harness.inspectProcessLiveness.mockResolvedValue('exited')
@@ -26,10 +23,10 @@ export function registerWorkerReleaseOwnershipGuardTests(): void {
       })) as { state: string; reason?: string; archive: unknown }
 
       expect(receipt.state).toBe('retained')
-      expect(receipt.reason).toBe('user_takeover')
-      const after = harness.db.getWorkerTerminalResourceByOwner(dispatchId)
-      expect(after?.ownership_state).toBe('user_owned')
-      expect(after?.release_state).not.toBe('released')
+      expect(receipt.reason).toBe('user_kept')
+      expect(harness.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe(
+        'retained'
+      )
     })
 
     it.each(['transferred', 'external'] as const)(

@@ -1,15 +1,15 @@
 import type { Repo } from '../../../shared/repo-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
-} from '../../project-runtime-git-options'
+} from '../../workspaces/execution-host/project-runtime-git-options'
 import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../text-generation/commit-message-text-generation'
 import { resolve } from 'node:path'
-import { listRepoWorktreeGraph } from '../../repo-worktrees'
-import { resolveAuthorizedPath } from './filesystem-auth'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'
+import { resolveAuthorizedPath } from './access/filesystem-auth'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 
 function comparableLocalPath(value: string): string {

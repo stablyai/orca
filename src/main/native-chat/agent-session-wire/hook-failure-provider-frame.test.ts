@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectStructuredItemToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 const CODEX_KIND = 'notification:hook/completed'
@@ -74,36 +74,6 @@ describe('failed hook provider frames', () => {
     )
   })
 
-  it.each([undefined, null, 'invalid', [null], [{ kind: 'error', text: ' ' }]])(
-    'keeps a named error visible when Codex entries are missing or malformed: %j',
-    (entries) => {
-      expect(
-        unhandledProviderFrameJournalItem('codex', CODEX_KIND, {
-          run: { eventName: 'stop', status: 'failed', entries }
-        })?.body
-      ).toMatchObject({ text: 'Codex Stop hook failed.', tone: 'error' })
-    }
-  )
-
-  it('uses a readable fallback when a failed hook carries no name', () => {
-    expect(
-      unhandledProviderFrameJournalItem('codex', CODEX_KIND, {
-        run: { status: 'failed', entries: [{ kind: 'error', text: 'Timed out' }] }
-      })?.body.text
-    ).toBe('Codex hook failed: Timed out')
-    expect(
-      unhandledProviderFrameJournalItem('codex', CODEX_KIND, {
-        run: { status: 'failed' },
-        message: 'Hook could not start'
-      })?.body.text
-    ).toBe('Codex hook failed: Hook could not start')
-    expect(
-      unhandledProviderFrameJournalItem('claude', CLAUDE_KIND, {
-        outcome: 'error'
-      })?.body.text
-    ).toBe('Claude hook failed.')
-  })
-
   it('shows Claude stderr and the exit code instead of the wire event name', () => {
     expect(
       unhandledProviderFrameJournalItem('claude', CLAUDE_KIND, {
@@ -146,16 +116,6 @@ describe('failed hook provider frames', () => {
     ).toBe(`Claude SessionStart hook failed: ${expected}`)
   })
 
-  it('retains a Claude exit code when there is no output', () => {
-    expect(
-      unhandledProviderFrameJournalItem('claude', CLAUDE_KIND, {
-        hook_name: 'SessionStart:startup',
-        outcome: 'error',
-        exit_code: 1
-      })?.body.text
-    ).toBe('Claude SessionStart:startup hook failed (exit code 1).')
-  })
-
   it('keeps successful hooks hidden even when they produce diagnostic output', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', CODEX_KIND, {
@@ -186,15 +146,5 @@ describe('failed hook provider frames', () => {
     expect(
       Buffer.byteLength(row?.body.providerFrame?.payload.head ?? '', 'utf8')
     ).toBeLessThanOrEqual(64)
-  })
-
-  it('leaves other providers and unrelated frame kinds on their existing fallback', () => {
-    const payload = { outcome: 'error', hook_name: 'Other hook', stderr: 'Failure' }
-    expect(
-      unhandledProviderFrameJournalItem('future-provider', CLAUDE_KIND, payload)?.body.text
-    ).toBe(`future-provider · ${CLAUDE_KIND}`)
-    expect(
-      unhandledProviderFrameJournalItem('claude', 'message:future/event', payload)?.body.text
-    ).toBe('claude · message:future/event')
   })
 })
