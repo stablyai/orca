@@ -84,9 +84,20 @@ export type PluginLanguagePackValidationResult =
   | { ok: true; entries: number }
   | { ok: false; error: string }
 
-type PluginLanguagePackWalkResult =
-  | { ok: true; catalog: Record<string, unknown> | null; entries: number }
+export type PluginLanguagePackAuthoringResult =
+  | { ok: true; ignoredProtectedStrings: number }
   | { ok: false; error: string }
+
+type PluginLanguagePackWalkResult =
+  | {
+      ok: true
+      catalog: Record<string, unknown> | null
+      entries: number
+      ignoredProtectedStrings: number
+    }
+  | { ok: false; error: string }
+
+type ProtectedCopyPolicy = 'reject' | 'ignore'
 
 type CatalogFrame = {
   source: Record<string, unknown>
@@ -156,11 +167,50 @@ export function checkPluginLanguagePackCatalog(
   return result.ok ? { ok: true, entries: result.entries } : result
 }
 
+// Why ignore, not reject: loading always drops protected copy, so a pack that translates it is
+// usable; authors and the directory only need to hear that Orca keeps its own text there.
+/** Author-time check: strict on everything except protected copy, which is counted instead. */
+export function checkPluginLanguagePackForAuthoring(
+  raw: string,
+  english?: EnglishSourceLookup
+): PluginLanguagePackAuthoringResult {
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch {
+    return { ok: false, error: 'language pack must contain one JSON object' }
+  }
+  const result = walkPluginLanguagePackCatalog(json, false, 'strict', english, 'ignore')
+  return result.ok ? { ok: true, ignoredProtectedStrings: result.ignoredProtectedStrings } : result
+}
+
+function countCatalogStrings(value: unknown): number {
+  if (typeof value === 'string') {
+    return 1
+  }
+  if (!isCatalogObject(value)) {
+    return 0
+  }
+  let count = 0
+  const stack: Record<string, unknown>[] = [value]
+  while (stack.length > 0) {
+    for (const child of Object.values(stack.pop()!)) {
+      if (typeof child === 'string') {
+        count += 1
+      } else if (isCatalogObject(child)) {
+        stack.push(child)
+      }
+    }
+  }
+  return count
+}
+
 function walkPluginLanguagePackCatalog(
   source: unknown,
   copyCatalog: boolean,
   strictness: PluginArtifactStrictness,
-  english?: EnglishSourceLookup
+  english?: EnglishSourceLookup,
+  protectedCopy: ProtectedCopyPolicy = 'reject'
 ): PluginLanguagePackWalkResult {
   if (!isCatalogObject(source)) {
     return { ok: false, error: 'language pack root must be an object' }
@@ -170,6 +220,7 @@ function walkPluginLanguagePackCatalog(
   const stack: CatalogFrame[] = [{ source, target: catalog, path: '', depth: 0 }]
   const seen = new WeakSet<object>([source])
   let entries = 0
+  let ignoredProtectedStrings = 0
   while (stack.length > 0) {
     const frame = stack.pop()!
     if (frame.depth > PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH) {
@@ -198,6 +249,10 @@ function walkPluginLanguagePackCatalog(
         isProtectedPluginTranslationPath(path) &&
         !(isCatalogObject(value) && translatablePluginChromeContainer(path))
       ) {
+        if (protectedCopy === 'ignore') {
+          ignoredProtectedStrings += countCatalogStrings(value)
+          continue
+        }
         if (strictness === 'tolerant') {
           continue
         }
@@ -230,5 +285,5 @@ function walkPluginLanguagePackCatalog(
       stack.push({ source: value, target: child, path, depth: frame.depth + 1 })
     }
   }
-  return { ok: true, catalog, entries }
+  return { ok: true, catalog, entries, ignoredProtectedStrings }
 }
