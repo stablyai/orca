@@ -231,6 +231,7 @@ it.each([undefined, 'pwsh.exe'])(
         environmentId: 'peer',
         targetGroupId: 'menu-group',
         activate: true,
+        selectWorktree: true,
         ...(shellOverride === undefined ? {} : { shell: 'pwsh.exe' })
       },
       { userAct: true }
