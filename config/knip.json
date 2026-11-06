@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
-    "src/main/native-chat/agent-session-journal/journal-legacy-import-worker-entry.ts",
     "src/main/index.ts",
     "src/preload/index.ts",
     "src/preload/browser-guest.ts",

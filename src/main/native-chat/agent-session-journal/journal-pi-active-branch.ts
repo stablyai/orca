@@ -3,7 +3,9 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { asRecord, parseJsonObject, timestampMs } from '../../ai-vault/session-scanner-values'
 import Database from '../../sqlite/sync-database'
-import { decodeOmpTranscriptRecord } from '../transcript-line-decoders-omp'
+import { decodeOmpTranscriptRecordWork } from '../transcript-line-decoders-omp'
+import { finishTranscriptWork, type TranscriptWork } from '../transcript-work-scheduler'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 
 function closePiImportDatabase(db: Database.Database | null): void {
   try {
@@ -24,7 +26,11 @@ export function createPiTranscriptCollector<T>(
     lineIndex: number,
     parsed?: Record<string, unknown> | null
   ): void
-  project(keep: (item: T) => void): Promise<void>
+  project(
+    keep: (item: T) => void,
+    prepareRow?: (line: string, fallbackId: string, lineIndex: number) => Promise<void>,
+    signal?: AbortSignal
+  ): Promise<void>
   close(): void
 } {
   let db: Database.Database
@@ -118,7 +124,8 @@ export function createPiTranscriptCollector<T>(
         db.exec('COMMIT; BEGIN')
       }
     },
-    async project(keep) {
+    async project(keep, prepareRow, signal) {
+      throwIfSignalAborted(signal)
       db.exec('COMMIT')
       if (leafId === null) {
         return
@@ -133,6 +140,7 @@ export function createPiTranscriptCollector<T>(
       let firstKeptId: string | null = null
       db.exec('BEGIN')
       while (currentId !== null) {
+        throwIfSignalAborted(signal)
         const row = byId.get(currentId)
         if (!row) {
           break
@@ -160,6 +168,7 @@ export function createPiTranscriptCollector<T>(
         let processedBytes = 0
         let sliceStartedAt = performance.now()
         for (const row of selected.iterate(from, through)) {
+          throwIfSignalAborted(signal)
           if (
             typeof row.raw_line !== 'string' ||
             typeof row.fallback_id !== 'string' ||
@@ -169,10 +178,14 @@ export function createPiTranscriptCollector<T>(
           }
           processedRows += 1
           processedBytes += Buffer.byteLength(row.raw_line, 'utf8')
-          const record = parseJsonObject(row.raw_line)
-          const message = decodePiSessionEntryRecord(record, row.fallback_id)
-          if (message) {
-            keep(toItem(message, identify(record, row.line_index)))
+          if (prepareRow) {
+            await prepareRow(row.raw_line, row.fallback_id, row.line_index)
+          } else {
+            const record = parseJsonObject(row.raw_line)
+            const message = decodePiSessionEntryRecord(record, row.fallback_id)
+            if (message) {
+              keep(toItem(message, identify(record, row.line_index)))
+            }
           }
           if (
             processedBytes >= 1024 * 1024 ||
@@ -221,6 +234,13 @@ function decodePiSessionEntryRecord(
   record: Record<string, unknown> | null,
   fallbackId: string
 ): NativeChatMessage | null {
+  return finishTranscriptWork(decodePiSessionEntryRecordWork(record, fallbackId))
+}
+
+export function* decodePiSessionEntryRecordWork(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): TranscriptWork<NativeChatMessage | null> {
   if (!record) {
     return null
   }
@@ -229,7 +249,7 @@ function decodePiSessionEntryRecord(
   }
   return asRecord(record.message)?.role === 'system'
     ? null
-    : decodeOmpTranscriptRecord(record, fallbackId)
+    : yield* decodeOmpTranscriptRecordWork(record, fallbackId)
 }
 
 function piSummaryMessage(

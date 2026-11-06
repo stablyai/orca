@@ -1,6 +1,5 @@
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
-  type NativeChatBlock,
   type NativeChatMessage
 } from '../../shared/native-chat/native-chat-types'
 import { NATIVE_CHAT_NOTICE_COPY } from '../../shared/native-chat/native-chat-notice'
@@ -10,7 +9,14 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { claudeContentBlocksWork } from './transcript-record-blocks'
+import {
+  codexTurnItemBlocks,
+  codexToolResult,
+  codexSummaryText,
+  withoutSkillContext
+} from './transcript-codex-content'
+import { finishTranscriptWork, type TranscriptWork } from './transcript-work-scheduler'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
 /** Paginated completed items own visible messages; response tools retain their legacy format. */
@@ -43,62 +49,68 @@ export function decodeCodexTranscriptRecord(
   fallbackId: string,
   options?: { historyImport: true }
 ): NativeChatMessage | null {
+  return finishTranscriptWork(decodeCodexTranscriptRecordWork(record, fallbackId, options))
+}
+
+export function* decodeCodexTranscriptRecordWork(
+  record: Record<string, unknown> | null,
+  fallbackId: string,
+  options?: { historyImport: true }
+): TranscriptWork<NativeChatMessage | null> {
   if (!record) {
     return null
   }
   const payload = asRecord(record.payload)
   if (!payload) {
     const id = extractString(record.id) ?? fallbackId
-    return codexUnwrappedResponseItem(record, id, parseTimestamp(record.timestamp))
+    return yield* codexUnwrappedResponseItem(record, id, parseTimestamp(record.timestamp))
   }
   const timestamp = parseTimestamp(record.timestamp)
   const baseId = extractString(payload.id) ?? fallbackId
 
   if (record.type === 'response_item') {
-    return codexResponseItem(payload, baseId, timestamp)
+    return yield* codexResponseItem(payload, baseId, timestamp)
   }
   if (record.type === 'event_msg') {
-    return codexEventMessage(payload, baseId, timestamp, options?.historyImport === true)
+    return yield* codexEventMessage(payload, baseId, timestamp, options?.historyImport === true)
   }
   return null
 }
 
-function codexUnwrappedResponseItem(
+function* codexUnwrappedResponseItem(
   record: Record<string, unknown>,
   id: string,
   timestamp: number | null
-): NativeChatMessage | null {
+): TranscriptWork<NativeChatMessage | null> {
   if (record.type !== 'message') {
-    return codexResponseItem(record, id, timestamp)
+    return yield* codexResponseItem(record, id, timestamp)
   }
   const role = record.role === 'assistant' ? 'assistant' : record.role === 'user' ? 'user' : null
-  const decodedBlocks = codexTurnItemBlocks(record.content)
-  const blocks =
-    role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
+  const decodedBlocks = yield* codexTurnItemBlocks(record.content)
+  const blocks = role === 'user' ? yield* withoutSkillContext(decodedBlocks) : decodedBlocks
   return role && blocks.length > 0 ? { id, role, blocks, timestamp, source: 'transcript' } : null
 }
 
-function codexResponseItem(
+function* codexResponseItem(
   payload: Record<string, unknown>,
   id: string,
   timestamp: number | null
-): NativeChatMessage | null {
+): TranscriptWork<NativeChatMessage | null> {
   if (payload.type === 'message') {
     const role =
       payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : null
     if (!role) {
       return null
     }
-    const decodedBlocks = claudeContentBlocks(payload.content)
-    const blocks =
-      role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
+    const decodedBlocks = yield* claudeContentBlocksWork(payload.content)
+    const blocks = role === 'user' ? yield* withoutSkillContext(decodedBlocks) : decodedBlocks
     if (blocks.length === 0) {
       return null
     }
     return { id, role, blocks, timestamp, source: 'transcript' }
   }
   if (payload.type === 'reasoning') {
-    const text = extractString(payload.text) ?? codexSummaryText(payload.summary)
+    const text = extractString(payload.text) ?? (yield* codexSummaryText(payload.summary))
     if (!text) {
       return null
     }
@@ -131,7 +143,7 @@ function codexResponseItem(
     return {
       id,
       role: 'tool',
-      blocks: [codexToolResult(payload.output, extractString(payload.call_id))],
+      blocks: [yield* codexToolResult(payload.output, extractString(payload.call_id))],
       timestamp,
       source: 'transcript'
     }
@@ -139,17 +151,12 @@ function codexResponseItem(
   return null
 }
 
-// Explicit skill expansions are model context, not the user's recorded prompt.
-function isSkillContext(block: NativeChatBlock): boolean {
-  return block.type === 'text' && block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>'
-}
-
-function codexEventMessage(
+function* codexEventMessage(
   payload: Record<string, unknown>,
   id: string,
   timestamp: number | null,
   historyImport: boolean
-): NativeChatMessage | null {
+): TranscriptWork<NativeChatMessage | null> {
   if (payload.type === CODEX_EVENT_TURN_ABORTED) {
     return {
       id,
@@ -164,7 +171,7 @@ function codexEventMessage(
     return codexCompactionMarker(id, timestamp)
   }
   if (payload.type === 'item_completed') {
-    return codexCompletedTurnItem(payload, id, timestamp, historyImport)
+    return yield* codexCompletedTurnItem(payload, id, timestamp, historyImport)
   }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
@@ -181,22 +188,24 @@ function codexEventMessage(
   return null
 }
 
-function codexCompletedTurnItem(
+function* codexCompletedTurnItem(
   payload: Record<string, unknown>,
   fallbackId: string,
   timestamp: number | null,
   historyImport: boolean
-): NativeChatMessage | null {
+): TranscriptWork<NativeChatMessage | null> {
   const item = asRecord(payload.item)
   if (!item) {
     return null
   }
   const id = extractString(item.id) ?? fallbackId
   if (historyImport && item.type === 'Reasoning') {
-    return codexResponseItem(
+    return yield* codexResponseItem(
       {
         type: 'reasoning',
-        text: codexSummaryText(item.summary_text) ?? codexSummaryText(item.raw_content)
+        text:
+          (yield* codexSummaryText(item.summary_text)) ??
+          (yield* codexSummaryText(item.raw_content))
       },
       id,
       timestamp
@@ -205,7 +214,7 @@ function codexCompletedTurnItem(
   if (item.type === 'ContextCompaction') {
     return codexCompactionMarker(id, timestamp)
   }
-  const blocks = codexTurnItemBlocks(item.content)
+  const blocks = yield* codexTurnItemBlocks(item.content)
   if (blocks.length === 0) {
     return null
   }
@@ -230,76 +239,12 @@ function codexCompactionMarker(id: string, timestamp: number | null): NativeChat
   }
 }
 
-function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {
-  if (!Array.isArray(content)) {
-    return []
-  }
-  const blocks: NativeChatBlock[] = []
-  for (const value of content) {
-    const item = asRecord(value)
-    if (!item) {
-      continue
-    }
-    if (
-      item.type === 'text' ||
-      item.type === 'Text' ||
-      item.type === 'input_text' ||
-      item.type === 'output_text'
-    ) {
-      const text = extractString(item.text)
-      if (text) {
-        blocks.push({ type: 'text', text })
-      }
-      continue
-    }
-    if (item.type === 'image' || item.type === 'Image' || item.type === 'input_image') {
-      const url = extractString(item.image_url) ?? extractString(item.url)
-      if (url) {
-        blocks.push({ type: 'image-ref', url })
-      }
-      continue
-    }
-    if (item.type === 'local_image' || item.type === 'LocalImage') {
-      const path = extractString(item.path)
-      if (path) {
-        blocks.push({ type: 'image-ref', path })
-      }
-    }
-  }
-  return blocks
-}
-
 /** Preserve raw argument shape for all consumers; callers needing structure decode it themselves. */
 function codexCallInput(payload: Record<string, unknown>): unknown {
   if (payload.arguments !== undefined) {
     return payload.arguments
   }
   return payload.input ?? payload.action ?? null
-}
-
-function codexToolResult(output: unknown, callId: string | null): NativeChatBlock {
-  const record = asRecord(output)
-  const isError = record?.success === false || record?.is_error === true
-  return {
-    type: 'tool-result',
-    output: toolResultOutput(record?.content ?? record?.output ?? output),
-    ...(callId ? { callId } : {}),
-    ...(isError ? { isError: true } : {})
-  }
-}
-
-function codexSummaryText(summary: unknown): string | null {
-  if (!Array.isArray(summary)) {
-    return null
-  }
-  const parts: string[] = []
-  for (const item of summary) {
-    const text = extractString(asRecord(item)?.text) ?? extractString(item)
-    if (text) {
-      parts.push(text)
-    }
-  }
-  return parts.length ? parts.join('\n') : null
 }
 
 function parseTimestamp(value: unknown): number | null {

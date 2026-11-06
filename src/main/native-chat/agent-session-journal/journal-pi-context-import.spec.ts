@@ -1,13 +1,14 @@
-import './journal-legacy-import-worker-mock-test-fixture'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import Database from '../../sqlite/sync-database'
 import {
   importLegacyTranscriptIntoJournal,
   prepareLegacyTranscriptImport
 } from './journal-legacy-import'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { PI_CONTEXT_FIXTURES } from './journal-pi-context-fixtures'
 
 export function registerJournalPiContextImportTests(): void {
@@ -42,6 +43,72 @@ export function registerJournalPiContextImportTests(): void {
   }
 
   describe('saved Pi context import', () => {
+    it('keeps prepared history when temporary database teardown reports an error', async () => {
+      const close = Database.prototype.close
+      const closeSpy = vi.spyOn(Database.prototype, 'close').mockImplementation(function (
+        this: Database.Database
+      ) {
+        close.call(this)
+        throw new Error('test teardown failure')
+      })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        const items = await prepare([
+          {
+            type: 'message',
+            id: 'first',
+            parentId: null,
+            message: { role: 'user', content: 'hello' }
+          }
+        ])
+        expect(items).toHaveLength(1)
+        expect(items[0]?.identity).toMatchObject({ provider: 'legacy', recordId: 'first' })
+      } finally {
+        closeSpy.mockRestore()
+        warn.mockRestore()
+      }
+    })
+
+    it('cancels a large active branch projection before returning prepared history', async () => {
+      const collector = createPiTranscriptCollector(
+        (message) => message.id,
+        (_record, lineIndex) => ({
+          provider: 'legacy',
+          agent: 'pi',
+          sessionId: 'session',
+          recordId: `active-${lineIndex}`
+        })
+      )
+      const controller = new AbortController()
+      const reason = new Error('Pi import cancelled')
+      const cancel = setImmediate(() => controller.abort(reason))
+      try {
+        collector.record(JSON.stringify({ type: 'session', version: 3 }), 'session', 0)
+        for (let index = 0; index < 12; index += 1) {
+          collector.record(
+            JSON.stringify({
+              type: 'message',
+              id: `active-${index}`,
+              parentId: index === 0 ? null : `active-${index - 1}`,
+              message: { role: 'user', content: 'x'.repeat(128 * 1024) }
+            }),
+            `active-${index}`,
+            index + 1
+          )
+        }
+        await expect(
+          collector.project(
+            () => undefined,
+            async () => undefined,
+            controller.signal
+          )
+        ).rejects.toBe(reason)
+      } finally {
+        clearImmediate(cancel)
+        collector.close()
+      }
+    })
+
     it.each(PI_CONTEXT_FIXTURES)('$name', async (fixture) => {
       const items = await prepare(fixture.entries, 'version' in fixture ? fixture.version : 3)
       expect(

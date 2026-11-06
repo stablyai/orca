@@ -1,4 +1,3 @@
-import './agent-session-journal/journal-legacy-import-worker-mock-test-fixture'
 import { codexLegacyMirrorRecords } from './agent-session-journal/codex-history-test-fixture'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
 import { createNativeChatMerger, replaceList } from '../../shared/native-chat/native-chat-merge'

@@ -1,4 +1,3 @@
-import './journal-legacy-import-worker-mock-test-fixture'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

@@ -1,4 +1,3 @@
-import '../agent-session-journal/journal-legacy-import-worker-mock-test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

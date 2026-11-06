@@ -15,8 +15,9 @@ import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalPayloadLimits } from './journal-payload-bounds'
 import { legacyImportReplacementItem } from './journal-legacy-import-item'
-import { runLegacyTranscriptImportWorker } from './journal-legacy-import-worker'
-import type { PreparedLegacyImport } from './journal-legacy-import-worker-protocol'
+import { decodeLegacyTranscriptImport } from './journal-legacy-import-decode'
+import type { PreparedLegacyImport } from './journal-legacy-import-types'
+import { abortSignalReason } from '../../../shared/abort-signal-reason'
 export { legacyItemBody } from './journal-legacy-import-item'
 import type { AgentSessionJournal } from './journal-store'
 // Hydrating a journal from a bridge-era transcript.
@@ -92,7 +93,7 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    return await runLegacyTranscriptImportWorker(
+    return await decodeLegacyTranscriptImport(
       {
         filePath,
         transcriptAgent,
@@ -103,9 +104,10 @@ export async function prepareLegacyTranscriptImport(input: {
           ? [options.source.conversationStore]
           : options.codexSessionsDirs,
         decodedMessageIdentities: options.decodedMessageIdentities,
-        limits
+        limits,
+        signal: options.signal
       },
-      async (observed, signal) => {
+      async (observed) => {
         if (options.source) {
           await validateAdoptedTranscriptSource({
             agent: input.agent,
@@ -113,14 +115,14 @@ export async function prepareLegacyTranscriptImport(input: {
             source: options.source,
             maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES,
             observed,
-            signal
+            signal: options.signal
           })
         }
-      },
-      options.signal
+      }
     )
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    const error = options.signal?.aborted ? abortSignalReason(options.signal) : err
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
 

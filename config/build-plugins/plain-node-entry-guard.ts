@@ -52,7 +52,6 @@ const PLAIN_NODE_ENTRY_NAMES = [
 
 // Electron is unavailable in main-process worker threads too (verified Electron 43); scan their graphs rather than trusting entry comments.
 const WORKER_THREAD_ENTRY_NAMES = [
-  'journal-legacy-import-worker-entry',
   'stt-worker',
   'warp-theme-parser-worker',
   'foreign-sqlite-reader-entry',
@@ -111,7 +110,9 @@ function collectReachableChunks(
       continue
     }
     reachable.push(chunk)
-    stack.push(...chunk.imports, ...chunk.dynamicImports)
+    for (const imported of [...chunk.imports, ...chunk.dynamicImports]) {
+      stack.push(imported)
+    }
   }
   return reachable
 }

@@ -1,4 +1,3 @@
-import '../../../native-chat/agent-session-journal/journal-legacy-import-worker-mock-test-fixture'
 import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import '../unused-default-rpc-methods.test-fixture'

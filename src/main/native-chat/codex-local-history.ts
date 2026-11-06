@@ -6,6 +6,7 @@ import { readCodexRolloutBytes } from './codex-rollout-history-stream'
 import { splitTranscriptStreamLines } from './transcript-stream-lines'
 import { isCodexVisibleHistoryRecord } from './transcript-line-decoders-codex'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 
 type HistoryPosition = {
   thread_id: string
@@ -26,20 +27,25 @@ type HistorySegment = {
 export async function readCodexLocalHistory(input: {
   filePath: string
   roots?: readonly string[]
+  signal?: AbortSignal
+  parseRecord?: (line: string) => Promise<Record<string, unknown> | null>
   visit: (
     line: string,
     fallbackId: string,
     selected: boolean,
     recordId: string | undefined,
     record: Record<string, unknown> | null
-  ) => void
+  ) => void | Promise<void>
 }): Promise<number> {
+  throwIfSignalAborted(input.signal)
   const sources = await codexHistorySources(input.filePath, input.roots)
+  const parseRecord = input.parseRecord ?? parseJsonObject
   const seen = new Set<string>()
   const segments: HistorySegment[] = []
   let path = sources.path
   let end: HistoryPosition | undefined
   for (;;) {
+    throwIfSignalAborted(input.signal)
     const rolloutId = codexPhysicalRolloutId(path) ?? sessionIdFromFileName(path)
     if (seen.has(path) || seen.has(rolloutId)) {
       throw new Error('The conversation history lineage is invalid.')
@@ -50,13 +56,13 @@ export async function readCodexLocalHistory(input: {
       throw new Error('The conversation history source identity is invalid.')
     }
     let header: string | null = null
-    for await (const raw of lines(path, end)) {
+    for await (const raw of lines(path, end, input.signal)) {
       if (raw.line.trim()) {
         header = raw.line
         break
       }
     }
-    const record = header ? parseJsonObject(header) : null
+    const record = header ? await parseRecord(header) : null
     const metadata = record?.type === 'session_meta' ? asRecord(record.payload) : null
     const paginated = metadata?.history_mode === 'paginated'
     const base = metadata?.history_base == null ? undefined : historyPosition(metadata.history_base)
@@ -79,11 +85,13 @@ export async function readCodexLocalHistory(input: {
   }
   let bytes = 0
   for (const segment of segments.toReversed()) {
+    throwIfSignalAborted(input.signal)
     let offset = 0
     let ordinal = segment.start
     let first = true
     const strictOrdinals = segment.end !== undefined
-    for await (const raw of lines(segment.path, segment.end)) {
+    for await (const raw of lines(segment.path, segment.end, input.signal)) {
+      throwIfSignalAborted(input.signal)
       offset += raw.byteLength
       bytes += raw.byteLength
       if (!raw.line.trim()) {
@@ -95,7 +103,7 @@ export async function readCodexLocalHistory(input: {
           throw new Error('The conversation history source changed during import.')
         }
       }
-      const record = parseJsonObject(raw.line)
+      const record = await parseRecord(raw.line)
       if (
         strictOrdinals &&
         (record?.ordinal !== ordinal ||
@@ -109,7 +117,7 @@ export async function readCodexLocalHistory(input: {
         const item = asRecord(payload?.item)
         const id =
           extractString(item?.id) ?? extractString(payload?.id) ?? extractString(record?.id)
-        input.visit(
+        await input.visit(
           raw.line,
           transcriptFallbackId(segment.path, offset - raw.byteLength),
           segment.end === undefined,
@@ -126,12 +134,13 @@ export async function readCodexLocalHistory(input: {
       throw new Error('The conversation history prefix is truncated or mismatched.')
     }
   }
+  throwIfSignalAborted(input.signal)
   return bytes
 }
 
-function lines(path: string, end?: HistoryPosition) {
+function lines(path: string, end?: HistoryPosition, signal?: AbortSignal) {
   return splitTranscriptStreamLines(
-    readCodexRolloutBytes(path, end?.end_byte_offset),
+    readCodexRolloutBytes(path, end?.end_byte_offset, signal),
     16 * 1024 * 1024
   )
 }

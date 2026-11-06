@@ -2,14 +2,21 @@
 
 export {
   decodeClaudeTranscriptLine,
-  decodeClaudeTranscriptRecord
+  decodeClaudeTranscriptRecord,
+  decodeClaudeTranscriptRecordWork
 } from './transcript-line-decoders-claude'
 export {
   decodeCodexTranscriptLine,
-  decodeCodexTranscriptRecord
+  decodeCodexTranscriptRecord,
+  decodeCodexTranscriptRecordWork
 } from './transcript-line-decoders-codex'
 export {
   decodeGrokTranscriptLine,
-  decodeGrokTranscriptRecord
+  decodeGrokTranscriptRecord,
+  decodeGrokTranscriptRecordWork
 } from './transcript-line-decoders-grok'
-export { decodeOmpTranscriptLine, decodeOmpTranscriptRecord } from './transcript-line-decoders-omp'
+export {
+  decodeOmpTranscriptLine,
+  decodeOmpTranscriptRecord,
+  decodeOmpTranscriptRecordWork
+} from './transcript-line-decoders-omp'
