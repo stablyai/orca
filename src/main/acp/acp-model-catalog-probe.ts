@@ -188,6 +188,46 @@ export function createAcpModelCatalogProbe(
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
 
+// Agents (notably opencode) answer session/new with a transient -32603 while
+// their providers still open; without a retry one probe failure degrades the picker.
+const TRANSIENT_AGENT_RETRY_DELAYS_MS = [250, 500, 1_000] as const
+
+const isTransientAgentFailure = (error: unknown): boolean =>
+  error instanceof AcpAgentError && error.code === -32603
+
+async function retryTransientAgentFailure<T>(
+  run: () => Promise<T>,
+  operation?: StructuredAgentResolutionOperation
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run()
+    } catch (error) {
+      if (attempt >= TRANSIENT_AGENT_RETRY_DELAYS_MS.length || !isTransientAgentFailure(error)) {
+        throw error
+      }
+      assertStructuredAgentResolutionCurrent(operation)
+      await sleep(TRANSIENT_AGENT_RETRY_DELAYS_MS[attempt], operation?.signal)
+    }
+  }
+}
+
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return
+  }
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(finish, ms)
+    const onAbort = (): void => finish()
+    function finish(): void {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }
+    signal?.addEventListener('abort', onAbort)
+  })
+}
+
 async function readSessionModels(
   spec: AcpLaunchSpec,
   listing: AcpSessionModelDiscovery,
@@ -197,13 +237,16 @@ async function readSessionModels(
   selectedModels?: readonly string[],
   ready?: (cleanup: () => Promise<unknown>) => void
 ): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
-  const initialized = await connection.initialize()
+  const initialized = await retryTransientAgentFailure(() => connection.initialize(), operation)
   assertStructuredAgentResolutionCurrent(operation)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
-  const started = await connection.start({ cwd: workspace, mcpServers: [] })
+  const started = await retryTransientAgentFailure(
+    () => connection.start({ cwd: workspace, mcpServers: [] }),
+    operation
+  )
   let stopped = false
   const cleanup = async (): Promise<void> => {
     stopped = true
