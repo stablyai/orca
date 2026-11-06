@@ -148,8 +148,10 @@ function AuthForm({
             config
               ? null
               : {
-                  message:
-                    'Choose an Antigravity account type and enter its Google Cloud project and location.',
+                  message: translate(
+                    'accounts.antigravity.settingsIncomplete',
+                    'Choose an Antigravity account type and enter its Google Cloud project and location.'
+                  ),
                   recovery: null
                 }
           )
