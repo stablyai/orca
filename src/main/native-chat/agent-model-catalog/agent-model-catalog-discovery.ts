@@ -4,6 +4,8 @@ import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 export type AgentModelCatalogResolvedProbe = {
   identity: unknown
+  /** It lists in the chat's own folder, so that folder's context retiring stops it. */
+  inChatFolder?: true
   /** `operation` owns the run; it defaults to the one the invocation was resolved under. */
   run: (
     signal?: AbortSignal,

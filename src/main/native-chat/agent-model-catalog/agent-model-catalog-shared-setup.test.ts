@@ -82,8 +82,9 @@ function harness() {
     await once('settings')
     return false
   })
+  const store = new AgentModelCatalogStore()
   const service = createAgentModelCatalogService({
-    store: new AgentModelCatalogStore(),
+    store,
     getConversation: (id) => (records[id] ? agentSessionConversationView(records[id]) : undefined),
     getRecord: (id) => records[id],
     drivesRecord: () => true,
@@ -104,6 +105,7 @@ function harness() {
     resolve,
     recordWorkspacePath,
     workspaceMayOverrideDefaultModel,
+    store,
     service
   }
 }
@@ -133,6 +135,68 @@ it.each(['listing', 'setup'] as const)(
     expect(h.run).toHaveBeenCalledOnce()
   }
 )
+
+it("stops a listing that runs in the chat's folder when that folder's context retires", async () => {
+  const h = harness()
+  h.resolve.mockImplementation(async (_home, _cwd, _lookup, _operation, at) => ({
+    identity: `codex in ${at}`,
+    run: h.run,
+    inChatFolder: true as const
+  }))
+  void h.service.demand({ agent: 'codex', sessionId: 'b' })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  h.service.retireContext('ws')
+  expect(h.run.mock.calls[0]?.[0]?.aborted).toBe(true)
+  await expect(h.discovery.promise).rejects.toThrow()
+  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).not.toHaveProperty('models')
+})
+
+it.each(['gate', 'cli', 'settings'] as const)(
+  'settles a waiting reader at once when its agent retires while its %s stage is stalled',
+  async (stage) => {
+    vi.useFakeTimers()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const h = harness()
+    const stalled = Promise.withResolvers<void>()
+    h.folder[stage] = stalled
+    let settled = false
+    void h.service
+      .read({ agent: 'codex', sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
+      .then(() => {
+        settled = true
+      })
+    await vi.advanceTimersByTimeAsync(0)
+    h.store.expireAgent('codex')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(true)
+    stalled.resolve()
+    h.discovery.resolve(listing('retired'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).not.toHaveProperty('models')
+  }
+)
+
+it("still lists for chat b when chat a's record goes away while their shared setup runs", async () => {
+  const h = harness()
+  // The CLI is found only once the login shell is read again.
+  h.resolve.mockImplementation(async (_home, _cwd, lookup, _operation, at) => {
+    if (lookup !== 'recover') {
+      throw new Error('not on the saved PATH')
+    }
+    return { identity: `codex in ${at}`, run: h.run }
+  })
+  const gate = Promise.withResolvers<void>()
+  h.folder.gate = gate
+  void h.service.demand({ agent: 'codex', sessionId: 'a' })
+  const b = h.service.read({ agent: 'codex', sessionId: 'b', waitForListing: true })
+  delete h.records.a
+  gate.resolve()
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  h.discovery.resolve(listing('shared'))
+  expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
+})
 
 it('ends a shorter reader at its own deadline, and a stalled refresh lists nothing after its budget', async () => {
   vi.useFakeTimers()

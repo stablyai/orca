@@ -20,12 +20,14 @@ export class AgentModelCatalogListingWaiters {
     private readonly listing: (fingerprint: string) => boolean
   ) {}
 
+  /** `signal` ends the wait (and its subscription) when its reader leaves. */
   wait(
     fingerprint: string,
     waitForChange = false,
-    terminal = false
+    terminal = false,
+    signal?: AbortSignal
   ): Promise<AgentModelCatalogEntry | null> | null {
-    if (!this.listing(fingerprint)) {
+    if (!this.listing(fingerprint) || signal?.aborted) {
       return null
     }
     const previous = this.read(fingerprint)
@@ -38,6 +40,7 @@ export class AgentModelCatalogListingWaiters {
         }
         settled = true
         clearTimeout(deadline)
+        signal?.removeEventListener('abort', leave)
         waiters.delete(check)
         if (waiters.size === 0) {
           this.waiters.delete(fingerprint)
@@ -56,6 +59,8 @@ export class AgentModelCatalogListingWaiters {
       const deadline = terminal
         ? undefined
         : setTimeout(() => finish(this.read(fingerprint)), AGENT_MODEL_CATALOG_PICKER_WAIT_MS)
+      const leave = (): void => finish(this.read(fingerprint))
+      signal?.addEventListener('abort', leave, { once: true })
       waiters.add(check)
       this.waiters.set(fingerprint, waiters)
       check()
@@ -98,10 +103,12 @@ export async function waitForAgentModelCatalogRead(input: {
   binding: () => AgentModelCatalogBinding | undefined
 }): Promise<void> {
   const { params, store, refresh } = input
+  // Once the reader stops waiting, nothing it left behind subscribes to or holds a listing wait.
+  const left = new AbortController()
   const wait = async (): Promise<void> => {
     await refresh?.listing
     await (refresh?.defaults ?? input.binding()?.projecting)
-    const bound = input.binding()
+    const bound = left.signal.aborted ? undefined : input.binding()
     if (
       bound &&
       (!store.get(bound.fingerprint) ||
@@ -112,7 +119,8 @@ export async function waitForAgentModelCatalogRead(input: {
       await store.pendingListing(
         bound.fingerprint,
         true,
-        params.legacy || usesModelSpecificAcpEfforts(params.agent)
+        params.legacy || usesModelSpecificAcpEfforts(params.agent),
+        left.signal
       )
     }
     if (bound && !store.isListing(bound.fingerprint)) {
@@ -120,6 +128,7 @@ export async function waitForAgentModelCatalogRead(input: {
     }
   }
   await waitWithinAgentModelCatalogRead(input.reader, wait())
+  left.abort()
 }
 
 /** The operation owns its original budget even while a resolver cannot be cancelled. */

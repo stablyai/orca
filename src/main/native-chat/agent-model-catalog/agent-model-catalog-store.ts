@@ -1,4 +1,5 @@
 import { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
+import { createAgentModelCatalogFences } from './agent-model-catalog-fences'
 import {
   evictAgentModelCatalogEntries,
   createAgentModelCatalogEntryFactory,
@@ -67,6 +68,8 @@ export class AgentModelCatalogStore {
   private readonly dueEntries = new Set<string>()
   private readonly partialAttempts = new Map<string, { agent: string; at: number }>()
   private readonly retirementRevisions = new Map<string, number>()
+  // Aborts when an agent's scopes are next retired.
+  readonly retirements = createAgentModelCatalogFences<string>()
   private readonly retiredObservations = new Set<string>()
   private persistence: AgentModelCatalogPersistence | null = null
   readonly efforts: ReturnType<typeof createAgentModelEffortDiscovery>
@@ -148,6 +151,7 @@ export class AgentModelCatalogStore {
 
   private retireListings(agent: string): void {
     this.retirementRevisions.set(agent, this.retirementRevision(agent) + 1)
+    this.retirements.retire(agent)
     for (const [fingerprint, flight] of this.refreshes) {
       if (flight.agent === agent) {
         retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
@@ -304,11 +308,9 @@ export class AgentModelCatalogStore {
   }
 
   pendingListing(
-    fingerprint: string,
-    waitForChange = false,
-    terminal = false
-  ): Promise<AgentModelCatalogEntry | null> | null {
-    return this.listingWaiters.wait(fingerprint, waitForChange, terminal)
+    ...wait: Parameters<AgentModelCatalogListingWaiters['wait']>
+  ): ReturnType<AgentModelCatalogListingWaiters['wait']> {
+    return this.listingWaiters.wait(...wait)
   }
 
   shouldRefresh(fingerprint: string): boolean {

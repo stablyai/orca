@@ -15,6 +15,7 @@ import {
 } from './agent-model-catalog-workspace'
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
 import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
+import { createAgentModelCatalogFences } from './agent-model-catalog-fences'
 import { seedAccountList } from './agent-model-catalog-account-list'
 import {
   agentModelCatalogReleasedOwner,
@@ -66,12 +67,15 @@ export function createAgentModelCatalogRefreshes(context: {
 }) {
   const { deps, lifetime, admission, bindings, requestKey, tasks } = context
   const refreshes = new Map<string, Held>()
+  // A workspace's command context (null: reads naming none); retiring it stops listings in its folder.
+  const fences = createAgentModelCatalogFences<string | null>()
   const start = (key: string, launch: AgentModelCatalogLaunch): Held => {
     const { agent } = launch
     const retirement = deps.store.retirementRevision(agent)
     const deadline = Date.now() + AGENT_MODEL_CATALOG_REFRESH_MS
     const ended = new AbortController()
-    const signal = AbortSignal.any([lifetime, ended.signal])
+    // Retiring its agent ends it at once, like its budget, its workspace or shutdown.
+    const signal = AbortSignal.any([lifetime, ended.signal, deps.store.retirements.signal(agent)])
     const current = (): boolean =>
       !signal.aborted &&
       Date.now() < deadline &&
@@ -170,6 +174,11 @@ export function createAgentModelCatalogRefreshes(context: {
           probeHome,
           workspacePath: cwd ?? folder
         })
+        // A listing that runs in the chat's folder ends when that folder's context retires.
+        const owner =
+          resolved?.inChatFolder || (!exact && folder !== undefined)
+            ? AbortSignal.any([lifetime, fences.signal(bound.workspaceId ?? null)])
+            : lifetime
         list = (model) => {
           if (
             current() &&
@@ -187,7 +196,7 @@ export function createAgentModelCatalogRefreshes(context: {
                 void task.finally(() => tasks.delete(task)).catch(() => {})
                 return task
               },
-              { deadline, signal: lifetime },
+              { deadline, signal: owner },
               model
             )
           }
@@ -196,7 +205,9 @@ export function createAgentModelCatalogRefreshes(context: {
           list(model)
         }
         listing.resolve()
-        await bounded(deps.store.pendingListing(fingerprint, true, true) ?? Promise.resolve(null))
+        await bounded(
+          deps.store.pendingListing(fingerprint, true, true, signal) ?? Promise.resolve(null)
+        )
       }
       listing.resolve()
       if (launch.passive) {
@@ -248,6 +259,7 @@ export function createAgentModelCatalogRefreshes(context: {
     pending: (key: string): boolean => refreshes.get(key)?.current() === true,
     /** A workspace's folder or command context changed: its refreshes (all, without one) end. */
     retire(workspaceId?: string): void {
+      fences.retire(workspaceId)
       for (const held of refreshes.values()) {
         if (workspaceId === undefined || held.workspaceId === workspaceId) {
           held.end()
