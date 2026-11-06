@@ -2,7 +2,7 @@
 // primary display, sized to exactly the bar it paints.
 import { app, BrowserWindow, screen, type Display, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { deferAppKitSceneMutation } from '../appkit-scene-mutation'
+import { deferAppKitSceneMutation } from '../window/desktop-integration/appkit-scene-mutation'
 import { registerChromeWindow } from '../window/app-window-lookup'
 import { installPrivilegedWindowNavigationPolicy } from '../window/privileged-window-navigation'
 import { buildCollapsedBarLayout } from '../../shared/notch/notch-bar-geometry'

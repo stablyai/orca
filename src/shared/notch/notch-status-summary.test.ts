@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload, AgentStatusState } from '../agent-status-types'
+import type { AgentStatusIpcPayload } from '../agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
 import { buildNotchSummary, isNotchIdle, isUnvisited, laneForState } from './notch-status-summary'
 
 // Fixed clock: buildNotchSummary defaults `now` to Date.now(), and fresh payloads must stay fresh.

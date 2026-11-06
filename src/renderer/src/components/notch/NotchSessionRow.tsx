@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { translate } from '../../i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatNotchElapsedSince } from '../../../../shared/notch/notch-duration-format'
 import { SESSION_ROW_HEIGHT } from '../../../../shared/notch/notch-panel-rect'
 import type { NotchRow } from '../../../../shared/notch/notch-snapshot'

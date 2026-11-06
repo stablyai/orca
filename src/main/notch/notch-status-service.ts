@@ -4,7 +4,7 @@
 // webContents and detached when it closes, so a second window subscribing through window.api
 // would go permanently silent. subscribeEnrichedStatus/subscribePaneStatusClear are additive and
 // survive, which is the whole point of a status surface you can see with the app closed.
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   EMPTY_NOTCH_SUMMARY,
   buildNotchSummary,

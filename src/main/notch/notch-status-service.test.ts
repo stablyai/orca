@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload, AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import { NotchStatusService, type NotchStatusSource } from './notch-status-service'
 
 // receivedAt defaults to now so fixtures aren't treated as long-silent agents; stateStartedAt

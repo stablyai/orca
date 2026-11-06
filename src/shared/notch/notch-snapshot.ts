@@ -1,7 +1,7 @@
 // Wire shape pushed from main to the notch renderer.
 // The renderer holds no derived state: everything it paints is computed in main and arrives
 // here whole, so the bar can never disagree with the counts the service resolved.
-import type { AgentStatusState, AgentType } from '../agent-status-types'
+import type { AgentStatusState, AgentType } from '../agent-status/contracts/agent-status-types'
 import type { CollapsedBarLayout, NotchPresentation } from './notch-bar-geometry'
 import type { NotchLane, NotchStatusSummary } from './notch-status-summary'
 

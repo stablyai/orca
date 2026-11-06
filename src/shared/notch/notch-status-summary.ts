@@ -1,11 +1,8 @@
 // Derives the notch bar's per-lane counts and session list from an agent-status snapshot.
 // Electron-free on purpose: main owns the data, but the math runs (and is tested) anywhere.
-import {
-  isFreshNonDoneAgentStatus,
-  type AgentStatusIpcPayload,
-  type AgentStatusState,
-  type AgentType
-} from '../agent-status-types'
+import { isFreshNonDoneAgentStatus } from '../agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusState, AgentType } from '../agent-status/contracts/agent-status-types'
 
 /** The three glyph lanes the bar renders. Mirrors the dashboard's buckets, minus `idle`. */
 export type NotchLane = 'working' | 'attention' | 'done'

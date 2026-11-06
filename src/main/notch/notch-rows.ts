@@ -2,7 +2,7 @@
 // Workspace lookup is injected so this stays synchronous and testable: resolving a branch would
 // need live git state, which main does not hold, and an async hop here would stall repaints.
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { NotchSession } from '../../shared/notch/notch-status-summary'
 import type { NotchRow } from '../../shared/notch/notch-snapshot'
 import { buildNotchRowLabel } from './notch-row-label'

@@ -119,7 +119,7 @@ vi.mock('./screen-geometry', () => ({ readScreenGeometry: () => Promise.resolve(
 // FIFO queue so the reposition-then-destroy ordering can be reproduced.
 let queueDeferred = false
 const deferredQueue: (() => void)[] = []
-vi.mock('../appkit-scene-mutation', () => ({
+vi.mock('../window/desktop-integration/appkit-scene-mutation', () => ({
   deferAppKitSceneMutation: (fn: () => void) => {
     if (queueDeferred) {
       deferredQueue.push(fn)
