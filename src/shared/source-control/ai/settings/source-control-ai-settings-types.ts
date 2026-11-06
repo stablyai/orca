@@ -1,4 +1,5 @@
 import type { CommitMessageAiModelCapability } from '../generation/commit-message-ai-types'
+import type { TextGenerationAgentId } from '../../../on-device-text-generation'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../generation/commit-message-agent-spec'
 import type {
@@ -15,8 +16,10 @@ export type AiTextOperation = AiTextActionId
 export type SourceControlAiOperation = SourceControlTextActionId
 
 export type SourceControlAiModelChoice = {
-  selectedModelByAgent?: Partial<Record<TuiAgent, string>>
-  selectedModelByAgentByHost?: Partial<Record<string, Partial<Record<TuiAgent, string>>>>
+  selectedModelByAgent?: Partial<Record<TextGenerationAgentId, string>>
+  selectedModelByAgentByHost?: Partial<
+    Record<string, Partial<Record<TextGenerationAgentId, string>>>
+  >
   selectedThinkingByModel?: Record<string, string>
 }
 
@@ -30,12 +33,14 @@ export type SourceControlAiPrCreationDefaults = {
 export type SourceControlAiSettings = {
   enabled: boolean
   actions?: SourceControlAiActionDefaults
-  agentId: TuiAgent | 'custom' | null
-  selectedModelByAgent: Partial<Record<TuiAgent, string>>
-  selectedModelByAgentByHost?: Partial<Record<string, Partial<Record<TuiAgent, string>>>>
-  discoveredModelsByAgent?: Partial<Record<TuiAgent, CommitMessageAiModelCapability[]>>
+  agentId: TextGenerationAgentId | CustomAgentId | null
+  selectedModelByAgent: Partial<Record<TextGenerationAgentId, string>>
+  selectedModelByAgentByHost?: Partial<
+    Record<string, Partial<Record<TextGenerationAgentId, string>>>
+  >
+  discoveredModelsByAgent?: Partial<Record<TextGenerationAgentId, CommitMessageAiModelCapability[]>>
   discoveredModelsByAgentByHost?: Partial<
-    Record<string, Partial<Record<TuiAgent, CommitMessageAiModelCapability[]>>>
+    Record<string, Partial<Record<TextGenerationAgentId, CommitMessageAiModelCapability[]>>>
   >
   selectedThinkingByModel: Record<string, string>
   customAgentCommand: string
@@ -59,6 +64,7 @@ export type RepoSourceControlAiOverrides = {
     Record<
       SourceControlActionId,
       {
+        // Per-action overrides launch agent CLIs, so they exclude providers with no launch path.
         agentId?: TuiAgent | CustomAgentId | null
         commandInputTemplate?: string | null
         agentArgs?: string | null
@@ -77,6 +83,7 @@ export type RepoSourceControlAiOverrides = {
 }
 
 export type CompleteSourceControlActionRecipe = {
+  // Per-action recipes launch agent CLIs, so they exclude providers with no launch path.
   agentId: TuiAgent | CustomAgentId | null
   commandInputTemplate: string
   agentArgs?: string | null

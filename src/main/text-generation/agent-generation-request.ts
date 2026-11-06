@@ -6,6 +6,8 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isOnDeviceTextGenerationId } from '../../shared/on-device-text-generation'
+import { runOnDeviceTextGeneration } from './on-device-text-generation'
 import {
   planCommitMessageGeneration,
   type CommitMessagePlan
@@ -40,8 +42,17 @@ export async function runGenerationRequest(input: {
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
+  if (isOnDeviceTextGenerationId(input.params.agentId)) {
+    return runOnDeviceTextGeneration({
+      prompt: input.prompt,
+      customPrompt: input.params.customPrompt,
+      shouldExecute: input.shouldExecute
+    })
+  }
+  const agentId = input.params.agentId
   const params = {
     ...input.params,
+    agentId,
     backslash: commandBackslashMode(input.target)
   }
   const planned = planCommitMessageGeneration(params, input.prompt)
@@ -57,7 +68,7 @@ export async function runGenerationRequest(input: {
           operation: input.operation
         })
       : runLocalPlanForAgent({
-          agentId: input.params.agentId,
+          agentId,
           plan,
           target: input.target,
           operation: input.operation,
@@ -65,7 +76,7 @@ export async function runGenerationRequest(input: {
           shouldExecute: input.shouldExecute
         })
   let result = await runClaudeGenerationAttempts({
-    agentId: input.params.agentId,
+    agentId,
     run: (attempt): Promise<InternalTextGenerationResult> => {
       if (attempt.strictMcp && !attempt.legacyToolPolicy) {
         return execute(plan)

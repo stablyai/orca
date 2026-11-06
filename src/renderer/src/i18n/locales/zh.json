@@ -43,6 +43,7 @@
         "recipe": "聊天名称",
         "useChatAgent": "使用聊天智能体",
         "configuredCliAgent": "使用已配置的CLI智能体（{{agent}}）",
+        "onDeviceAgent": "Use on-device model",
         "configuredCliAgentUnknown": "使用已配置的 CLI 代理",
         "clearCliArguments": "清除CLI参数以使用各聊天的智能体。",
         "cliArgumentsPlaceholder": "已配置的CLI命名智能体的可选参数",

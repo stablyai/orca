@@ -10,7 +10,8 @@ export function createWebPlatformApi(): Partial<PreloadApi> {
         arch: '',
         shell: '',
         displayServer: null,
-        windowMaterial: 'off'
+        windowMaterial: 'off',
+        onDeviceModelInstalled: false
       })
     }
   }

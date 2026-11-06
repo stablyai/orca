@@ -1,3 +1,4 @@
+import { isOnDeviceTextGenerationId } from '../../../../../../shared/on-device-text-generation'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
@@ -51,6 +52,10 @@ export function buildCommitMessageGenerationParams(args: {
   return {
     agentId: args.agentId,
     model: modelId,
+    // CLI agents get instructions through the template; the provider takes them as session instructions.
+    ...(isOnDeviceTextGenerationId(args.agentId) && args.baseParams?.customPrompt
+      ? { customPrompt: args.baseParams.customPrompt }
+      : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
     commandInputTemplate: args.commandTemplate,
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),

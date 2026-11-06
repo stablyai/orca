@@ -1,6 +1,6 @@
 import type { CommitMessageAiSettings } from '../../../../shared/source-control/ai/generation/commit-message-ai-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TextGenerationAgentId } from '../../../../shared/on-device-text-generation'
 import {
   getCommitMessageAgentCapability,
   isCustomAgentId,
@@ -24,7 +24,7 @@ export function readCommitMessageAiSettings(settings: GlobalSettings): CommitMes
 }
 
 export function commitMessageAgentLabel(
-  agentId: TuiAgent,
+  agentId: TextGenerationAgentId,
   capability: CommitMessageAgentCapability
 ): string {
   return getAgentCatalog().find((a) => a.id === agentId)?.label ?? capability.label

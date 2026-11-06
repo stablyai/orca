@@ -19,9 +19,9 @@ export function aiCommitPrPickerEntry(
   const model = resolveCommitMessageSelectedModel(config, capability)
   const effort = resolveCommitMessageSelectedThinking(config, model)
   return {
-    agent: capability.id,
+    agent: capability.id as never,
     label: commitMessageAgentLabel(capability.id, capability),
-    rows: [{ agent: capability.id, kind: 'cli' }],
+    rows: [{ agent: capability.id as never, kind: 'cli' }],
     surfaces: ['terminal'],
     defaultSurface: 'terminal',
     terminal: { model: model.id, ...(effort ? { options: { effort } } : {}) },

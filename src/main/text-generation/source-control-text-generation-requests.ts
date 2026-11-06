@@ -29,6 +29,7 @@ import {
   textGenerationFailureCodeFields
 } from '../../shared/text-generation-failure-copy'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
+import { isOnDeviceTextGenerationId } from '../../shared/on-device-text-generation'
 import { commandBackslashMode, runGenerationRequest } from './agent-generation-request'
 import { fitsLocalCommandLine } from './source-control-local-process'
 export { commandBackslashMode } from './agent-generation-request'
@@ -56,6 +57,10 @@ function fitPromptToLocalCommandLine(
   build: (diffBudget?: number) => string
 ): string {
   const prompt = build()
+  // The on-device provider receives the prompt directly, with no command line to fit.
+  if (isOnDeviceTextGenerationId(params.agentId)) {
+    return prompt
+  }
   // The WSL launcher re-wraps argv in a login-shell script, so this plan's size does not bound it; keep the guard's verdict.
   if (
     target.kind !== 'local' ||
@@ -64,11 +69,10 @@ function fitPromptToLocalCommandLine(
   ) {
     return prompt
   }
+  // Narrowed once, outside the closure, so a provider id cannot reach the CLI planner.
+  const cliParams = { ...params, agentId: params.agentId, backslash: commandBackslashMode(target) }
   const fits = (candidate: string): boolean => {
-    const planned = planCommitMessageGeneration(
-      { ...params, backslash: commandBackslashMode(target) },
-      candidate
-    )
+    const planned = planCommitMessageGeneration(cliParams, candidate)
     return !planned.ok || fitsLocalCommandLine(planned.plan, COMMAND_LINE_FIT_HEADROOM)
   }
   if (fits(prompt)) {

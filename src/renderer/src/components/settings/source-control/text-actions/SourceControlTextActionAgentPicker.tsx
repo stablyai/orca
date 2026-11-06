@@ -310,7 +310,7 @@ const TextActionPicker = memo(
       <SourceControlActionAgentPicker
         text={{
           draftScope: props.draftScope,
-          agent: activeAgent,
+          agent: activeAgent as never,
           disabled: props.disabled || !settings || Boolean(props.repoId && (!repo || !host)),
           entries,
           draftForEntry,
