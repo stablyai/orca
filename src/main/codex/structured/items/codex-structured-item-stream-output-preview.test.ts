@@ -8,13 +8,13 @@ import { createCodexStructuredItemStreams } from './codex-structured-item-stream
 
 function outputStream(type: 'commandExecution' | 'fileChange') {
   const bodies: AgentJournalItemBody[] = []
-  const sink = {
-    appendItem: (_identity: unknown, body: AgentJournalItemBody) => {
+  const sink: StructuredAgentSessionEventSink = {
+    appendItem: (_identity, body) => {
       bodies.push(body)
     },
     appendTombstone: () => {},
     publish: () => {}
-  } as unknown as StructuredAgentSessionEventSink
+  }
   let timer: (() => void) | null = null
   const streams = createCodexStructuredItemStreams({
     sink,
