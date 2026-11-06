@@ -79,11 +79,3 @@ export function useKeyboardOcclusion(): number {
 
   return keyboardLift
 }
-
-// Unlike native keyboard events, page visibility is inferred from a positive occluded strip.
-export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
-
-export function useSoftKeyboard(): SoftKeyboardState {
-  const height = useKeyboardOcclusion()
-  return { height, visible: height > 0 }
-}
