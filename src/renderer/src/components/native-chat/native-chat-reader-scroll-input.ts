@@ -113,8 +113,8 @@ export function nativeChatReaderScrollInputHandlers({
       report({ kind: 'touch-drag' }, event)
     },
     onKeyDown: (event) => {
+      onReaderAct?.()
       if (!READER_SCROLL_KEYS.has(event.key) || isEditableTarget(event.target)) {
-        onReaderAct?.()
         return
       }
       const modified =

@@ -1,7 +1,7 @@
 // Instant jumps still settle as virtualized rows are measured; retain the target until arrival.
 
 import { useCallback, useRef } from 'react'
-import type { Virtualizer } from '@tanstack/react-virtual'
+import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 
 /** How close to its target a jump counts as arrived: sub-pixel and zoom rounding. */
@@ -52,12 +52,23 @@ export function useNativeChatViewportAlign({
   endAlign: () => void
   /** Whether the view is still the jump's: settling, or resting where it landed. */
   isAlignHeld: () => boolean
-  /** The row an end-aligned jump holds at the viewport's bottom, until something else takes the scroll. */
-  heldEndIndex: () => number | null
+  /**
+   * Whether a resize of the row at this index moves an end-aligned jump's row: that row or any
+   * above it, visible or not. The row is held by key, so rows inserted or removed before it
+   * don't retarget the hold; once it is no longer drawn the hold ends.
+   */
+  pinsEndGrowth: (index: number, measurements: readonly VirtualItem[]) => boolean
+  /** A reader acting on the content owns what it moves: an end-aligned jump stops holding its row. */
+  releaseEndPin: () => void
 } {
   /** The row or offset `alignToViewportTop` scrolled to, until something else takes the scroll. */
   const alignRef = useRef<
-    | (({ index: number; edge: NativeChatAlignEdge } | { offset: number }) & { arrived: boolean })
+    | ((
+        | { index: number; edge: NativeChatAlignEdge; key: VirtualItem['key'] }
+        | { offset: number }
+      ) & {
+        arrived: boolean
+      })
     | null
   >(null)
 
@@ -72,7 +83,12 @@ export function useNativeChatViewportAlign({
       // Use the virtualizer to replace its pending jump reconciliation instead of racing it.
       if (virtualizer.scrollElement && !Number.isNaN(index)) {
         // Target the row's index so measurements can correct its landing offset.
-        alignRef.current = { index, edge, arrived: false }
+        alignRef.current = {
+          index,
+          edge,
+          key: virtualizer.options.getItemKey(index),
+          arrived: false
+        }
         virtualizer.scrollToIndex(index, { align: edge, behavior: 'auto' })
         return
       }
@@ -121,10 +137,37 @@ export function useNativeChatViewportAlign({
     alignRef.current = null
   }, [])
   const isAlignHeld = useCallback(() => alignRef.current !== null, [])
-  const heldEndIndex = useCallback(() => {
+  // The held row's index, found once per measurement pass rather than once per resized row.
+  const heldIndexRef = useRef<{ measurements: readonly VirtualItem[]; index: number } | null>(null)
+  const pinsEndGrowth = useCallback((index: number, measurements: readonly VirtualItem[]) => {
     const held = alignRef.current
-    return held !== null && 'index' in held && held.edge === 'end' ? held.index : null
+    if (held === null || !('index' in held) || held.edge !== 'end') {
+      return false
+    }
+    if (heldIndexRef.current?.measurements !== measurements) {
+      const current = measurements.findIndex((item) => item.key === held.key)
+      heldIndexRef.current = { measurements, index: current }
+    }
+    const pinned = heldIndexRef.current.index
+    if (pinned === -1) {
+      alignRef.current = null
+      return false
+    }
+    return index <= pinned
+  }, [])
+  const releaseEndPin = useCallback(() => {
+    const held = alignRef.current
+    if (held !== null && 'index' in held && held.edge === 'end') {
+      alignRef.current = null
+    }
   }, [])
 
-  return { alignToViewportTop, isAlignPending, endAlign, isAlignHeld, heldEndIndex }
+  return {
+    alignToViewportTop,
+    isAlignPending,
+    endAlign,
+    isAlignHeld,
+    pinsEndGrowth,
+    releaseEndPin
+  }
 }

@@ -200,13 +200,19 @@ export function useNativeChatTranscriptWindow({
     [readScrollMargin]
   )
 
-  const { alignToViewportTop, isAlignPending, endAlign, isAlignHeld, heldEndIndex } =
-    useNativeChatViewportAlign({
-      scrollRef,
-      virtualizer,
-      finishReaderTakeover,
-      programmaticScrollMarks
-    })
+  const {
+    alignToViewportTop,
+    isAlignPending,
+    endAlign,
+    isAlignHeld,
+    pinsEndGrowth,
+    releaseEndPin
+  } = useNativeChatViewportAlign({
+    scrollRef,
+    virtualizer,
+    finishReaderTakeover,
+    programmaticScrollMarks
+  })
 
   // Compensate rows above the reader, excluding visible/first jump-target measurements, unseen scroll writes and backward-reader scrolling; preserve landed jumps.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
@@ -215,9 +221,7 @@ export function useNativeChatTranscriptWindow({
     if (Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
       return false
     }
-    // An end-aligned jump keeps its row's end at the bottom: rows measured late above it, visible or not, and the row itself push it down.
-    const pinnedEnd = heldEndIndex()
-    if (pinnedEnd !== null && item.index <= pinnedEnd) {
+    if (pinsEndGrowth(item.index, instance.measurementsCache)) {
       return true
     }
     return (
@@ -322,13 +326,6 @@ export function useNativeChatTranscriptWindow({
       reconcileReaderScroll(true)
     }
   }, [isAlignHeld, reconcileReaderScroll])
-
-  // A reader acting on the content owns what it moves: an end-aligned reveal stops holding its row.
-  const releaseEndPin = useCallback(() => {
-    if (heldEndIndex() !== null) {
-      endAlign()
-    }
-  }, [endAlign, heldEndIndex])
 
   return {
     virtualItems: virtualizer.getVirtualItems(),

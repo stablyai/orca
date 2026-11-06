@@ -133,7 +133,7 @@ function Transcript({
     setLoaded((current) => Math.min(items.length, current + 2))
     return 'applied'
   }, [items.length, onLoadEarlier])
-  const shown = items.slice(items.length - loaded)
+  const shown = items.slice(Math.max(0, items.length - loaded))
   return (
     <NativeChatMessageList
       ref={handle}
@@ -472,6 +472,46 @@ describe('where a strip reveal lands', () => {
     layout.measuredRowHeights = [...heights]
     paint()
     expect(scroller().scrollTop).toBe(readerTop)
+    layout.measuredRowHeights = []
+  })
+
+  it('lets go of a revealed row once it is gone, so rows that grow later do not move the view', async () => {
+    const parent = [
+      ...Array.from({ length: 40 }, (_, index) =>
+        say(`earlier-${index}`, 'assistant', `Earlier ${index}.`, index - 40)
+      ),
+      say('ask', 'user', 'Review it', 1),
+      spawn('spawn', [agent('task-b', 'lane b')], 2)
+    ]
+    const child = [
+      say('b-first', 'assistant', 'Opening lane b.', 3, 'task-b'),
+      say('b-said', 'assistant', 'Read lane b.', 4, 'task-b')
+    ]
+    const later = Array.from({ length: 80 }, (_, index) =>
+      say(`later-${index}`, 'assistant', `Later ${index}.`, 5 + index)
+    )
+    const handle = createRef<NativeChatMessageListHandle>()
+    const { rerender } = render(
+      <Transcript items={[...parent, ...child, ...later]} handle={handle} />
+    )
+    paint()
+    await reveal(handle, 'task-b')
+    paint()
+    expect(screen.getByText('Read lane b.')).toBeInTheDocument()
+
+    // The child's rows leave the transcript (a rewind of its output, say); the hold must not pass to whatever row now has its index.
+    rerender(<Transcript items={[...parent, ...later]} handle={handle} />)
+    paint()
+    const restingTop = scroller().scrollTop
+    // The last mounted parent row, whose end sits at or below the viewport's bottom.
+    const grown = Array.from(scroller().querySelectorAll<HTMLElement>('[data-index]')).findLast(
+      (row) => row.textContent?.includes('Later')
+    )!
+    const heights: number[] = []
+    heights[Number(grown.dataset.index)] = grown.offsetHeight + 200
+    layout.measuredRowHeights = heights
+    paint()
+    expect(scroller().scrollTop).toBe(restingTop)
     layout.measuredRowHeights = []
   })
 })
