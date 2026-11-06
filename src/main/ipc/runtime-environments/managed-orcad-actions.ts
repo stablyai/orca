@@ -25,6 +25,7 @@ import {
   liftUserHoldsForServerAction,
   resumeRuntimeEnvironmentStatus
 } from '../ssh/ssh-host-user-disconnect'
+import { releaseUnlinkedHostTransport } from '../ssh/ssh-session-teardown'
 import type { ManagedServerActions } from '../../runtime/managed-server-actions-registry'
 import {
   retireRemovedRuntimeEnvironment,
@@ -53,7 +54,8 @@ export function createManagedOrcadActions(
         options.invalidateTransport,
         options.store,
         userDataPath()
-      )
+      ),
+    releaseHostTransport: releaseUnlinkedHostTransport
   }
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),

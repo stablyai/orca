@@ -18,6 +18,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import type { OrcadMigrationDestinationCatalog } from './orcad-migration-cutover-coordinator'
+import { storeBackedOrcadMigrationDestination } from './orcad-migration-destination-fake'
 import {
   listOrcadMigrationSourceCutovers,
   removeOrcadMigrationJournalsForDestination
@@ -89,18 +90,11 @@ let destination: OrcadMigrationDestinationCatalog & { stage: ReturnType<typeof v
 /** Use the real server import behind migration calls. */
 function serverDestination(): typeof destination {
   return {
-    readState: async (manifest: OrcadMigrationManifest) =>
-      server.getOrcadMigrationCatalogState(manifest),
+    ...storeBackedOrcadMigrationDestination(server),
     stage: vi.fn(async (manifest: OrcadMigrationManifest) =>
       server.stageOrcadMigrationCatalog(manifest)
     ),
-    commit: async (manifest) => server.commitStagedOrcadMigrationCatalog(manifest),
-    abort: async (manifest) => {
-      const result = server.abortStagedOrcadMigrationCatalog(manifest)
-      return result.aborted ? result : { ...result, durableAbsent: true as const }
-    },
-    abortByReference: vi.fn(),
-    stageChunk: async (request) => server.stageOrcadMigrationSnapshotChunk(request)
+    abortByReference: vi.fn()
   }
 }
 

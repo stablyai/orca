@@ -18,6 +18,7 @@ import {
   isBrowserPasswordFillClickAllowed,
   useBrowserPasswordPageState
 } from './browser-password-page-store'
+import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 function hostOf(origin: string): string {
   try {
@@ -66,6 +67,10 @@ export function BrowserPasswordFillDropdown({
       clearBrowserPasswordFocusedField(browserPageId)
     }
   }, [browserPageId, isActive, focusedField])
+  // Like Chrome's autofill list, Escape typed in the page's field closes it.
+  useGuestEscape(browserPageId, isActive && Boolean(focusedField?.suggestions.length), () =>
+    clearBrowserPasswordFocusedField(browserPageId)
+  )
   if (!isActive || !focusedField || focusedField.suggestions.length === 0) {
     return null
   }

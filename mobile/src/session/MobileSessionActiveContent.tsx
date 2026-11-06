@@ -19,6 +19,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../transport/use-host-profile'
 import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
@@ -39,7 +40,6 @@ export function MobileSessionActiveContent({
   const {
     hostId,
     worktreeId,
-    insets,
     client,
     terminals,
     terminalTextScale,
@@ -49,8 +49,6 @@ export function MobileSessionActiveContent({
     terminalSplitActive,
     visibleTerminalHandles,
     notifyTerminalPaneFrame,
-    markdownDocs,
-    fileDocs,
     diffComments,
     diffCommentBusy,
     createError,
@@ -134,6 +132,7 @@ export function MobileSessionActiveContent({
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
   )
+  const openNativeChatAccounts = useOpenHostAccounts(controller.router, hostId)
   const navigateToSender = useCallback(
     (senderWorktreeId: string, paneKey: string) => {
       const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
@@ -170,7 +169,7 @@ export function MobileSessionActiveContent({
       <View style={styles.markdownFrame}>
         <MarkdownReader
           documentId={activeMarkdownTab.id}
-          doc={markdownDocs.get(activeMarkdownTab.id)}
+          doc={controller.markdownDocs.get(activeMarkdownTab.id)}
           onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
           onSave={() => void saveMarkdownTab(activeMarkdownTab)}
@@ -193,7 +192,7 @@ export function MobileSessionActiveContent({
         <FileReader
           documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
           client={client}
-          doc={fileDocs.get(activeFileTab.id)}
+          doc={controller.fileDocs.get(activeFileTab.id)}
           title={activeFileTab.title || t('session.activeContent.fileTitle', 'File')}
           relativePath={activeFileTab.relativePath}
           language={activeFileTab.language}
@@ -227,7 +226,7 @@ export function MobileSessionActiveContent({
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
           keyboardLift={keyboardLift}
-          bottomInset={insets.bottom}
+          bottomInset={controller.insets.bottom}
           onToast={showToast}
         />
         {toastMessage && (
@@ -376,6 +375,8 @@ export function MobileSessionActiveContent({
                       terminalView: true
                     })
                   }
+                  // Accounts open on the paired host, so a chat another server runs offers none.
+                  onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
                 />
               </MobileNativeChatForkProvider>
             </MobileAgentMessageProvider>

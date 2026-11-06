@@ -1,9 +1,7 @@
+import { isClaudeToolResultContent } from '../../shared/claude-tool-content'
 import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
-import {
-  claudeRecord,
-  readClaudeMessageEnvelope
-} from './structured/journal/claude-structured-item-translation'
+import { readClaudeMessageEnvelope } from './structured/journal/claude-structured-item-translation'
 
 /** Attachments/queued steer and tool results continue the existing root. */
 export function isClaudeTranscriptRootPrompt(row: Record<string, unknown>): boolean {
@@ -18,7 +16,7 @@ export function isClaudeTranscriptRootPrompt(row: Record<string, unknown>): bool
   if (
     !envelope ||
     claudeEnvelopeStopHookFeedbackRow(envelope) ||
-    !envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result')
+    !envelope.content.some((part) => !isClaudeToolResultContent(part))
   ) {
     return false
   }

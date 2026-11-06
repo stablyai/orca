@@ -56,6 +56,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.readDocPreview',
   'files.readPreview',
   'files.readTerminalArtifact',
+  'files.readTerminalArtifactChunk',
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
   'files.searchPaths',

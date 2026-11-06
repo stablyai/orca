@@ -34,6 +34,7 @@ import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNa
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+import type { MobileNativeChatUsageLimit } from './use-mobile-native-chat-usage-limit'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -128,4 +129,5 @@ export type MobileNativeChatController = {
   nativeChatAcceptsImages: boolean
   /** The structured chat's options read on whether its agent forks; absent until it answers. */
   nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
+  nativeChatUsageLimit: MobileNativeChatUsageLimit | null
 }

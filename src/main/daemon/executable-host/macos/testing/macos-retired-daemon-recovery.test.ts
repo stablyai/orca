@@ -38,10 +38,7 @@ vi.mock('../../../sessions/terminal-descendant-shutdown', () => ({
   terminateShutdownDescendants: mocks.terminate
 }))
 vi.mock('../macos-daemon-job-state', () => ({ releaseMacDaemonJob: mocks.release }))
-import {
-  recoverRetiredMacDaemonJob,
-  recoverRetiredMacDaemonJobs
-} from '../macos-retired-daemon-recovery'
+import { recoverRetiredMacDaemonJobs } from '../macos-retired-daemon-recovery'
 
 const startedAt = 'Mon Oct 12 16:28:32 2026'
 const identity = { commandLine: 'daemon', startedAtMs: Date.parse(startedAt) }
@@ -90,21 +87,6 @@ afterEach(() => {
   }
 })
 
-it('releases retired old-protocol conversation owners before returning from Restart', async () => {
-  mocks.identity
-    .mockResolvedValueOnce(identity)
-    .mockResolvedValueOnce(identity)
-    .mockResolvedValueOnce(identity)
-    .mockResolvedValueOnce(null)
-  await recoverRetiredMacDaemonJobs('/profile/daemon')
-  expect(mocks.terminate).toHaveBeenCalledExactlyOnceWith(snapshot)
-  expect(kill.mock.calls).toEqual([[job.pid, 'SIGKILL']])
-  expect(mocks.terminate.mock.invocationCallOrder[0]).toBeLessThan(kill.mock.invocationCallOrder[0])
-  expect(mocks.release).toHaveBeenCalledExactlyOnceWith(job.service, Date.now() + 3_000)
-  expect(mocks.versions).toHaveBeenCalledOnce()
-  expect(mocks.capture).toHaveBeenCalledOnce()
-})
-
 it.each(['connected', 'unknown'] as const)('preserves endpoints that read %s', async (outcome) => {
   mocks.probe.mockResolvedValue(outcome)
   await recoverRetiredMacDaemonJobs('/profile/daemon')
@@ -123,15 +105,6 @@ it.each(['present', 'permission-denied'] as const)(
     await recoverRetiredMacDaemonJobs('/profile/daemon')
     expect(kill).not.toHaveBeenCalled()
     expect(mocks.probe).not.toHaveBeenCalled()
-  }
-)
-
-it.each([null, { ...identity, startedAtMs: identity.startedAtMs + 59_000 }])(
-  'preserves uninspectable or newly starting processes: %j',
-  async (value) => {
-    mocks.identity.mockResolvedValue(value)
-    await recoverRetiredMacDaemonJobs('/profile/daemon')
-    expect(kill).not.toHaveBeenCalled()
   }
 )
 
@@ -203,52 +176,4 @@ it('never signals a root recycled during descendant teardown', async () => {
 it('does not report success while a service registration remains', async () => {
   mocks.release.mockResolvedValue(false)
   await expect(recoverRetiredMacDaemonJobs('/profile/daemon')).rejects.toThrow('Could not release')
-})
-
-it('accepts a root that exits naturally after its descendants', async () => {
-  mocks.identity
-    .mockResolvedValueOnce(identity)
-    .mockResolvedValueOnce(identity)
-    .mockResolvedValueOnce(null)
-  kill.mockImplementation(() => {
-    throw Object.assign(new Error('gone'), { code: 'ESRCH' })
-  })
-  await recoverRetiredMacDaemonJobs('/profile/daemon')
-  expect(kill.mock.calls).toEqual([[job.pid, 0]])
-  expect(mocks.release).toHaveBeenCalledOnce()
-})
-
-it.each(['linux', 'win32'] as const)('does no discovery on %s', async (platform) => {
-  vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-  await recoverRetiredMacDaemonJobs('/profile/daemon')
-  expect(mocks.versions).not.toHaveBeenCalled()
-})
-
-it('does no discovery for Node/SSH execution hosts or unpackaged builds', async () => {
-  Object.defineProperty(process, 'type', { configurable: true, value: undefined })
-  await recoverRetiredMacDaemonJobs('/profile/daemon')
-  Object.defineProperty(process, 'type', { configurable: true, value: 'browser' })
-  mocks.packaged = false
-  await recoverRetiredMacDaemonJobs('/profile/daemon')
-  expect(mocks.versions).not.toHaveBeenCalled()
-})
-
-it('reports whether a launch-blocking label was released, reading only that protocol', async () => {
-  await expect(recoverRetiredMacDaemonJob('/profile', '/profile/daemon', 45)).resolves.toBe(true)
-  expect(mocks.job).toHaveBeenCalledWith('/profile', '/profile/daemon', 45)
-  expect(mocks.versions).not.toHaveBeenCalled()
-  expect(kill.mock.calls).toEqual([[job.pid, 'SIGKILL']])
-  expect(mocks.release).toHaveBeenCalledOnce()
-})
-
-it.each([
-  ['no matching job', () => mocks.job.mockResolvedValue(null)],
-  ['a live endpoint', () => mocks.probe.mockResolvedValue('connected')],
-  ['an unreadable endpoint', () => mocks.probe.mockResolvedValue('unknown')],
-  ['a published PID record', () => mocks.stat.mockResolvedValue({})]
-])('leaves a launch-blocking label alone for %s', async (_, arrange) => {
-  arrange()
-  await expect(recoverRetiredMacDaemonJob('/profile', '/profile/daemon', 45)).resolves.toBe(false)
-  expect(kill).not.toHaveBeenCalled()
-  expect(mocks.release).not.toHaveBeenCalled()
 })

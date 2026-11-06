@@ -73,7 +73,7 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
   const t = useMobileTranslation()
   const keyboard = useKeyboardOcclusion()
   const measure = useCallback<DetailCardMeasure>(
-    (root, place) => {
+    (place) => {
       const composer = composerRef.current
       if (!composer) {
         place(null)
@@ -83,7 +83,7 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
       composer.measureInWindow((x, y, width, height) => {
         place(
           width > 0 && height > 0
-            ? { side: 'above', right: x + width - root.x, bottom: y - root.y - spacing.sm }
+            ? { side: 'above', right: x + width, bottom: y - spacing.sm }
             : null
         )
       })

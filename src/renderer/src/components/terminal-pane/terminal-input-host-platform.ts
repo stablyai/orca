@@ -1,5 +1,4 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
@@ -10,6 +9,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import type { AppState } from '@/store/types'
 import type { PtyTransport } from './pty-transport-types'
 import { isWslShellOverride } from './terminal-paste-runtime'
+import { runtimeHostPlatform, sshTargetRemotePlatform } from './pty-owner-machine-platform'
 
 type TerminalInputHostPlatformState = Pick<
   AppState,
@@ -54,7 +54,7 @@ export function resolveTerminalInputHostPlatform(args: {
       : transportConnectionId
   if (connectionId) {
     // Why: only an SSH-owner report may enable Windows-specific input encoding; client OS is unrelated.
-    return args.state.sshConnectionStates.get(connectionId)?.remotePlatform ?? 'linux'
+    return sshTargetRemotePlatform(args.state, connectionId, null) ?? 'linux'
   }
 
   // The live binding retains its spawn-time runtime even if workspace host selection changes.
@@ -65,17 +65,12 @@ export function resolveTerminalInputHostPlatform(args: {
   const transportExecutionHost = parseExecutionHostId(args.transport?.getExecutionHostId?.())
   if (runtimeEnvironmentId && transportExecutionHost?.kind === 'ssh') {
     return (
-      args.state.sshStateByEnvironment
-        .get(runtimeEnvironmentId)
-        ?.connectionStates.get(transportExecutionHost.targetId)?.remotePlatform ?? 'linux'
+      sshTargetRemotePlatform(args.state, transportExecutionHost.targetId, runtimeEnvironmentId) ??
+      'linux'
     )
   }
   if (runtimeEnvironmentId) {
-    // Retain last-verified host platform through outages; client fallback silently changes input/path conventions (ssh-execution-boundary.md).
-    return (
-      lastVerifiedRuntimeStatus(args.state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId))
-        ?.hostPlatform ?? args.clientPlatform
-    )
+    return runtimeHostPlatform(args.state, runtimeEnvironmentId) ?? args.clientPlatform
   }
   const localSessionMetadata = args.transport?.getLocalSessionMetadata?.()
   if (ptyId !== null && localSessionMetadata != null) {
@@ -88,17 +83,10 @@ export function resolveTerminalInputHostPlatform(args: {
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(args.state, args.worktreeId))
   if (host?.kind === 'ssh') {
     const ownerEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(args.state, args.worktreeId)
-    return ownerEnvironmentId
-      ? (args.state.sshStateByEnvironment
-          .get(ownerEnvironmentId)
-          ?.connectionStates.get(host.targetId)?.remotePlatform ?? 'linux')
-      : (args.state.sshConnectionStates.get(host.targetId)?.remotePlatform ?? 'linux')
+    return sshTargetRemotePlatform(args.state, host.targetId, ownerEnvironmentId) ?? 'linux'
   }
   if (host?.kind === 'runtime') {
-    return (
-      lastVerifiedRuntimeStatus(args.state.runtimeStatusByEnvironmentId.get(host.environmentId))
-        ?.hostPlatform ?? args.clientPlatform
-    )
+    return runtimeHostPlatform(args.state, host.environmentId) ?? args.clientPlatform
   }
   return args.clientPlatform
 }

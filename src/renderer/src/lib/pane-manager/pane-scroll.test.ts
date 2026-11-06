@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { Terminal } from '@xterm/xterm'
-import { captureScrollState, restoreScrollState } from './pane-scroll'
+import { captureScrollState, restoreScrollState, restoreScrollStateAfterFit } from './pane-scroll'
 
 function writeHeadless(terminal: HeadlessTerminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
@@ -22,6 +22,37 @@ function makeHeadlessRestorable(terminal: HeadlessTerminal): Terminal {
 }
 
 describe('scroll state', () => {
+  it('retries a fit restore when xterm leaves the viewport short of the target', async () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    )
+    const headless = new HeadlessTerminal({ cols: 20, rows: 5, scrollback: 100 })
+    try {
+      await writeHeadless(headless, Array.from({ length: 50 }, (_, i) => `line-${i}`).join('\r\n'))
+      headless.scrollToLine(10)
+      const terminal = makeHeadlessRestorable(headless)
+      const state = captureScrollState(terminal)
+      const marker = state.firstVisibleLineMarker
+      headless.scrollToBottom()
+      // xterm 6 clamps against stale scrollbar geometry until its queued viewport sync runs.
+      vi.spyOn(terminal, 'scrollToLine').mockImplementationOnce(() => {})
+      const onRestored = vi.fn()
+
+      restoreScrollStateAfterFit(terminal, state, { onRestored, shouldRestore: () => true })
+      expect(onRestored).not.toHaveBeenCalled()
+      expect(marker?.isDisposed).toBe(false)
+
+      frames.shift()?.(0)
+      expect(headless.buffer.active.viewportY).toBe(10)
+      expect(onRestored).toHaveBeenCalledOnce()
+      expect(marker?.isDisposed).toBe(true)
+    } finally {
+      headless.dispose()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it.each([
     {
       fromCols: 10,

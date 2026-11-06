@@ -6,7 +6,6 @@ import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
-import { MobileNativeChatNoticeDisclosureSummary } from './MobileNativeChatNoticeDisclosureSummary'
 import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
@@ -45,6 +44,8 @@ import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-s
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
 import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
+import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
+import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -169,7 +170,7 @@ export function MobileNativeChatNoticeRow({
             )
       return (
         <View>
-          <MobileNativeChatNoticeDisclosureSummary
+          <MobileNativeChatNoticeDisclosure
             summary={summary}
             expanded={expanded}
             fontScale={fontScale}
@@ -299,9 +300,10 @@ export function MobileNativeChatNoticeRow({
               </Text>
             </Pressable>
           ) : null}
+          <MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />
           {detail || payload ? (
             <View>
-              <MobileNativeChatNoticeDisclosureSummary
+              <MobileNativeChatNoticeDisclosure
                 summary={t('pullRequest.markdownBlocks.details', 'Details')}
                 expanded={expanded}
                 fontScale={fontScale}
