@@ -2,15 +2,12 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
-  AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import {
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage,
-  type AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
+  AgentSessionHistoryPage,
+  AgentSessionSubscribeEvent
+} from '../../../../shared/agent-session/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 
@@ -20,7 +17,15 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
+import {
+  getStructuredAgentSessionReadOwner,
+  findStructuredAgentSessionReadOwner,
+  retireStructuredAgentSessionReadOwner,
+  resetStructuredAgentSessionReadOwnersForTests
+} from './structured-agent-session-read-owner'
+
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../../shared/agent-session/structured-agent-session-coalescer'
+import type { StructuredAgentSessionAdmission } from './structured-agent-session-read-owner-contract'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -31,24 +36,6 @@ function message(id: string, sequence: number, role: 'user' | 'assistant'): Agen
     sequence,
     observedAt: sequence,
     body: { kind: 'message', role, blocks: [{ type: 'text', text: id }] }
-  }
-}
-
-function providerFrame(id: string, sequence: number): AgentJournalRenderItem {
-  return {
-    itemId: id,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: {
-      kind: 'status',
-      text: id,
-      providerFrame: {
-        provider: 'codex',
-        kind: 'notification:item/commandExecution/outputDelta',
-        payload: { head: id, byteLength: id.length, digest: id, truncated: false }
-      }
-    }
   }
 }
 
@@ -88,89 +75,46 @@ describe('useStructuredAgentSessionRead history window', () => {
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
   })
 
-  it('restores a realistic 21-turn window across the wire-safe bridge-sized read', async () => {
-    const items = Array.from({ length: 21 }, (_, turn) => [
-      message(`user-${turn}`, turn * 2 + 1, 'user'),
-      message(`assistant-${turn}`, turn * 2 + 2, 'assistant')
-    ]).flat()
-    const olderItems = items.slice(0, 12)
-    const tailItems = [
-      ...Array.from({ length: 170 }, (_, index) => providerFrame(`delta-${index}`, 43 + index)),
-      ...items.slice(12).map((item, index) => ({ ...item, sequence: 213 + index }))
-    ]
-    mocks.call
-      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
-      .mockResolvedValueOnce({ ok: true, page: page('before', olderItems, false) })
-
-    const { result } = renderHook(() =>
-      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
-    )
-
-    await waitFor(() =>
-      expect(
-        result.current.state.items.filter((item) => item.body.kind === 'message')
-      ).toHaveLength(items.length)
-    )
-    expect(mocks.call).toHaveBeenNthCalledWith(1, LOCAL_TARGET, 'agentSession.history', {
-      sessionId: 'session-a',
-      direction: 'tail',
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    })
-    expect(mocks.call).toHaveBeenNthCalledWith(2, LOCAL_TARGET, 'agentSession.history', {
-      sessionId: 'session-a',
-      direction: 'before',
-      cursor: { epoch: 'epoch-a', sequence: tailItems[0].sequence },
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    })
-  })
-
-  it('does not invent a writable fence for a mixed-version history page', async () => {
+  it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {
     mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
-
-    const { result } = renderHook(() =>
+    const { result, unmount } = renderHook(() =>
       useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
     )
-
     await waitFor(() => expect(result.current.state.status).toBe('ready'))
-    expect(result.current.state.fence).toBeNull()
-  })
-
-  it('loads each earlier page at the wire maximum', async () => {
-    const tailItems = Array.from({ length: 200 }, (_, index) =>
-      message(`tail-${index}`, 301 + index, 'assistant')
+    const emit: (event: AgentSessionSubscribeEvent) => void = mocks.subscribe.mock.calls[0][2]
+    act(() =>
+      emit({ type: 'snapshot', sessionId: 'session-a', page: page('tail', [], false), fence: 1 })
     )
-    const initialOlderItems = Array.from({ length: 100 }, (_, index) =>
-      message(`middle-${index}`, 201 + index, 'assistant')
-    )
-    mocks.call
-      .mockResolvedValueOnce({
-        ok: true,
-        page: page('tail', tailItems, true)
+    vi.useFakeTimers()
+    try {
+      const batch = {
+        cursor: { epoch: 'epoch-a', sequence: 501 },
+        items: [message('answer', 501, 'assistant')],
+        removedItemIds: [],
+        submissions: []
+      }
+      act(() => emit({ type: 'batch', sessionId: 'session-a', batch }))
+      act(() =>
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            ...batch,
+            cursor: { epoch: 'epoch-a', sequence: 502 },
+            items: [],
+            removedItemIds: ['answer']
+          }
+        })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
       })
-      .mockResolvedValueOnce({
-        ok: true,
-        page: page('before', initialOlderItems, true)
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        page: page('before', [message('oldest', 1, 'user')], false)
-      })
-
-    const { result } = renderHook(() =>
-      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
-    )
-    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
-
-    await act(async () => result.current.loadOlder())
-
-    expect(mocks.call).toHaveBeenLastCalledWith(LOCAL_TARGET, 'agentSession.history', {
-      sessionId: 'session-a',
-      direction: 'before',
-      cursor: { epoch: 'epoch-a', sequence: 201 },
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    })
-    expect(result.current.state.items).toHaveLength(301)
-    expect(result.current.state.items[0]?.itemId).toBe('oldest')
+      expect(result.current.state.items).toEqual([])
+      expect(result.current.state.cursor?.sequence).toBe(502)
+    } finally {
+      unmount()
+      vi.useRealTimers()
+    }
   })
 
   it('shares one in-flight older page, and its result, with every caller', async () => {
@@ -198,7 +142,6 @@ describe('useStructuredAgentSessionRead history window', () => {
       first = result.current.loadOlder()
     })
     expect(result.current.loadingOlder).toBe(true)
-    // A rail jump asking while scroll-to-top's page is in flight joins it.
     act(() => {
       second = result.current.loadOlder()
     })
@@ -217,78 +160,87 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.call).toHaveBeenCalledTimes(2)
   })
 
-  it('reports an older page the host refused as failed, not applied', async () => {
-    const tailItems = Array.from({ length: 300 }, (_, index) =>
-      message(`tail-${index}`, 301 + index, 'assistant')
+  it('releases browsed history only after the last reader returns and retires its old page', async () => {
+    const corpus = Array.from({ length: 4000 }, (_, index) =>
+      message(`row-${index + 1}`, index + 1, 'assistant')
     )
-    mocks.call
-      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
-      .mockResolvedValueOnce({ ok: false, reset: 'expired', page: page('tail', [], true) })
-    const { result } = renderHook(() =>
-      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    mocks.call.mockImplementation(
+      async (_target, _method, params: { direction: string; cursor?: AgentJournalCursor }) => {
+        const end = params.cursor ? params.cursor.sequence - 1 : 4000
+        const items = corpus.slice(Math.max(0, end - 200), end)
+        return {
+          ok: true,
+          page: {
+            ...page(params.direction === 'tail' ? 'tail' : 'before', items, true),
+            liveCursor: { epoch: 'epoch-a', sequence: 4000 }
+          }
+        }
+      }
     )
-    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
-
-    let outcome: Promise<string> = Promise.resolve('')
-    await act(async () => {
-      outcome = result.current.loadOlder()
-      await outcome
+    const view = renderHook(
+      ({ secondVisible }) => ({
+        first: useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET }),
+        second: useStructuredAgentSessionRead({
+          sessionId: 'session-a',
+          target: LOCAL_TARGET,
+          isVisible: secondVisible
+        })
+      }),
+      { initialProps: { secondVisible: true } }
+    )
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    const releaseFirst = view.result.current.first.retainHistory()
+    const releaseSecond = view.result.current.second.retainHistory()
+    for (let pageIndex = 0; pageIndex < 8; pageIndex++) {
+      await act(async () => {
+        await view.result.current.first.loadOlder()
+      })
+    }
+    expect(view.result.current.first.state.items).toHaveLength(2000)
+    // Selection alone must not retire the source's initial autofill.
+    const releaseSelection = view.result.current.first.retainHistory()
+    act(() => releaseSelection())
+    expect(view.result.current.first.state.items).toHaveLength(2000)
+    expect(view.result.current.first.initialHistoryAutoLoad).toBe(true)
+    view.rerender({ secondVisible: false })
+    act(() => {
+      releaseFirst()
+      view.result.current.first.trimHistory()
     })
-    await expect(outcome).resolves.toBe('failed')
-    expect(result.current.loadingOlder).toBe(false)
-  })
-
-  it('does no host work when the app regains focus', async () => {
-    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
-    const visible = renderHook(() =>
-      useStructuredAgentSessionRead({
-        sessionId: 'session-visible',
-        target: LOCAL_TARGET,
-        isVisible: true
-      })
-    )
-    const hidden = renderHook(() =>
-      useStructuredAgentSessionRead({
-        sessionId: 'session-hidden',
-        target: LOCAL_TARGET,
-        isVisible: false
-      })
-    )
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
-    expect(mocks.subscribe).toHaveBeenCalledTimes(1)
-
-    await act(async () => window.dispatchEvent(new Event('focus')))
-
-    expect(mocks.call).toHaveBeenCalledTimes(1)
-    expect(mocks.subscribe).toHaveBeenCalledTimes(1)
-    visible.unmount()
-    hidden.unmount()
-    hasFocus.mockRestore()
-  })
-
-  it('does no host work for retained inactive sessions', async () => {
-    const first = renderHook(() =>
-      useStructuredAgentSessionRead({
-        sessionId: 'session-inactive-a',
-        target: LOCAL_TARGET,
-        isVisible: false
-      })
-    )
-    const second = renderHook(() =>
-      useStructuredAgentSessionRead({
-        sessionId: 'session-inactive-b',
-        target: LOCAL_TARGET,
-        isVisible: false
-      })
-    )
-
-    await act(() => Promise.resolve())
-
-    expect(mocks.call).not.toHaveBeenCalled()
-    expect(mocks.subscribe).not.toHaveBeenCalled()
-    first.unmount()
-    second.unmount()
+    expect(view.result.current.first.state.items).toHaveLength(2000)
+    const oldPage = Promise.withResolvers<{ ok: true; page: AgentSessionHistoryPage }>()
+    mocks.call.mockImplementationOnce(() => oldPage.promise)
+    let oldRead!: Promise<string>
+    act(() => {
+      oldRead = view.result.current.second.loadOlder()
+    })
+    act(() => releaseSecond())
+    expect(view.result.current.first.state.items).toHaveLength(1024)
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
+    expect(view.result.current.first.state.cursor).toEqual({ epoch: 'epoch-a', sequence: 4000 })
+    expect(view.result.current.first.state.hasOlder).toBe(true)
+    expect(view.result.current.first.loadingOlder).toBe(false)
+    const releaseAgain = view.result.current.first.retainHistory()
+    const newPage = Promise.withResolvers<{ ok: true; page: AgentSessionHistoryPage }>()
+    mocks.call.mockImplementationOnce(() => newPage.promise)
+    let newRead!: Promise<string>
+    act(() => {
+      newRead = view.result.current.first.loadOlder()
+    })
+    await act(async () => {
+      oldPage.resolve({ ok: true, page: page('before', corpus.slice(1800, 2000), true) })
+      await expect(oldRead).resolves.toBe('superseded')
+    })
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
+    expect(view.result.current.first.loadingOlder).toBe(true)
+    await act(async () => {
+      newPage.resolve({ ok: true, page: page('before', corpus.slice(2776, 2976), true) })
+      await expect(newRead).resolves.toBe('applied')
+    })
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2777)
+    act(() => releaseAgain())
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
+    view.unmount()
   })
 
   it('preserves cached state and resumes at the applied cursor on re-entry', async () => {
@@ -335,81 +287,22 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.call).toHaveBeenCalledTimes(2)
     expect(mocks.subscribe.mock.calls[2]?.[1]).toEqual({
       sessionId: 'session-switch-a',
-      cursor: view.result.current.first.state.cursor
+      cursor: { epoch: 'epoch-a', sequence: 500 }
     })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
+    const owner = getStructuredAgentSessionReadOwner('session-switch-a', LOCAL_TARGET)
+    act(() => owner.resync?.())
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(4))
+    expect(unsubscribe).toHaveBeenCalledTimes(3)
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    view.unmount()
+    owner.resync?.()
+    expect(mocks.subscribe).toHaveBeenCalledTimes(4)
+    expect(unsubscribe).toHaveBeenCalledTimes(4)
   })
 })
 
-describe('useStructuredAgentSessionRead currency', () => {
-  afterEach(cleanup)
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetStructuredAgentSessionReadOwnersForTests()
-  })
-
-  it('is current only once a run has been caught up with the host', async () => {
-    const emits: ((event: AgentSessionSubscribeEvent) => void)[] = []
-    mocks.call.mockResolvedValue({
-      ok: true,
-      page: page('tail', [message('m-1', 1, 'user')], false)
-    })
-    const closes: (() => void)[] = []
-    mocks.subscribe.mockImplementation((_target, _params, onEvent, _onError, onClose) => {
-      emits.push(onEvent)
-      closes.push(onClose)
-      return Promise.resolve({ unsubscribe: vi.fn() })
-    })
-    const frame = (sequence: number, hasNewer: boolean): AgentSessionSubscribeEvent => ({
-      type: 'batch',
-      sessionId: 'session-a',
-      batch: {
-        cursor: { epoch: 'epoch-a', sequence },
-        items: [],
-        removedItemIds: [],
-        submissions: []
-      },
-      ...(hasNewer ? { hasNewer: true as const } : {})
-    })
-    const view = renderHook(
-      ({ isVisible }: { isVisible: boolean }) =>
-        useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET, isVisible }),
-      { initialProps: { isVisible: true } }
-    )
-    await waitFor(() => expect(emits).toHaveLength(1))
-    // History alone is not the host's present.
-    expect(view.result.current.readCurrent).toBe(false)
-
-    // A resume with nothing missed is an empty frame that changes no state.
-    act(() => emits[0]!(frame(view.result.current.state.cursor!.sequence, false)))
-    expect(view.result.current.readCurrent).toBe(true)
-
-    view.rerender({ isVisible: false })
-    expect(view.result.current.readCurrent).toBe(false)
-
-    view.rerender({ isVisible: true })
-    await waitFor(() => expect(emits).toHaveLength(2))
-    act(() => emits[1]!(frame(700, true)))
-    expect(view.result.current.readCurrent).toBe(false)
-    act(() => emits[1]!(frame(900, false)))
-    await waitFor(() => expect(view.result.current.readCurrent).toBe(true))
-
-    // The stream closing under a pane that is showing: what it holds is stale until the reconnect,
-    // and an update still waiting to be applied when it closed must not say otherwise.
-    act(() => {
-      emits[1]!(frame(950, false))
-      closes[1]!()
-    })
-    expect(view.result.current.readCurrent).toBe(false)
-    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
-    expect(view.result.current.readCurrent).toBe(false)
-  })
-})
-
-// A workspace delete closes its structured chats while the pane is still mounted, so every read
-// against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
-// lost that race must not leave the pane holding an error the live transport is about to clear.
+// Workspace deletion briefly leaves mounted chats with unknown ownership; an older-page failure must not replace the conversation the stream is retiring.
 describe('useStructuredAgentSessionRead older page failures', () => {
   afterEach(cleanup)
 
@@ -445,7 +338,6 @@ describe('useStructuredAgentSessionRead older page failures', () => {
     return { result, outcome }
   }
 
-  // A failed older page is the list's to retry; it must never replace the loaded conversation.
   it.each([
     ['a closed session', refusal('agent_session_ownership_unknown')],
     ['any other reason', new Error('journal read failed')]
@@ -460,26 +352,9 @@ describe('useStructuredAgentSessionRead older page failures', () => {
       expect(result.current.loadingOlder).toBe(false)
     }
   )
-
-  it('starts a new paging generation when the host re-sends its snapshot', async () => {
-    const { result } = await loadedTailThatRefusesOlder(new Error('journal read failed'))
-    const before = result.current.olderHistoryGeneration
-    const onEvent = mocks.subscribe.mock.calls.at(-1)?.[2]
-    act(() => {
-      onEvent?.({
-        type: 'snapshot',
-        sessionId: 'session-a',
-        page: page('tail', tailItems, true),
-        fence: 0
-      })
-    })
-    expect(result.current.olderHistoryGeneration).toBeGreaterThan(before)
-  })
 })
 
-// A loaded chat that loses contact is the transport's to retry: only a refusal the host sent, or a
-// chat that never loaded, is owed the failure. A loaded chat with no messages yet would otherwise
-// trade its empty state for the full-pane error on every blip.
+// Keep loaded chats, including empty ones, through transport blips; show explicit host refusals or initial-load failures.
 describe('useStructuredAgentSessionRead stream failures', () => {
   afterEach(cleanup)
 
@@ -487,14 +362,6 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionReadOwnersForTests()
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
-  })
-
-  const journalRefusal = (details?: { reason: string }) => ({
-    code: 'runtime_error',
-    message: 'agent_session_journal_unreadable',
-    data: {
-      refusal: { code: 'agent_session_journal_unreadable', ...(details ? { details } : {}) }
-    }
   })
 
   async function loadedChatWithNoMessages() {
@@ -514,28 +381,27 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     expect(result.current.state.error).toBeUndefined()
     expect(result.current.state.readRefusal).toBeUndefined()
   })
-
-  // A refusal whose reason this build doesn't know is still the host's answer, so it is owed too.
-  it.each([
-    ['with its reason', { reason: 'journalUnavailable' }],
-    ['without a reason', undefined]
-  ])('still reports a refusal the host sent on a loaded chat, %s', async (_case, details) => {
-    const { result, onError } = await loadedChatWithNoMessages()
-    act(() => onError?.(journalRefusal(details)))
-    expect(result.current.state.status).toBe('error')
-    expect(result.current.state.readRefusal).toEqual({
-      code: 'agent_session_journal_unreadable',
-      ...(details ? { details } : {})
-    })
-  })
-
-  it('still reports a failure that names nothing before the chat first loads', async () => {
-    mocks.call.mockRejectedValueOnce(new Error('journal read failed'))
-    const { result } = renderHook(() =>
-      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+  it('retains the action-only owner continuously across replacement and retirement', async () => {
+    const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const a = Promise.withResolvers<void>()
+    const first = vi.fn<(attempt: StructuredAgentSessionAdmission) => Promise<void>>(
+      () => a.promise
     )
-    await waitFor(() => expect(result.current.state.status).toBe('error'))
-    expect(result.current.state.error).toBe('journal read failed')
-    expect(result.current.state.epoch).toBeNull()
+    const pending = owner.admit('A', () => true, first)
+    const next = vi.fn<(attempt: StructuredAgentSessionAdmission) => Promise<void>>(
+      () => new Promise<void>(() => {})
+    )
+    const successor = owner.admit('B', () => true, next)
+    await pending
+    expect(first.mock.calls[0][0].signal.aborted).toBe(true)
+    expect(getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBe(owner)
+    expect(owner.admit('B', () => true, next)).toBe(successor)
+    a.resolve()
+    await Promise.resolve()
+    expect(next.mock.calls[0][0].current()).toBe(true)
+    retireStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    await successor
+    expect(next.mock.calls[0][0].current()).toBe(false)
+    expect(findStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBeUndefined()
   })
 })

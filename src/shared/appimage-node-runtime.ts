@@ -1,9 +1,4 @@
-/**
- * The pinned Node a Linux AppImage carries, so what runs outside Electron needs no download.
- * deb and rpm exclude it at packaging time: their installs never vanish under a running process.
- *
- * Keep this file erasable-only TypeScript with no imports — packaging scripts require it directly.
- */
+/** Bundle pinned Node for AppImage processes outside Electron; deb/rpm omit it because installed runtimes persist. Keep import-free erasable TypeScript for direct packaging-script require. */
 
 /** Segments under the app's resources dir, laid out like the upstream archive (`bin/node`). */
 export const APPIMAGE_NODE_RUNTIME_SEGMENTS = ['node-runtime', 'bin', 'node'] as const

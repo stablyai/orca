@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { copyTerminalSelection } from '@/components/terminal-pane/terminal-selection-copy'
+import { copyTerminalSelection } from '@/components/terminal-pane/clipboard/terminal-selection-copy'
 import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 import {
   claimTerminalRightClickPasteMouseDown,
@@ -8,11 +8,7 @@ import {
 
 type PreviewRightClickTerminal = Pick<Terminal, 'getSelection' | 'clearSelection' | 'focus'>
 
-/**
- * Terminal-style right-click for the preview terminal, mirroring the pane's
- * useTerminalContextMenuTrigger: a selection copies and clears, no selection
- * pastes, and Ctrl+right-click keeps the native menu reachable.
- */
+/** Match pane right-click behavior: copy selection or paste; Ctrl+right-click retains native menu access. */
 export function installPreviewTerminalRightClickPaste({
   container,
   getTerminal,

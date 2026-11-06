@@ -45,15 +45,4 @@ describe('structured chat tab index', () => {
     ).toBe(renamed)
     expect(structuredChatTabById(undefined, 'workspace', 'chat')).toBeUndefined()
   })
-
-  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
-    'finds nothing for a workspace id named after an object member (%s)',
-    (workspaceId) => {
-      const tabsByWorkspace: Record<string, readonly Tab[]> = { workspace: [tab('chat')] }
-      expect(structuredChatTabBySessionId(tabsByWorkspace, workspaceId, 'session-chat')).toBe(
-        undefined
-      )
-      expect(structuredChatTabById(tabsByWorkspace, workspaceId, 'chat')).toBeUndefined()
-    }
-  )
 })

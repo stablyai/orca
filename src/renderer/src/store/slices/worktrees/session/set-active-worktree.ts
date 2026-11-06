@@ -76,6 +76,9 @@ export function createSetActiveWorktree(
         }
       }
 
+      const nextActiveWorkspaceKey = isWorkspaceKey(worktreeId)
+        ? worktreeId
+        : worktreeWorkspaceKey(worktreeId)
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
       const {
         restoredRightSidebarExplorerView,
@@ -90,10 +93,7 @@ export function createSetActiveWorktree(
         reconciledActiveTabId
       )
 
-      // Why: prep is deferred (shell render deferred below) so it waits for input quiet instead of blocking the click.
-      // Why first-activation guard, not tab.ptyId==null: reconnectPersistedTerminals repopulates ptyId before mount.
-      // Tag every tab on FIRST activation so reattach/fresh-spawn updateTabPtyId suppresses activity + sortEpoch bumps.
-      // Generation is only bumped when no tab has a live PTY — a live remount would kill the user's shell.
+      // Defer prep until input quiet. First activation tags even rehydrated PTYs to suppress click activity; bump generation only for dead tabs or remount kills live shells.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
       const wakeable = tabs.filter(isWakeable)
       const allDead =
@@ -127,6 +127,7 @@ export function createSetActiveWorktree(
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
+        s.activeWorkspaceKey !== nextActiveWorkspaceKey ||
         s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
@@ -151,9 +152,7 @@ export function createSetActiveWorktree(
         ...reconciliation?.patch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
-        activeWorkspaceKey: isWorkspaceKey(worktreeId)
-          ? worktreeId
-          : worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceKey: nextActiveWorkspaceKey,
         activeWorkspaceExecutionHostId: executionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,
@@ -167,9 +166,7 @@ export function createSetActiveWorktree(
       }
     })
 
-    // Why: any activation is an explicit wake (null is the sleep flow clearing selection).
-    // Cleared after the set() above so a pane still waiting on the marker connects once,
-    // in the remounted generation, instead of connecting and then being remounted.
+    // Activation explicitly wakes (null only clears selection for sleep); clear intent after remount-generation update so waiting panes connect once.
     clearWorktreeSleepIntent(worktreeId)
 
     if (worktreeId && shouldPrepareTerminalTabs) {

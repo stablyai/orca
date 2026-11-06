@@ -2,10 +2,15 @@ import type { GlobalSettings } from '../global-settings-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../execution-host'
+import { taskSourceCacheScopeHostId } from '../task-source-context'
 
-type RuntimeFocusSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+export type RuntimeFocusSettings =
+  | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+  | null
+  | undefined
 
 export function getGitHubRepoCacheKey(
   repoPath: string,
@@ -16,14 +21,43 @@ export function getGitHubRepoCacheKey(
   executionHostId?: string | null,
   hasRepoOwner = false
 ): string {
-  const owner = repoId ?? repoPath
-  const scope = getGitHubCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner)
-  // Why: runtime/SSH lookups can observe different remotes than the local repo
-  // path, so cache keys include the repo's owning execution boundary.
-  if (scope) {
-    return `${scope}::${owner}::${suffix}`
+  // Scope caches by execution owner: runtime/SSH hosts may observe different remotes at the same repo path.
+  return composeRepoCacheKey(
+    getGitHubCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner),
+    repoId ?? repoPath,
+    suffix
+  )
+}
+
+/** Repo cache keys use [scope::]owner::suffix; absent scope means this computer. repoCacheKeyHostId reads the shape back. */
+export function composeRepoCacheKey(
+  scope: string | null | undefined,
+  owner: string,
+  suffix: string
+): string {
+  return scope ? `${scope}::${owner}::${suffix}` : `${owner}::${suffix}`
+}
+
+/** Which host's bucket `key` is when one of `owners` (repo id or path) owns it; null when none does. */
+export function repoCacheKeyHostId(key: string, owners: readonly string[]): ExecutionHostId | null {
+  if (owners.some((owner) => key.startsWith(`${owner}::`))) {
+    return LOCAL_EXECUTION_HOST_ID
   }
-  return `${owner}::${suffix}`
+  // Why not the first `::`: a task-source scope with empty parts contains `::` itself.
+  for (const owner of owners) {
+    const marker = `::${owner}::`
+    for (let at = key.indexOf(marker); at !== -1; at = key.indexOf(marker, at + 1)) {
+      const scope = key.slice(0, at)
+      // Why the `::` check: a composed host id is encoded, so a candidate spanning `::` is owner + suffix.
+      const hostId =
+        (scope.includes('::') ? null : normalizeExecutionHostId(scope)) ??
+        taskSourceCacheScopeHostId(scope)
+      if (hostId) {
+        return hostId
+      }
+    }
+  }
+  return null
 }
 
 function getGitHubCacheHostScope(
@@ -40,8 +74,7 @@ function getGitHubCacheHostScope(
   if (sshConnectionId) {
     return toSshExecutionHostId(sshConnectionId)
   }
-  // Why: an existing repo with no remote/runtime owner is local; only missing
-  // owner context should inherit the focused runtime fallback.
+  // Known repos without remote/runtime ownership are local; only missing owner context inherits focused runtime scope.
   if (hasRepoOwner) {
     return null
   }
@@ -57,7 +90,7 @@ export function getLegacyGitHubRepoCacheKey(
   repoId: string | undefined,
   suffix: string
 ): string {
-  return `${repoId ?? repoPath}::${suffix}`
+  return composeRepoCacheKey(null, repoId ?? repoPath, suffix)
 }
 
 export function getGitHubPRCacheKey(

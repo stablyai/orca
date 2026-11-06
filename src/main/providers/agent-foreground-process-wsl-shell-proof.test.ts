@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { confirmShellForegroundProcess } from './agent-foreground-process'
 
-// Why pinned: daemon WSL panes spawn `wsl.exe` (pty-subprocess/shell-launch-plan.ts),
-// which reaches this proof through pty-shell-foreground-confirmation.ts and is not a
-// shell name, so the recovery barrier never grounds WSL panes and the renderer's
-// reset tree keeps covering them. A future WSL proof must change this deliberately.
+// WSL panes expose wsl.exe, not a provable guest shell; recovery must remain blocked without a guest-side proof.
 const realPlatform = process.platform
 afterEach(() => {
   Object.defineProperty(process, 'platform', { value: realPlatform })

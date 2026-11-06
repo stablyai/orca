@@ -1,11 +1,11 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  HEADLESS_RUNTIME_WINDOW_ID,
-  OrcaRuntimeService,
-  RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
-  electronMocks
-} from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../runtime-graph-reload-lifecycle'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
@@ -15,7 +15,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('claims the first window as authoritative and ignores later windows', () => {
@@ -242,11 +242,12 @@ describe('OrcaRuntimeService', () => {
     runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.markGraphUnavailable(TEST_WINDOW_ID)
 
-    expect(runtime.getStatus()).toMatchObject({
-      graphStatus: 'unavailable',
-      authoritativeWindowId: null,
-      rendererGraphEpoch: 2
-    })
+    // Main-owned panes remain answerable after the window closes.
+    expect(runtime.getStatus()).toMatchObject(
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? { graphStatus: 'ready', authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID }
+        : { graphStatus: 'unavailable', authoritativeWindowId: null, rendererGraphEpoch: 2 }
+    )
   })
 
   it('restores headless graph authority after a promoted renderer reload times out', async () => {

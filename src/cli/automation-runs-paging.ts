@@ -2,7 +2,7 @@ import type { AutomationRun } from '../shared/automations-types'
 import type { RuntimeRpcSuccess } from '../shared/runtime-rpc-envelope'
 import { RuntimeClientError, type RuntimeClient } from './runtime-client'
 
-// Why 25: a snapshot can reach ~200 KB, so 25 runs stay under a remote reply's 4 MB in practice.
+// Keep typical snapshot pages below the remote reply limit; retry smaller when needed.
 export const AUTOMATION_RUNS_PAGE_SIZE = 25
 const REPLY_TOO_LARGE = 'reply_too_large'
 
@@ -10,7 +10,6 @@ type RunsReply = { runs: AutomationRun[]; nextCursor?: string | null }
 
 type RunsQuery = { automationId?: string; limit: number; cursor?: string }
 
-/** Sends one `automation.runs` request. */
 export type AutomationRunsRpc = (
   params: Partial<RunsQuery>
 ) => Promise<RuntimeRpcSuccess<RunsReply>>
@@ -44,7 +43,6 @@ async function readShrinkingPage(
   }
 }
 
-/** One page, halving the page size while the remote host refuses the reply as too large. */
 export async function readAutomationRunsPage(
   rpc: AutomationRunsRpc,
   query: RunsQuery
@@ -52,10 +50,7 @@ export async function readAutomationRunsPage(
   return (await readShrinkingPage(rpc, query)).page
 }
 
-/**
- * Every run, read page by page so no single reply has to carry the whole history (#28254).
- * A host older than paging ignores `limit` and returns everything with no cursor, ending the loop.
- */
+/** Older hosts ignore paging and return all runs without a cursor, ending the loop. */
 export async function readAllAutomationRuns(
   rpc: AutomationRunsRpc,
   automationId: string | undefined
@@ -65,7 +60,7 @@ export async function readAllAutomationRuns(
   let cursor: string | undefined
   let limit = AUTOMATION_RUNS_PAGE_SIZE
   for (;;) {
-    // Why carry the limit: the next page is likely as heavy as the one that had to shrink.
+    // Later pages may need the same reduced limit.
     const read = await readShrinkingPage(rpc, { automationId, limit, cursor })
     const page = read.page
     limit = read.limit

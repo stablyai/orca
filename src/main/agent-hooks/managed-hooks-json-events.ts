@@ -1,16 +1,6 @@
 import { isPlainObject } from './installer-utils'
 
-/**
- * Which of `events` an Orca-owned `{ hooks: { <event>: [{ hooks: [{ command }] }] } }` file
- * still registers under a managed command.
- *
- * Shared by every agent whose managed hooks file Orca generates wholesale (Muse, DSH), so
- * "installed", "partial" and "not_installed" cannot drift between them.
- *
- * Why every lookup is guarded: the file is on disk and hand-editable, so any node can be
- * null, a scalar, or the wrong container. A malformed node reads as "event absent" — status
- * calculation must report a broken install, never throw on it.
- */
+/** Treat malformed user-edited nodes as absent events when reporting installation status. */
 export function readManagedHookEventsFromJson(
   parsed: unknown,
   events: readonly string[],

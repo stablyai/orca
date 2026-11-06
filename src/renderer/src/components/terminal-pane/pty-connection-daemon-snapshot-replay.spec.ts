@@ -6,7 +6,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { Terminal } from '@xterm/headless'
 import { flushAsyncTicks, createDeferred, writeHeadlessTerminal } from './pty-connection-test-async'
@@ -20,7 +20,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks as AgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -64,6 +68,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('clears the captured pen for a normal-buffer fallback reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       const snapshot = 'ORCA-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -90,7 +95,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -133,6 +142,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('returns a shell-owned daemon snapshot to the normal buffer on reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -154,10 +164,13 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
       connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            restoredLeafId: LEAF_1,
+            restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+          }) as never,
+          agentTitleMocks2
+        )
       )
       await flushAsyncTicks(20)
 
@@ -170,6 +183,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     it('drops a too-wide daemon alt frame and keeps the scrollback prefix', async () => {
       // Why: fixed-grid alt rows clip at a narrower viewport until the owner repaints.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -200,7 +214,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(20)
 
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])
@@ -211,6 +229,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('keeps a daemon alt frame at its capture grid while the target grid is unknown', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -238,10 +257,13 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
       connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            restoredLeafId: LEAF_1,
+            restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+          }) as never,
+          agentTitleMocks4
+        )
       )
       await flushAsyncTicks(20)
 
@@ -253,6 +275,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('falls back to the merged daemon snapshot when split metadata is incomplete', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -278,10 +301,13 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
       connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            restoredLeafId: LEAF_1,
+            restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+          }) as never,
+          agentTitleMocks5
+        )
       )
       await flushAsyncTicks(20)
 
@@ -292,6 +318,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('keeps a daemon alt frame when the pane is not narrower than the capture', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -322,7 +349,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       await flushAsyncTicks(20)
 
       expect(
@@ -332,6 +363,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('drops a too-wide daemon alt frame on cold restore and keeps its history', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -363,7 +395,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
       await flushAsyncTicks(20)
 
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])
@@ -377,6 +413,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     it('resizes the pane to the snapshot grid before replaying daemon snapshot bytes (bug #7279)', async () => {
       // Why: the daemon serializes soft-wrapped lines flat, so reattach must resize xterm to the snapshot grid before writing, or rows rewrap wrong.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -405,10 +442,13 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
       await flushAsyncTicks(20)
 
-      // Pane was resized to the snapshot grid before the snapshot bytes landed.
       expect(pane.terminal.resize).toHaveBeenCalledWith(80, 24)
       const resizeToSnapshotCall = pane.terminal.resize.mock.invocationCallOrder.find(
         (_order, index) => {
@@ -428,6 +468,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('waits for a recovered destination fit before forwarding its grid or live output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
       const transport = createMockTransport('tab-pty')
       let deliverLiveData = (_data: string): void => {}
@@ -460,7 +501,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       await flushAsyncTicks(20)
       transport.resize.mockClear()
       signalPty.mockClear()
@@ -487,11 +532,9 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     })
 
     it('forwards the destination grid on reveal when the reattach fit was deferred by a display:none pane', async () => {
-      // Why: a restored floating-workspace pane reattaches while its panel is still closed, so the
-      // pane is display:none for the whole replay. The snapshot pins xterm to the PTY's grid, and the
-      // reattach fit is the only step that pushes the client grid back and signals SIGWINCH — losing
-      // it strands the PTY at the snapshot grid and the first reveal reflows the replay under a live TUI.
+      // Hidden floating panels cannot fit during replay; deferred fit must restore the client grid and signal SIGWINCH before reveal reflows a live TUI.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
@@ -525,12 +568,15 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         isVisibleRef: { current: false }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+      )
       await flushAsyncTicks(20)
       transport.resize.mockClear()
       signalPty.mockClear()
 
-      // Reveal: the panel opens, the pane gains a box, and the first fit becomes measurable.
       xtermContainerDisplay = 'block'
       ;(deps.isVisibleRef as { current: boolean }).current = true
       pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 })) as never
@@ -542,10 +588,9 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     })
 
     it('suppresses the deferred reattach grid push when mobile claims the PTY while hidden', async () => {
-      // Why: the pre-check at reattach time cannot see a takeover that happens while the pane
-      // waits for a box, and this path calls transport.resize directly, bypassing
-      // forwardPtyResize's own suppression.
+      // Recheck mobile takeover after the hidden pane gains a box; direct transport.resize bypasses the usual suppression.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
       const transport = createMockTransport('tab-pty')
@@ -580,7 +625,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         isVisibleRef: { current: false }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
       await flushAsyncTicks(20)
       transport.resize.mockClear()
       signalPty.mockClear()
@@ -604,6 +653,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('restores a pinned viewport only after a same-size reattach snapshot finishes parsing', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const { markTerminalFollowOutput, markTerminalPinnedViewport } =
         await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('tab-pty')
@@ -632,7 +682,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks12)
+      )
       await flushAsyncTicks(20)
       expect(pane.terminal.scrollToLine).not.toHaveBeenCalled()
 
@@ -651,6 +705,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('does not apply a queued reattach snapshot after the PTY is replaced', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       const reattachResult = createDeferred<{
         id: string
@@ -674,7 +729,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks13)
+      )
       await flushAsyncTicks(8)
       replayCallback.current?.('blocking replay')
       await flushAsyncTicks(12)
@@ -696,6 +755,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('does not apply a queued reattach snapshot after its PTY exits', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       const reattachResult = createDeferred<{ id: string; snapshot: string }>()
       const replayCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -713,7 +773,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks14)
+      )
       await flushAsyncTicks(8)
       replayCallback.current?.('blocking replay')
       await flushAsyncTicks(12)
@@ -735,6 +799,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
 
     it('drops stale callbacks but delivers fresh replacement output after an old replay clear', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks15 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
       const { getTerminalScrollIntentKind, markTerminalPinnedViewport } =
         await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('tab-pty')
@@ -765,7 +830,11 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks15)
+      )
       await flushAsyncTicks(8)
       oldCallbacks.current?.onReplayData?.('old replay')
       await flushAsyncTicks(8)

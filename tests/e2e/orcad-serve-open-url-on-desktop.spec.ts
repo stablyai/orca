@@ -1,14 +1,5 @@
-/**
- * #30731: `orca open-url` on a paired `orca serve` running orcad with no browser engine opens the
- * page in the paired desktop's browser, its network routed through the server.
- *
- * Needs the packaged orcad slot (`pnpm build:orcad`). Background launch only; nothing is focused.
- *
- * Run:
- *   ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/orcad-serve-open-url-on-desktop.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- */
+// #30731 / #35066: open-url must create the first page on a paired desktop while routing through the server.
+// Build the packaged slot with pnpm build:orcad, then run the electron-headless project with ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1.
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 
@@ -127,7 +118,7 @@ test('orca open-url on orcad serve opens the page in the paired desktop', async 
         timeoutMs: 90_000
       })
 
-    // No desktop has taken this server's pages yet: a typed refusal that says what to do.
+    // No desktop is paired yet: a typed refusal that says what to do.
     const refused = await openUrl()
     writeFileSync(
       testInfo.outputPath('open-url-before-desktop.txt'),
@@ -161,7 +152,6 @@ test('orca open-url on orcad serve opens the page in the paired desktop', async 
           testRepoPath
         )
       )
-    // The user opens a browser tab in the server's workspace, as in the report.
     await desktop.page.evaluate(
       ({ environmentId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
@@ -178,17 +168,11 @@ test('orca open-url on orcad serve opens the page in the paired desktop', async 
         { timeout: 60_000, message: 'the server workspace never got a tab group on the desktop' }
       )
       .not.toBeNull()
-    await desktop.page.evaluate(async () => {
+    const browserPageCount = await desktop.page.evaluate(() => {
       const state = window.__store?.getState()
-      const groupId = state?.activeWorktreeId
-        ? state.activeGroupIdByWorktree[state.activeWorktreeId]
-        : undefined
-      if (!state || !groupId) {
-        throw new Error('desktop has no active tab group in the server workspace')
-      }
-      state.setBrowserDefaultUrl('about:blank')
-      await state.openNewBrowserTabInActiveWorkspace(groupId)
+      return Object.values(state?.browserPagesByWorkspace ?? {}).flat().length
     })
+    expect(browserPageCount).toBe(0)
 
     let opened: { code: number | null; stdout: string; stderr: string } | null = null
     await expect

@@ -14,9 +14,7 @@ import {
 } from './project-sections-operations'
 import { buildSections, type Worktree } from './workspace-list-sections'
 
-// The desktop half lives in src/renderer/src/components/sidebar/
-// worktree-list-groups-mobile-parity.test.ts: buildRows renders these headers, and main serves
-// PROJECT_SECTION_PARITY_SERVED for the same host answers.
+// Counterpart: renderer sidebar/worktree-list-groups-mobile-parity.test.ts uses the same served project fixtures.
 
 function served(): ServedProjectSections | null {
   const verdict = projectSectionsRead.interpret({
@@ -84,8 +82,8 @@ describe('Project grouping on the phone', () => {
     expect(headers(buildProjectSectionCatalog(null, desktopRepos, null, 'manual'))).toEqual([
       { key: 'repo:m4-orca-two', label: 'orca' },
       { key: 'repo:win-orca', label: 'orca' },
-      { key: 'repo:local-workspace', label: 'Users/jinwoo/orca/workspaces/orca/orca' },
-      { key: 'repo:local-stably', label: 'Users/jinwoo/stably/orca' },
+      { key: 'repo:local-workspace', label: 'orca/orca' },
+      { key: 'repo:local-stably', label: 'stably/orca' },
       { key: 'repo:m4-orca', label: 'orca' },
       { key: 'repo:local-assets', label: 'design-assets' }
     ])

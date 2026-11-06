@@ -2,10 +2,13 @@ import type {
   WorkerReportOutcome,
   FederationRelayDirection,
   FederationRelayItemRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
-import { isWorkerStateIn, SETTLEABLE_WORKER_STATES } from '../../worker-report-admission'
+import {
+  isWorkerStateIn,
+  SETTLEABLE_WORKER_STATES
+} from '../../workers/reports/worker-report-admission'
 
 export function getFederationRelayItem(
   this: OrchestrationDb,

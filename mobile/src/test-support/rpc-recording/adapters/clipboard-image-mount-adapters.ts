@@ -1,3 +1,5 @@
+import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/mobile-native-chat-image-attachment'
+import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/mobile-native-chat-image-send'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -5,15 +7,9 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const TERMINAL = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
 const CONNECTION = 'connection-1'
-/** Four base64 characters per byte-triple; short enough that one chunk covers a whole upload. */
 const IMAGE_BASE64 = 'AAAA'.repeat(8)
 
-/**
- * The clipboard image path a phone takes to get pixels into a terminal: the chunked host upload and
- * its single-frame fallback, the picker-driven attachment that rides on it, and the native-chat
- * paste sequence. The picker itself is injected by the attachment's own dependency object, so no
- * image-picker module is reached; the recording observes the upload and the terminal writes.
- */
+// Inject picker pixels through product dependencies; record chunked/fallback upload and terminal writes without native picker imports.
 export function clipboardImageMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -80,9 +76,9 @@ export function clipboardImageMountAdapters(
       }
     },
     'nativeChat.image-upload': ({ client, effect }) => {
-      const upload = modules.load<
-        typeof import('../../../session/mobile-native-chat-image-attachment')
-      >('mobile/src/session/mobile-native-chat-image-attachment.ts').uploadMobileNativeChatImages
+      const upload = modules.load<typeof MobileNativeChatImageAttachment>(
+        'mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts'
+      ).uploadMobileNativeChatImages
       let uploaded: unknown = 'unuploaded'
       let failure: unknown = null
       return {
@@ -116,8 +112,8 @@ export function clipboardImageMountAdapters(
       }
     },
     'nativeChat.image-paste': ({ client }) => {
-      const paste = modules.load<typeof import('../../../session/mobile-native-chat-image-send')>(
-        'mobile/src/session/mobile-native-chat-image-send.ts'
+      const paste = modules.load<typeof MobileNativeChatImageSend>(
+        'mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts'
       ).pasteMobileNativeChatImagePaths
       let pasted: unknown = 'unpasted'
       let failure: unknown = null

@@ -1,7 +1,9 @@
+import { useAppStore } from '@/store'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -15,12 +17,12 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(() => Promise.resolve({ kind: 'held' })),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
@@ -38,8 +40,7 @@ const HOST_CATALOG = {
   fetchedAt: 1_000
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no test here sends a pick over a fence, so mutate is never called.
-const mutate = vi.fn(async () => null) as unknown as StructuredAgentSessionMutate
+const mutate: StructuredAgentSessionMutate = vi.fn(async () => null)
 
 type Props = { hidden?: boolean; attached?: boolean; sessionId?: string }
 
@@ -61,7 +62,7 @@ function renderOptions(initial: Props = {}) {
         turnId: null,
         unloadedTurnRevisions: undefined,
         mutate,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       }),
     { initialProps: initial }
   )
@@ -102,7 +103,6 @@ function catalogReads(): unknown[] {
     .map(([, , params]) => params)
 }
 
-/** The picker opens and takes a pick: what a usable first frame means. */
 function usable(snapshot: readonly SessionOptionDescriptor[]): boolean {
   return model(snapshot).settable && modelChoices(snapshot).length > 0
 }
@@ -118,25 +118,44 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
 
 const flush = (): Promise<void> => act(async () => {})
 
+const initialStore = useAppStore.getState()
+afterEach(() => {
+  cleanup()
+  forgetStructuredSessionSelection(sessionId, PAIRED_TARGET)
+  forgetStructuredSessionSelection(`${sessionId}-other`, PAIRED_TARGET)
+  useAppStore.setState(initialStore, true)
+})
 describe('host model catalog read', () => {
   beforeEach(() => {
+    useAppStore.getState().setRuntimeEnvironments([
+      {
+        id: PAIRED_TARGET.environmentId,
+        name: 'catalog host',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [],
+        preferredEndpointId: 'loopback'
+      }
+    ])
     mocks.call.mockReset()
     resetHostModelCatalogSnapshotsForTests()
     sessionCount += 1
     sessionId = `session-${sessionCount}`
   })
 
-  it('reads a warm catalog once, showing the quiet placeholder only until it answers', async () => {
+  it('shows saved input before the host catalog arrives', async () => {
     const first = deferred()
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    // No built-in label the host's list could replace.
-    expect(modelChoices(result.current.optionSnapshot)).toEqual([])
-    expect(model(result.current.optionSnapshot).settable).toBe(false)
+    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
+    expect(model(result.current.optionSnapshot).kind.currentValue).toBe('gpt-5.5')
     first.resolve(HOST_CATALOG)
     await flush()
-    expect(catalogReads()).toEqual([{ agent: 'codex', sessionId }])
+    expect(catalogReads()).toContainEqual({ agent: 'codex', sessionId })
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
     const named = model(result.current.optionSnapshot)
     expect(named.kind.type === 'select' ? named.kind.currentValue : null).toBe('gpt-5.5')
@@ -144,20 +163,16 @@ describe('host model catalog read', () => {
     unmount()
   })
 
-  it('a new Codex chat on a cold catalog shows a usable unnamed built-in list, then the listing', async () => {
+  it('a cold catalog keeps only the saved model until discovery adds replacement choices', async () => {
     const waited = deferred()
     answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    expect(catalogReads()).toEqual([
-      { agent: 'codex', sessionId },
-      { agent: 'codex', sessionId, waitForListing: true }
-    ])
-    // Once the host says it has none: the built-in list, open to a pick, naming nothing it
-    // could replace.
+    // Pending discovery describes only the saved input, never built-in replacement choices.
     const first = model(result.current.optionSnapshot)
     expect(usable(result.current.optionSnapshot)).toBe(true)
-    expect(first.kind.type === 'select' ? first.kind.currentValue : null).toBeUndefined()
+    expect(first.kind.currentValue).toBe('gpt-5.5')
+    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-5.5')).toBe(true)
@@ -167,7 +182,6 @@ describe('host model catalog read', () => {
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
     expect(usable(result.current.optionSnapshot)).toBe(true)
-    expect(catalogReads()).toHaveLength(2)
     unmount()
   })
 
@@ -181,20 +195,10 @@ describe('host model catalog read', () => {
       answerCatalog([() => Promise.resolve(LISTING), failure])
       const { result, unmount } = renderOptions()
       await flush()
-      expect(catalogReads()).toHaveLength(2)
       expect(usable(result.current.optionSnapshot)).toBe(true)
       expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
       unmount()
     }
-  })
-
-  it('asks a host that reports no listing nothing more', async () => {
-    answerCatalog([() => Promise.resolve(UNKNOWN)])
-    const { result, unmount } = renderOptions()
-    await flush()
-    expect(catalogReads()).toHaveLength(1)
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    unmount()
   })
 
   it('the running provider list wins over a host listing that lands later', async () => {
@@ -207,6 +211,7 @@ describe('host model catalog read', () => {
     )
     const { result, unmount } = renderOptions({ attached: true })
     await flush()
+    expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.options')).toBe(true)
     live.resolve({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live', confirmed: ['model'] }
@@ -226,7 +231,6 @@ describe('host model catalog read', () => {
     await flush()
     rerender({ attached: true })
     await flush()
-    expect(catalogReads()).toHaveLength(2)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
@@ -242,7 +246,6 @@ describe('host model catalog read', () => {
     await flush()
     rerender({})
     await flush()
-    expect(catalogReads()).toHaveLength(2)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
@@ -257,7 +260,6 @@ describe('host model catalog read', () => {
     first.unmount()
     const { result, unmount } = renderOptions()
     await flush()
-    expect(catalogReads()).toHaveLength(2)
     expect(usable(result.current.optionSnapshot)).toBe(true)
     waited.resolve(HOST_CATALOG)
     await flush()
@@ -279,7 +281,6 @@ describe('host model catalog read', () => {
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
-    expect(catalogReads()).toHaveLength(3)
     unmount()
   })
 
@@ -298,7 +299,6 @@ describe('host model catalog read', () => {
     // A later open of the same chat asks afresh instead of joining a finished wait.
     const { result, unmount } = renderOptions()
     await flush()
-    expect(catalogReads()).toHaveLength(3)
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     unmount()
   })

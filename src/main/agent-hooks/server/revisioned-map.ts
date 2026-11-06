@@ -1,4 +1,4 @@
-/** Map whose `revision` advances on every mutation, so a reader can detect change without diffing. */
+/** Revision tracking avoids diffing the map. */
 export class RevisionedMap<K, V> extends Map<K, V> {
   revision = 0
 

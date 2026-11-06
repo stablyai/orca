@@ -56,7 +56,6 @@ export type ProcessGoneCrashEvent = {
 
 type CrashReportRecorderStore = Pick<CrashReportStore, 'record' | 'attachDetails'>
 
-/** Injectable so tests can drive the pairing without a Crashpad handler. */
 export type MinidumpCapture = (
   crashedAtMs: number,
   expectedProcessType: string
@@ -77,8 +76,7 @@ function expectedCrashpadProcessType(event: ProcessGoneCrashEvent): string | nul
 const captureProcessMinidump: MinidumpCapture = (crashedAtMs, expectedProcessType) =>
   captureMinidumpSignature(crashedAtMs, { expectedProcessType })
 
-// Why: the coalesce map prunes every key against the calling window, so a shorter
-// one here would weaken the other 30s coalescers. Stay uniform with them.
+// Map pruning uses the caller's window, so match the other 30-second coalescers.
 const SUPPRESSED_PROCESS_GONE_COALESCE_MS = 30_000
 
 function processGoneRendererOrigin(event: ProcessGoneCrashEvent): string | undefined {
@@ -87,8 +85,7 @@ function processGoneRendererOrigin(event: ProcessGoneCrashEvent): string | undef
     : rendererCrashBreadcrumbOrigin(event.webContentsId)
 }
 
-// Why: key off the emitted breadcrumb, not the crash-report dedupe key, so two
-// different recoverable services can never suppress each other's evidence.
+// Include service identity so separate recoverable services cannot suppress each other.
 function suppressedProcessGoneCoalesceKey(data: CrashReportBreadcrumbData): string {
   return JSON.stringify([
     data.source,
@@ -102,9 +99,7 @@ function suppressedProcessGoneCoalesceKey(data: CrashReportBreadcrumbData): stri
   ])
 }
 
-// Why: POSIX exit codes arrive as raw wait statuses (61696 = exit 241); name the
-// meaning on the span so bundles read without manual decoding. Display-only —
-// the recorded exitCode stays raw. launch-failed codes are not wait statuses.
+// Decode POSIX wait statuses for spans; preserve raw exitCode and exclude launch-failed codes.
 function decodedExitCodeAttribute(event: ProcessGoneCrashEvent): Record<string, string> {
   if (process.platform === 'win32' || event.reason === 'launch-failed' || event.exitCode === null) {
     return {}
@@ -126,13 +121,7 @@ function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
   }
 }
 
-/**
- * Folds the Crashpad signature into a report that is already on disk.
- *
- * Why separate from the record write: an exit code of 0x80000003 only says "a
- * CHECK fired"; the name, file and line live in the dump, which Crashpad is
- * still writing when process-gone fires. Waiting inline would stall recovery.
- */
+// Attach the still-pending Crashpad signature later so dump polling cannot stall recovery.
 async function attachMinidumpSignature(
   store: CrashReportRecorderStore,
   reportId: string,
@@ -152,8 +141,7 @@ async function attachMinidumpSignature(
     minidumpPath: captured.filePath,
     minidumpBytes: captured.sizeBytes
   })
-  // Why: the crash-report record is capped at 5 entries and is user-facing;
-  // the span is what makes the signature countable in the diagnostics bundle.
+  // Preserve countable signature telemetry beyond the bounded user-facing report store.
   const span = startSpan('electron.minidump_signature', {
     attributes: {
       'crash.report_id': reportId,
@@ -186,8 +174,7 @@ export function recordProcessGoneCrash(
       exitCode: event.exitCode
     })
   }
-  // Crashpad captures suppressed service crashes too; keep a crash loop from
-  // filling the disk even when no user-facing report is created.
+  // Suppressed service crash loops also create dumps that need pruning.
   scheduleCrashpadDumpPrune()
   if (
     !shouldRecordProcessGoneCrash({
@@ -200,9 +187,7 @@ export function recordProcessGoneCrash(
       expectedTeardown: event.expectedTeardown
     })
   ) {
-    // Why: Chromium can crash-loop a recoverable child (network service seen at
-    // 1459/min) and each suppressed event costs a span plus a forced disk flush,
-    // which both floods the 30-entry ring and evicts the real pre-crash trail.
+    // Coalesce recoverable crash loops to bound breadcrumb, span and forced-flush traffic.
     const suppressedData = buildSuppressedProcessGoneBreadcrumbData(event)
     const origin = processGoneRendererOrigin(event)
     recordCoalescedDurableCrashBreadcrumb({
@@ -249,8 +234,7 @@ export function recordProcessGoneCrash(
       ...event.details,
       ...mainProcessLifecycle,
       ...siblingDetails,
-      // Why: an Orca-issued kill and an external one are identical in every other
-      // recorded field, so this is what answers "did we do this to ourselves?"
+      // Internal and external kills can otherwise produce identical crash details.
       ...selfInitiatedTreeKillDetails(goneAt)
     },
     event.processType
@@ -277,8 +261,7 @@ export function recordProcessGoneCrash(
       breadcrumbs: reportBreadcrumbs
     }
   })
-  // Why: a renderer crash can be followed by another process exit before the
-  // trace batch window closes, so make the primary signal durable immediately.
+  // Flush before another process can exit during the trace batch window.
   span.fail(
     `${event.source} process gone: ${event.processType} ${event.reason} (${event.exitCode ?? 'unknown'})`
   )
@@ -311,8 +294,7 @@ export function recordProcessGoneCrash(
   )
   void recorded
     .then((report) => {
-      // Why: kept off the returned chain so a minidump failure can never reach
-      // the persist-failure handler below and release a claim that did persist.
+      // Keep attachment failures outside the persist chain so they cannot release a persisted claim.
       void attachMinidumpSignature(
         store,
         report.id,

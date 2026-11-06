@@ -277,8 +277,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
   })
 
   it('treats a broker that cannot report liveness as usable, not dead', async () => {
-    // Why: unverifiable is not exited — only a broker that proves its control
-    // died is withheld; silence must never cost a working relay.
+    // Unverifiable liveness is not death; only positive control-death evidence withholds a broker.
     vi.useFakeTimers()
     const unverifiable = { closeNow: vi.fn() }
     const coordinator = new RelayAuthCoordinator({
@@ -295,8 +294,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
   })
 
   it('reopens a broker that died leaving no retry timer behind', async () => {
-    // Why: an auth refresh failing past token expiry closes the broker with
-    // no timer; only ensureLive (periodic/power-resume) can revive it.
+    // Expired-token refresh failure leaves no retry; ensureLive must revive it.
     vi.useFakeTimers()
     const dead = { closeNow: vi.fn(), isLive: () => false }
     const live = { closeNow: vi.fn(), isLive: () => true }
@@ -345,12 +343,10 @@ describe('RelayAuthCoordinator liveness safety net', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(openBroker).toHaveBeenCalledOnce()
 
-    // A scheduled Retry-After timer owns recovery; ensureLive must not race it.
     coordinator.ensureLive()
     await vi.advanceTimersByTimeAsync(0)
     expect(openBroker).toHaveBeenCalledOnce()
 
-    // The retry fires into a slow open; ensureLive must not preempt it.
     await vi.advanceTimersByTimeAsync(30_000)
     expect(openBroker).toHaveBeenCalledTimes(2)
     coordinator.ensureLive()
@@ -360,7 +356,6 @@ describe('RelayAuthCoordinator liveness safety net', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(coordinator.getActiveBroker()).toBe(broker)
 
-    // A live broker needs nothing.
     coordinator.ensureLive()
     await vi.advanceTimersByTimeAsync(0)
     expect(openBroker).toHaveBeenCalledTimes(2)

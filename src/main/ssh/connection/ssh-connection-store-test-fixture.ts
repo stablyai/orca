@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 
@@ -82,7 +82,6 @@ export function createMockStore() {
     releaseRemovedSshTargetTombstone: vi.fn(dropTombstone),
     reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
       reassignments.push({ oldTargetId, newTargetId })
-      // Pretend one repo referenced the old id.
       return ['repo-1']
     })
   }

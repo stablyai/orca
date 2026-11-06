@@ -33,11 +33,13 @@ function stubWindow(ssh: SshApiStub): void {
       ssh: {
         ...ssh,
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
         onDetectedPortsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onStateChanged: (handler: (data: { targetId: string; state: unknown }) => void) => {
           onStateChangedHandler = handler
           return () => {}
@@ -145,8 +147,7 @@ describe('direct SSH hydration target metadata', () => {
       status: useAppStore.getState().sshConnectionStates.get('ssh-live')?.status
     }).toEqual({ label: 'devbox', status: 'connecting' })
 
-    // A push for a known target takes the fast path instead of re-querying the
-    // link that is already failing to answer.
+    // Known-target pushes bypass lookups on an already-unresponsive link.
     listTargetsCalls = 0
     onStateChangedHandler?.({ targetId: 'ssh-live', state: connectingState('ssh-live') })
     await settle()

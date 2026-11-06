@@ -68,7 +68,23 @@ const originalWebSocket = globalThis.WebSocket
 
 function sentRequests(socket: RuntimeEventTestSocket, method: string): SentRequest[] {
   return socket.sent
-    .map((payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as SentRequest)
+    .flatMap((payload) => {
+      const value: unknown = JSON.parse(payload.replace(/^encrypted:/, ''))
+      return value &&
+        typeof value === 'object' &&
+        'id' in value &&
+        typeof value.id === 'string' &&
+        'method' in value &&
+        typeof value.method === 'string'
+        ? [
+            {
+              id: value.id,
+              method: value.method,
+              params: 'params' in value ? value.params : undefined
+            }
+          ]
+        : []
+    })
     .filter((request) => request.method === method)
 }
 
@@ -101,6 +117,7 @@ describe('runtime client-event stream disposal', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the socket constructor, states, handlers, send and close consumed by the client.
     globalThis.WebSocket = RuntimeEventTestSocket as unknown as typeof WebSocket
   })
 

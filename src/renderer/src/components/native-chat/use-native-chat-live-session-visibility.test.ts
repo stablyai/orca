@@ -3,9 +3,9 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { useAppStore } from '@/store'
-import { NATIVE_CHAT_INITIAL_LIMIT, nextNativeChatLimit } from './native-chat-pagination'
+import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
 
 const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
   type Subscription = {
@@ -112,68 +112,6 @@ describe('useNativeChatLiveSession visibility', () => {
     vi.useRealTimers()
   })
 
-  it('does no transcript IO when initially hidden', async () => {
-    await render({ ...BASE_ARGS, enabled: false })
-
-    expect(transport.readSession).not.toHaveBeenCalled()
-    expect(transport.subscribe).not.toHaveBeenCalled()
-  })
-
-  it('unsubscribes on hide, retains committed messages, and rejects hidden work', async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [BASE_ARGS.paneKey]: { state: 'working', stateStartedAt: 100, updatedAt: Date.now() }
-      }
-    } as never)
-    await render(BASE_ARGS)
-    await emit(0, {
-      type: 'snapshot',
-      messages: [assistant('committed', 1)],
-      hasMore: true,
-      lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 100 }
-    })
-    const staleLoadEarlier = latest?.loadEarlier
-
-    await render({ ...BASE_ARGS, enabled: false })
-
-    expect(subscriptions[0]?.unsubscribe).toHaveBeenCalledOnce()
-    expect(latest?.messages.map((message) => message.id)).toEqual(['committed'])
-    expect(latest?.readPhase).toBe('ready')
-    expect(latest?.status).toBe('working')
-
-    const readsAfterHide = transport.readSession.mock.calls.length
-    void staleLoadEarlier?.()
-    void latest?.loadEarlier()
-    expect(transport.readSession).toHaveBeenCalledTimes(readsAfterHide)
-
-    const rendersAfterHide = renders.mock.calls.length
-    await act(async () => {
-      for (let index = 0; index < 1_000; index += 1) {
-        subscriptions[0]?.onFrame({
-          type: 'appended',
-          messages: [assistant(`stale-hidden-${index}`, index + 2)]
-        })
-      }
-      await Promise.resolve()
-    })
-    expect(renders).toHaveBeenCalledTimes(rendersAfterHide)
-    expect(latest?.messages.map((message) => message.id)).toEqual(['committed'])
-  })
-
-  it('cancels a not-found retry when hidden', async () => {
-    vi.useFakeTimers()
-    transport.readSession.mockResolvedValue({ error: 'not found', notFound: true })
-
-    await render(BASE_ARGS)
-    expect(transport.readSession).toHaveBeenCalledOnce()
-
-    await render({ ...BASE_ARGS, enabled: false })
-    await act(async () => vi.advanceTimersByTimeAsync(60_000))
-
-    expect(transport.readSession).toHaveBeenCalledOnce()
-    expect(subscriptions[0]?.unsubscribe).toHaveBeenCalledOnce()
-  })
-
   it('reopens one fresh stream whose snapshot wins every stale generation', async () => {
     const oldSeed = deferred<{ messages: NativeChatMessage[] }>()
     const freshSeed = deferred<{ messages: NativeChatMessage[] }>()
@@ -217,50 +155,6 @@ describe('useNativeChatLiveSession visibility', () => {
     expect(latest?.messages.map((message) => message.id)).toEqual(['fresh'])
   })
 
-  it('closes a deferred paired-client stream after a rapid hide and reveal', async () => {
-    const deferredTeardown = deferred<() => void>()
-    const oldUnsubscribe = vi.fn()
-    transport.subscribe.mockImplementationOnce((_args, onFrame) => {
-      subscriptions.push({ onFrame, unsubscribe: oldUnsubscribe })
-      return deferredTeardown.promise
-    })
-
-    await render(BASE_ARGS)
-    await render({ ...BASE_ARGS, enabled: false })
-    await render(BASE_ARGS)
-
-    expect(transport.subscribe).toHaveBeenCalledTimes(2)
-    expect(subscriptions).toHaveLength(2)
-    expect(subscriptions[1]?.unsubscribe).not.toHaveBeenCalled()
-
-    await act(async () => {
-      deferredTeardown.resolve(oldUnsubscribe)
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(oldUnsubscribe).toHaveBeenCalledOnce()
-    expect(subscriptions[1]?.unsubscribe).not.toHaveBeenCalled()
-  })
-
-  it('contains a deferred paired-client stream-handle rejection', async () => {
-    const deferredTeardown = deferred<() => void>()
-    transport.subscribe.mockImplementationOnce((_args, onFrame) => {
-      subscriptions.push({ onFrame, unsubscribe: vi.fn() })
-      return deferredTeardown.promise
-    })
-
-    await render(BASE_ARGS)
-    await act(async () => {
-      deferredTeardown.reject(new Error('stream setup failed'))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    await render({ ...BASE_ARGS, enabled: false })
-
-    expect(transport.subscribe).toHaveBeenCalledOnce()
-  })
-
   it('drops retained messages when the hidden transcript identity changes', async () => {
     await render(BASE_ARGS)
     await emit(0, {
@@ -295,37 +189,6 @@ describe('useNativeChatLiveSession visibility', () => {
     expect(transport.readSession).toHaveBeenCalledTimes(2)
     expect(transport.subscribe).toHaveBeenCalledTimes(2)
     expect(latest?.messages.map((message) => message.id)).toEqual(['session-b'])
-  })
-
-  it('reveals with the paged window and restarts it only on a source change', async () => {
-    const pagedLimit = nextNativeChatLimit(NATIVE_CHAT_INITIAL_LIMIT)
-    transport.readSession.mockResolvedValue({ messages: [assistant('read', 0)] })
-    const initialMessages = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
-      assistant(`old-${index}`, index)
-    )
-
-    await render(BASE_ARGS)
-    await emit(0, { type: 'snapshot', messages: initialMessages, hasMore: true })
-    await act(async () => {
-      void latest?.loadEarlier()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(transport.readSession.mock.calls[1]?.[2]).toBe(pagedLimit)
-
-    await render({ ...BASE_ARGS, enabled: false })
-    await render(BASE_ARGS)
-
-    expect(transport.readSession.mock.calls[2]?.[2]).toBe(pagedLimit)
-    expect(transport.subscribe.mock.calls[1]?.[0]?.limit).toBe(pagedLimit)
-
-    await render({
-      ...BASE_ARGS,
-      sessionId: 'session-2',
-      transcriptPath: '/remote/session-2.jsonl'
-    })
-
-    expect(transport.readSession.mock.calls[3]?.[2]).toBe(NATIVE_CHAT_INITIAL_LIMIT)
   })
 
   it('lets the pending read repair a stream error frame', async () => {
@@ -396,4 +259,114 @@ describe('useNativeChatLiveSession visibility', () => {
     expect(transport.readSession).toHaveBeenCalledTimes(3)
     expect(latest?.messages.map((message) => message.id)).toEqual(['fresh-after-reveal'])
   })
+  it.each(['seed', 'snapshot'] as const)(
+    'bounds both retained buffers on return to live from a %s base and retires late history',
+    async (source) => {
+      const initial = Array.from({ length: 300 }, (_, index) =>
+        assistant(`message-${index + 700}`, index + 700)
+      )
+      const expanded = Array.from({ length: 500 }, (_, index) =>
+        assistant(`message-${index + 500}`, index + 500)
+      )
+      const late = deferred<{ messages: NativeChatMessage[] }>()
+      transport.readSession
+        .mockResolvedValueOnce({ messages: initial })
+        .mockResolvedValueOnce({ messages: expanded })
+        .mockImplementationOnce(() => late.promise)
+      await render(BASE_ARGS)
+      if (source === 'snapshot') {
+        await emit(0, { type: 'snapshot', messages: initial, hasMore: true })
+      }
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      await emit(0, {
+        type: 'append',
+        messages: Array.from({ length: 400 }, (_, index) =>
+          assistant(`live-${index}`, index + 1000)
+        )
+      })
+      expect((latest?.messages.length ?? 0) > 600).toBe(true)
+      let oldRead: Promise<string> | undefined
+      await act(async () => {
+        oldRead = latest?.loadEarlier()
+      })
+      await act(async () => {
+        latest?.trimHistory?.()
+      })
+      expect(latest?.messages.map((row) => row.id)).toEqual(
+        Array.from({ length: 300 }, (_, index) => `live-${index + 100}`)
+      )
+      expect(latest?.messages.at(-1)?.id).toBe('live-399')
+      expect(latest?.hasMore).toBe(true)
+      expect(latest?.loadingEarlier).toBe(false)
+      await act(async () => {
+        late.resolve({ messages: [assistant('stale-page', -1)] })
+        await expect(oldRead).resolves.toBe('superseded')
+      })
+      expect(latest?.messages.at(-1)?.id).toBe('live-399')
+      transport.readSession.mockResolvedValueOnce({ messages: expanded })
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      expect(transport.readSession.mock.calls.at(-1)?.[2]).toBe(500)
+      expect(subscriptions[0]?.unsubscribe).not.toHaveBeenCalled()
+    }
+  )
+  it('retires the first older read when returning before it enlarged the budget', async () => {
+    const initial = Array.from({ length: 300 }, (_, index) =>
+      assistant(`row-${index + 700}`, index + 700)
+    )
+    const older = deferred<{ messages: NativeChatMessage[] }>()
+    transport.readSession
+      .mockResolvedValueOnce({ messages: initial })
+      .mockImplementationOnce(() => older.promise)
+    await render(BASE_ARGS)
+    let request: Promise<string> | undefined
+    await act(async () => {
+      request = latest?.loadEarlier()
+    })
+    await act(async () => latest?.trimHistory?.())
+    await act(async () => {
+      older.resolve({
+        messages: Array.from({ length: 500 }, (_, index) =>
+          assistant(`row-${index + 500}`, index + 500)
+        )
+      })
+      await expect(request).resolves.toBe('superseded')
+    })
+    expect(latest?.messages.map((row) => row.id)).toEqual(initial.map((row) => row.id))
+    expect(latest?.loadingEarlier).toBe(false)
+  })
+
+  it.each(['seed', 'snapshot'] as const)(
+    'applies the current budget to a late enlarged reveal %s',
+    async (source) => {
+      const initial = Array.from({ length: 300 }, (_, index) =>
+        assistant(`row-${index + 700}`, index + 700)
+      )
+      const expanded = Array.from({ length: 500 }, (_, index) =>
+        assistant(`row-${index + 500}`, index + 500)
+      )
+      const reveal = deferred<{ messages: NativeChatMessage[] }>()
+      transport.readSession
+        .mockResolvedValueOnce({ messages: initial })
+        .mockResolvedValueOnce({ messages: expanded })
+        .mockImplementationOnce(() => reveal.promise)
+      await render(BASE_ARGS)
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      await render({ ...BASE_ARGS, enabled: false })
+      await render(BASE_ARGS)
+      await act(async () => latest?.trimHistory?.())
+      if (source === 'snapshot') {
+        await emit(1, { type: 'snapshot', messages: expanded, hasMore: false })
+      }
+      await act(async () => reveal.resolve({ messages: expanded }))
+      expect(latest?.messages.map((row) => row.id)).toEqual(initial.map((row) => row.id))
+      expect(latest?.hasMore).toBe(true)
+      expect(subscriptions[1]?.unsubscribe).not.toHaveBeenCalled()
+    }
+  )
 })

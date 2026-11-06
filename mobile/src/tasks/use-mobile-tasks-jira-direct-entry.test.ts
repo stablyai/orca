@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
@@ -9,8 +9,8 @@ import { useHostRepoList, type HostRepoListResource } from './use-host-repo-list
 import { useMobileTasksTaskListLoading } from './use-mobile-tasks-task-list-loading'
 
 vi.mock('./mobile-tasks-dependencies', async () => {
-  const { useCallback, useEffect, useRef } = await import('react')
-  return { useCallback, useEffect, useRef }
+  const { useCallback, useEffect, useLayoutEffect, useRef } = await import('react')
+  return { useCallback, useEffect, useLayoutEffect, useRef }
 })
 vi.mock('./mobile-tasks-legacy-foundation', async () => import('./mobile-tasks-item-mapping'))
 
@@ -76,6 +76,7 @@ function mountJira(fetchRepos: () => Promise<RepoSummary[]>) {
         setItems,
         setLoading: vi.fn(),
         setRefreshing: vi.fn(),
+        setTaskListSettled: vi.fn(),
         taskStateHydrated: true,
         tasksSupported: true
       })

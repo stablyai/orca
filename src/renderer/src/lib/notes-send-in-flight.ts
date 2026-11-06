@@ -1,9 +1,8 @@
+import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
 import { useSyncExternalStore } from 'react'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 
-// Why: notes handed to a send leave the next send at once and come back only if that delivery
-// fails, as a submitted composer clears and restores on error. Delivered notes are still removed
-// by their owner; a hold lives only until its delivery settles.
+// Hold submitted notes out of later sends until delivery settles; restore on failure and let the owner remove delivered notes.
 const holds = new Map<unknown, number>()
 const listeners = new Set<() => void>()
 let version = 0
@@ -21,9 +20,7 @@ function reportsDelivered(result: unknown): boolean {
     : false
 }
 
-/** Takes `keys` out of the next send until `delivered` settles, whatever its result. A result that
- *  reports delivery also runs `onDelivered`, for a send whose own callback can no longer fire
- *  (a Retry of a failed new chat). */
+/** Hold keys until settlement; onDelivered also handles retries whose original sender callback can no longer run. */
 export function holdNotesForSend(
   keys: readonly unknown[],
   delivered: Promise<unknown>,
@@ -72,14 +69,17 @@ function getVersion(): number {
   return version
 }
 
-/** Changes whenever a hold starts or ends, for memos that filter by `isNoteInFlight`. */
 export function useNotesInFlightVersion(): number {
   return useSyncExternalStore(subscribe, getVersion, getVersion)
 }
 
 /** A note's identity for delivery: an edit makes it a new pending note, as for its removal. */
-export function diffCommentSendKey(note: DiffCommentDeliverySnapshot): string {
+export function diffCommentSendKey(
+  owner: DiffCommentOwner,
+  note: DiffCommentDeliverySnapshot
+): string {
   return JSON.stringify([
+    diffCommentOwnerKey(owner),
     note.id,
     note.body,
     note.filePath,

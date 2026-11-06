@@ -2,19 +2,11 @@ import type { TabGroupLayoutNode } from '../tab-types'
 import { buildSplitNode, replaceLeaf } from './tab-group-layout-tree'
 import type { LayoutGroup } from './workspace-layout-model'
 
-/**
- * Headless ("Orca server") tab-GROUP split operations (distinct from terminal
- * PANE splits inside one tab). The headless host historically coalesced every
- * tab into a single group, so a client drag-to-split-group was lost on the next
- * snapshot. These pure helpers let the host model + persist a real multi-group
- * layout, sharing the renderer's group tree operations so host and client
- * agree on the tree. Groups are order and membership only; a caller keeping a per-view
- * selected tab adapts it.
- */
+/** Share group-tree operations with the renderer so headless drag splits survive the next persisted snapshot.
+ * Groups hold membership/order; callers adapt per-view selections. These are tab-group splits, not terminal-pane splits. */
 
 type SplitDirection = 'left' | 'right' | 'up' | 'down'
 
-/** Collect every groupId referenced by a layout tree. */
 export function collectTabGroupLayoutGroupIds(
   node: TabGroupLayoutNode | null | undefined,
   groupIds = new Set<string>()
@@ -31,7 +23,6 @@ export function collectTabGroupLayoutGroupIds(
   return groupIds
 }
 
-/** Remove a leaf from the tree, collapsing the parent split into the sibling. */
 export function removeTabGroupLayoutLeaf(
   root: TabGroupLayoutNode | null | undefined,
   groupId: string
@@ -58,13 +49,7 @@ export type HeadlessTabGroupMoveResult = {
   layout: TabGroupLayoutNode | null
 }
 
-/**
- * Move `tabId` into an EXISTING `targetGroupId` (a non-split drop), mirroring the
- * renderer's move-to-group path. Inserts at `index` (clamped), removes the tab
- * from its source group, and drops a source group emptied by the move (collapsing
- * it out of the layout). Returns null when the tab/target is missing or it's a
- * same-group no-op.
- */
+/** Mirror renderer group moves: clamp insertion, remove the source entry and collapse emptied groups; null for missing tabs/targets or same-group no-ops. */
 export function buildHeadlessTabGroupMove(args: {
   groups: readonly LayoutGroup[]
   layout: TabGroupLayoutNode | null | undefined
@@ -111,14 +96,7 @@ export type HeadlessTabGroupSplitResult = {
   newGroupId: string
 }
 
-/**
- * Move `tabId` out of its current group into a NEW group split off from
- * `targetGroupId` in `splitDirection`, mirroring the renderer's dropUnifiedTab
- * split path. Returns the next groups + group layout tree.
- *
- * Returns null when the move can't apply (tab/group missing, or it would split
- * the only tab off its own group — a renderer-side no-op).
- */
+/** Move a tab into a new split group like renderer dropUnifiedTab; null for missing identities or splitting the only tab off its own group. */
 export function buildHeadlessTabGroupSplit(args: {
   groups: readonly LayoutGroup[]
   layout: TabGroupLayoutNode | null | undefined
@@ -131,8 +109,7 @@ export function buildHeadlessTabGroupSplit(args: {
   if (!sourceGroup) {
     return null
   }
-  // Splitting the last tab off its own group would create a sibling only to
-  // immediately collapse the empty source — a no-op the renderer skips too.
+  // Splitting a sole tab off its own group immediately collapses the source; preserve the renderer’s no-op.
   if (sourceGroup.id === args.targetGroupId && sourceGroup.tabOrder.length <= 1) {
     return null
   }
@@ -158,7 +135,6 @@ export function buildHeadlessTabGroupSplit(args: {
     tabOrder: group.id === sourceGroup.id ? sourceOrder : group.tabOrder
   }))
   groups.push({ id: args.newGroupId, tabOrder: [args.tabId] })
-  // Drop any group emptied by the move and collapse it out of the layout.
   groups = groups.filter((group) => group.tabOrder.length > 0)
   const liveGroupIds = new Set(groups.map((group) => group.id))
   let prunedLayout: TabGroupLayoutNode | null = layout

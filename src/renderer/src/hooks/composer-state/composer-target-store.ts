@@ -14,6 +14,8 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectAllKnownWorkspaceStatuses } from '@/store/host-workspace-status-columns'
 
 export type ComposerStateInput = {
   initialRepoId?: string
@@ -27,6 +29,7 @@ export type ComposerStateInput = {
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean
@@ -50,6 +53,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget = null,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled = NEVER_CANCEL_COMPOSER_SUBMIT,
@@ -104,11 +108,12 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
 
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
 
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
 
-  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  // Every paired host's columns too, so a host-only lane's + keeps its status; submit scopes it to the target.
+  const workspaceStatuses = useAppStore(useShallow(selectAllKnownWorkspaceStatuses))
 
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
 
@@ -167,6 +172,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled,

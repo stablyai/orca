@@ -63,8 +63,7 @@ export function markdownDocumentFromRelativePath(
   relativePath: string
 ): MarkdownDocument | null {
   const normalizedRelativePath = normalizeRelativePath(relativePath, rootPath)
-  // Why: SSH providers should return root-relative paths; reject escape
-  // segments before building a synthetic absolute path for renderer use.
+  // Reject escaping SSH paths before constructing synthetic renderer absolute paths.
   if (!isSafeRelativePath(normalizedRelativePath)) {
     return null
   }

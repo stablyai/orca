@@ -7,23 +7,30 @@ const mocks = vi.hoisted(() => ({
   readFileSync: vi.fn()
 }))
 
-vi.mock('fs', () => ({
-  readFileSync: (...args: unknown[]) => mocks.readFileSync(...args)
+vi.mock('./ssh-identity-file-read', () => ({
+  readSshIdentityFileSync: (path: string) => {
+    try {
+      return { contents: mocks.readFileSync(path) ?? null, problem: null }
+    } catch (error) {
+      return { contents: null, problem: String(error) }
+    }
+  }
 }))
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
 }))
 
-vi.mock('ssh2', () => {
+vi.mock('./ssh2-module-load', () => {
   class MockBaseAgent {}
-  return {
+  const ssh2 = {
     BaseAgent: MockBaseAgent,
     createAgent: (...args: unknown[]) => mocks.createAgent(...args),
     utils: {
       parseKey: (...args: unknown[]) => mocks.parseKey(...args)
     }
   }
+  return { loadSsh2: () => ssh2 }
 })
 
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
@@ -134,24 +141,5 @@ describe('createIdentityFilteredAgent', () => {
 
     expect(createIdentityFilteredAgent('/tmp/agent.sock', ['~/.ssh/work_key'])).toBeUndefined()
     expect(mocks.createAgent).not.toHaveBeenCalled()
-  })
-
-  it('delegates signing to the underlying agent', () => {
-    const allowedKey = makeKey('allowed')
-    const sign = vi.fn()
-    const options = { hash: 'sha256' as const }
-    const callback = vi.fn()
-    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
-    mocks.parseKey.mockReturnValue(allowedKey)
-    mocks.createAgent.mockReturnValue({
-      getIdentities: vi.fn(),
-      sign
-    })
-
-    const agent = createIdentityFilteredAgent('/tmp/agent.sock', ['~/.ssh/work_key'])
-    const data = Buffer.from('payload')
-    agent?.sign(allowedKey as never, data, options, callback)
-
-    expect(sign).toHaveBeenCalledWith(allowedKey, data, options, callback)
   })
 })

@@ -34,7 +34,7 @@ function getBackendAuthRead(
   if (existing) {
     return existing
   }
-  // Why: dedupe UNC reads because Node cannot cancel an in-flight read.
+  // Share UNC reads because Node cannot cancel issued filesystem I/O.
   const read = createAuthFilesystemOperation(authPath, () =>
     readFile(authPath, 'utf8').then(
       (content) => ({ content }),

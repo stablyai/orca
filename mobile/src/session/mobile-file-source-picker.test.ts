@@ -21,7 +21,7 @@ function launcher(assets: Asset[] | null) {
   )
 }
 
-function filesByUri(contents: Record<string, Uint8Array>) {
+function filesByUri(contents: Record<string, Uint8Array>, closed?: string[]) {
   return (uri: string) => {
     const bytes = contents[uri] ?? new Uint8Array()
     return {
@@ -35,7 +35,7 @@ function filesByUri(contents: Record<string, Uint8Array>) {
             done = true
             return chunk
           },
-          close: () => {}
+          close: () => closed?.push(uri)
         }
       }
     }
@@ -52,6 +52,7 @@ async function collect(files: AsyncIterable<PickedMobileFile>): Promise<PickedMo
 
 describe('pickMobileFiles', () => {
   it('reads each picked file with its own name and type', async () => {
+    const closed: string[] = []
     const launch = launcher([
       { uri: 'file:///c/a', name: 'spec.pdf', mimeType: 'application/pdf', size: 3 },
       { uri: 'file:///c/b', name: 'notes' }
@@ -59,16 +60,20 @@ describe('pickMobileFiles', () => {
     const files = await collect(
       pickMobileFiles({
         launch,
-        createFile: filesByUri({
-          'file:///c/a': new Uint8Array([1, 2, 3]),
-          'file:///c/b': new Uint8Array([4])
-        })
+        createFile: filesByUri(
+          {
+            'file:///c/a': new Uint8Array([1, 2, 3]),
+            'file:///c/b': new Uint8Array([4])
+          },
+          closed
+        )
       })
     )
     expect(files).toEqual([
       { name: 'spec.pdf', mime: 'application/pdf', byteLength: 3, base64: 'AQID' },
       { name: 'notes', mime: 'application/octet-stream', byteLength: 1, base64: 'BA==' }
     ])
+    expect(closed).toEqual(['file:///c/a', 'file:///c/b'])
     expect(launch).toHaveBeenCalledWith({ type: '*/*', multiple: true, copyToCacheDirectory: true })
   })
 

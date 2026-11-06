@@ -79,7 +79,7 @@ function renderPersistence() {
       controller as unknown as Parameters<typeof useTerminalPaneLayoutPersistence>[0]
     )
   )
-  return { hook, push }
+  return { hook, push, setTabLayout }
 }
 
 afterEach(() => {
@@ -89,16 +89,6 @@ afterEach(() => {
 })
 
 describe('terminal layout title persist', () => {
-  it('pushes the cleared layout when the clear-title shortcut runs', () => {
-    const { hook, push } = renderPersistence()
-    push.mockClear()
-
-    hook.result.current.handleClearPaneTitleShortcut(1)
-
-    expect(push).toHaveBeenCalledOnce()
-    expect(push.mock.lastCall?.[0].layout.titlesByLeafId).toEqual({})
-  })
-
   it('tells the host to drop every title once the last remote pane title is cleared', () => {
     const { hook, push } = renderPersistence()
     hook.result.current.changePaneTitle(2, 'server')
@@ -114,35 +104,19 @@ describe('terminal layout title persist', () => {
     hook.result.current.removePaneTitle(1)
     expect(push.mock.lastCall?.[0].layout.titlesByLeafId).toEqual({})
   })
+})
 
-  it('a window-owned build saves a renamed pane at once, without asking main', () => {
-    const { hook, push } = renderPersistence()
-    push.mockClear()
+describe('terminal layout persist with host-retired panes', () => {
+  it('keeps a host-retired pane out of the layout it writes while that pane is still mounted', () => {
+    const { hook, push, setTabLayout } = renderPersistence()
+    hook.result.current.hostRetiredLeafIdsRef.current = new Set([RIGHT])
 
-    hook.result.current.changePaneTitle(2, 'server')
+    hook.result.current.changePaneTitle(1, 'build')
 
-    expect(mocks.sendLayoutCommandToOwner).not.toHaveBeenCalled()
-    expect(push).toHaveBeenCalledOnce()
-  })
-
-  it('a layout-owner build shows a title change only once main has saved it', () => {
-    mocks.layoutOwnerIsMain = true
-    mocks.sendLayoutCommandToOwner.mockReturnValue(true)
-    const { hook, push } = renderPersistence()
-    push.mockClear()
-
-    hook.result.current.changePaneTitle(2, 'server')
-    hook.result.current.removePaneTitle(1)
-
-    expect(mocks.sendLayoutCommandToOwner.mock.calls.map(([, command]) => command)).toEqual([
-      { type: 'renamePane', tabId: 'tab', leafId: RIGHT, title: 'server' },
-      { type: 'renamePane', tabId: 'tab', leafId: LEFT, title: null }
-    ])
-    expect(push).not.toHaveBeenCalled()
-
-    for (const [, , handlers] of mocks.sendLayoutCommandToOwner.mock.calls) {
-      handlers.apply({})
-    }
-    expect(push).toHaveBeenCalledTimes(2)
+    const written = setTabLayout.mock.lastCall?.[1]
+    expect(written?.root).toEqual({ type: 'leaf', leafId: LEFT })
+    expect(written?.activeLeafId).toBe(LEFT)
+    expect(written?.ptyIdsByLeafId).toEqual({ [LEFT]: 'remote:host:1' })
+    expect(push.mock.lastCall?.[0].layout.root).toEqual({ type: 'leaf', leafId: LEFT })
   })
 })

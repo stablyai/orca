@@ -37,7 +37,6 @@ describe('compareFileNames', () => {
   })
 
   it('breaks numeric-collation ties deterministically instead of readdir order', () => {
-    // numeric collation ties "2" with "02"; the code-unit fallback keeps a total order.
     expect(['2.txt', '02.txt'].sort(compareFileNames)).toEqual(['02.txt', '2.txt'])
     expect(['02.txt', '2.txt'].sort(compareFileNames)).toEqual(['02.txt', '2.txt'])
     expect(compareFileNames('a.txt', 'a.txt')).toBe(0)

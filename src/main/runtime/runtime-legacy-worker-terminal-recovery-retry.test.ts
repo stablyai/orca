@@ -6,8 +6,8 @@ import {
 import type {
   LegacyWorkerRecoveryPorts,
   LegacyWorkerTerminalRecoveryResult
-} from './runtime-legacy-worker-terminal-recovery-types'
-import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 import {
   missingWorkspaceRecoveryFixture,
   missingWorkspaceWorker,
@@ -103,9 +103,7 @@ describe('RuntimeLegacyWorkerTerminalRecoveryController retry loop', () => {
   })
 
   it('reaches every armed controller from the test cancel hook', async () => {
-    // Why the hook exists: the retry re-arms itself for as long as a worker stays deferred, so a
-    // suite that never resolves one keeps a recovery loop — and the worktree scans it issues —
-    // running inside whichever later test happens to be executing when the timer fires.
+    // Cancel deferred-worker retries at teardown or their recurring worktree scans leak into later tests.
     const first = armedController()
     const second = armedController()
 

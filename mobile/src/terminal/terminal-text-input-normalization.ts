@@ -1,7 +1,4 @@
-// Why: iOS smart punctuation can rewrite two ASCII hyphens into a single
-// Unicode dash before React Native delivers terminal text input. Each dash maps
-// to exactly "--": recovering longer runs (#5222) needed the previous controlled
-// value written back into the field, and that write-back kills iOS dictation (#7925).
+// Map iOS smart dashes to --; repairing longer runs via controlled write-back would interrupt dictation.
 const IOS_SMART_DASH_REPLACEMENT_PATTERN = /[\u2013\u2014]/g
 
 export function normalizeTerminalTextInput(text: string): string {

@@ -1,7 +1,7 @@
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
@@ -20,7 +20,6 @@ export type TabBarProps = {
   /** Set only when this group is one of several splits. */
   onCloseSplitPane?: () => void
   onNewTerminalTab: () => void
-  /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void

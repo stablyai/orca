@@ -1,7 +1,7 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { e2eDisableRemoteTerminalStallRecovery } from '@/lib/e2e-config'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalBinaryController } from './remote-runtime-terminal-binary-controller'
@@ -23,6 +23,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     viewport?: { cols: number; rows: number }
     /** Stable across this pane's reattaches so the host can dedupe replayed input. */
     inputSessionId?: string
+    /** A terminal pane pauses output while hidden, so the host may count it as showing the terminal. */
+    reportsPaneVisibility?: boolean
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
@@ -108,9 +110,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           TerminalStreamOpcode.ClaimViewport,
           encodeTerminalStreamJson({ cols, rows })
         )
-        // Why: older runtimes ignore the claim opcode but still understand
-        // Resize. Claim first keeps new-runtime ownership precise and leaves a
-        // backwards-compatible resize immediately behind it.
+        // Claim then Resize: new hosts get precise ownership; older hosts ignore Claim but retain compatible resize.
         const resized = this.sendFrame(
           streamId,
           TerminalStreamOpcode.Resize,
@@ -152,6 +152,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ackOutputSourceRanges: 1,
             outputPause: 1,
             outputPauseDropNotice: 1,
+            ...(args.reportsPaneVisibility ? { paneVisibility: 1 } : {}),
             writeUnavailable: 1,
             ...(args.client.type === 'desktop'
               ? { desktopViewportClaims: 1, endpointLossNotice: 1 }

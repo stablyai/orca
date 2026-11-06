@@ -1,4 +1,5 @@
-import type { AgentStatusEntry, MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type { AgentStatusEntry } from './agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 
 const cachedMigrationUnsupportedEntries = new WeakMap<
   MigrationUnsupportedPtyEntry,
@@ -18,9 +19,7 @@ export function migrationUnsupportedToAgentStatusEntry(
     : {
         state: 'blocked',
         prompt: 'Agent unavailable after pane identity migration',
-        // Why: this synthetic row represents a persistent migration block. Keep
-        // it "fresh" without Date.now() so Zustand selectors can return a stable
-        // cached object for the same store snapshot.
+        // Keep persistent migration blocks fresh without Date.now so snapshot selectors can cache stable objects.
         updatedAt: Number.MAX_SAFE_INTEGER,
         stateStartedAt: entry.updatedAt,
         agentType: 'unknown',

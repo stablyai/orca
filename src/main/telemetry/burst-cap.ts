@@ -1,10 +1,4 @@
-// Three independent burst caps; all must pass to transmit an event or apply a consent mutation:
-//   (1) Per-event token bucket (30/min, agent_error 20/min) — caps runaway useEffects/error spam.
-//   (2) Per-session ceiling (1,000) — backstops a compromised renderer to protect the PostHog billing cap.
-//   (3) Consent-mutation bucket (≤5/session, shared setOptIn+acknowledgeBanner) — more is a bug or attack.
-// resetBurstCapsForSession() (on initTelemetry) clears all. Per-event refills continuously; the ceiling
-// and consent bucket intentionally don't — the point is to cap aggregate per-session volume.
-// Overflow logs once per bucket per session then drops silently, so a pathological caller can't DoS stderr.
+// Per-event refill caps runaway producers; non-refilling session/consent ceilings bound aggregate volume. Reset per telemetry session and warn once per bucket so overflow cannot flood stderr.
 
 import { eventSchemas, type EventName } from '../../shared/telemetry-events'
 
@@ -22,7 +16,6 @@ type TokenBucket = {
   warned: boolean
 }
 
-// Module-level singleton state — one telemetry session per main process, no multi-tenant reuse.
 const perEventBuckets = new Map<string, TokenBucket>()
 let perSessionCount = 0
 let perSessionWarned = false
@@ -41,7 +34,7 @@ function getOrCreateBucket(name: string, now: number): TokenBucket {
     perEventBuckets.set(name, bucket)
     return bucket
   }
-  // Lazy refill on access (avoids a timer): `capacity` tokens per `WINDOW_MS`.
+  // Refill lazily to avoid another timer.
   const elapsed = now - bucket.lastRefill
   if (elapsed > 0) {
     const refill = (elapsed / WINDOW_MS) * bucket.capacity
@@ -51,14 +44,9 @@ function getOrCreateBucket(name: string, now: number): TokenBucket {
   return bucket
 }
 
-/**
- * Consume one token for `name`; `true` if allowed, `false` if any bucket rejected it.
- * Order matters: the per-event bucket drops runaway useEffects before they count against the
- * per-session ceiling, which backstops a renderer cycling names to evade the per-event caps.
- */
+/** Spend per-event tokens before session budget so one runaway producer cannot exhaust every event; the global ceiling also bounds cycling names. */
 export function consumeBurstToken(name: EventName): boolean {
-  // Bound `perEventBuckets`: the IPC handler casts any string to EventName, so reject unknown
-  // names a compromised renderer could flood. `Object.hasOwn` (not `in`) skips prototype-chain keys.
+  // Reject untrusted IPC names before map allocation; own-property checks exclude prototype keys.
   if (!Object.hasOwn(eventSchemas, name)) {
     return false
   }
@@ -85,10 +73,7 @@ export function consumeBurstToken(name: EventName): boolean {
   return true
 }
 
-/**
- * Consume one consent-mutation token; returns `false` once the per-session ceiling is hit.
- * Only renderer IPC calls reach here — main-originated mutations bypass IPC and stay uncapped.
- */
+/** Renderer consent mutations share a session cap; main-originated changes bypass this IPC guard. */
 export function consumeConsentMutationToken(): boolean {
   if (consentMutationCount >= CONSENT_MUTATION_CEILING) {
     if (!consentMutationWarned) {
@@ -103,7 +88,6 @@ export function consumeConsentMutationToken(): boolean {
   return true
 }
 
-/** Reset every bucket; called on each telemetry session start (`initTelemetry`), and by tests. */
 export function resetBurstCapsForSession(): void {
   perEventBuckets.clear()
   perSessionCount = 0
@@ -112,7 +96,6 @@ export function resetBurstCapsForSession(): void {
   consentMutationWarned = false
 }
 
-/** Test-only introspection. Not part of the runtime API. */
 export function _getBurstCapStateForTests(): {
   perEventBuckets: Map<string, TokenBucket>
   perSessionCount: number

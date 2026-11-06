@@ -7,8 +7,8 @@ import {
 } from '../../ssh/ssh-exec-stdin-file-transfer'
 import {
   classifySftpFailureForExecFallback,
-  uploadRelayDirectory,
-  writeRelayFile
+  uploadRemoteInstallDirectory,
+  writeRemoteInstallFile
 } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { tagSftpHandshakeCorruption } from '../../ssh/sftp-handshake-corruption'
@@ -57,16 +57,6 @@ beforeEach(() => {
 })
 
 describe('classifySftpFailureForExecFallback', () => {
-  it('accepts only the host refusing or sandboxing SFTP', () => {
-    expect(classifySftpFailureForExecFallback(subsystemRefused())).toBe('sftp-unavailable')
-    expect(
-      classifySftpFailureForExecFallback(
-        new Error('Received exit code 127 while establishing SFTP session')
-      )
-    ).toBe('sftp-unavailable')
-    expect(classifySftpFailureForExecFallback(sandboxed())).toBe('sftp-sandboxed')
-  })
-
   it('falls back only for a parse failure ssh2 reported before the SFTP session was ready', () => {
     const corrupted = (): Error =>
       Object.assign(new Error('Packet length 1111577416 exceeds max length of 262144'), {
@@ -101,8 +91,8 @@ describe('classifySftpFailureForExecFallback', () => {
 describe('relay install transfer fallback selection', () => {
   it('streams over exec stdin when the subsystem is refused, and skips SFTP for the rest of the connect', async () => {
     const conn = connection(subsystemRefused)
-    await uploadRelayDirectory(conn, '/local/relay', '/h/.orca-remote/stage/payload', posix)
-    await writeRelayFile(conn, posix, '/h/.orca-remote/stage/payload/.version', '0.1.0+abc')
+    await uploadRemoteInstallDirectory(conn, '/local/relay', '/h/.orca-remote/stage/payload', posix)
+    await writeRemoteInstallFile(conn, posix, '/h/.orca-remote/stage/payload/.version', '0.1.0+abc')
 
     expect(uploadDirectoryViaExecStdin).toHaveBeenCalledWith(
       conn,
@@ -123,16 +113,16 @@ describe('relay install transfer fallback selection', () => {
   it('asks SFTP again after a reconnect', async () => {
     let generation = 1
     const conn = connection(subsystemRefused, { getConnectGeneration: () => generation })
-    await uploadRelayDirectory(conn, '/l', '/h/r', posix)
+    await uploadRemoteInstallDirectory(conn, '/l', '/h/r', posix)
     generation = 2
-    await uploadRelayDirectory(conn, '/l', '/h/r', posix)
+    await uploadRemoteInstallDirectory(conn, '/l', '/h/r', posix)
     expect(conn.uploadDirectory).toHaveBeenCalledTimes(2)
   })
 
   it('falls back for a chrooted subsystem without remembering it as a host verdict', async () => {
     const conn = connection(sandboxed)
-    await uploadRelayDirectory(conn, '/l', '/h/r', posix)
-    await uploadRelayDirectory(conn, '/l', '/h/r', posix)
+    await uploadRemoteInstallDirectory(conn, '/l', '/h/r', posix)
+    await uploadRemoteInstallDirectory(conn, '/l', '/h/r', posix)
     expect(conn.uploadDirectory).toHaveBeenCalledTimes(2)
     expect(uploadDirectoryViaExecStdin).toHaveBeenCalledTimes(2)
   })
@@ -140,7 +130,7 @@ describe('relay install transfer fallback selection', () => {
   it('surfaces unverifiable transport loss instead of retrying down another path', async () => {
     const lost = unconfirmed()
     const conn = connection(() => lost)
-    await expect(uploadRelayDirectory(conn, '/l', '/h/r', posix)).rejects.toBe(lost)
+    await expect(uploadRemoteInstallDirectory(conn, '/l', '/h/r', posix)).rejects.toBe(lost)
     expect(uploadDirectoryViaExecStdin).not.toHaveBeenCalled()
   })
 
@@ -151,17 +141,17 @@ describe('relay install transfer fallback selection', () => {
       return subsystemRefused()
     })
     await expect(
-      uploadRelayDirectory(conn, '/l', '/h/r', posix, { signal: controller.signal })
+      uploadRemoteInstallDirectory(conn, '/l', '/h/r', posix, { signal: controller.signal })
     ).rejects.toThrow()
     expect(uploadDirectoryViaExecStdin).not.toHaveBeenCalled()
   })
 
   it('keeps the sandbox diagnosis where exec stdin cannot apply', async () => {
     await expect(
-      uploadRelayDirectory(connection(sandboxed), '/l', 'C:/Users/u/r', windows)
+      uploadRemoteInstallDirectory(connection(sandboxed), '/l', 'C:/Users/u/r', windows)
     ).rejects.toThrow(/SFTP subsystem sees a different filesystem/)
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(sandboxed, { usesSystemSshTransport: () => true }),
         '/l',
         '/h/r',

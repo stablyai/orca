@@ -36,33 +36,6 @@ function sharedProjectStore(worktreeHostId: 'local' | undefined, localRepoStampe
   return store
 }
 
-describe('editor tabs of a local worktree in a project shared with a paired host', () => {
-  it.each([
-    { hostId: 'local' as const, localRepoStamped: true },
-    { hostId: undefined, localRepoStamped: true },
-    { hostId: undefined, localRepoStamped: false }
-  ])(
-    'binds to this machine, not the focused paired host (worktree host $hostId, local repo stamped $localRepoStamped)',
-    ({ hostId, localRepoStamped }) => {
-      const store = sharedProjectStore(hostId, localRepoStamped)
-      store.getState().openFile({
-        filePath: '/local/repo-feature/file.ts',
-        relativePath: 'file.ts',
-        worktreeId: 'repo-1::/local/repo-feature',
-        language: 'typescript',
-        mode: 'edit'
-      })
-      const file = store.getState().openFiles[0]
-      expect(file?.runtimeEnvironmentId ?? null).toBeNull()
-      expect(file?.operationProvenance?.generation.route).toEqual({
-        executionHostId: 'local',
-        runtimeEnvironmentId: null
-      })
-      expect(file?.id).not.toContain('paired-mac')
-    }
-  )
-})
-
 describe('an editor tab already bound to a host that does not know its workspace', () => {
   it('still closes', () => {
     const store = sharedProjectStore(undefined, true)

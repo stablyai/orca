@@ -5,12 +5,7 @@ import {
   createClaudeUserMessageQueue
 } from './claude-agent-sdk-user-message-queue'
 
-/**
- * The SDK's input pump is `for await (const frame of prompt) { await transport.write(frame) }`.
- * A rejected write — or an abort — ends that loop abruptly, which calls the
- * generator's `return()`. Everything below drives that exact shape, because the
- * frame the pump already pulled is the one nothing else can reach.
- */
+// Model the SDK pump: it resumes only after transport.write and abandons the iterator on failure.
 const frame = (text: string): SDKUserMessage =>
   ({
     type: 'user',
@@ -77,7 +72,6 @@ describe('claude user message queue', () => {
 
     const pulled = await pump.next()
     expect(pulled.value).toMatchObject({ type: 'user' })
-    // The write proof is the pump coming back for more, exactly as before.
     await expect(settled(sent)).resolves.toBe('pending')
     void pump.next()
     await expect(sent).resolves.toBeUndefined()

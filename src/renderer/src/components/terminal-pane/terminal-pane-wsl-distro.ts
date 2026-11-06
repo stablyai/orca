@@ -7,23 +7,26 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
 type PaneWslDistroState = Parameters<typeof getLocalProjectExecutionRuntimeContext>[0]
 
-/**
- * Distro whose POSIX paths a local pane prints. Mirrors the runtime resolution
- * `pty-connection` uses to decide whether the pane shell runs inside WSL, so a
- * worktree on a Windows drive with a WSL project runtime is still recognized.
- */
+/** Match pty-connection’s runtime distro: local WSL panes print POSIX paths even when the worktree is on a Windows drive. */
 export function resolvePaneWslDistro(
   state: PaneWslDistroState,
   worktreeId: string,
-  worktreePath: string
+  worktreePath: string,
+  resolvedTarget?: Parameters<typeof getLocalProjectExecutionRuntimeContext>[4]
 ): string | null {
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, undefined, {
-    wslAvailable: capabilities?.wslAvailable,
-    availableWslDistros: capabilities?.wslDistros ?? null
-  })
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    state,
+    worktreeId,
+    undefined,
+    {
+      wslAvailable: capabilities?.wslAvailable,
+      availableWslDistros: capabilities?.wslDistros ?? null
+    },
+    resolvedTarget
+  )
   if (projectRuntime?.status === 'resolved') {
     return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : null
   }

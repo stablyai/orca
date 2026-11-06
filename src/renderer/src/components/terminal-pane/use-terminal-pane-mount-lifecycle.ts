@@ -3,24 +3,24 @@ import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
-import { useTerminalParkMountIntent } from './use-terminal-park-mount-intent'
+import { isTerminalTabParked } from './parking/output-watchers/terminal-parked-watcher-registry'
 import { prepareTerminalPaneMount } from './terminal-pane-mount-preparation'
 import { createTerminalPaneManagerOptions } from './terminal-pane-manager-options'
 import { restoreTerminalPaneLayout } from './terminal-pane-layout-restore'
 import { runTerminalPaneBootstrapSplits } from './terminal-pane-mount-bootstrap'
-import { recordingBootstrapSplits } from './terminal-pane-bootstrap-split-record'
+import { runBootstrapSplitInMain } from './terminal-pane-bootstrap-split-in-main'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 import { cleanupTerminalPaneMount } from './terminal-pane-mount-cleanup'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 
-/** Mounts the PaneManager and wires pane creation, close, and split events. */
 export function useTerminalPaneMountLifecycle(
   deps: UseTerminalPaneLifecycleDeps,
   refs: TerminalPaneLifecycleRefs
 ): void {
-  const mountFollowsTerminalPark = useTerminalParkMountIntent(deps.tabId)
+  // Read park intent during render before watcher disposal; instance caching becomes stale on cwd changes.
+  const mountFollowsTerminalPark = isTerminalTabParked(deps.tabId)
   configureTerminalOutputBacklogCap(deps.settings?.terminalScrollbackRows)
 
   useEffect(() => {
@@ -45,8 +45,7 @@ export function useTerminalPaneMountLifecycle(
       refs,
       ptyDeps,
       deferredSplitHandoffs,
-      // Keep the raw startup object for identity checks against the store's queued command.
-      // `ptyDeps.startup` is consumed/mutated during bootstrap.
+      // Preserve startup identity before bootstrap mutates ptyDeps.startup, so ownership checks compare the queued object.
       startup: deps.startup,
       defaultTabCwd: preparation.defaultTabCwd,
       startupCwd: preparation.startupCwd,
@@ -85,15 +84,23 @@ export function useTerminalPaneMountLifecycle(
       ptyDeps,
       initialLayoutHadBuffers: preparation.initialLayoutHadBuffers
     })
-    runTerminalPaneBootstrapSplits({
-      // Switch point: startup splits are recorded in main under the window's pane ids.
-      manager: ORCA_LAYOUT_OWNER_IS_MAIN
-        ? recordingBootstrapSplits(manager, deps.worktreeId, deps.tabId)
-        : manager,
-      ptyDeps,
-      issueCommandSplit: deps.issueCommandSplit,
-      isActive: deps.isActive
-    })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      runBootstrapSplitInMain({
+        manager,
+        worktreeId: deps.worktreeId,
+        tabId: deps.tabId,
+        ptyDeps,
+        issueCommandSplit: deps.issueCommandSplit,
+        isActive: deps.isActive
+      })
+    } else {
+      runTerminalPaneBootstrapSplits({
+        manager,
+        ptyDeps,
+        issueCommandSplit: deps.issueCommandSplit,
+        isActive: deps.isActive
+      })
+    }
     shouldPersistLayout = true
     preparation.syncCanExpandState()
     preparation.syncPaneCount()
@@ -111,7 +118,8 @@ export function useTerminalPaneMountLifecycle(
         showPaneTitle: deps.showPaneTitle,
         persistLayoutSnapshot: deps.persistLayoutSnapshot,
         syncCanExpandState: preparation.syncCanExpandState,
-        queueResizeAll
+        queueResizeAll,
+        detachPaneToNewTab: deps.detachPaneToNewTab
       },
       ptyDeps
     })

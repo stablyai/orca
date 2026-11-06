@@ -1,10 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-/**
- * The person's own Stop press, read as "Stopping…" until its request answers, so the control
- * flips on click while the host's Stop event is still on its way. Presentation only: never
- * stored or sent. Once it answers, the host's own `stopping` is what the chat shows.
- */
+/** Show Stopping immediately until this request settles; afterward use host stopping state. Keep the press local to presentation. */
 export function useStructuredAgentSessionStopPress(sessionId: string): {
   pressed: boolean
   track: <T>(stop: () => Promise<T>) => Promise<T>
@@ -19,7 +15,6 @@ export function useStructuredAgentSessionStopPress(sessionId: string): {
       try {
         return await stop()
       } finally {
-        // Answered or failed alike: a failed request's notice is the existing one.
         if (latest.current === token) {
           latest.current = null
           setPress(null)

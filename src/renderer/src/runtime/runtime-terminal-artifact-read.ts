@@ -1,44 +1,113 @@
-import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { RuntimeReadableFileContent } from './runtime-file-client-types'
-import { callRuntimeRpc } from './runtime-rpc-client'
-import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { readRemoteFileContent } from './runtime-remote-file-content'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
+import {
+  acquireTerminalArtifactGrant,
+  isRenewableGrantError,
+  pinTerminalArtifactGrantTarget,
+  renewRestoredHostFileGrant,
+  renewTerminalArtifactGrant,
+  TERMINAL_ARTIFACT_WRITE_MAX_BYTES,
+  type TerminalArtifactGrantTarget
+} from './runtime-terminal-artifact-grant'
 
-/** Reads a host file outside every workspace through the grant its host issued for it. */
-export async function readRuntimeTerminalArtifactContent(args: {
-  target: RuntimeClientTarget & { kind: 'environment' }
+export async function readHostFilePreview(
+  unpinned: TerminalArtifactGrantTarget
+): Promise<RuntimeReadableFileContent> {
+  const pinned = pinTerminalArtifactGrantTarget(unpinned)
+  const granted = await acquireTerminalArtifactGrant(pinned)
+  if (!granted) {
+    throw new Error(`File not found on its host: ${pinned.absolutePath}`)
+  }
+  return readRuntimeTerminalArtifactContent(
+    { ...pinned, absolutePath: granted.absolutePath, grantId: granted.grantId },
+    { pageOversizedBinary: false }
+  )
+}
+
+/** A granted host file, or a restored tab's absolute host path (grants are never persisted). */
+export function isHostFileOutsideWorkspaces(args: {
+  filePath: string
+  relativePath?: string
+  grantId?: string
+}): boolean {
+  return Boolean(
+    args.grantId ?? (args.relativePath === args.filePath && !chatScratchFileAddress(args.filePath))
+  )
+}
+
+export async function readHostFileOutsideWorkspaces(args: {
+  target: TerminalArtifactGrantTarget['target']
   worktreeId: string
-  absolutePath: string
-  grantId: string
+  filePath: string
+  relativePath?: string
+  grantId?: string
+  expectedEnvironmentPairingRevision?: number
+  pageOversizedBinary: boolean
 }): Promise<RuntimeReadableFileContent> {
-  const params = {
-    worktree: toRuntimeWorktreeSelector(args.worktreeId),
-    grantId: args.grantId,
-    absolutePath: args.absolutePath
-  }
-  let result: RuntimeFileReadResult
+  const pinned = pinTerminalArtifactGrantTarget({
+    target: args.target,
+    worktreeId: args.worktreeId,
+    absolutePath: args.filePath,
+    expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+  })
+  const grantId = args.grantId ?? (await renewRestoredHostFileGrant(pinned))
+  return readRuntimeTerminalArtifactContent(
+    { ...pinned, grantId },
+    { pageOversizedBinary: args.pageOversizedBinary }
+  )
+}
+
+/** Reads a host file outside every workspace through its grant, renewing a lapsed or stale one. */
+export async function readRuntimeTerminalArtifactContent(
+  unpinned: TerminalArtifactGrantTarget & { grantId: string },
+  options: { pageOversizedBinary: boolean }
+): Promise<RuntimeReadableFileContent> {
+  const args = pinTerminalArtifactGrantTarget(unpinned)
   try {
-    result = await callRuntimeRpc<RuntimeFileReadResult>(
-      args.target,
-      'files.readTerminalArtifact',
-      params,
-      { timeoutMs: 15_000 }
-    )
-  } catch (err) {
-    // Why: the host refuses binary artifacts with this exact typed error; images use the preview.
-    if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
-      return callRuntimeRpc<RuntimeFilePreviewResult>(
-        args.target,
-        'files.readTerminalArtifactPreview',
-        params,
-        { timeoutMs: 15_000 }
-      )
+    return await readThroughGrant(args, options)
+  } catch (error) {
+    if (!isRenewableGrantError(error)) {
+      throw error
     }
-    throw err
   }
-  if (result.truncated) {
-    throw new Error(`Remote file is too large to open in the editor (${result.byteLength} bytes)`)
+  // Why: a file changed on its host stales the tab's grant; Reload and Compare must still read it.
+  const renewed = await renewTerminalArtifactGrant(args)
+  if (!renewed) {
+    throw new Error(`File not found on its host: ${args.absolutePath}`)
   }
-  return { content: result.content, isBinary: false }
+  const content = await readThroughGrant({ ...args, grantId: renewed.grantId }, options)
+  return renewed.readOnly ? { ...content, readOnly: true } : content
+}
+
+async function readThroughGrant(
+  args: TerminalArtifactGrantTarget & { grantId: string },
+  options: { pageOversizedBinary: boolean }
+): Promise<RuntimeReadableFileContent> {
+  const content = await readRemoteFileContent(
+    {
+      target: args.target,
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
+      grantId: args.grantId,
+      absolutePath: args.absolutePath,
+      expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+    },
+    options
+  )
+  return {
+    ...content,
+    terminalArtifactGrantId: args.grantId,
+    ...(grantCanSave(content) ? {} : { readOnly: true as const })
+  }
+}
+
+/** A grant saves only text within one write; a larger or binary file opens read-only. */
+function grantCanSave(content: RuntimeReadableFileContent): boolean {
+  // Why the length first: UTF-8 never takes fewer bytes than UTF-16 units, so long text skips encoding.
+  return (
+    !content.isBinary &&
+    content.content.length <= TERMINAL_ARTIFACT_WRITE_MAX_BYTES &&
+    new TextEncoder().encode(content.content).byteLength <= TERMINAL_ARTIFACT_WRITE_MAX_BYTES
+  )
 }

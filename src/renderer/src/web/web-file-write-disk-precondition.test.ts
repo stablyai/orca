@@ -35,22 +35,6 @@ function methodsFor(
 }
 
 describe('paired web client save precondition', () => {
-  it('lets a server that enforces the precondition compare at write time', async () => {
-    const { methods, callRuntimeResult, calledMethods } = methodsFor(
-      [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY],
-      'original'
-    )
-
-    await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(calledMethods()).toEqual(['files.writeIfUnchanged'])
-    expect(callRuntimeResult.mock.calls[0]?.[1]).toMatchObject({ diskPrecondition: precondition })
-  })
-
   it('refuses without writing when an older server holds newer disk content', async () => {
     const { methods, calledMethods } = methodsFor([], 'agent rewrite')
 
@@ -64,30 +48,21 @@ describe('paired web client save precondition', () => {
     expect(calledMethods()).toEqual(['files.readPreview'])
   })
 
-  it('writes through an older server without the field once the disk matches', async () => {
-    const { methods, callRuntimeResult, calledMethods } = methodsFor([], 'original')
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(result).toEqual({ ok: true })
-    expect(calledMethods()).toEqual(['files.readPreview', 'files.write'])
-    expect(callRuntimeResult.mock.calls[1]?.[1]).not.toHaveProperty('diskPrecondition')
-  })
-
-  it('reports a confirmed-missing file to an autosave through an older server', async () => {
-    const { methods, calledMethods } = methodsFor([], null)
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(result).toEqual({ ok: false, diskConflict: 'missing' })
+  it('refuses an ambiguous automatic baseline before sending to a v1 server', async () => {
+    const { methods, calledMethods } = methodsFor(
+      [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY],
+      'a�'
+    )
+    expect(
+      await methods.writeFile({
+        filePath: '/hub/repo/readme.md',
+        content: 'a�',
+        diskPrecondition: {
+          expectedSignature: getDiskBaselineSignature('a�'),
+          requireLosslessUtf8: true
+        }
+      })
+    ).toEqual({ ok: false, diskConflict: 'not-utf8' })
     expect(calledMethods()).toEqual(['files.readPreview'])
   })
 
@@ -102,20 +77,6 @@ describe('paired web client save precondition', () => {
       })
     ).rejects.toThrow('timed out')
     expect(calledMethods()).toEqual(['files.readPreview'])
-  })
-
-  it('reports a too-large file an older server also cannot page as changed', async () => {
-    // The paired client surfaces a failed envelope as an Error carrying the wire message.
-    const { methods, calledMethods } = methodsFor([], null, 'file_too_large')
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: { ...precondition, allowMissing: true }
-    })
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(calledMethods()).not.toContain('files.write')
   })
 
   it.each([

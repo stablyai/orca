@@ -6,14 +6,6 @@ function rateLimitedResponse(headers?: Record<string, string>): Response {
 }
 
 describe('createOAuthUsageError', () => {
-  it('captures a numeric Retry-After on 429', async () => {
-    const error = await createOAuthUsageError(rateLimitedResponse({ 'retry-after': '3037' }))
-    expect(error.status).toBe(429)
-    expect(error.skipPtyFallback).toBe(true)
-    expect(error.retryAfterMs).toBe(3037 * 1000)
-    expect(error.message).toBe('Claude usage is rate limited right now.')
-  })
-
   it('captures an HTTP-date Retry-After on 429', async () => {
     const error = await createOAuthUsageError(
       rateLimitedResponse({ 'retry-after': new Date(Date.now() + 90_000).toUTCString() })

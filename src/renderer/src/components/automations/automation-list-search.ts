@@ -7,8 +7,7 @@ export {
   type AutomationListSearchQueryResolution
 } from './automation-list-search-query'
 
-// Why: prompts can be multi-MB agent instructions. Index only a fixed prefix so
-// lowercasing/includes stay O(bound) per automation rather than O(prompt size).
+// Bound indexed fields so lowercasing/includes cannot scale with multi-MB prompts.
 export const AUTOMATION_LIST_SEARCH_NAME_MAX_CODE_UNITS = 512
 export const AUTOMATION_LIST_SEARCH_PROJECT_MAX_CODE_UNITS = 1_024
 export const AUTOMATION_LIST_SEARCH_WORKSPACE_MAX_CODE_UNITS = 512
@@ -56,7 +55,7 @@ export function truncateAutomationListSearchField(value: string, maxCodeUnits: n
   }
   let end = maxCodeUnits
   const last = value.charCodeAt(end - 1)
-  // High surrogate at the cut would leave an orphan low surrogate.
+  // Avoid leaving an unmatched high surrogate at the end of the prefix.
   if (last >= 0xd800 && last <= 0xdbff) {
     end -= 1
   }
@@ -106,12 +105,7 @@ export function automationListSearchIndexMatches(
   return false
 }
 
-/**
- * Content fingerprint for search-relevant fields only. Used so list refresh
- * ticks that replace arrays with equivalent search content do not rebuild
- * indexes or re-run filtering. Fields are capped first so fingerprinting a
- * multi-MB prompt costs the same as indexing it.
- */
+/** Fingerprint only capped search fields so equivalent refreshes reuse indexes and large prompts keep bounded cost. */
 export function buildAutomationListSearchFingerprint(
   sources: readonly AutomationListSearchFields[],
   keys?: readonly string[]

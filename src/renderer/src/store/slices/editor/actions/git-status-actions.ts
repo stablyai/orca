@@ -10,7 +10,7 @@ import {
   createLoadingBranchCompareSummary,
   getKnownGitHead
 } from '../git/branch-compare-state'
-import { recordDroppedEditorFilesInLayoutOwner } from '../tabs/editor-tab-layout-owner'
+import { closeDroppedEditorFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function createGitStatusActions(
@@ -21,6 +21,7 @@ export function createGitStatusActions(
   | 'gitStatusByWorktree'
   | 'gitStatusHeadByWorktree'
   | 'gitStatusHugeByWorktree'
+  | 'gitStatusReadErrorByWorktree'
   | 'gitBranchLineTotalByWorktree'
   | 'gitIgnoredPathsByWorktree'
   | 'gitConflictOperationByWorktree'
@@ -33,6 +34,7 @@ export function createGitStatusActions(
     gitStatusByWorktree: {},
     gitStatusHeadByWorktree: {},
     gitStatusHugeByWorktree: {},
+    gitStatusReadErrorByWorktree: {},
     gitBranchLineTotalByWorktree: {},
     gitIgnoredPathsByWorktree: {},
     gitConflictOperationByWorktree: {},
@@ -52,6 +54,23 @@ export function createGitStatusActions(
       }),
     // Why: session-local conflict tracking (Resolved-locally) lives only in the renderer; main returns raw git status, so the renderer owns conflictStatusSource.
     setGitStatus: (worktreeId, status) => {
+      const { readError } = status
+      if (readError !== undefined) {
+        // A failed read proves nothing about the tree, so keep the last known state and flag it.
+        set((s) =>
+          s.gitStatusReadErrorByWorktree[worktreeId] === readError
+            ? s
+            : {
+                gitStatusReadErrorByWorktree: {
+                  ...s.gitStatusReadErrorByWorktree,
+                  [worktreeId]: readError
+                }
+              }
+        )
+        // Conflict markers are read independently of the index, so the banner stays live.
+        get().setConflictOperation(worktreeId, status.conflictOperation)
+        return
+      }
       const filesBefore = ORCA_LAYOUT_OWNER_IS_MAIN ? get().openFiles : null
       set((s) => {
         const hadStatusEntry = Object.hasOwn(s.gitStatusByWorktree, worktreeId)
@@ -75,7 +94,7 @@ export function createGitStatusActions(
             ? prevOperation
             : status.conflictOperation
 
-        // Why: operation → 'unknown' with zero unresolved means an abort (git merge --abort), not resolution; clear tracked paths instead of marking each "Resolved locally".
+        // Unknown operation with zero conflicts can mean abort; clear tracking instead of calling every path Resolved locally.
         if (
           statusIsComplete &&
           nextOperation === 'unknown' &&
@@ -162,6 +181,8 @@ export function createGitStatusActions(
             (prevBranchLineTotal.generated?.removed ?? null) ===
               (nextBranchLineTotal.generated?.removed ?? null))
 
+        const readErrorUnchanged = !Object.hasOwn(s.gitStatusReadErrorByWorktree, worktreeId)
+
         const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
         const nextStatusHead = getKnownGitHead(status.head)
         const statusHeadUnchanged = prevStatusHead === nextStatusHead
@@ -182,6 +203,7 @@ export function createGitStatusActions(
           ignoredUnchanged &&
           hugeUnchanged &&
           branchLineTotalUnchanged &&
+          readErrorUnchanged &&
           statusHeadUnchanged &&
           !shouldInvalidateBranchCompare
         ) {
@@ -227,9 +249,18 @@ export function createGitStatusActions(
           ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
           : s.gitBranchChangesByWorktree
 
+        const nextReadErrorMap = readErrorUnchanged
+          ? s.gitStatusReadErrorByWorktree
+          : (() => {
+              const copy = { ...s.gitStatusReadErrorByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+
         return {
           openFiles: nextOpenFiles,
           gitStatusHugeByWorktree: nextHugeMap,
+          gitStatusReadErrorByWorktree: nextReadErrorMap,
           gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
           gitStatusHeadByWorktree: nextStatusHeadMap,
           gitStatusByWorktree: statusUnchanged
@@ -248,9 +279,9 @@ export function createGitStatusActions(
           gitBranchChangesByWorktree: nextBranchChanges
         }
       })
-      // A resolved deleted-side conflict drops its placeholder record; main closes its tab.
+      // A resolved deleted-side conflict drops its placeholder record; main closes its tab, and its frame drops it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && filesBefore && filesBefore !== get().openFiles) {
-        recordDroppedEditorFilesInLayoutOwner(get(), filesBefore, worktreeId)
+        closeDroppedEditorFileTabsThroughLayoutOwner(get(), filesBefore, worktreeId)
       }
     },
     setConflictOperation: (worktreeId, operation) =>

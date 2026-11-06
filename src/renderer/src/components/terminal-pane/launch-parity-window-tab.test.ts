@@ -2,7 +2,11 @@ import type * as React from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { createManager, createPane } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -28,6 +32,15 @@ import {
   windowSpawnRequest,
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+import { createPaneManagerOptionsTestContext } from './terminal-pane-manager-options-test-context'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
@@ -40,15 +53,17 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: () => false }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), message: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return { ...actual, useCallback: <T>(fn: T): T => fn }
 })
 // Row 8: what precedes the launch (setup policy and hooks trust) is decided, not asked.
-vi.mock('@/lib/launch-work-item-direct-preflight', async (importOriginal) => ({
+vi.mock('@/lib/workspace/creation/setup/workspace-setup-preparation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  resolveDirectSetupDecision: async () => ({ kind: 'decided', decision: 'inherit' })
+  inspectRequiredWorkspaceSetup: async () => ({ kind: 'decided', decision: 'inherit' })
 }))
 vi.mock('@/lib/ensure-hooks-confirmed', () => ({ ensureHooksConfirmed: async () => 'run' }))
 vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
@@ -63,11 +78,10 @@ vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
 }))
 
 const load = perClientLoader(async () => ({
-  launch: await import('@/lib/launch-agent-in-new-tab'),
+  launch: await import('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'),
   quick: await import('@/lib/run-quick-command-in-new-tab'),
   vault: await import('@/lib/launch-ai-vault-session'),
-  resume: await import('@/lib/ai-vault-resume-command'),
-  dashboard: await import('@/components/dashboard/launch-dashboard-agent'),
+  resume: await import('@/lib/agent-session/resume/history/ai-vault-resume-command'),
   pane: await import('./pty-connection'),
   paneOptions: await import('./terminal-pane-manager-options'),
   defaults: await import('@/lib/pane-manager/pane-terminal-options'),
@@ -80,7 +94,9 @@ async function openTab(c: WindowLaunchCase) {
   const modules = await load(c.client)
   await installTerminalTestGlobals()
   Object.assign(window.api.platform, { get: () => ({ platform: c.client, osRelease: '10' }) })
-  const store = modules.createStore()
+  const store = modules.createStore(
+    (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+  )
   holder.store = store
   store.setState(
     launchWorkspaceState(c.workspace, { ...getDefaultSettings('/home/alice'), ...c.settings })
@@ -105,10 +121,6 @@ async function openTab(c: WindowLaunchCase) {
       launchSource: 'terminal_context_menu',
       initialCwd: producer.initialCwd
     })
-  } else if (producer.kind === 'plus' && producer.via === 'dashboard') {
-    // Its workspace activation asks for a PR refresh, which this harness has no bridge for.
-    Object.assign(window.api, { gh: {} })
-    modules.dashboard.launchDashboardAgent({ worktreeId, agent: producer.agent })
   } else if (producer.kind === 'plus') {
     // Hand-built copies of what the "+" menu and the new-agent shortcut pass.
     modules.launch.launchAgentInNewTab({
@@ -174,25 +186,20 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
   // A measured grid no lane defaults to, so the request shows the pane's size reached it.
   Object.assign(pane.terminal, PANE_GRID)
   // The xterm keyboard options the real TerminalPane builds for this tab, over the defaults (pane-dom-creation.ts).
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: building the bag and terminalOptions read only these deps, ptyDeps.startup and startupCwd.
-  const managerOptions = modules.paneOptions.createTerminalPaneManagerOptions({
-    deps: {
-      tabId: tab.id,
-      worktreeId,
-      settingsRef: { current: store.getState().settings },
-      isVisibleRef: { current: true },
-      effectiveMacOptionAsAltRef: { current: 'false' }
-    },
-    ptyDeps: { startup },
-    startupCwd: cwd
-  } as never)
+  const paneArgs = mockPanePtyArgs(pane, createManager(1), deps)
+  const optionsContext = createPaneManagerOptionsTestContext(paneArgs[2], null, cwd)
+  optionsContext.deps.settingsRef = { current: store.getState().settings }
+  const managerOptions = modules.paneOptions.createTerminalPaneManagerOptions(optionsContext)
   const { vtExtensions } = {
     ...modules.defaults.buildDefaultTerminalOptions(),
     ...managerOptions.terminalOptions?.(pane.id)
   }
   pane.terminal.options.vtExtensions = { kittyKeyboard: vtExtensions?.kittyKeyboard === true }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane fixtures model every member connectPanePty reads, as in pty-connection-startup-command-delivery.test.ts.
-  modules.pane.connectPanePty(pane as never, createManager(1) as never, deps as never)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  bindPaneAgentTitleMocks(paneArgs[2], agentTitleMocks)
+
+  modules.pane.connectPanePty(...paneArgs)
   await flushAsyncTicks(20)
   const [request] = spawn.mock.calls[0] ?? []
   // Fixed ids so the table can name them; the color replies are this harness's theme.
@@ -204,9 +211,7 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
   )
 }
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 1, 2 and 6, window
-// half): the real producer, store and pane build the pty:spawn request each case's table row names.
-// C2 (typed-prompt tabs onto the pane trigger) and C3 (Antigravity continue) check against it.
+// Use real launch producers, store and pane to pin the spawn-request parity baseline for later convergence.
 describe('window-tab producers: the pty:spawn request a real pane sends', () => {
   // Why: the first import transforms the whole pane graph; keep that out of the first case.
   beforeAll(async () => {

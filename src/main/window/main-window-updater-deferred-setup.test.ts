@@ -1,17 +1,24 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
-import type { UpdaterSetupOptions } from '../updater'
+import type { Store } from '../persistence/loading-store/store'
+import type { UpdaterSetupOptions } from '../updater/lifecycle/updater-setup'
 
-const { setupMock, milestoneMock } = vi.hoisted(() => ({
+const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
+  getMainWindowMock: vi.fn<() => BrowserWindow | null>(() => null),
   setupMock: vi.fn<(window: BrowserWindow, options?: UpdaterSetupOptions) => void>(),
   milestoneMock: vi.fn<(name: string) => void>()
 }))
 
 vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
-vi.mock('../updater', () => ({ setupAutoUpdater: setupMock }))
-vi.mock('../ipc/ui', () => ({ isTrustedUIRenderer: () => true }))
+vi.mock('../updater/updater-service', () => ({ setupAutoUpdater: setupMock }))
+vi.mock('../updater/lifecycle/electron-updater-proxy-session', () => ({
+  applyProxyToElectronUpdaterSession: vi.fn()
+}))
+vi.mock('../ipc/ui', () => ({
+  isTrustedUIRenderer: () => true,
+  getTrustedUIRendererWindow: getMainWindowMock
+}))
 vi.mock('../startup/startup-diagnostics', () => ({ logStartupMilestone: milestoneMock }))
 
 function createWindowOwner() {
@@ -26,6 +33,7 @@ function createWindowOwner() {
     releaseChannelOverride: 'rc'
   } satisfies Partial<ReturnType<Store['getUI']>>
   const store = {
+    getSettings: vi.fn(() => ({})),
     getUI: vi.fn(() => ui),
     updateUI: vi.fn<(patch: Parameters<Store['updateUI']>[0]) => void>(),
     flushPendingAsync: vi.fn<Store['flushPendingAsync']>().mockResolvedValue(undefined)
@@ -389,7 +397,9 @@ describe('completed deferred updater setup ownership', () => {
     })
     updater.ensureAutoUpdaterConfigured()
     const options = capturedSetupOptions()
+    expect(options.getMainWindow).toBe(getMainWindowMock)
     expect(Object.keys(options)).toEqual([
+      'getMainWindow',
       'getLastUpdateCheckAt',
       'onBeforeQuit',
       'setLastUpdateCheckAt',
@@ -398,6 +408,7 @@ describe('completed deferred updater setup ownership', () => {
       'setPendingUpdateNudgeId',
       'setDismissedUpdateNudgeId',
       'getReleaseChannelOverride',
+      'getUpdateDelayDays',
       'onBeforeQuitFailure',
       'installMode'
     ])
@@ -405,6 +416,9 @@ describe('completed deferred updater setup ownership', () => {
     expect(options.getPendingUpdateNudgeId?.()).toBe('pending')
     expect(options.getDismissedUpdateNudgeId?.()).toBe('dismissed')
     expect(options.getReleaseChannelOverride?.()).toBe('rc')
+    expect(options.getUpdateDelayDays?.()).toBe(0)
+    owner.store.getSettings.mockReturnValue({ updateDelayDays: 7 })
+    expect(options.getUpdateDelayDays?.()).toBe(7)
     owner.store.getUI.mockReturnValue({ ...owner.store.getUI(), lastUpdateCheckAt: 456 })
     expect(options.getLastUpdateCheckAt?.()).toBe(456)
     options.setLastUpdateCheckAt?.(789)

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer
-} from '../../../shared/remote-runtime-shared-control-test-server'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   captureRuntimeEnvironmentCapabilityEvidence,
@@ -16,6 +16,7 @@ import {
   closeRemoteRuntimeRequestConnection,
   ensureRemoteRuntimeSharedControlConnection,
   getRemoteRuntimeSharedControlDiagnostics,
+  isRemoteRuntimeConnectionReady,
   pauseRemoteRuntimeSharedControlRetry,
   reconnectRemoteRuntimeSharedControlConnection,
   sendRemoteRuntimeSharedControlRequest,
@@ -39,7 +40,16 @@ describe('runtime environment shared-control connection cache', () => {
     ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
     ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
     reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
-    await waitFor(() => server.connectionCount() === 1)
+    await waitFor(() => isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, server.pairing))
+    expect(isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, server.pairing)).toBe(true)
+    expect(
+      isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, {
+        ...server.pairing,
+        endpoint: 'ws://127.0.0.1:1'
+      })
+    ).toBe(false)
+    expect(server.connectionCount()).toBe(1)
+    expect(server.requests).toHaveLength(0)
 
     server.closeClients()
     await waitFor(
@@ -84,18 +94,6 @@ describe('runtime environment shared-control connection cache', () => {
     server.closeClients()
     await waitFor(() => getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)?.state !== 'ready')
     expect(getRemoteRuntimeSharedControlAnsweredAt(ENVIRONMENT_ID)).toBeNull()
-  })
-
-  it('blocks standing creation while manual intent is disconnected', async () => {
-    const server = await createSharedControlTestServer()
-    markRuntimeEnvironmentManuallyDisconnected(ENVIRONMENT_ID)
-
-    ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
-    reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
-    await delay(50)
-
-    expect(server.connectionCount()).toBe(0)
-    expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)).toBeNull()
   })
 
   it('lets a bypass request finish but never retries it after manual disconnect', async () => {
@@ -161,9 +159,7 @@ describe('runtime environment shared-control connection cache', () => {
       const response = await sendRemoteRuntimeSharedControlRequestOnRuntime(
         ENVIRONMENT_ID,
         server.pairing,
-        'files.write',
-        { relativePath: 'a.ts' },
-        1000,
+        { method: 'files.write', params: { relativePath: 'a.ts' }, timeoutMs: 1000 },
         'runtime-a'
       )
 
@@ -171,6 +167,29 @@ describe('runtime environment shared-control connection cache', () => {
       expect(server.requests.some((request) => request.method === 'files.write')).toBe(sent)
     }
   )
+
+  it('sends the prepared request on the runtime-pinned shared socket', async () => {
+    const server = await createSharedControlTestServer({
+      resultForRequest: (method) => (method === 'status.get' ? { runtimeId: 'runtime-a' } : {})
+    })
+
+    await sendRemoteRuntimeSharedControlRequestOnRuntime(
+      ENVIRONMENT_ID,
+      server.pairing,
+      {
+        method: 'orchestration.federationImport',
+        params: { items: [1, 2, 3] },
+        timeoutMs: 1000,
+        prepareRequest: ({ envelope }) => ({ params: { items: [1] }, envelope })
+      },
+      'runtime-a'
+    )
+
+    expect(server.requests.at(-1)).toMatchObject({
+      method: 'orchestration.federationImport',
+      params: { items: [1] }
+    })
+  })
 })
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {

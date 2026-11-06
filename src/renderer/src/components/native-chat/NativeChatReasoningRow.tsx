@@ -1,12 +1,11 @@
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,
   type NativeChatReasoningHeadline
-} from '../../../../shared/native-chat-reasoning-row'
+} from '../../../../shared/native-chat/transcript/native-chat-reasoning-row'
 import {
   NativeChatReasoningBody,
   NativeChatReasoningChevron
@@ -28,16 +27,12 @@ function translatedHeadline(headline: NativeChatReasoningHeadline): string {
 export function NativeChatReasoningRow({
   message,
   markdown,
-  turnIsWorking = false,
-  onLinkClick,
-  allowFileUriLinks
+  turnIsWorking = false
 }: {
   message: Pick<NativeChatMessage, 'id' | 'role' | 'state' | 'completedAt' | 'timestamp'>
   markdown: string
   /** The row's own turn (or subagent) is still running; an open row there has not ended. */
   turnIsWorking?: boolean
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }): React.JSX.Element | null {
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
   const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
@@ -52,7 +47,6 @@ export function NativeChatReasoningRow({
     <div className="min-w-0 text-sm text-chat-foreground-faint">
       <Collapsible open={disclosure.open} onOpenChange={disclosure.setOpen}>
         <CollapsibleTrigger asChild>
-          {/* Laid out like a tool run's header, so its glyph sits in the same column. */}
           <button
             type="button"
             className="group/reasoning flex min-h-6 w-full min-w-0 items-center gap-1.5 rounded-md py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -66,12 +60,7 @@ export function NativeChatReasoningRow({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent animation="height" data-native-chat-member-detail>
-          <NativeChatReasoningBody
-            rowKey={disclosureKey}
-            markdown={markdown}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
-          />
+          <NativeChatReasoningBody rowKey={disclosureKey} markdown={markdown} />
         </CollapsibleContent>
       </Collapsible>
     </div>

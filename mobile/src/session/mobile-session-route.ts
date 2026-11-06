@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
+import { HOST_SESSION_ROUTE, type HostStackRouteTarget } from '../navigation/host-stack-navigation'
 
 export type MobileSessionRouteParams = {
   hostId: string
@@ -10,8 +10,7 @@ export type MobileSessionRouteParams = {
   executionHost?: ExecutionHostId
 }
 
-/** Identities stay raw — the navigator owns the params, so pre-encoding a
- *  workspace id would reach the session screen still escaped. */
+// Leave identities raw because the navigator owns parameter encoding.
 export function mobileSessionRouteTarget({
   hostId,
   worktreeId,
@@ -20,7 +19,7 @@ export function mobileSessionRouteTarget({
   executionHost
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
-    name: '[hostId]/session/[worktreeId]',
+    name: HOST_SESSION_ROUTE,
     params: {
       hostId,
       worktreeId,

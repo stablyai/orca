@@ -3,6 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AppState } from '../types'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -104,7 +105,13 @@ describe('creating a tab directly into a new split', () => {
         split: { ...SPLIT, sourceGroupId: atomic.sourceGroupId, activate }
       })
 
-      expect(published).toEqual({ emptyGroups: [], updates: 1 })
+      // Switch on, a second publication marks the new pane as starting in main.
+      expect(published).toEqual({ emptyGroups: [], updates: ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 1 })
+      expect(
+        Object.keys(atomic.store.getState().terminalPaneStartsByPaneKey).filter((key) =>
+          key.startsWith('terminal-2:')
+        )
+      ).toHaveLength(ORCA_LAYOUT_OWNER_IS_MAIN ? 1 : 0)
       expect(
         layoutProjection(
           atomic.store.getState(),
@@ -146,16 +153,33 @@ describe('creating a tab directly into a new split', () => {
       ).toEqual(layoutProjection(chained.store.getState(), chained.sourceGroupId, chainedGroupId!))
     }
   )
+})
 
-  it('records the pane interaction the empty split used to record', () => {
+describe('creating a tab shown in another pane', () => {
+  it('shows the new tab in its pane without making that pane the active one', () => {
     const { store, sourceGroupId } = seededStore()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().createTab(WT, undefined, undefined, {
-      split: { ...SPLIT, sourceGroupId }
+    const browserGroupId = store
+      .getState()
+      .createEmptySplitGroup(WT, sourceGroupId, 'right', { activate: false })!
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'browser-old',
+      targetGroupId: browserGroupId,
+      activate: false
+    })
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'browser-new',
+      targetGroupId: browserGroupId,
+      activate: false,
+      showInGroup: true
     })
 
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('terminal-panes')
+    const state = store.getState()
+    expect(state.groupsByWorktree[WT].find((g) => g.id === browserGroupId)?.activeTabId).toBe(
+      'browser-new'
+    )
+    expect(state.activeGroupIdByWorktree[WT]).toBe(sourceGroupId)
+    expect(
+      state.unifiedTabsByWorktree[WT].find((tab) => tab.id === 'browser-new')?.lastFocusedAt
+    ).toBeUndefined()
   })
 })

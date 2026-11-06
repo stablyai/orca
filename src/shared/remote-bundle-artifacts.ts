@@ -1,10 +1,5 @@
-/**
- * Names and platforms shared by the bundles Orca ships to other machines: the WSL guest
- * programs (`build-wsl-guest.mjs`, out/relay/wsl) and the per-platform ripgrep.
- *
- * Keep this file erasable-only TypeScript: build-wsl-guest.mjs imports it directly under Node's
- * type stripping, which rejects enums, namespaces, and parameter properties.
- */
+/** Shared WSL guest/ripgrep artifact names. Keep erasable-only TypeScript: Node build-wsl-guest.mjs imports via type stripping,
+ * which rejects enums, namespaces and parameter properties. */
 
 /** Every host platform Orca bundles programs for. */
 export const REMOTE_BUNDLE_PLATFORMS = [
@@ -21,3 +16,5 @@ export type RemoteBundlePlatform = (typeof REMOTE_BUNDLE_PLATFORMS)[number]
 export const OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
 /** Built into the WSL guest bundle dir (out/relay/wsl). */
 export const WSL_CLAUDE_PROFILE_HELPER_FILENAME = 'claude-profile-wsl.cjs'
+/** Built into the WSL guest bundle dir; runs the owned OpenCode text task inside the distro. */
+export const OPENCODE_WSL_TEXT_TASK_FILENAME = 'opencode-text-task-wsl.cjs'

@@ -5,11 +5,10 @@ import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
 import type { resolvePinnedFederatedServer } from './worker-observation'
 
-// Pre-structured-output servers only expose raw terminal reads; keep that path fenced and
-// cursor-scoped so an old peer never silently degrades a transcript cursor.
+// Old peers expose only terminal reads; retain fences and cursor scope instead of silently degrading transcript cursors.
 export async function readLegacyFederatedTerminal(args: {
   runtime: Parameters<typeof resolvePinnedFederatedServer>[0]
   server: ReturnType<typeof resolvePinnedFederatedServer>

@@ -1,4 +1,4 @@
-import type { JiraProject, JiraSiteSelection } from '../../shared/jira-types'
+import type { JiraProject, JiraSiteSelection } from '../../shared/jira/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'

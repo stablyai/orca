@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { fingerprintAuthenticatedPairingCredential } from '../../../../device-principal'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { fingerprintAuthenticatedPairingCredential } from '../../../server/pairing/device-principal'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
 
 describe('orchestration federation control mail', () => {
@@ -274,7 +278,7 @@ describe('orchestration federation control mail', () => {
 
   it('uses imported types for waiter eligibility and returns the oldest full batch', async () => {
     vi.useFakeTimers()
-    await dispatchImport(importRequest('import-heartbeat', 1, 'relay-heartbeat', 'heartbeat'))
+    await dispatchImport(importRequest('import-merge-ready', 1, 'relay-merge-ready', 'merge_ready'))
 
     const escalationWaiter = workerDispatcher.dispatch(
       checkRequest('wait-escalation', true, 1_000, 'escalation')
@@ -289,7 +293,7 @@ describe('orchestration federation control mail', () => {
       result: {
         count: 2,
         messages: [
-          { id: 'relay-heartbeat', type: 'heartbeat' },
+          { id: 'relay-merge-ready', type: 'merge_ready' },
           { id: 'relay-escalation', type: 'escalation' }
         ]
       }

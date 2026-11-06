@@ -2,7 +2,13 @@ import type { PushDatabase } from './push-database.js'
 
 // Caps worker and prune traffic at poolMax - 1 connections so request-path lookups always find one.
 export function reserveRequestConnection(database: PushDatabase, poolMax: number): PushDatabase {
-  const capacity = Math.max(1, poolMax - 1)
+  return limitPushDatabaseConcurrency(database, Math.max(1, poolMax - 1))
+}
+
+export function limitPushDatabaseConcurrency(
+  database: PushDatabase,
+  capacity: number
+): PushDatabase {
   let active = 0
   const waiting: (() => void)[] = []
   const admit = async <T>(run: () => Promise<T>): Promise<T> => {

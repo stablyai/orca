@@ -1,7 +1,6 @@
 import type { CommandSpec } from './args'
 
-// Why: predictable verbs prevent failed agent guesses; existing divergences stay
-// grandfathered because renaming them would break compatibility.
+// Grandfather existing verb divergences to avoid breaking compatibility.
 
 type VerbFamily = {
   name: string
@@ -61,8 +60,6 @@ export function findVocabularyViolations(specs: CommandSpec[]): VocabularyViolat
       if (family.allowlist.has(command)) {
         continue
       }
-      // Why: an alias on the canonical verb makes the command reachable the
-      // canonical way, which satisfies the policy without a rename.
       if (hasCanonicalAlias(spec, family.canonical)) {
         continue
       }

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
-import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1 } from '../persistence-session-fixtures'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 
 export function registerPtyBindingRestartRetirementTests(): void {
@@ -53,6 +53,24 @@ export function registerPtyBindingRestartRetirementTests(): void {
     expect(
       store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId
     ).toEqual({})
+  })
+
+  it('keeps a same-id incarnation published while an unstamped retirement waits in the Store queue', async () => {
+    const { store, authority } = await fixture()
+    await store.persistPtyBinding({ ...binding, incarnationId: undefined })
+    const gate = authority.pause()
+    const publish = store.persistPtyBinding(binding)
+    await gate.started.promise
+    const retire = store.retirePtyBinding(binding, undefined, { incarnationId: undefined })
+    gate.finish.resolve()
+    await publish
+    expect(await retire).toBe(false)
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId?.[
+        binding.leafId
+      ]
+    ).toBe(binding.ptyId)
+    expect(await store.retirePtyBinding(binding)).toBe(true)
   })
 
   it('restores the old binding after a known save failure and allows another attempt', async () => {

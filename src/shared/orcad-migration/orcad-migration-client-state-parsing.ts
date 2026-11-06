@@ -1,8 +1,5 @@
 import { parseHostStableKey } from '../automation-owner-key'
-import {
-  MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
-  type ClientHostedBrowserCloseIntent
-} from '../client-hosted-browser-close-intent'
+import { MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS as MAX_ORCAD_MIGRATION_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS } from '../workspace-session/client-hosted-browser-close-intent'
 import type {
   OrcadMigrationClientHostedBrowserCloseIntent,
   OrcadMigrationUiRoutingState
@@ -23,8 +20,6 @@ import { requiredRecord } from './orcad-migration-dormant-value-validation'
 export const MAX_ORCAD_MIGRATION_CLIENT_SELECTIONS = 4_096
 export const MAX_ORCAD_MIGRATION_CLIENT_ROUTING_ENTRIES = 16_384
 export const MAX_ORCAD_MIGRATION_SAVED_PORT_FORWARDS = 256
-export const MAX_ORCAD_MIGRATION_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS =
-  MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS
 
 export function parseClientHostedBrowserCloseIntents(
   value: unknown
@@ -95,10 +90,25 @@ export function parseMobileSelections(value: unknown): PersistedMobileClientTabS
         }
         tabs[groupId] = tabId
       }
+      const recentTabIds = rawSelection.recentTabIds
+      if (
+        recentTabIds !== undefined &&
+        !(
+          Array.isArray(recentTabIds) &&
+          recentTabIds.every((tabId): tabId is string => typeof tabId === 'string' && !!tabId)
+        )
+      ) {
+        throw new Error('orcad_migration_dormant_mobile_selection_tabs_invalid')
+      }
       if (!activeTabId && !activeGroupId && Object.keys(tabs).length === 0) {
         continue
       }
-      entries[worktreeId] = { activeTabId, activeGroupId, activeTabIdByGroupId: tabs }
+      entries[worktreeId] = {
+        activeTabId,
+        activeGroupId,
+        activeTabIdByGroupId: tabs,
+        ...(recentTabIds ? { recentTabIds } : {})
+      }
       count += 1
       if (count > MAX_ORCAD_MIGRATION_CLIENT_SELECTIONS) {
         throw new Error('orcad_migration_dormant_mobile_selections_too_many')
@@ -235,5 +245,3 @@ export function parseUiRouting(value: unknown): OrcadMigrationUiRoutingState {
 export function parseSavedPortForwards(value: unknown): SavedPortForward[] {
   return parseSavedPortForwardsValue(value, MAX_ORCAD_MIGRATION_SAVED_PORT_FORWARDS)
 }
-
-export type { ClientHostedBrowserCloseIntent }

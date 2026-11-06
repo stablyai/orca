@@ -1,4 +1,4 @@
-import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/gitlab-types'
+import type { GitLabPagedResult, GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 
@@ -15,7 +15,7 @@ type GitLabWorkItemByPathLookupArgs = GitLabSourceLookupArgs & {
   type: 'issue' | 'mr'
 }
 
-type GitLabMRListLookupArgs = GitLabSourceLookupArgs & {
+type GitLabWorkItemListLookupArgs = GitLabSourceLookupArgs & {
   state?: 'opened' | 'merged' | 'closed' | 'all'
   page?: number
   perPage?: number
@@ -33,10 +33,10 @@ export async function lookupGitLabWorkItemByPathForSource(
   return item ? withRendererRepoId(item, args.repoId) : null
 }
 
-export async function listGitLabMRsForSource(
-  args: GitLabMRListLookupArgs
-): Promise<ListMergeRequestsResult> {
-  const result = await gitLabApiFor(args).listMRs(args)
+export async function listGitLabWorkItemsForSource(
+  args: GitLabWorkItemListLookupArgs
+): Promise<GitLabPagedResult<GitLabWorkItem>> {
+  const result = await gitLabApiFor(args).listWorkItems(args)
   return {
     ...result,
     items: result.items.map((item) => withRendererRepoId(item, args.repoId))

@@ -9,7 +9,6 @@ export function resolveDiffRuntimeEnvironmentId(
   if (explicitRuntimeEnvironmentId !== undefined) {
     return explicitRuntimeEnvironmentId
   }
-  // Why: route diffs by explicit worktree owner; null forces LOCAL, undefined would inherit the focused runtime → wrong host (#6957, #8484).
-  // Why: a diff only reads, so a twin shows this app's copy, never the focused server's.
+  // Explicit owner routes reads; null forces local while undefined follows focused runtime and can hit wrong host (#6957, #8484).
   return runtimeEnvironmentIdUnlessTwin(state, worktreeId)
 }

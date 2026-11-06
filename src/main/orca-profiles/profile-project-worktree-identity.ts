@@ -1,9 +1,14 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+
 import type { Repo } from '../../shared/repo-types'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import {
+  type WorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace-scope'
+import '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
@@ -66,14 +71,8 @@ export function rekeyOwnerKey(
   return null
 }
 
-/**
- * Every worktree locator an owner key could name.
- *
- * Two readings, because one key can be both: with a repo literally named `worktree`,
- * `worktree::/p` is a `<repoId>::<path>` locator AND parses as a `worktree:` workspace key naming
- * repo `` (empty). `ownerKeyBelongsToRepo` accepts either, so a caller that reasons about a key
- * without a repo id in hand has to consider both or it will disagree with the predicate.
- */
+/** Consider both locator parses: worktree::/p can name repo worktree or an empty-repo workspace key.
+ * Match ownerKeyBelongsToRepo, which accepts either interpretation. */
 export function ownerKeyWorktreeIds(ownerKey: string): string[] {
   const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
     ? getWorktreeIdFromHostIdentity(ownerKey)

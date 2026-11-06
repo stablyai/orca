@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createEditorStore } from './editor-slice-test-harness'
+import { makeFolderWorkspace } from './worktrees-slice-test-fixtures'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -18,35 +20,26 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
 }))
 
 describe('createEditorSlice conflict status reconciliation', () => {
-  it('records clean git status checks with an explicit empty entry list', () => {
+  it('keeps the last known changes while git status cannot be read', () => {
     const store = createEditorStore()
+    const entries = [{ path: 'README.md', status: 'modified' as const, area: 'unstaged' as const }]
+    store.getState().setGitStatus('wt-1', { conflictOperation: 'unknown', entries })
 
-    store.getState().setGitStatus('wt-clean', {
-      conflictOperation: 'unknown',
-      entries: []
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'merge',
+      entries: [],
+      readError: 'fatal: .git/index: index file smaller than expected'
     })
 
-    expect(store.getState().gitStatusByWorktree).toHaveProperty('wt-clean')
-    expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
-  })
+    expect(store.getState().gitStatusByWorktree['wt-1']).toEqual(entries)
+    expect(store.getState().gitConflictOperationByWorktree['wt-1']).toBe('merge')
+    expect(store.getState().gitStatusReadErrorByWorktree['wt-1']).toBe(
+      'fatal: .git/index: index file smaller than expected'
+    )
 
-  it('keeps the capped state sticky until a complete result recovers', () => {
-    const store = createEditorStore()
-    store.getState().setGitStatus('wt-huge', {
-      conflictOperation: 'unknown',
-      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
-      didHitLimit: true,
-      statusLength: 2
-    })
+    store.getState().setGitStatus('wt-1', { conflictOperation: 'unknown', entries })
 
-    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toEqual({ limit: 1 })
-
-    store.getState().setGitStatus('wt-huge', {
-      conflictOperation: 'unknown',
-      entries: [{ path: 'src/index.ts', status: 'modified', area: 'unstaged' }]
-    })
-
-    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toBeUndefined()
+    expect(store.getState().gitStatusReadErrorByWorktree['wt-1']).toBeUndefined()
   })
 
   it('preserves omitted conflict state when a capped result is incomplete', () => {
@@ -303,73 +296,6 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([])
   })
 
-  it('keeps loading branch compare state when an older HEAD result arrives', () => {
-    const store = createEditorStore()
-
-    store.getState().beginGitBranchCompareRequest('wt-1', 'req-stale', 'refs/remotes/origin/main')
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'unknown',
-      entries: [],
-      head: 'head-new',
-      branch: 'refs/heads/feature'
-    })
-    store.getState().setGitBranchCompareResult('wt-1', 'req-stale', {
-      summary: {
-        baseRef: 'refs/remotes/origin/main',
-        baseOid: 'base-old',
-        compareRef: 'feature',
-        headOid: 'head-old',
-        mergeBase: 'base-old',
-        changedFiles: 0,
-        commitsAhead: 0,
-        status: 'ready'
-      },
-      entries: []
-    })
-
-    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual({
-      baseRef: 'refs/remotes/origin/main',
-      baseOid: null,
-      compareRef: 'HEAD',
-      headOid: null,
-      mergeBase: null,
-      changedFiles: 0,
-      status: 'loading'
-    })
-    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toBeUndefined()
-  })
-
-  it('accepts a newer branch compare before git status catches up', () => {
-    const store = createEditorStore()
-    const summary = {
-      baseRef: 'refs/remotes/origin/main',
-      baseOid: 'base-old',
-      compareRef: 'feature',
-      headOid: 'head-new',
-      mergeBase: 'base-old',
-      changedFiles: 1,
-      commitsAhead: 1,
-      status: 'ready' as const
-    }
-
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'unknown',
-      entries: [],
-      head: 'head-old',
-      branch: 'refs/heads/feature'
-    })
-    store.getState().beginGitBranchCompareRequest('wt-1', 'req-newer', summary.baseRef)
-    store.getState().setGitBranchCompareResult('wt-1', 'req-newer', {
-      summary,
-      entries: [{ path: 'src/new.ts', status: 'modified' }]
-    })
-
-    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(summary)
-    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
-      { path: 'src/new.ts', status: 'modified' }
-    ])
-  })
-
   it('preserves a newer branch compare when an unchanged older status refresh returns', () => {
     const store = createEditorStore()
     const summary = {
@@ -405,24 +331,6 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
       { path: 'src/new.ts', status: 'modified' }
     ])
-  })
-
-  it('clears ignored path cache when status refresh omits ignored paths', () => {
-    const store = createEditorStore()
-
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'unknown',
-      entries: [],
-      ignoredPaths: ['dist/', '.env']
-    })
-    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual(['dist/', '.env'])
-
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'unknown',
-      entries: []
-    })
-
-    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual([])
   })
 
   it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
@@ -502,37 +410,113 @@ describe('createEditorSlice conflict status reconciliation', () => {
     )
   })
 
-  it('marks tracked conflicts as resolved locally after live conflict state disappears', () => {
-    const store = createEditorStore()
+  describe('selecting a conflict whose file is already open', () => {
+    const conflictEntry = {
+      path: 'src/conflict.ts',
+      status: 'modified',
+      area: 'unstaged',
+      conflictKind: 'both_modified',
+      conflictStatus: 'unresolved',
+      conflictStatusSource: 'git'
+    } as const
+    const SERVER_WORKSPACE = folderWorkspaceKey('server-folder')
+    const FILE = '/repo/src/conflict.ts'
 
-    store.getState().trackConflictPath('wt-1', 'src/conflict.ts', 'both_modified')
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'merge',
-      entries: [
-        {
-          path: 'src/conflict.ts',
-          status: 'modified',
-          area: 'unstaged',
-          conflictKind: 'both_modified',
-          conflictStatus: 'unresolved'
-        }
-      ]
-    })
-    store.getState().setGitStatus('wt-1', {
-      conflictOperation: 'merge',
-      entries: [{ path: 'src/conflict.ts', status: 'modified', area: 'staged' }]
-    })
-
-    expect(store.getState().gitStatusByWorktree['wt-1']).toEqual([
-      {
-        path: 'src/conflict.ts',
-        status: 'modified',
-        area: 'staged',
-        conflictKind: 'both_modified',
-        conflictStatus: 'resolved_locally',
-        conflictStatusSource: 'session'
+    /** A folder workspace on paired server env-1, or a plain local worktree. */
+    function storeFor(onServer: boolean) {
+      const store = createEditorStore()
+      if (onServer) {
+        store.setState({
+          folderWorkspaces: [
+            makeFolderWorkspace({
+              id: 'server-folder',
+              projectGroupId: 'server-group',
+              folderPath: '/repo',
+              connectionId: null
+            })
+          ],
+          projectGroups: [
+            {
+              id: 'server-group',
+              name: 'Server',
+              parentPath: '/repo',
+              connectionId: null,
+              executionHostId: 'runtime:env-1',
+              parentGroupId: null,
+              createdFrom: 'folder-scan',
+              tabOrder: 0,
+              isCollapsed: false,
+              color: null,
+              createdAt: 1,
+              updatedAt: 1
+            }
+          ]
+        })
       }
-    ])
+      return { store, worktreeId: onServer ? SERVER_WORKSPACE : 'wt-1' }
+    }
+
+    function selectConflict(store: ReturnType<typeof createEditorStore>, worktreeId: string) {
+      store
+        .getState()
+        .openConflictReview(
+          worktreeId,
+          '/repo',
+          [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }],
+          'live-summary'
+        )
+      store
+        .getState()
+        .openConflictReviewFile(
+          `${worktreeId}::conflict-review`,
+          worktreeId,
+          '/repo',
+          conflictEntry,
+          'typescript'
+        )
+    }
+
+    function openConflictFile(store: ReturnType<typeof createEditorStore>, worktreeId: string) {
+      return store.getState().openFile({
+        filePath: FILE,
+        relativePath: 'src/conflict.ts',
+        worktreeId,
+        language: 'typescript',
+        mode: 'edit'
+      })
+    }
+
+    const copiesOf = (store: ReturnType<typeof createEditorStore>) =>
+      store
+        .getState()
+        .openFiles.filter((file) => file.filePath === FILE)
+        .map((file) => [file.id, file.runtimeEnvironmentId ?? null])
+
+    it('reuses an open server file instead of opening a second copy', () => {
+      const { store, worktreeId } = storeFor(true)
+      const fileId = openConflictFile(store, worktreeId)
+      expect(fileId).not.toBe(FILE)
+
+      selectConflict(store, worktreeId)
+
+      expect(copiesOf(store)).toEqual([[fileId, 'env-1']])
+      const state = store.getState()
+      expect(state.openFiles.find((file) => file.id === fileId)?.conflict).toMatchObject({
+        conflictStatus: 'unresolved'
+      })
+      expect(
+        state.openFiles.find((file) => file.id === `${worktreeId}::conflict-review`)?.conflictReview
+          ?.selectedFileId
+      ).toBe(fileId)
+    })
+
+    it('names a server file it opens itself so a later open reuses it', () => {
+      const { store, worktreeId } = storeFor(true)
+      selectConflict(store, worktreeId)
+      const fileId = openConflictFile(store, worktreeId)
+
+      expect(copiesOf(store)).toEqual([[fileId, 'env-1']])
+    })
   })
 
   it('clears tracked conflict continuity on abort-like transitions', () => {

@@ -14,7 +14,7 @@ import {
   getVisibleDeletableWorkspaceIdentities,
   getWorkspaceSpaceWorktreeIdentity
 } from './workspace-space-delete-selection'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { useAppStore } from '@/store'
 import { getWorkspaceSpaceProgressLabel } from './workspace-space-format'
@@ -110,8 +110,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
     sourceRows,
     treemapZoomWorktreeId
   )
-  // Why: these ids are local UI state derived from the latest scan rows. Repair
-  // them before commit so stale selections cannot flash after a scan changes.
+  // Repair scan-derived selection before commit so obsolete rows cannot flash after a new scan.
   if (inspectedWorktreeId !== nextInspectedWorktreeId) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setInspectedWorktreeId(nextInspectedWorktreeId)
@@ -145,13 +144,22 @@ export function useWorkspaceSpaceManagerProjection(args: {
     setGitStatusByWorktreeIdentity
   ])
 
-  useEffect(() => {
-    const visibleWorktreeIdentities = new Set(rows.map(getWorkspaceSpaceWorktreeIdentity))
-    const candidates = getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows, {
+  // Status results must not restart the queue that produced them.
+  const gitStatusCandidates = useMemo(() => {
+    const visibleWorktreeIdentities = new Set(
+      filterWorkspaceSpaceRows(sourceRows, query, onlyDeletable).map(
+        getWorkspaceSpaceWorktreeIdentity
+      )
+    )
+    return getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows, {
       activeWorktreeId,
       activeExecutionHostId: activeWorkspaceExecutionHostId,
       visibleWorktreeIdentities
     })
+  }, [sourceRows, query, onlyDeletable, activeWorktreeId, activeWorkspaceExecutionHostId])
+
+  useEffect(() => {
+    const candidates = gitStatusCandidates
     if (candidates.length === 0) {
       return
     }
@@ -174,13 +182,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
     return () => {
       cancelled = true
     }
-  }, [
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId,
-    refreshWorkspaceGitStatus,
-    rows,
-    sourceRows
-  ])
+  }, [refreshWorkspaceGitStatus, gitStatusCandidates])
 
   const inspectedWorktree =
     rows.find((row) => getWorkspaceSpaceWorktreeIdentity(row) === nextInspectedWorktreeId) ??

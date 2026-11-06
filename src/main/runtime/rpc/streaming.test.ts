@@ -4,14 +4,13 @@ import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
 import { defineMethod, defineStreamingMethod, type RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     // Why: subscribe streams register as remote view subscribers for Phase-5
-    // query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
@@ -118,7 +117,6 @@ describe('RpcDispatcher streaming', () => {
       messages.push(msg)
     )
 
-    // Wait for handler to capture emit
     await vi.waitFor(() => expect(emitFn).not.toBeNull())
 
     emitFn!({ type: 'data', chunk: 'line 1\n' })
@@ -337,8 +335,7 @@ describe('RpcDispatcher streaming', () => {
     )
 
     await vi.waitFor(() => expect(registry.peekCleanup('terminal-1:desktop-1')).toBeDefined())
-    // Cleanup now registers before snapshot work so a disconnect cannot orphan
-    // a desktop width floor; wait for the actual exit waiter before resolving it.
+    // Cleanup registers before snapshot work to protect width floors; wait for the actual exit waiter before resolving it.
     await vi.waitFor(() => expect(runtime.subscribeToPtyExit).toHaveBeenCalled())
     resolveExit()
     await dispatchPromise

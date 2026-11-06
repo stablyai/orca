@@ -17,11 +17,7 @@ export type InstallDirPackageGrantOutcome = {
   reason?: string
 }
 
-/**
- * The two passes the repair runs. `root`: one inheritable grant, so files a later update writes
- * inherit it. `tree`: what that grant cannot reach, because a shipped module or directory that
- * carries its own protected DACL inherits nothing from the root.
- */
+/** Grant root inheritably for future updates; tree pass reaches shipped entries with protected DACLs that cannot inherit it. */
 export type InstallDirPackageGrants = {
   root: (installDir: string) => Promise<InstallDirPackageGrantOutcome>
   tree: (installDir: string) => Promise<InstallDirPackageGrantOutcome>
@@ -33,7 +29,7 @@ const ADDON_UNAVAILABLE: InstallDirPackageGrantOutcome = {
   reason: 'addon-unavailable'
 }
 
-/** Never `replace`, so SYSTEM, Administrators, the user and the orphan all survive. */
+/** Additive only: preserve SYSTEM/admin/user/orphan ACEs. */
 function grantPackageRead(
   security: WindowsSecurity,
   path: string,
@@ -65,13 +61,7 @@ export async function grantInstallDirPackageRoot(
   }
 }
 
-/**
- * Everything below the root (the root pass covers the root), continuing past failures the way
- * `icacls /T /C` did. Every file gets a flagless grant. A directory is granted only when its DACL
- * is protected, and then inheritably so its own descendants inherit it: any other directory
- * already inherits the root's grant, and re-granting it would re-propagate its whole subtree
- * (3.2 s for 1,093 directories in a 7.6k-entry install).
- */
+/** Continue past failures. Files need flagless grants; only protected directories need inheritable grants. Re-granting others needlessly repropagates subtrees (3.2s/1093 dirs measured). */
 export async function grantInstallDirPackageTree(
   installDir: string
 ): Promise<InstallDirPackageGrantOutcome> {
@@ -98,7 +88,7 @@ export async function grantInstallDirPackageTree(
     })
     for (const entry of entries) {
       const path = join(current, entry.name)
-      // Never through a link: a junction can point anywhere, and the repair is for this tree.
+      // Do not follow junctions outside this install tree.
       if (entry.isSymbolicLink()) {
         continue
       }

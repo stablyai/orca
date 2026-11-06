@@ -69,7 +69,6 @@ export function useRemoteBrowserPageStream({
 }): {
   reconnectRemoteStream: () => void
 } {
-  // Bumped by Reconnect to re-run the open effect from scratch. See reconnectRemoteStream.
   const [reopenNonce, setReopenNonce] = useState(0)
   const lastFrameDeviceSizeRef = useRef<string | null>(null)
 
@@ -130,9 +129,7 @@ export function useRemoteBrowserPageStream({
       if (!target || !size) {
         return
       }
-      // Why no browser.viewport here: the screencast subscription already carries this pane's
-      // size and the host's stream owns the emulation. A second, unowned override re-applied
-      // the full pane size over the host's fitted one, so its frames came back cropped (#30341).
+      // The stream owns fitted emulation; an unowned browser.viewport would overwrite it with a size the host cannot paint.
       try {
         // Why: the streamed bitmap can include the host compositor surface, but CDP input wants the guest page's CSS viewport coords.
         const viewport = await callRuntimeRpc(
@@ -173,8 +170,7 @@ export function useRemoteBrowserPageStream({
         if (!pageId || !isActiveRef.current) {
           return
         }
-        // Why restart first: the new stream applies the size, and its ready handler re-reads the
-        // page's CSS viewport after that. Reading it now would only see the old emulation.
+        // Restart applies emulation before ready re-reads CSS size; reading now sees the old viewport.
         if (lifecycle.restartForViewport(pageId)) {
           remoteCssViewportSizeRef.current = null
         } else {
@@ -232,8 +228,7 @@ export function useRemoteBrowserPageStream({
           }
           const prevUrl = streamFrameUrlRef.current
           streamFrameUrlRef.current = nextUrl
-          // Why: the host can change the viewport it shows on its own (it fits it to the view it
-          // can paint), and the cached CSS size then describes a layout that is gone.
+          // The host can refit its painted viewport independently, invalidating cached CSS size.
           const deviceSize = `${frame.metadata.deviceWidth}x${frame.metadata.deviceHeight}`
           const previousDeviceSize = lastFrameDeviceSizeRef.current
           lastFrameDeviceSizeRef.current = deviceSize
@@ -288,12 +283,8 @@ export function useRemoteBrowserPageStream({
   ])
 
   const reconnectRemoteStream = useCallback((): void => {
-    // No status write here: bumping the nonce re-runs the open effect, and open() publishes
-    // 'opening'. Setting it from two places is how the old three-variable version drifted.
+    // open() owns status; re-running its effect also recovers failed initial creation when no stream exists to resume.
     setPaneNotice(null)
-    // Why re-run the whole open effect rather than resume the stream: reconnect has to work in the
-    // cases where there is nothing to resume — the remote page was never created, or the very first
-    // open failed. Resuming a token only covers a stream that once existed.
     setReopenNonce((nonce) => nonce + 1)
   }, [setPaneNotice])
 

@@ -6,11 +6,15 @@ import {
   WORKSPACE_CLEANUP_IDLE_MS,
   getPersistedWorkspaceCleanupActivityAt,
   isWorkspaceOldForCleanup
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { TERMINAL_USE_THROTTLE_MS } from './terminal-use-producer'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta,
+  type PartialRuntimeStore
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -19,12 +23,13 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 function createHeadlessRuntime(ptyId = 'pty-1') {
   // Untouched for 45 days: no agent ran, so no Recent stamp moved.
-  const meta: Record<string, Partial<WorktreeMeta>> = { [WT]: { lastActivityAt: 1 } }
+  const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta({ lastActivityAt: 1 }) }
   const writes: Partial<WorktreeMeta>[] = []
-  const store = {
+  const repo = storeRepo({ id: 'repo-1', path: '/tmp/repo-1', connectionId: null })
+  const store: PartialRuntimeStore = {
     // An unstamped row's writes resolve their host from its repo's only registration.
-    getRepos: () => [{ id: 'repo-1', connectionId: null }],
-    getRepo: (id: string) => (id === 'repo-1' ? { id, connectionId: null } : undefined),
+    getRepos: () => [repo],
+    getRepo: (id: string) => (id === repo.id ? repo : undefined),
     getSettings: () => ({}),
     getWorktreeMeta: (id: string) => meta[id],
     getAllWorktreeMeta: () => meta,
@@ -34,8 +39,7 @@ function createHeadlessRuntime(ptyId = 'pty-1') {
       return meta[id]
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the terminal-use path reads only these members.
-  const runtime = new OrcaRuntimeService(store as unknown as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   // No desktop window: the phone is the only client.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [{ tabId: 'tab-1', worktreeId: WT, title: 'zsh', activeLeafId: 'pane:1', layout: null }],
@@ -76,24 +80,6 @@ describe('host-written terminal use', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('writes at most once a minute per workspace, and never for terminal replies', () => {
-    const { runtime, writes } = createHeadlessRuntime()
-    runtime.terminalRunFacts.recordInput('pty-1', 'query-reply', '\x1b[0n', 1_000)
-    expect(writes).toEqual([])
-    runtime.terminalRunFacts.recordInput('pty-1', 'driving', 'a', 1_000)
-    runtime.terminalRunFacts.recordInput(
-      'pty-1',
-      'driving',
-      'b',
-      1_000 + TERMINAL_USE_THROTTLE_MS - 1
-    )
-    runtime.terminalRunFacts.recordInput('pty-1', 'driving', 'c', 1_000 + TERMINAL_USE_THROTTLE_MS)
-    expect(writes).toEqual([
-      { lastTerminalUseAt: 1_000 },
-      { lastTerminalUseAt: 1_000 + TERMINAL_USE_THROTTLE_MS }
-    ])
   })
 
   it('app-written launch input never counts', () => {

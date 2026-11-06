@@ -25,8 +25,7 @@ describe('acceptSessionSnapshot', () => {
 
   it('accepts an equal version (reprocess) so close tombstones can expire and clear', () => {
     const marker: AppliedSnapshotMarker = { epoch: 'renderer:a', version: 42 }
-    // Polling returns the same cached version repeatedly; reprocessing is needed
-    // so applyClosedTabTombstones can run its TTL/clear pass.
+    // Equal cached versions still need reprocessing so close tombstones can expire.
     expect(
       acceptSessionSnapshot({ publicationEpoch: 'renderer:a', snapshotVersion: 42 }, marker)
     ).toBe(true)
@@ -35,7 +34,6 @@ describe('acceptSessionSnapshot', () => {
 
   it('accepts any version from a new publisher (epoch change) and resets the floor', () => {
     const marker: AppliedSnapshotMarker = { epoch: 'renderer:a', version: 99 }
-    // Lower version but different epoch (renderer reload / headless) → accepted.
     expect(
       acceptSessionSnapshot({ publicationEpoch: 'headless:b', snapshotVersion: 1 }, marker)
     ).toBe(true)
@@ -45,7 +43,6 @@ describe('acceptSessionSnapshot', () => {
   it('treats a missing epoch as its own publisher key', () => {
     const marker: AppliedSnapshotMarker = { epoch: null, version: -1 }
     expect(acceptSessionSnapshot({ snapshotVersion: 5 }, marker)).toBe(true)
-    // A strictly older snapshot from the same (null) publisher is rejected.
     expect(acceptSessionSnapshot({ snapshotVersion: 4 }, marker)).toBe(false)
     expect(marker).toEqual({ epoch: null, version: 5 })
   })
@@ -75,7 +72,6 @@ describe('applyClosedTabTombstones', () => {
     const tombstones = new Map([['a', 5000]])
     const result = applyClosedTabTombstones([tab('a'), tab('b')], tombstones, 1000)
     expect(result.map((t) => t.id)).toEqual(['b'])
-    // Still present in the publisher snapshot → tombstone retained for next time.
     expect(tombstones.has('a')).toBe(true)
   })
 
@@ -88,6 +84,10 @@ describe('applyClosedTabTombstones', () => {
 
   it('stops suppressing and clears an expired tombstone even if still present', () => {
     const tombstones = new Map([['a', 5000]])
+    expect(
+      applyClosedTabTombstones([tab('a'), tab('b')], tombstones, 4999).map((t) => t.id)
+    ).toEqual(['b'])
+    expect(tombstones.has('a')).toBe(true)
     const result = applyClosedTabTombstones([tab('a'), tab('b')], tombstones, 5000)
     expect(result.map((t) => t.id)).toEqual(['a', 'b'])
     expect(tombstones.has('a')).toBe(false)

@@ -40,7 +40,7 @@ export function ConnectionDiagnosticsScreen({
   onBack: () => void
   hostPicker?: ReactNode
 }) {
-  const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
+  const [copiedScope, setCopiedScope] = useState<{ hostId: string | null } | null>(null)
   const [submissionStates, setSubmissionStates] = useState<DiagnosticsSubmissionStates>({})
 
   const diagnosisArgs = host
@@ -51,16 +51,19 @@ export function ConnectionDiagnosticsScreen({
   const hostId = host?.id ?? null
   const submissionKey = hostId && incidentId ? `${hostId}:${incidentId}` : null
   const submissionState = getDiagnosticsSubmissionState(submissionStates, submissionKey)
-  const copied = copiedHostId !== null && copiedHostId === hostId
+  const copied = copiedScope !== null && copiedScope.hostId === hostId
 
   const copyDiagnostics = useCallback(async () => {
-    if (!device || !hostId) {
+    if (!device) {
       return
     }
     const { report } = await device.report()
     await writeClipboard(report)
-    setCopiedHostId(hostId)
-    setTimeout(() => setCopiedHostId((current) => (current === hostId ? null : current)), 2000)
+    setCopiedScope({ hostId })
+    setTimeout(
+      () => setCopiedScope((current) => (current?.hostId === hostId ? null : current)),
+      2000
+    )
   }, [device, hostId, writeClipboard])
 
   const sendDiagnostics = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira/jira-attachment-image'
 import { migrateLegacyJiraImages } from './runtime-jira-image-cache'
 import type {
   JiraComment,
@@ -7,14 +7,14 @@ import type {
   JiraMutationResult,
   JiraPriority,
   JiraTransition
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
-import { JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-detail-capabilities'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
 
@@ -32,8 +32,7 @@ async function readRemoteJiraPayload<TResult>(
     if (!(error instanceof RuntimeRpcCallError) || error.code !== 'method_not_found') {
       throw error
     }
-    // Older runtimes predate image payload streaming but still return text-only
-    // Jira details safely through the original one-shot method.
+    // Older runtimes lack image streaming but still serve text through the original one-shot method.
     return callRuntimeRpc<TResult>(target, fallbackMethod, args, { timeoutMs: 30_000 })
   }
 }

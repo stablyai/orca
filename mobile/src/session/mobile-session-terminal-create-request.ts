@@ -3,7 +3,6 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import { sessionTabCreateTerminal } from './mobile-session-write-operations'
 
-/** Keep the ordinary create payload while the chat fork adds only its source intent. */
 export function requestMobileSessionTerminalCreate(args: {
   client: RpcClient
   worktreeId: string

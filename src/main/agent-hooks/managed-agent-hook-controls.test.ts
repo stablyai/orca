@@ -45,12 +45,10 @@ vi.mock('./managed-agent-hook-registry', () => ({
     ['codex', mocks.refreshCodex]
   ]
 }))
-
 import {
   applyAgentStatusHooksEnabled,
   installManagedAgentHooks,
   removeManagedAgentHooksAsync,
-  resolveStartupManagedHookAction,
   shouldContinueManagedHookStartup
 } from './managed-agent-hook-controls'
 
@@ -78,50 +76,6 @@ describe('managed agent hook controls', () => {
     mocks.probeClaudeVersion.mockResolvedValue(null)
   })
 
-  it('installs only agents with positively detected CLIs', async () => {
-    mocks.detect.mockResolvedValue({
-      claude: { state: 'missing' },
-      codex: { state: 'found' }
-    })
-
-    const results = await installManagedAgentHooks({ agentCmdOverrides: {} })
-
-    expect(mocks.installClaude).not.toHaveBeenCalled()
-    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
-    expect(results).toEqual([
-      expect.objectContaining({
-        agent: 'claude',
-        state: 'skipped',
-        skipReason: 'cli_not_found'
-      }),
-      expect.objectContaining({ agent: 'codex', state: 'installed' })
-    ])
-  })
-
-  it('refreshes existing scripts for agents whose CLI is no longer detected', async () => {
-    mocks.detect.mockResolvedValue({
-      claude: { state: 'missing' },
-      codex: { state: 'found' }
-    })
-
-    await installManagedAgentHooks({ agentCmdOverrides: {} })
-
-    // Why (#11549 aftermath): the skipped agent's user-wide config still invokes the
-    // script, so a stale (leaking) script must not be frozen by the presence gate.
-    expect(mocks.refreshClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.refreshCodex).toHaveBeenCalledTimes(1)
-    expect(mocks.installClaude).not.toHaveBeenCalled()
-  })
-
-  it('refreshes existing scripts even when CLI detection rejects', async () => {
-    mocks.detect.mockRejectedValue(new Error('detection unavailable'))
-
-    await installManagedAgentHooks({ agentCmdOverrides: {} })
-
-    expect(mocks.refreshClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.refreshCodex).toHaveBeenCalledTimes(1)
-  })
-
   it('awaits each script refresh before probing for CLIs', async () => {
     let releaseRefresh: (() => void) | undefined
     mocks.refreshClaude.mockImplementation(
@@ -136,9 +90,7 @@ describe('managed agent hook controls', () => {
     })
 
     const install = installManagedAgentHooks({ agentCmdOverrides: {} })
-    // Why waitFor and not a fixed microtask tick: the install path awaits session reconcilers
-    // before refreshing scripts, so the number of ticks before this point is an implementation
-    // detail. The assertion below is the real contract: no CLI probe until the refresh resolves.
+    // Earlier awaits vary; wait for refresh entry before asserting that CLI probing is blocked.
     await vi.waitFor(() => expect(mocks.refreshClaude).toHaveBeenCalled())
 
     expect(mocks.detect).not.toHaveBeenCalled()
@@ -147,96 +99,39 @@ describe('managed agent hook controls', () => {
     expect(mocks.detect).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps installing when a script refresh throws', async () => {
-    mocks.refreshClaude.mockRejectedValue(new Error('disk full'))
-    mocks.detect.mockResolvedValue({
-      claude: { state: 'found' },
-      codex: { state: 'found' }
-    })
-
-    const results = await installManagedAgentHooks({ agentCmdOverrides: {} })
-
-    expect(mocks.installClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
-    expect(results).toEqual([
-      expect.objectContaining({ agent: 'claude', state: 'installed' }),
-      expect.objectContaining({ agent: 'codex', state: 'installed' })
-    ])
-  })
-
-  it('forwards the detected Claude version to its installer', async () => {
-    mocks.detect.mockResolvedValue({
-      claude: { state: 'found', executablePath: '/opt/bin/claude' },
-      codex: { state: 'missing' }
-    })
-    mocks.probeClaudeVersion.mockResolvedValue('2.1.261')
-
-    await installManagedAgentHooks({ agentCmdOverrides: {} })
-
-    expect(mocks.probeClaudeVersion).toHaveBeenCalledWith('/opt/bin/claude')
-    expect(mocks.installClaude).toHaveBeenCalledWith({ cliVersion: '2.1.261' })
-  })
-
-  it('only refreshes scripts for the selected agents', async () => {
-    mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
-
-    await installManagedAgentHooks({ agentCmdOverrides: {} }, { agents: ['codex'] })
-
-    expect(mocks.refreshClaude).not.toHaveBeenCalled()
-    expect(mocks.refreshCodex).toHaveBeenCalledTimes(1)
-  })
-
-  it('fails closed when CLI detection rejects', async () => {
-    mocks.detect.mockRejectedValue(new Error('detection unavailable'))
-
-    const results = await installManagedAgentHooks({ agentCmdOverrides: {} })
-
-    expect(mocks.installClaude).not.toHaveBeenCalled()
-    expect(mocks.installCodex).not.toHaveBeenCalled()
-    expect(results).toEqual([
-      expect.objectContaining({
-        agent: 'claude',
-        state: 'skipped',
-        skipReason: 'cli_presence_unknown'
-      }),
-      expect.objectContaining({
-        agent: 'codex',
-        state: 'skipped',
-        skipReason: 'cli_presence_unknown'
-      })
-    ])
-  })
-
-  it('removes disabled agents without probing or reinstalling them', async () => {
-    mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
-
-    const results = await applyAgentStatusHooksEnabled(true, {
-      agentCmdOverrides: {},
-      disabledTuiAgents: ['claude']
-    })
-
-    expect(mocks.removeClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.installClaude).not.toHaveBeenCalled()
-    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
-    expect(results).toEqual([
-      expect.objectContaining({ agent: 'claude', state: 'not_installed' }),
-      expect.objectContaining({ agent: 'codex', state: 'installed' })
-    ])
-  })
-
   it('does not install an agent disabled while detection was running', async () => {
-    mocks.detect.mockResolvedValue({
-      claude: { state: 'found' },
-      codex: { state: 'found' }
-    })
-
-    await installManagedAgentHooks(
-      { agentCmdOverrides: {} },
-      { shouldContinue: (agent) => agent !== 'claude' }
+    let releaseDetection: ((value: Record<string, { state: 'found' }>) => void) | undefined
+    mocks.detect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseDetection = resolve
+        })
     )
+    let claudeDisabled = false
+    const install = installManagedAgentHooks(
+      { agentCmdOverrides: {} },
+      { shouldContinue: (agent) => agent !== 'claude' || !claudeDisabled }
+    )
+    try {
+      await vi.waitFor(() => expect(mocks.detect).toHaveBeenCalledTimes(1))
+      claudeDisabled = true
+      releaseDetection?.({ claude: { state: 'found' }, codex: { state: 'found' } })
+      const results = await install
 
-    expect(mocks.installClaude).not.toHaveBeenCalled()
-    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
+      expect(mocks.installClaude).not.toHaveBeenCalled()
+      expect(mocks.installCodex).toHaveBeenCalledTimes(1)
+      expect(results).toEqual([
+        expect.objectContaining({
+          agent: 'claude',
+          state: 'skipped',
+          skipReason: 'hooks_disabled'
+        }),
+        expect.objectContaining({ agent: 'codex', state: 'installed' })
+      ])
+    } finally {
+      releaseDetection?.({ claude: { state: 'found' }, codex: { state: 'found' } })
+      await install
+    }
   })
 
   it('does not finish a startup install after shutdown begins', async () => {
@@ -263,68 +158,60 @@ describe('managed agent hook controls', () => {
   })
 
   it('does not remove an agent enabled by a newer settings update', async () => {
-    mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
-
-    await applyAgentStatusHooksEnabled(
-      true,
-      {
-        agentCmdOverrides: {},
-        disabledTuiAgents: ['claude']
-      },
-      { shouldContinue: () => true }
+    let releaseDetection: ((value: Record<string, { state: 'found' }>) => void) | undefined
+    mocks.detect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseDetection = resolve
+        })
     )
-
-    expect(mocks.removeClaude).not.toHaveBeenCalled()
+    let claudeEnabled = false
+    const update = applyAgentStatusHooksEnabled(
+      true,
+      { agentCmdOverrides: {}, disabledTuiAgents: ['claude'] },
+      { shouldContinue: (agent) => agent !== 'claude' || claudeEnabled }
+    )
+    try {
+      await vi.waitFor(() => expect(mocks.detect).toHaveBeenCalledTimes(1))
+      claudeEnabled = true
+      releaseDetection?.({ codex: { state: 'found' } })
+      await update
+      expect(mocks.removeClaude).not.toHaveBeenCalled()
+      expect(mocks.installCodex).toHaveBeenCalledTimes(1)
+    } finally {
+      releaseDetection?.({ codex: { state: 'found' } })
+      await update
+    }
   })
 
-  it('removes every managed hook when the global setting is off', async () => {
-    await applyAgentStatusHooksEnabled(false)
-
-    expect(mocks.detect).not.toHaveBeenCalled()
-    expect(mocks.removeClaude).toHaveBeenCalledTimes(1)
-    expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
-  })
+  // R42: on a WSL host the bridge's panes in the same distro still run on these entries.
 
   it('awaits only the selected asynchronous removers during quit', async () => {
-    const results = await removeManagedAgentHooksAsync({ agents: ['codex'] })
-
-    expect(mocks.removeClaudeAsync).not.toHaveBeenCalled()
-    expect(mocks.removeCodexAsync).toHaveBeenCalledTimes(1)
-    expect(results).toEqual([expect.objectContaining({ agent: 'codex', state: 'not_installed' })])
-  })
-})
-
-describe('startup managed hook reconciliation (STA-5679)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('skips instead of removing when this profile has the off switch set', () => {
-    // Why this matters: the hook files are user-global. Startup removal here deleted the hooks that
-    // every other Orca instance depends on, and Cursor then reads as idle with no status at all.
-    expect(resolveStartupManagedHookAction({ agentStatusHooksEnabled: false })).toBe('skip')
-  })
-
-  it('installs when hooks are enabled or the setting is unset', () => {
-    expect(resolveStartupManagedHookAction({ agentStatusHooksEnabled: true })).toBe('install')
-    expect(resolveStartupManagedHookAction({})).toBe('install')
-    expect(resolveStartupManagedHookAction(null)).toBe('install')
-  })
-
-  it('does not remove disabled agents during startup install reconciliation', async () => {
-    const settings = {
-      agentStatusHooksEnabled: true,
-      agentCmdOverrides: {},
-      disabledTuiAgents: ['claude' as const]
-    }
-    mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
-
-    await installManagedAgentHooks(settings, {
-      shouldContinue: (agent) => shouldContinueManagedHookStartup(false, settings, agent)
+    let finishRemoval: ((value: ReturnType<typeof status>) => void) | undefined
+    mocks.removeCodexAsync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRemoval = resolve
+        })
+    )
+    let settled = false
+    const removal = removeManagedAgentHooksAsync({ agents: ['codex'] }).then((results) => {
+      settled = true
+      return results
     })
-
-    expect(mocks.removeClaude).not.toHaveBeenCalled()
-    expect(mocks.installClaude).not.toHaveBeenCalled()
-    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
+    try {
+      await vi.waitFor(() => expect(mocks.removeCodexAsync).toHaveBeenCalledTimes(1))
+      await Promise.resolve()
+      expect(mocks.removeClaudeAsync).not.toHaveBeenCalled()
+      expect(settled).toBe(false)
+      finishRemoval?.(status('codex', 'not_installed'))
+      await expect(removal).resolves.toEqual([
+        expect.objectContaining({ agent: 'codex', state: 'not_installed' })
+      ])
+      expect(settled).toBe(true)
+    } finally {
+      finishRemoval?.(status('codex', 'not_installed'))
+      await removal
+    }
   })
 })

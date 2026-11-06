@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPreviewMessage,
+  cloneSessionAccumulator,
   createAccumulator,
   finalizeSession
 } from './session-scanner-accumulator'
+import { addPreviewMessage } from './session-scanner-messages'
 import type { SessionAccumulator } from './session-scanner-types'
 
 // Mirrors SESSION_PREVIEW_MESSAGE_LIMIT in the module under test.
@@ -32,7 +33,6 @@ describe('AI Vault preview-window truncation signal', () => {
   it('flags the session once an older turn falls out of the window', () => {
     const session = finalizeSession(accumulatorWithUserTurns(PREVIEW_LIMIT + 1), 'darwin')
 
-    // The opening ask is gone, so the earliest preview turn is not the first prompt.
     expect(session?.previewMessages[0]?.text).toBe('turn 1')
     expect(session?.previewMessagesTruncated).toBe(true)
   })
@@ -40,6 +40,8 @@ describe('AI Vault preview-window truncation signal', () => {
   it('carries the flag onto snapshots taken from a cloned accumulator', () => {
     const accumulator = accumulatorWithUserTurns(PREVIEW_LIMIT + 1)
 
-    expect(finalizeSession({ ...accumulator }, 'darwin')?.previewMessagesTruncated).toBe(true)
+    expect(
+      finalizeSession(cloneSessionAccumulator(accumulator), 'darwin')?.previewMessagesTruncated
+    ).toBe(true)
   })
 })

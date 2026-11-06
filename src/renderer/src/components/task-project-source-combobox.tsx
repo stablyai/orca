@@ -7,8 +7,9 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { projectHostCountLabel } from './project-host-count-label'
 import type { Repo } from '../../../shared/repo-types'
-import type { TaskProjectPickerGroup } from './task-page-default-repo-selection'
+import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
 import {
   getSelectedTaskProjectSource,
   hasMultipleTaskProjectHosts,
@@ -77,13 +78,7 @@ function getProjectDetail(
   const selectedSource = getSelectedTaskProjectSource(group, selected)
   const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource)?.trim() : ''
   if (hasMultipleTaskProjectHostsInGroup(group)) {
-    const hostCount = translate(
-      'auto.components.task.project.source.combobox.hostCount',
-      '{{value0}} hosts',
-      {
-        value0: String(group.sources.length)
-      }
-    )
+    const hostCount = projectHostCountLabel(group.sources.length)
     return hostLabel ? `${hostLabel} · ${hostCount}` : hostCount
   }
   return hostLabel ? `${hostLabel} · ${selectedSource.path}` : selectedSource.path

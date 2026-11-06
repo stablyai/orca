@@ -1,4 +1,3 @@
-// ─── Search ─────────────────────────────────────────────
 export type SearchMatch = {
   line: number
   column: number

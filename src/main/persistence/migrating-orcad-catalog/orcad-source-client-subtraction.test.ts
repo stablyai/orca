@@ -34,7 +34,7 @@ function manifest(): OrcadMigrationManifest {
 }
 
 describe('retiring client-hosted browser close intents', () => {
-  it('finishes a retry after the moving write already flushed', () => {
+  it('moves close intents to the destination and accepts an exact retry', () => {
     const state = getDefaultPersistedState('/home/test')
     state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment = {
       old: [
@@ -43,9 +43,13 @@ describe('retiring client-hosted browser close intents', () => {
       ]
     }
     subtractOrcadMigrationClientState(state, manifest())
-    const moved = structuredClone(
-      state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment
-    )
+    const moved = {
+      'environment-1': [
+        { browserPageId: 'page-1', worktreeId, closedAt: 42 },
+        { browserPageId: 'page-2', worktreeId, closedAt: 43 }
+      ]
+    }
+    expect(state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment).toEqual(moved)
     expect(() => subtractOrcadMigrationClientState(state, manifest())).not.toThrow()
     expect(state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment).toEqual(moved)
   })

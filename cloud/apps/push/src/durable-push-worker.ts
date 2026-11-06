@@ -61,7 +61,7 @@ export class DurablePushWorker {
 
   private async drain(): Promise<void> {
     for (let count = 0; count < 25 && !this.stopped; count++) {
-      const queued = await this.store.claim()
+      const queued = await this.store.claim(() => !this.stopped)
       if (!queued) return
       const delivery = buildPushDelivery({
         expiresAt: queued.expiresAt,

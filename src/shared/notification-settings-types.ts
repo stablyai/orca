@@ -1,11 +1,22 @@
-import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
-import type { AgentStatusState, AgentType } from './agent-status-types'
-import type { AgentTurnOutcome } from './agent-turn-outcome'
+import {
+  type StructuredAttentionRead,
+  type StructuredAttentionOrigin,
+  isStructuredAttentionRead
+} from './agent-session/agent-session-attention'
+import {
+  isAgentSessionExecutionLocation,
+  type AgentSessionExecutionLocation
+} from './agent-session/lifecycle/agent-session-record'
+import type { AgentStatusState, AgentType } from './agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from './agent-status/lifecycle/agent-turn-outcome'
+import type { ExecutionHostId } from './execution-host'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
   enabled: boolean
+  /** An agent finished its turn; permission and question prompts use agentNeedsInput. */
   agentTaskComplete: boolean
+  agentNeedsInput: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:
@@ -32,6 +43,29 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type StructuredNotificationRead = StructuredAttentionRead & {
   paneKey: string
+  executionHost?: NotificationDispatchRequest['executionHost']
+}
+
+export type NotificationAttentionAcknowledgement = {
+  worktree?: AgentSessionExecutionLocation
+  reads: (StructuredAttentionRead & { paneKey?: string })[]
+}
+
+export function isNotificationAttentionAcknowledgement(
+  value: unknown
+): value is NotificationAttentionAcknowledgement {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'reads' in value &&
+    Array.isArray(value.reads) &&
+    value.reads.every(
+      (read) =>
+        isStructuredAttentionRead(read) &&
+        (!('paneKey' in read) || typeof read.paneKey === 'string')
+    ) &&
+    (!('worktree' in value) || isAgentSessionExecutionLocation(value.worktree))
+  )
 }
 
 export type NotificationDispatchRequest = {
@@ -40,6 +74,8 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  /** Null means routing did not establish the physical workspace host. */
+  workspaceExecutionHostId?: ExecutionHostId | null
   /** Configured notification source; independent of physical execution location. */
   notificationSourceId?: NotificationSourceId
   /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */
@@ -60,13 +96,9 @@ export type NotificationDispatchRequest = {
   agentLastAssistantMessage?: string
   /** The verdict on the turn this notification reports, which picks its wording. */
   agentTurnOutcome?: AgentTurnOutcome
-  /**
-   * Which lane raised this, so the click handler knows how to reveal the subject. Absent means the
-   * terminal lane, which is every sender that predates structured chat.
-   */
+  /** Click-routing lane; absence means terminal, preserving pre-structured-chat senders. */
   surface?: 'terminal' | 'agent-session'
-  /** The news's own identity, set only by a producer that announces each one once. Delivery dedupes
-   *  on it instead of the per-workspace burst window, which would drop distinct news. */
+  /** Producer-owned once-only news identity bypasses workspace burst dedupe so distinct events survive. */
   attentionKey?: string
   structuredOrigin?: StructuredAttentionOrigin
   /** The execution host already pushed this to its paired phones, so main must not fan it out again. */
@@ -86,6 +118,7 @@ export type NotificationDispatchResult = {
     | 'not-displayed'
     | 'blocked-by-system'
     | 'invalid-request'
+    | 'already-read'
 }
 
 export type NotificationDismissResult = {
@@ -126,8 +159,7 @@ export type NotificationPermissionStatusResult = {
   requested: boolean
 }
 
-/** macOS notification permission outcome: authoritative native UNUserNotificationCenter readout, else a weaker
- *  delivery-probe fallback; 'awaiting-decision' = permission dialog unanswered. */
+/** macOS permission from authoritative native UNUserNotificationCenter, otherwise weaker delivery probing; awaiting-decision means unanswered dialog. */
 export type NotificationDeliveryProbeResult = {
   state: 'delivered' | 'blocked' | 'awaiting-decision' | 'unsupported'
   /** True when the state comes from the native authorization readout (vs. the delivery-probe fallback). */

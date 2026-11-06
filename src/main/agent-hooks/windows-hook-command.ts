@@ -19,10 +19,9 @@ export function wrapWindowsHookCommand(
 export function buildWindowsHookPowerShellCommand(
   scriptPath: string,
   env: Record<string, string> = {},
-  // Why: POSIX wrap already answers missing-script with stdout; Windows must match so gate events cannot drift (#15462).
+  // Match POSIX fallback answers so missing-script gate events cannot default to denial.
   options: { fallbackStdout?: string } = {}
 ): string {
-  // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
   const quoted = quotePowerShellLiteral(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `$env:${key} = ${quotePowerShellLiteral(value)}; `)
@@ -31,9 +30,7 @@ export function buildWindowsHookPowerShellCommand(
     options.fallbackStdout === undefined
       ? ''
       : `Write-Output ${quotePowerShellLiteral(options.fallbackStdout)}; `
-  // Why the order: answer first (a gate event reads silence as deny), then the shared
-  // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
-  // pipe, and ReadToEnd would strand the launcher there forever (#11549).
+  // Answer gates before checking Orca context, then guard ReadToEnd against abandoned stdin.
   return `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 

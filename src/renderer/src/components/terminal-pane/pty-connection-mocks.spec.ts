@@ -1,7 +1,6 @@
-// oxlint-disable anti-slop/no-module-mocking -- Test-only mocks shared by PTY connection registration suites.
 import type * as React from 'react'
-import { vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
+
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 
@@ -72,7 +71,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases: fixture.mocks.resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: fixture.mocks.scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -107,7 +106,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep: fixture.mocks.notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -120,18 +119,18 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => takeMockTransport(options))
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => takeMockTransport(options)
   )
 }))
 
 // Only the eager-buffer read is replaced; the remaining dispatcher stays real.
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,

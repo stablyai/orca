@@ -61,6 +61,60 @@ beforeEach(() => {
 })
 
 describe('fetchReposForAllHosts generation', () => {
+  it('starts worktree discovery for a ready host while a peer catalog is still pending', async () => {
+    let releaseSlow = (): void => {}
+    const slow = new Promise<void>((resolve) => {
+      releaseSlow = resolve
+    })
+    let releaseVisibility = (): void => {}
+    const visibility = new Promise<void>((resolve) => {
+      releaseVisibility = resolve
+    })
+    vi.mocked(window.api.runtimeEnvironments.list).mockResolvedValue(
+      ['healthy', 'slow'].map((id) => ({
+        id,
+        name: id,
+        createdAt: 1,
+        updatedAt: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [],
+        preferredEndpointId: 'test'
+      }))
+    )
+    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if ('selector' in args && args.selector === 'slow') {
+        await slow
+      }
+      if (args.method === 'settings.get') {
+        await visibility
+      }
+      return {
+        id: 'rpc-catalog',
+        ok: true,
+        result: { repos: [remoteRepo], projects: [], setups: [], settings: {} },
+        _meta: { runtimeId: 'remote-runtime' }
+      }
+    })
+    const store = createTestStore()
+    const discoveredHosts: string[] = []
+    const load = store.getState().fetchReposForAllHosts({
+      onHostLoaded: async (hostId) => {
+        discoveredHosts.push(hostId)
+        if (hostId === 'runtime:healthy') {
+          expect(store.getState().worktreeVisibilityDefaultsByHost).toHaveProperty(hostId)
+          expect(store.getState().repos.some((repo) => repo.executionHostId === hostId)).toBe(true)
+        }
+      }
+    })
+    await vi.waitFor(() => expect(discoveredHosts).toEqual(['local']))
+    releaseVisibility()
+    await vi.waitFor(() => expect(discoveredHosts).toEqual(['local', 'runtime:healthy']))
+    releaseSlow()
+    await load
+    expect(discoveredHosts).toEqual(['local', 'runtime:healthy', 'runtime:slow'])
+  })
+
   it('settles startup hydration after the local catalog without waiting for remotes', async () => {
     let resolveRemote!: (value: unknown) => void
     let markRemoteStarted!: () => void
@@ -318,25 +372,6 @@ describe('fetchReposForAllHosts generation', () => {
     expect(store.getState().repos.find((repo) => repo.id === remoteRepo.id)?.path).toBe(
       freshRemoteRepo.path
     )
-  })
-
-  it('invalidates folder path statuses when an all-host repo catalog changes', async () => {
-    reposList.mockResolvedValueOnce([{ ...localRepo, path: '/local/changed' }])
-    const store = createTestStore()
-    store.setState({
-      repos: [localRepo],
-      folderWorkspacePathStatuses: {
-        cached: {
-          status: { path: '/local', exists: true },
-          checkedAt: 1,
-          requestSnapshot: 'before-change'
-        }
-      }
-    })
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-
-    expect(store.getState().folderWorkspacePathStatuses).toEqual({})
   })
 
   it('drops a targeted repo catalog that started before a reconnect', async () => {

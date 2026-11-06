@@ -1,45 +1,55 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react'
-import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
+import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from 'react'
+import type { BundledSkillPlan } from '../../../shared/bundled-skill-plan'
+import { summarizeBundledSkillPlan } from '../../../shared/bundled-skill-summary'
+import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
+import {
+  planBundledSkillsOnTarget,
+  type BundledSkillPlanResult,
+  type BundledSkillUnsupportedReason
+} from '@/runtime/runtime-bundled-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 
-// Why: window focus fires on every alt-tab, and each scan re-reads and re-hashes
-// every installed package; a just-completed scan stays authoritative briefly.
+// Alt-tab fires focus repeatedly; briefly reuse a completed plan to avoid re-reading and re-hashing every target.
 const FOCUS_RESCAN_COOLDOWN_MS = 15_000
-let cachedInventory: SkillFreshnessInventory | null = null
-let pendingInventory: Promise<SkillFreshnessInventory> | null = null
+// Why one target: every surface derives it from the same store, so they all plan one host.
+let activeTarget: BundledSkillTarget | null = null
+let cachedPlan: { targetKey: string; result: BundledSkillPlanResult; revision: number } | null =
+  null
+let pendingPlan: {
+  targetKey: string
+  request: Promise<BundledSkillPlanResult>
+} | null = null
 let invalidationRevision = 0
-let completedRevision = -1
 let lastCompletedScanAt = 0
 let refreshSequence = 0
 let scheduledFocusRescan: number | null = null
 
 type SkillFreshnessSnapshot = {
-  inventory: SkillFreshnessInventory | null
+  /** The host this snapshot describes; a surface on another target never reads it. */
+  targetKey: string | null
+  plan: BundledSkillPlan | null
+  /** Why this host can't be planned: an older server, or an SSH host no server serves yet. */
+  unsupported: BundledSkillUnsupportedReason | null
   loading: boolean
   error: string | null
 }
 
-let snapshot: SkillFreshnessSnapshot = {
-  inventory: null,
-  loading: false,
-  error: null
-}
-const DISABLED_SNAPSHOT: SkillFreshnessSnapshot = Object.freeze({
-  inventory: null,
-  loading: false,
-  error: null
-})
+const IDLE = { plan: null, unsupported: null, loading: false, error: null } as const
+let snapshot: SkillFreshnessSnapshot = { ...IDLE, targetKey: null }
+const DISABLED_SNAPSHOT: SkillFreshnessSnapshot = Object.freeze({ ...IDLE, targetKey: null })
 const REENABLING_SNAPSHOT: SkillFreshnessSnapshot = Object.freeze({
-  inventory: null,
-  loading: true,
-  error: null
+  ...IDLE,
+  targetKey: null,
+  loading: true
 })
 const subscribers = new Set<() => void>()
 let pendingReenableRefresh: Promise<void> | null = null
 
 function publishSnapshot(next: SkillFreshnessSnapshot): void {
   if (
-    snapshot.inventory === next.inventory &&
+    snapshot.targetKey === next.targetKey &&
+    snapshot.plan === next.plan &&
+    snapshot.unsupported === next.unsupported &&
     snapshot.loading === next.loading &&
     snapshot.error === next.error
   ) {
@@ -51,94 +61,126 @@ function publishSnapshot(next: SkillFreshnessSnapshot): void {
   }
 }
 
-async function loadInventory(force: boolean): Promise<SkillFreshnessInventory> {
+async function loadPlan(
+  target: BundledSkillTarget,
+  force: boolean
+): Promise<BundledSkillPlanResult> {
+  const targetKey = bundledSkillTargetKey(target)
   if (force) {
     invalidationRevision += 1
   }
   const targetRevision = invalidationRevision
   for (;;) {
-    if (cachedInventory && completedRevision >= targetRevision) {
-      return cachedInventory
+    if (cachedPlan?.targetKey === targetKey && cachedPlan.revision >= targetRevision) {
+      return cachedPlan.result
     }
-    if (!pendingInventory) {
+    if (pendingPlan?.targetKey !== targetKey) {
       const requestRevision = invalidationRevision
-      const request = window.api.skills
-        .freshnessInventory()
-        .then((inventory) => {
-          cachedInventory = inventory
-          completedRevision = Math.max(completedRevision, requestRevision)
+      const request = planBundledSkillsOnTarget(target, {})
+        .then((result) => {
+          // Why per target: a late answer from the previous host must not satisfy this one.
+          cachedPlan = {
+            targetKey,
+            result,
+            revision:
+              cachedPlan?.targetKey === targetKey
+                ? Math.max(cachedPlan.revision, requestRevision)
+                : requestRevision
+          }
           lastCompletedScanAt = Date.now()
-          return inventory
+          return result
         })
         .finally(() => {
-          if (pendingInventory === request) {
-            pendingInventory = null
+          if (pendingPlan?.request === request) {
+            pendingPlan = null
           }
         })
-      pendingInventory = request
+      pendingPlan = { targetKey, request }
     }
-    await pendingInventory
+    await pendingPlan.request
   }
 }
 
-/** Rescan freshness without going through the hook, for surfaces whose explicit
- *  refresh affordance must move the shared verdict (the installed-skills refreshed
- *  event reuses a completed scan and deliberately does not reach this store). */
-export async function refreshSkillFreshness(force = true): Promise<void> {
+/** Explicit refreshes update the shared verdict without mounting the hook. */
+export function refreshSkillFreshness(force = true): Promise<void> {
+  return refreshPlan(force)
+}
+
+async function refreshPlan(force: boolean): Promise<void> {
   if (scheduledFocusRescan !== null) {
     window.clearTimeout(scheduledFocusRescan)
     scheduledFocusRescan = null
   }
+  const target = activeTarget
+  if (!target) {
+    return
+  }
+  const targetKey = bundledSkillTargetKey(target)
   const sequence = ++refreshSequence
-  // Why: eligibility is write authority for the draft command. Once invalidated,
-  // stale bytes must stop authorizing UI even if the replacement scan fails.
-  publishSnapshot({ inventory: null, loading: true, error: null })
+  // An invalidated digest must stop authorizing Update even if its replacement fails.
+  publishSnapshot({ ...IDLE, targetKey, loading: true })
   try {
-    const inventory = await loadInventory(force)
+    const result = await loadPlan(target, force)
     if (sequence === refreshSequence) {
-      publishSnapshot({ inventory, loading: false, error: null })
+      publishSnapshot(
+        result.kind === 'plan'
+          ? { ...IDLE, targetKey, plan: result.plan }
+          : { ...IDLE, targetKey, unsupported: result.reason }
+      )
     }
   } catch (cause) {
     if (sequence === refreshSequence) {
       publishSnapshot({
-        inventory: null,
-        loading: false,
+        ...IDLE,
+        targetKey,
         error: cause instanceof Error ? cause.message : 'Could not inspect Orca skills.'
       })
     }
   }
 }
 
+/** Points every surface at `target`; a new host drops the old one's plan and re-plans. */
+function selectSkillFreshnessTarget(target: BundledSkillTarget): boolean {
+  if (activeTarget && bundledSkillTargetKey(activeTarget) === bundledSkillTargetKey(target)) {
+    return false
+  }
+  activeTarget = target
+  void refreshPlan(true)
+  return true
+}
+
 function onWindowFocus(): void {
   const cooldownRemaining = FOCUS_RESCAN_COOLDOWN_MS - (Date.now() - lastCompletedScanAt)
   if (cooldownRemaining <= 0) {
-    void refreshSkillFreshness(true)
+    void refreshPlan(true)
     return
   }
-  if (!snapshot.inventory?.eligibleUpdateNames.length || scheduledFocusRescan !== null) {
+  if (
+    !snapshot.plan ||
+    !summarizeBundledSkillPlan(snapshot.plan).hasWork ||
+    scheduledFocusRescan !== null
+  ) {
     return
   }
-  // Why: a focus event can follow an external edit. Retract stale update
-  // authority immediately, but keep rapid alt-tabs to one trailing disk scan.
-  publishSnapshot({ inventory: null, loading: true, error: null })
+  // Retract potentially stale update authority immediately, but coalesce rapid alt-tabs into one trailing scan.
+  publishSnapshot({ ...IDLE, targetKey: snapshot.targetKey, loading: true })
   scheduledFocusRescan = window.setTimeout(
     () => {
       scheduledFocusRescan = null
-      void refreshSkillFreshness(true)
+      void refreshPlan(true)
     },
     Math.min(cooldownRemaining, FOCUS_RESCAN_COOLDOWN_MS)
   )
 }
 
 function onInstalledSkillsChanged(): void {
-  void refreshSkillFreshness(true)
+  void refreshPlan(true)
 }
 
 function subscribe(subscriber: () => void): () => void {
   subscribers.add(subscriber)
   if (subscribers.size === 1) {
-    // Why: every consumer reads one external snapshot, so focus/install events
-    // install one listener and trigger one shared IPC scan regardless of UI count.
+    // Share one listener and plan across consumers, regardless of UI count.
     window.addEventListener('focus', onWindowFocus)
     window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
   }
@@ -167,9 +209,9 @@ function getDisabledSnapshot(): SkillFreshnessSnapshot {
   return DISABLED_SNAPSHOT
 }
 
-function ensureInventoryLoaded(): void {
-  if (!snapshot.inventory && !snapshot.loading) {
-    void refreshSkillFreshness(false)
+function ensurePlanLoaded(): void {
+  if (!snapshot.plan && !snapshot.unsupported && !snapshot.loading) {
+    void refreshPlan(false)
   }
 }
 
@@ -180,46 +222,55 @@ export type SkillFreshnessState = SkillFreshnessSnapshot & {
 async function skipSkillFreshnessRefresh(): Promise<void> {}
 
 function refreshSkillFreshnessAfterReenable(): Promise<void> {
-  pendingReenableRefresh ??= refreshSkillFreshness(true).finally(() => {
+  pendingReenableRefresh ??= refreshPlan(true).finally(() => {
     pendingReenableRefresh = null
   })
   return pendingReenableRefresh
 }
 
-export function useSkillFreshness(enabled = true): SkillFreshnessState {
-  const previousEnabledRef = useRef(enabled)
-  const reenabled = enabled && !previousEnabledRef.current
+/** Plans `target`'s Orca skills; null (host unknown or not plannable) plans nothing. */
+export function useSkillFreshness(target: BundledSkillTarget | null): SkillFreshnessState {
+  const targetKey = target ? bundledSkillTargetKey(target) : null
+  const previousKeyRef = useRef(targetKey)
+  const reenabled = targetKey !== null && previousKeyRef.current === null
   const current = useSyncExternalStore(
-    enabled ? subscribe : subscribeDisabled,
-    enabled ? getSnapshot : getDisabledSnapshot,
-    enabled ? getSnapshot : getDisabledSnapshot
+    target ? subscribe : subscribeDisabled,
+    target ? getSnapshot : getDisabledSnapshot,
+    target ? getSnapshot : getDisabledSnapshot
   )
 
-  useEffect(() => {
-    const wasEnabled = previousEnabledRef.current
-    previousEnabledRef.current = enabled
-    if (!enabled) {
+  // Why an event: `targetKey` is the target's identity, so only a key change re-plans.
+  const planTarget = useEffectEvent((previousKey: string | null) => {
+    if (!target) {
       return
     }
-    if (!wasEnabled) {
+    if (selectSkillFreshnessTarget(target)) {
+      return
+    }
+    if (previousKey === null) {
       void refreshSkillFreshnessAfterReenable()
       return
     }
-    ensureInventoryLoaded()
-  }, [enabled])
+    ensurePlanLoaded()
+  })
+  useEffect(() => {
+    const previousKey = previousKeyRef.current
+    previousKeyRef.current = targetKey
+    planTarget(previousKey)
+  }, [targetKey])
 
   return {
-    ...(reenabled ? REENABLING_SNAPSHOT : current),
-    refresh: enabled ? refreshSkillFreshness : skipSkillFreshnessRefresh
+    ...(reenabled || (target && current.targetKey !== targetKey) ? REENABLING_SNAPSHOT : current),
+    refresh: target ? refreshSkillFreshness : skipSkillFreshnessRefresh
   }
 }
 
 export const _skillFreshnessCacheForTests = {
   reset(): void {
-    cachedInventory = null
-    pendingInventory = null
+    activeTarget = null
+    cachedPlan = null
+    pendingPlan = null
     invalidationRevision = 0
-    completedRevision = -1
     lastCompletedScanAt = 0
     refreshSequence = 0
     pendingReenableRefresh = null
@@ -227,6 +278,6 @@ export const _skillFreshnessCacheForTests = {
       window.clearTimeout(scheduledFocusRescan)
       scheduledFocusRescan = null
     }
-    snapshot = { inventory: null, loading: false, error: null }
+    snapshot = { ...IDLE, targetKey: null }
   }
 }

@@ -21,8 +21,7 @@ import {
 } from './automation-runs-dashboard-model'
 
 const FETCH_CONCURRENCY = 4
-// The persistence contract retains at most 100 final runs per automation;
-// fetching that bound keeps summary cards complete without an extra scan.
+// Fetch the persistence bound of 100 final runs per automation to keep summary cards complete without another scan.
 const RUNS_PAGE_SIZE = 100
 
 type DashboardState = {
@@ -62,9 +61,7 @@ export function useAutomationRunsDashboard({
   useEffect(() => {
     inputRef.current = { rows, context, legacyTarget, authorityForRow }
   }, [authorityForRow, context, legacyTarget, rows])
-  // Keys the effective request, not just the row: a re-pair bumps the authority's
-  // pairing revision and an uncaptured row's fallback target can move, and either
-  // makes the entries and cursors already on screen belong to a different host.
+  // Key the full request: pairing revisions and uncaptured fallback-target changes invalidate existing entries/cursors.
   const queryKey = useMemo(
     () =>
       rows
@@ -87,8 +84,7 @@ export function useAutomationRunsDashboard({
   }, [state])
   const [loadMoreToken, setLoadMoreToken] = useState(0)
   const loadMore = useCallback(() => setLoadMoreToken((token) => token + 1), [])
-  // Null while disabled: a fresh re-entry must never resume from the previous
-  // session's cursors, however many times load-more fired before it.
+  // Clear disabled-session generations so re-entry never reuses old load-more cursors.
   const generationRef = useRef<{
     queryKey: string
     reloadToken: number
@@ -159,8 +155,7 @@ export function useAutomationRunsDashboard({
             nextCursors.set(row.key, result.value.nextCursor)
           }
         } else {
-          // Only a successful terminal page retires a cursor; keeping it here
-          // leaves the row's remaining history reachable through `loadMore`.
+          // Retain cursors on failed pages so remaining history stays reachable through Load more.
           if (cursor) {
             nextCursors.set(row.key, cursor)
           }

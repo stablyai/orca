@@ -3,6 +3,8 @@ import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { getActiveTabNavOrder, getGroupVisibleTabOrder } from './group-tab-order'
 import { buildOrderedTabItems } from './tab-bar-item-model'
+import { makeOpenFile } from '../../store/slices/store-session-test-harness'
+import { makeTerminalTab } from '../../store/slices/worktrees-slice-test-fixtures'
 
 function terminalTab(id: string, groupId: string, entityId: string, sortOrder: number): Tab {
   return {
@@ -128,10 +130,7 @@ describe('getGroupVisibleTabOrder', () => {
   })
 
   it('walks tabs in the reordered group.tabOrder sequence (regression: drag-reordered tabs)', () => {
-    // Original visual order was [term-1, term-2, term-3]; user dragged
-    // term-1 to the end so tabOrder is now [tab-t2, tab-t3, tab-t1]. The
-    // pre-fix keyboard nav read the stale tabBarOrderByWorktree and cycled
-    // 3 → 1 → 2 instead of 3 → 2 → 1. This walks the new canonical order.
+    // Reordered group.tabOrder must override stale legacy order for keyboard cycling.
     const group: TabGroup = {
       id: 'g1',
       worktreeId: 'wt',
@@ -324,7 +323,6 @@ describe('getActiveTabNavOrder', () => {
       id: 'g1',
       worktreeId: 'wt',
       activeTabId: 'tab-t1',
-      // Drag-reordered: canonical order is [t2, t3, t1]
       tabOrder: ['tab-t2', 'tab-t3', 'tab-t1']
     }
     const tabs: Tab[] = [
@@ -336,11 +334,14 @@ describe('getActiveTabNavOrder', () => {
       activeGroupIdByWorktree: { wt: 'g1' },
       groupsByWorktree: { wt: [group] },
       unifiedTabsByWorktree: { wt: tabs },
-      // Stale legacy order still in insertion order:
+      // Keep legacy insertion order stale to expose accidental fallback.
       tabBarOrderByWorktree: { wt: ['term-1', 'term-2', 'term-3'] },
       tabsByWorktree: {
-        // @ts-expect-error — minimal TerminalTab shape; nav helper only reads `id`
-        wt: [{ id: 'term-1' }, { id: 'term-2' }, { id: 'term-3' }]
+        wt: [
+          makeTerminalTab({ id: 'term-1', worktreeId: 'wt' }),
+          makeTerminalTab({ id: 'term-2', worktreeId: 'wt' }),
+          makeTerminalTab({ id: 'term-3', worktreeId: 'wt' })
+        ]
       }
     })
     expect(getActiveTabNavOrder(state, 'wt').map((t) => t.id)).toEqual([
@@ -374,13 +375,12 @@ describe('getActiveTabNavOrder', () => {
       groupsByWorktree: { wt: [activeGroup, otherGroup] },
       unifiedTabsByWorktree: { wt: tabs },
       tabsByWorktree: {
-        // @ts-expect-error — minimal shape for terminal presence only
-        wt: [{ id: 'term-1' }, { id: 'term-2' }]
+        wt: [
+          makeTerminalTab({ id: 'term-1', worktreeId: 'wt' }),
+          makeTerminalTab({ id: 'term-2', worktreeId: 'wt' })
+        ]
       },
-      openFiles: [
-        // @ts-expect-error — minimal OpenFile shape; nav helper only reads `id` and `worktreeId`
-        { id: '/repo/file.md', worktreeId: 'wt' }
-      ]
+      openFiles: [makeOpenFile({ id: '/repo/file.md', worktreeId: 'wt' })]
     })
 
     expect(getActiveTabNavOrder(state, 'wt')).toEqual([
@@ -394,11 +394,12 @@ describe('getActiveTabNavOrder', () => {
       tabBarOrderByWorktree: { wt: ['term-1', 'sim-1', 'e1', 'term-2'] },
       unifiedTabsByWorktree: { wt: [simulatorTab('sim-1', 'g1', 3)] },
       tabsByWorktree: {
-        // @ts-expect-error — minimal shape
-        wt: [{ id: 'term-1' }, { id: 'term-2' }]
+        wt: [
+          makeTerminalTab({ id: 'term-1', worktreeId: 'wt' }),
+          makeTerminalTab({ id: 'term-2', worktreeId: 'wt' })
+        ]
       },
-      // @ts-expect-error — minimal shape
-      openFiles: [{ id: 'e1', worktreeId: 'wt' }]
+      openFiles: [makeOpenFile({ id: 'e1', worktreeId: 'wt' })]
     })
     expect(getActiveTabNavOrder(state, 'wt')).toEqual([
       { type: 'terminal', id: 'term-1' },

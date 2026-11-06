@@ -6,9 +6,7 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 import {
   _resetTerminalPaneSplitRequestRoutingForTests,
-  dispatchTerminalPaneSplitRequest,
-  queueTerminalPaneSplitRequest,
-  withoutQueuedMainSplits
+  dispatchTerminalPaneSplitRequest
 } from './terminal-pane-split-request-routing'
 import {
   _resetLayoutFramePositionForTests,
@@ -114,46 +112,6 @@ describe('a split main asked for, mounted in a layout-owner build', () => {
     })
 
     expect(splitPane).toHaveBeenCalledWith(1, 'horizontal', { leafId: NEW })
-    expect(sendLayoutApply).not.toHaveBeenCalled()
-    uninstall()
-  })
-
-  it('mounts a split into an unmounted tab with its command, not as a fresh shell', () => {
-    // The split lands while the tab is not mounted: its request waits; main's frame already
-    // holds the pane.
-    queueTerminalPaneSplitRequest({
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      paneRuntimeId: 1,
-      sourceLeafId: SOURCE,
-      direction: 'vertical',
-      newLeafId: NEW,
-      command: 'make test'
-    })
-    const framed = {
-      root: {
-        type: 'split' as const,
-        direction: 'vertical' as const,
-        first: { type: 'leaf' as const, leafId: SOURCE },
-        second: { type: 'leaf' as const, leafId: NEW }
-      },
-      activeLeafId: SOURCE,
-      expandedLeafId: null
-    }
-
-    // The tab's first mount replays its layout without the pane...
-    expect(withoutQueuedMainSplits(framed, 'tab-1', 'wt-1').root).toEqual({
-      type: 'leaf',
-      leafId: SOURCE
-    })
-    // ...and the waiting request mounts it, starting its command.
-    const ptyDeps: { startup?: unknown } = {}
-    const { manager, splitPane, startups } = mountedTab(ptyDeps)
-    const uninstall = install(manager, ptyDeps)
-
-    expect(splitPane).toHaveBeenCalledTimes(1)
-    expect(splitPane).toHaveBeenCalledWith(1, 'vertical', { leafId: NEW })
-    expect(startups).toEqual([{ command: 'make test' }])
     expect(sendLayoutApply).not.toHaveBeenCalled()
     uninstall()
   })

@@ -7,13 +7,7 @@ type CombinedDiffSectionIndexCache = {
   map: Map<string, number>
 }
 
-/**
- * Section-key to section-index map that keeps its identity while the section keys do.
- *
- * On-demand section loads replace the sections array on every fetch, so a freshly built Map would
- * be a memo miss for every consumer — the file tree would re-render all of its rows continuously
- * while the user scrolls a large diff.
- */
+/** Preserve map identity while section keys match so progressive loads do not rerender every tree row. */
 export function useCombinedDiffSectionIndexMap({
   entrySignature,
   sections
@@ -24,15 +18,12 @@ export function useCombinedDiffSectionIndexMap({
   const cacheRef = useRef<CombinedDiffSectionIndexCache | null>(null)
   const sectionIndexByKey = useMemo(() => {
     const previous = cacheRef.current
-    // Section content/loading updates preserve entry order and keys. The entry signature usually
-    // changes when the navigable structure changes, but compare keys as a guard for reused
-    // signatures (and to keep this cache correct if a caller rebuilds sections).
+    // Content loads keep keys/order; verify keys too because callers may reuse signatures while rebuilding sections.
     if (
       previous !== null &&
       previous.entrySignature === entrySignature &&
       previous.sections.length === sections.length &&
-      // Why identity first: a section load rewrites one element of a `prev.map(...)` copy, so most
-      // rows settle on a pointer compare instead of a string compare.
+      // Identity settles untouched load siblings without reading their keys.
       sections.every(
         (section, index) =>
           previous.sections[index] === section || previous.sections[index]?.key === section.key
@@ -43,9 +34,7 @@ export function useCombinedDiffSectionIndexMap({
     return createCombinedDiffSectionIndexMap(sections)
   }, [entrySignature, sections])
 
-  // Why a committed write and not a render-phase one: React can discard a render, and a cache
-  // seeded from abandoned work would hand a later render a map for sections that never existed.
-  // Layout, not passive, so a synchronous re-render inside the same commit still sees this cache.
+  // Cache only committed sections; abandoned renders must not seed later lookups. Layout timing supports same-commit rerenders.
   useLayoutEffect(() => {
     cacheRef.current = { entrySignature, sections, map: sectionIndexByKey }
   }, [entrySignature, sectionIndexByKey, sections])

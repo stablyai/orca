@@ -1,7 +1,5 @@
 import { SPLIT_TERMINAL_PANE_EVENT, type SplitTerminalPaneDetail } from '@/constants/terminal'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { removeLayoutLeaf } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 // Why 32: ordinary use has one request; the cap tolerates automation bursts without letting a stalled renderer retain unbounded commands or mount leases.
 export const TERMINAL_PANE_SPLIT_QUEUE_CAPACITY = 32
@@ -15,13 +13,16 @@ type SplitMountLease = {
 
 const queuedRequests: SplitTerminalPaneDetail[] = []
 const splitMountLeasesByTarget = new Map<string, SplitMountLease>()
+/** Mounts held open until their holder releases them; bounded by the work in flight that holds them. */
+const mountHoldsByTarget = new Map<string, { tabId: string; worktreeId: string; count: number }>()
 const splitMountLeaseListeners = new Set<() => void>()
 let splitMountLeaseTabIds: ReadonlySet<string> = new Set()
 
 function notifySplitMountLeaseChange(): void {
-  splitMountLeaseTabIds = new Set(
-    [...splitMountLeasesByTarget.values()].map((lease) => lease.tabId)
-  )
+  splitMountLeaseTabIds = new Set([
+    ...[...splitMountLeasesByTarget.values()].map((lease) => lease.tabId),
+    ...[...mountHoldsByTarget.values()].map((hold) => hold.tabId)
+  ])
   for (const listener of splitMountLeaseListeners) {
     listener()
   }
@@ -104,6 +105,32 @@ export function queueTerminalPaneSplitRequest(detail: SplitTerminalPaneDetail): 
   acquireSplitMountLease(detail.tabId, detail.worktreeId)
 }
 
+/** Keeps a tab mounted, parked or not, until the returned release runs: work on its live panes
+ *  that outlasts a timed lease must not lose them to cold parking halfway through. */
+export function holdTerminalPaneMount(tabId: string, worktreeId: string): () => void {
+  const key = splitTargetKey(tabId, worktreeId)
+  const hold = mountHoldsByTarget.get(key)
+  if (hold) {
+    hold.count += 1
+  } else {
+    mountHoldsByTarget.set(key, { tabId, worktreeId, count: 1 })
+    notifySplitMountLeaseChange()
+  }
+  let released = false
+  return () => {
+    const current = mountHoldsByTarget.get(key)
+    if (released || !current) {
+      return
+    }
+    released = true
+    current.count -= 1
+    if (current.count === 0) {
+      mountHoldsByTarget.delete(key)
+      notifySplitMountLeaseChange()
+    }
+  }
+}
+
 export function takeQueuedTerminalPaneSplitRequests(
   tabId: string,
   worktreeId?: string
@@ -125,52 +152,13 @@ export function takeQueuedTerminalPaneSplitRequests(
   return requests
 }
 
-/** The tab's layout without the panes of splits main asked for that wait here, which mount them. */
-export function withoutQueuedMainSplits(
-  layout: TerminalLayoutSnapshot,
-  tabId: string,
-  worktreeId: string
-): TerminalLayoutSnapshot {
-  let root = layout.root
-  for (const leafId of queuedMainSplitLeafIds(tabId, worktreeId)) {
-    root = removeLayoutLeaf(root, leafId) ?? root
-  }
-  return root === layout.root ? layout : { ...layout, root }
-}
-
-function queuedMainSplitLeafIds(tabId: string, worktreeId: string): string[] {
-  return queuedRequests.flatMap((request) =>
-    request.tabId === tabId &&
-    request.newLeafId &&
-    (request.worktreeId === undefined || request.worktreeId === worktreeId)
-      ? [request.newLeafId]
-      : []
-  )
-}
-
 export function cancelQueuedTerminalPaneSplitRequests(tabId: string, worktreeId?: string): void {
   removeQueuedRequestsForTarget(tabId, worktreeId)
   releaseSplitMountLease(tabId, worktreeId)
 }
 
-/** Drops a waiting split whose pane closed before its tab mounted; the tab's lease goes with its last one. */
-export function cancelQueuedTerminalPaneSplitForLeaf(tabId: string, leafId: string): void {
-  const index = queuedRequests.findIndex(
-    (request) => request.tabId === tabId && request.newLeafId === leafId
-  )
-  if (index === -1) {
-    return
-  }
-  const [{ worktreeId }] = queuedRequests.splice(index, 1)
-  if (
-    !queuedRequests.some((request) => request.tabId === tabId && request.worktreeId === worktreeId)
-  ) {
-    releaseSplitMountLease(tabId, worktreeId)
-  }
-}
-
 export function hasTerminalPaneSplitMountLease(tabId: string, worktreeId?: string): boolean {
-  return [...splitMountLeasesByTarget.values()].some(
+  return [...splitMountLeasesByTarget.values(), ...mountHoldsByTarget.values()].some(
     (lease) =>
       lease.tabId === tabId && (worktreeId === undefined || lease.worktreeId === worktreeId)
   )
@@ -227,6 +215,7 @@ export function _resetTerminalPaneSplitRequestRoutingForTests(): void {
     clearTimeout(lease.timer)
   }
   splitMountLeasesByTarget.clear()
+  mountHoldsByTarget.clear()
   splitMountLeaseListeners.clear()
   splitMountLeaseTabIds = new Set()
 }

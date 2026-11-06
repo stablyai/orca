@@ -1,15 +1,16 @@
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
-import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-session-resume'
-import { AiVaultPrepareSessionResumeParams } from '../../shared/rpc-contract/ai-vault-params'
+import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
+import { prepareLegacySharedCodexSessionResume } from '../codex/history/resume/codex-legacy-session-resume'
 
 let root: string | undefined
 const request = {
@@ -38,7 +39,13 @@ function install(record: AgentSessionRecord, copy = vi.fn(), journal = savedJour
   setStructuredAgentSessionHost({
     journalSnapshot: async () => journal,
     deps: {
-      store: { getRecord: () => record, listRecords: () => [record] },
+      store: {
+        getRecord: () => record,
+        listRecords: () => [record],
+        listConversations: () => [agentSessionConversationView(record)],
+        selectWritableRecord: () => ({ kind: 'writable', record }),
+        requireWritableRecord: () => record
+      },
       adapter: { copyConversation: copy },
       resolveWorkspacePath: async () => root,
       resolveLaunchEnv: () => ({})
@@ -98,34 +105,42 @@ it('locates the current Codex rollout in its recorded home and materializes the 
   })
 })
 
-it('copies OpenCode directly from the selected record and preserves its typed account and copy id', async () => {
-  root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
-  const record = agentSessionRecordFixture()
-  record.provider = 'opencode'
-  record.accountHome = { kind: 'opencode', locator: { kind: 'unmanaged' } }
-  record.providerHandleChain = [
-    {
-      ...record.providerHandleChain[0]!,
-      handle: { agent: 'opencode', transport: 'acp', nativeId: 'ses_source' }
-    }
-  ]
-  const copy = vi.fn(async () => ({ sessionId: 'ses_copy' }))
-  install(record, copy)
-  const result = await prepareStructuredChatCliFork(request, prepare)
-  expect(copy).toHaveBeenCalledWith(
-    expect.objectContaining({
-      accountHome: record.accountHome,
-      providerSessionId: 'ses_source',
-      identity: expect.objectContaining({ sessionId: record.sessionId })
-    })
-  )
-  expect(result.cliForkSource).toMatchObject({
-    agent: 'opencode',
-    sourceAgent: 'opencode2',
-    sessionId: 'ses_copy'
-  })
-  expect(prepare).not.toHaveBeenCalled()
-})
+it.runIf(process.platform === 'win32')(
+  'maps an extended-length Windows rollout path into the prepared home (#27200)',
+  async () => {
+    root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', root)
+    const home = join(root, 'codex-runtime-home', 'home')
+    const system = join(root, 'system')
+    const record = agentSessionRecordFixture()
+    record.provider = 'codex'
+    record.accountHome = { variable: 'CODEX_HOME', path: home }
+    record.providerHandleChain = [
+      {
+        ...record.providerHandleChain[0]!,
+        handle: { transport: 'codex-app-server', agent: 'codex', nativeId: 'current-conversation' }
+      }
+    ]
+    const relative = join('2026', '10', '15', 'rollout-2026-10-15-current-conversation.jsonl')
+    await mkdir(join(home, 'sessions', '2026', '10', '15'), { recursive: true })
+    await writeFile(join(home, 'sessions', relative), '{"saved":true}\n')
+    vi.spyOn(
+      structuredAgentRuntimeRegistration('codex')!.transcriptImport!,
+      'findTranscript'
+    ).mockResolvedValueOnce(`\\\\?\\${join(home, 'sessions', relative)}`)
+    install(record)
+    const result = await prepareStructuredChatCliFork(request, async (args) => ({
+      ...(await prepareLegacySharedCodexSessionResume(args, {
+        isHostSystemDefaultRealHomeSelected: () => true,
+        legacyCodexHomePath: home,
+        systemCodexHomePath: system
+      })),
+      useRealCodexHome: false,
+      substituteCodexHome: system
+    }))
+    expect(result.cliForkSource?.filePath).toBe(join(system, 'sessions', relative))
+  }
+)
 
 it('uses the Pi file handle and refuses a mismatched saved header or missing handle', async () => {
   root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
@@ -185,26 +200,4 @@ it('uses the Pi file handle and refuses a mismatched saved header or missing han
   await expect(prepareStructuredChatCliFork(request, prepare)).rejects.toThrow(
     'no saved conversation'
   )
-})
-
-it('refuses a foreign workspace or WSL record and rejects mixed chat/row requests', async () => {
-  root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
-  const record = agentSessionRecordFixture()
-  install(record)
-  await expect(
-    prepareStructuredChatCliFork(
-      { ...request, sourceChat: { ...request.sourceChat, workspaceId: 'other' } },
-      prepare
-    )
-  ).rejects.toThrow('on this host')
-  record.location.wslDistro = 'Ubuntu'
-  await expect(prepareStructuredChatCliFork(request, prepare)).rejects.toThrow('on this host')
-  expect(
-    AiVaultPrepareSessionResumeParams.safeParse({
-      ...request,
-      agent: 'claude',
-      filePath: '/foreign'
-    }).success
-  ).toBe(false)
-  expect(prepare).not.toHaveBeenCalled()
 })

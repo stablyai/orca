@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
 import type { TabGroup } from '../../../../../shared/tab-types'
@@ -139,8 +139,7 @@ export function createTabsGroupActions(
               ...state.activeGroupIdByWorktree,
               [worktreeId]: groupId
             }
-        // Why: focusing a group surfaces its active terminal tab, so dismiss the tab-level bell.
-        // Why (activeWorktree guard below): only when the group is in the active worktree, else the unseen tab's bell is swallowed.
+        // Only surface tabs of the active workspace; focusing an unseen group must not consume its bell.
         if (state.activeWorktreeId !== worktreeId) {
           if (groupAlreadyFocused) {
             return state

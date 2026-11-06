@@ -1,12 +1,7 @@
-/**
- * The string and key normalization behind the WSL move projection: a UNC path of the moved distro
- * and its Linux path, or any alias of the owning host, compare equal. Only identity-shaped strings
- * are normalized, and never user text, so a move that rewrites a draft or a comment still shows.
- */
+// Normalize host/path identities for comparison; preserve user text and terminal output byte for byte.
 import type { WslMoveProjectionScope } from './wsl-move-state-projection'
 
-/** Subtrees of user-authored text and terminal output, compared byte for byte. */
-const FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
+export const WSL_MOVE_FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
   'dirtyDraftContent',
   'comment',
   'prompt',
@@ -28,7 +23,7 @@ const FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
   'selectedText'
 ])
 
-/** `editor:<enc worktreeId>:<enc runtime>:<enc filePath>` → its three decoded parts. */
+/** Decode editor:<worktreeId>:<runtime>:<filePath>. */
 export function parseEditorFileId(value: string): [string, string, string] | null {
   if (!value.startsWith('editor:')) {
     return null
@@ -49,8 +44,7 @@ export function createWslMoveStringNormalizer(
   scope: Pick<WslMoveProjectionScope, 'distro' | 'hostAliases'>
 ): (value: string) => string {
   const distro = escapeRegExp(scope.distro)
-  // A path, a worktree id (`<repo>::<path>[::workspace:<id>]`) or an owner key whose path is a UNC
-  // path of the distro. Path segments stop at `:`, which only the id suffix uses.
+  // Match distro UNC identities; colons delimit worktree suffixes rather than path segments.
   const uncIdentity = new RegExp(
     `^((?:worktree:)?(?:[^\\s\\\\/]*::)?)(?:\\\\\\\\|//)(?:wsl\\.localhost|wsl\\$)[\\\\/]${distro}((?:[\\\\/][^\\\\/:]*)*)(::.*)?$`,
     'i'
@@ -62,7 +56,7 @@ export function createWslMoveStringNormalizer(
       return '<H>'
     }
     const separator = value.indexOf('|')
-    // A key qualified by the owning host names the same row as the bare key the import writes.
+    // Qualified and bare keys identify the same moved row.
     if (separator > 0 && aliases.has(value.slice(0, separator))) {
       return normalize(value.slice(separator + 1))
     }
@@ -83,10 +77,7 @@ export function createWslMoveStringNormalizer(
   return normalize
 }
 
-/**
- * Normalizes identity strings and every key, drops `droppedKeys`, and sorts keys. Throws when two
- * keys of one record become the same key, i.e. two spellings of one thing.
- */
+/** Normalize identities and sorted keys; refuse collisions unless their values match. */
 export function canonicalizeWslMoveValue(
   value: unknown,
   normalize: (value: string) => string,
@@ -113,11 +104,11 @@ export function canonicalizeWslMoveValue(
       child,
       normalize,
       droppedKeys,
-      freeText || FREE_TEXT_KEYS.has(key)
+      freeText || WSL_MOVE_FREE_TEXT_KEYS.has(key)
     )
     const earlier = originalByKey.get(normalizedKey)
     if (earlier !== undefined) {
-      // The same row under a qualified and a bare key is one row; two different rows are a refusal.
+      // Equal aliases can collapse; conflicting rows must refuse.
       const kept = entries.find(([existing]) => existing === normalizedKey)?.[1]
       if (JSON.stringify(kept) !== JSON.stringify(canonical)) {
         throw new Error(`Two keys name the same thing after the move: ${earlier} and ${key}`)

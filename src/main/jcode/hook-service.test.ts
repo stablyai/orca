@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('os', async () => {
-  // oxlint-disable-next-line typescript/consistent-type-imports -- vi.importActual needs the inline import() to type the real module
-  const actual = await vi.importActual<typeof import('os')>('os')
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return { ...actual, homedir: homedirMock }
 })
 
@@ -29,8 +29,7 @@ describe('JcodeHookService', () => {
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-jcode-home-'))
     homedirMock.mockReturnValue(homeDir)
-    // Why: getJcodeConfigPath prefers JCODE_HOME; an ambient value would write
-    // outside the temp home and leak the written config past afterEach.
+    // Isolate JCODE_HOME as well as homedir so installs cannot escape the temporary home.
     vi.stubEnv('JCODE_HOME', '')
   })
 
@@ -58,9 +57,7 @@ describe('JcodeHookService', () => {
 
     const config = readFileSync(getJcodeConfigPath(), 'utf8')
     for (const event of JCODE_HOOK_EVENTS) {
-      // Why both wrappers: the value is shell-quoted for jcode's hook tokenizer and
-      // then TOML-quoted for the file, so neither the raw path nor the shell-quoted
-      // string appears on its own.
+      // Commands are shell-quoted for jcode, then TOML-quoted for config storage.
       expect(config).toContain(
         `${event} = ${tomlQuoteString(getJcodeManagedCommand(getJcodeManagedScriptPath()))}`
       )
@@ -68,7 +65,6 @@ describe('JcodeHookService', () => {
     const script = readFileSync(getJcodeManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/jcode')
     expect(script).toContain('payload@-')
-    // Why: the payload is jcode's own JCODE_HOOK_PAYLOAD, forwarded verbatim.
     expect(script).toContain('$JCODE_HOOK_PAYLOAD')
     expect(script).toContain('payload="$JCODE_HOOK_PAYLOAD"')
   })
@@ -137,13 +133,13 @@ describe('JcodeHookService', () => {
     expect(readFileSync(configPath, 'utf8')).not.toContain('previous')
   })
 
-  it('does not report complete stale event coverage as installed when the current script exists', () => {
+  it('does not report stale managed commands as installed beside the current one', () => {
     const service = new JcodeHookService()
     service.install()
     const staleCommand = getJcodeManagedCommand('/Users/previous/.orca/agent-hooks/jcode-hook.sh')
     writeFileSync(
       getJcodeConfigPath(),
-      `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = ${tomlQuoteString(staleCommand)}`).join('\n')}\n`,
+      `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = [${tomlQuoteString(staleCommand)}, ${tomlQuoteString(getJcodeManagedCommand(getJcodeManagedScriptPath()))}]`).join('\n')}\n`,
       'utf8'
     )
 
@@ -154,6 +150,7 @@ describe('JcodeHookService', () => {
       `Managed hook command outdated for events: ${JCODE_HOOK_EVENTS.join(', ')}`
     )
     expect(service.install().state).toBe('installed')
+    expect(readFileSync(getJcodeConfigPath(), 'utf8')).not.toContain('previous')
   })
 
   it('reports legacy unquoted commands as outdated even when the script exists', () => {
@@ -217,6 +214,35 @@ describe('JcodeHookService', () => {
     const status = new JcodeHookService().install()
     expect(status.state).toBe('error')
     expect(status.detail).toContain('config.toml')
+  })
+
+  it('appends to user hook arrays and removes only its own element', () => {
+    const configPath = getJcodeConfigPath()
+    const source = `[hooks]\npre_tool = [\n    "~/gates/pre-tool.sh", # policy\n    "~/gates/memory-gate.sh",\n]\npre_tool_timeout_ms = 5000\n`
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(configPath, source, 'utf8')
+    const service = new JcodeHookService()
+    expect(service.getStatus().state).toBe('not_installed')
+
+    expect(service.install().state).toBe('installed')
+    const installed = readFileSync(configPath, 'utf8')
+    expect(parseToml(installed).hooks).toMatchObject({
+      pre_tool: [
+        '~/gates/pre-tool.sh',
+        '~/gates/memory-gate.sh',
+        getJcodeManagedCommand(getJcodeManagedScriptPath())
+      ],
+      pre_tool_timeout_ms: 5000
+    })
+    expect(installed).toContain('"~/gates/pre-tool.sh", # policy')
+    expect(service.install().state).toBe('installed')
+    expect(readFileSync(configPath, 'utf8')).toBe(installed)
+
+    expect(service.remove().state).toBe('not_installed')
+    expect(parseToml(readFileSync(configPath, 'utf8'))).toEqual(parseToml(source))
+    expect(readFileSync(configPath, 'utf8')).toContain(
+      'pre_tool = [\n    "~/gates/pre-tool.sh", # policy\n    "~/gates/memory-gate.sh",\n]\n'
+    )
   })
 
   it('remove clears only the managed entries', () => {

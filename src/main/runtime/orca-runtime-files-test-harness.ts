@@ -9,7 +9,6 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 
-/** Restores the shared fs/auth/watcher mock state and fake timers around each test. */
 export function useRuntimeFileCommandsLifecycle(): void {
   const originalPlatform = process.platform
 
@@ -42,10 +41,7 @@ export function createRuntimeFileCommands(options?: {
   resolveKnownWorkspaceFileTarget?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
   resolveTerminalCwd?: ReturnType<typeof vi.fn>
-  resolveTerminalContext?: ReturnType<typeof vi.fn>
   resolveTerminalFileUriHostname?: ReturnType<typeof vi.fn>
-  hasRecentTerminalOutputPath?: ReturnType<typeof vi.fn>
-  hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getSettings: vi.fn(() => ({ followSymlinkedDirectories: false })),
@@ -58,7 +54,7 @@ export function createRuntimeFileCommands(options?: {
     path,
     ...(options?.hostId ? { hostId: options.hostId } : {})
   }
-  // Mirrors the real resolver: the worktree's own host outranks the repo row.
+  // Worktree host outranks repo metadata, matching the real resolver.
   const runtimeFileTargetExecutionHostId = (): ExecutionHostId => {
     const connectionId = store.getRepo(worktree.repoId)?.connectionId
     return normalizeExecutionHostId(options?.hostId) ?? getConnectionExecutionHostId(connectionId)
@@ -66,7 +62,6 @@ export function createRuntimeFileCommands(options?: {
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
-    resolveWorktreeSelector: vi.fn(async () => worktree),
     resolveRuntimeFileTarget:
       options?.resolveRuntimeFileTarget ??
       vi.fn(async () => ({
@@ -77,18 +72,8 @@ export function createRuntimeFileCommands(options?: {
       ? { resolveKnownWorkspaceFileTarget: options.resolveKnownWorkspaceFileTarget }
       : {}),
     resolveTerminalCwd: options?.resolveTerminalCwd ?? vi.fn(() => path),
-    resolveTerminalContext:
-      options?.resolveTerminalContext ??
-      vi.fn(() => ({
-        worktreeId: worktree.id,
-        connectionId: store.getRepo(worktree.repoId)?.connectionId ?? null
-      })),
     ...(options?.resolveTerminalFileUriHostname
       ? { resolveTerminalFileUriHostname: options.resolveTerminalFileUriHostname }
-      : {}),
-    hasRecentTerminalOutputPath: options?.hasRecentTerminalOutputPath ?? vi.fn(() => true),
-    ...(options?.hasRecentNativeChatOutputPath
-      ? { hasRecentNativeChatOutputPath: options.hasRecentNativeChatOutputPath }
       : {}),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),

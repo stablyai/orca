@@ -11,25 +11,23 @@ import {
   type SidebarInputsFeedState,
   type SidebarInputsFeedStep
 } from '../../../shared/sidebar-list/sidebar-inputs-feed-installer'
-import type { SidebarInputsFeed, SidebarInputsFeedDomain } from './sidebar-inputs-feed'
+import type {
+  SidebarInputsFeed,
+  SidebarInputsFeedChange,
+  SidebarInputsFeedDomain
+} from './sidebar-inputs-feed'
 
 /** A domain whose entities a test edits; counts its reads and live watchers. */
-export function testDomain(
-  name: string,
-  initial: Record<string, unknown> = {},
-  options: { rereadOnRead?: boolean } = {}
-) {
+export function testDomain(name: string, initial: Record<string, unknown> = {}) {
   let entities: Record<string, unknown> = { ...initial }
-  const watchers = new Set<() => void>()
+  const watchers = new Set<(change?: SidebarInputsFeedChange) => void>()
   let reads = 0
   let failing = false
   let gate: Promise<void> | null = null
   const domain: SidebarInputsFeedDomain = {
     name,
-    rereadOnRead: options.rereadOnRead,
-    read: async () => {
+    read: () => {
       reads += 1
-      await gate
       if (failing) {
         throw new Error('read failed')
       }
@@ -38,15 +36,19 @@ export function testDomain(
     watch: (changed) => {
       watchers.add(changed)
       return () => watchers.delete(changed)
+    },
+    ready: async () => {
+      await gate
     }
   }
-  const announce = (): void => watchers.forEach((changed) => changed())
+  const announce = (change?: SidebarInputsFeedChange): void =>
+    watchers.forEach((changed) => changed(change))
   return {
     domain,
     entities: () => entities,
-    set(key: string, value: unknown) {
+    set(key: string, value: unknown, change?: SidebarInputsFeedChange) {
       entities = { ...entities, [key]: value }
-      announce()
+      announce(change)
     },
     remove(key: string) {
       entities = Object.fromEntries(
@@ -61,7 +63,7 @@ export function testDomain(
     setQuietly(key: string, value: unknown) {
       entities = { ...entities, [key]: value }
     },
-    /** Holds every read until the returned release runs. */
+    /** Holds the domain unready, so phone reads wait, until the returned release runs. */
     hold(): () => void {
       let release = (): void => {}
       gate = new Promise((resolve) => {

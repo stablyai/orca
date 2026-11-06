@@ -1,3 +1,6 @@
+import type * as GitlabGithubStatusModule from '../../../tasks/use-mobile-tasks-gitlab-github-status-actions'
+import type { ActionableTaskItem } from '../../../tasks/mobile-tasks-project-workspace-types'
+import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -6,7 +9,6 @@ import { mountFixture } from '../recorder-fixture-shape'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -18,7 +20,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -58,6 +59,8 @@ const GITHUB_PR_ITEM = {
   title: 'A pull request',
   source: {
     id: 'github:pr:12',
+    url: 'https://github.com/owner/repo/pull/12',
+    prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' },
     repoId: REPO_ID,
     number: 12,
     type: 'pr',
@@ -69,11 +72,12 @@ const GITHUB_PR_ITEM = {
   }
 } as const
 
-const GITHUB_ISSUE_ITEM = {
+export const GITHUB_ISSUE_ITEM = {
   provider: 'github',
   title: 'An issue',
   source: {
     id: 'github:issue:9',
+    url: 'https://github.com/owner/repo/issues/9',
     repoId: REPO_ID,
     number: 9,
     type: 'issue',
@@ -122,14 +126,11 @@ function gitlabDetailPayload(): Record<string, unknown> {
   }
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
   readonly fixture: Record<string, unknown>
+  readonly observedFields?: readonly TaskActionObservedField[]
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
     readonly actions: () => Actions
@@ -140,12 +141,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskActionMountOwners(modules, context, model, spec.fixture, spec.observedFields)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -173,10 +176,6 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * A pull request's checks and file list, and the open-or-closed state a hosted item can be moved
- * to. Both read a detail payload the screen already holds rather than re-fetching it.
- */
 export function taskItemChecksStatusMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -185,9 +184,17 @@ export function taskItemChecksStatusMountAdapters(
     const useActions = load<
       typeof import('../../../tasks/use-mobile-tasks-github-check-file-actions')
     >('use-mobile-tasks-github-check-file-actions.tsx').useMobileTasksGithubCheckFileActions
-    return mountModelHook(context, {
-      useHook: (model) => useActions(model),
+    return mountModelHook(modules, context, {
+      useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
+      observedFields: [
+        'detailRefreshSeq',
+        'expandedPrFilePath',
+        'prFileContents',
+        'prFileLoadingPath',
+        'prFileCommentDrafts'
+      ],
       fixture: {
+        actionItem: GITHUB_PR_ITEM,
         detailPayload: githubDetailPayload(),
         expandedPrFilePath: null,
         mutatingStatus: false,
@@ -229,11 +236,21 @@ export function taskItemChecksStatusMountAdapters(
   }
   function hostedStatus(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
-      mountModelHook(context, {
-        useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-gitlab-github-status-actions')>(
+      mountModelHook(modules, context, {
+        useHook: (
+          model: Parameters<
+            typeof GitlabGithubStatusModule.useMobileTasksGitlabGithubStatusActions
+          >[0]
+        ) =>
+          load<typeof GitlabGithubStatusModule>(
             'use-mobile-tasks-gitlab-github-status-actions.tsx'
           ).useMobileTasksGitlabGithubStatusActions(model),
+        observedFields: [
+          'itemAddLabelsDraft',
+          'itemRemoveLabelsDraft',
+          'itemAddAssigneesDraft',
+          'itemRemoveAssigneesDraft'
+        ],
         fixture: {
           detailPayload: item.provider === 'github' ? githubDetailPayload() : gitlabDetailPayload(),
           loadTasks: async () => {},
@@ -244,12 +261,17 @@ export function taskItemChecksStatusMountAdapters(
         },
         actions: ({ actions }) => ({
           'gitlab-status': () => actions().toggleGitLabStatus(mountFixture(item)),
-          'github-metadata': () =>
-            actions().updateGitHubIssueMetadata(mountFixture(GITHUB_ISSUE_ITEM), {
+          'github-metadata': () => {
+            // The screen edits only the open issue, so open it first as a user does.
+            const issue: Extract<ActionableTaskItem, { provider: 'github' }> =
+              mountFixture(GITHUB_ISSUE_ITEM)
+            actions().setActionItem(issue)
+            return actions().updateGitHubIssueMetadata(issue, {
               title: 'Renamed',
               addLabels: ['triage'],
               removeLabels: ['bug']
             })
+          }
         }),
         state: (model) => ({
           payload: model.detailPayload,

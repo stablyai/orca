@@ -136,7 +136,7 @@ describe('ssh remote command builders', () => {
     expect(readRemoteHomeCommand(posix)).toBe('echo $HOME')
     expect(removeRemoteTreeCommand(posix, '/home/me/.orca-remote/x')).toContain('rm -rf')
     const probe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
-    expect(probe).toContain('test -d')
+    expect(probe).toContain("cd '/home/me/orcad'")
     expect(probe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })
 
@@ -167,6 +167,24 @@ describe('ssh remote command builders', () => {
     writeFileSync(join(dir, ORCAD_INSTALL_MODEL.installCompleteFilename), '')
     return { dir, artifact: artifacts.at(-1)! }
   }
+
+  it.skipIf(process.platform === 'win32')(
+    'answers a POSIX install complete only with every artifact present, in its own dir',
+    async () => {
+      const { dir, artifact } = stageOrcadInstall(nativePosix)
+      try {
+        const run = async (installDir: string): Promise<string> =>
+          (await runShellCommand(probeOrcadInstalledCommand(nativePosix, installDir))).trim()
+        expect(await run(dir)).toBe('OK')
+        // The relative test must not resolve against the caller's working directory.
+        expect(await run(join(dir, 'missing slot'))).toBe('MISSING')
+        rmSync(join(dir, artifact))
+        expect(await run(dir)).toBe('MISSING')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.skipIf(!powerShellExecutable)('rejects a Windows install missing one artifact', async () => {
     const { dir, artifact } = stageOrcadInstall(windows)

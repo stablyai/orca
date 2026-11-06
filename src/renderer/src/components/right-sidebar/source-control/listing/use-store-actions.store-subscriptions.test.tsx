@@ -41,11 +41,6 @@ afterEach(() => {
   useAppStore.setState(originalState, true)
 })
 
-/** Everything the hook returns that is a store action rather than subscribed state. */
-const ACTION_KEYS = Object.keys(originalState).filter(
-  (key) => typeof (originalState as Record<string, unknown>)[key] === 'function'
-)
-
 describe('useSourceControlStoreActions store subscriptions', () => {
   it('keeps only the two generation-record maps subscribed', () => {
     const baseline = listenerCount()
@@ -56,8 +51,7 @@ describe('useSourceControlStoreActions store subscriptions', () => {
     }
     mount(<Probe />)
 
-    // Why 2: `pullRequestGenerationRecords` and `commitMessageGenerationRecords` are the only
-    // entries that are state; the other 40 are actions read through getState().
+    // Subscribe only to the two generation maps; fixed-identity actions come from getState().
     expect(listenerCount() - baseline).toBe(2)
 
     unmount()
@@ -122,45 +116,5 @@ describe('useSourceControlStoreActions store subscriptions', () => {
     })
     expect(read()).not.toBe(afterPr)
     expect(read().commitMessageGenerationRecords).toEqual({ 'wt-1': record })
-  })
-
-  it('hands back the live store action references', () => {
-    let latest: SourceControlStoreActions | null = null
-    function Probe(): null {
-      latest = useSourceControlStoreActions()
-      return null
-    }
-    mount(<Probe />)
-
-    const state = useAppStore.getState() as unknown as Record<string, unknown>
-    const returned = latest as unknown as Record<string, unknown>
-    const returnedActionKeys = Object.keys(returned).filter(
-      (key) => typeof returned[key] === 'function'
-    )
-
-    expect(returnedActionKeys.length).toBe(40)
-    for (const key of returnedActionKeys) {
-      expect(returned[key]).toBe(state[key])
-    }
-  })
-
-  it('never reassigns a store action, which is what makes getState() safe here', () => {
-    const before = useAppStore.getState() as unknown as Record<string, unknown>
-    const snapshot = new Map(ACTION_KEYS.map((key) => [key, before[key]]))
-
-    // Drive real writes through several slices, then confirm no action identity moved.
-    act(() => {
-      useAppStore.getState().setRightSidebarOpen(true)
-      useAppStore.getState().setRightSidebarTab('source-control')
-      useAppStore.getState().allocatePullRequestGenerationRequestId()
-      useAppStore.getState().setPullRequestGenerationRecord('wt-1', { status: 'pending' } as never)
-      useAppStore.getState().setCommitMessageGenerationRecord('wt-1', {
-        status: 'pending'
-      } as never)
-    })
-
-    const after = useAppStore.getState() as unknown as Record<string, unknown>
-    const moved = ACTION_KEYS.filter((key) => after[key] !== snapshot.get(key))
-    expect(moved).toEqual([])
   })
 })

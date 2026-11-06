@@ -5,16 +5,7 @@ export type CodexRestartNoticeAccount = {
   label: string
 }
 
-/**
- * Decides whether two restart-notice accounts are the same account.
- *
- * Why not the labels: an account label is an email, and nothing stops two
- * accounts from sharing one — the same OpenAI login added under two ChatGPT
- * workspaces, or a failed roster read collapsing every account to the same
- * fallback string. Deciding on labels there erases a prompt for a pane that is
- * genuinely running on the account the user switched away from. Labels remain
- * the fallback only for callers that carry no ids at all.
- */
+/** Prefer account IDs: distinct ChatGPT workspaces can share email labels, and roster failures collapse labels to a fallback. Compare labels only when neither caller has IDs or real account switches lose prompts. */
 export function isSameCodexRestartNoticeAccount(
   a: CodexRestartNoticeAccount,
   b: CodexRestartNoticeAccount

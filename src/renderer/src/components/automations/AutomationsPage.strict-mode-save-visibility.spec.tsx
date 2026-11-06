@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Save visibility under a StrictMode mount, which is how the dev app runs.
- *
- * StrictMode's simulated unmount disposes the host query controller after its
- * first effect cycle. A controller that stays disposed drops every later
- * invalidation — the list keeps its initial rows and a create never appears
- * until the app is reloaded. These pin the revive: after the double mount, a
- * write and the authority's change event must still refetch the written host.
- */
+/** StrictMode disposes the first controller; the revived mount must still refetch on writes/change events rather than retain initial rows forever. */
 
 import { act } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -88,8 +80,7 @@ describe('AutomationsPage save visibility under StrictMode', () => {
     await settleHostQueries()
     expect(rows(container, 'automation-row')).toEqual([])
 
-    // A write that lands elsewhere (CLI, another window) only reaches this page
-    // through the event; a disposed controller would drop it on the floor.
+    // Writes from another window or CLI reach this page only through the event.
     desktopStoreHolds([CREATED])
     await act(async () => {
       window.dispatchEvent(

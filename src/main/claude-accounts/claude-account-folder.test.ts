@@ -29,11 +29,8 @@ vi.mock('../macos-keychain/generic-password', () => ({
   }
 }))
 
-import {
-  readClaudeFolderLogin,
-  readClaudeFolderLoginAsync,
-  removeClaudeAccountFolder
-} from './claude-account-folder'
+import { readClaudeFolderLoginAsync, removeClaudeAccountFolder } from './claude-account-folder'
+
 import { claudeKeychainService } from './keychain'
 
 const roots: string[] = []
@@ -53,40 +50,16 @@ function fixture() {
 }
 
 describe('claude account folder', () => {
-  it("reads the folder's login and treats a signed-out state file as no login", () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    expect(readClaudeFolderLogin(stateFile)).toBeNull()
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: ' a@example.test ' } }))
-    expect(readClaudeFolderLogin(stateFile)).toEqual({
-      email: 'a@example.test',
-      organizationUuid: null,
-      organizationName: null
-    })
-    writeFileSync(stateFile, JSON.stringify({ numStartups: 2 }))
-    expect(readClaudeFolderLogin(stateFile)).toBeNull()
-  })
-
-  it('reuses a recent answer within maxAgeMs even though the file changed', () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test!' } }))
-    expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
-    expect(readClaudeFolderLogin(stateFile)?.email).toBe('b@example.test!')
-  })
-
   it('rereads a state file over a share only when its mtime or size changes', async () => {
     const { home } = fixture()
     const stateFile = join(home, '.claude.json')
     await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
     writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    // Whole seconds, which every filesystem stores exactly.
+    // Whole seconds avoid filesystem timestamp rounding.
     const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
     utimesSync(stateFile, mtime, mtime)
     expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
-    // Same size and mtime: the cached answer, so the file was not read again.
+    // Hold size and mtime constant to prove the cached answer is reused.
     writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
     utimesSync(stateFile, mtime, mtime)
     expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')

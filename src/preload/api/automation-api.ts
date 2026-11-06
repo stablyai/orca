@@ -20,11 +20,7 @@ export type ExternalAutomationManagerResult = {
   updatedAt: number
 }
 
-/**
- * Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
- * so this IPC api carries only what stays desktop-native: the external-manager
- * scope (probes run on this computer) and the dispatch-loop plumbing.
- */
+// Automation CRUD uses runtime RPC; this IPC API handles desktop probes and dispatch.
 export type AutomationsApi = {
   listExternalManagerForOwner: (
     request: ScopedExternalManagerListRequest

@@ -1,8 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
-import type { JiraIssue, JiraIssueListFilters } from '../../../../shared/jira-types'
-import { createJiraSlice } from './jira'
+import type { JiraIssue, JiraIssueListFilters } from '../../../../shared/jira/jira-types'
+import { createTestStore } from './store-test-helpers'
 const { list } = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('@/runtime/runtime-jira-client', () => ({
   jiraListIssues: list,
@@ -27,10 +25,7 @@ function issue(key: string): JiraIssue {
   }
 }
 it('isolates status results from preset caches and reuses an equivalent selection order', async () => {
-  const store = create<AppState>()(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only settings and Jira slice fields are accessed by these list reads.
-    (...args) => ({ settings: null, ...createJiraSlice(...args) }) as AppState
-  )
+  const store = createTestStore()
   list.mockImplementation(
     async (_source, _preset, _limit, _site, filters?: JiraIssueListFilters) => [
       issue(

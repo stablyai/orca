@@ -1,25 +1,29 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { SlashCommandSuggestion } from '../../../../shared/native-chat-slash-commands'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
-import { selectAiVaultPanelWorkspace } from '../right-sidebar/ai-vault-panel-workspace'
-import { openAgentSessionHistoryModal } from '../right-sidebar/agent-session-history-modal'
-import type { NativeChatPickerItem } from './native-chat-composer-state'
+import type { SlashCommandSuggestion } from '../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isAiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { selectAiVaultPanelWorkspace } from '../right-sidebar/ai-vault/scope/ai-vault-panel-workspace'
+import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  writeNativeChatComposerText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
-const RESUME = 'resume'
+export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 
-/** A structured chat's catalog with Orca's `/resume`, in place of an agent command of that name. */
+/** Replace the agent’s /resume catalog entry with Orca’s Session History command. */
 export function withNativeChatResumeCommand(
-  commands: readonly SlashCommandSuggestion[]
+  commands: readonly SlashCommandSuggestion[],
+  accountUsage = false
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
-    name: RESUME,
+    name: NATIVE_CHAT_RESUME_COMMAND,
     description: translate(
       'components.native-chat.resumeCommand.description',
       'Open Agent Session History'
@@ -27,22 +31,36 @@ export function withNativeChatResumeCommand(
     argumentHint: translate('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
   }
-  const at = commands.findIndex(({ name }) => name === RESUME)
+  if (accountUsage) {
+    commands = [
+      {
+        name: 'usage',
+        description: translate(
+          'components.native-chat.usage.description',
+          'Show usage for this chat’s Codex account'
+        ),
+        orcaOwned: true
+      },
+      ...commands.filter((command) => command.name !== 'usage')
+    ]
+  }
+  const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
   return at === -1
     ? [...commands, resume]
     : [...commands.slice(0, at), resume, ...commands.slice(at)]
 }
 
-/** The search a `/resume` draft carries, read the way the chat host reads a command; else null. */
+/** Parse optional /resume search text using host command syntax; null for other drafts. */
 export function parseNativeChatResumeDraft(draft: string): string | null {
   const firstToken = draft.split(/\s/, 1)[0] ?? ''
-  if (firstToken.toLowerCase() !== `/${RESUME}`) {
+  if (firstToken.toLowerCase() !== `/${NATIVE_CHAT_RESUME_COMMAND}`) {
     return null
   }
   return draft.slice(firstToken.length).replace(/\s+/g, ' ').trim()
 }
 
 export type NativeChatResumeCommand = {
+  matchesDraft: (draft: string) => boolean
   /** Opens Session History for a `/resume` draft; false means the draft is not Orca's. */
   consume: (draft: string) => boolean
   /** Choosing the draft-leading Orca row runs it; mid-prompt it stays an ordinary completion. */
@@ -53,14 +71,13 @@ export type NativeChatResumeCommand = {
 
 /** In a structured chat, `/resume [search]` opens its Session History and never reaches the agent. */
 export function useNativeChatResumeCommand(args: {
-  /** Present only in a structured chat. */
-  structuredTransport: Pick<NativeChatStructuredComposerTransport, 'worktreeId'> | undefined
-  /** The chat's recorded provider. */
+  structuredTransport:
+    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage'>
+    | undefined
   agent: AgentType
   terminalTabId: string
-  /** `isPickedSkill`: a skill row the user picked keeps going to the agent, even one named `resume`. */
+  /** Picked skills still reach the agent, even when named resume. */
   picker: Pick<NativeChatPickerState, 'autocomplete' | 'isPickedSkill' | 'clearSkillOrigin'>
-  /** The composer's input and the state a consumed draft resets. */
   editor: {
     textareaRef: RefObject<NativeChatComposerInput | null>
     setDraft: (value: string) => void
@@ -75,13 +92,32 @@ export function useNativeChatResumeCommand(args: {
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  const usage = structuredTransport?.accountUsage
+  const openUsage = useCallback(
+    (draft: string): void => {
+      const rest = draft.replace(/^\/\S+\s*/, '')
+      // Focus before opening so closing the modal returns to the editor even after a Send click.
+      textareaRef.current?.focus()
+      usage?.open()
+      setDraft(rest)
+      setCaret(rest.length)
+      setActiveSuggestion(0)
+      setNotice(null)
+      // The editor owns its selection; state alone leaves the caret where the command was.
+      const input = textareaRef.current
+      if (input) {
+        writeNativeChatComposerText(input, rest, rest.length)
+      }
+    },
+    [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
+  )
 
   const open = useCallback(
     (search: string): void => {
       const state = useAppStore.getState()
       const worktreeId =
         structuredWorktreeId ?? findNativeChatTabOwnerWorktreeId(state, terminalTabId)
-      // The chat is on screen, so its workspace is the active one whenever the ids agree.
+      // Use the active execution host when the on-screen workspace ID matches.
       const executionHostId =
         worktreeId === state.activeWorktreeId
           ? (state.activeWorkspaceExecutionHostId ?? undefined)
@@ -89,7 +125,7 @@ export function useNativeChatResumeCommand(args: {
       const workspace = worktreeId
         ? { worktreeId, ...(executionHostId ? { executionHostId } : {}) }
         : null
-      // Refuse rather than let "Workspace" silently mean another workspace's history.
+      // Refuse unresolved ownership so Workspace cannot silently open another workspace’s history.
       if (!workspace || !selectAiVaultPanelWorkspace(state, workspace).worktree) {
         setNotice(
           translate(
@@ -99,7 +135,7 @@ export function useNativeChatResumeCommand(args: {
         )
         return
       }
-      // The dialog hands focus back to what had it, and a Send click leaves that on the button.
+      // Focus before opening so dialog restoration returns to the editor even after a Send click.
       textareaRef.current?.focus()
       openAgentSessionHistoryModal({
         workspace,
@@ -125,32 +161,52 @@ export function useNativeChatResumeCommand(args: {
     ]
   )
 
+  const matchesDraft = useCallback(
+    (draft: string): boolean =>
+      structured &&
+      !isPickedSkill(draft) &&
+      (parseNativeChatResumeDraft(draft) !== null ||
+        (usage !== undefined && /^\/usage\s*$/i.test(draft))),
+    [isPickedSkill, structured, usage]
+  )
   const consume = useCallback(
     (draft: string): boolean => {
-      const search = structured && !isPickedSkill(draft) ? parseNativeChatResumeDraft(draft) : null
-      if (search !== null) {
-        open(search)
+      if (!matchesDraft(draft)) {
+        return false
       }
-      return search !== null
+      if (/^\/usage\s*$/i.test(draft)) {
+        openUsage(draft)
+      } else {
+        open(parseNativeChatResumeDraft(draft) ?? '')
+      }
+      return true
     },
-    [isPickedSkill, open, structured]
+    [matchesDraft, open, openUsage]
   )
 
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
-        // Choosing Orca's own row is explicit, so an earlier skill pick of the same name doesn't count.
+        // An explicit Orca command pick overrides an earlier same-named skill pick.
         if (leading && item.kind === 'command' && item.orcaOwned) {
+          if (item.name !== 'resume' && !(item.name === 'usage' && usage)) {
+            pick(item)
+            return
+          }
           clearSkillOrigin()
+          if (item.name === 'usage') {
+            openUsage(textareaRef.current?.value ?? '')
+            return
+          }
           // The caret can sit right after `/resume` with a search already typed past it.
           open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')
           return
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, open, textareaRef]
+    [autocomplete, clearSkillOrigin, open, openUsage, textareaRef, usage]
   )
 
-  return { consume, interceptPick }
+  return { consume, interceptPick, matchesDraft }
 }

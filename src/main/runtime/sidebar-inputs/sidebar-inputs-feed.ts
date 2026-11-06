@@ -17,24 +17,23 @@ import {
 import { FeedChangeLog, type FeedRevisionChanges } from './sidebar-inputs-feed-log'
 import { FeedPins, feedPageToken } from './sidebar-inputs-feed-pins'
 
-/** One producer's snapshot, as entities keyed so that none is needlessly large. */
+/** An urgent change (an accepted command, a metadata write) publishes with no coalesce delay. */
+export type SidebarInputsFeedChange = { urgent?: boolean }
+
+/** Read producer caches synchronously so publishing never waits on scans; null means unavailable until the producer announces readiness. */
 export type SidebarInputsFeedDomain = {
   name: string
-  read: () => Record<string, unknown> | Promise<Record<string, unknown>>
-  /** Calls `changed` after anything `read` depends on may have changed; returns the detach. */
-  watch: (changed: () => void) => () => void
-  /** Some of its sources announce no change, so every phone read re-reads it first. */
-  rereadOnRead?: boolean
+  read: () => Record<string, unknown> | null
+  /** Calls `changed` whenever anything `read` depends on is written; returns the detach. */
+  watch: (changed: (change?: SidebarInputsFeedChange) => void) => () => void
+  /** Settles once `read` has a first snapshot; only a phone read waits on it. */
+  ready?: () => Promise<void>
 }
 
 // A change after a quiet spell publishes at once; the rest of its burst at most this often.
 const FLUSH_COALESCE_MS = 50
 
-/**
- * The phone's copy of the sidebar inputs, served from the producers' own snapshots. Everything
- * here (published entities, log, pinned pages) exists only while a phone is subscribed; the
- * producers run regardless, since the desktop reads them too.
- */
+/** Cache/diff/pin phone sidebar inputs only while subscribed; producers continue independently for desktop readers. */
 export class SidebarInputsFeed {
   readonly generation = randomUUID()
   private lastRevision = 0
@@ -105,14 +104,11 @@ function feedReply(
 class FeedSession {
   private readonly published = new Map<string, Map<string, FeedEntity>>()
   private readonly dirty = new Set<string>()
-  // Counts dirty marks; `flushedMarks` is the count the last finished flush had taken.
-  private marks = 0
-  private flushedMarks = 0
   private readonly log: FeedChangeLog
   private readonly pins = new FeedPins()
   private readonly detaches: (() => void)[]
   private timer: ReturnType<typeof setTimeout> | null = null
-  private flushing: Promise<void> | null = null
+  private urgentQueued = false
   private lastFlushAt = Number.NEGATIVE_INFINITY
   private disposed = false
 
@@ -124,9 +120,11 @@ class FeedSession {
   ) {
     this.log = new FeedChangeLog(revision)
     for (const domain of domains) {
-      this.markDirty(domain.name)
+      this.dirty.add(domain.name)
     }
-    this.detaches = domains.map((domain) => domain.watch(() => this.invalidate(domain.name)))
+    this.detaches = domains.map((domain) =>
+      domain.watch((change) => this.invalidate(domain.name, change?.urgent === true))
+    )
   }
 
   /** Returns the last revision, which the next session continues from. */
@@ -148,17 +146,14 @@ class FeedSession {
     if (params.pageToken !== undefined) {
       return this.pins.page(params.pageToken) ?? reset()
     }
-    for (const domain of this.domains) {
-      // A failed read leaves its domain dirty but unmarked; marking it makes this read retry it.
-      if (domain.rereadOnRead || this.dirty.has(domain.name)) {
-        this.markDirty(domain.name)
-      }
-    }
-    await this.flushDirty()
-    // A release during the flush discarded what this read would serve.
+    // Only a producer's first snapshot is waited on; after that every read serves the cache.
+    await Promise.all(this.domains.flatMap((domain) => (domain.ready ? [domain.ready()] : [])))
+    // A release during the wait discarded what this read would serve.
     if (this.disposed) {
       return reset()
     }
+    // A failed or not-yet-ready read left its domain dirty; this retries it.
+    this.flush()
     const budget = Math.min(
       SIDEBAR_INPUTS_PAGE_MAX_BYTES,
       Math.max(SIDEBAR_INPUTS_PAGE_MIN_BYTES, params.maxBytes)
@@ -175,64 +170,56 @@ class FeedSession {
     return this.batch('snapshot', null, budget, () => this.everything())
   }
 
-  private invalidate(name: string): void {
+  private invalidate(name: string, urgent: boolean): void {
     if (this.disposed) {
       return
     }
-    this.markDirty(name)
+    this.dirty.add(name)
+    if (urgent) {
+      // A microtask, not now: the writer announcing this may be mid-change.
+      if (!this.urgentQueued) {
+        this.urgentQueued = true
+        queueMicrotask(() => {
+          this.urgentQueued = false
+          this.flush()
+        })
+      }
+      return
+    }
     this.timer ??= setTimeout(
       () => {
         this.timer = null
-        void this.flushDirty()
+        this.flush()
       },
       Math.max(0, this.lastFlushAt + FLUSH_COALESCE_MS - performance.now())
     )
   }
 
-  private markDirty(name: string): void {
-    this.dirty.add(name)
-    this.marks += 1
-  }
-
-  /** Resolves once everything dirty at the call has been read, waiting on at most two flushes. */
-  private async flushDirty(): Promise<void> {
+  /** Publishes every dirty domain's cached snapshot as one revision; reads nothing asynchronous. */
+  private flush(): void {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
-    const marks = this.marks
-    // A flush already running may have taken its domains before this call's marks.
-    while (this.flushedMarks < marks && !this.disposed) {
-      this.flushing ??= this.flush().finally(() => {
-        this.flushing = null
-      })
-      await this.flushing
-    }
-  }
-
-  private async flush(): Promise<void> {
-    this.lastFlushAt = performance.now()
-    const marks = this.marks
-    const due = this.domains.filter((domain) => this.dirty.has(domain.name))
-    this.dirty.clear()
-    const reads = await Promise.all(due.map((domain) => readDomain(domain)))
-    this.flushedMarks = marks
     if (this.disposed) {
       return
     }
+    this.lastFlushAt = performance.now()
+    const due = this.domains.filter((domain) => this.dirty.has(domain.name))
+    this.dirty.clear()
     const changes: FeedRevisionChanges = new Map()
-    due.forEach((domain, index) => {
-      const read = reads[index]
+    for (const domain of due) {
+      const read = readDomain(domain)
       if (!read) {
-        // Unmarked, so the next flush or phone read retries it but nothing schedules a retry.
+        // Nothing schedules a retry: the next flush or phone read does, or the producer's announcement.
         this.dirty.add(domain.name)
-        return
+        continue
       }
       const changed = this.publish(domain.name, read)
       if (changed.size > 0) {
         changes.set(domain.name, changed)
       }
-    })
+    }
     if (changes.size > 0) {
       this.revision += 1
       this.log.append(this.revision, changes)
@@ -311,11 +298,15 @@ class FeedSession {
   }
 }
 
-/** Each entity's JSON; null when the read failed. */
-async function readDomain(domain: SidebarInputsFeedDomain): Promise<Map<string, string> | null> {
+/** Each entity's JSON; null when the read failed or the producer has no snapshot yet. */
+function readDomain(domain: SidebarInputsFeedDomain): Map<string, string> | null {
   try {
+    const snapshot = domain.read()
+    if (!snapshot) {
+      return null
+    }
     const entities = new Map<string, string>()
-    for (const [key, value] of Object.entries(await domain.read())) {
+    for (const [key, value] of Object.entries(snapshot)) {
       // What JSON cannot hold (undefined, a function) is absent, as it would be on the wire.
       const json: string | undefined = JSON.stringify(value)
       if (json !== undefined) {

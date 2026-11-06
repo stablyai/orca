@@ -1,9 +1,5 @@
-/**
- * The one place a row or event from an endpoint gets its owner stamped. A row a paired server
- * returns is owned by that server (`runtime:E`); a row this app returns keeps the host it names.
- * Per-kind arms differ only in which fields carry that owner.
- */
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+// Stamp endpoint ownership once: paired server rows use runtime:E, local-app rows retain their named hosts; per-kind arms select owner fields.
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -99,8 +95,7 @@ export function adoptFromEndpoint(
             : fetched.resolveOwnHostId(fetched.row)
       }
     case 'worktreeEvent':
-      // Why: this app's own events can name any repo in its catalog (local or direct SSH), so they
-      // pin the refresh to this app instead of to one host.
+      // Local-app events span local/direct-SSH repos; pin refresh to this app, not a single host.
       return target.kind === 'environment'
         ? { ...fetched.row, executionHostId: getRuntimeTargetHostId(target) }
         : { ...fetched.row, forceLocalOwner: true }

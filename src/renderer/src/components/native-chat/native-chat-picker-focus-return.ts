@@ -1,10 +1,10 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 
-/** Radix restores focus to the trigger on close, which is right for a visit that changed nothing
- *  and wrong after one that did: the message is what comes next. `notePick` marks the visit as
- *  used; a click that took focus somewhere else keeps it. */
-export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | undefined): {
-  /** Goes on the trigger, whose own press closes the surface. */
+/** After a pick, focus the composer unless an outside click already moved focus elsewhere. */
+export function useNativeChatPickerFocusReturn(
+  focusComposer: (() => void) | undefined,
+  restoreDisappearingTrigger = false
+): {
   triggerRef: React.RefObject<HTMLButtonElement | null>
   notePick: () => void
   onInteractOutside: (event: Event) => void
@@ -13,13 +13,27 @@ export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | und
   const triggerRef = useRef<HTMLButtonElement>(null)
   const picked = useRef(false)
   const interactedOutside = useRef(false)
+  const [returnAfterClose, setReturnAfterClose] = useState(false)
+  useLayoutEffect(() => {
+    if (!returnAfterClose) {
+      return
+    }
+    setReturnAfterClose(false)
+    const trigger = triggerRef.current
+    // The closed layout may have removed More after the pane expanded.
+    if (trigger?.isConnected && !trigger.closest('[inert], [aria-hidden="true"]')) {
+      trigger.focus()
+    } else {
+      focusComposer?.()
+    }
+  }, [returnAfterClose, focusComposer])
   return {
     triggerRef,
     notePick: () => {
       picked.current = true
     },
     onInteractOutside: (event: Event) => {
-      // Why: Radix reports a press on the trigger too, and that press only closes the surface.
+      // Radix also reports trigger presses, which only close the surface.
       if (!(event.target instanceof Node && triggerRef.current?.contains(event.target))) {
         interactedOutside.current = true
       }
@@ -33,6 +47,11 @@ export function useNativeChatPickerFocusReturn(focusComposer: (() => void) | und
         document.activeElement !== document.body
       picked.current = false
       interactedOutside.current = false
+      if (restoreDisappearingTrigger && !used && !focusedElsewhere) {
+        event.preventDefault()
+        setReturnAfterClose(true)
+        return
+      }
       if (!used || !focusComposer || focusedElsewhere) {
         return
       }

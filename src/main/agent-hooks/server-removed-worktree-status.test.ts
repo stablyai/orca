@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { LEAF_1, LEAF_2, LEAF_3, LEAF_4, LEAF_5, recentTs } from './server.test-fixtures'
 
 const REMOVED = 'repo-1::/workspace/removed'
@@ -159,11 +159,9 @@ describe('AgentHookServer removed-worktree retirement', () => {
         const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
         if (localWorktree === REMOVED) {
           expect(file.authorityCommitments?.[pane]).toMatchObject({ worktreeId: KEPT })
-          // The retained foreign launch fence rejects the removed workspace's late repaint.
           expect(file.entries[pane]).toBeUndefined()
         } else {
           expect(file.authorityCommitments?.[pane]).toBeUndefined()
-          // The occupant keeps reporting, without the removed owner's token hash stamped on its row.
           expect(file.entries[pane]).toMatchObject({ worktreeId: KEPT, payload: { state: 'done' } })
           expect(file.entries[pane].launchTokenHash).toBeUndefined()
         }

@@ -5,7 +5,7 @@ import {
 } from '@/store/slices/terminal-tab-retirement'
 import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
 import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
 

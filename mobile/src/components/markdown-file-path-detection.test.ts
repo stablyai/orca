@@ -197,8 +197,7 @@ describe('detectFilePathSegments', () => {
   })
 
   it('skips detection for runs over the length cap even with dots', () => {
-    // 'a.b/'-repeats pass the dot precheck, so this exercises the length cap that
-    // bounds CANDIDATE_PATTERN's worst-case backtracking.
+    // Dot-heavy repeats pass dot precheck; length cap must still bound regex backtracking.
     const text = 'a.b/'.repeat(2000)
     expect(detectFilePathSegments(text)).toEqual([{ type: 'text', value: text }])
   })

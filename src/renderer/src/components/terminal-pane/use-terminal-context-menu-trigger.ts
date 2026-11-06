@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { TerminalPasteSource } from './terminal-paste-model'
-import { copyTerminalSelection } from './terminal-selection-copy'
+import type { TerminalPasteSource } from './input/paste/terminal-paste-model'
+import { copyTerminalSelection } from './clipboard/terminal-selection-copy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import {
   claimTerminalRightClickPasteMouseDown,
@@ -68,8 +68,7 @@ export function useTerminalContextMenuTrigger({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: when users opt into terminal-style right-click, a selection copies
-    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
+    // Configured right-click copies selection or pastes; Ctrl+right-click preserves menu access.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {
@@ -81,7 +80,7 @@ export function useTerminalContextMenuTrigger({
           writeClipboardText: window.api.ui.writeTerminalClipboardText,
           clearSelectionOnSuccess: true
         }).catch(() => {
-          /* ignore clipboard write failures */
+          // Failed copy leaves selection available for retry.
         })
       } else {
         void pasteResolvedPane('right-click')

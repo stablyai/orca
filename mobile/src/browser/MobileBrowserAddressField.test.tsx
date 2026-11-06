@@ -7,6 +7,8 @@ import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 // Hoisted with the mock factory, which runs before every module-level const in this file.
 const platform = vi.hoisted(() => ({ OS: 'ios' }))
 
+vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
+
 vi.mock('react-native', () => ({
   Platform: platform,
   StyleSheet: {
@@ -26,6 +28,8 @@ function addressInput(os: string): Record<string, unknown> {
       createElement(MobileBrowserAddressField, {
         disabled: false,
         focused: false,
+        loading: false,
+        loadFailed: false,
         onBlur: () => {},
         onChangeText: () => {},
         onFocus: () => {},
@@ -38,9 +42,7 @@ function addressInput(os: string): Record<string, unknown> {
     throw new Error('nothing mounted')
   }
   const mounted: ReactTestRenderer = renderer
-  // The imported component, not the string the mock stands it up as: a host-component string is
-  // not an `ElementType`, so `findByType('TextInput')` drops the file out of `tsc` and out of the
-  // tests-typecheck ratchet, and a pin that does not typecheck proves nothing.
+  // Find imported component, not host string: React ElementType rejects TextInput string and would drop this test from typecheck ratchet.
   return mounted.root.findByType(TextInput).props
 }
 
@@ -49,14 +51,12 @@ afterEach(() => {
 })
 
 describe('the address field keyboard', () => {
-  // `keyboardType` is a native enum a browser does not read, so without this the page's address bar
-  // gets the plain keyboard and loses the slash and the .com key it has on a phone.
+  // Browser ignores native keyboardType; inputMode must preserve URL keys.
   it('asks for the URL keyboard through inputMode on the web', () => {
     expect(addressInput('web').inputMode).toBe('url')
   })
 
-  // `inputMode` takes precedence over `keyboardType`, so anything other than undefined here would
-  // replace the iOS URL keyboard rather than add to it.
+  // Keep native inputMode undefined: it overrides keyboardType and would replace iOS URL keyboard.
   it('leaves inputMode unset on both native platforms', () => {
     expect(addressInput('ios').inputMode).toBeUndefined()
     expect(addressInput('ios').keyboardType).toBe('url')

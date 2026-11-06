@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
-import { openDecisionGateFromMessage } from '../../../../orchestration/coordinator-decision-gates'
-import { applyEscalationToDispatch } from '../../../../orchestration/coordinator-escalation-triage'
+import { openDecisionGateFromMessage } from '../../../../orchestration/coordinator/decision-gates/coordinator-decision-gates'
+import { applyEscalationToDispatch } from '../../../../orchestration/coordinator/escalation/coordinator-escalation-triage'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
@@ -250,8 +250,7 @@ describe('orchestration.send between terminals in no Run', () => {
   afterEach(() => h.cleanup())
 
   it('delivers terminal-to-terminal mail when neither terminal is in a Run', async () => {
-    // Two plain panes and `send --to <handle>`: the first command the guide teaches. #19542
-    // refused this with a bare "Run is required"; it files under the unbound Run instead.
+    // Plain handle-to-handle mail uses the unbound Run; #19542 incorrectly refused it as Run-required.
     const { db, runtime, ctx } = h.setup(false)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_a' ? 'tab_a:leaf_a' : handle === 'term_b' ? 'tab_b:leaf_b' : null

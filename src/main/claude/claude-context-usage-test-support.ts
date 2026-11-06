@@ -1,24 +1,18 @@
-// A translator over an in-memory journal, for tests of the context facts it writes.
-
 import { vi } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionRevisionJournal
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
-import { personStopDecidesTurn } from '../native-chat/agent-session-journal/journal-stop-turn-end'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { createJournalReducerState } from '../native-chat/agent-session-journal/projection/journal-reducer'
+import { personStopDecidesTurn } from '../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { ClaudeContextReportTarget } from './claude-context-facts'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { claudeTurnLifecycleIdentity } from './claude-turn-lifecycle-item'
 
-/** A journal in miniature: the latest revision per row, its creation clock
- *  pinned, and revisions resolved against it as a bound sink would. */
 export function journal({ deferred = false } = {}) {
   const queued: (() => void)[] = []
   const run = (write: () => void): void => {
@@ -174,7 +168,6 @@ export const compactBoundary = (at: number) =>
 export const turnIdentity = (turnId: string) =>
   claudeTurnLifecycleIdentity('claude-session', turnId)
 
-/** Every turn the CLI runs opens with an init naming the main model as `modelUsage` keys it. */
 export function setup({
   init = 'claude-fable-5-1[1m]',
   deferred = false

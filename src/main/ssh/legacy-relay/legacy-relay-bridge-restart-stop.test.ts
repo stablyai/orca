@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { SshConnection } from '../connection/ssh-connection'
 import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
 const TARGET = 'ssh-box'
 const RELAY_PTY = 'pty2:epoch:1'
@@ -61,8 +61,7 @@ let leases: SshRemotePtyLease[]
 let connected: boolean
 
 function installHost(): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked endpoints and client never touch the connection.
-  const connection = {} as SshConnection
+  const connection = unusedSshConnection()
   registry.installLegacyRelayBridge({
     leases: () => leases,
     retireLease: (_target, relayPtyId) => {
@@ -125,31 +124,5 @@ describe('a bridged tab closed while disconnected', () => {
     expect(registry.legacyRelayBridgedPanes()).toEqual([])
     expect(leases[0].state).toBe('terminated')
     expect(leases[0].pendingKill).toBeUndefined()
-  })
-})
-
-describe('a stop-and-wait of a connected bridged tab', () => {
-  it('settles only on the relay’s exit report', async () => {
-    relay.ptys = new Set([RELAY_PTY])
-    relay.shutdowns = []
-    leases = [
-      {
-        targetId: TARGET,
-        ptyId: RELAY_PTY,
-        tabId: 'tab-1',
-        leafId: 'leaf-1',
-        state: 'detached',
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ]
-    connected = true
-    installHost()
-    await registry.startLegacyRelayBridge(TARGET)
-    await expect(registry.stopLegacyRelayPaneAndWait(PTY, Date.now() + 5_000)).resolves.toBe(
-      'reported'
-    )
-    expect(relay.shutdowns).toEqual([RELAY_PTY])
-    expect(leases[0].state).toBe('terminated')
   })
 })

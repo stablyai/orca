@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
-import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import {
+  MobileEndpointSupervisor,
+  type MobileEndpointSupervisorDependencies
+} from './mobile-endpoint-supervisor'
 import {
   dependencies,
   FakeLogicalClient,
@@ -9,23 +12,20 @@ import {
   relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
-import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
+
 import type { RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// The fakes' fixed jitter puts the known-offline wait at 5039ms.
 const HOST_OFFLINE_WAIT_MS = 5_039
-// ...and the attach-timeout redial at 1003ms.
 const ATTACH_TIMEOUT_REDIAL_MS = 1_003
 
 function attachTimeout(): RelayOuterError {
   return new RelayOuterError(4404, true, MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT)
 }
 
-// A cell that refuses every relay dial with `failure` until `succeedAfter` dials.
 function cellRefusing(failure: () => Error, succeedAfter = Number.POSITIVE_INFINITY) {
   const logical = new FakeLogicalClient('disconnected', 'lan')
   const migrateTo = logical.migrateTo.getMockImplementation()!
@@ -102,25 +102,9 @@ describe('relay dial refused because the desktop data link missed its attach dea
     expect(openRelay).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(openRelay).toHaveBeenCalledTimes(3)
-    // The quick redial is spent for this failure streak.
     await vi.advanceTimersByTimeAsync(HOST_OFFLINE_WAIT_MS - 1)
     expect(openRelay).toHaveBeenCalledTimes(3)
     expect(resolveRelay).not.toHaveBeenCalled()
-    supervisor.stop()
-  })
-
-  it('keeps the known-offline wait for a 4404 without the reason', async () => {
-    const { logical, openRelay } = cellRefusing(() => new RelayOuterError(4404, true))
-    const resolveRelay = vi.fn(async () => relay)
-    const supervisor = start(logical, { openRelay, resolveRelay })
-
-    await supervisor.start()
-
-    expect(resolveRelay).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(HOST_OFFLINE_WAIT_MS - 1)
-    expect(openRelay).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(openRelay).toHaveBeenCalledTimes(2)
     supervisor.stop()
   })
 

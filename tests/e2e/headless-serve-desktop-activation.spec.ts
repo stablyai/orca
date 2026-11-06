@@ -31,8 +31,8 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalRead
 } from '../../src/shared/runtime-types'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -49,8 +49,7 @@ function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolati
     launchEnv: {
       NODE_ENV: 'development',
       ORCA_E2E_HEADLESS: '1',
-      // Why: production builds always use the lock; this opt-in makes the dev
-      // E2E bundle exercise the same second-instance ownership path.
+      // Opt dev E2E builds into production’s single-instance ownership path.
       ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
     },
     extraEnv: {},

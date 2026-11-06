@@ -1,9 +1,18 @@
-// Restart-timer policy: recovery must re-ensure a running distro, must NOT
-// boot a stopped one (wsl -d starts stopped distros), and must respect state
-// currency and disposal.
+import type * as WslBackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WslRelayRecovery, type WslRelayRecoveryState } from './wsl-hook-relay-recovery'
+import type { WslRelayRestartSetup } from './wsl-hook-relay-state'
+
+const { noteWslDistroMayHaveStoppedMock } = vi.hoisted(() => ({
+  noteWslDistroMayHaveStoppedMock: vi.fn()
+}))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslBackgroundDistroGate>()),
+  ...(await (() => ({
+    noteWslDistroMayHaveStopped: noteWslDistroMayHaveStoppedMock
+  }))())
+}))
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }))
 
@@ -18,146 +27,89 @@ function waitFor(condition: () => boolean, timeoutMs = 3_000): Promise<void> {
 }
 
 describe('WslRelayRecovery', () => {
-  it('re-ensures the distro when the restart timer fires and the distro is running', async () => {
+  it('re-reads a settled list before a drained restart, and waits again if the distro stopped', async () => {
     const restart = vi.fn()
+    const deferred: (() => void)[] = []
+    const isDistroRunning = vi.fn(async (_distro: string, _startedAfter: number) => false)
     const recovery = new WslRelayRecovery({
-      isDistroRunning: async () => true,
+      isDistroRunning,
+      deferUntilRunning: (_distro, task) => deferred.push(task),
+      captureSetup: () => ({ launchKinds: [] }),
       warn: vi.fn(),
       isDisposed: () => false,
       isCurrent: () => true,
       restart,
       dropState: vi.fn()
     })
-    const state = makeState()
-    recovery.scheduleRestart(state)
+    recovery.scheduleRestart(makeState())
     await vi.advanceTimersByTimeAsync(250)
+    await waitFor(() => deferred.length === 1)
+
+    // Drained by a list that still named the stopping distro; a fresh settled read says stopped.
+    deferred[0]()
+    await waitFor(() => deferred.length === 2)
+    expect(restart).not.toHaveBeenCalled()
+
+    isDistroRunning.mockResolvedValue(true)
+    deferred[1]()
     await waitFor(() => restart.mock.calls.length === 1)
-    expect(restart).toHaveBeenCalledWith('Ubuntu')
   })
 
-  it('drops the state instead of booting a stopped distro', async () => {
+  it('restarts with the relay config captured before dropState discarded it', async () => {
     const restart = vi.fn()
-    const dropState = vi.fn()
-    const warn = vi.fn()
+    const deferred: (() => void)[] = []
+    let live: WslRelayRestartSetup | undefined = {
+      codexHomePath: '/home/u/.orca-codex',
+      claudeConfigDir: '/home/u/.orca/claude',
+      launchKinds: ['pi', 'omp']
+    }
+    const expected = live
+    const isDistroRunning = vi.fn(async (_distro: string, _startedAfter: number) => false)
     const recovery = new WslRelayRecovery({
-      isDistroRunning: async () => false,
-      warn,
+      isDistroRunning,
+      deferUntilRunning: (_distro, task) => deferred.push(task),
+      captureSetup: () => live ?? { launchKinds: [] },
+      warn: vi.fn(),
       isDisposed: () => false,
       isCurrent: () => true,
       restart,
-      dropState
+      dropState: () => {
+        live = undefined
+      }
     })
-    const state = makeState()
-    recovery.scheduleRestart(state)
+    recovery.scheduleRestart(makeState())
     await vi.advanceTimersByTimeAsync(250)
-    await waitFor(() => dropState.mock.calls.length === 1)
-    expect(restart).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('distro not running'))
+    await waitFor(() => deferred.length === 1)
+    isDistroRunning.mockResolvedValue(true)
+    deferred[0]()
+    await waitFor(() => restart.mock.calls.length === 1)
+    expect(restart).toHaveBeenCalledExactlyOnceWith('Ubuntu', expected)
   })
 
-  it('does nothing when the state was replaced or the manager is disposed', async () => {
+  it('re-probes once after a stopped verdict and restarts only once', async () => {
     const restart = vi.fn()
-    const probe = vi.fn(async () => true)
+    const deferred: (() => void)[] = []
+    const isDistroRunning = vi.fn(async () => false)
     const recovery = new WslRelayRecovery({
-      isDistroRunning: probe,
-      warn: vi.fn(),
-      isDisposed: () => false,
-      isCurrent: () => false,
-      restart,
-      dropState: vi.fn()
-    })
-    const state = makeState()
-    recovery.scheduleRestart(state)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(probe).not.toHaveBeenCalled()
-    expect(restart).not.toHaveBeenCalled()
-  })
-
-  it('does not drop or restart when the state was replaced mid-probe (probe false)', async () => {
-    let current = true
-    let resolveProbe: ((running: boolean) => void) | undefined
-    const probe = vi.fn(() => new Promise<boolean>((resolve) => (resolveProbe = resolve)))
-    const restart = vi.fn()
-    const dropState = vi.fn()
-    const recovery = new WslRelayRecovery({
-      isDistroRunning: probe,
-      warn: vi.fn(),
-      isDisposed: () => false,
-      isCurrent: () => current,
-      restart,
-      dropState
-    })
-    const state = makeState()
-    recovery.scheduleRestart(state)
-    await vi.advanceTimersByTimeAsync(250)
-    await waitFor(() => probe.mock.calls.length === 1)
-    // A fresh ensure() replaces this state while the probe is in flight.
-    current = false
-    resolveProbe?.(false)
-    await vi.advanceTimersByTimeAsync(100)
-    expect(dropState).not.toHaveBeenCalled()
-    expect(restart).not.toHaveBeenCalled()
-  })
-
-  it('does not restart when the state was replaced mid-probe (probe true)', async () => {
-    let current = true
-    let resolveProbe: ((running: boolean) => void) | undefined
-    const probe = vi.fn(() => new Promise<boolean>((resolve) => (resolveProbe = resolve)))
-    const restart = vi.fn()
-    const recovery = new WslRelayRecovery({
-      isDistroRunning: probe,
-      warn: vi.fn(),
-      isDisposed: () => false,
-      isCurrent: () => current,
-      restart,
-      dropState: vi.fn()
-    })
-    const state = makeState()
-    recovery.scheduleRestart(state)
-    await vi.advanceTimersByTimeAsync(250)
-    await waitFor(() => probe.mock.calls.length === 1)
-    current = false
-    resolveProbe?.(true)
-    await vi.advanceTimersByTimeAsync(100)
-    expect(restart).not.toHaveBeenCalled()
-  })
-
-  it('scheduleOneShotReinstall is a no-op once disposed', async () => {
-    const run = vi.fn()
-    const recovery = new WslRelayRecovery({
-      isDistroRunning: async () => true,
-      warn: vi.fn(),
-      isDisposed: () => true,
-      isCurrent: () => true,
-      restart: vi.fn(),
-      dropState: vi.fn()
-    })
-    const state = makeState()
-    recovery.scheduleOneShotReinstall(state, 10, run)
-    await vi.advanceTimersByTimeAsync(100)
-    expect(run).not.toHaveBeenCalled()
-    expect(state.reinstallTimer).toBeUndefined()
-  })
-
-  it('clearTimers cancels both pending timers', async () => {
-    const restart = vi.fn()
-    const recovery = new WslRelayRecovery({
-      isDistroRunning: async () => true,
+      isDistroRunning,
+      deferUntilRunning: (_distro, task) => deferred.push(task),
+      captureSetup: () => ({ launchKinds: [] }),
       warn: vi.fn(),
       isDisposed: () => false,
       isCurrent: () => true,
       restart,
       dropState: vi.fn()
     })
-    const state = makeState()
-    const reinstall = vi.fn()
-    recovery.scheduleRestart(state)
-    recovery.scheduleOneShotReinstall(state, 100, reinstall)
-    recovery.clearTimers(state)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(restart).not.toHaveBeenCalled()
-    expect(reinstall).not.toHaveBeenCalled()
-    expect(state.restartTimer).toBeUndefined()
-    expect(state.reinstallTimer).toBeUndefined()
+    recovery.scheduleRestart(makeState())
+    await vi.advanceTimersByTimeAsync(250)
+    await waitFor(() => deferred.length === 1)
+    // The first read was wrong (the distro was still running): the re-probe recovers it.
+    isDistroRunning.mockResolvedValue(true)
+    await vi.advanceTimersByTimeAsync(30_000)
+    await waitFor(() => restart.mock.calls.length === 1)
+    deferred[0]()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(isDistroRunning).toHaveBeenCalledTimes(2)
+    expect(restart).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,9 +1,8 @@
-import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
+import type { AgentCompletionStatusSnapshot } from './agent-completion/agent-completion-coordinator-types'
 
 type AgentHookTerminalLifecycleHandler = (payload: AgentCompletionStatusSnapshot) => void
 
-// Why: hook completion authority may live in the global IPC coordinator while
-// cursor/cache effects belong to the mounted pane; route accepted events by pane.
+// Route accepted hooks by pane: global completion authority and mounted cursor/cache ownership live in different consumers.
 const handlersByPaneKey = new Map<string, AgentHookTerminalLifecycleHandler>()
 
 export function registerAgentHookTerminalLifecycleHandler(

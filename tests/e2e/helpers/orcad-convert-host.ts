@@ -1,7 +1,4 @@
-/**
- * The real SSH host a conversion cell runs against: the Linux Docker fixture, or a Windows
- * OpenSSH host the ssh-windows-hosts lane provisioned and described in a descriptor file.
- */
+// Use the real Docker Linux host or the Windows OpenSSH descriptor provisioned by its CI lane.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import type { TestInfo } from '@stablyai/playwright-test'
@@ -29,6 +26,8 @@ export type OrcadConvertHost = {
   blockTcpForwarding?: () => void
   /** Docker only: runs a shell command on the host as the SSH user and returns its stdout. */
   exec?: (command: string) => string
+  /** Docker only: copies a host path (file or directory) to a local path. */
+  copyFromHost?: (remotePath: string, localPath: string) => void
   /** Docker only: kills every live SSH connection, leaving sshd listening; returns how many. */
   dropSshConnections?: () => number
   /** Docker only: freezes or thaws the whole host; TCP stays up but nothing answers. */
@@ -66,6 +65,11 @@ export function startOrcadConvertHost(source: string, testInfo: TestInfo): Orcad
       cleanup: () => cleanupDockerSshHostTarget(target),
       blockTcpForwarding: () => blockDockerSshHostTargetTcpForwarding(target),
       exec: (command) => execDockerSshHostTargetCommand(target, command),
+      copyFromHost: (remotePath, localPath) =>
+        execFileSync('docker', ['cp', `${target.containerName}:${remotePath}`, localPath], {
+          stdio: 'ignore',
+          timeout: 60_000
+        }),
       dropSshConnections: () =>
         Number(
           execDockerSshHostTargetControlCommand(target, DROP_SSH_CONNECTIONS).split('\n').at(-1)

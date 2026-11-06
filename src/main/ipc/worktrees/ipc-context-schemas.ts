@@ -6,10 +6,10 @@ import type {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
 import type { ListDetectedWorktreesArgs } from '../../../shared/detected-worktree-provider-contract'
-import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 
 export type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -25,8 +25,7 @@ export type RemoveWorktreeArgs = {
   /** Explicit Force Delete only — `force` alone is set by the ordinary confirmation (#11960). */
   allowUnverifiedPtyStop?: boolean
   skipArchive?: boolean
-  /** Explicit waiver for a FAILED archive hook (#19334). Distinct from `skipArchive`, which
-   *  never runs the hook at all, and never implied by `force`. */
+  /** Explicit failed-archive waiver; skipArchive bypasses execution, and force grants neither permission. */
   allowFailedArchiveHook?: boolean
   snapshotPruneBatchId?: string
 }

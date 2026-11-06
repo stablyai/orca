@@ -7,8 +7,8 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build, version as esbuildVersion } from 'esbuild'
 import { runProcess } from '@orca/process-host'
-import { nodeExecutable } from '../../../../../config/scripts/check-job-log-byte-cap-benchmark.mjs'
-import { workload } from '../../../../../config/scripts/check-job-log-performance-cases.mjs'
+import { nodeExecutable } from '../../../../../config/scripts/performance/check-job-log/check-job-log-byte-cap-benchmark.mjs'
+import { workload } from '../../../../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
 
 const require = createRequire(import.meta.url)
 export const hash = (value) => createHash('sha256').update(value).digest('hex')
@@ -29,7 +29,7 @@ const cpuDescriptors = [8, 63].map((size) => ({
   mode: 'cpu',
   family: 'short-lines',
   bytes: size * 1024 * 1024,
-  generator: 'config/scripts/check-job-log-performance-cases.mjs#workload'
+  generator: 'config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs#workload'
 }))
 
 export async function prepareHostMeasurement(root = process.cwd()) {
@@ -70,8 +70,16 @@ export async function prepareHostMeasurement(root = process.cwd()) {
     const executedSources = [
       import.meta.filename,
       fileURLToPath(scriptUrl('./check-job-log-cache-retention-child.mjs')),
-      fileURLToPath(scriptUrl('../../../../../config/scripts/check-job-log-performance-cases.mjs')),
-      fileURLToPath(scriptUrl('../../../../../config/scripts/check-job-log-byte-cap-benchmark.mjs'))
+      fileURLToPath(
+        scriptUrl(
+          '../../../../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
+        )
+      ),
+      fileURLToPath(
+        scriptUrl(
+          '../../../../../config/scripts/performance/check-job-log/check-job-log-byte-cap-benchmark.mjs'
+        )
+      )
     ].map((filename) => sourceName(scriptRoot, filename))
     const sourceHashes = {}
     for (const name of [...new Set([...bundleSources, ...executedSources])].sort()) {

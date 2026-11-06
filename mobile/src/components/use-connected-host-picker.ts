@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import type { HostProfile } from '../transport/types'
 
-function hostPickerOptions(hosts: HostProfile[]) {
+/** Picker rows for desktops, telling apart two that share a name and endpoint. */
+export function hostPickerOptions(hosts: HostProfile[]) {
   const entries = hosts.map((host) => ({
     host,
     endpointLabel: hostEndpointLabel(host.endpoint)

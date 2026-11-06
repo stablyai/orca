@@ -1,15 +1,4 @@
-/**
- * The execute fence, plus the run-history row a refused manual attempt leaves.
- *
- * doc:94 pairs "return the typed `target_removed` conflict" with "record a
- * skipped-run reason", and the scheduled path already does both. Without this
- * the same automation produces a row when a schedule refuses it and nothing at
- * all when the user asks by hand, so run history contradicts itself.
- *
- * Only `target_removed` records: it is the verdict that the record has no host
- * at all. `owner_changed` and `fencing_required` say the CALLER is stale, and a
- * client re-reading and retrying must not litter history on the way.
- */
+// Record only target_removed refusals; stale caller fences should not add run-history rows.
 
 import type { AutomationRun } from '../../shared/automations-types'
 import {

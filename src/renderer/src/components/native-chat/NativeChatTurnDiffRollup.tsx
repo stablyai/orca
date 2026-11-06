@@ -1,18 +1,20 @@
-import { ChevronRight } from 'lucide-react'
-import { useId } from 'react'
+import { ChevronRight, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
+import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
+import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import {
   nativeChatTurnDiffEditFile,
-  type NativeChatDiffTarget,
+  NATIVE_CHAT_TURN_DIFF_FILE_LIMIT,
   type NativeChatTurnDiff,
   type NativeChatTurnDiffFile
-} from './native-chat-turn-diffs'
+} from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
   return (
@@ -32,46 +34,28 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
   )
 }
 
-function TurnDiffFileRow({
-  file,
-  onReveal
-}: {
-  file: NativeChatTurnDiffFile
-  onReveal: (target: NativeChatDiffTarget) => void
-}): React.JSX.Element {
-  const pathId = useId()
+function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
+  const name = nativeChatEditFileBaseName(file.path)
   const disclosureKey = `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`
   const { open, setOpen } = useNativeChatDisclosure(disclosureKey, false)
   return (
     <div>
-      <div className="flex min-w-0 items-center">
-        <Button
-          variant="ghost"
-          size="xs"
-          className="min-w-0 flex-1 justify-start"
-          onClick={() => onReveal(file.target)}
-        >
-          <span id={pathId} className="min-w-0 truncate font-mono" title={file.path}>
-            {file.path}
-          </span>
-          <DiffLineCounts added={file.added} removed={file.removed} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={
-            open
-              ? translate('components.native-chat.turnDiff.hideDiff', 'Hide diff')
-              : translate('components.native-chat.turnDiff.showDiff', 'Show diff')
-          }
-          aria-describedby={pathId}
-          title={file.path}
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
-          <ChevronRight aria-hidden className={open ? 'size-3.5 rotate-90' : 'size-3.5'} />
-        </Button>
-      </div>
+      <Button
+        variant="ghost"
+        size="xs"
+        className="w-full min-w-0 justify-start"
+        aria-expanded={open}
+        aria-label={`${file.path} +${file.added} -${file.removed}`}
+        title={file.path}
+        onClick={() => setOpen(!open)}
+      >
+        <ChevronRight aria-hidden className={open ? 'size-3.5 rotate-90' : 'size-3.5'} />
+        <span className="max-w-2/3 shrink-0 truncate font-mono text-chat-foreground">{name}</span>
+        <span aria-hidden className="min-w-0 flex-1 truncate text-right font-mono">
+          {file.path.slice(0, -name.length)}
+        </span>
+        <DiffLineCounts added={file.added} removed={file.removed} />
+      </Button>
       <NativeChatExpandable open={open}>
         <TurnDiffFilePatches file={file} />
       </NativeChatExpandable>
@@ -79,39 +63,70 @@ function TurnDiffFileRow({
   )
 }
 
+function hideTurnDiffs(): Promise<void> {
+  return hideNativeChatCardKind(
+    { nativeChatTurnDiffSummary: false },
+    NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID,
+    translate('components.native-chat.turnDiff.hidden', "Orca won't show turn diffs anymore")
+  )
+}
+
 export function NativeChatTurnDiffRollup({
-  diff,
-  onReveal
+  diff
 }: {
   diff: NativeChatTurnDiff
-  onReveal: (target: NativeChatDiffTarget) => void
 }): React.JSX.Element {
+  const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
+    `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
+    false
+  )
+  const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
+  const remaining = diff.files.length - files.length
   return (
-    <Collapsible className="text-xs text-muted-foreground">
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="xs" className="group w-full min-w-0 justify-start gap-1.5">
-          <span className="min-w-0 truncate">
-            {diff.files.length === 1
-              ? translate('components.native-chat.turnDiff.one', '1 changed file')
-              : translate('components.native-chat.turnDiff.many', '{{count}} changed files', {
-                  count: diff.files.length
-                })}
-          </span>
-          <DiffLineCounts added={diff.added} removed={diff.removed} />
-          {diff.truncated ? (
-            <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
-          ) : null}
-          <ChevronRight
-            aria-hidden
-            className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
-          />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 space-y-1 pl-4">
-        {diff.files.map((file) => (
-          <TurnDiffFileRow key={file.path} file={file} onReveal={onReveal} />
+    <div className="group/turn-diff rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint">
+      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
+        <span className="min-w-0 truncate">
+          {translate('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
+            count: diff.files.length,
+            defaultValue_one: '{{count}} changed file'
+          })}
+        </span>
+        <DiffLineCounts added={diff.added} removed={diff.removed} />
+        {diff.truncated ? (
+          <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
+        ) : null}
+        {/* Shown on card hover or keyboard focus, like the transcript's other row actions. The
+            negative margin keeps the header one text line tall, as the row-height estimate assumes. */}
+        <span className="-my-1 ml-auto flex shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/turn-diff:pointer-events-auto group-hover/turn-diff:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate('components.native-chat.turnDiff.hide', 'Hide')}
+                onClick={() => void hideTurnDiffs()}
+              >
+                <EyeOff aria-hidden className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate('components.native-chat.turnDiff.hide', 'Hide')}
+            </TooltipContent>
+          </Tooltip>
+        </span>
+      </div>
+      <div className="space-y-1">
+        {files.map((file) => (
+          <TurnDiffFileRow key={file.path} file={file} />
         ))}
-      </CollapsibleContent>
-    </Collapsible>
+        {remaining > 0 ? (
+          <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>
+            {translate('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
+              count: remaining
+            })}
+          </Button>
+        ) : null}
+      </div>
+    </div>
   )
 }

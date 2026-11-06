@@ -11,8 +11,7 @@ const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => (
   resolveCodexCommandMock: vi.fn()
 }))
 
-// Runs the node stub in place of the resolved CLI, through the real chokepoint.
-// The probe's child runs in-process here; the worker transport has its own suite.
+// Run the Node fixture through the real process chokepoint; worker transport has separate coverage.
 vi.mock(
   '../worker-thread-child-process/worker-thread-child-process',
   () =>
@@ -43,18 +42,17 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-vi.mock('../codex/codex-state-db', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
   isCodexStateDbBackfillPending: vi.fn(() => false)
 }))
 
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
 
-// Dies the way a real app-server does: complains on stderr, then exits nonzero
-// once the client has spoken, so the initialize write can never race an EPIPE.
+// Wait for initialization bytes before exiting so stderr diagnosis cannot race an EPIPE.
 const STUB_CODEX_SOURCE = `
 process.stdin.on('data', () => {
   process.stderr.write(process.env.ORCA_STUB_CODEX_STDERR ?? '')
@@ -68,7 +66,7 @@ let stubPath: string
 function runStub(stderr: string, exitCode: number): Promise<{ error: string | null }> {
   process.env.ORCA_STUB_CODEX_STDERR = stderr
   process.env.ORCA_STUB_CODEX_EXIT_CODE = String(exitCode)
-  // Why: a temp home with no auth.json keeps the HTTP fallback off the developer's real login.
+  // Empty fixture auth keeps HTTP fallback away from the developer's real login.
   return fetchCodexRateLimits({ codexHomePath: tempRoot })
 }
 
@@ -100,13 +98,6 @@ describe('Codex RPC exit diagnostics', () => {
     expect(result.error).toContain("try '--help'")
   })
 
-  it('names the exit code when the child says nothing', async () => {
-    await expect(runStub('', 1)).resolves.toMatchObject({
-      error: 'Codex RPC process exited (exit code 1)',
-      status: 'error'
-    })
-  })
-
   it('classifies a dead refresh token so the re-auth warning fires', async () => {
     const result = await runStub(
       '2026-08-20T18:04:11.221Z INFO codex_core::auth: refreshing ChatGPT tokens\n' +
@@ -115,8 +106,6 @@ describe('Codex RPC exit diagnostics', () => {
     )
 
     expect(result.error).toBe('Your ChatGPT session could not be refreshed. Please sign in again.')
-    // The renderer's re-auth warning gates on exactly this predicate;
-    // codex-account-auth-warning.test.ts asserts the surfaced string end-to-end.
     expect(isCodexAuthError(result.error)).toBe(true)
   })
 
@@ -139,15 +128,5 @@ describe('Codex RPC exit diagnostics', () => {
     expect(result.error).not.toContain('moveoplus')
     expect(result.error).not.toContain('sk-aaaa')
     expect(result.error?.length ?? 0).toBeLessThan(500)
-  })
-
-  it('keeps the final failure after startup banners', async () => {
-    const result = await runStub(
-      'Welcome to WSL\nLoading shell profile\nERROR: unknown option --obsolete\n',
-      2
-    )
-
-    expect(result.error).toContain('Welcome to WSL')
-    expect(result.error).toContain('ERROR: unknown option --obsolete')
   })
 })

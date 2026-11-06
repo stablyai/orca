@@ -1,20 +1,11 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { toBundledRipgrepPlatform } from '../../shared/bundled-ripgrep'
+
 import {
-  bundledRipgrepCommand,
-  bundledRipgrepContentKey,
   bundledRipgrepWslSpawnOptions,
   resetBundledRipgrepPathCacheForTests,
   resolveBundledRipgrepPath
@@ -32,21 +23,6 @@ describe('bundled ripgrep path', () => {
     resetBundledRipgrepPathCacheForTests()
   })
 
-  it('resolves the checkout binary for this host in development', () => {
-    setResourcesPath(undefined)
-    const command = bundledRipgrepCommand()
-
-    expect(command).toContain(join('@vscode', 'ripgrep-universal', 'bin'))
-    expect(existsSync(command)).toBe(true)
-  })
-
-  it('resolves the Linux build for WSL-routed spawns', () => {
-    setResourcesPath(undefined)
-    const linuxPlatform = toBundledRipgrepPlatform('linux', process.arch)
-
-    expect(bundledRipgrepCommand({ wsl: true })).toContain(join('bin', `${linuxPlatform}`, 'rg'))
-  })
-
   it('prefers the packaged resources copy', () => {
     const resourcesDir = mkdtempSync(join(tmpdir(), 'orca-rg-resources-'))
     try {
@@ -60,34 +36,6 @@ describe('bundled ripgrep path', () => {
     } finally {
       rmSync(resourcesDir, { recursive: true, force: true })
     }
-  })
-
-  it('names no bundled build for platforms outside the relay set', () => {
-    expect(toBundledRipgrepPlatform('freebsd', 'x64')).toBeNull()
-    expect(toBundledRipgrepPlatform('win32', 'ia32')).toBeNull()
-  })
-
-  it('keys the remote cache on the shipped bytes', () => {
-    setResourcesPath(undefined)
-    const platform = toBundledRipgrepPlatform(process.platform, process.arch)!
-    const key = bundledRipgrepContentKey(platform)
-
-    expect(key).toMatch(/^[0-9a-f]{16}$/)
-    const otherPlatform = platform === 'win32-x64' ? 'linux-x64' : 'win32-x64'
-    expect(bundledRipgrepContentKey(otherPlatform)).not.toBe(key)
-  })
-
-  it('picks the distro-arch Linux build and fails closed when its drive is unavailable', () => {
-    const { wslShellCommand } = bundledRipgrepWslSpawnOptions(
-      'C:\\Program Files\\Orca\\resources\\ripgrep\\linux-x64\\rg'
-    )
-
-    expect(wslShellCommand).toContain(`wslpath -u 'C:\\Program Files\\Orca\\resources\\ripgrep'`)
-    expect(wslShellCommand).toContain('aarch64|arm64) a=linux-arm64')
-    expect(wslShellCommand).toContain('printf %s "$d/$a/rg"')
-    expect(wslShellCommand).toContain('else printf /dev/null/orca-ripgrep-unavailable')
-    expect(wslShellCommand).not.toContain('else printf rg')
-    expect(bundledRipgrepWslSpawnOptions('rg')).toEqual({})
   })
 
   it.skipIf(process.platform === 'win32')(

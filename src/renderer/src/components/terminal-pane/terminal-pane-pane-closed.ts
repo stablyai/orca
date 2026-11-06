@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import {
   resolveTabTitleAfterPaneClose,
@@ -15,6 +15,7 @@ import {
   discardDeferredSplitPaneHandoffForKey
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
+import { clearTerminalFontSizeOverride } from './appearance/terminal-font-size-overrides'
 
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
@@ -31,7 +32,6 @@ export function createTerminalPaneClosedHandler(
       paneCwdRef,
       paneTransportsRef,
       panePtyBindingsRef,
-      paneFontSizesRef,
       replayingPanesRef,
       clearRuntimePaneTitle,
       syncPanePtyLayoutBinding,
@@ -87,13 +87,11 @@ export function createTerminalPaneClosedHandler(
     const leafId = closedPane?.leafId
     const deferredSplitHandoff = context.deferredSplitHandoffs.get(paneId)
     if (deferredSplitHandoff) {
-      // Explicit pane removal is terminal for the split intent; only a
-      // whole-tab remount is allowed to retain this record.
+      // Explicit close ends split intent; only whole-tab remount may retain it.
       clearDeferredSplitPaneHandoff(deferredSplitHandoff)
       context.deferredSplitHandoffs.delete(paneId)
     } else if (leafId) {
-      // A close callback can outlive its mount-local numeric handle; the
-      // durable leaf key still identifies the deferred split to discard.
+      // Close may outlive the numeric handle; discard deferred splits by durable leaf key.
       discardDeferredSplitPaneHandoffForKey(makePaneKey(tabId, leafId))
     }
     if (leafId && isRetiredSurface) {
@@ -136,7 +134,9 @@ export function createTerminalPaneClosedHandler(
       paneTransportsRef.current.delete(paneId)
     }
     clearRuntimePaneTitle(tabId, paneId)
-    paneFontSizesRef.current.delete(paneId)
+    if (leafId && closedPane?.reason === 'close') {
+      clearTerminalFontSizeOverride(leafId)
+    }
     replayingPanesRef.current.delete(paneId)
     refs.restoredViewportBlankingPanesRef.current.delete(paneId)
     setPaneTitles((current) => {

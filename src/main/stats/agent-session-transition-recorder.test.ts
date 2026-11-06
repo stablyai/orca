@@ -49,8 +49,7 @@ function hook(
   }
 }
 
-/** A row from a host that publishes the main agent fact beside the combined state. The recorder
- *  reads the combined row only; the fact rides along as it does on the real enriched payload. */
+/** Model combined hook state with main-agent evidence alongside it. */
 function mainAgentHook(
   row: {
     state: AgentSessionStatusEvent['payload']['state']
@@ -76,8 +75,7 @@ function sink(): AgentSessionSink & {
 
 describe('AgentSessionTransitionRecorder', () => {
   it('counts a hook-only agent that never writes an agent-shaped terminal title', () => {
-    // The regression this replaces: stats read OSC titles, so an agent whose CLI
-    // reports only over hooks contributed nothing to either aggregate (#10201).
+    // #10201: hook-only agents must contribute despite absent OSC titles.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -93,13 +91,11 @@ describe('AgentSessionTransitionRecorder', () => {
     const recorder = new AgentSessionTransitionRecorder(stats)
 
     recorder.onStatus(hook('working', T))
-    // Warm reconnect: the pane is already mirrored, so the replays are snapshots.
+    // Warm reconnect rows repeat mirrored snapshots.
     recorder.onStatus(hook('working', T, { isReplay: true }))
     recorder.onStatus(hook('working', T, { isReplay: true }))
     recorder.onStatus(hook('working', T, { isReplay: true }))
-    // Cold reconnect (app restart / new relay session): the replay is the first
-    // thing this recorder sees for the pane, so the snapshot guard cannot help —
-    // only the live gate stops it counting work that began in an earlier runtime.
+    // Cold replay has no prior mirror; only live-event gating prevents counting work from the earlier runtime.
     recorder.onStatus(hook('working', T, { paneKey: 'cold-pane', isReplay: true }))
     recorder.onStatus(hook('working', T, { paneKey: 'cold-pane', isReplay: true }))
 
@@ -107,7 +103,6 @@ describe('AgentSessionTransitionRecorder', () => {
   })
 
   it('does not double-count a re-emitted live status mid-turn', () => {
-    // Tool-progress events re-emit `working` many times per turn.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -121,8 +116,7 @@ describe('AgentSessionTransitionRecorder', () => {
   })
 
   it('never opens a session from a replayed or disk-restored working status', () => {
-    // A replayed `working` describes work that began in an earlier runtime;
-    // crediting it would mint a phantom spawn on every reconnect.
+    // Historical working replay must not mint a new spawn on reconnect.
     const replayed = sink()
     new AgentSessionTransitionRecorder(replayed).onStatus(hook('working', T, { isReplay: true }))
     expect(replayed.onAgentStart).not.toHaveBeenCalled()
@@ -135,7 +129,6 @@ describe('AgentSessionTransitionRecorder', () => {
   })
 
   it('still closes a live session when the terminating status arrives as a replay', () => {
-    // How a client learns about a completion it missed while disconnected.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -160,7 +153,7 @@ describe('AgentSessionTransitionRecorder', () => {
   })
 
   it('treats waiting and blocked as session boundaries, not agent work', () => {
-    // Time parked on a permission prompt is the user's, not the agent's.
+    // Permission-wait time belongs to the user, not agent execution.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -174,8 +167,7 @@ describe('AgentSessionTransitionRecorder', () => {
   })
 
   it('ignores identity-only provider-session refreshes', () => {
-    // These carry a state field but no turn-state transition; acting on them
-    // would open a session from a resume-metadata write.
+    // Identity refreshes carry state but no execution transition; never open from resume metadata alone.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -184,7 +176,6 @@ describe('AgentSessionTransitionRecorder', () => {
 
     recorder.onStatus(hook('working', T + 1_000))
     recorder.onStatus(hook('done', T + 2_000, { providerSessionOnly: true }))
-    // The refresh must not close the live session either.
     expect(stats.getSummary().totalAgentTimeMs).toBe(0)
 
     recorder.onStatus(hook('done', T + 3_000))
@@ -225,15 +216,13 @@ describe('AgentSessionTransitionRecorder', () => {
     }
 
     expect(recorder.trackedPaneCount).toBe(AGENT_SESSION_MIRROR_LIMIT)
-    // The evicted pane's open session was closed out rather than leaked.
     expect(stats.getSummary().totalAgentsSpawned).toBe(AGENT_SESSION_MIRROR_LIMIT + 1)
     expect(stats.getSummary().totalAgentTimeMs).toBe(0)
   })
 })
 
 describe('AgentSessionTransitionRecorder on rows that also carry the main agent fact', () => {
-  // The stats ask "was an agent executing": the main agent's own turn, or a subagent still running
-  // after the main agent settled. A background shell the settled main agent left behind is neither.
+  // Count main/subagent execution, excluding background shells left by a settled agent.
   const MAIN_AGENT_WORKING = { state: 'working' as const, stateStartedAt: T }
 
   it('stops the session when the main agent settles and only a watch loop holds the row working', () => {
@@ -241,7 +230,6 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
     const recorder = new AgentSessionTransitionRecorder(stats)
 
     recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-    // The Stop hook: the row stays `working` (same clock) in monitoring mode; the main agent is done.
     recorder.onStatus(
       mainAgentHook(
         {
@@ -253,7 +241,6 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
         { receivedAt: T + 20_000 }
       )
     )
-    // Hours of dev server later, the shell exits and the row settles.
     recorder.onStatus(
       mainAgentHook(
         { state: 'done', mainAgent: { state: 'done', stateStartedAt: T + 20_000 } },
@@ -288,8 +275,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
   })
 
   it('dates the stop by the evidence when a shell outlives the last subagent', () => {
-    // Main agent done at +10s, its subagent finishes at +60s, a shell keeps the row in monitoring:
-    // neither state clock moves at +60s, so the evidence clock is the edge.
+    // Subagent completion can leave monitoring state/clock unchanged; date the stop from evidence.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
     const mainAgentDone = { state: 'done' as const, stateStartedAt: T + 10_000 }
@@ -306,8 +292,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
   })
 
   it('dates a subagent reopening a monitoring row by the evidence, not the pinned row clock', () => {
-    // The hook lane keeps the row's clock across a watch-loop mode change, so it still reads T,
-    // the start of the main agent's turn; dating the reopen by it would bill the monitoring window.
+    // Watch-loop changes retain turn-start clock; reopening from it would bill the monitoring gap.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
     const mainAgentDone = { state: 'done' as const, stateStartedAt: T + 5_000 }
@@ -348,7 +333,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
         { receivedAt: T + 5_000 }
       )
     )
-    // A task notification resumes the main agent; the row's own clock never moved off T.
+    // Main-agent resume keeps the old row clock; use current evidence.
     recorder.onStatus(
       mainAgentHook(
         { state: 'working', mainAgent: { state: 'working', stateStartedAt: T + 300_000 } },
@@ -368,8 +353,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
   })
 
   it("never dates an edge by an SSH host's main agent clock", () => {
-    // An SSH host stamps `mainAgent.stateStartedAt` with its own clock (an hour behind here), while
-    // every other edge is dated by this host; mixing them would add the skew to the span.
+    // Remote main-agent clocks may skew by hours; all duration edges need this host's clocks.
     const skewed = new StatsCollector()
     const remote = new AgentSessionTransitionRecorder(skewed)
     remote.onStatus(
@@ -388,8 +372,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
   })
 
   it('never dates a reopen before the close a fact-less OSC repaint caused', () => {
-    // An OSC repaint to a different state carries no main agent fact and closes the span; the next
-    // hook row restores the fact with its unchanged clock, which predates that close.
+    // OSC can close the span without main-agent evidence; its restored fact has an older unchanged clock.
     const osc = new StatsCollector()
     const local = new AgentSessionTransitionRecorder(osc)
     local.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
@@ -406,7 +389,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
 
   it.each([
     ['its own prompt', { state: 'waiting' as const, stateStartedAt: T + 30_000 }],
-    // Codex/Claude: a child's approval prompt parks the row while the displaced main agent reads working.
+    // Child approval can park the row while the displaced main agent still says working.
     ["a child's approval prompt", MAIN_AGENT_WORKING]
   ])(
     'pauses the clock while the row waits on %s, dated by the row clock',
@@ -415,8 +398,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
       const recorder = new AgentSessionTransitionRecorder(stats)
 
       recorder.onStatus(mainAgentHook({ state: 'working', mainAgent: MAIN_AGENT_WORKING }, T))
-      // A reconnect replays the missed wait: the row clock is restamped at the edge, while the
-      // evidence clock keeps the last observation before the gap.
+      // Reconnect restamps row timing but preserves pre-gap evidence time.
       recorder.onStatus(
         mainAgentHook({ state: 'waiting', mainAgent: waitingMainAgent }, T + 30_000, {
           isReplay: true,
@@ -456,7 +438,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
   })
 
   it("reads an old host's monitoring row like a new host's: the watch loop stops the clock", () => {
-    // Hosts that predate `mainAgent` already published `monitoring` only for a settled main agent.
+    // Older hosts already used monitoring only for settled main agents.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -467,7 +449,6 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
         payload: { state: 'working', workingMode: 'monitoring' }
       })
     )
-    // The main agent resumes: the row's clock is still pinned to T.
     recorder.onStatus(hook('working', T, { receivedAt: T + 300_000 }))
     recorder.onStatus(hook('done', T + 310_000))
 
@@ -476,7 +457,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
   })
 
   it('dates the first live row after a restored one by the evidence, not the restored clock', () => {
-    // A live hook that repeats a hydrated `working` keeps the row clock from the earlier runtime.
+    // A live repeat after hydration can retain an earlier runtime's working clock.
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
@@ -489,7 +470,7 @@ describe('AgentSessionTransitionRecorder on rows that also carry the main agent 
 
 describe('AgentSessionTransitionRecorder fed by the status store', () => {
   it('dates a live start on a hydrated row by this runtime, not the persisted state clock', async () => {
-    // An OSC row carries no main agent fact; its live repeat keeps the persisted `stateStartedAt`.
+    // OSC repeats lack main-agent evidence and retain persisted state-start time.
     vi.useRealTimers()
     _internals.resetCachesForTests()
     const hookDataDir = mkdtempSync(join(tmpdir(), 'orca-stats-recorder-hooks-'))

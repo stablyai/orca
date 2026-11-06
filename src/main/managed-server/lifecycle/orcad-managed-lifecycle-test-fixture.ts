@@ -1,8 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
-import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
@@ -13,7 +14,6 @@ export const MANAGED_VERSION = '0.2.0+abc'
 export const MANAGED_PREVIOUS_VERSION = '0.1.0+def'
 export const MANAGED_LOCAL_PORT = 46_768
 
-/** A managed server registered in a temp profile, with its claimed SSH target. */
 export function createManagedLifecycleHarness() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-managed-lifecycle-'))
   let target: SshTarget = {
@@ -76,7 +76,6 @@ export function createManagedLifecycleHarness() {
   return { userDataPath, environment, targetStore, context, flushes, current: () => target }
 }
 
-/** Readiness whose pairing offer, once tunneled, matches the harness server's saved one. */
 export function managedReadiness(deviceToken = 'device-token'): ServeReadiness {
   const endpoint = 'ws://127.0.0.1:6768'
   return {

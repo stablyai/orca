@@ -64,15 +64,19 @@ export function DashboardAgentChildDisclosure({
         onKeyDown={stopKeyDown}
         data-agent-child-disclosure-button=""
         className="col-start-1 row-start-1 -mr-1.5"
-        aria-label={translate(
-          'auto.components.dashboard.DashboardAgentChildDisclosure.1b57ce9fa4',
-          '{{value0}} {{value1}} child {{value2}}',
-          {
-            value0: childAgentsExpanded ? 'Hide' : 'Show',
-            value1: childAgentCount,
-            value2: childAgentCount === 1 ? 'agent' : 'agents'
-          }
-        )}
+        aria-label={
+          childAgentsExpanded
+            ? translate(
+                'auto.components.dashboard.DashboardAgentChildDisclosure.hideChildAgents',
+                'Hide {{count}} child agents',
+                { count: childAgentCount, defaultValue_one: 'Hide {{count}} child agent' }
+              )
+            : translate(
+                'auto.components.dashboard.DashboardAgentChildDisclosure.showChildAgents',
+                'Show {{count}} child agents',
+                { count: childAgentCount, defaultValue_one: 'Show {{count}} child agent' }
+              )
+        }
         aria-expanded={childAgentsExpanded}
       >
         <ChevronDown

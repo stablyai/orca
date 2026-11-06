@@ -67,8 +67,6 @@ describe('managed TOML marker blocks', () => {
     expect(strip(`a = 1\n\n\n${START}\nx\n${END}\n`)).toBe('a = 1\n')
   })
 
-  // CodeRabbit on #20148: a prefix match let a user's own comment open or close
-  // a region, deleting every byte between two quoted markers.
   it("ignores a marker line carrying a trailing comment of the user's own", () => {
     const text = [
       'a = 1',

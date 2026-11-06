@@ -1,11 +1,9 @@
-// Why: publishing an artifact mints a URL anyone can open, so agents get the capability only
-// after the user grants it. The gate lives here so main, the CLI, and Settings share one contract.
+// Public artifact URLs require a user-granted capability; main/CLI/Settings share this gate.
 import type { GlobalSettings } from './global-settings-types'
 
 export const ARTIFACT_SHARING_DISABLED_CODE = 'artifact_sharing_disabled'
 
-// Why device-wide wording: the gate has no caller identity, so `orca artifacts share` typed by a
-// human is denied exactly like an agent's. Copy that blames agents alone would misdescribe it.
+// The gate has no caller identity and also denies human CLI sharing; wording must describe device-wide permission.
 export const ARTIFACT_SHARING_DISABLED_MESSAGE =
   'Publishing artifacts is off for this device. Nothing running here — agents or the orca CLI — can mint public artifact links until you allow it.'
 

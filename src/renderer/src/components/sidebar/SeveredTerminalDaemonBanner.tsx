@@ -42,7 +42,10 @@ function writeDismissed(key: string): void {
 function sessionsLabel(count: number | null): string {
   return count === null
     ? translate('terminal.severedDaemonBanner.unknownCount', 'its running terminals')
-    : translate('terminal.severedDaemonBanner.count', '{{count}} running terminals', { count })
+    : translate('terminal.severedDaemonBanner.count', '{{count}} running terminals', {
+        count,
+        defaultValue_one: '{{count}} running terminal'
+      })
 }
 
 function refusalMessage(
@@ -59,7 +62,6 @@ function refusalMessage(
       )
 }
 
-/** Persistent notice for a Linux AppImage terminal daemon kept although its files are gone. */
 export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
   const [daemon, setDaemon] = React.useState<PtyManagementSeveredDaemon | null>(null)
   const [dismissed, setDismissed] = React.useState<string | null>(() => readDismissed())

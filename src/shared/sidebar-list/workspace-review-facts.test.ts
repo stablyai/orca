@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildWorkspaceReviewFacts,
-  prGroupOfReviewFact,
-  readWorkspaceReviewFact
-} from './workspace-review-facts'
+import { buildWorkspaceReviewFacts, readWorkspaceReviewFact } from './workspace-review-facts'
 
 const repo = { id: 'repo-1', path: '/r', connectionId: null, executionHostId: null }
 const row = { id: 'repo-1::/r/a', repoId: 'repo-1', branch: 'refs/heads/a', linkedPR: null }
@@ -43,18 +39,20 @@ describe('readWorkspaceReviewFact', () => {
   })
 })
 
-describe('prGroupOfReviewFact', () => {
-  it('keeps rows without a PR in progress and lanes the rest by state', () => {
-    expect(prGroupOfReviewFact(null)).toBe('in-progress')
-    expect(prGroupOfReviewFact({ provider: 'github', reviewState: 'draft' })).toBe('in-progress')
-    expect(prGroupOfReviewFact({ provider: 'github', reviewState: '' })).toBe('in-review')
-    expect(prGroupOfReviewFact({ provider: 'github', reviewState: 'merged' })).toBe('done')
+it('lists only rows with a PR, under the key the workspaces domain lists them at', () => {
+  const other = { ...row, id: 'repo-1::/r/b', branch: 'b' }
+  expect(buildWorkspaceReviewFacts([row, other], [repo], { 'repo-1::a': pr('open') })).toEqual({
+    [`|${row.id}`]: { provider: 'github', reviewState: 'open' }
   })
 })
 
-it('lists only rows with a PR', () => {
-  const other = { ...row, id: 'repo-1::/r/b', branch: 'b' }
-  expect(buildWorkspaceReviewFacts([row, other], [repo], { 'repo-1::a': pr('open') })).toEqual({
-    [row.id]: { provider: 'github', reviewState: 'open' }
+it('reads each host’s copy of a same-id workspace with its own repo, under its own key', () => {
+  const sshRepo = { ...repo, connectionId: 'box' }
+  const local = { ...row, hostId: 'local' as const }
+  const remote = { ...row, hostId: 'ssh:box' as const }
+  const cache = { 'repo-1::a': pr('merged'), 'ssh:box::repo-1::a': pr('open') }
+  expect(buildWorkspaceReviewFacts([local, remote], [repo, sshRepo], cache)).toEqual({
+    [`local|${row.id}`]: { provider: 'github', reviewState: 'merged' },
+    [`ssh:box|${row.id}`]: { provider: 'github', reviewState: 'open' }
   })
 })

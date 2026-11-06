@@ -1,12 +1,15 @@
 import type { DiffComment, DiffReviewScope } from '../../../src/shared/diff-comment-types'
-import { formatDiffComment, formatDiffComments } from '../../../src/shared/diff-comments-format'
-
-export { formatDiffComment, formatDiffComments }
+import {
+  mobileDiffReviewCommentMatchesItem,
+  type MobileDiffReviewQueueItem
+} from './mobile-diff-review-queue'
 
 export type CreateMobileDiffCommentInput = {
   worktreeId: string
   filePath: string
   oldPath?: string
+  /** Inclusive range start, below lineNumber; absent for a single line. */
+  startLine?: number
   lineNumber: number
   body: string
   id: string
@@ -21,19 +24,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeScope(value: unknown): DiffReviewScope | undefined {
   return value === 'unstaged' || value === 'staged' || value === 'branch' ? value : undefined
-}
-
-export function formatMobileDiffReviewPrompt(comments: readonly DiffComment[]): string {
-  return [
-    'You are reviewing the current worktree. Address the following mobile review notes.',
-    '',
-    formatDiffComments(comments),
-    '',
-    'After applying fixes:',
-    '1. Summarize changed files.',
-    '2. Run relevant tests.',
-    '3. Tell me if anything remains risky.'
-  ].join('\n')
 }
 
 export function normalizeMobileDiffComments(value: unknown, worktreeId: string): DiffComment[] {
@@ -87,6 +77,9 @@ export function createMobileDiffComment(input: CreateMobileDiffCommentInput): Di
     filePath: input.filePath,
     oldPath: input.oldPath,
     source: 'diff',
+    ...(input.startLine !== undefined && input.startLine < input.lineNumber
+      ? { startLine: input.startLine }
+      : {}),
     lineNumber: input.lineNumber,
     body,
     createdAt: input.createdAt,
@@ -143,10 +136,34 @@ export function removeDeliveredMobileDiffComments(
   })
 }
 
-/** Unsent notes that no new-agent send is still carrying. */
 export function sendableMobileDiffComments(
   comments: readonly DiffComment[],
   sendingIds: ReadonlySet<string>
 ): DiffComment[] {
   return comments.filter((comment) => !comment.sentAt && !sendingIds.has(comment.id))
+}
+
+/** The open file's notes by line, and which were written against an older version of its diff. */
+export function mobileDiffReviewNotesForItem(
+  comments: readonly DiffComment[],
+  item: MobileDiffReviewQueueItem | null
+): { commentsByLine: Map<number, DiffComment[]>; staleCommentIds: Set<string> } {
+  const commentsByLine = new Map<number, DiffComment[]>()
+  const staleCommentIds = new Set<string>()
+  if (!item) {
+    return { commentsByLine, staleCommentIds }
+  }
+  for (const comment of comments) {
+    if (!mobileDiffReviewCommentMatchesItem(comment, item)) {
+      continue
+    }
+    commentsByLine.set(comment.lineNumber, [
+      ...(commentsByLine.get(comment.lineNumber) ?? []),
+      comment
+    ])
+    if (comment.diffIdentity !== undefined && comment.diffIdentity !== item.diffIdentity) {
+      staleCommentIds.add(comment.id)
+    }
+  }
+  return { commentsByLine, staleCommentIds }
 }

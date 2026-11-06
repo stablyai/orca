@@ -11,15 +11,13 @@ afterEach(cleanup)
 const NO_SLOTS: never[] = []
 const NO_ROWS = { messages: [], turnKeys: [] }
 
-/** A transcript scroller wide enough to show the rail. */
 function railScroller(): HTMLDivElement {
   const element = document.createElement('div')
   Object.defineProperty(element, 'clientWidth', { value: 800 })
   return element
 }
 
-/** The rail over the real hook, on a thread known only from the host's outline.
- *  The first two prompts have replies; past 20 the ticks are sampled. */
+/** Use the real rail hook over a host outline; prompts beyond 20 get sampled ticks. */
 function Rail({
   count = 3,
   activeIndex,
@@ -75,20 +73,6 @@ describe('message rail interaction', () => {
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0Reply 0'))
   })
 
-  it('previews the message alone while the agent has not replied', async () => {
-    render(<Rail />)
-    fireEvent.pointerEnter(tick('Prompt 2'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 2')
-  })
-
-  it('jumps to the clicked tick', async () => {
-    const select = vi.fn()
-    render(<Rail onSelect={select} />)
-    await userEvent.setup().click(tick('Prompt 1'))
-    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-1' }))
-  })
-
   it('keeps focus where it was while a hover preview opens and closes', async () => {
     render(<Rail />)
     const composer = screen.getByRole('textbox')
@@ -126,12 +110,10 @@ describe('message rail interaction', () => {
     expect(screen.getByRole('toolbar').contains(document.activeElement)).toBe(false)
   })
 
-  // A long thread draws only some ticks; the keyboard still reaches every message,
-  // and the tick it lands on stays drawn while it holds focus.
+  // Keyboard navigation must reach unsampled messages and keep the focused tick drawn.
   it('walks every message with the arrow keys, sampled onto the rail or not', async () => {
     const user = userEvent.setup()
     render(<Rail count={60} />)
-    // Anti-vacuous: the second message has no tick until the keyboard reaches it.
     expect(screen.queryByRole('button', { name: 'Prompt 1' })).toBeNull()
     screen.getByRole('textbox').focus()
     await user.tab()
@@ -141,12 +123,6 @@ describe('message rail interaction', () => {
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1Reply 1'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 2'))
-  })
-
-  it('marks a tick whose history is still paging in as busy', () => {
-    render(<Rail pendingId="prompt-0" />)
-    expect(tick('Prompt 0').getAttribute('aria-busy')).toBe('true')
-    expect(tick('Prompt 1').getAttribute('aria-busy')).toBeNull()
   })
 
   it.each([

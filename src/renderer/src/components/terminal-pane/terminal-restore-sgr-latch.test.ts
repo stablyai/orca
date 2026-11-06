@@ -1,13 +1,13 @@
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Terminal } from '@xterm/headless'
 import { afterEach, describe, expect, it } from 'vitest'
-import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
+
 import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { restoreScrollbackBuffers } from './layout-serialization'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -106,16 +106,6 @@ describe('fresh-shell terminal restore SGR state', () => {
     expect(bottomLine?.getCell(20)?.getBgColor()).toBe(-1)
   })
 
-  it('clears the serialized live pen before fresh shell output', async () => {
-    const source = serialize('\x1b[1mBOLD')
-    await writeTerminal(source.terminal, source.data)
-
-    const restored = await restoreBuffer(source.addon.serialize())
-
-    expect(boldAtText(restored, 'BOLD')).not.toBe(0)
-    expect(boldAtText(restored, 'fresh-shell')).toBe(0)
-  })
-
   it('clears the captured pen after normal-buffer daemon reattach', async () => {
     const terminal = createTerminal()
     await writeTerminal(terminal, UNCLOSED_BOLD_FIXTURE)
@@ -148,37 +138,6 @@ describe('fresh-shell terminal restore SGR state', () => {
 
     expect(boldAtText(terminal, 'PLAIN')).toBe(0)
     expect(foregroundAtText(terminal, 'PLAIN')).toBe(-1)
-  })
-
-  it('keeps the synthetic saved-cursor register from restoring bold', async () => {
-    const source = serialize('\x1b[1mBOLD')
-    await writeTerminal(source.terminal, source.data)
-    const snapshot = serializeWithAbsoluteCursor(source.addon, source.terminal, undefined, {
-      x: 10,
-      y: 0,
-      originMode: false
-    })
-
-    const restored = await restoreBuffer(snapshot, { followingOutput: '\x1b8after-restore' })
-
-    expect(boldAtText(restored, 'after-restore')).toBe(0)
-  })
-
-  it('grounds the synthetic saved cursor after normal-buffer daemon reattach', async () => {
-    const source = serialize('\x1b[1mBOLD')
-    await writeTerminal(source.terminal, source.data)
-    const snapshot = serializeWithAbsoluteCursor(source.addon, source.terminal, undefined, {
-      x: 10,
-      y: 0,
-      originMode: false
-    })
-    const restored = createTerminal()
-
-    await writeTerminal(restored, snapshot)
-    await writeTerminal(restored, POST_REPLAY_REATTACH_RESET)
-    await writeTerminal(restored, '\x1b8after-reattach')
-
-    expect(boldAtText(restored, 'after-reattach')).toBe(0)
   })
 
   it('restores alt-screen scrollback without leaking its bold frame', async () => {

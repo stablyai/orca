@@ -1,10 +1,23 @@
 import { z } from 'zod'
-import type { ExecutionHostId } from '../execution-host'
-import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../folder-workspaces/folder-workspace-worktree'
+import type { Repo } from '../repo-types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../worktree/host-qualified-identity'
+import type { CrossStoreWorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
+import type { Worktree } from '../worktree/types'
+import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { openEnum } from '../zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import { SMART_TIERS } from './sort-stamps'
-import { WorkspaceRowSchema } from './workspace-rows'
+import { CrossStoreParentRecordSchema, WorkspaceRowSchema } from './workspace-rows'
 import { HostReportedActivitySchema, type HostReportedActivity } from './workspace-activity-facts'
 
 /** One paired-server workspace as the sidebar lists it, keyed by its host-qualified id. */
@@ -21,8 +34,7 @@ const PairedServerWorkspaceRowSchema = z
     isPinned: z.boolean()
   })
   .extend(
-    // What the list sorts, groups and filters by, as the server stamped it; older desktops omit them.
-    // `lineage` is the edge the server's own check kept, not its stored record.
+    // Server-owned sorting/filter/lineage facts; older desktops omit them. Lineage is the checked edge, not the raw record.
     WorkspaceRowSchema.pick({
       isMainWorktree: true,
       isUnread: true,
@@ -44,7 +56,8 @@ const PairedServerWorkspaceRowSchema = z
   )
   .extend({
     /** The server's own terminals and agents there; older desktops omit it. */
-    activity: HostReportedActivitySchema.optional().catch(undefined)
+    activity: HostReportedActivitySchema.optional().catch(undefined),
+    crossStoreParent: CrossStoreParentRecordSchema
   })
 
 /** See PairedServerHost; health and compatibility stay open strings, as a reader only compares them. */
@@ -52,7 +65,9 @@ const PairedServerHostFactsSchema = z.object({
   label: z.string(),
   health: z.string(),
   compatibility: z.string().nullable(),
-  pairedDeviceId: z.string().nullable()
+  pairedDeviceId: z.string().nullable(),
+  /** The server's verified store identity, which cross-store records name; older desktops omit it. */
+  installationId: z.string().nullable().optional().catch(undefined)
 })
 
 /** Every configured server main lists rows for. Unverifiable: its last rows, not confirmed current. */
@@ -73,6 +88,72 @@ export type PairedServerHostFacts = z.infer<typeof PairedServerHostFactsSchema>
 
 export type PairedServerWorkspaceRow = z.infer<typeof PairedServerWorkspaceRowSchema>
 export type PairedServerRowsSnapshot = z.infer<typeof PairedServerRowsSnapshotSchema>
+
+/** A paired server's workspace as the window holds it, in the shape the server's own list reports. */
+export function pairedServerRowOfWorktree(
+  worktree: Worktree,
+  kind: PairedServerWorkspaceRow['kind'],
+  repo: Pick<Repo, 'kind'> | undefined,
+  lineage: WorktreeLineage | null | undefined,
+  crossStoreParent?: CrossStoreWorkspaceLineage
+): PairedServerWorkspaceRow {
+  const key = getWorktreeHostIdentity(worktree)
+  // The server's reply carries no automation name, so the row leaves it out too.
+  const { automationName: _automationName, ...kindFacts } = getWorkspaceRowKindFacts(worktree, repo)
+  return {
+    key,
+    worktreeId: worktree.id,
+    repoId: worktree.repoId,
+    kind,
+    path: worktree.path,
+    branch: worktree.branch,
+    displayName: worktree.displayName,
+    isArchived: worktree.isArchived,
+    isPinned: worktree.isPinned,
+    isMainWorktree: worktree.isMainWorktree,
+    isUnread: worktree.isUnread,
+    instanceId: worktree.instanceId,
+    lineage: lineage
+      ? {
+          parentWorktreeId: lineage.parentWorktreeId,
+          worktreeInstanceId: lineage.worktreeInstanceId,
+          parentWorktreeInstanceId: lineage.parentWorktreeInstanceId
+        }
+      : null,
+    workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+    sortOrder: worktree.sortOrder,
+    manualOrder: worktree.manualOrder,
+    createdAt: worktree.createdAt,
+    creatorProvenance: worktree.creatorProvenance,
+    ...kindFacts,
+    recentAt: worktree.lastActivityAt,
+    smartTier: worktree.smartTier,
+    smartAt: worktree.smartAt,
+    ...(crossStoreParent ? { crossStoreParent } : {})
+  }
+}
+
+/** Host-qualified paired rows omitted by buildWorkspaceRows. */
+export function buildPairedServerRows(catalog: {
+  worktrees: readonly Worktree[]
+  folderWorkspaces: readonly FolderWorkspace[]
+  repos: readonly Repo[]
+  lineageById: Readonly<Record<string, WorktreeLineage>>
+}): Map<string, PairedServerWorkspaceRow> {
+  const rows = new Map<string, PairedServerWorkspaceRow>()
+  const add = (worktree: Worktree, kind: PairedServerWorkspaceRow['kind']): void => {
+    if (parseExecutionHostId(worktree.hostId)?.kind === 'runtime') {
+      const repo = catalog.repos.find(
+        (entry) => entry.id === worktree.repoId && getRepoExecutionHostId(entry) === worktree.hostId
+      )
+      const row = pairedServerRowOfWorktree(worktree, kind, repo, catalog.lineageById[worktree.id])
+      rows.set(row.key, row)
+    }
+  }
+  catalog.worktrees.forEach((worktree) => add(worktree, 'git'))
+  catalog.folderWorkspaces.forEach((folder) => add(folderWorkspaceToWorktree(folder), 'folder'))
+  return rows
+}
 
 // Older servers omit `workspaceKind` and may send arms this build has not heard of.
 const ServerWorktreePsRowSchema = z.object({
@@ -105,7 +186,8 @@ const ServerWorktreePsRowSchema = z.object({
   liveTerminalCount: z.number().optional().catch(undefined),
   unverifiableTerminalCount: z.number().optional().catch(undefined),
   status: z.string().optional().catch(undefined),
-  workingMode: z.string().optional().catch(undefined)
+  workingMode: z.string().optional().catch(undefined),
+  crossStoreParent: CrossStoreParentRecordSchema
 })
 
 function reportedActivity(row: z.infer<typeof ServerWorktreePsRowSchema>): HostReportedActivity {

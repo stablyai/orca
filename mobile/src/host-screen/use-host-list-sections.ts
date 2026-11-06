@@ -8,8 +8,12 @@ import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
 import type { Section, SectionRepo, Worktree } from '../worktree/workspace-list-types'
+import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
+import type { MobileLineageStores } from '../worktree/mobile-workspace-lineage'
+import { useLastVisitedWorktreeOnHost } from '../worktree/use-last-visited-worktree-on-host'
 import { rowFiltersForView } from '../worktree/workspace-view-settings'
-import { buildHostFeedCatalog, buildHostFeedView } from './host-sidebar-feed-inputs'
+import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
+import { buildHostFeedView } from './host-sidebar-feed-inputs'
 import { buildHostFeedSections, buildPreFeedSections } from './host-sidebar-feed-sections'
 import { useHostRepoIconDataUrls } from './use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from './use-host-sidebar-feed'
@@ -17,24 +21,24 @@ import type { HostScreenState } from './use-host-screen-state'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
+  hostId: string | undefined
   /** Null in a build that lists without the feed. */
   feed: HostSidebarFeed | null
-  /** The rows worktree.ps and the desktop's server lists served, with display state applied. */
   displayWorktrees: Worktree[]
+  hostContextOf: WorktreeHostContextOf
   /** The desktop's platform, which names its own host; never the phone's. */
   hostPlatform: NodeJS.Platform | null
+  /** The host's own store identity (status.get), for parents on another machine. */
+  hostInstallationId: string | undefined
   state: HostScreenState
 }
 
 export type HostListSections = {
   sections: Section[]
-  /** Each section before collapse; a feed-built section carries its own count instead. */
   rawSections: Section[]
   uniqueRepos: WorkspaceSectionRepo[]
-  /** Each row's repo by id, as the desktop's cards look theirs up for colour and icon. */
   repoById: ReadonlyMap<string, SectionRepo>
   collapsedGroups: Set<string>
-  /** The desktop's value once read; the served catalog's (or the default) before. */
   projectOrderBy: ProjectOrderBy
 }
 
@@ -43,19 +47,19 @@ function useCollapsedGroups(state: HostScreenState): Set<string> {
 }
 
 function useFilterRepos(
-  state: HostScreenState,
+  catalogRepos: readonly SectionRepo[],
   displayWorktrees: Worktree[]
 ): WorkspaceSectionRepo[] {
-  const catalogRepos = state.servedProjectSections?.repos ?? state.desktopRepos
   return useMemo(
     () => buildFilterRepos(catalogRepos, displayWorktrees),
     [catalogRepos, displayWorktrees]
   )
 }
 
-/** The phone's own list rules, for a page built without the feed. */
 function useLegacyHostListSections({
   displayWorktrees,
+  hostContextOf,
+  hostInstallationId,
   state
 }: HostListSectionsInputs): HostListSections {
   const projectCatalog = useMemo(
@@ -75,8 +79,13 @@ function useLegacyHostListSections({
   )
   const collapsedGroups = useCollapsedGroups(state)
   const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
+  const lineageStores = useMemo<MobileLineageStores>(
+    () => ({ ownInstallationId: hostInstallationId, servers: state.serverWorkspaces.hosts }),
+    [hostInstallationId, state.serverWorkspaces.hosts]
+  )
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
+    hostContextOf,
     sortMode: state.view.sortBy,
     filters: rowFilters,
     search: state.search,
@@ -87,34 +96,32 @@ function useLegacyHostListSections({
     filterCatalogRepos: state.servedProjectSections?.repos ?? state.desktopRepos,
     collapsedGroups,
     workspaceStatuses: state.view.workspaceStatuses,
-    repoHostIdByRepoId: state.repoHostIdByRepoId
+    repoHostIdByRepoId: state.repoHostIdByRepoId,
+    lineageStores
   })
   return { ...sectionsResult, collapsedGroups, projectOrderBy: projectCatalog.projectOrderBy }
 }
 
 const NO_SECTIONS: Section[] = []
 
-/** The desktop sidebar's own list, built by the shared builder from the host's feed. */
 function useFeedHostListSections({
   client,
+  hostId,
   feed,
   displayWorktrees,
+  hostContextOf,
   hostPlatform,
   state
 }: HostListSectionsInputs): HostListSections {
   const collapsedGroups = useCollapsedGroups(state)
-  const uniqueRepos = useFilterRepos(state, displayWorktrees)
-  const projectOrderBy =
-    state.view.projectOrderBy ?? state.servedProjectSections?.projectOrderBy ?? 'manual'
   const domains = feed?.kind === 'ready' ? feed.domains : null
+  // The catalog installed with the rows; a desktop that predates it answers mobileRelay.projectSections.
+  const served = domains?.projectCatalog ?? state.servedProjectSections
+  const uniqueRepos = useFilterRepos(served?.repos ?? state.desktopRepos, displayWorktrees)
+  const projectOrderBy = state.view.projectOrderBy ?? served?.projectOrderBy ?? 'manual'
   const catalog = useMemo(
-    () =>
-      buildHostFeedCatalog(
-        state.servedProjectSections,
-        state.desktopRepos,
-        state.hostProjectGroups
-      ),
-    [state.servedProjectSections, state.desktopRepos, state.hostProjectGroups]
+    () => buildSidebarFeedCatalog(served, state.desktopRepos, state.hostProjectGroups),
+    [served, state.desktopRepos, state.hostProjectGroups]
   )
   const view = useMemo(
     () =>
@@ -130,26 +137,40 @@ function useFeedHostListSections({
     () => (domains ? buildSidebarFeedRows(domains, catalog, view) : null),
     [domains, catalog, view]
   )
-  const loading = feed?.kind === 'loading'
+  const lastVisited = useLastVisitedWorktreeOnHost(hostId)
+  // Fall back only after an unreadable feed; before the first read, wait or retain the installed feed to avoid flashing a different list shape.
+  const preFeed = feed?.kind === 'reopen'
   const sections = useMemo(
     () =>
       built
         ? buildHostFeedSections({
             rows: built.sectionRows,
-            activeRowKeys: built.activeRowKeys,
+            lastVisited,
             liveRows: displayWorktrees,
+            hostContextOf,
             repoHostIdByRepoId: state.repoHostIdByRepoId,
             search: state.search
           })
-        : loading
+        : preFeed
           ? buildPreFeedSections({
               rows: displayWorktrees,
+              hostContextOf,
               view: state.view,
               search: state.search,
-              repoHostIdByRepoId: state.repoHostIdByRepoId
+              repoHostIdByRepoId: state.repoHostIdByRepoId,
+              lastVisited
             })
           : NO_SECTIONS,
-    [built, loading, displayWorktrees, state.view, state.repoHostIdByRepoId, state.search]
+    [
+      built,
+      preFeed,
+      displayWorktrees,
+      hostContextOf,
+      state.view,
+      state.repoHostIdByRepoId,
+      state.search,
+      lastVisited
+    ]
   )
 
   const iconIds = useMemo(() => [...new Set(domains?.repoIcons.values() ?? [])], [domains])
@@ -159,7 +180,7 @@ function useFeedHostListSections({
     const hostIcons = new Map(
       state.desktopRepos.map((repo) => [repoIconFeedKey(repo), repo.repoIcon])
     )
-    const repos = state.servedProjectSections?.repos ?? state.desktopRepos
+    const repos = served?.repos ?? state.desktopRepos
     return new Map(
       repos.map((repo) => {
         const key = repoIconFeedKey(repo)
@@ -171,12 +192,11 @@ function useFeedHostListSections({
         return [repo.id, { ...repo, repoIcon }]
       })
     )
-  }, [state.servedProjectSections, state.desktopRepos, domains, iconDataUrls])
+  }, [served, state.desktopRepos, domains, iconDataUrls])
 
   return { sections, rawSections: sections, uniqueRepos, repoById, collapsedGroups, projectOrderBy }
 }
 
-/** Switch point: the list comes from the host's sidebar feed, or the phone builds it itself. */
 export const useHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? useFeedHostListSections
   : useLegacyHostListSections

@@ -1,13 +1,10 @@
-// The one execution host every tab-bar entry names (as the window stamps new tabs), derived from
-// what owns the tab.
-
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
 import type { TabContentType } from '../tab-types'
-import type { PersistedOpenFile } from '../workspace-session-state-types'
+import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import { editorTabFile } from './workspace-layout-editor-tab-file'
 
 type FileOwner = Pick<
@@ -15,7 +12,7 @@ type FileOwner = Pick<
   'filePath' | 'externalSshTargetId' | 'runtimeEnvironmentId'
 >
 
-/** An editor tab follows its file's owner, as the window stamps it; every other tab its partition. */
+/** Editor tabs follow file ownership; all other tabs follow their partition. */
 export function tabExecutionHostId(
   tab: { kind: TabContentType; entityId: string },
   workspace: {

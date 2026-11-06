@@ -1,6 +1,7 @@
+import { TerminalCrewPortals } from '../orchestration-crew/TerminalCrewPortals'
 import { createPortal } from 'react-dom'
-import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { TerminalPaneFileDropOwner } from './input/file-drop/TerminalPaneFileDropOwner'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -8,15 +9,14 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { isPaneOwnerRecoveryError, TerminalErrorToast } from './TerminalErrorToast'
 import { openTerminalBesideTab } from './open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
-import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
-import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { handleInternalTerminalFileDrop } from './input/file-drop/terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from './TerminalPaneSleepingPortals'
@@ -28,9 +28,12 @@ import {
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { canCloseTerminalPane, terminalPaneCloseLabel } from './terminal-pane-close-affordance'
 import { useAppStore } from '@/store'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { useWslHostStartCardReplacesPaneError } from './use-wsl-host-stopped-pane'
+import { terminalPaneMenuAddToChat } from './clipboard/terminal-pane-menu-copy-actions'
 
 export function TerminalPaneSurface({
   controller
@@ -38,6 +41,7 @@ export function TerminalPaneSurface({
   controller: TerminalPaneController
 }): React.JSX.Element {
   const {
+    activeAgentId,
     activePane,
     activePaneCanContinueInNewSession,
     activePaneCanResumeInChat,
@@ -125,6 +129,12 @@ export function TerminalPaneSurface({
   const paneOnClient = useAppStore(
     (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
   )
+  const errorReplacedByStartCard = useWslHostStartCardReplacesPaneError(
+    worktreeId,
+    activePane
+      ? (paneTransportsRef.current.get(activePane.id)?.getRuntimeEnvironmentId?.() ?? null)
+      : undefined
+  )
 
   return (
     <>
@@ -186,47 +196,41 @@ export function TerminalPaneSurface({
           paneTransportsRef={paneTransportsRef}
         />
       ))}
+      <TerminalCrewPortals controller={controller} />
       <TerminalPaneCodexRestartPortals controller={controller} />
       <AgentLaunchPaneNoticePortal
         refusal={visibleLaunchRefusal}
+        agentId={activeAgentId}
         isActive={isActive}
         pane={activePane}
         tabId={tabId}
       />
-      {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
-          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
-      {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
+      {/* Let SSH recovery and a stopped WSL distro's Start own the pane instead of the raw error toast. */}
+      {visibleTerminalError &&
+      isActive &&
+      !showSshReconnectOverlay &&
+      !errorReplacedByStartCard &&
+      activePane
         ? createPortal(
             <TerminalErrorToast
-              error={visibleTerminalError}
+              error={visibleTerminalError.error}
+              resourceLimit={visibleTerminalError.resourceLimit}
+              agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={
-                isPaneOwnerUnverifiedError(visibleTerminalError)
-                  ? () => {
-                      const ptyId = activePane
-                        ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
-                        : null
-                      return requestTerminalPaneRecovery({
-                        tabId,
-                        ptyId,
-                        reason: 'reattach-unverifiable',
-                        // The user asking again is the new trigger that reopens
-                        // a reason an observed failure has closed.
-                        trigger: 'user'
-                      }).then((recovered) => {
-                        if (recovered) {
-                          dismissTerminalError()
-                        }
-                        return recovered
-                      })
-                    }
+                isPaneOwnerRecoveryError(visibleTerminalError.error)
+                  ? () =>
+                      Promise.resolve(
+                        paneTransportsRef.current.get(activePane.id)?.retryRecovery?.() ?? false
+                      )
                   : undefined
               }
               onOpenNewTerminal={() => {
                 openTerminalBesideTab(tabId)
               }}
+              onClosePane={() => handleRequestClosePane(activePane.id)}
             />,
             activePane.container,
             `terminal-error-${activePane.id}`
@@ -264,13 +268,23 @@ export function TerminalPaneSurface({
         onOpenChange={contextMenu.setOpen}
         menuPoint={contextMenu.point}
         menuOpenedAtRef={contextMenu.menuOpenedAtRef}
-        canClosePane={contextMenu.paneCount > 1}
+        canClosePane={canCloseTerminalPane({
+          paneCount: contextMenu.paneCount,
+          showSplitButton,
+          isTabPinned
+        })}
+        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount)}
         canExpandPane={contextMenu.paneCount > 1}
         canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
         menuPaneIsExpanded={
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
         onCopy={() => void contextMenu.onCopy()}
+        addToChat={
+          contextMenu.open
+            ? terminalPaneMenuAddToChat(contextMenu.menuPane, tabId, worktreeId)
+            : null
+        }
         onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}

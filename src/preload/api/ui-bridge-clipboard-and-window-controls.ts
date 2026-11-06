@@ -1,17 +1,14 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
-import type {
-  RuntimeMobileMarkdownRequest,
-  RuntimeMobileMarkdownResponse
-} from '../../shared/mobile-markdown-document'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
+  plainTextContextMenuTargetChannel,
   type RichMarkdownContextMenuCommandPayload,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
@@ -23,6 +20,7 @@ export const uiClipboardAndWindowControlsApi = {
       filePath: string
       relativePath: string
       staged: boolean
+      oldPath?: string
       runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
     }) => void
@@ -34,23 +32,13 @@ export const uiClipboardAndWindowControlsApi = {
         filePath: string
         relativePath: string
         staged: boolean
+        oldPath?: string
         runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)
     ipcRenderer.on('ui:openDiffFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openDiffFromMobile', listener)
-  },
-  onMobileMarkdownRequest: (
-    callback: (request: RuntimeMobileMarkdownRequest) => void
-  ): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, request: RuntimeMobileMarkdownRequest) =>
-      callback(request)
-    ipcRenderer.on('ui:mobileMarkdownRequest', listener)
-    return () => ipcRenderer.removeListener('ui:mobileMarkdownRequest', listener)
-  },
-  respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse): void => {
-    ipcRenderer.send('ui:mobileMarkdownResponse', response)
   },
   onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, target: TerminalSurfaceCloseTarget) =>
@@ -67,20 +55,29 @@ export const uiClipboardAndWindowControlsApi = {
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
   },
-  onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
-      callback(data)
-    ipcRenderer.on('ui:sleepWorktree', listener)
-    return () => ipcRenderer.removeListener('ui:sleepWorktree', listener)
-  },
-  onWorktreeSleepRequest: (callback) => {
+  onTerminalPaneMoveToNewTabRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
       callback(request)
-    ipcRenderer.on('ui:worktreeSleepRequest', listener)
-    return () => ipcRenderer.removeListener('ui:worktreeSleepRequest', listener)
+    ipcRenderer.on('ui:terminalPaneMoveToNewTabRequest', listener)
+    return () => ipcRenderer.removeListener('ui:terminalPaneMoveToNewTabRequest', listener)
   },
-  respondWorktreeSleep: (response) => {
-    ipcRenderer.send('ui:worktreeSleepResponse', response)
+  replyTerminalPaneMoveToNewTab: (reply) => {
+    ipcRenderer.send('ui:terminalPaneMoveToNewTabReply', reply)
+  },
+  onWorkspaceSleep: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: Parameters<typeof callback>[0]) =>
+      callback(notice)
+    ipcRenderer.on('ui:workspaceSleep', listener)
+    return () => ipcRenderer.removeListener('ui:workspaceSleep', listener)
+  },
+  onProjectMovePause: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:projectMovePause', listener)
+    return () => ipcRenderer.removeListener('ui:projectMovePause', listener)
+  },
+  respondProjectMovePause: (response) => {
+    ipcRenderer.send('ui:projectMovePauseResponse', response)
   },
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
@@ -102,11 +99,14 @@ export const uiClipboardAndWindowControlsApi = {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
-    /** A native-chat composer paste, kept where its draft can bring it back. */
     forNativeChatDraft?: boolean
-    /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  savePastedTextAsFile: (args: {
+    text: string
+    runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+  }): Promise<string> => ipcRenderer.invoke('clipboard:savePastedTextAsFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (
@@ -154,6 +154,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null): void => {
     ipcRenderer.send(richMarkdownContextMenuTargetChannel, target)
+  },
+  markPlainTextContextMenuTarget: (): void => {
+    ipcRenderer.send(plainTextContextMenuTargetChannel)
   },
   setTerminalInputFocused: (focused: boolean): void => {
     ipcRenderer.send('ui:setTerminalInputFocused', focused)
@@ -209,7 +212,7 @@ export const uiClipboardAndWindowControlsApi = {
       _event: Electron.IpcRendererEvent,
       data: { isQuitting: boolean; requestId?: number }
     ): void => {
-      // Why: main cannot reach will-quit while a frozen renderer owns the window close handshake.
+      // Acknowledge before callbacks: a frozen renderer can block main from reaching will-quit.
       ipcRenderer.send('window:close-request-received', data?.requestId)
       callback({ isQuitting: data?.isQuitting ?? false })
     }

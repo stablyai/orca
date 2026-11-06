@@ -1,14 +1,7 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
-/**
- * The isolation unit for WSL transcript filesystem work: one stalled distro
- * must not fast-fail or strand work on any other. Gate admission and helper
- * ownership share this key so scheduling and process faults isolate alike.
- *
- * wsl$ and wsl.localhost spellings of one distro stay distinct routes on
- * purpose (provider spelling can change behavior), so a stuck spelling never
- * fast-fails its twin — the twin is bounded by its own waiter deadlines.
- */
+/** Isolate distro/spelling consistently across gate and process ownership.
+ * wsl$ and wsl.localhost remain distinct: provider behavior may differ, so each has its own deadlines. */
 export function wslTranscriptFsRouteKey(path: string): string {
   const normalized = path.replace(/\\/g, '/')
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)/i)

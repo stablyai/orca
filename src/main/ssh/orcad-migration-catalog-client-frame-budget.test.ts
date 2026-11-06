@@ -9,10 +9,12 @@ import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY
 } from '../../shared/orcad-runtime-capabilities'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 const sendRequest = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/remote-runtime-client', () => ({
+const extraCapabilities = vi.hoisted((): string[] => [])
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,
@@ -27,7 +29,8 @@ vi.mock('../../shared/remote-runtime-client', () => ({
         capabilities: [
           ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
           ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-          'orcad.migration-blob.agent-session-records.v1'
+          'orcad.migration-blob.agent-session-records.v1',
+          ...extraCapabilities
         ]
       }
     })
@@ -46,7 +49,6 @@ const pairingCode = encodePairingOffer({
   pairedDeviceId: 'paired-desktop'
 })
 
-/** A manifest whose JSON is exactly `bytes` long. */
 function manifestOfBytes(bytes: number): OrcadMigrationManifest {
   const withLabel = (targetLabel: string): OrcadMigrationManifest => ({
     version: ORCAD_MIGRATION_MANIFEST_VERSION,
@@ -68,6 +70,7 @@ const manyBlobs: OrcadMigrationBlobDescriptor[] = Array.from({ length: 200 }, (_
 
 beforeEach(() => {
   vi.clearAllMocks()
+  extraCapabilities.length = 0
   sendRequest.mockResolvedValue({
     ok: true,
     _meta: { runtimeId: 'runtime' },
@@ -81,11 +84,6 @@ beforeEach(() => {
 })
 
 describe("orcad migration requests fit the host's sealed inbound frame", () => {
-  it('stages a large manifest that still fits', async () => {
-    await stageRemoteOrcadMigrationCatalog(pairingCode, manifestOfBytes(760 * 1024))
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses, unsent, a manifest at the validation cap: sealed, it overflows the 1 MiB frame', async () => {
     await expect(
       stageRemoteOrcadMigrationCatalog(

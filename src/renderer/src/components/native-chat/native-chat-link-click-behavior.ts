@@ -2,10 +2,9 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   terminalLinkClickBehaviorFor,
   type TerminalLinkClickBehavior
-} from '@/components/terminal-pane/terminal-link-click-behavior'
+} from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
 
-/** What a plain click on a transcript link does. A profile that only turned the
- *  terminal popover off keeps opening chat links outright, as before actions existed. */
+/** Preserve direct link opens for profiles that disabled terminal popovers before click actions existed. */
 export function nativeChatPlainLinkClickBehavior(
   settings:
     | Pick<GlobalSettings, 'terminalLinkClickBehavior' | 'terminalLinkActionPopoverEnabled'>

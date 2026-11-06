@@ -44,8 +44,7 @@ async function readDeviceKey(deps: DarwinTerminalNameDeps, name: string): Promis
   }
 }
 
-// XNU names every pty slave ttys%03d by minor with one /dev entry; verify rdev before trusting it.
-// Unlike devname, a root-made earlier alias of a pty cannot win here.
+// XNU gives pty slaves one ttys%03d minor entry; verify rdev so an earlier root-created alias cannot win as devname might.
 async function readPtyNames(
   devices: ReadonlySet<string>,
   deps: DarwinTerminalNameDeps,
@@ -96,7 +95,20 @@ async function readTerminalNames(
   signal?.throwIfAborted()
 }
 
-/** Name terminals using this capture's /dev inventory, without retaining positive or misses. */
+/** Names keyed by `major/minor` device token, as ps's `tdev` column prints them. */
+export async function nameDarwinTerminalDevices(
+  devices: ReadonlySet<string>,
+  deps: DarwinTerminalNameDeps = deviceFilesystem,
+  signal?: AbortSignal
+): Promise<Map<string, string>> {
+  const names = await readPtyNames(devices, deps, signal)
+  if (names.size < devices.size) {
+    await readTerminalNames(devices, names, deps, signal)
+  }
+  return names
+}
+
+/** Use this capture’s /dev inventory without caching hits or misses. */
 export async function nameDarwinTerminals(
   stdout: string,
   deps: DarwinTerminalNameDeps = deviceFilesystem,
@@ -117,10 +129,7 @@ export async function nameDarwinTerminals(
       devices.add(device)
     }
   }
-  const names = await readPtyNames(devices, deps, signal)
-  if (names.size < devices.size) {
-    await readTerminalNames(devices, names, deps, signal)
-  }
+  const names = await nameDarwinTerminalDevices(devices, deps, signal)
   return stdout.replace(TDEV_COLUMNS, (_row, head: string, device: string) => {
     return head + (names.get(deviceToken(device) ?? '') ?? '??')
   })

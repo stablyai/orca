@@ -13,16 +13,18 @@ import {
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import { createTestStore } from '../../../../store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '../../../../store/slices/worktrees-slice-test-fixtures'
-import { getWorktreeDragUnitGroups } from '../../worktree-drag-units'
-import {
-  buildManualOrderUpdatesForVisibleGroups,
-  type WorktreeManualOrderUpdate
-} from '../../worktree-manual-order'
-import { buildWorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { getWorktreeDragUnitGroups } from './worktree-drag-units'
+import { buildManualOrderUpdatesForVisibleGroups } from './worktree-manual-order'
+import type { WorktreeManualOrderUpdate } from './worktree-manual-order-ranks'
+import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -47,9 +49,8 @@ const folder = (id: string, manualOrder: number): FolderWorkspace =>
   makeFolderWorkspace({ id, projectGroupId: GROUP.id, manualOrder, workspaceStatus: 'in-progress' })
 // Highest manualOrder renders first, so the sidebar shows a, b, c.
 const FOLDERS = [folder('fw-a', 3000), folder('fw-b', 2000), folder('fw-c', 1000)]
-const FOLDER_A = folderWorkspaceKey('fw-a')
-const FOLDER_B = folderWorkspaceKey('fw-b')
-const FOLDER_C = folderWorkspaceKey('fw-c')
+const [FOLDER_A, FOLDER_B, FOLDER_C] = FOLDERS.map(getFolderWorkspaceHostIdentity)
+const WORKTREE_KEY = getWorktreeHostIdentity(WORKTREE)
 
 function buildSidebarRows(
   groupBy: WorktreeGroupBy,
@@ -82,7 +83,7 @@ function buildSidebarRows(
 
 function renderedFolderIds(rows: readonly Row[]): string[] {
   return rows.flatMap((row) =>
-    row.type === 'folder-workspace' ? [folderWorkspaceKey(row.folderWorkspace.id)] : []
+    row.type === 'folder-workspace' ? [getFolderWorkspaceHostIdentity(row.folderWorkspace)] : []
   )
 }
 
@@ -98,22 +99,23 @@ const SLOT = {
   dropAnchorId: null,
   previewOffsetsByWorktreeId: new Map<string, number>()
 }
-const LANE_TARGET = { status: 'in-review', isPinDrop: false, lineageParentId: null }
-const PIN_TARGET = { status: null, isPinDrop: true, lineageParentId: null }
+const LANE_TARGET = { status: 'in-review', isPinDrop: false, lineageParentIdentity: null }
+const PIN_TARGET = { status: null, isPinDrop: true, lineageParentIdentity: null }
 
 // Folder rows drag only under their project group, so their key comes from the repo layout.
 function dragKeys(): { folderKey: string; worktreeKey: string } {
   return {
     folderKey: dragGroupKey(buildSidebarRows('repo'), FOLDER_A),
-    worktreeKey: dragGroupKey(buildSidebarRows('workspace-status'), WORKTREE.id)
+    worktreeKey: dragGroupKey(buildSidebarRows('workspace-status'), WORKTREE_KEY)
   }
 }
 
 function pointerDrag(
   sourceGroupKey: string,
-  worktreeId: string,
-  selection = [worktreeId]
+  worktreeKey: string,
+  selection = [worktreeKey]
 ): WorktreePointerDrag {
+  const selectedIds = selection.map(getWorktreeIdFromHostIdentity)
   return {
     pointerId: 1,
     sourceRow: document.createElement('div'),
@@ -121,11 +123,14 @@ function pointerDrag(
     startY: 100,
     currentX: 100,
     currentY: 300,
-    worktreeId,
-    draggedIds: selection,
+    worktreeId: getWorktreeIdFromHostIdentity(worktreeKey),
+    worktreeKey,
+    draggedIds: selectedIds,
+    pickedCopies: [],
     draggedCopies: [],
-    reorderDraggedIds: selection,
-    reorderUnitDraggedIds: [worktreeId],
+    reorderDraggedIds: selectedIds,
+    reorderDraggedKeys: selection,
+    reorderUnitDraggedKeys: [worktreeKey],
     sourceGroupKey,
     rects: [],
     active: true,
@@ -213,9 +218,10 @@ function saveSlotDrop(rows: Row[], worktrees: Worktree[], selection: string[], d
     onReorderWorktrees: (reorder) => {
       saved = buildManualOrderUpdatesForVisibleGroups({
         ...reorder,
+        draggedIds: reorder.draggedKeys,
         now: 10_000,
-        rankByWorktreeId: catalog.rankByWorktreeId,
-        allWorktreeIds: catalog.orderedIds
+        rankByWorktreeId: catalog.rankByKey,
+        allWorktreeIds: catalog.orderedKeys
       }).updates
     }
   }
@@ -268,16 +274,18 @@ describe('folder workspace sidebar drag groups', () => {
         undefined,
         undefined
       ])
-      expect(getWorktreeDragGroups(rows).map((group) => group.worktreeIds)).toEqual([[WORKTREE.id]])
+      expect(getWorktreeDragGroups(rows).map((group) => group.worktreeIds)).toEqual([
+        [WORKTREE_KEY]
+      ])
       expect(getWorktreeDragUnitGroups(rows).map((group) => group.worktreeIds)).toEqual([
-        [WORKTREE.id]
+        [WORKTREE_KEY]
       ])
     }
 
     const repoRows = buildSidebarRows('repo', folders, [WORKTREE], projectGroups)
     expect(getWorktreeDragGroups(repoRows).map((group) => group.worktreeIds)).toEqual([
       [FOLDER_A, FOLDER_C],
-      [WORKTREE.id],
+      [WORKTREE_KEY],
       [FOLDER_B]
     ])
   })
@@ -289,7 +297,10 @@ describe('folder workspace sidebar drag groups', () => {
     const store = createTestStore()
     const updateFolderWorkspace = vi.fn(() => new Promise<boolean>(() => {}))
     store.setState({ folderWorkspaces: FOLDERS, updateFolderWorkspace })
-    const metaUpdates = [...saved].map(([id, updates]) => ({ worktreeId: id, updates }))
+    const metaUpdates = [...saved].map(([key, updates]) => ({
+      worktreeId: getWorktreeIdFromHostIdentity(key),
+      updates
+    }))
     void store.getState().updateWorktreesMeta(metaUpdates)
     expect(updateFolderWorkspace).toHaveBeenCalled()
     const reorderedRows = buildSidebarRows('repo', store.getState().folderWorkspaces)
@@ -305,7 +316,9 @@ describe('folder workspace sidebar drag groups', () => {
     const updates = { manualOrder: 9000 }
     void store
       .getState()
-      .updateWorktreesMeta([{ worktreeId: FOLDER_A, updates, executionHostId: 'ssh:remote-box' }])
+      .updateWorktreesMeta([
+        { worktreeId: folderWorkspaceKey('fw-a'), updates, executionHostId: 'ssh:remote-box' }
+      ])
 
     // The local folder with the same id keeps its rank.
     const ranks = store.getState().folderWorkspaces.map((workspace) => workspace.manualOrder)
@@ -321,25 +334,26 @@ describe('folder workspace sidebar drag groups', () => {
       { ...WORKTREE, id: 'wt-top', manualOrder: 5000 },
       { ...WORKTREE, id: 'wt-next', manualOrder: 4000 }
     ]
+    const [TODO, TOP, NEXT] = worktrees.map(getWorktreeHostIdentity)
     const rows = buildSidebarRows('repo', FOLDERS, worktrees)
     // A project group renders its folder workspaces above its repos, so the two kinds drag apart.
     expect(getWorktreeDragGroups(rows).map((group) => group.worktreeIds)).toEqual([
       [FOLDER_A, FOLDER_B, FOLDER_C],
-      ['wt-todo', 'wt-top', 'wt-next']
+      [TODO, TOP, NEXT]
     ])
 
     // The other selected row keeps its rank; wt-next lands above wt-top and fw-a below fw-b.
-    expect(saveSlotDrop(rows, worktrees, ['wt-next', FOLDER_A], 1)).toEqual(
-      new Map([['wt-next', { manualOrder: 5500 }]])
+    expect(saveSlotDrop(rows, worktrees, [NEXT, FOLDER_A], 1)).toEqual(
+      new Map([[NEXT, { manualOrder: 5500 }]])
     )
-    expect(saveSlotDrop(rows, worktrees, [FOLDER_A, 'wt-top'], 2)).toEqual(
+    expect(saveSlotDrop(rows, worktrees, [FOLDER_A, TOP], 2)).toEqual(
       new Map([[FOLDER_A, { manualOrder: 1500 }]])
     )
   })
 
   it('shows a folder workspace drag no board, status lane or pin target', () => {
     const { folderKey, worktreeKey } = dragKeys()
-    const worktreeFrame = flushOver(worktreeKey, WORKTREE.id)
+    const worktreeFrame = flushOver(worktreeKey, WORKTREE_KEY)
     expect(worktreeFrame.onWorkspaceBoardDragPreviewStart).toHaveBeenCalled()
     expect(worktreeFrame.state.dropIndicatorY).toBe(300)
 
@@ -351,7 +365,7 @@ describe('folder workspace sidebar drag groups', () => {
 
   it('commits no status lane or pin drop for a folder workspace drag', () => {
     const { folderKey, worktreeKey } = dragKeys()
-    expect(releaseOver(worktreeKey, WORKTREE.id).onMoveWorktreesToStatusAtIndex).toHaveBeenCalled()
+    expect(releaseOver(worktreeKey, WORKTREE_KEY).onMoveWorktreesToStatusAtIndex).toHaveBeenCalled()
 
     expect(releaseOver(folderKey, FOLDER_A).onMoveWorktreesToStatusAtIndex).not.toHaveBeenCalled()
     const overPin = { getEligibleLineageDropTarget: () => PIN_TARGET }

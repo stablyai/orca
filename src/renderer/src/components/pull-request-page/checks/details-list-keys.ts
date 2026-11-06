@@ -1,9 +1,4 @@
-/**
- * Check annotations and jobs carry no stable id of their own: GitHub workflow-level annotations
- * repeat identical content (`path`/`startLine` null, same message), and GitLab jobs may report a
- * null id. Keying on content alone therefore collides; keying on the array index alone reshuffles
- * rows on every list update. Pairing the content key with its occurrence count gives both.
- */
+/** Content plus occurrence disambiguates duplicate annotations/null-ID jobs without index-only keys reshuffling unrelated rows. */
 export function assignUniqueListKeys<T>(
   items: readonly T[],
   contentKey: (item: T) => string

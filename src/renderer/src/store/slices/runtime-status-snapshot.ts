@@ -1,19 +1,14 @@
 import {
   runtimeEnvironmentStatusFromSnapshot,
-  type RuntimeHostStatusSnapshot
-} from '../../../../shared/runtime-host-status'
-import type {
-  RuntimeEnvironmentStatus,
-  RuntimeStatusSlice,
-  RuntimeStatusStoreState
-} from './runtime-status-types'
+  type RuntimeHostStatusSnapshot,
+  type RuntimeEnvironmentStatus
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatusSlice, RuntimeStatusStoreState } from './runtime-status-types'
+
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 
-/**
- * Main re-paired this environment (an update or rollback run from the CLI) and nothing told this
- * renderer; the status it now publishes under the new revision is that notice (P1-C).
- */
+/** A snapshot’s newer pairing revision signals a CLI update/rollback the renderer catalog missed (P1-C). */
 export function snapshotOutrunsCatalog(
   snapshot: RuntimeHostStatusSnapshot,
   state: Pick<RuntimeStatusSlice, 'runtimeEnvironments'>

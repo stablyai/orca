@@ -1,11 +1,11 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import {
-  canMoveTabToNewPaneColumnFromState,
-  moveTabToNewPaneColumn
-} from '@/components/tab-bar/tab-move-to-pane-column'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
-import type { NativeChatSplitDirection } from './native-chat-split-shortcut'
+import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
+import type { NativeChatSplitDirection } from './native-chat-pane-shortcut'
 
 export type NativeChatSplitTarget =
   | { kind: 'terminal-pane'; terminalTabId: string }
@@ -39,10 +39,26 @@ export function canRunNativeChatSplitTarget(
   if (!target) {
     return false
   }
-  return (
-    target.kind === 'terminal-pane' ||
-    canMoveTabToNewPaneColumnFromState(state, target.unifiedTabId, target.groupId)
-  )
+  return target.kind === 'terminal-pane' || findSplitSource(state, target) !== null
+}
+
+function findSplitSource(
+  state: Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
+  target: Extract<NativeChatSplitTarget, { kind: 'workspace-tab' }>
+) {
+  for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
+    const tab = tabs.find(
+      (candidate) => candidate.id === target.unifiedTabId && candidate.groupId === target.groupId
+    )
+    if (
+      tab?.contentType === 'agent-session' &&
+      isTuiAgent(tab.agentSessionAgent) &&
+      state.groupsByWorktree[worktreeId]?.some((group) => group.id === target.groupId)
+    ) {
+      return { tab, worktreeId, agent: tab.agentSessionAgent }
+    }
+  }
+  return null
 }
 
 export function runNativeChatSplitTarget(
@@ -56,11 +72,23 @@ export function runNativeChatSplitTarget(
     })
     return true
   }
-  return moveTabToNewPaneColumn({
-    unifiedTabId: target.unifiedTabId,
-    groupId: target.groupId,
-    direction
+  const source = findSplitSource(useAppStore.getState(), target)
+  if (!source) {
+    return false
+  }
+  void openNewTerminalTabInWorkspace(useAppStore.getState, source.worktreeId, target.groupId, {
+    sourceGroupId: target.groupId,
+    splitDirection: direction
+  }).catch(() => {
+    toast.error(
+      translate(
+        'auto.store.slices.worktrees.localBaseRefUnshallowFailed',
+        'Could not open a terminal for this workspace'
+      )
+    )
   })
+  useAppStore.getState().recordFeatureInteraction('tab-splits')
+  return true
 }
 
 export function runActiveNativeChatSplit(

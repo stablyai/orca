@@ -66,7 +66,7 @@ function applyTokenCorrection(
   session.totalCacheReadTokens += read
   session.totalCacheWriteTokens += write
   session.totalCacheWrite1hTokens += write1h
-  // Why: a growing turn can cross the long-context threshold, so its whole share moves at once.
+  // A growing turn can cross the long-context threshold, moving its whole share at once.
   const previousLong = longContextTurnTokens(projection.model, maximaTotals(previous))
   const updatedLong = longContextTurnTokens(projection.model, maximaTotals(updated))
   for (const target of [location, aggregate]) {

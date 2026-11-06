@@ -17,11 +17,8 @@ The settings persistence adapter is in-memory. This is a rendered production
 component check, not a full app IPC, restart-persistence, or generation test. No
 generator is called or mocked. Current Source Control AI settings expose action
 recipes with CLI arguments; they do not have a Discover Models button. The separate
-`omp-model-discovery-policy.test.ts` and `omp-source-control-discovery.test.ts`
-regressions cover real discovery-result policy and production generation selection
-with cached models, including SSH host keys. The configured-default sentinel stays
-out of generic terminal catalogs while generation without a model override still
-uses OMP configuration.
+`omp-source-control-discovery.test.ts` regression covers production generation
+selection with cached models, including SSH host keys.
 
 `tests/tools/omp-source-control-runtime-smoke.mjs` separately validates argv against
 the actual OMP argument parser in a read-only reference checkout. It makes no model

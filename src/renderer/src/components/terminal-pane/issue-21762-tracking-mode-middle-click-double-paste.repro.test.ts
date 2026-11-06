@@ -1,12 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Issue #21762: in a terminal pane running a TUI that enables mouse tracking
-// (Claude Code, Codex, ...), a middle-click pastes the PRIMARY selection twice.
-// Orca's own paste path bails out in tracking mode (correctly — the TUI owns
-// the click), but bailing out also skips arming the native-paste suppression
-// window from #8993, so Chromium's native "paste PRIMARY into focused editable"
-// reaches xterm's helper textarea unsuppressed while the TUI performs its own
-// primary paste from the forwarded mouse report — two copies from one click.
+// Tracking TUIs paste from mouse reports; also suppress Chromium PRIMARY paste so xterm cannot insert a second copy.
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -30,7 +24,7 @@ vi.mock('@/lib/pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => 
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   refitAndRefreshAllTerminalPanes: vi.fn()
 }))
-vi.mock('./terminal-fit-restore', () => ({
+vi.mock('./viewport/terminal-fit-restore', () => ({
   restoreTerminalFitToDesktop: vi.fn(),
   restoreTerminalFitsToDesktop: vi.fn()
 }))
@@ -38,12 +32,14 @@ vi.mock('./terminal-pane-split-with-inherited-cwd', () => ({
   splitTerminalPaneWithInheritedCwd: vi.fn()
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
-vi.mock('./terminal-paste-coordinator', () => ({ planTerminalPasteWithYield: vi.fn() }))
-vi.mock('./terminal-paste-executor', () => ({ executeTerminalPastePlan: vi.fn() }))
-vi.mock('./terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: vi.fn() }))
-vi.mock('./terminal-bracketed-paste', () => ({ pasteTerminalText: vi.fn() }))
-vi.mock('./terminal-pty-paste-writer', () => ({ writeTerminalPastePtyInput: vi.fn() }))
-vi.mock('./terminal-paste-errors', () => ({ formatTerminalPasteExecutionError: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-coordinator', () => ({ planTerminalPasteWithYield: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-executor', () => ({ executeTerminalPastePlan: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: vi.fn() }))
+vi.mock('./input/paste/terminal-bracketed-paste', () => ({ pasteTerminalText: vi.fn() }))
+vi.mock('./input/paste/terminal-pty-paste-writer', () => ({ writeTerminalPastePtyInput: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-errors', () => ({
+  formatTerminalPasteExecutionError: vi.fn()
+}))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
@@ -125,17 +121,13 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
       pane.container
     )
 
-    // The #8993 suppression window must be armed so the native follow-up paste
-    // doesn't reach xterm's helper textarea and duplicate the TUI's own paste.
     expect(armPrimarySelectionNativePasteSuppressionMock).toHaveBeenCalled()
-    // Propagation must NOT be stopped here — xterm's own mousedown listener
-    // (a descendant of this capture handler) still needs to see the event so
-    // the tracking TUI receives the click as a mouse report.
+    // Keep propagation so xterm can forward the mouse report to the tracking TUI.
     expect(outcome.propagationStopped).toBe(false)
     expect(pane.terminal.focus).not.toHaveBeenCalled()
   })
 
-  it('stops propagation and pastes directly to the PTY when the pane is not in mouse-tracking mode', () => {
+  it('stops propagation and focuses the pane when mouse tracking is disabled', () => {
     const pane = buildTrackedPane('none')
     const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
 
@@ -149,9 +141,7 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
     expect(pane.terminal.focus).toHaveBeenCalled()
   })
 
-  // Follow-up to #21834: xterm withholds the mouse report for a shifted click
-  // (SelectionService.shouldForceSelection), so the TUI never pastes. Arming
-  // suppression while also returning early would leave nothing pasted at all.
+  // Shift forces xterm selection and withholds mouse reports; suppression plus early return would paste nothing.
   describe('Shift+middle-click in a mouse-tracking pane', () => {
     it("takes Orca's own paste path: stops propagation and focuses the pane", () => {
       const pane = buildTrackedPane('sgr')
@@ -184,8 +174,7 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
       expect(pane.terminal.focus).not.toHaveBeenCalled()
     })
 
-    // Guards against collapsing the modifier check to `shiftKey || altKey`:
-    // off Mac, xterm still forwards an Alt+middle-click, so the TUI pastes.
+    // Alt still forwards middle-click off Mac; treating it like Shift would duplicate paste.
     it('leaves Alt+middle-click on the TUI-owned path off Mac', () => {
       const pane = buildTrackedPane('sgr')
       const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))

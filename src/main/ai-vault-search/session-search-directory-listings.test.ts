@@ -14,10 +14,6 @@ beforeEach(() => {
   readdir.mockReset()
 })
 
-// A WSL root is a UNC path into the distro, and reading it with raw `fs` is
-// what makes a stalled distro look like an empty directory. The gated primitive
-// is the same one discovery walks with, so a refusal arrives as an error the
-// walk treats as unverifiable rather than as "nothing here".
 it('reads through the gated primitive, on the scan lane', async () => {
   const unc = '\\\\wsl$\\Ubuntu\\home\\me\\.claude\\projects'
   readdir.mockResolvedValueOnce([{ name: 'one.jsonl' }])

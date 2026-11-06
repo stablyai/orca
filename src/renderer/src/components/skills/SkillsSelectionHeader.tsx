@@ -7,11 +7,7 @@ import { selectedCountLabel } from './skill-display-labels'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 import { SKILLS_SUBTITLE_ACTION_CLASS } from './skills-subtitle-action'
 
-/**
- * Selection takes over the page header instead of opening a bar somewhere else:
- * the submit lands in the slot the user just clicked, and `✕` keeps meaning what
- * Esc means — leave the mode, not the page.
- */
+/** Keep submit in the header’s action slot; close and Escape leave selection mode before leaving the page. */
 export function SkillsSelectionHeader({
   title,
   icon,
@@ -26,8 +22,7 @@ export function SkillsSelectionHeader({
   onCancel,
   onSubmit
 }: {
-  /** Copy is passed in already translated: this header's own key namespace
-   *  cannot own strings for two unrelated modes. */
+  /** Callers supply translated mode-specific copy instead of sharing this header’s namespace. */
   title: string
   icon: React.JSX.Element
   actionIcon: React.JSX.Element

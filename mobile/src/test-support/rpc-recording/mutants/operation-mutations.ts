@@ -1,13 +1,8 @@
 import type { OperationMutation } from '../operation-module-loader'
 
-/**
- * One in-memory source edit per adapter family. Each anchor names a real expression in a mounted
- * operation; the recording that owns the family must change visible state when it is applied, which
- * is what proves that family's `state()` projection observes the operation's actual output.
- */
+// Each anchored mutation must change its family’s recorded output to prove that projection observes product behavior.
 export const OPERATION_MUTATIONS = {
-  // Drops the delivery-unknown arm of a native-chat send, so an ack lost after the frame was
-  // written reads as a definite rejection and invites the user to send the same message twice.
+  // Lost acknowledgements must remain unknown; treating them as rejection invites duplicate sends.
   'native-chat-send-delivery-unknown': {
     file: 'mobile-native-chat-send.ts',
     before: `    return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
@@ -15,9 +10,7 @@ export const OPERATION_MUTATIONS = {
       : 'rejected'`,
     after: `    return isLogicalClientCutoverError(error) ? 'unknown' : 'rejected'`
   },
-  // Re-anchored where the lifecycle migration moved the guard: the hand-rolled generation compare
-  // became the owner's, so the anchor is the owner's compare. The defect it injects — a stale
-  // workspace response poisoning the search cache — is unchanged.
+  // Bypass the owner’s generation guard to poison search with a stale workspace reply.
   race: {
     file: 'generation-scoped-request-owner.ts',
     before: `    if (state.generation !== this.currentGeneration) {
@@ -26,11 +19,7 @@ export const OPERATION_MUTATIONS = {
 `,
     after: ''
   },
-  // Re-anchored where step 7 moved the defence. The b2 seed's defect is a null result envelope
-  // reaching the metadata sheet, and the call-site guard it used to be injected at can no longer
-  // see one: the checked reader refuses the envelope first. So the anchor is the schema, and
-  // loosening it to `z.unknown()` puts the null back on the path to `result.ok` — which is main's
-  // own property-read TypeError, and a different visible error from the reply the reader names.
+  // Loosen the schema so null reaches result.ok and reproduces the unchecked property-read failure.
   acceptance: {
     file: 'task-project-board-reply-schema.ts',
     before: `export const taskProjectMutationStatusSchema = z.looseObject({
@@ -39,9 +28,7 @@ export const OPERATION_MUTATIONS = {
 })`,
     after: `export const taskProjectMutationStatusSchema = z.unknown()`
   },
-  // Interprets inside the request chain instead of at the declared barrier, so the issue leg
-  // rejects the group early and the sibling comment request is abandoned out of order. Re-anchored
-  // where the operation migration moved the send; the defect it injects is unchanged.
+  // Interpret before the barrier so an issue refusal abandons sibling comments out of order.
   order: {
     file: 'use-mobile-tasks-item-detail-loading.tsx',
     before: `        linearIssueRead.request(
@@ -66,33 +53,20 @@ export const OPERATION_MUTATIONS = {
             return response
           }),`
   },
-  // Decodes the reply envelope instead of the accepted snapshot, so the Home card publishes nothing
-  // where a host answered.
-  'home-accounts-envelope': {
-    file: 'mobile-home-host-requests.ts',
-    before: 'const snapshot = decodeAccountsSnapshot(accounts.value)',
-    after: 'const snapshot = decodeAccountsSnapshot(reply)'
-  },
-  // Writes every chunk of an asset at offset 0, so a multi-chunk asset reassembles as its last
-  // chunk over a zero-filled buffer. The length still matches the manifest; only the sha256 check
-  // and the decoded bytes in the projection say the bundle is wrong.
+  // Offset-zero chunk writes preserve length; digest and decoded-byte observations must detect corruption.
   'mobile-web-bundle-chunk-placement': {
     file: 'mobile-web-bundle-fetch.ts',
     before: 'whole.set(bytes, offset)',
     after: 'whole.set(bytes, 0)'
   },
-  // Puts the workspace catalog's reply back behind an unchecked reader, so a reply carrying neither
-  // rows nor an `unchanged` token reaches `admitWorktreeCatalogResponse` as an invalid admission
-  // instead of being named at the boundary — main's answer, and the one the host screen showed as
-  // an empty host rather than a failure (STA-3123).
+  // Bypass reply checks so malformed catalog responses reach admission and can blank the host (STA-3123).
   'worktree-catalog-unchecked-reader': {
     file: 'worktree-catalog-operations.ts',
     before: "read: rpcResultVariant('worktree-catalog', worktreeCatalogSchema)",
     after:
       "read: (raw: unknown) => ({ compatible: true, variant: 'worktree-catalog', value: raw, salvage: { droppedPaths: [], droppedCount: 0 } })"
   },
-  // Reads the push test result one level above the envelope, so an accepted test reports failure.
-  // Re-anchored when step 7 deleted the cast the checked reader made unnecessary; same defect.
+  // Read the wrong envelope level so an accepted push test reports failure.
   'push-test-envelope': {
     file: 'notification-display-test.tsx',
     before: 'const result = delivered.value',
@@ -129,16 +103,7 @@ export const OPERATION_MUTATIONS = {
     after:
       '(settingsRes.value.result as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })'
   },
-  // Treats any successful linear.status reply as a connected Linear account.
-  'home-providers-linear': {
-    file: 'mobile-home-host-requests.ts',
-    before: 'linearConnected: linear?.connected === true',
-    after: 'linearConnected: linear !== null'
-  },
-  // Reads the host platform from the wrong field of the host.platform result. Re-anchored where
-  // step 7 moved the read: the hand-rolled `readHostPlatform` became the reply schema's own
-  // projection, so the anchor is that projection. The defect it injects — rows labelled with a
-  // platform the host never reported — is unchanged.
+  // Read the wrong host-platform field so rows display an unreported platform.
   'repo-metadata-platform': {
     file: 'host-screen-reply-schema.ts',
     before: `  .looseObject({ platform: salvagedOptional('platform', z.enum(NODE_PLATFORM_NAMES)) })
@@ -155,9 +120,7 @@ export const OPERATION_MUTATIONS = {
     before: '((settingsResult.value ?? {}) as RuntimeTaskSettings)',
     after: '((settingsResponse.result ?? {}) as RuntimeTaskSettings)'
   },
-  // Moves the optimistic preset write behind the guard that only an unusable client takes, so the
-  // preset the screen shows never follows the tap. Anchored above the send so the step-4 migration
-  // of this file does not move it; the projection it proves load-bearing is the same one.
+  // Gate the optimistic write on an unusable client so the displayed preset never follows the tap.
   'task-preferences-optimistic': {
     file: 'use-mobile-tasks-client-settings-actions.tsx',
     before: `      setDefaultGitHubPreset(preset)
@@ -181,10 +144,7 @@ export const OPERATION_MUTATIONS = {
     before: '  value: () => settingsMember(raw),',
     after: '  value: ((settings) => () => settings)(settingsMember(raw)),'
   },
-  // Checks the sibling's refusal before the operation's own, so a correlated refusal reports the
-  // sibling. Invisible to every scenario whose sibling succeeds or rejects at the transport.
-  // Re-anchored where the operation migration moved both reads; the reorder it injects — the
-  // detection refusal deciding the error before the settings read is interpreted — is unchanged.
+  // Give the sibling refusal precedence; only correlated-refusal scenarios detect this ordering.
   'new-tab-refusal-order': {
     file: 'mobile-new-tab-agent-loader.ts',
     before: `  const readSettings = newTabSettingsRead.interpret(settingsResponse)`,
@@ -201,9 +161,7 @@ export const OPERATION_MUTATIONS = {
       }`,
     after: '      setRuntimeSettings(settingsValue)'
   },
-  // Keeps the composed draft cleared after a send the runtime refused, so the text the user typed
-  // is gone and only a retype recovers it. Anchored on the branch that reads the send verdict, not
-  // on the send, so the step-4 migration of this file does not move it.
+  // Keep a refused send’s draft cleared, losing the user’s input.
   'terminal-send-refusal-restores-draft': {
     file: 'use-mobile-session-terminal-send-actions.ts',
     before: `      if (!accepted) {
@@ -227,12 +185,17 @@ export const OPERATION_MUTATIONS = {
     file: 'mobile-pr-sidebar-state.ts',
     before: `      return {
         kind: 'ready',
-        data: { pr, details: null, checks: [], checksError: checksOutcome.error }
+        data: {
+          pr,
+          details: null,
+          checks: [],
+          checksError: checksOutcome.error,
+          pushTarget: link.pushTarget
+        }
       }`,
     after: '      return failureState(checksOutcome.error)'
   },
-  // Sends the presence-lock `client` member whether or not this phone holds a device token, so a
-  // tokenless phone claims the floor under an empty id instead of asking for the mode alone.
+  // Always send the client member so tokenless phones falsely claim presence.
   'display-mode-unconditional-client': {
     file: 'use-mobile-session-terminal-stream-display.ts',
     before: `          ...(deviceTokenRef.current
@@ -240,23 +203,19 @@ export const OPERATION_MUTATIONS = {
             : {}),`,
     after: `          client: { id: deviceTokenRef.current, type: 'mobile' as const },`
   },
-  // Forwards the viewport cell on every `auto` toggle, including before any surface has measured
-  // one, so the host is told to drive at a null size rather than at the dims it already stored.
+  // Send unmeasured viewport cells on auto toggles, replacing stored dimensions with null.
   'display-mode-unmeasured-viewport': {
     file: 'use-mobile-session-terminal-stream-display.ts',
-    before: `          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})`,
-    after: `          ...(next === 'auto' ? { viewport: viewportRef.current } : {})`
+    before: `          ...(viewport && next === 'auto' ? { viewport } : {})`,
+    after: `          ...(next === 'auto' ? { viewport } : {})`
   },
-  // Puts the active tab on the wire as `null` rather than omitting the member, so a create on a
-  // fresh session or after the last tab closed asks the host to insert after a tab that is not
-  // there. Invisible to any scenario whose session already has an active tab.
+  // Send null instead of omitting afterTabId; only sessions without an active tab detect it.
   'create-after-tab-id-null': {
     file: 'use-mobile-session-terminal-create-actions.ts',
     before: '      const afterTabId = activeSessionTabId ?? undefined',
     after: '      const afterTabId = activeSessionTabId'
   },
-  // Swaps the two quick-command members, so a saved shell command arrives as an agent prompt and an
-  // agent prompt arrives as a startup command. Invisible to any scenario that fills neither.
+  // Swap shell command and agent prompt; empty-option scenarios cannot detect it.
   'create-quick-command-keys': {
     file: 'mobile-session-terminal-create-request.ts',
     before: `    ...(options?.startupCommand ? { command: options.startupCommand } : {}),
@@ -270,26 +229,19 @@ export const OPERATION_MUTATIONS = {
       : {}),
     ...(options?.agentPrompt ? { command: options.agentPrompt } : {}),`
   },
-  // Drops the in-flight guard, so a second tap while the host is still answering opens a second
-  // terminal the user never asked for. Invisible to any scenario that taps once.
+  // Remove the in-flight guard; only overlapping taps expose duplicate terminals.
   'create-second-tap-in-flight': {
     file: 'use-mobile-session-terminal-create-actions.ts',
     before: '    if (creatingTerminalRef.current) {',
     after: '    if (false && creatingTerminalRef.current) {'
   },
-  // Lets a refused tab load reject the startup sequence, so neither the terminal load behind it nor
-  // the two refresh timers it arms ever run and the route sits on "Loading terminals" with no
-  // second chance. The activation timer is not among them: it needs `created === '1'`, which the
-  // closing scenario leaves unset, so what kills this mutant is the missing fetches alone.
+  // Let tab-load refusal abort terminal loading/refresh timers; this scenario has no created activation timer.
   'startup-tab-load-rejects-sequence': {
     file: 'use-mobile-session-startup.ts',
     before: '      await ensureSessionTabs().catch(() => null)',
     after: '      await ensureSessionTabs()'
   },
-  // Accepts a `null` Linear status as the status itself, which is the container requirement the
-  // whole domain rests on: main read `status.connected` off that null and threw the property-read
-  // TypeError the Tasks screen showed as its load error. Only the `result-null` partition of the
-  // matrix can see it, so `family-mutants.test.ts` drives that variant rather than the pilot.
+  // Accept null Linear status; only result-null reaches the resulting connected property-read failure.
   'linear-status-nullable': {
     file: 'task-list-reply-schema.ts',
     before: `  activeWorkspaceId: salvagedOptional('activeWorkspaceId', z.string().nullable())
@@ -297,10 +249,7 @@ export const OPERATION_MUTATIONS = {
     after: `  activeWorkspaceId: salvagedOptional('activeWorkspaceId', z.string().nullable())
 }).nullable()`
   },
-  // Collapses the assignable-user row's explicit `avatarUrl: null` into absence, so a host that
-  // reported "this user has no avatar" becomes indistinguishable from one that does not report
-  // avatars at all, and the picker draws its initials placeholder for both. The null-collapse class
-  // the session domain shipped twice before a review caught it; this anchor keeps it caught.
+  // Collapse explicit avatarUrl:null to absence; picker rendering alone cannot distinguish them.
   'assignable-user-avatar-null-collapse': {
     file: 'task-provider-entity-reply-schema.ts',
     before: `  name: prNullableText('name'),
@@ -318,7 +267,6 @@ export const OPERATION_MUTATIONS = {
 
 export type Mutation = keyof typeof OPERATION_MUTATIONS
 
-/** The spec the loader applies, carrying the name only so a half-applied anchor can report it. */
 export function operationMutation(name: Mutation): OperationMutation {
   return { name, ...OPERATION_MUTATIONS[name] }
 }

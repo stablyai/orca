@@ -16,8 +16,17 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('lucide-react-native', () => ({ RefreshCw: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronsUpDown: 'Icon',
+  CircleAlert: 'Icon',
+  FileText: 'Icon',
+  ListChecks: 'Icon',
+  SearchX: 'Icon',
+  WifiOff: 'Icon'
+}))
 vi.mock('../components/MobileDiffReviewLine', () => ({ MobileDiffReviewLine: () => null }))
+vi.mock('react-native-gesture-handler', () => ({ Gesture: {}, GestureDetector: () => null }))
+vi.mock('../components/pr-sidebar/PRCommentsSection', () => ({ CommentGroupView: () => null }))
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(),
   notificationAsync: vi.fn(),
@@ -34,15 +43,16 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 let tree: ReactTestRenderer | null = null
+let queries = documentQueryClient()
 
 afterEach(() => {
   act(() => tree?.unmount())
   tree = null
 })
 
-/** The review body as the screen view wires it, for a host the shell has not reached. */
 function ReviewWhileUnreachable({
   onReconnect,
   client = null,
@@ -63,27 +73,35 @@ function ReviewWhileUnreachable({
     name: 'review',
     initialFilter: 'all',
     initialTarget: null,
+    commitOid: null,
     onOpenSession: () => {},
     onReconnect
   })
   return createElement(MobileDiffReviewBody, {
-    activeHunkIndex: controller.activeHunkIndex,
     commentsByLine: controller.commentsByLine,
     currentItem: controller.currentItem,
     diffState: controller.diffState,
     filteredCount: controller.filteredQueue.length,
-    listRef: controller.listRef,
     screenState: controller.screenState,
     staleCommentIds: controller.staleCommentIds,
-    onAddNote: controller.openComposer,
+    threadsByLine: new Map(),
+    threadActions: undefined,
+    selectedRange: null,
+    onPickLines: () => {},
+    scrollToLine: null,
+    onScrolledToLine: () => {},
     onEditNote: controller.openEditComposer,
-    onRetry: controller.retryAction ?? undefined
+    onRetry: controller.retryAction ?? undefined,
+    offline: connState !== 'connected',
+    filter: controller.filter,
+    onBack: () => {}
   })
 }
 
 async function render(onReconnect: ((hostId: string) => void) | null): Promise<ReactTestRenderer> {
   await act(async () => {
-    tree = create(createElement(ReviewWhileUnreachable, { onReconnect }))
+    queries = documentQueryClient()
+    tree = create(queries.wrap(createElement(ReviewWhileUnreachable, { onReconnect })))
     await Promise.resolve()
   })
   if (tree === null) {
@@ -95,7 +113,8 @@ async function render(onReconnect: ((hostId: string) => void) | null): Promise<R
 function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
   return rendered.root.findAll(
     (node) =>
-      String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Retry loading review'
+      String(node.type) === 'Pressable' &&
+      node.findAll((child) => child.props.children === 'Reconnect').length > 0
   )
 }
 
@@ -103,7 +122,7 @@ describe('the review Retry while the host is unreachable', () => {
   it('is absent on the page, where nothing can re-dial', async () => {
     const rendered = await render(null)
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })
@@ -124,9 +143,16 @@ describe('the review Retry while the host is unreachable', () => {
     const client = createFakeRpcClient()
     await act(async () => {
       rendered.update(
-        createElement(ReviewWhileUnreachable, { onReconnect: null, client, connState: 'connected' })
+        queries.wrap(
+          createElement(ReviewWhileUnreachable, {
+            onReconnect: null,
+            client,
+            connState: 'connected'
+          })
+        )
       )
     })
-    expect(loadSnapshot.mock.calls).toEqual([[client, 'wt-1']])
+    expect(loadSnapshot).toHaveBeenCalledTimes(1)
+    expect(loadSnapshot.mock.calls[0]?.slice(0, 2)).toEqual([client, 'wt-1'])
   })
 })

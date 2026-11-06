@@ -45,7 +45,10 @@ export async function getWorkItemDetailsBySlug(
     return { ok: false, error: number.error }
   }
   if (args.type !== 'issue' && args.type !== 'pr') {
-    return { ok: false, error: { type: 'validation_error', message: 'Invalid type.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Invalid type.', reason: 'invalid_item_type' }
+    }
   }
   const contentFragment = args.type === 'issue' ? ISSUE_FRAGMENT : PULL_REQUEST_FRAGMENT
   const result = await runGraphql<{
@@ -66,7 +69,10 @@ export async function getWorkItemDetailsBySlug(
   const raw =
     args.type === 'issue' ? result.data.repository?.issue : result.data.repository?.pullRequest
   if (!raw) {
-    return { ok: false, error: { type: 'not_found', message: 'Item not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Item not found.', reason: 'item_not_found' }
+    }
   }
   return { ok: true, details: mapWorkItemDetails(raw, args) }
 }

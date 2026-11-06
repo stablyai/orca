@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
+import { watchRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 export function useSourceControlBaseRefDefault({
@@ -15,35 +15,25 @@ export function useSourceControlBaseRefDefault({
   isBranchVisible: boolean
   isFolder: boolean
 }): string | null {
-  // Why: start null (not 'origin/main') so branch compare doesn't fire with a fabricated ref before the IPC resolves.
+  // Unknown bases must not trigger comparison against a fabricated origin/main.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   useEffect(() => {
     if (!isBranchVisible || !activeRepoId || !activeRepoExecutionHostId || isFolder) {
       return
     }
-    // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC resolves, so branch compare can't fire with a stale defaultBaseRef from a different repo (transient "invalid-base" on switch).
+    // Drop the previous repo’s default while loading to prevent transient invalid-base comparisons.
     setDefaultBaseRef(null)
-    let stale = false
-    // Why: resolved on the repo's OWNER host, not the focused runtime.
-    void getRuntimeRepoBaseRefDefault(activeRepoExecutionHostId, activeRepoId)
-      .then((result) => {
-        if (!stale) {
-          // IPC returns a { defaultBaseRef, remoteCount } envelope; only defaultBaseRef is needed here (remoteCount powers BaseRefPicker's multi-remote hint).
-          setDefaultBaseRef(result.defaultBaseRef)
-        }
-      })
-      .catch((err) => {
+    // Resolve on the repo owner, which may differ from the focused host.
+    return watchRuntimeRepoBaseRefDefault(activeRepoExecutionHostId, activeRepoId, {
+      onResult: (result) => setDefaultBaseRef(result.defaultBaseRef),
+      onError: (err) => {
         console.error('[SourceControl] getBaseRefDefault failed', err)
-        // Why: leave defaultBaseRef null on failure (not a fabricated 'origin/main') so branch compare/PR fetch skip a possibly-nonexistent ref.
-        if (!stale) {
-          setDefaultBaseRef(null)
-        }
-      })
-    return () => {
-      stale = true
-    }
+        // Keep failures unknown so comparison/review fetches cannot use a fabricated ref.
+        setDefaultBaseRef(null)
+      }
+    })
   }, [
-    // Why: only repo/host ownership changes should reset the base; unrelated metadata churn must not restart eligibility's timeout.
+    // Only owner changes reset the base; metadata churn must not restart eligibility’s timeout.
     activeRepoConnectionId,
     activeRepoExecutionHostId,
     activeRepoId,

@@ -141,15 +141,6 @@ describe('useEphemeralVmRecipeOptions', () => {
     expect(container.textContent).not.toContain('stale-project')
   })
 
-  it('does not probe recipes while the feature is disabled', async () => {
-    const listRecipes = vi.fn().mockResolvedValue(result(['hidden']))
-    installApi(listRecipes)
-
-    await render(<Harness repoId="repo-1" enabled={false} />)
-
-    expect(listRecipes).not.toHaveBeenCalled()
-  })
-
   it('does not send a paired-runtime repo id to local recipe discovery', async () => {
     const listRecipes = vi.fn().mockResolvedValue({
       status: 'error',

@@ -1,6 +1,4 @@
-// Probes a running daemon's loaded modules (via loaded-modules.ps1) and flags
-// any that resolve under the original app dir — those would be locked during an
-// NSIS update and defeat the relocation.
+// Flag daemon modules mapped from the original install, which would remain locked during NSIS update.
 
 import { spawnSync } from 'node:child_process'
 import { join, win32 } from 'node:path'
@@ -9,9 +7,7 @@ const HERE = import.meta.dirname
 const POWERSHELL = 'powershell.exe'
 const PS_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']
 
-// Case-insensitive, separator-normalized containment test. The inputs are always
-// Windows module paths, so use win32 semantics explicitly — otherwise --selftest
-// on a non-Windows host would treat `\` as a literal and every check would fail.
+// Always use case-insensitive win32 path semantics so offline selftests handle backslashes on any OS.
 function normalizeForCompare(p) {
   return win32
     .normalize(p)
@@ -19,11 +15,7 @@ function normalizeForCompare(p) {
     .toLowerCase()
 }
 
-/**
- * Pure filter: which of `modulePaths` live under `appDir`. Exported so selftest
- * can validate the containment logic against synthetic inputs without a launch.
- * Matches on a path-segment boundary so `C:\App` does not match `C:\Application`.
- */
+// Filter modules under appDir on path-segment boundaries (C:\App must not match C:\Application).
 export function findAppDirResidentModules(modulePaths, appDir) {
   const needle = normalizeForCompare(appDir)
   const prefix = `${needle}${win32.sep}`
@@ -33,10 +25,7 @@ export function findAppDirResidentModules(modulePaths, appDir) {
   })
 }
 
-/**
- * Run the PowerShell probe for `pid`. Returns
- * { found, mainModule, modules } or throws if PowerShell itself fails.
- */
+// Run the PowerShell module probe; throw on probe failure.
 export function probeLoadedModules(pid) {
   const script = join(HERE, 'loaded-modules.ps1')
   const result = spawnSync(POWERSHELL, [...PS_ARGS, '-File', script, '-ProcessId', String(pid)], {
@@ -46,8 +35,7 @@ export function probeLoadedModules(pid) {
   if (result.error) {
     throw new Error(`failed to spawn PowerShell probe: ${result.error.message}`)
   }
-  // Check exit status before parsing: a non-zero exit that still wrote to stdout
-  // would otherwise surface as a bare JSON SyntaxError instead of the real error.
+  // Check exit status before JSON so PowerShell failure cannot masquerade as SyntaxError.
   if (result.status !== 0) {
     throw new Error(`loaded-modules.ps1 exited with status ${result.status}: ${result.stderr}`)
   }
@@ -60,11 +48,7 @@ export function probeLoadedModules(pid) {
   return JSON.parse(trimmed)
 }
 
-/**
- * Full handle assessment for a running daemon: whether its main module is the
- * copied host exe, and which loaded modules (if any) still live in the app dir.
- * Returns a structured verdict; never throws for a clean/empty module list.
- */
+// Report copied-exe identity and install-dir mappings; empty module lists are valid.
 export function assessDaemonHandles(pid, appDir, expectedHostExePath) {
   const probe = probeLoadedModules(pid)
   if (!probe.found) {

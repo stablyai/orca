@@ -1,10 +1,8 @@
-import type { RunRow } from '../../types'
+import type { RunRow } from '../orchestration-records'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
-import { mailboxAddressOf } from '../../orchestration-caller-identity'
-
-// ── Runs ──
+import { mailboxAddressOf } from '../../addressing/orchestration-caller-identity'
 
 export function createRun(
   this: OrchestrationDb,
@@ -24,7 +22,6 @@ export function createRun(
   const id = generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.unbindOtherRunsForCoordinator(coordinator)
     this.db
       .prepare(
         `INSERT INTO runs (

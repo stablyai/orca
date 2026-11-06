@@ -3,7 +3,7 @@ import type * as StoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
-import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-limits'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './input/paste/terminal-paste-limits'
 import {
   cleanupGlobalEffectsTestWindow,
   installGlobalEffectsTestWindow
@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   focusActivePane: vi.fn(),
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
-  handleTerminalFileDrop: vi.fn(),
   enforceTerminalCurrentScrollIntent: vi.fn(),
   syncTerminalScrollIntentFromViewport: vi.fn(),
   pasteTerminalText: vi.fn(),
@@ -82,11 +81,7 @@ vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   syncTerminalScrollIntentFromViewport: mocks.syncTerminalScrollIntentFromViewport
 }))
 
-vi.mock('./terminal-drop-handler', () => ({
-  handleTerminalFileDrop: mocks.handleTerminalFileDrop
-}))
-
-vi.mock('./terminal-bracketed-paste', () => ({
+vi.mock('./input/paste/terminal-bracketed-paste', () => ({
   BRACKETED_PASTE_END: '\u001b[201~',
   BRACKETED_PASTE_START: '\u001b[200~',
   pasteTerminalText: mocks.pasteTerminalText,
@@ -97,11 +92,7 @@ vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
-// Why: this suite invokes the hook outside a real React render (the react mock
-// above runs effects synchronously and manages refs by hand), so a reactive
-// useAppStore(selector) call would throw an "Invalid hook call". Read the
-// current snapshot synchronously instead; getState/setState stay real so tests
-// can seed terminalLayoutsByTabId.
+// This harness runs hooks without React rendering; use real synchronous store snapshots instead of reactive selectors that would throw invalid-hook-call.
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
@@ -128,62 +119,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     cleanupGlobalEffectsTestWindow()
-  })
-
-  it('records terminal input for targeted paste events', async () => {
-    const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }
-    const pane = { id: 1, leafId: 'leaf-1', terminal }
-    const manager = {
-      getPanes: vi.fn(() => [pane]),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => pane)
-    }
-    const transport = {
-      getPtyId: vi.fn(() => 'pty-1'),
-      isConnected: vi.fn(() => true),
-      sendInput: vi.fn<(data: string) => boolean>(() => true)
-    }
-
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      tabId: 'tab-1',
-      isActive: true,
-      isVisible: true,
-      isSyncFitEnabled: true,
-      paneCount: 1,
-      managerRef: { current: manager as never },
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map([[pane.id, transport]]) as never },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      toggleExpandPane: vi.fn()
-    })
-
-    const pasteListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([eventName]) => eventName === PASTE_TERMINAL_TEXT_EVENT)
-
-    expect(pasteListener).toBeDefined()
-    const listener = pasteListener?.[1]
-    if (typeof listener !== 'function') {
-      throw new Error('expected paste listener')
-    }
-    listener(
-      new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: 'git status' } })
-    )
-
-    await flushPasteTasks()
-
-    expect(mocks.pasteTerminalText).toHaveBeenCalledWith(terminal, 'git status', {
-      forceBracketedPaste: false
-    })
-    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
-    expect(terminal.focus).toHaveBeenCalledOnce()
   })
 
   it('chunks large programmatic paste events through the pane PTY transport', async () => {

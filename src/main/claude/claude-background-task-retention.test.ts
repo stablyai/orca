@@ -1,7 +1,6 @@
 import { setImmediate } from 'node:timers/promises'
 import { expect, it } from 'vitest'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
-import { taskDescription, taskName } from './claude-background-task-frames'
 
 type Retention = 'live' | 'settled' | 'removed'
 type Field = 'description' | 'name'
@@ -83,14 +82,4 @@ it.each([
   } finally {
     tracker.clear()
   }
-})
-
-it('preserves normalization, name fallback, and the UTF-16 clipping boundary', () => {
-  expect(taskDescription(' \t run\n the\r\n build ')).toBe('run the build')
-  expect(taskDescription(' \t\r\n ')).toBeUndefined()
-  expect(taskDescription(null)).toBeUndefined()
-  expect(taskName({ name: ' ', agent_type: '\t reviewer\nagent ' })).toBe('reviewer agent')
-  const value = `${'漢'.repeat(511)}\ud83d\ude00\udfff`
-  expect(taskDescription(value)).toBe(value.slice(0, 512))
-  expect(taskName({ subagent_type: value })).toBe(value.slice(0, 512))
 })

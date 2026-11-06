@@ -12,7 +12,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -67,6 +71,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -84,11 +90,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           parseCallback = callback
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks)
+        )
         await flushAsyncTicks(6)
 
         capturedDataCallback.current?.('\r\x1b[Korca % npm test')
@@ -105,6 +115,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks2 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -117,11 +129,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
         const pane = createPane(1)
         let parseCallback: (() => void) | undefined
-        pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        pane.terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           parseCallback = callback
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks2)
+        )
         await flushAsyncTicks(6)
 
         capturedDataCallback.current?.('\x1b[?2026hplain claude frame\x1b[?2026l')
@@ -134,6 +150,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('forces a viewport refresh when foreground background SGR is split across PTY chunks', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -151,11 +169,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         _core?: { refresh: typeof refresh }
       }
       terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
 
-      connectPanePty(pane as never, manager as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.('\x1b[48')
@@ -170,6 +192,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('forces a viewport refresh when the foreground CSI introducer is split across PTY chunks', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -187,11 +211,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         _core?: { refresh: typeof refresh }
       }
       terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
 
-      connectPanePty(pane as never, manager as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.('\x1b')
@@ -205,6 +233,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('does not keep forcing viewport refresh after completed background redraws', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -222,11 +252,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         _core?: { refresh: typeof refresh }
       }
       terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
 
-      connectPanePty(pane as never, manager as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks5)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(
@@ -247,6 +281,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks6 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -263,11 +299,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           callback?.()
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks6)
+        )
         await flushAsyncTicks(6)
         sendTerminalInputThroughPane(pane, '已经安装完成，软件已更新后重启。')
 
@@ -285,6 +325,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks7 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -301,11 +343,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           callback?.()
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks7)
+        )
         await flushAsyncTicks(6)
 
         capturedDataCallback.current?.('已经安装完成，软件已更新后重启。')
@@ -322,6 +368,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks8 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -338,11 +386,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           callback?.()
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks8)
+        )
         await flushAsyncTicks(6)
         sendTerminalInputThroughPane(pane, 'abc 123 ✓')
 
@@ -358,6 +410,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -374,11 +428,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           callback?.()
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks9)
+        )
         await flushAsyncTicks(6)
 
         capturedDataCallback.current?.('abc 123 ✓')
@@ -396,6 +454,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -412,11 +472,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           callback?.()
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks10)
+        )
         await flushAsyncTicks(6)
 
         // User typed into the prompt; Claude redraws the input line in place.
@@ -435,6 +499,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks11 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -451,11 +517,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
           _core?: { refresh: typeof refresh }
         }
         terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
           callback?.()
         })
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks11)
+        )
         await flushAsyncTicks(6)
 
         // CR redraw still forces one synchronous refresh, but no native-Windows follow-up repaint is scheduled.
@@ -472,6 +542,8 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks12 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -491,11 +563,15 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         }
         terminal._core = { refresh: synchronousRefresh }
         terminal.refresh = debouncedRefresh
-        terminal.write = vi.fn((_data: string, callback?: () => void) => callback?.())
+        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => callback?.())
         const manager = createManager(1)
         manager.hasWebglRenderer.mockReturnValue(true)
 
-        connectPanePty(pane as never, manager as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks12)
+        )
         await flushAsyncTicks(6)
 
         capturedDataCallback.current?.('\r\x1b[3Gzzzx\x1b[K')

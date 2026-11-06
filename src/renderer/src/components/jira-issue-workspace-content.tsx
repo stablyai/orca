@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 
 export type JiraIssueWorkspaceAction = {
   label: string
@@ -197,8 +197,6 @@ export function JiraIssueWorkspaceContent({
                     </span>
                   </div>
                   <div className="px-3 py-2">
-                    {/* Why: Jira comment screenshots need the same preview
-                                affordance without changing compact comment typography. */}
                     <JiraIssueMarkdown
                       target={imageTarget}
                       content={comment.body}

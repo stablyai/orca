@@ -1,5 +1,10 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
+import {
+  hasEditorFrameFlush,
+  runAfterEditorFramesFlush
+} from './editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
@@ -20,7 +25,7 @@ export function useTerminalBulkCloseActions(
   const { activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests } =
     controller
   const confirmBulkClose = useBulkTabCloseConfirmation()
-  const closeTabBarTabs = useCallback(
+  const closeTabBarTabsNow = useCallback(
     (tabIds: string[]) => {
       if (!activeWorktreeId) {
         return
@@ -57,7 +62,7 @@ export function useTerminalBulkCloseActions(
           unifiedTab?.contentType === 'terminal' &&
           isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))
         ) {
-          closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
+          closeTerminalTab(unifiedTab.entityId, { reason: 'user', skipRunningProcessConfirm: true })
           continue
         }
         if (unifiedTab?.contentType === 'agent-session') {
@@ -69,8 +74,8 @@ export function useTerminalBulkCloseActions(
         } else if (
           state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
         ) {
-          const file = state.openFiles.find((candidate) => candidate.id === id)
-          if (file?.isDirty) {
+          // Why fresh state: an earlier view of the same record may have just closed.
+          if (needsSavePromptOnClose(useAppStore.getState(), id)) {
             dirtyFileIds.push(id)
             continue
           }
@@ -90,6 +95,20 @@ export function useTerminalBulkCloseActions(
       }
     },
     [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+  )
+  const closeTabBarTabs = useCallback(
+    (tabIds: string[]) => {
+      const state = useAppStore.getState()
+      const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
+      const fileIdOf = (id: string): string => tabs.find((tab) => tab.id === id)?.entityId ?? id
+      // Why: a custom editor frame may still hold edits the dirty checks must see; only its tabs wait.
+      const framed = tabIds.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
+      closeTabBarTabsNow(tabIds.filter((id) => !framed.includes(id)))
+      if (framed.length > 0) {
+        runAfterEditorFramesFlush(state, framed.map(fileIdOf), () => closeTabBarTabsNow(framed))
+      }
+    },
+    [activeWorktreeId, closeTabBarTabsNow]
   )
 
   const selectScopeTabIds = useCallback(
@@ -149,19 +168,22 @@ export function useTerminalBulkCloseActions(
           )
           .map((file) => file.id)
       },
-      (fileIds) => {
-        const selectedIds = new Set(fileIds)
-        const files = useAppStore.getState().openFiles.filter((file) => selectedIds.has(file.id))
-        const dirtyFileIds = files.filter((file) => file.isDirty).map((file) => file.id)
-        for (const file of files) {
-          if (!file.isDirty) {
-            closeFile(file.id)
+      (fileIds) =>
+        runAfterEditorFramesFlush(useAppStore.getState(), fileIds, () => {
+          const selectedIds = new Set(fileIds)
+          const files = useAppStore.getState().openFiles.filter((file) => selectedIds.has(file.id))
+          const dirtyFileIds: string[] = []
+          for (const file of files) {
+            if (needsSavePromptOnClose(useAppStore.getState(), file.id)) {
+              dirtyFileIds.push(file.id)
+            } else {
+              closeFile(file.id)
+            }
           }
-        }
-        if (dirtyFileIds.length > 0) {
-          queueEditorCloseRequests(dirtyFileIds)
-        }
-      }
+          if (dirtyFileIds.length > 0) {
+            queueEditorCloseRequests(dirtyFileIds)
+          }
+        })
     )
   }, [activeWorktreeId, closeFile, confirmBulkClose, queueEditorCloseRequests])
 

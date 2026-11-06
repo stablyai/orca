@@ -14,7 +14,7 @@ const PROVIDER_ACTION_COMMANDS: Record<
   openclaw: { pause: 'disable', resume: 'enable', run: 'run', delete: 'rm' }
 }
 
-/** Fails closed like its neighbours: an unlisted or inherited key is not an action. */
+/** Reject unlisted or inherited action names. */
 function providerActionCommand(
   provider: ExternalAutomationProvider,
   action: ExternalAutomationAction

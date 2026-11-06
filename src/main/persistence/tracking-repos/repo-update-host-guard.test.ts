@@ -37,7 +37,7 @@ describe('updateRepo host guard', () => {
   })
 
   it('reports a host mismatch instead of returning the same silent null as a missing row', () => {
-    // #22421's exact shape: the row exists under `runtime:env-1`, the caller addressed the probe host.
+    // Regression #22421: caller used the probed host instead of the stored runtime row's host.
     const { operations, scheduleSave } = makeOperations([
       makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
     ])
@@ -96,7 +96,6 @@ describe('updateRepo host guard', () => {
     )
 
     expect(result?.displayName).toBe('Local edit')
-    // The peer's row is untouched: a client-local write must never repair another host's metadata.
     expect(state.repos[1].displayName).toBe('Peer')
   })
 
