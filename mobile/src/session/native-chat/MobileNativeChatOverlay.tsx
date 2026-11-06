@@ -100,7 +100,10 @@ export function MobileNativeChatOverlay({
     () => foldMobileNativeChatMessages(fullContent.messages, agent),
     [fullContent.messages, agent]
   )
-  const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
+  const taskList = useMemo(
+    () => nativeChatDockedTaskList(folded, session.taskList),
+    [folded, session.taskList]
+  )
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
   const composerTray = useMobileNativeChatComposerTray({

@@ -4,6 +4,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
 import type { ConnectionState } from '../../transport/types'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { useMobileTranscriptTaskList } from './use-mobile-transcript-task-list'
 import { useMobileStructuredAgentSession } from '../use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
@@ -86,9 +87,27 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  // Claude's journal import stops at 1024 ops, so older tasks live only in the transcript file.
+  const journal = structuredSession.session
+  const fileTaskList = useMobileTranscriptTaskList({
+    client:
+      structured &&
+      agent === 'claude' &&
+      (journal.status === 'ready' || journal.status === 'error') &&
+      !journal.taskList
+        ? client
+        : null,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? null
+  })
+  const baseSession = structured ? journal : bridgeSession
   return {
     structuredSession,
-    session: structured ? structuredSession.session : bridgeSession,
+    session:
+      baseSession.taskList || !fileTaskList
+        ? baseSession
+        : { ...baseSession, taskList: fileTaskList },
     sessionCommands
   }
 }

@@ -1,8 +1,7 @@
 import { resolveHistoryLimit } from './agent-session-history-limit'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { snapshotLatestTurn } from './agent-session-history-latest-turn'
-
+import { pageSnapshotTail } from './agent-session-history-latest-turn'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
@@ -324,6 +323,6 @@ function buildPage(input: HistoryPageInput): AgentSessionHistoryPage {
     hasNewer: input.hasNewer,
     ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
     // Read the whole timeline: long turns can begin below this page.
-    latestTurn: snapshotLatestTurn(input.snapshot)
+    ...pageSnapshotTail(input.snapshot)
   }
 }

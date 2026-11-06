@@ -19837,6 +19837,8 @@
         "updated": "Updated {{task}}",
         "unchanged": "Tasks unchanged",
         "showAll": "Full task list",
+        "cancelled": "Cancelled",
+        "cancelledTask": "Cancelled {{task}}",
         "progress_one": "{{completed}} of {{count}} task completed",
         "progress_other": "{{completed}} of {{count}} tasks completed"
       },
