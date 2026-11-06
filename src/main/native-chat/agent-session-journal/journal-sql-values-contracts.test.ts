@@ -22,13 +22,28 @@ function fixture() {
   return { db, context }
 }
 
-type Send = { status: string; flags: { recovered: boolean }; coverage?: string[] }
-const send = (status: string): Send => ({ status, flags: { recovered: false } })
+type Send = {
+  clientMessageId: string
+  payloadFingerprint: string
+  submittedAt: number
+  fence: number
+  dispatchState: string
+  flags: { recovered: boolean }
+  coverage?: string[]
+}
+const send = (dispatchState: string): Send => ({
+  clientMessageId: 'send',
+  payloadFingerprint: 'fingerprint',
+  submittedAt: 1,
+  fence: 0,
+  dispatchState,
+  flags: { recovered: false }
+})
 
 function maps(context: JournalSqlValueContext) {
   return {
-    source: new JournalSqlKeyedMap<string, Send>(context, 'fixture.sends'),
-    alias: new JournalSqlKeyedMap<string, Send>(context, 'fixture.aliases')
+    source: new JournalSqlKeyedMap<string, Send>(context, 'submissions'),
+    alias: new JournalSqlKeyedMap<string, Send>(context, 'order.queued')
   }
 }
 
@@ -54,40 +69,39 @@ it.each([false, true])(
     ;({ source, alias } = maps(command))
     const candidate = alias.get('send')!
     expect(candidate).toBe(source.get('send'))
-    candidate.status = 'unknown'
+    candidate.dispatchState = 'unknown'
     candidate.flags.recovered = true
     candidate.coverage = ['first']
     candidate.coverage.push('second')
     command.flush()
-    expect(command.changes().map((change) => change.path)).toEqual([
-      'fixture.aliases',
-      'fixture.sends'
-    ])
+    expect(command.changes().map((change) => change.path)).toEqual(['order.queued', 'submissions'])
 
     command = f.context()
     ;({ source, alias } = maps(command))
     expect(source.get('send')).toEqual({
-      status: 'unknown',
+      ...send('unknown'),
       flags: { recovered: true },
       coverage: ['first', 'second']
     })
     source.set('send', send('accepted'))
     expect(alias.get('send')).toEqual({
-      status: 'unknown',
+      ...send('unknown'),
       flags: { recovered: true },
       coverage: ['first', 'second']
     })
-    alias.get('send')!.status = 'old-attempt'
+    alias.get('send')!.dispatchState = 'old-attempt'
     command.flush()
 
     command = f.context()
     ;({ source, alias } = maps(command))
-    expect(source.get('send')!.status).toBe('accepted')
-    expect(alias.get('send')!.status).toBe('old-attempt')
+    expect(source.get('send')!.dispatchState).toBe('accepted')
+    expect(alias.get('send')!.dispatchState).toBe('old-attempt')
     alias.set('send', source.get('send')!)
     command.flush()
     expect(alias.get('send')).toBe(source.get('send'))
-    expect(f.db.prepare('SELECT incarnation FROM journal_proj_value_snapshots').all()).toEqual([])
+    expect(
+      f.db.prepare('SELECT incarnation FROM journal_proj_submissions WHERE current=0').all()
+    ).toEqual([])
   }
 )
 
@@ -101,35 +115,8 @@ it('keeps a source captured before replacement when a later alias first refers t
   alias.set('old', original)
   command.flush()
   const next = maps(f.context())
-  expect(next.source.get('send')!.status).toBe('second')
-  expect(next.alias.get('old')!.status).toBe('first')
-})
-
-it.each([false, true])('keeps nested shared objects after bulk import=%s', (bulk) => {
-  const f = fixture()
-  let command = f.context()
-  let { source } = maps(command)
-  const seed = () => {
-    source.set('send', send('first'))
-    const first = source.get('send')!
-    const flags = first.flags
-    source.set('other', { status: 'second', flags })
-  }
-  if (bulk) {
-    command.bulkLoad(seed)
-  } else {
-    seed()
-  }
-  command.flush()
-
-  command = f.context()
-  ;({ source } = maps(command))
-  const other = source.get('other')!
-  const original = source.get('send')!
-  expect(other.flags).toBe(original.flags)
-  other.flags.recovered = true
-  command.flush()
-  expect(maps(f.context()).source.get('send')!.flags.recovered).toBe(true)
+  expect(next.source.get('send')!.dispatchState).toBe('second')
+  expect(next.alias.get('old')!.dispatchState).toBe('first')
 })
 
 it('rolls back SQL mutations and object writes together when the command context is discarded', () => {
@@ -150,7 +137,7 @@ it('rolls back SQL mutations and object writes together when the command context
   const restored = maps(f.context())
   expect(restored.source.size).toBe(1)
   expect(restored.source.has('new')).toBe(false)
-  expect(restored.alias.get('send')).toEqual({ status: 'pending', flags: { recovered: false } })
+  expect(restored.alias.get('send')).toEqual(send('pending'))
 })
 
 it('preserves undefined entries, membership, reinsert order and change-record order', () => {

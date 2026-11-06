@@ -2,8 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { z } from 'zod'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
@@ -11,6 +9,7 @@ import {
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal } from './journal-open'
+import { JournalSqlTurnSources } from './journal-sql-turn-sources'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { exportJournalControlState } from './journal-sql-control-export'
@@ -122,7 +121,7 @@ it.each([
   )
 })
 
-it('preserves item and nested aliases across export, replacement, deletion and rollback', () => {
+it('keeps a captured item incarnation across replacement, deletion and rollback', () => {
   const rows = journalSqlLifecycleRows().slice(0, 8)
   database.transaction((db) => {
     publishTestJournalEpoch(db, 'session', 'epoch')
@@ -132,7 +131,6 @@ it('preserves item and nested aliases across export, replacement, deletion and r
   const item = [...memoryJournalMap(loaded.state.items).values()].find(
     (value) => value.body.kind === 'message'
   )!
-  loaded.state.itemEchoes.set('shared', { item, body: item.body })
   database.db.exec(journalSqlProjectionSchema())
   const exported = new JournalSqlReducer(
     new JournalSqlScope(database.db, 'session', 'exported'),
@@ -144,23 +142,29 @@ it('preserves item and nested aliases across export, replacement, deletion and r
   })
   const reducer = () =>
     new JournalSqlReducer(new JournalSqlScope(database.db, 'session', 'exported'), 'epoch')
-  const alias = (command: JournalSqlReducer) =>
-    z
-      .custom<{ item: AgentJournalRenderItem; body: AgentJournalRenderItem['body'] }>()
-      .parse(command.state.itemEchoes.get('shared'))
+  const sources = (command: JournalSqlReducer) =>
+    new JournalSqlTurnSources(command.context.indexScope())
+  const captured = (command: JournalSqlReducer) => sources(command).get('shared')!.item
   let command = reducer()
-  expect(alias(command).item).toBe(command.state.items.get(item.itemId))
-  expect(alias(command).body).toBe(command.state.items.get(item.itemId)?.body)
-  alias(command).item.observedAt = 222
+  sources(command).set('shared', {
+    item: command.state.items.get(item.itemId)!,
+    failedAt: item.sequence,
+    ordinary: true,
+    relevant: true
+  })
+  command.flush()
+  command = reducer()
+  expect(captured(command)).toBe(command.state.items.get(item.itemId))
+  captured(command).observedAt = 222
   command.flush()
   command = reducer()
   expect(command.state.items.get(item.itemId)?.observedAt).toBe(222)
   database.db.exec('SAVEPOINT alias_rollback')
-  alias(command).item.observedAt = 999
+  captured(command).observedAt = 999
   command.flush()
   database.db.exec('ROLLBACK TO alias_rollback; RELEASE alias_rollback')
   command = reducer()
-  expect(alias(command).item.observedAt).toBe(222)
+  expect(captured(command).observedAt).toBe(222)
   command.state.items.set(item.itemId, {
     ...command.state.items.get(item.itemId)!,
     observedAt: 333
@@ -168,10 +172,10 @@ it('preserves item and nested aliases across export, replacement, deletion and r
   command.flush()
   command = reducer()
   expect(command.state.items.get(item.itemId)?.observedAt).toBe(333)
-  expect(alias(command).item.observedAt).toBe(222)
+  expect(captured(command).observedAt).toBe(222)
   command.state.items.delete(item.itemId)
   command.flush()
   command = reducer()
   expect(command.state.items.has(item.itemId)).toBe(false)
-  expect(alias(command).item.observedAt).toBe(222)
+  expect(captured(command).observedAt).toBe(222)
 })

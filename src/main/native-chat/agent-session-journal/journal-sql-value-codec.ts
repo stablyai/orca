@@ -1,3 +1,5 @@
+import { journalSqlCaptures } from './journal-sql-captures'
+
 export type JournalSqlValueLocation = {
   collection: string
   key: string
@@ -20,6 +22,7 @@ export function encodeJournalSqlValue(
   placed?: (value: object, path: string[]) => void
 ): EncodedJournalSqlValue {
   const refs: JournalSqlValueReference[] = []
+  const captures = journalSqlCaptures(owner.collection)
   const paths = new WeakMap<object, string[]>()
   const stored: StoredJournalSqlValue = { data: value === undefined ? [] : [value], refs }
   paths.set(stored.data, [])
@@ -32,7 +35,12 @@ export function encodeJournalSqlValue(
     }
     const path = this === stored.data ? [] : [...paths.get(this)!, key]
     const source = locate(child)
-    if (source && journalSqlLocationKey(source) !== journalSqlLocationKey(owner)) {
+    if (
+      source &&
+      source.path.length === 0 &&
+      captures[path.join('.')] === source.collection &&
+      journalSqlLocationKey(source) !== journalSqlLocationKey(owner)
+    ) {
       refs.push({ path, source })
       return null
     }

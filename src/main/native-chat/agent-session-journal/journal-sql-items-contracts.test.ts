@@ -7,6 +7,18 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlItemValues } from './journal-sql-item-values'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { JournalSqlKeyedMap } from './journal-sql-keyed-values'
+import { JournalSqlTurnSources } from './journal-sql-turn-sources'
+
+/** Turn sources are the item family's real holder: each captures its whole item. */
+function capturedItems(context: JournalSqlValueContext) {
+  const sources = new JournalSqlTurnSources(context.indexScope())
+  return {
+    get: (id: string) => sources.get(id)?.item,
+    set: (id: string, item: AgentJournalRenderItem) =>
+      sources.set(id, { item, failedAt: item.sequence, ordinary: true, relevant: true }),
+    delete: (id: string) => sources.delete(id)
+  }
+}
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -29,7 +41,7 @@ function fixture() {
       context,
       payloads,
       items: new JournalSqlKeyedMap<string, AgentJournalRenderItem>(context, 'items'),
-      captured: new JournalSqlKeyedMap<string, AgentJournalRenderItem>(context, 'captured')
+      captured: capturedItems(context)
     }
   }
   function save(c: ReturnType<typeof command>, itemId: string, seq: number) {
