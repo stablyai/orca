@@ -933,7 +933,9 @@
         "cb4d287238": "Nom du serveur",
         "3affe7de3a": "Collez une URL d'appairage provenant d'un serveur Orca accessible depuis ce navigateur.",
         "e3bcd082ac": "Se connecter à Orca",
-        "mobileScopeRejected": "Ce code QR accorde un accès limité (mobile). Pour utiliser l'application web complète, ouvrez le lien d'accès navigateur depuis Paramètres → Environnements d'exécution → Partager ce serveur Orca → Nouveau lien."
+        "mobileScopeRejected": "Ce code QR accorde un accès limité (mobile). Pour utiliser l'application web complète, ouvrez le lien d'accès navigateur depuis Paramètres → Environnements d'exécution → Partager ce serveur Orca → Nouveau lien.",
+        "replaceSavedServer": "Ce lien se connecte à un autre serveur que « {{name}} » ({{endpoint}}). Connectez-vous uniquement si vous faites confiance au point de terminaison ci-dessous.",
+        "keepSavedServer": "Garder le serveur enregistré"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "L'historique des sessions d'agent n'est pas disponible pour cet hôte d'exécution.",
