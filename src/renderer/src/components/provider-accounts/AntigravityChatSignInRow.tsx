@@ -285,6 +285,7 @@ export function AntigravityChatSignInRow(props: {
         owner={props.owner}
         disabled={props.disabled || signIn.ownFlow}
         onSignIn={signIn.start}
+        actionError={signIn.alert}
         hostLabel={props.label}
         heading={
           <div>

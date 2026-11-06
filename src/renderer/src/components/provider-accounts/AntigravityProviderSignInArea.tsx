@@ -52,6 +52,7 @@ export function AntigravityProviderSignInArea(props: {
         owner={props.owner}
         disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
         onSignIn={signIn.start}
+        actionError={signIn.alert}
         hostLabel={props.label}
         heading={
           <div>

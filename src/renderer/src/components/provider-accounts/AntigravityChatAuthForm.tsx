@@ -24,6 +24,7 @@ type AuthFormProps = {
   onSignIn: () => void
   heading: ReactNode
   hostLabel: string
+  actionError?: string | null
   children: (action: AuthAction) => ReactNode
 }
 
@@ -33,6 +34,7 @@ export function AntigravityChatAuthForm({
   onSignIn,
   heading,
   hostLabel,
+  actionError,
   children
 }: AuthFormProps): React.JSX.Element | null {
   const capability = useStructuredAgentSessionHostCapabilityState(
@@ -57,6 +59,7 @@ export function AntigravityChatAuthForm({
       onSignIn={onSignIn}
       heading={heading}
       hostLabel={hostLabel}
+      actionError={actionError}
     >
       {children}
     </AuthForm>
@@ -70,6 +73,7 @@ function AuthForm({
   onSignIn,
   heading,
   hostLabel,
+  actionError,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const id = useId()
@@ -302,7 +306,7 @@ function AuthForm({
             </div>
           </div>
         )}
-        {error && (
+        {error && error !== actionError && (
           <p role="alert" className="text-xs text-destructive">
             {error}
           </p>

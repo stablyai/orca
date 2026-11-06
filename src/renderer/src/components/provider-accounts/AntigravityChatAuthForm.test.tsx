@@ -166,6 +166,44 @@ it.each([
   }
 )
 
+it.each([
+  { surface: 'accounts', language: 'en' },
+  { surface: 'provider', language: 'en' },
+  { surface: 'accounts', language: 'es' }
+] as const)(
+  '$surface presents a direct failed sign-in and rejected settings read once ($language)',
+  async ({ surface, language }) => {
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage(language)
+    const target = {
+      kind: 'environment',
+      environmentId: `failed-read-${surface}-${language}`
+    } as const
+    const failure =
+      'Antigravity account settings could not be confirmed on this host. Restart Orca on this host, then try again.'
+    streams.initial.set(key(target), {
+      revision: 1,
+      auth: 'unknown',
+      flow: { phase: 'failed', flowId: null, error: failure }
+    })
+    let rejectRead!: (cause: Error) => void
+    const read = new Promise<AntigravityChatAuthConfig | null>((_resolve, reject) => {
+      rejectRead = reject
+    })
+    vi.mocked(callAntigravityChatAuthConfig).mockReturnValue(read)
+    renderSurface(surface, target)
+    await waitFor(() => expect(callAntigravityChatAuthConfig).toHaveBeenCalledWith(target))
+    await act(async () => {
+      rejectRead(new Error(failure))
+    })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert')).toHaveTextContent(failure)
+    expect(screen.getAllByText(failure)).toHaveLength(1)
+    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+  }
+)
+
 it('does not start a departed host after its prepared save settles', async () => {
   const target = { kind: 'environment', environmentId: 'departed-host' } as const
   let finish!: (value: typeof enterprise) => void
