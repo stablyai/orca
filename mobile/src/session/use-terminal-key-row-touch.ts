@@ -5,6 +5,10 @@ import type {
   NativeSyntheticEvent,
   ScrollView
 } from 'react-native'
+import {
+  sameSmartKeySet,
+  type AgentSmartKeySet
+} from '../../../src/shared/terminal/input/agent-smart-keys'
 
 // The same movement the Duo rail allows before a touch stops counting as a press.
 const PRESS_MOVE_SLOP = 8
@@ -26,38 +30,35 @@ function isPointerClick(event: GestureResponderEvent): boolean {
  * nor moved under the finger since it went down, and `shown` holds still from touch-down until that
  * touch's press has landed. A new `shown` scrolls the row back to its start.
  */
-export function useTerminalKeyRowTouch<T>({
+export function useTerminalKeyRowTouch({
   scrollRef,
   latest,
-  sameShown,
   cancelAccessoryRepeat
 }: {
   scrollRef: RefObject<ScrollView | null>
-  latest: T
-  sameShown: (a: T, b: T) => boolean
+  latest: AgentSmartKeySet | null
   cancelAccessoryRepeat: () => void
 }) {
   const [shown, setShown] = useState(latest)
-  const touchRef = useRef({ down: false, x: 0, y: 0 })
-  const holdingRef = useRef(false)
+  const touchRef = useRef({ down: false, moved: false, x: 0, y: 0 })
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressRevisionRef = useRef(0)
   const armedRef = useRef(new Map<string, number>())
   const scrollXRef = useRef(0)
   const latestRef = useRef(latest)
-  const sameShownRef = useRef(sameShown)
+  // From touch-down until that touch's press lands (or the settle timer runs out).
+  const holding = () => touchRef.current.down || settleTimerRef.current !== null
   const show = useCallback(() => {
     setShown((current) =>
-      sameShownRef.current(current, latestRef.current) ? current : latestRef.current
+      sameSmartKeySet(current, latestRef.current) ? current : latestRef.current
     )
   }, [])
   useEffect(() => {
     latestRef.current = latest
-    sameShownRef.current = sameShown
-    if (!holdingRef.current) {
+    if (!holding()) {
       show()
     }
-  }, [latest, sameShown, show])
+  }, [latest, show])
   const resetTo = useRef(shown)
   useEffect(() => {
     if (resetTo.current !== shown) {
@@ -82,7 +83,6 @@ export function useTerminalKeyRowTouch<T>({
   const settle = useCallback(() => {
     clearSettleTimer()
     if (!touchRef.current.down) {
-      holdingRef.current = false
       show()
     }
   }, [clearSettleTimer, show])
@@ -96,14 +96,14 @@ export function useTerminalKeyRowTouch<T>({
     rowTouchHandlers: {
       onTouchStart: (event: GestureResponderEvent) => {
         const { pageX, pageY } = event.nativeEvent
-        touchRef.current = { down: true, x: pageX, y: pageY }
-        holdingRef.current = true
+        touchRef.current = { down: true, moved: false, x: pageX, y: pageY }
         clearSettleTimer()
       },
       onTouchMove: (event: GestureResponderEvent) => {
         const { pageX, pageY } = event.nativeEvent
         const start = touchRef.current
-        if (Math.hypot(pageX - start.x, pageY - start.y) > PRESS_MOVE_SLOP) {
+        if (!start.moved && Math.hypot(pageX - start.x, pageY - start.y) > PRESS_MOVE_SLOP) {
+          start.moved = true
           cancelPresses()
         }
       },
