@@ -190,3 +190,19 @@ describe('agent descendant kill E2E routing', () => {
     ).not.toContain(spec)
   })
 })
+
+describe('agent permission settings E2E routing', () => {
+  const spec = 'tests/e2e/agent-auto-permissions.spec.ts'
+  it.each([
+    'src/renderer/src/components/agent/launch-settings/AgentPermissionChoiceControls.tsx',
+    'src/renderer/src/components/settings/agents/permissions/AgentPermissionModeMenu.tsx',
+    'src/shared/agent-launch/permissions/tui-agent-permission-choice.ts'
+  ])('routes %s', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain(spec)
+  })
+  it('skips unit tests', () => {
+    expect(
+      selectPrE2eSpecs(['src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts'])
+    ).not.toContain(spec)
+  })
+})
