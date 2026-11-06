@@ -7,7 +7,7 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import {
   findLandedImagePreviewEchoes,
@@ -17,7 +17,7 @@ import {
 import {
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText as normalizeReconcileText
-} from '../../../../../src/shared/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { useMobileNativeChatUnconfirmedSends } from '../use-mobile-native-chat-unconfirmed-sends'
 import {
   appendMobileNativeChatPending,
@@ -30,6 +30,7 @@ import {
   type MobileNativeChatSendOrigin
 } from '../mobile-native-chat-pending-echo'
 import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
+import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {
@@ -38,6 +39,7 @@ import {
   readMobileNativeChatDraftEditGeneration,
   setMobileNativeChatDraftText
 } from './mobile-native-chat-draft-store'
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
@@ -69,7 +71,11 @@ export function useMobileNativeChatDrafts(args: {
   readSeededLaunchDraft: () => string | null
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  restoreRejectedDraft: (
+    origin: MobileNativeChatSendOrigin,
+    text: string,
+    options?: { preserveConversationCommands?: boolean }
+  ) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
@@ -105,6 +111,10 @@ export function useMobileNativeChatDrafts(args: {
   const getComposerEditGeneration = useCallback(() => composerEditGenerationRef.current, [])
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+
+  useEffect(() => {
+    void loadMobileNativeChatDrafts(hostId, worktreeId)
+  }, [hostId, worktreeId])
 
   const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
     draftKey,
@@ -148,6 +158,7 @@ export function useMobileNativeChatDrafts(args: {
       const tail = messagesRef.current.at(-1)
       return {
         draftKey,
+        draftDestination: mobileNativeChatDraftDestination(draftKey),
         draftEditGeneration: readMobileNativeChatDraftEditGeneration(draftKey),
         pendingKey,
         normalizedText: normalizeReconcileText(text),
@@ -166,14 +177,21 @@ export function useMobileNativeChatDrafts(args: {
 
   // Clear at send time because slow/lost acknowledgements must not leave delivered text in the composer; restore only on rejection.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    clearMobileNativeChatDraftForSend(origin.draftKey, origin.draftEditGeneration, text)
+    clearMobileNativeChatDraftForSend(origin.draftDestination, origin.draftEditGeneration, text)
   }, [])
 
-  const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    setMobileNativeChatDraftText(origin.draftKey, (current) =>
-      appendReturnedDraftText(current, text)
-    )
-  }, [])
+  const restoreRejectedDraft = useCallback(
+    (
+      origin: MobileNativeChatSendOrigin,
+      text: string,
+      options?: { preserveConversationCommands?: boolean }
+    ) => {
+      setMobileNativeChatDraftText(origin.draftDestination, (current) =>
+        appendReturnedDraftText(current, text, options)
+      )
+    },
+    []
+  )
 
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {

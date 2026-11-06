@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -126,13 +127,24 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     const openFiles = [activeFile]
     const closeFile = vi.fn()
     const editorDrafts = { [activeFile.id]: '# unsaved edits' }
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+    const store = createTestStore()
+    store.setState({
       openFiles,
       editorDrafts,
       closeFile,
+      worktreesByRepo: {
+        project: [
+          makeWorktree({
+            id: activeFile.worktreeId,
+            repoId: 'project',
+            path: '/home/user/project',
+            hostId: 'runtime:env-1'
+          })
+        ]
+      },
       setLastKnownDiskSignature: vi.fn()
     })
+    mocks.getState.mockImplementation(store.getState)
     // Delay rejection like real host I/O so retry state commits separately; return machine code with prose to exercise code-based classification.
     const hostError = new RuntimeRpcCallError({
       id: 'rpc-1',

@@ -1,8 +1,7 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { type WorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   removeWorkspaceSessionOwners,
   withoutWslMoveFrozenOwners
@@ -130,6 +129,13 @@ export function pruneWorktreeStateForRepo(
     }
     if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+    }
+  }
+  // Only the child decides: a parent in another store shares no repo ids with this one.
+  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
+    const childScope = parseWorkspaceKey(childKey)
+    if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
+      delete state.crossStoreLineageByChildKey?.[childKey]
     }
   }
   pruneMobileClientTabSelections(belongsToHost)

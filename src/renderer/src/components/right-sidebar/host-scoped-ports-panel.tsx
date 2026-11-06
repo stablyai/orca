@@ -7,7 +7,7 @@ import {
   killWorkspacePortOnExecutionHost,
   scanWorkspacePortsOnExecutionHost,
   type HostScopedPortHost
-} from '@/lib/workspace-port-scan-client'
+} from '@/lib/workspace-ports/workspace-port-scan-client'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkspacePort, WorkspacePortHostScanResult } from '../../../../shared/workspace-ports'
@@ -55,7 +55,12 @@ export function HostScopedPortsPanel({
           platform: 'unknown',
           scannedAt: Date.now(),
           ports: [],
-          unavailableReason: message || 'Workspace port scan failed.'
+          unavailableReason:
+            message ||
+            translate(
+              'auto.components.right.sidebar.PortsPanel.740aca88ab',
+              'Workspace port scan failed.'
+            )
         }
       })
     } finally {

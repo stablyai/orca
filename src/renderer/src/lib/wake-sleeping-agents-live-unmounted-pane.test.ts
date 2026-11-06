@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import type { PtyListedSession } from '../../../shared/pty-listed-session'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { PtyListedSession } from '../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'

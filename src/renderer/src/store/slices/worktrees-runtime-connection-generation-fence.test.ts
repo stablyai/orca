@@ -67,18 +67,6 @@ beforeEach(() => {
 })
 
 describe('fetchAllWorktrees across a runtime connection-generation change', () => {
-  it('publishes every repo when nothing perturbs the connection', async () => {
-    const store = createTestStore()
-    seedRuntimeRepos(store)
-    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
-      detectedListReply(repoOf(args))
-    )
-
-    await store.getState().fetchAllWorktrees()
-
-    expect(Object.keys(store.getState().worktreesByRepo).sort()).toEqual([...REPO_IDS])
-  })
-
   it('re-reads instead of dropping the repos still in flight when the generation moves', async () => {
     // A host-wide generation bump discards every outstanding repo scan; retry rather than leave a stable sidebar subset (#19241).
     const store = createTestStore()

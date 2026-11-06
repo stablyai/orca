@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { resolveTaskPullRequestRepo } from './task-page-github-review-model'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function PRMergeCell({
   item,
   repo,
@@ -241,7 +242,7 @@ export function PRMergeCell({
             {getPullRequestMergeMethodLabel(method)}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+        <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
           <ExternalLink className="size-4" />
           {translate('auto.components.TaskPage.37d60046e3', 'Open GitHub merge box')}
         </DropdownMenuItem>

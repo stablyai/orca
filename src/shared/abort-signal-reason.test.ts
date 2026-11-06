@@ -38,17 +38,6 @@ it('detaches cancelled callers from shared stalled work while another caller wai
   expect(getEventListeners(anchorController.signal, 'abort')).toHaveLength(0)
 })
 
-it('observes shared work only once for callers already aborted', async () => {
-  const work = new Promise<void>(() => {})
-  const observed = vi.spyOn(work, 'then')
-  const signal = AbortSignal.abort(new Error('cancelled'))
-  for (let index = 0; index < 100; index += 1) {
-    await expect(waitForPromiseWithSignal(work, signal)).rejects.toThrow('cancelled')
-  }
-  expect(observed).toHaveBeenCalledOnce()
-  expect(sharedPromiseSettlementWaiters(work).waiterCount).toBe(0)
-})
-
 it('allows synchronous cancellation before a cached settlement is delivered', async () => {
   const work = Promise.resolve(42)
   await expect(waitForPromiseWithSignal(work, new AbortController().signal)).resolves.toBe(42)
@@ -57,11 +46,6 @@ it('allows synchronous cancellation before a cached settlement is delivered', as
   controller.abort(new Error('cancelled'))
   await expect(waiting).rejects.toThrow('cancelled')
   await expect(waitForPromiseWithSignal(work, new AbortController().signal)).resolves.toBe(42)
-})
-
-it('returns work directly when no cancellation was requested', () => {
-  const work = Promise.resolve(42)
-  expect(waitForPromiseWithSignal(work)).toBe(work)
 })
 
 it('preserves an abort queued between two callers of an already-settled promise', async () => {

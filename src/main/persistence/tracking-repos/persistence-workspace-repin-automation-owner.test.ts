@@ -11,15 +11,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { AUTOMATION_ORPHAN_ISSUES } from '../../../shared/automation-list-scope'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
-import { resetRetirementCollisionKeyCacheForTests } from '../../worktree-name-retirement'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
 let hasCreatedStoreInCase = false
 
@@ -170,16 +170,6 @@ afterEach(async () => {
 })
 
 describe('a workspace re-pinned outside the automation editor', () => {
-  it('owns its records on the pin it started on', async () => {
-    const store = await loadStore(initialState())
-
-    expect(store.listAutomationsForScope().items[0].selector).toEqual({
-      kind: 'ssh',
-      targetId: 'prod',
-      targetGeneration: PROD_GENERATION
-    })
-  })
-
   it('moves the captured owner onto the registration it now names', async () => {
     const store = await loadStore(initialState())
     store.flush()

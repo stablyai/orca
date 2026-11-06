@@ -1,9 +1,9 @@
-import { agentEntryCompletionAt } from '../../../../../shared/agent-completion-time'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import { agentEntryCompletionAt } from '../../../../../shared/agent-status/lifecycle/agent-completion-time'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusEvidenceObservedAt
-} from '../../../../../shared/agent-status-freshness'
+} from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 
 export type FreshnessSchedulerDeps = {
   getStatusEntries: () => Record<string, AgentStatusEntry>

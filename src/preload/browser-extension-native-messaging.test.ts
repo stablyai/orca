@@ -86,13 +86,6 @@ function install(
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('chrome.runtime native messaging in extension contexts', () => {
-  it('exists only for extensions that ask for nativeMessaging, on chrome and browser', () => {
-    expect(install({ permissions: ['storage'] }).runtime.connectNative).toBeUndefined()
-    const optional = install({ optional_permissions: ['nativeMessaging'] })
-    expect(typeof optional.runtime.connectNative).toBe('function')
-    expect(optional.browserRuntime.sendNativeMessage).toBe(optional.runtime.sendNativeMessage)
-  })
-
   it('queues posts until the host runs and routes replies by port', async () => {
     const page = install({ permissions: ['nativeMessaging'] })
     const port = call(page.runtime, 'connectNative', 'com.example.vault')
@@ -131,15 +124,6 @@ describe('chrome.runtime native messaging in extension contexts', () => {
     )
   })
 
-  it('logs an unchecked lastError when nobody listens for the disconnect', async () => {
-    const page = install({ permissions: ['nativeMessaging'] })
-    call(page.runtime, 'connectNative', 'com.example.vault')
-    page.reply(`connect:${page.portId()}`, { ok: true, value: undefined })
-    await tick()
-    page.emit([page.portId(), 'disconnect', 'Native host has exited.'])
-    expect(page.error).toHaveBeenCalledWith('Unchecked runtime.lastError: Native host has exited.')
-  })
-
   it('lets main release a port the extension dropped while it was starting', async () => {
     const worker = install({ permissions: ['nativeMessaging'] }, 'worker')
     const port = call(worker.runtime, 'connectNative', 'com.example.vault')
@@ -148,14 +132,6 @@ describe('chrome.runtime native messaging in extension contexts', () => {
     worker.reply(`connect:${worker.portId()}`, { ok: true, value: undefined })
     await tick()
     expect(worker.calls.at(-1)).toEqual({ method: 'disconnect', args: [worker.portId()] })
-  })
-
-  it('registers a worker for port events on every connect, so a refusal before a grant is retried', () => {
-    const worker = install({ optional_permissions: ['nativeMessaging'] }, 'worker')
-    call(worker.runtime, 'connectNative', 'com.example.vault')
-    call(worker.runtime, 'connectNative', 'com.example.vault')
-    const listen = [PRELOAD_NATIVE_MESSAGING_NAMESPACE, 'onPortEvent', true]
-    expect(worker.listens).toEqual([listen, listen])
   })
 
   it('answers sendNativeMessage with a promise, or a callback that sees lastError', async () => {

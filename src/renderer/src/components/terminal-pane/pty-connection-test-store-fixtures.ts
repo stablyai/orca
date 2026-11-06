@@ -6,6 +6,7 @@ import type { StoreState } from './pty-connection-test-store-state'
 export function createInitialStoreState(getState: () => StoreState): StoreState {
   return {
     activeWorktreeId: 'wt-1',
+    unifiedTabsByWorktree: {},
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
     },
@@ -58,6 +59,12 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     clearSleepingAgentSession: vi.fn((paneKey: string) => {
       delete getState().sleepingAgentSessionsByPaneKey[paneKey]
+    }),
+    rememberSleepingAgentSession: vi.fn((record, replaces) => {
+      const records = getState().sleepingAgentSessionsByPaneKey
+      if (records[record.paneKey] === replaces) {
+        records[record.paneKey] = record
+      }
     }),
     registerAgentLaunchConfig: vi.fn(),
     clearAgentLaunchConfig: vi.fn(),

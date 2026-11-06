@@ -1,109 +1,34 @@
 import '../memory/host-malloc-tunables-claim'
+import { parseArgs } from './launch/daemon-command-arguments'
 import { readFileSync } from 'node:fs'
-import { startDaemon, type DaemonHandle } from './daemon-main'
-import { createPtySubprocess } from './pty-subprocess'
-import { warmWindowsConptyOnce } from './windows-conpty-warmup'
-import { warmPwshAvailabilityCache } from '../pwsh'
-import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
-import { PROTOCOL_VERSION } from './types'
-import { detectOwnCgroupScopeUnit, ownFreshDaemonScope } from './daemon-cgroup-scope'
+import { startDaemon, type DaemonHandle } from './server/daemon-main'
+import { createPtySubprocess } from './pty-subprocess/pty-subprocess'
+import { warmWindowsConptyOnce } from './pty-subprocess/windows-conpty-warmup'
+import { warmPwshAvailabilityCache } from '../pty/shell-startup/pwsh'
+import { createDaemonFileLog, createNoopDaemonFileLog } from './observability/daemon-file-log'
+import { PROTOCOL_VERSION } from './protocol/daemon-protocol-version'
+import { detectOwnCgroupScopeUnit, ownFreshDaemonScope } from './process-scopes/daemon-cgroup-scope'
 import {
   DAEMON_EXIT_ENDPOINT_OCCUPIED,
   DaemonEndpointUnavailableError
-} from './daemon-endpoint-ownership'
+} from './endpoint/publication/daemon-endpoint-ownership'
 import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
 } from '../providers/macos-tcc-login-shell'
-import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
+import { MacosLoginSessionDeathWatch } from './process-scopes/macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
-import { publishDaemonPidFile } from './daemon-spawner'
-import { initializeTerminalScopes } from './terminal-scopes-runtime'
-import { isNativePtyException, uncaughtExceptionLogDetails } from './daemon-native-pty-exception'
-import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
+import { readCurrentDaemonReadyIdentity } from './endpoint/identity/daemon-ready-identity'
+import { publishDaemonPidFile } from './launch/daemon-spawner'
+import { initializeTerminalScopes } from './process-scopes/terminal-scopes-runtime'
+import {
+  isNativePtyException,
+  uncaughtExceptionLogDetails
+} from './pty-subprocess/daemon-native-pty-exception'
+import { startDaemonScopeDeathWatch } from './process-scopes/daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage-generation-lease'
-import { createDaemonShutdownDeadline } from './daemon-shutdown-deadline'
-
-export type ParsedDaemonArgs = {
-  socketPath: string
-  tokenPath: string
-  pidPath?: string
-  launchNonce?: string
-  entryPath?: string
-  appVersion?: string
-  spawnerExecPath?: string
-  /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
-  loginSessionWatch?: boolean
-  freshDaemonScope?: boolean
-  logFilePath?: string
-}
-
-export function parseArgs(argv: string[]): ParsedDaemonArgs {
-  let socketPath = ''
-  let tokenPath = ''
-  let logFilePath = ''
-  let pidPath = ''
-  let launchNonce = ''
-  let entryPath = ''
-  let appVersion = ''
-  let spawnerExecPath = ''
-  let loginSessionWatch = false
-  let freshDaemonScope = false
-
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--socket' && argv[i + 1]) {
-      socketPath = argv[i + 1]
-      i++
-    } else if (argv[i] === '--token' && argv[i + 1]) {
-      tokenPath = argv[i + 1]
-      i++
-    } else if (argv[i] === '--log-file' && argv[i + 1]) {
-      logFilePath = argv[i + 1]
-      i++
-    } else if (argv[i] === '--pid-record' && argv[i + 1]) {
-      pidPath = argv[i + 1]
-      i++
-    } else if (argv[i] === '--launch-nonce' && argv[i + 1]) {
-      launchNonce = argv[i + 1]
-      i++
-    } else if (argv[i] === '--entry-path' && argv[i + 1]) {
-      entryPath = argv[i + 1]
-      i++
-    } else if (argv[i] === '--app-version' && argv[i + 1]) {
-      appVersion = argv[i + 1]
-      i++
-    } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
-      spawnerExecPath = argv[i + 1]
-      i++
-    } else if (argv[i] === '--login-session-watch') {
-      loginSessionWatch = true
-    } else if (argv[i] === '--fresh-daemon-scope') {
-      freshDaemonScope = true
-    }
-  }
-
-  if (!socketPath || !tokenPath) {
-    throw new Error('Usage: daemon-entry --socket <path> --token <path> [--log-file <path>]')
-  }
-
-  if ((pidPath && !launchNonce) || (!pidPath && launchNonce)) {
-    throw new Error('Daemon PID record path and launch nonce must be provided together')
-  }
-
-  return {
-    socketPath,
-    tokenPath,
-    ...(pidPath ? { pidPath, launchNonce } : {}),
-    ...(entryPath ? { entryPath } : {}),
-    ...(appVersion ? { appVersion } : {}),
-    ...(spawnerExecPath ? { spawnerExecPath } : {}),
-    ...(loginSessionWatch ? { loginSessionWatch } : {}),
-    ...(freshDaemonScope ? { freshDaemonScope } : {}),
-    ...(logFilePath ? { logFilePath } : {})
-  }
-}
+import { createDaemonShutdownDeadline } from './launch/daemon-shutdown-deadline'
 
 async function main(): Promise<void> {
   // The parent closes startup stderr after readiness; later EPIPE errors must not kill the daemon.
@@ -127,6 +52,8 @@ async function main(): Promise<void> {
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
+  // Log writes are async; every exit, including process.exit below, flushes the queued tail.
+  process.once('exit', () => daemonLog.close())
   const daemonScope = ownFreshDaemonScope(freshDaemonScope === true, launchNonce)
   const log = (event: string, details?: Record<string, unknown>): void =>
     daemonLog.log(event, details)
@@ -153,6 +80,8 @@ async function main(): Promise<void> {
       return
     }
     daemonLog.log('uncaught-exception-fatal', uncaughtExceptionLogDetails(err))
+    // Rethrowing from this handler skips 'exit' listeners.
+    daemonLog.close()
     console.error('[daemon] Uncaught exception (fatal):', err)
     throw err
   })
@@ -184,7 +113,6 @@ async function main(): Promise<void> {
       daemonLog.log('shutdown-error', { message: (err as Error)?.message })
     } finally {
       shutdownDeadline.cancel()
-      daemonLog.close()
       process.exit(0)
     }
   }
@@ -239,7 +167,6 @@ async function main(): Promise<void> {
             shuttingDown = true
             daemonLog.log('login-session-dead-retire', details)
             daemon?.recordOrderlyExit()
-            daemonLog.close()
             // Skip PTY teardown so replacement daemons cold-restore scrollback from unclean session metadata.
             process.exit(1)
           }
@@ -292,12 +219,10 @@ async function main(): Promise<void> {
       deathWatch?.stop()
       shuttingDown = true
       daemonLog.log('shutdown', { reason: 'idle' })
-      daemonLog.close()
       process.exit(0)
     },
     onRpcShutdown: () => {
       shutdownDeadline.cancel()
-      daemonLog.close()
       process.exit(0)
     },
     onShutdownRequested: beginShutdown

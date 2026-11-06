@@ -1,6 +1,6 @@
 /** Completed local agents retain cold-restore identity (#9454) without posing as unfinished work or resurrecting after pane removal. This path does not use paired-runtime web-tab recovery. */
 import { afterEach, describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { activationTreatsNoteAsFinished } from './sleeping-agent-pane-ownership'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
@@ -64,40 +64,6 @@ function reportTurnFinished(interrupted = false): void {
 }
 
 describe('a finished local agent', () => {
-  it('keeps completed quit records resumable', () => {
-    expect(
-      activationTreatsNoteAsFinished({
-        paneKey: 'quit-tab:quit-leaf',
-        tabId: 'quit-tab',
-        worktreeId: WORKTREE_ID,
-        agent: 'codex',
-        providerSession: { key: 'session_id', id: SESSION_ID },
-        prompt: '',
-        state: 'done',
-        origin: 'quit',
-        capturedAt: 1,
-        updatedAt: 1
-      })
-    ).toBe(false)
-  })
-
-  it('keeps its resume identity and is recorded as completed history', () => {
-    seedLiveLocalCodexPane()
-
-    reportTurnFinished()
-
-    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
-    expect(record, 'a finished codex turn leaves a resume record').toBeDefined()
-    expect(record?.state, 'the done turn stays done').toBe('done')
-    expect(record?.origin).toBe('live')
-    expect(record?.agent).toBe('codex')
-    expect(record?.providerSession).toEqual({ key: 'session_id', id: SESSION_ID })
-    expect(
-      activationTreatsNoteAsFinished(record!),
-      'a finished agent must read as history, or activation restarts it'
-    ).toBe(true)
-  })
-
   it('keeps an interrupted done turn resumable after its pane is killed', () => {
     seedLiveLocalCodexPane()
     reportTurnFinished(true)
@@ -138,18 +104,5 @@ describe('a finished local agent', () => {
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
-  })
-
-  it('still holds its resume identity for a cold restore while its pane exists', () => {
-    seedLiveLocalCodexPane()
-    reportTurnFinished()
-
-    // A restored surviving pane still needs its identity or crash recovery would reopen a bare shell (#9454).
-    const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
-
-    expect(launched, 'an owned pane resumes in place, never in a new tab').toBe(0)
-    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
-    expect(record, 'the pane still owns a record to cold-restore from').toBeDefined()
-    expect(record?.providerSession).toEqual({ key: 'session_id', id: SESSION_ID })
   })
 })

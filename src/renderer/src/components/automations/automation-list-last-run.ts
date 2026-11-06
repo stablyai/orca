@@ -159,7 +159,14 @@ export function formatAutomationLastRunCell(
   }
   const relative = formatAutomationRelativeTime(snapshot.at, now)
   const absolute = formatAutomationDateTime(snapshot.at)
-  const text = status && relative ? `${status} ${relative}` : status || relative || absolute
+  const text =
+    status && relative
+      ? translate(
+          'auto.components.automations.automation.list.last.run.statusWithRelative',
+          '{{status}} {{relative}}',
+          { status, relative }
+        )
+      : status || relative || absolute
   return {
     text,
     title: status ? `${status} · ${absolute}` : absolute,

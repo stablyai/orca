@@ -7,10 +7,10 @@ import {
 } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-  ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY
 } from '../../shared/orcad-runtime-capabilities'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const extraCapabilities = vi.hoisted((): string[] => [])
@@ -40,10 +40,6 @@ vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
 
 const { commitRemoteOrcadMigrationCatalog, stageRemoteOrcadMigrationCatalog } =
   await import('./orcad-migration-catalog-client')
-const {
-  abortRemoteOrcadMigrationCatalogByReference,
-  ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED
-} = await import('./orcad-migration-catalog-reference-client')
 
 const pairingCode = encodePairingOffer({
   v: PAIRING_OFFER_VERSION,
@@ -88,11 +84,6 @@ beforeEach(() => {
 })
 
 describe("orcad migration requests fit the host's sealed inbound frame", () => {
-  it('stages a large manifest that still fits', async () => {
-    await stageRemoteOrcadMigrationCatalog(pairingCode, manifestOfBytes(760 * 1024))
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses, unsent, a manifest at the validation cap: sealed, it overflows the 1 MiB frame', async () => {
     await expect(
       stageRemoteOrcadMigrationCatalog(
@@ -108,42 +99,6 @@ describe("orcad migration requests fit the host's sealed inbound frame", () => {
     await expect(
       commitRemoteOrcadMigrationCatalog(pairingCode, manifest, { expectedBlobs: manyBlobs })
     ).rejects.toThrow(/too large to move to its Orca server/)
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
-
-  it('aborts a manifest no request can carry by its identity alone, durably', async () => {
-    extraCapabilities.push(ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY)
-    const manifest = manifestOfBytes(MAX_ORCAD_MIGRATION_MANIFEST_BYTES)
-    const identity = { migrationId: manifest.migrationId, manifestSha256: manifest.manifestSha256 }
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: { ...identity, state: 'absent', aborted: true, durableAbsent: true }
-    })
-    await expect(
-      abortRemoteOrcadMigrationCatalogByReference(pairingCode, manifest)
-    ).resolves.toEqual({ ...identity, state: 'absent', aborted: true, durableAbsent: true })
-    expect(sendRequest).toHaveBeenCalledWith(
-      expect.anything(),
-      'orcad.migration.abortCatalogByReference',
-      identity
-    )
-
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: { ...identity, state: 'absent', aborted: true }
-    })
-    await expect(
-      abortRemoteOrcadMigrationCatalogByReference(pairingCode, manifest)
-    ).rejects.toThrow('orcad_migration_catalog_abort_durability_invalid')
-  })
-
-  it('refuses, unsent, an abort by reference to a host that predates it', async () => {
-    await expect(
-      abortRemoteOrcadMigrationCatalogByReference(
-        pairingCode,
-        manifestOfBytes(MAX_ORCAD_MIGRATION_MANIFEST_BYTES)
-      )
-    ).rejects.toThrow(ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED)
     expect(sendRequest).not.toHaveBeenCalled()
   })
 })

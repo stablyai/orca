@@ -7,9 +7,9 @@ import {
   type AgentSessionAttachmentPathUploadResult,
   type AgentSessionAttachmentUploadCommitResult,
   type AgentSessionAttachmentUploadTarget
-} from '../../../../shared/agent-session-attachments'
+} from '../../../../shared/agent-session/agent-session-attachments'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
-import { takeBrowserAttachmentFile } from '@/lib/browser-attachment-files'
+import { readBrowserAttachmentFile } from '@/lib/browser-attachment-files'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import { resolveEnvironment } from './web-runtime-session'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -109,7 +109,7 @@ export async function uploadBrowserFilesToWebAgentSessionAttachments(
   const { paths, ...target } = args
   const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
   for (const sourcePath of paths) {
-    const file = takeBrowserAttachmentFile(sourcePath)
+    const file = readBrowserAttachmentFile(sourcePath)
     if (!file) {
       result.failed.push({ sourcePath, reason: 'Attach the file again.' })
       continue

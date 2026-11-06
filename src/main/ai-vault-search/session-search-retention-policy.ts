@@ -1,4 +1,4 @@
-import { normalizeAiVaultSearchHistoryDays } from '../../shared/ai-vault-search-settings'
+import { normalizeAiVaultSearchHistoryDays } from '../../shared/ai-vault/search/ai-vault-search-settings'
 
 const DAY_MS = 86_400_000
 

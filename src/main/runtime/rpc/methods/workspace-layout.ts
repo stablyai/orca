@@ -10,7 +10,7 @@ import { LayoutReopenHeldPanesParams } from '../../../../shared/rpc-contract/wor
 import type { WorkspaceLayoutStreamFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { listEnvironments } from '../../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 let layoutSubscriptionSeq = 0
 
@@ -105,6 +105,13 @@ export const LAYOUT_APPLY_METHODS = [
     permission: 'workspace',
     params: LayoutReopenHeldPanesParams,
     handler: async (params, { runtime }) => runtime.reopenHeldTerminalPanes(params.panes)
+  }),
+  // The user's Start on panes held for a stopped WSL distro; main's frames show their start.
+  defineMethod({
+    name: 'layout.startWslHeldPanes',
+    permission: 'workspace',
+    params: LayoutReopenHeldPanesParams,
+    handler: async (params, { runtime }) => runtime.startWslHeldTerminalPanes(params.panes)
   })
 ]
 

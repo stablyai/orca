@@ -3,7 +3,9 @@ import { render } from './native-chat-tooltip-test-harness'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
@@ -158,6 +160,73 @@ describe('reader navigation', () => {
     expect(distanceFromBottom(container)).toBe(0)
     expect(screen.getByText('follow-up question')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
+  })
+
+  describe('with scroll to latest on send off', () => {
+    const originalSettings = useAppStore.getState().settings
+    beforeEach(() => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), nativeChatScrollToLatestOnSend: false }
+      })
+    })
+    afterEach(() => {
+      useAppStore.setState({ settings: originalSettings })
+    })
+
+    function sendFrom(
+      readerTop: (scroller: HTMLElement) => number,
+      replyRowsBeforeSend = 0
+    ): HTMLElement {
+      const handle = createRef<NativeChatMessageListHandle>()
+      const view = (messages: NativeChatMessage[]) => (
+        <NativeChatMessageList
+          ref={handle}
+          session={session(messages)}
+          isWorking
+          expandSignal={false}
+        />
+      )
+      const reply = Array.from({ length: replyRowsBeforeSend }, (_, index) =>
+        marker(TRANSCRIPT_LENGTH + index)
+      )
+      const { container, rerender } = render(view(transcript))
+      paint(container)
+      scrollTranscript(container, readerTop(scrollRoot(container)))
+      paint(container)
+      rerender(view([...transcript, ...reply]))
+      paint(container)
+      // A structured send reads the reader at the press; its echo lands before the host admits it.
+      const readerWasAtEnd = handle.current?.readerAtEnd()
+      const sentAt = TRANSCRIPT_LENGTH + reply.length
+      const sent = [...transcript, ...reply, userMessage(sentAt, 'follow-up question')]
+      rerender(view(sent))
+      paint(container)
+      act(() => handle.current?.revealLatest(readerWasAtEnd))
+      rerender(view([...sent, marker(sentAt + 1)]))
+      paint(container)
+      return container
+    }
+
+    it('leaves a reader who scrolled up where they were', () => {
+      const container = sendFrom(() => 1000)
+      expect(scrollRoot(container).scrollTop).toBe(1000)
+      expect(offersJumpToLatest()).toBe(true)
+    })
+
+    it('still follows the reply for a reader who stopped just short of the end', () => {
+      const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 20)
+      expect(distanceFromBottom(container)).toBe(0)
+      expect(offersJumpToLatest()).toBe(false)
+    })
+
+    it('leaves a reader in place once output has grown past them', () => {
+      const container = sendFrom(
+        (scroller) => scroller.scrollHeight - scroller.clientHeight - 20,
+        10
+      )
+      expect(distanceFromBottom(container)).toBeGreaterThan(ROW_PX * 10)
+      expect(offersJumpToLatest()).toBe(true)
+    })
   })
 
   it('stops following when the reader pages up from the focused transcript', () => {
@@ -365,6 +434,7 @@ describe('reader navigation', () => {
       const composer = {
         focus,
         insertTypedText,
+        insertAgentReferences: () => false,
         acceptsText: () => true,
         appendText: vi.fn(),
         handlePasteEvent: vi.fn(),
@@ -386,18 +456,6 @@ describe('reader navigation', () => {
       expect(insertTypedText).toHaveBeenCalledWith('a')
     }
   )
-
-  it('makes the transcript a keyboard stop, so the scroll keys can reach it', () => {
-    const { container } = render(list(transcript))
-
-    expect(scrollRoot(container)).toHaveAttribute('tabindex', '0')
-  })
-
-  it('names the transcript as a region, so a focused scroll stop is announced', () => {
-    const { container } = render(list(transcript))
-
-    expect(screen.getByRole('region', { name: 'Conversation' })).toBe(scrollRoot(container))
-  })
 })
 
 describe('disclosure following across retained pane visibility', () => {

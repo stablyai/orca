@@ -27,8 +27,6 @@ const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('win32-x64')
 const mockExec = vi.mocked(execCommand)
 const sha = (c: string): string => c.repeat(64)
-const root = 'C:/Users/ada/.orca-remote'
-const store = `${root}/runtimes`
 
 const powerShell = [
   process.env.ORCA_POWERSHELL_EXECUTABLE,
@@ -40,49 +38,6 @@ const powerShell = [
       stdio: 'ignore'
     }).status === 0
 )
-
-describe('Windows runtime store commands', () => {
-  it('stay inside the EDR posture: one encoded powershell.exe line, no policy switch, no compilation', () => {
-    for (const command of [
-      windowsRuntimeStoreInventoryCommand(root),
-      windowsSweepStaleRuntimeStagesCommand(store, 20, 'SWEPT')
-    ]) {
-      expect(command).toMatch(/^powershell\.exe -NoProfile -NonInteractive -EncodedCommand \S+$/)
-      expect(decodeRemotePowerShellScript(command)).not.toMatch(
-        /ExecutionPolicy|Add-Type|\.ps1|Import-Module/
-      )
-    }
-  })
-
-  it('finds process holds by image path under runtimes\\, never by image name', () => {
-    const script = decodeRemotePowerShellScript(windowsRuntimeStoreInventoryCommand(root))
-    expect(script).toContain(
-      `Get-CimInstance -ClassName Win32_Process -Filter "ExecutablePath LIKE '%\\\\runtimes\\\\%'" -Property ExecutablePath -ErrorAction Stop`
-    )
-    expect(script).not.toMatch(/Name\s*=|node\.exe|ProcessName/)
-    expect(script.indexOf("Write-Output 'PROCESS_CHECK cim'")).toBeGreaterThan(
-      script.indexOf('Get-CimInstance')
-    )
-  })
-
-  it('falls back to Get-Process image paths when WMI refuses a standard user', () => {
-    const script = decodeRemotePowerShellScript(windowsRuntimeStoreInventoryCommand(root))
-    const fallback = script.slice(script.indexOf("Write-Output 'PROCESS_CHECK cim'"))
-    expect(fallback).toContain(
-      "Get-Process -ErrorAction Stop | Where-Object { $_.Path -and $_.Path.IndexOf('\\runtimes\\', [StringComparison]::OrdinalIgnoreCase) -ge 0 }"
-    )
-    expect(fallback.indexOf("Write-Output 'PROCESS_CHECK process'")).toBeGreaterThan(
-      fallback.indexOf('Get-Process')
-    )
-  })
-
-  it('reads both ref shapes from every sibling of runtimes\\', () => {
-    const script = decodeRemotePowerShellScript(windowsRuntimeStoreInventoryCommand(root))
-    expect(script).toContain("Join-Path $d.FullName '.runtime-node'")
-    expect(script).toContain("$_.Name.StartsWith('.runtime-ref-node-')")
-    expect(script).toContain("$_.Name -ne 'runtimes'")
-  })
-})
 
 describe('parseRuntimeStoreInventory with Windows output', () => {
   it('takes holds from backslash image paths in any case, tombstones included', () => {

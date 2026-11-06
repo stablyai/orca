@@ -4,6 +4,7 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { translate } from '../../../i18n/mobile-i18n'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../src/shared/clipboard-image'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { ConnectionState } from '../../../transport/types'
@@ -16,6 +17,11 @@ import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
+import {
+  readMobilePastedImages,
+  type MobilePastedImages
+} from './mobile-native-chat-composer-paste'
+import { useClipboardReader } from '../../../platform/clipboard'
 
 type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
@@ -36,7 +42,7 @@ export function useMobileNativeChatImageUpload(args: {
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
-  attachImage: (source: MobileImageSource) => Promise<void>
+  attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -53,6 +59,7 @@ export function useMobileNativeChatImageUpload(args: {
   } = args
   const [isAttaching, setIsAttaching] = useState(false)
   const picker = useMediaPicker()
+  const clipboard = useClipboardReader()
   const attachingCount = useRef(0)
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
@@ -60,7 +67,7 @@ export function useMobileNativeChatImageUpload(args: {
   }, [connState])
 
   const attachImage = useCallback(
-    async (source: MobileImageSource): Promise<void> => {
+    async (source: MobileImageSource | MobilePastedImages): Promise<void> => {
       const scope = scopeKey
       if (
         !client ||
@@ -83,7 +90,10 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: picker.pickImages,
+          pickImages: (from) =>
+            typeof from === 'string'
+              ? picker.pickImages(from)
+              : readMobilePastedImages(from, clipboard),
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true
@@ -113,18 +123,27 @@ export function useMobileNativeChatImageUpload(args: {
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()
         if (connStateRef.current !== 'connected') {
-          showToast('Attach failed (disconnected)', 1500)
+          showToast(
+            translate('chat.useImageUpload.disconnected', 'Attach failed (disconnected)'),
+            1500
+          )
           return
         }
         if (uploadError instanceof ImageLibraryPermissionError) {
-          showToast('Photo permission denied', 1500)
+          showToast(
+            translate('chat.useImageUpload.permissionDenied', 'Photo permission denied'),
+            1500
+          )
           return
         }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
-          showToast('Image too large to attach', 1500)
+          showToast(
+            translate('chat.useImageUpload.imageTooLarge', 'Image too large to attach'),
+            1500
+          )
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(translate('chat.useImageUpload.attachFailed', 'Attach failed'), 1500)
       }
     },
     [
@@ -135,6 +154,7 @@ export function useMobileNativeChatImageUpload(args: {
       onAttachSuccess,
       onError,
       onImagesUploaded,
+      clipboard,
       picker,
       scopeKey,
       showToast,

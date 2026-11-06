@@ -1,8 +1,10 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../shared/image-paste-following-text'
-import { shellEscapePath } from './pane-helpers'
+import './pane-helpers'
+import { shellEscapePath } from '../../../../shared/shell/launch/shell-path-quoting'
 import type { PtyTransport } from './pty-transport-types'
-import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
+import './terminal-bracketed-paste'
+import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import {
   canPasteImageDropPathRaw,
   formatImageDropPasteText,

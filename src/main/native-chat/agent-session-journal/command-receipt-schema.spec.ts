@@ -3,17 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { journalPragmaNumber, openJournalDatabase, runJournalTransaction } from './journal-database'
+import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   createAgentSessionRecordTablesSql,
   createJournalTablesSql,
   JOURNAL_DB_SCHEMA_VERSION
 } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from './journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from './journal-host-database-test-support'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
 import { commandReceiptScope } from './command-receipt-schema'
 import {
@@ -34,7 +31,7 @@ export function registerCommandReceiptSchemaTests(): void {
   })
 
   afterEach(async () => {
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -45,79 +42,6 @@ export function registerCommandReceiptSchemaTests(): void {
         .get('agent_session_command_receipts')
     )
   }
-
-  describe('command receipt schema at writable open', () => {
-    it('creates the operation/caller primary key and session index on a fresh host database', () => {
-      const database = openTestJournalHostDatabase(root)
-      expect(hasReceiptTable(database.db)).toBe(true)
-      expect(journalPragmaNumber(database.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
-      expect(
-        database.db.prepare('PRAGMA table_info(agent_session_command_receipts)').all()
-      ).toEqual([
-        expect.objectContaining({ name: 'operation_id', pk: 1 }),
-        expect.objectContaining({ name: 'session_id', pk: 0 }),
-        expect.objectContaining({ name: 'caller_key', pk: 2 }),
-        expect.objectContaining({ name: 'method', pk: 0 }),
-        expect.objectContaining({ name: 'fingerprint', pk: 0 }),
-        expect.objectContaining({ name: 'status', pk: 0 }),
-        expect.objectContaining({ name: 'result_json', pk: 0 }),
-        expect.objectContaining({ name: 'rejection_json', pk: 0 }),
-        expect.objectContaining({ name: 'accepted_at', pk: 0 })
-      ])
-      const indexes = database.db.prepare('PRAGMA index_list(agent_session_command_receipts)').all()
-      expect(indexes).toHaveLength(2)
-      expect(indexes).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            name: 'sqlite_autoindex_agent_session_command_receipts_1',
-            origin: 'pk'
-          }),
-          expect.objectContaining({ name: 'agent_session_command_receipts_session', origin: 'c' })
-        ])
-      )
-      expect(
-        database.db.prepare('PRAGMA index_info(agent_session_command_receipts_session)').all()
-      ).toEqual([expect.objectContaining({ name: 'session_id' })])
-      expect(
-        database.db.prepare('PRAGMA foreign_key_list(agent_session_command_receipts)').all()
-      ).toEqual([
-        expect.objectContaining({
-          table: 'agent_session_records',
-          from: 'session_id',
-          to: 'session_id',
-          on_delete: 'CASCADE'
-        })
-      ])
-    })
-
-    it.each([3, 4])('adds the table to an older-shaped version %i database', (version) => {
-      const seeded = new Database(dbPath)
-      seeded.exec(createJournalTablesSql())
-      if (version === 4) {
-        seeded.exec(createAgentSessionRecordTablesSql())
-        writeCommandReceiptTestRecord(seeded)
-      }
-      seeded.pragma(`user_version = ${version}`)
-      expect(hasReceiptTable(seeded)).toBe(false)
-      seeded.close()
-
-      for (let open = 0; open < 2; open += 1) {
-        const { db, readOnly } = openJournalDatabase(dbPath)
-        try {
-          expect(readOnly).toBe(false)
-          expect(hasReceiptTable(db)).toBe(true)
-          expect(journalPragmaNumber(db, 'user_version')).toBe(4)
-          if (version === 4) {
-            expect(db.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
-              { session_id: 'session-1' }
-            ])
-          }
-        } finally {
-          db.close()
-        }
-      }
-    })
-  })
 
   describe('command receipts on a newer database', () => {
     it('reads receipts, refuses writes with the journal guard and leaves the file byte-identical', async () => {

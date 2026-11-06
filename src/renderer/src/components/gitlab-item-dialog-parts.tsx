@@ -4,13 +4,14 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
   GitLabWorkItem,
   MRComment
 } from '../../../shared/gitlab-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type JobTraceState = {
   loading: boolean
@@ -164,7 +165,11 @@ export function CommentCard({
                 : translate('auto.components.GitLabItemDialog.4168eb2c51', 'Resolve')}
             </Button>
           ) : null}
-          <span>{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}</span>
+          <span>
+            {comment.createdAt
+              ? new Date(comment.createdAt).toLocaleDateString(getIntlLocale())
+              : ''}
+          </span>
         </div>
       </div>
       {comment.path ? (
@@ -243,7 +248,7 @@ export function PipelineJobRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              onClick={() => void window.api.shell.openUrl(job.webUrl)}
+              onClick={(event) => openAppHttpLink(job.webUrl, { event })}
               title={translate('auto.components.GitLabItemDialog.032ae1312b', 'Open job in GitLab')}
             >
               <ExternalLink className="size-3" />

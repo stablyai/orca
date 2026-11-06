@@ -1,5 +1,5 @@
 import type { PaneManager, PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'

@@ -4,6 +4,7 @@ import {
 } from '../../../src/shared/host-display-resolution'
 import { useHostDescriptor } from './host-descriptor-store'
 import { classifyLegacyHostName } from './host-name-identity'
+import type { HostMachine } from '../../../src/shared/host-machine-line'
 
 export type HostDisplaySource = {
   id: string
@@ -11,6 +12,7 @@ export type HostDisplaySource = {
   personalName?: string
   lastKnownMachineName?: string
   lastKnownHostPlatform?: NodeJS.Platform
+  lastKnownHostMachine?: HostMachine
 }
 
 // Live descriptors override persisted identity even when empty; the phone’s rename still wins the title.
@@ -22,6 +24,7 @@ export function useHostDisplay(host: HostDisplaySource | null): HostDisplayResol
   return resolveHostDisplay({
     name: identity?.personalName ?? live?.machineName ?? identity?.name ?? '',
     machineName: live ? live.machineName : (host?.lastKnownMachineName ?? null),
-    platform: live ? live.platform : (host?.lastKnownHostPlatform ?? null)
+    platform: live ? live.platform : (host?.lastKnownHostPlatform ?? null),
+    machine: live ? (live.machine ?? null) : (host?.lastKnownHostMachine ?? null)
   })
 }

@@ -1,4 +1,4 @@
-import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
@@ -20,7 +20,8 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
     // Preserve observed-exit classification/diagnostics; attach the triggering failure as cause.
     throw cleanupError instanceof AgentSessionAcquisitionRootExitObservedError
       ? new AgentSessionAcquisitionRootExitObservedError(
-          new AggregateError([cause, cleanupError], cleanupError.message)
+          new AggregateError([cause, cleanupError], cleanupError.message),
+          cleanupError.deathEvidenceKind
         )
       : new AgentSessionAcquisitionExitUnprovenError(
           new AggregateError([cause, cleanupError], 'agent session acquisition cleanup failed')
@@ -47,7 +48,7 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
 export async function stopAgentSessionProviderRoot(
   stop: () => Promise<boolean>,
   report?: (error: Error) => void
-): Promise<boolean> {
+): Promise<boolean | 'kill-delivered'> {
   try {
     return (await stop()) === true
   } catch (error) {
@@ -56,7 +57,10 @@ export async function stopAgentSessionProviderRoot(
       error instanceof AgentSessionAcquisitionExitProvenError
     ) {
       report?.(error)
-      return true
+      return error instanceof AgentSessionAcquisitionRootExitObservedError &&
+        error.deathEvidenceKind === 'kill-delivered'
+        ? 'kill-delivered'
+        : true
     }
     if (isAgentSessionPreSpawnError(error)) {
       return true

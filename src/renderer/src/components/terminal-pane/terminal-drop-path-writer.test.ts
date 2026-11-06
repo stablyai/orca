@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
+import './terminal-bracketed-paste'
+import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 
 function createTransport(

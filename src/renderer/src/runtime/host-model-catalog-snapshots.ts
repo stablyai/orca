@@ -1,4 +1,4 @@
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from './structured-agent-session-client'
 import { structuredAgentSessionHostKey } from './structured-agent-session-host-capability'
@@ -68,8 +68,16 @@ export function recordHostModelCatalogSnapshot(
 ): void {
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
   if (catalog.origin === 'unknown' || catalog.models.length === 0) {
-    // The account a new chat pins has no list: an older answer belongs to another account.
-    snapshots.delete(key)
+    if (worktree === null) {
+      snapshots.delete(key)
+    } else {
+      const entry = snapshots.get(key)
+      const retired = entry?.byWorktree.get(worktree)
+      if (entry && retired && entry.account === retired) {
+        entry.account = null
+      }
+      entry?.byWorktree.delete(worktree)
+    }
     return
   }
   const entry = snapshots.get(key) ?? { account: null, byWorktree: new Map() }

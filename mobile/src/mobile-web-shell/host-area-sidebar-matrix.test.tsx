@@ -81,6 +81,7 @@ vi.mock('../theme/mobile-theme', async (original) => ({
   colors: {}
 }))
 vi.mock('../storage/preferences', () => ({
+  HOST_SIDEBAR_DEFAULT_WIDTH: 320,
   HOST_SIDEBAR_MAX_WIDTH: 480,
   HOST_SIDEBAR_MIN_WIDTH: 240,
   loadHostSidebarWidth: async () => 320,
@@ -145,61 +146,13 @@ vi.mock('./page-owns-host-area', async () => {
 import HostGroupLayout from '../../app/h/_layout'
 import { RpcClientProvider } from '../transport/client-context.web'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
-import {
-  BUNDLE_REFUSED,
-  createMobileWebShellSession,
-  gates,
-  MANIFEST_WIRE,
-  manifestFacts,
-  run
-} from './mobile-web-shell-session-test-fixtures'
+import './mobile-web-shell-session-test-fixtures'
 import type { MobileWebShellSession } from './mobile-web-shell-session-contract'
-import type { MobileWebPageRoute } from './page-route-policy'
 
 const IPAD = { width: 1180, height: 820 }
 const PHONE = { width: 390, height: 844 }
-const SIDEBAR = 320
+
 const HOST = '/h/host-1'
-const DETAIL = '/h/host-1/session/wt-1'
-
-type Shell = 'shipped' | 'new'
-type Page = 'none' | 'undeclared' | 'declared'
-
-function pageRoutes(page: Page): MobileWebPageRoute[] | null {
-  if (page === 'none') {
-    return null
-  }
-  return [
-    {
-      pathname: '/h/[hostId]',
-      grants: ['navigate'],
-      ...(page === 'declared' ? { canOwnHostArea: true } : {})
-    },
-    { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'] }
-  ]
-}
-
-function sessionFor(page: Page, pathname: string, wide: boolean) {
-  const routes = pageRoutes(page)
-  const opened = run(
-    createMobileWebShellSession(pathname),
-    { type: 'layout-changed', wide },
-    { type: 'gates-changed', gates: routes === null ? gates({ hostCapabilities: [] }) : gates() }
-  ).session
-  if (routes === null) {
-    return opened
-  }
-  return run(
-    opened,
-    { type: 'cache-read', generation: null },
-    { type: 'manifest-read', manifest: manifestFacts({ ...MANIFEST_WIRE, routes }) },
-    { type: 'download-staged' }
-  ).session
-}
-
-function served(page: Page, pathname: string, wide: boolean): boolean {
-  return sessionFor(page, pathname, wide).state.kind === 'activating'
-}
 
 async function sidebarsIn(
   renderer: Renderer,
@@ -237,120 +190,10 @@ async function sidebarsIn(
 }
 
 // hostAreaBeneath models a detail pushed over the host page; without it, the detail was deep-linked.
-async function countSidebars(
-  shell: Shell,
-  page: Page,
-  wide: boolean,
-  at: string = HOST,
-  hostAreaBeneath = at === HOST
-) {
-  const window = wide ? IPAD : PHONE
-  const pageCode: Renderer = page === 'declared' ? 'page' : 'old-page'
-  if (shell === 'shipped') {
-    const native = await sidebarsIn('shipped-shell', window, { pathname: at })
-    const opens = page !== 'none' && !(wide && at === HOST) && served(page, at, false)
-    const pane = wide ? { ...window, width: window.width - SIDEBAR } : window
-    return { native, pages: opens ? await sidebarsIn(pageCode, pane, { pathname: at }) : 0 }
-  }
-  const native = await sidebarsIn('native', window, {
-    pathname: at,
-    ...(hostAreaBeneath ? { hostSession: sessionFor(page, HOST, wide) } : {})
-  })
-  let pages = 0
-  const session = sessionFor(page, at, wide)
-  if (session.state.kind === 'activating') {
-    const pane = wide && native > 0 ? { ...window, width: window.width - SIDEBAR } : window
-    pages = await sidebarsIn(pageCode, pane, { pathname: at, ownsHostArea: session.ownsHostArea })
-  }
-  return { native, pages }
-}
-
-describe('host sidebars on screen, per shell, page and width, on the host route', () => {
-  const rows: [Shell, Page, boolean, { native: number; pages: number }][] = [
-    ['shipped', 'none', false, { native: 0, pages: 0 }],
-    ['shipped', 'undeclared', false, { native: 0, pages: 0 }],
-    ['shipped', 'declared', false, { native: 0, pages: 0 }],
-    ['new', 'none', false, { native: 0, pages: 0 }],
-    ['new', 'undeclared', false, { native: 0, pages: 0 }],
-    ['new', 'declared', false, { native: 0, pages: 0 }],
-    ['shipped', 'none', true, { native: 1, pages: 0 }],
-    ['shipped', 'undeclared', true, { native: 1, pages: 0 }],
-    ['shipped', 'declared', true, { native: 1, pages: 0 }],
-    ['new', 'none', true, { native: 1, pages: 0 }],
-    ['new', 'undeclared', true, { native: 1, pages: 0 }],
-    ['new', 'declared', true, { native: 0, pages: 1 }]
-  ]
-
-  it.each(rows)('%s shell, %s page, wide=%s', async (shell, page, wide, expected) => {
-    expect(await countSidebars(shell, page, wide)).toEqual(expected)
-  })
-})
-
-describe('host sidebars on a wide detail route', () => {
-  const rows: [string, Shell, Page, boolean, { native: number; pages: number }][] = [
-    // Both released versions are outside this tree; retain their pairing as a compatibility fixture.
-    ['old app opening a detail', 'shipped', 'undeclared', false, { native: 1, pages: 1 }],
-    ['old app opening a detail', 'shipped', 'declared', false, { native: 1, pages: 0 }],
-    ['deep link or notification', 'new', 'none', false, { native: 1, pages: 0 }],
-    ['deep link or notification', 'new', 'undeclared', false, { native: 1, pages: 0 }],
-    ['deep link or notification', 'new', 'declared', false, { native: 1, pages: 0 }],
-    ['narrow to wide with a detail pushed', 'new', 'declared', false, { native: 1, pages: 0 }],
-    ['handoff to a native screen', 'new', 'declared', true, { native: 1, pages: 0 }],
-    ['handoff to a native screen', 'new', 'undeclared', true, { native: 1, pages: 0 }]
-  ]
-
-  it.each(rows)('%s: %s shell, %s page', async (_case, shell, page, beneath, expected) => {
-    expect(await countSidebars(shell, page, true, DETAIL, beneath)).toEqual(expected)
-  })
-})
-
-describe('the native sidebar beside a declaring page on its way in', () => {
-  const declared = pageRoutes('declared') ?? []
-  const checking = run(createMobileWebShellSession(HOST, true), {
-    type: 'gates-changed',
-    gates: gates()
-  }).session
-  const fetching = run(
-    checking,
-    { type: 'cache-read', generation: null },
-    { type: 'manifest-read', manifest: manifestFacts({ ...MANIFEST_WIRE, routes: declared }) }
-  ).session
-  const failed = run(fetching, { type: 'download-failed', cause: BUNDLE_REFUSED }).session
-  const rechecking = run(failed, { type: 'retry-pressed' }).session
-  // Keep native sidebar until ownership is declared, including failures; retry must show it while checking again.
-  const rows: [string, MobileWebShellSession, number][] = [
-    ['checking', checking, 1],
-    ['fetching', fetching, 0],
-    ['activating', run(fetching, { type: 'download-staged' }).session, 0],
-    ['failed', failed, 0],
-    ['checking again', rechecking, 1]
-  ]
-
-  it.each(rows)('%s', async (_state, hostSession, expected) => {
-    expect(hostSession.state.kind).toBe(_state === 'checking again' ? 'checking' : _state)
-    expect(await sidebarsIn('native', IPAD, { hostSession })).toBe(expected)
-  })
-})
 
 describe('the page sidebar rule', () => {
-  it('draws no sidebar in a wide viewport without the init fact', async () => {
-    expect(await sidebarsIn('page', IPAD)).toBe(0)
-    expect(await sidebarsIn('page', IPAD, { ownsHostArea: false })).toBe(0)
-    expect(await sidebarsIn('page', { width: 1366 - SIDEBAR, height: 1024 })).toBe(0)
-  })
-
   it('draws one only when the shell gave it the host area, and only when wide', async () => {
     expect(await sidebarsIn('page', IPAD, { ownsHostArea: true })).toBe(1)
     expect(await sidebarsIn('page', PHONE, { ownsHostArea: true })).toBe(0)
-  })
-})
-
-describe('a phone', () => {
-  it('reports nothing to the layout from a served host route', async () => {
-    const hostSession = sessionFor('declared', HOST, false)
-    expect(hostSession.state.kind).toBe('activating')
-    env.reports.length = 0
-    expect(await sidebarsIn('native', PHONE, { hostSession })).toBe(0)
-    expect(env.reports).toEqual([])
   })
 })

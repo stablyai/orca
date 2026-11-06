@@ -101,6 +101,13 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
       void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)
       set({ updateReassuranceSeen: true })
     },
+    seenMacosUpdateRequirement: null,
+    markMacosUpdateRequirementSeen: (minimumMacosVersion) => {
+      void window.api.ui
+        .set({ seenMacosUpdateRequirement: minimumMacosVersion })
+        .catch(console.error)
+      set({ seenMacosUpdateRequirement: minimumMacosVersion })
+    },
     osc52ClipboardDefaultOnNoticePending: false,
     clearOsc52ClipboardDefaultOnNotice: () => {
       // Clear locally before persisting to prevent repeat toasts on failure; next launch may re-arm the notice.

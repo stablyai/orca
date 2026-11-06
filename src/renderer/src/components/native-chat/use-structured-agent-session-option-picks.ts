@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 
 export function useRememberSessionOptionPicks(target: RuntimeClientTarget, agent: AgentType) {

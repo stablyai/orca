@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
   it('coalesces concurrent creates that share a clientMutationId', async () => {

@@ -7,7 +7,7 @@ import {
   getWorkspaceReferenceIdentifier,
   getWorkspaceReferenceIdentity,
   parseWorkspaceReferenceQuery
-} from '../../shared/workspace-reference-identity'
+} from '../../shared/workspace-attachments/workspace-reference-identity'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   getOptionalPositiveIntegerFlag,

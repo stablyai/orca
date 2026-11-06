@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { SettingsProjectRemovalScope } from '../settings-project-list'
+import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
 function getRemoveProjectDescription(scope: SettingsProjectRemovalScope): string {

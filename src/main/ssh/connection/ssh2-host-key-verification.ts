@@ -3,7 +3,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   createHostKeyVerifier,
-  DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+  getDefaultServerHostKeyAlgorithms,
   orderServerHostKeyAlgorithms
 } from '../ssh-host-key-verifier'
 import { HostKeyVerificationError, hostKeyPolicyForOwner } from '../ssh-host-key-decision'
@@ -107,12 +107,13 @@ export async function installSsh2HostKeyVerification(
     config.port ?? 22
   )
   // If ssh2's own algorithm list is unreadable, keep its defaults rather than guessing a reorder.
-  const serverHostKeyOrder = DEFAULT_SERVER_HOST_KEY_ALGORITHMS
+  const defaultServerHostKeyAlgorithms = getDefaultServerHostKeyAlgorithms()
+  const serverHostKeyOrder = defaultServerHostKeyAlgorithms
     ? orderServerHostKeyAlgorithms(
         knownHostsEntries,
         hostKeyLookupHost,
         config.port ?? 22,
-        DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+        defaultServerHostKeyAlgorithms,
         storedKeyTypes,
         isHostKeyAlias
       )

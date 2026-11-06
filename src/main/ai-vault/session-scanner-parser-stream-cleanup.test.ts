@@ -24,12 +24,12 @@ vi.mock('node:readline', async (importOriginal) => ({
   createInterface: mocks.createInterface
 }))
 
-import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
-import { parseDroidSessionFile } from './session-scanner-droid-parser'
-import { parseMessageGraphSessionFile } from './session-scanner-graph-parsers'
-import { parseGrokSessionFile } from './session-scanner-grok-parser'
-import { parseKimiSessionFile } from './session-scanner-kimi-parser'
-import { clearKimiSessionIndexCache } from './session-scanner-kimi-paths'
+import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'
+import { parseDroidSessionFile } from './scanners/droid/session-scanner-droid-parser'
+import { parseMessageGraphSessionFile } from './scanners/session-scanner-graph-parsers'
+import { parseGrokSessionFile } from './scanners/grok/session-scanner-grok-parser'
+import { parseKimiSessionFile } from './scanners/kimi/session-scanner-kimi-parser'
+import { clearKimiSessionIndexCache } from './scanners/kimi/session-scanner-kimi-paths'
 
 const PARSE_FAILURE = 'parser failed mid-transcript'
 

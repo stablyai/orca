@@ -1,7 +1,7 @@
 import { ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { SshTarget } from '../../shared/ssh-types'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { IDENTITY_ORCAD_MIGRATION_PATH_REWRITER } from './orcad-migration-path-rewrite'
 import type {

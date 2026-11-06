@@ -20,7 +20,7 @@ export const ORCHESTRATION_RUN_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'A Run is a namespace and home inbox. It never schedules or places workers.',
+      'A Run is a namespace and home inbox. It never schedules or places workers. worker-start --spec creates one when none is bound; use run-create for Task graphs or a new goal.',
       '--retry-request is only for exact recovery after an unknown mutation result.'
     ]
   },

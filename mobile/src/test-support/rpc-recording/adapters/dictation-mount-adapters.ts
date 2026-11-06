@@ -1,6 +1,7 @@
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as AudioChunkModule from '../../../hooks/mobile-dictation-audio-chunk'
 
 const DICTATION_ID = 'dictation-1'
 const MODEL_ID = 'whisper-small'
@@ -82,9 +83,10 @@ export function dictationMountAdapters(
       }
     },
     'speech.audio-chunk': ({ client, effect }) => {
-      const enqueue = modules.load<typeof import('../../../hooks/mobile-dictation-audio-chunk')>(
+      const chunks = modules.load<typeof AudioChunkModule>(
         'mobile/src/hooks/mobile-dictation-audio-chunk.ts'
-      ).enqueueMobileDictationAudioChunk
+      )
+      const enqueue = chunks.enqueueMobileDictationAudioChunk
       const budget = modules.load<
         typeof import('../../../hooks/mobile-dictation-pending-audio-budget')
       >('mobile/src/hooks/mobile-dictation-pending-audio-budget.ts')
@@ -105,7 +107,8 @@ export function dictationMountAdapters(
             {
               pendingChunks,
               pendingAudioBudget,
-              shouldReleaseBudget: () => true,
+              isActive: () => true,
+              transcriptSoFar: new chunks.MobileDictationTranscriptSoFar(),
               failActiveDictation: (id: string, error: unknown) => {
                 failures.push(error instanceof Error ? error.message : String(error))
                 effect('dictation-failed', { id })

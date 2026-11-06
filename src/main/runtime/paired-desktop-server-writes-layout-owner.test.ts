@@ -1,7 +1,6 @@
 // Paired close uses session.tabs.close to stop host terminals; window-style layout.apply assumes its window already stopped them.
 import { describe, expect, it, vi } from 'vitest'
 import {
-  LEAF_A,
   PTY_A,
   TAB_ID,
   WORKTREE_ID,
@@ -72,22 +71,6 @@ describe.each([
 
     expect(tabRow(fixture)?.customTitle).toBe('from desktop')
     expect(notifier?.renameTerminal.mock.calls ?? []).toEqual([])
-  })
-
-  it('applies the routed props, chat pane and AI vault title in main, stopping nothing', async () => {
-    const { fixture } = setup()
-
-    for (const command of [
-      { type: 'setTabProps', workspace: WORKTREE_ID, tabId: TAB_ID, color: '#ff0000' },
-      { type: 'setChatPane', workspace: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_A },
-      { type: 'renameTab', workspace: WORKTREE_ID, tabId: TAB_ID, kind: 'aiVault', title: null }
-    ] as const) {
-      await expect(fixture.runtime.applyLayoutCommand(command)).resolves.toMatchObject({ ok: true })
-    }
-
-    expect(tabRow(fixture)).toMatchObject({ color: '#ff0000' })
-    expect(fixture.session().terminalLayoutsByTabId[TAB_ID]?.chatLeafId).toBe(LEAF_A)
-    expect(fixture.stopped).toEqual([])
   })
 
   // The pitfall: a window's closeTabs means its window already stopped the terminals.

@@ -118,7 +118,7 @@ export function ChecksTabActions({
             onSelect={() => void onRerun(true)}
           >
             <RefreshCw className="size-4" />
-            {translate('auto.components.GitHubItemDialog.e31651a224', 'Rerun failed checks')}
+            {translate('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void onRerun(false)}>
             <RefreshCw className="size-4" />
@@ -151,6 +151,7 @@ export function ChecksTabCompactHeader({
   counts,
   summaryLabel,
   listLength,
+  showSummary = false,
   refreshAction,
   rerunAction,
   secondaryActions
@@ -159,6 +160,7 @@ export function ChecksTabCompactHeader({
   summaryColor: string
   counts: { failing: number; pending: number }
   summaryLabel: string
+  showSummary?: boolean
   listLength: number
   refreshAction: React.JSX.Element
   rerunAction: React.JSX.Element | null
@@ -179,7 +181,7 @@ export function ChecksTabCompactHeader({
             <div className="text-[13px] font-medium leading-5 text-foreground">
               {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
             </div>
-            {listLength > 0 && (
+            {(listLength > 0 || showSummary) && (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
               </div>

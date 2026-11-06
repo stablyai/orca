@@ -1,12 +1,12 @@
 import { extractLeadingEnvAssignments } from '../../../shared/command-environment'
 import { getCommandTokenPathBasename } from '../../../shared/command-token-scanner'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveStartupShell,
   type AgentStartupShell,
   tokenizeStartupCommand
-} from '../../../shared/tui-agent-startup-shell'
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { OrchestrationError } from './orchestration-error'
 
 export function resolveConfiguredWorkerAgent(

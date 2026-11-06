@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-types'
 import type { PreloadApi } from '../api-types'
 
 export const claudeAccountsApi = {
@@ -16,5 +17,11 @@ export const claudeAccountsApi = {
     accountId: string | null
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
-  }) => ipcRenderer.invoke('claudeAccounts:select', args)
+  }) => ipcRenderer.invoke('claudeAccounts:select', args),
+  onSelectedElsewhere: (callback: (change: ClaudeAccountSelectionChange) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: ClaudeAccountSelectionChange) =>
+      callback(change)
+    ipcRenderer.on('claudeAccounts:selectedElsewhere', listener)
+    return () => ipcRenderer.removeListener('claudeAccounts:selectedElsewhere', listener)
+  }
 } satisfies PreloadApi['claudeAccounts']

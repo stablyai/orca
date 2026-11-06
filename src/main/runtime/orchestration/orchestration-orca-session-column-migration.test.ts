@@ -7,7 +7,7 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from './terminal-authority/structured-sessions/structured-worker-identity'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
@@ -138,6 +138,7 @@ function stripOrcaSessionSchema(path: string, version: number): void {
     ${DROP_REMOVED_WORK_TRIGGERS_SQL}
     ${DROP_RUN_EVENT_TRIGGERS_SQL}
     DROP INDEX idx_runs_coordinator_orca_session_id;
+    DROP INDEX IF EXISTS idx_dispatch_session_presentation;
     DROP INDEX idx_dispatch_assignee_orca_session_id;
     DROP TRIGGER trg_runs_remember_coordinator_insert;
     DROP TRIGGER trg_runs_remember_coordinator_update;

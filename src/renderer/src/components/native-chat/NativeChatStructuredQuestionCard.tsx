@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
-import type { AgentJournalQuestion } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
+import type { AgentJournalQuestion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
 import {
   structuredQuestionAnswers,
   structuredQuestionCard
@@ -20,7 +20,7 @@ export function NativeChatStructuredQuestionCard({
   onCancel: () => void
   isSubmitting?: boolean
   shouldFocus?: boolean
-  answerInputRef?: RefObject<HTMLInputElement | null>
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
 }): React.JSX.Element {
   const card = structuredQuestionCard(questions)
   return (

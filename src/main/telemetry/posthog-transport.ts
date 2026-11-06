@@ -1,10 +1,13 @@
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
-import { PostHog } from 'posthog-node'
+import type * as PostHogSdk from 'posthog-node'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { getMainHttpClient } from '../network/http-client'
 import type { CommonProps, EventName } from '../../shared/telemetry-events'
 import type { ConsentState } from './consent'
 
 const OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS = 1_000
+export const POSTHOG_FLUSH_AT = 20
+export const POSTHOG_FLUSH_INTERVAL_MS = 10_000
 
 export function buildCommonProps(
   installId: string,
@@ -24,7 +27,7 @@ export function buildCommonProps(
 }
 
 export function waitForCaptureEnqueue(
-  client: PostHog,
+  client: PostHogSdk.PostHog,
   event: EventName,
   uuid: string
 ): Promise<boolean> {
@@ -69,15 +72,23 @@ export function shouldOptOutSdkAtInit(consent: ConsentState): boolean {
   return consent.effective === 'disabled'
 }
 
-export function createPostHogClient(writeKey: string, consent: ConsentState): PostHog {
-  const client = new PostHog(writeKey, {
+// Load the SDK with the client; requiring it at startup costs ~58ms before any window (#35752).
+function loadPostHogSdk(): typeof PostHogSdk {
+  return require('posthog-node')
+}
+
+export function createPostHogClient(writeKey: string, consent: ConsentState): PostHogSdk.PostHog {
+  const client = new (loadPostHogSdk().PostHog)(writeKey, {
     host: 'https://us.i.posthog.com',
-    flushAt: 20,
-    flushInterval: 10_000,
+    flushAt: POSTHOG_FLUSH_AT,
+    flushInterval: POSTHOG_FLUSH_INTERVAL_MS,
     // Disable SDK GeoIP/IP enrichment to keep the wire inside the declared allow-list.
     disableGeoip: true,
     // Increase offline buffer from 1000 to 5000; overflow drops oldest events.
-    maxQueueSize: 5000
+    maxQueueSize: 5000,
+    // The SDK's default global fetch skips the desktop session's proxy; resolved per send.
+    // Omit credentials so the desktop session never attaches its cookies to telemetry.
+    fetch: (url, options) => getMainHttpClient().fetch(url, { ...options, credentials: 'omit' })
   })
 
   if (shouldOptOutSdkAtInit(consent)) {

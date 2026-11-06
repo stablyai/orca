@@ -1,8 +1,4 @@
-import type {
-  RuntimeFilePreviewResult,
-  RuntimeFileReadChunkResult,
-  RuntimeFileReadResult
-} from '../../../shared/runtime-types'
+import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
@@ -21,7 +17,9 @@ import {
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
-import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
+import { readRemoteRangePreview } from './runtime-file-range-preview'
+import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session/agent-session-attachments'
+import { decodeSvgBase64, isSvgFilePath } from '../../../shared/svg-document'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   isHostFileOutsideWorkspaces,
@@ -35,16 +33,35 @@ import {
   readRemoteFileInChunks,
   readRemoteFilePreview
 } from './runtime-paged-file-read'
-
-const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
-const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
-  'Remote file download requires a newer Orca server. Update the headless server and try again.'
-
-type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>>
+import {
+  downloadRemoteFileViaPreview,
+  readRemoteDownloadChunk,
+  remoteChunkedDownloadAvailable,
+  streamDownloadedFile
+} from './runtime-remote-file-download'
 
 export { localAccess } from './runtime-file-routing'
 
-export async function readRuntimeFileContent({
+/** SVG opens as editable markup; hosts send it as image bytes, or as a URL if a viewer asks. */
+export async function readRuntimeFileContent(
+  args: RuntimeFileReadArgs
+): Promise<RuntimeReadableFileContent> {
+  if (!isSvgFilePath(args.filePath)) {
+    return readRuntimeFileContentAsStored(args)
+  }
+  const result = await readRuntimeFileContentAsStored({ ...args, pageOversizedBinary: false })
+  const markup = result.isBinary && result.content ? decodeSvgBase64(result.content) : null
+  if (markup === null) {
+    return result
+  }
+  return {
+    content: markup,
+    isBinary: false,
+    ...(result.fileIdentity ? { fileIdentity: result.fileIdentity } : {})
+  }
+}
+
+async function readRuntimeFileContentAsStored({
   target,
   filePath,
   relativePath,
@@ -65,7 +82,9 @@ export async function readRuntimeFileContent({
       connectionId,
       includeLocalLogMetadata,
       ...localAccess(connectionId, access),
-      ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {})
+      ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {}),
+      // A viewer reads images and PDFs by URL; baseline checks keep base64.
+      ...(pageOversizedBinary && !connectionId ? { rangePreview: true } : {})
     })
   }
   // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
@@ -91,6 +110,11 @@ export async function readRuntimeFileContent({
     worktree: scratch?.worktreeSelector ?? toRuntimeWorktreeSelector(worktreeId),
     relativePath: readPath
   })
+  // Baseline checks discard binary content, so only readers that render bytes mint a stream.
+  const rangePreview = pageOversizedBinary ? await readRemoteRangePreview(remote) : null
+  if (rangePreview) {
+    return rangePreview
+  }
   let result: RuntimeFileReadResult
   try {
     result = await callRuntimeRpc<RuntimeFileReadResult>(
@@ -151,7 +175,10 @@ export async function readRuntimeFilePreview(
       runtimeTarget,
       'agentSessionAttachment.read',
       { path: filePath },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+      }
     )
   }
   if (!remoteArgs) {
@@ -159,7 +186,8 @@ export async function readRuntimeFilePreview(
       return readHostFilePreview({
         target: runtimeTarget,
         worktreeId,
-        absolutePath: filePath
+        absolutePath: filePath,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
       })
     }
     if (hasRemoteRuntimeOwner(context)) {
@@ -175,7 +203,8 @@ export async function readRuntimeFilePreview(
     {
       target: remoteArgs.target,
       worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath
+      relativePath: remoteArgs.relativePath,
+      expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
     },
     { pageOversized: true }
   )
@@ -211,117 +240,7 @@ export async function downloadRuntimeFile(
     return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
   }
 
-  const download = await window.api.fs.startDownloadedFile({ suggestedName })
-  if (download.canceled) {
-    return download
-  }
-
-  let finished = false
-  try {
-    let offset = 0
-    for (;;) {
-      const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
-      if (chunk.bytesRead > 0) {
-        await window.api.fs.appendDownloadedFileChunk({
-          transferId: download.transferId,
-          contentBase64: chunk.contentBase64
-        })
-      }
-      offset += chunk.bytesRead
-      if (chunk.eof) {
-        break
-      }
-      if (chunk.bytesRead <= 0) {
-        throw new Error('Remote download stalled before reaching EOF')
-      }
-    }
-    const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
-    finished = true
-    return result
-  } finally {
-    if (!finished) {
-      await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
-    }
-  }
-}
-
-async function remoteChunkedDownloadAvailable(
-  remoteArgs: RemoteFileDownloadArgs
-): Promise<boolean> {
-  try {
-    await callRuntimeRpc<RuntimeFileReadChunkResult>(
-      remoteArgs.target,
-      'files.readChunk',
-      {
-        worktree: remoteArgs.worktreeSelector,
-        relativePath: remoteArgs.relativePath,
-        offset: 0,
-        length: 1
-      },
-      { timeoutMs: 60_000 }
-    )
-    return true
-  } catch (error) {
-    // Older hosts may lack chunk downloads but still satisfy preview-sized reads.
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return false
-    }
-    throw error
-  }
-}
-
-async function readRemoteDownloadChunk(
-  remoteArgs: RemoteFileDownloadArgs,
-  offset: number
-): Promise<RuntimeFileReadChunkResult> {
-  return callRuntimeRpc<RuntimeFileReadChunkResult>(
-    remoteArgs.target,
-    'files.readChunk',
-    {
-      worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath,
-      offset,
-      length: REMOTE_DOWNLOAD_CHUNK_BYTES
-    },
-    { timeoutMs: 60_000 }
-  )
-}
-
-async function downloadRemoteFileViaPreview(
-  remoteArgs: RemoteFileDownloadArgs,
-  suggestedName: string
-): Promise<RuntimeFileDownloadResult> {
-  try {
-    const result = await callRuntimeRpc<RuntimeFilePreviewResult>(
-      remoteArgs.target,
-      'files.readPreview',
-      { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
-      { timeoutMs: 15_000 }
-    )
-    // Legacy empty metadata-free binary means unsupported; recognized zero-byte previews remain valid.
-    if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
-      throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
-    }
-    return window.api.fs.saveDownloadedFile({
-      suggestedName,
-      content: result.content,
-      encoding: result.isBinary ? 'base64' : 'utf8'
-    })
-  } catch (error) {
-    if (isUnsupportedRemotePreviewDownload(error)) {
-      throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
-    }
-    throw error
-  }
-}
-
-function isUnsupportedRemotePreviewDownload(error: unknown): boolean {
-  if (!(error instanceof RuntimeRpcCallError)) {
-    return false
-  }
-  return (
-    error.code === 'method_not_found' ||
-    (error.code === 'runtime_error' &&
-      (error.message === 'file_too_large' || error.message === 'binary_file'))
+  return streamDownloadedFile(suggestedName, (offset) =>
+    readRemoteDownloadChunk(remoteArgs, offset)
   )
 }

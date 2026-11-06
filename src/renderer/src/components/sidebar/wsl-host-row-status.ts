@@ -75,6 +75,20 @@ export function getWslHostRowTurnedOffDetail(): string {
   )
 }
 
+export function getWslHostsPausedLabel(): string {
+  return translate(
+    'auto.components.sidebar.wslHostRowStatus.paused',
+    'WSL hosts are paused in this build. Your saved hosts and their projects keep working; adding hosts and moving projects onto them is paused.'
+  )
+}
+
+export function getWslHostsPausedShortLabel(): string {
+  return translate(
+    'auto.components.sidebar.wslHostRowStatus.pausedShort',
+    'Adding WSL distros is paused in this build.'
+  )
+}
+
 /** Explain missing orcad templates in dialogs; without them WSL hosts cannot run. */
 export function getWslHostServerFilesMissingLabel(): string {
   return translate(

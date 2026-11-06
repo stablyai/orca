@@ -1,5 +1,4 @@
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
-import { skipOpenEscapeContinuation } from '../../../../../shared/terminal-partial-escape-tail'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -77,23 +76,11 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
       return
     }
     const replayedSeq = typeof replayingSnapshot?.seq === 'number' ? replayingSnapshot.seq : null
-    // The reset above aborted any open escape, so a chunk main labels as resuming inside one must skip its tail (#33766).
-    const followsByteGap = !opts.quiet || !opts.preserveReplayState
-    let openEscape = ''
-    let pendingData = ''
+    const pendingWrites: { data: string; chunk: (typeof pendingChunks)[number] }[] = []
     for (const chunk of pendingChunks) {
       const sliced =
         replayedSeq === null ? chunk.data : session.getChunkDataAfterSnapshot(chunk, replayedSeq)
-      let data = sliced ?? chunk.data
-      if (followsByteGap && chunk.gapEscapeState && data === chunk.data) {
-        openEscape = chunk.gapEscapeState
-      }
-      if (openEscape) {
-        const skipped = skipOpenEscapeContinuation(openEscape, data)
-        data = skipped.rest
-        openEscape = skipped.stillOpen
-      }
-      pendingData += data
+      pendingWrites.push({ data: sliced ?? chunk.data, chunk })
     }
     if (replayingSnapshot && replayedSeq !== null) {
       session.setRestoredSnapshotBaseline(
@@ -109,6 +96,19 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
           )
         }
       }
+    }
+    // One coalesced write; each admission advances the stream position past the chunk before it.
+    let pendingData = ''
+    for (const { data, chunk } of pendingWrites) {
+      if (data) {
+        // A reset above moved xterm off the stream; resume only where xterm is or at a proven boundary (#33766).
+        // The abandon already disclosed the loss or deferred to the post-flood repaint.
+        const admitted = session.admitStreamBytes(data, chunk, { repairsOwnSkips: true })
+        if (admitted !== null) {
+          pendingData += admitted
+        }
+      }
+      session.recordRendererOrderedSeq(chunk)
     }
     if (pendingData) {
       session.writePtyOutputToXterm(pendingData, true)

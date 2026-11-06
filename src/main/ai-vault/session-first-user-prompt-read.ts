@@ -1,8 +1,8 @@
 import type {
   AiVaultAgent,
-  AiVaultFirstUserPromptResult,
-  AiVaultSession
-} from '../../shared/ai-vault-types'
+  AiVaultSession,
+  AiVaultFirstUserPromptResult as ReadAiVaultFirstUserPromptResult
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -11,11 +11,11 @@ import {
   parseOpenCodeSqliteSessionViaWorker,
   parseOpenCode2SqliteSessionViaWorker,
   parseZcodeSqliteSessionViaWorker
-} from './session-scanner-opencode-sqlite-worker-spawn'
-import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+} from './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import type { FileWithMtime } from './session-scanner-types'
-import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
-import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
+import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
+import { configureOpenCodeWslReaders } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
@@ -25,8 +25,6 @@ export type ReadAiVaultFirstUserPromptArgs = {
   codexHome?: string | null
   wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
 }
-
-export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
 
 /** Reparse one transcript with full first-prompt capture instead of listing preview limits. */
 export async function readAiVaultFirstUserPrompt(

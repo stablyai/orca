@@ -208,6 +208,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     oscLinks: serialized?.oscLinks,
     alternateScreen: serialized?.alternateScreen,
     terminalOwner: serialized?.terminalOwner,
+    lastTitle: serialized?.lastTitle,
     data: serialized?.data ?? ''
   })
   console.log('[mobile-terminal-stream] snapshot', {

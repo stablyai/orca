@@ -2,7 +2,7 @@
 
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function findStructuredAgentSessionTab(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -21,10 +21,11 @@ export function findStructuredAgentSessionTab(
 /** Return the pruned snapshot, or null; the caller owns storing/emitting, so this cannot fail settlement. */
 export function retireStructuredAgentSessionTabFrom(
   snapshot: RuntimeMobileSessionTabsSnapshot,
-  sessionId: string
+  sessionId: string,
+  expectedTabId?: string
 ): RuntimeMobileSessionTabsSnapshot | null {
   const tab = findStructuredAgentSessionTab(snapshot, sessionId)
-  if (!tab) {
+  if (!tab || (expectedTabId !== undefined && tab.id !== expectedTabId)) {
     return null
   }
   const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
@@ -48,11 +49,20 @@ export function retireStructuredAgentSessionTabFrom(
 export function retireSettledStructuredWorkerTab(
   sessionId: string,
   runtime:
-    | { retireStructuredAgentSessionTabFromSnapshot?: (sessionId: string) => boolean }
-    | undefined
+    | {
+        retireStructuredAgentSessionTabFromSnapshot?: (
+          sessionId: string,
+          expectedTabId?: string
+        ) => boolean
+      }
+    | undefined,
+  expectedTabId: string | null
 ): void {
+  if (!expectedTabId) {
+    return
+  }
   try {
-    runtime?.retireStructuredAgentSessionTabFromSnapshot?.(sessionId)
+    runtime?.retireStructuredAgentSessionTabFromSnapshot?.(sessionId, expectedTabId)
   } catch (error) {
     console.warn('[orchestration] structured worker tab retirement failed', sessionId, error)
   }

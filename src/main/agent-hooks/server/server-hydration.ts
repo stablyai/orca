@@ -9,8 +9,9 @@ import {
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
-import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
-import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
+import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { LAST_STATUS_FILE_VERSION } from './server-constants'
 import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
 import {
   authorityCommitmentsMatch,
@@ -28,6 +29,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
       return
     }
     // Repeated hydration must not merge state from an earlier runtime.
+    this.providerRowsByTab = null
     clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()

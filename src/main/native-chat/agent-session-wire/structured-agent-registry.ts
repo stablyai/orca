@@ -1,6 +1,6 @@
 // Reject capabilities without adapter implementations so declarations remain trustworthy.
 
-import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
+import type { AgentSessionCapabilities } from '../../../shared/agent-session/agent-session-capabilities'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
@@ -17,6 +17,7 @@ function requiredAdapterMethods(
   adapter: StructuredAgentSessionAdapter
 ): AdapterMethod[] {
   return [
+    ...(capabilities.fork ? (['copyConversation'] as const) : []),
     ...(capabilities.compact ? (['compact'] as const) : []),
     ...(capabilities.threadGoal ? (['changeThreadGoal'] as const) : []),
     ...(capabilities.rewind && !adapter.forkForRewind ? (['rewind', 'recoverRewind'] as const) : [])

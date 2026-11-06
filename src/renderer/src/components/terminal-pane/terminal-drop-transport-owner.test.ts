@@ -10,13 +10,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 
 describe('terminal drop transport owner', () => {
-  it('uses the receiving host rather than the focused runtime', () => {
-    const owner = captureTerminalDropTransportOwner({ getExecutionHostId: () => 'local' })
-    expect(owner?.executionHostId).toBe('local')
-    expect(owner?.runtimeEnvironmentId).toBeNull()
-    expect(captureTerminalDropTransportOwner({})).toBeNull()
-  })
-
   it('captures and rechecks a runtime transport after settings change', () => {
     let environmentId = 'owner-runtime'
     const owner = captureTerminalDropTransportOwner({

@@ -12,6 +12,8 @@ export type WslHostsSlice = {
   setWslHostServerFiles: (present: boolean) => void
   /** False in serve-only: no host is added and no project moved. False until main answers, so Add and Move never flash. */
   wslHostsAcceptNewWork: boolean
+  /** True only once main answered serve-only; drives the "paused" notice, never a flash in open. */
+  wslHostsNewWorkPaused: boolean
   setWslHostsAcceptNewWork: (accepts: boolean) => void
 }
 
@@ -20,7 +22,9 @@ export const createWslHostsSlice: StateCreator<AppState, [], [], WslHostsSlice> 
   wslHostServerFiles: 'unknown',
   setWslHostServerFiles: (present) => set({ wslHostServerFiles: present ? 'present' : 'missing' }),
   wslHostsAcceptNewWork: false,
-  setWslHostsAcceptNewWork: (accepts) => set({ wslHostsAcceptNewWork: accepts }),
+  wslHostsNewWorkPaused: false,
+  setWslHostsAcceptNewWork: (accepts) =>
+    set({ wslHostsAcceptNewWork: accepts, wslHostsNewWorkPaused: !accepts }),
   applyWslHostStatus: (status) =>
     set((state) => {
       const current = state.wslHostStatuses[status.environmentId]
