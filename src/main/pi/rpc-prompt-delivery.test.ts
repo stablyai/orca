@@ -168,7 +168,7 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
       state: 'rejected',
       rejection: {
         kind: 'notSignedIn',
-        detail: { text: error, audience: 'person' },
+        detail: { text: error, audience: 'log' },
         // Pi checks sign-in before it records a prompt, so the agent never had this one.
         neverReachedAgent: true
       }

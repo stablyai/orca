@@ -149,7 +149,10 @@ it.each([
     expect.objectContaining({
       body: expect.objectContaining({
         kind: 'status',
-        failure: expect.objectContaining({ kind: 'notSignedIn' })
+        failure: expect.objectContaining({
+          kind: 'notSignedIn',
+          detail: { text: errorMessage, audience: 'log' }
+        })
       })
     })
   )

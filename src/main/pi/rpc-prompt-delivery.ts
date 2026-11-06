@@ -68,7 +68,7 @@ export function piRpcFailureFact(error: string) {
         (/\b401\b/.test(error) && !TEMPORARY_OAUTH_FAILURE.test(error))
       : piHttpErrorStatus(error) === 401)
   return agentSessionFailureFact(signInRequired ? 'notSignedIn' : 'providerRejected', {
-    detail: providerDiagnostic(error, 'person')
+    detail: providerDiagnostic(error, signInRequired ? 'log' : 'person')
   })
 }
 
