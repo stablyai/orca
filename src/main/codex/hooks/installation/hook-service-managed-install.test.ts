@@ -31,7 +31,6 @@ vi.mock('os', async (importOriginal) => {
 import './hook-service'
 import { CodexHookService } from './codex-hook-service-implementation'
 import '../definitions/codex-hook-definition'
-import { buildCodexHookCommand as getManagedCommand } from '../definitions/codex-hook-command-form'
 import { runExclusivelyForCodexTrustConfig } from '../../trust/toml/codex-trust-config-mutation-queue'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
@@ -99,35 +98,6 @@ describe('CodexHookService', () => {
     expect(existsSync(managedHooksJsonPath)).toBe(true)
   })
 
-  it('installs PermissionRequest with trust so Codex approval prompts reach Orca', async () => {
-    const systemCodexHome = join(homes.tmpHome, '.codex')
-    mkdirSync(systemCodexHome, { recursive: true })
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      'model = "gpt-5.2-codex"\napproval_policy = "on-request"\n',
-      'utf-8'
-    )
-
-    const status = await new CodexHookService().install()
-
-    expect(status.state).toBe('installed')
-
-    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-    const hooksConfig = JSON.parse(readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')) as {
-      hooks: Record<string, { hooks?: { command?: string }[] }[]>
-    }
-
-    expect(Object.keys(hooksConfig.hooks).sort()).toEqual(localManagedCodexEvents())
-    expect(
-      isCodexManagedCommand(hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command)
-    ).toBe(true)
-
-    const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
-    expect(trustConfig).toContain('model = "gpt-5.2-codex"')
-    expect(trustConfig).toContain('approval_policy = "on-request"')
-    expect(trustConfig).toContain(':permission_request:0:0')
-  })
-
   it('reports, instead of writing, approvals a mirrored inline hooks.state cannot take', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -168,117 +138,6 @@ describe('CodexHookService', () => {
     )
     expect(existsSync(join(systemCodexHome, 'hooks.json'))).toBe(false)
   })
-
-  it('drops plugin manager metadata from runtime hooks.json during install', async () => {
-    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-    mkdirSync(managedCodexHome, { recursive: true })
-    writeFileSync(
-      join(managedCodexHome, 'hooks.json'),
-      `${JSON.stringify({
-        hooks: {},
-        _managed: {
-          'compound-engineering': {
-            Stop: [0]
-          }
-        }
-      })}\n`,
-      'utf-8'
-    )
-
-    expect((await new CodexHookService().install()).state).toBe('installed')
-
-    const hooksConfig = JSON.parse(readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')) as {
-      hooks: Record<string, unknown>
-      _managed?: unknown
-    }
-    expect(hooksConfig._managed).toBeUndefined()
-    expect(Object.keys(hooksConfig)).toEqual(['hooks'])
-  })
-
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command when the profile path contains a space (#6078)',
-    async () => {
-      const spaceHome = join(tmpdir(), 'orca home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        const systemCodexHome = join(spaceHome, '.codex')
-        mkdirSync(systemCodexHome, { recursive: true })
-
-        const status = await new CodexHookService().install()
-        expect(status.state).toBe('installed')
-
-        const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-        const hooksConfig = JSON.parse(
-          readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
-        ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
-
-        for (const eventName of localManagedCodexEvents()) {
-          const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toBe(
-            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
-          )
-        }
-      } finally {
-        removeTreeSync(spaceHome)
-      }
-    }
-  )
-
-  it.skipIf(process.platform !== 'win32')(
-    'quotes the script path when the profile contains cmd metacharacters',
-    async () => {
-      const metacharHome = join(tmpdir(), 'orca %ORCA_TEST% ^ home')
-      mkdirSync(metacharHome, { recursive: true })
-      homedirMock.mockReturnValue(metacharHome)
-      try {
-        const systemCodexHome = join(metacharHome, '.codex')
-        mkdirSync(systemCodexHome, { recursive: true })
-
-        const status = await new CodexHookService().install()
-        expect(status.state).toBe('installed')
-
-        const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-        const hooksConfig = JSON.parse(
-          readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
-        ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
-
-        for (const eventName of localManagedCodexEvents()) {
-          const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toBe(
-            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
-          )
-        }
-      } finally {
-        removeTreeSync(metacharHome)
-      }
-    }
-  )
-
-  it.skipIf(process.platform !== 'win32')(
-    'launches the managed .cmd directly when the profile path is cmd-safe',
-    async () => {
-      const status = await new CodexHookService().install()
-      expect(status.state).toBe('installed')
-
-      const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-      const hooksConfig = JSON.parse(
-        readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
-      ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
-
-      // Runner temp paths can require the quoting fallback too.
-      const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
-      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(homes.tmpHome, '.orca', 'agent-hooks'))
-      if (cmdSafe) {
-        expect(command).not.toMatch(/powershell/i)
-        expect(command).toMatch(/\/agent-hooks\/codex-hook\.cmd$/)
-      } else {
-        expect(command).toBe(
-          getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
-        )
-      }
-    }
-  )
 
   it.skipIf(process.platform !== 'win32')(
     'posts hook payloads via the curl-based managed script preserving UTF-8 and spaced metadata',

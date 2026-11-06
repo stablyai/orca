@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
+import { HOST_MACHINE_KINDS } from '../../../src/shared/host-machine-line'
+
+// An unknown future kind drops the whole field, so the row shows the OS alone; a bad model only loses the model.
+export const HostMachineSchema = z.object({
+  kind: z.enum(HOST_MACHINE_KINDS),
+  model: z.string().trim().min(1).max(128).nullable().catch(null)
+})
 
 // Keep fields optional across host versions; older admitted hosts may report none.
 // Salvage capabilities as a whole: dropping only bad entries would publish a set the legacy probe rejected.
@@ -12,7 +19,12 @@ export const hostStatusSchema = z.looseObject({
   floatingWorkspaceEnabled: salvagedOptional('floatingWorkspaceEnabled', z.boolean()),
   capabilities: salvagedOptional('capabilities', z.array(z.string())),
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
-  machineName: salvagedOptional('machineName', z.string())
+  machineName: salvagedOptional('machineName', z.string()),
+  hostMachine: salvagedOptional('hostMachine', HostMachineSchema),
+  hostDescriptor: salvagedOptional(
+    'hostDescriptor',
+    z.looseObject({ installationId: salvagedOptional('installationId', z.string()) })
+  )
 })
 
 export type HostStatusReply = z.output<typeof hostStatusSchema>

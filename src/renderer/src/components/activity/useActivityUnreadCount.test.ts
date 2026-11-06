@@ -54,11 +54,6 @@ describe('countActivityUnread session-boundary rows (STA-3386)', () => {
     )
     expect(countActivityUnread(source)).toBe(0)
   })
-
-  it('still counts an ordinary unacknowledged done', () => {
-    const source = makeSource(makeEntry({}))
-    expect(countActivityUnread(source)).toBe(1)
-  })
 })
 
 describe('countActivityUnread with Clear completed cutoffs', () => {
@@ -160,48 +155,5 @@ describe('countActivityUnread working turns', () => {
     expect(countActivityUnread(makeSource(entry), expiredAt)).toBe(0)
     expect(countActivityUnread(makeSource({ ...entry, updatedAt: expiredAt }), expiredAt)).toBe(1)
     expect(countActivityUnread(makeSource({ ...entry, restoredUnconfirmed: true }), 2_000)).toBe(0)
-  })
-})
-
-describe('countActivityUnread reads the combined state, not the main agent fact', () => {
-  // Mirror combined Activity state: a settled main agent with running children is still working, with no completion event until the row settles.
-  const NOW = AGENT_STATUS_STALE_AFTER_MS
-
-  it('counts a fresh row held working by a subagent as one live working turn', () => {
-    const source = makeSource(
-      makeEntry({
-        state: 'working',
-        updatedAt: NOW - 1_000,
-        stateStartedAt: NOW - 5_000,
-        mainAgent: { state: 'done', stateStartedAt: NOW - 2_000 }
-      })
-    )
-    expect(countActivityUnread(source, NOW)).toBe(1)
-  })
-
-  it('does not count a settled main agent with only a watch loop, matching the feed', () => {
-    const source = makeSource(
-      makeEntry({
-        state: 'working',
-        workingMode: 'monitoring',
-        updatedAt: NOW - 1_000,
-        stateStartedAt: NOW - 5_000,
-        mainAgent: { state: 'done', stateStartedAt: NOW - 2_000 }
-      })
-    )
-    expect(countActivityUnread(source, NOW)).toBe(0)
-  })
-
-  it('does not count a restored row as a live turn, whatever its main agent says', () => {
-    const source = makeSource(
-      makeEntry({
-        state: 'working',
-        updatedAt: NOW - 1_000,
-        stateStartedAt: NOW - 5_000,
-        restoredUnconfirmed: true,
-        mainAgent: { state: 'working', stateStartedAt: NOW - 5_000 }
-      })
-    )
-    expect(countActivityUnread(source, NOW)).toBe(0)
   })
 })

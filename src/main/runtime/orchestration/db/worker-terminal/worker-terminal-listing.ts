@@ -1,11 +1,11 @@
-import type { DispatchStatus } from '../../types'
+import type { DispatchStatus } from '../orchestration-records'
 import type { TerminalExitCause } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   deriveWorkerTerminalListState,
   type WorkerDispatchListState,
   type WorkerTerminalResourceRow,
   type WorkerTerminalListState
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'

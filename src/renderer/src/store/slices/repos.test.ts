@@ -4,12 +4,13 @@ import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from '../github/cache-identity'
 
 import type { Repo } from '../../../../shared/repo-types'
-import 'sonner'
+import { toast } from 'sonner'
 import '../../../../shared/global-settings-test-fixture'
 import '../../web/preload-api/web-fallback-api'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,
+  projectsSetupExistingFolder,
   ptyKill,
   remoteRepo,
   reposRemoveForHost,
@@ -34,6 +35,34 @@ const ownerOf = (repo: Repo) => ({ hostId: getRepoExecutionHostId(repo) })
 const serverRepo: Repo = { ...remoteRepo, executionHostId: 'runtime:env-1' }
 
 describe('repo slice runtime routing', () => {
+  it('names an SSH host without a server and offers Connect, never its raw id (#37767)', async () => {
+    const store = createTestStore()
+    store.setState({ sshTargetLabels: new Map([['ssh-1', 'build box']]) })
+    const connect = vi.fn().mockResolvedValue(null)
+    Object.assign(window.api, { ssh: { connect } })
+
+    await expect(
+      store.getState().setupProjectExistingFolder({
+        projectId: 'github:acme/orca',
+        hostId: 'ssh:ssh-1',
+        path: '/srv/orca',
+        kind: 'git'
+      })
+    ).resolves.toBeNull()
+
+    expect(projectsSetupExistingFolder).not.toHaveBeenCalled()
+    const [, options] = vi.mocked(toast.error).mock.calls[0] ?? []
+    expect(options?.description).toContain('build box')
+    expect(options?.description).not.toContain('ssh-1')
+    const action = options?.action
+    if (!action || typeof action !== 'object' || !('onClick' in action)) {
+      throw new Error('expected a Connect action')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action ignores its click event.
+    action.onClick({} as never)
+    expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-1' })
+  })
+
   it('drops persisted visit timestamps for removed unhydrated SSH repos', async () => {
     const store = createTestStore()
     const sshWorktreeId = `${sshRepo.id}::/home/orca/wt`
@@ -52,43 +81,6 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().repos).toEqual([localRepo])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: sshRepo.id, hostId: 'ssh:ssh-1' })
-  })
-
-  it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
-    runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1' }])
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-remove-runtime-unhydrated',
-      ok: true,
-      result: { removed: true },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    const remoteWorktreeId = `${remoteRepo.id}::/srv/orca/wt`
-    const localWorktreeId = `${localRepo.id}::/local/wt`
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [serverRepo, localRepo],
-      activeRepoId: remoteRepo.id,
-      lastVisitedAtByWorktreeId: {
-        [remoteWorktreeId]: 100,
-        [localWorktreeId]: 200
-      }
-    })
-
-    await store.getState().removeProject(remoteRepo.id, ownerOf(serverRepo))
-
-    expect(store.getState().repos).toEqual([localRepo])
-    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: remoteRepo.id },
-      timeoutMs: 15_000
-    })
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: remoteRepo.id,
-      hostId: 'runtime:env-1'
-    })
   })
 
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {

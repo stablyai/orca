@@ -21,6 +21,7 @@ import type {
 } from '../../shared/plugins/frames/plugin-protocol'
 import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { getPluginHostRendererActions } from './view/plugin-host-renderer-actions'
+import type { PluginAppearanceService } from './appearance/plugin-appearance-service'
 
 /** Who made a call: the open panel (frames only), and its host window's WebContents for desktop
  *  IPC calls. */
@@ -73,6 +74,7 @@ export function resolvePluginServiceHostCallPolicy(input: {
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
   statusBar?: PluginStatusBarState | null
+  appearance?: PluginAppearanceService | null
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
@@ -88,6 +90,7 @@ export function resolvePluginServiceHostCallPolicy(input: {
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
           statusBar: input.statusBar,
+          appearance: input.appearance,
           declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
             (item) => item.id
           ),

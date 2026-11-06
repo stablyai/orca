@@ -5,9 +5,9 @@ import {
   journalLifecycleMutationItemId,
   type JournalLifecycleIdentityMutationInput,
   type JournalLifecycleMutationInput
-} from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+} from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
-import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 
 /** Pure per-turn scratch: held durable rows never affect replay translation. */
 export type AcpHistoryItem = Extract<JournalLifecycleIdentityMutationInput, { kind: 'item' }>

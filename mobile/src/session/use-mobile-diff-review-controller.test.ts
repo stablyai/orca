@@ -6,6 +6,7 @@ import { MobileDiffReviewScreenView } from '../components/MobileDiffReviewScreen
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 const loadSnapshot = vi.hoisted(() => vi.fn())
 vi.mock('./mobile-diff-review-loaders', () => ({
@@ -71,6 +72,7 @@ function readySnapshot(branch: string): ReviewScreenState {
 
 describe('useMobileDiffReviewController', () => {
   let renderer: ReactTestRenderer | null = null
+  const queries = documentQueryClient()
   let screenState: ReviewScreenState = { kind: 'loading' }
 
   function Probe({ connState }: { connState: ConnectionState }): null {
@@ -95,7 +97,7 @@ describe('useMobileDiffReviewController', () => {
 
   async function update(connState: ConnectionState): Promise<void> {
     await act(async () => {
-      renderer?.update(createElement(Probe, { connState }))
+      renderer?.update(queries.wrap(createElement(Probe, { connState })))
       await Promise.resolve()
     })
   }
@@ -119,7 +121,7 @@ describe('useMobileDiffReviewController', () => {
     )
 
     await act(async () => {
-      renderer = create(createElement(Probe, { connState: 'connected' }))
+      renderer = create(queries.wrap(createElement(Probe, { connState: 'connected' })))
       await Promise.resolve()
     })
     expect(screenState).toMatchObject({ kind: 'ready' })
@@ -143,7 +145,7 @@ describe('useMobileDiffReviewController', () => {
       .mockRejectedValueOnce(new Error('snapshot fetch failed'))
 
     await act(async () => {
-      renderer = create(createElement(Probe, { connState: 'connected' }))
+      renderer = create(queries.wrap(createElement(Probe, { connState: 'connected' })))
       await Promise.resolve()
     })
     expect(screenState).toMatchObject({ kind: 'ready' })
@@ -192,7 +194,7 @@ describe('useMobileDiffReviewController', () => {
     async function stageCurrent(whileStaging?: () => void): Promise<void> {
       loadSnapshot.mockResolvedValueOnce(unstaged(['a.ts', 'b.ts', 'c.ts']))
       await act(async () => {
-        renderer = create(createElement(StageProbe))
+        renderer = create(queries.wrap(createElement(StageProbe)))
         await Promise.resolve()
       })
       expect(controller?.currentItem?.filePath).toBe('c.ts')
@@ -221,6 +223,48 @@ describe('useMobileDiffReviewController', () => {
     it('keeps a file the reader picked while the stage was running', async () => {
       await stageCurrent(() => controller?.moveFile('previous'))
       expect(controller?.currentItem?.filePath).toBe('b.ts')
+    })
+
+    it('keeps an unsaved note across reopen and edits, and clears it once saved', async () => {
+      loadSnapshot.mockResolvedValueOnce(unstaged(['c.ts']))
+      await act(async () => {
+        renderer = create(queries.wrap(createElement(StageProbe)))
+        await Promise.resolve()
+      })
+      act(() => controller?.openComposer(3))
+      act(() => controller?.setComposerBody('rename this'))
+      act(() => controller?.closeComposer())
+      act(() => controller?.openNewNoteSheet({ kind: 'range', startLine: 5, line: 7 }))
+      expect(controller?.composerBody).toBe('rename this')
+
+      act(() => controller?.closeSheet('range'))
+      act(() =>
+        controller?.openEditComposer({
+          id: 'saved',
+          worktreeId: 'wt-1',
+          filePath: 'c.ts',
+          lineNumber: 1,
+          side: 'modified',
+          body: 'older note',
+          createdAt: 1
+        })
+      )
+      expect(controller?.composerBody).toBe('older note')
+      act(() => controller?.closeComposer())
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('rename this')
+
+      let saving: Promise<void> | undefined
+      act(() => {
+        saving = controller?.saveComposer()
+      })
+      const save = client.requests.find((request) => request.method === 'worktree.set')
+      await act(async () => {
+        save?.resolve({ id: 'save', ok: true, result: {}, _meta: { runtimeId: 'r' } })
+        await saving
+      })
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('')
     })
   })
 })
@@ -283,6 +327,7 @@ it('runs the real Diff Review View dock demand before parent HEAD refresh withou
     .mockResolvedValueOnce(snapshot('c'))
   let controller: ReturnType<typeof useMobileDiffReviewController>
   let rendered: ReactTestRenderer | undefined
+  const screenQueries = documentQueryClient()
   function Screen() {
     controller = useMobileDiffReviewController({
       client: rpc,
@@ -342,7 +387,7 @@ it('runs the real Diff Review View dock demand before parent HEAD refresh withou
   layout.isWideLayout = true
   try {
     await act(async () => {
-      rendered = create(createElement(Screen))
+      rendered = create(screenQueries.wrap(createElement(Screen)))
     })
     // The actual View measures its row before choosing inline demand.
     const row = rendered!.root.findAll((node) => typeof node.props.onLayout === 'function')[0]
@@ -366,7 +411,7 @@ it('runs the real Diff Review View dock demand before parent HEAD refresh withou
       throw new Error('expected ready B')
     }
     const acceptedRepo = controller!.prSidebarState.data.pr.prRepo
-    await act(async () => rendered!.update(createElement(Screen)))
+    await act(async () => rendered!.update(screenQueries.wrap(createElement(Screen))))
     expect(
       controller!.prSidebarState.kind === 'ready' && controller!.prSidebarState.data.pr.prRepo
     ).toBe(acceptedRepo)

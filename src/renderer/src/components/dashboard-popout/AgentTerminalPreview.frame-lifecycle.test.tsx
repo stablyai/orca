@@ -92,7 +92,7 @@ vi.mock('./preview-terminal-ime-bridge', () => ({
 vi.mock('./preview-terminal-key-handler', () => ({
   installPreviewTerminalKeyHandler: () => vi.fn()
 }))
-vi.mock('@/components/terminal-pane/terminal-native-copy-gutter', () => ({
+vi.mock('@/components/terminal-pane/clipboard/terminal-native-copy-gutter', () => ({
   installTerminalNativeCopyGutterTrim: () => ({ dispose: vi.fn() })
 }))
 vi.mock('./preview-terminal-app-menu-clipboard', () => ({

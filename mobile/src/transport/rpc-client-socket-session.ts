@@ -7,6 +7,7 @@ import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evi
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
 import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
 import { startSocketDeadlineClock } from './socket-deadline-clock'
+import { receiveBinaryAsBase64 } from './websocket-payload-bytes'
 import type { ConnectionLogEmitter, ConnectionState, RpcRequest, RpcResponse } from './types'
 
 const CONNECT_TIMEOUT_MS = 12_000
@@ -47,7 +48,7 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = new WebSocket(options.endpoint)
+    this.socket = receiveBinaryAsBase64(new WebSocket(options.endpoint))
     this.attachHandlers()
     this.armConnectTimeout()
   }

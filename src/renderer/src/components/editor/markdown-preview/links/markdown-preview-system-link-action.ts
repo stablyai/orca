@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { useAppStore } from '@/store/index'
 import {

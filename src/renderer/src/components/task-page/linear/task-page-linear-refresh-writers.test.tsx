@@ -20,7 +20,7 @@ import {
   mapLinearIssueRead,
   pendingLinearIssueWrites
 } from '@/store/slices/linear/linear-issue-publication'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import { useState } from 'react'

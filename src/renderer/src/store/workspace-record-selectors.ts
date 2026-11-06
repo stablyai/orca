@@ -7,7 +7,7 @@ import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/ex
 import type { Worktree } from '../../../shared/worktree/types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
+import { findIndexedWorktreeOwnerForHost } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { AppState } from './types'
 import { getFolderWorkspaceWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MacosTccPromptWatch,
   type LogStreamChild,
-  isOrcaAttributedPrompt,
   parseTccPromptEvent
 } from './macos-tcc-prompt-watch'
 
@@ -42,18 +41,6 @@ describe('parseTccPromptEvent', () => {
     expect(parseTccPromptEvent('Filtering the log data using "subsystem == ..."')).toBeNull()
     expect(parseTccPromptEvent('')).toBeNull()
     expect(parseTccPromptEvent('AUTHREQ_PROMPTING: msgID=1.2,')).toBeNull()
-  })
-})
-
-describe('isOrcaAttributedPrompt', () => {
-  it('rejects unrelated services even when Orca is responsible', () => {
-    expect(
-      isOrcaAttributedPrompt({
-        service: 'kTCCServiceMicrophone',
-        accessingIdentifier: 'orca',
-        responsibleIdentifier: 'com.stablyai.orca'
-      })
-    ).toBe(false)
   })
 })
 

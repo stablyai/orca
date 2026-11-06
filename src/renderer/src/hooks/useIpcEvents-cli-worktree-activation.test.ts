@@ -80,7 +80,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree,
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
@@ -205,6 +205,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -348,7 +349,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
@@ -468,6 +469,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {

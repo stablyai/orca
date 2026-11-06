@@ -1,7 +1,7 @@
 import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
+import { findGithubWorkItemWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { formatPRDelta } from '../task-page-pr-delta-summary'
 import {
@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitHubRows({
   model
 }: {

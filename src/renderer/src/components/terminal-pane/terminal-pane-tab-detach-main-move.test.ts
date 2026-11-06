@@ -1,7 +1,7 @@
 // Exercise drag-out through main’s movePaneToNewTab and resulting frames, matching the window-side detach suites.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { createStoreCascadesMockApi } from '../../store/slices/store-cascades-test-harness'
 import { LEAF_1, LEAF_2, splitLayout, unboundSplitLayout } from './terminal-pane-tab-detach-fixture'
 import {

@@ -35,7 +35,7 @@ import {
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { OpenInContextSubmenu } from '../../../file-actions/OpenInContextSubmenu'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {

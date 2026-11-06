@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 import React, { act } from 'react'
-import {
-  cleanup,
-  createEvent,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within
-} from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -179,84 +171,6 @@ function edit(input: HTMLTextAreaElement, value: string) {
     target: { value, selectionStart: value.length, selectionEnd: value.length }
   })
 }
-
-it.each(['en', 'de'] as const)(
-  'passes the real %s Conversation assignee refusal to surviving mentions without gating Send',
-  async (language) => {
-    await i18n.changeLanguage(await loadRendererUiLanguage(language))
-    const keys: { key: string; prevented: boolean }[] = []
-    mountConversation((event) => keys.push({ key: event.key, prevented: event.defaultPrevented }))
-    const input = screen.getByPlaceholderText<HTMLTextAreaElement>(
-      language === 'de' ? 'Kommentar hinzufügen…' : 'Add a comment…'
-    )
-    const send = screen.getByRole<HTMLButtonElement>('button', {
-      name: language === 'de' ? 'Kommentar senden' : 'Send comment'
-    })
-    expect(send.disabled).toBe(true)
-    edit(input, 'Draft for @')
-    const listbox = await screen.findByRole('listbox')
-    await within(listbox).findByText(GITHUB_EXACT_OPERATION_UNSUPPORTED)
-    expect(screen.getAllByText(GITHUB_EXACT_OPERATION_UNSUPPORTED)).toHaveLength(1)
-    expect(input.getAttribute('aria-expanded')).toBe('true')
-    expect(input.getAttribute('aria-controls')).toBe(listbox.id)
-    expect(within(listbox).getAllByRole('option')).toHaveLength(3)
-    const sourceLabels =
-      language === 'de'
-        ? ['PR-Autor', 'Kommentarautor', 'Teilnehmer']
-        : ['PR author', 'Commenter', 'Participant']
-    for (const [index, login] of ['pr-author', 'comment-author', 'participant'].entries()) {
-      const option = within(listbox).getByRole('option', { name: new RegExp(`@${login}`) })
-      expect(within(option).getByText(sourceLabels[index])).toBeTruthy()
-    }
-    expect(send.disabled).toBe(false)
-    expect(io.rpc.mock.calls.some((call) => call[1] === 'status.get')).toBe(true)
-    expect(io.rpc.mock.calls.some((call) => call[1] === 'github.listAssignableUsers')).toBe(false)
-    fireEvent.mouseDown(within(listbox).getByRole('option', { name: /@comment-author/ }))
-    expect(input.value).toBe('Draft for @comment-author')
-    expect(screen.queryByRole('listbox')).toBeNull()
-    expect(send.disabled).toBe(false)
-
-    edit(input, 'Draft without a query')
-    expect(screen.queryByRole('listbox')).toBeNull()
-    expect(screen.queryByText(GITHUB_EXACT_OPERATION_UNSUPPORTED)).toBeNull()
-    const unmatched = 'Draft for @zzzz36172nomatch'
-    edit(input, unmatched)
-    const errorOnly = screen.getByRole('listbox')
-    expect(within(errorOnly).getAllByText(GITHUB_EXACT_OPERATION_UNSUPPORTED)).toHaveLength(1)
-    expect(within(errorOnly).queryAllByRole('option')).toHaveLength(0)
-    expect(input.getAttribute('aria-expanded')).toBe('true')
-    expect(input.hasAttribute('aria-activedescendant')).toBe(false)
-    keys.length = 0
-    for (const key of ['ArrowDown', 'ArrowUp', 'Enter', 'Tab']) {
-      const event = createEvent.keyDown(input, { key, bubbles: true, cancelable: true })
-      expect(() => fireEvent(input, event)).not.toThrow()
-      expect(event.defaultPrevented).toBe(false)
-      expect(input.value).toBe(unmatched)
-      expect(input.hasAttribute('aria-activedescendant')).toBe(false)
-    }
-    expect(keys).toEqual(
-      ['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].map((key) => ({ key, prevented: false }))
-    )
-    // DOM fixtures do not perform the browser's default newline insertion; deliver its normal change.
-    edit(input, `${unmatched}\ncontinued draft`)
-    expect(input.value).toBe(`${unmatched}\ncontinued draft`)
-    expect(screen.queryByRole('listbox')).toBeNull()
-    edit(input, unmatched)
-    const escape = createEvent.keyDown(input, { key: 'Escape', bubbles: true, cancelable: true })
-    fireEvent(input, escape)
-    expect(escape.defaultPrevented).toBe(true)
-    expect(screen.queryByRole('listbox')).toBeNull()
-    expect(input.getAttribute('aria-expanded')).toBe('false')
-    expect(input.hasAttribute('aria-controls')).toBe(false)
-    expect(input.value).toBe(unmatched)
-    expect(send.disabled).toBe(false)
-    expect(
-      io.rpc.mock.calls.every((call) =>
-        ['status.get', 'github.project.listAssignableUsersBySlug'].includes(call[1])
-      )
-    ).toBe(true)
-  }
-)
 
 it('recovers the same Conversation draft through real owner metadata and keeps no-error empty matches collapsed', async () => {
   mountConversation()

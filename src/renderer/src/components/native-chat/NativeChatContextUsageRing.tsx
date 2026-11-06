@@ -4,34 +4,19 @@ import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
-  formatContextTokenCount,
+  contextUsageRingReadout,
+  keyContextUsageRows,
   type NativeChatContextUsageSummary
-} from './native-chat-context-usage-summary'
+} from '../../../../shared/native-chat/native-chat-context-usage-summary'
 
 const RING_SIZE = 16
 const RING_STROKE = 2
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
-/** Past this the window is nearly spent; the ring turns destructive to say so. */
-const CRITICAL_PERCENTAGE = 90
 /** Long enough that a pointer crossing the ring toward dictation doesn't flash the card. */
 const HOVER_OPEN_DELAY_MS = 150
 /** Long enough for the pointer to cross the gap between the ring and the card. */
 const HOVER_CLOSE_DELAY_MS = 100
-
-type ContextUsageRow = NativeChatContextUsageSummary['rows'][number]
-
-/** The CLI can repeat a category name, so a row's key counts which repeat it is. */
-function keyRows(
-  rows: NativeChatContextUsageSummary['rows']
-): { key: string; row: ContextUsageRow }[] {
-  const seen = new Map<string, number>()
-  return rows.map((row) => {
-    const repeat = seen.get(row.name) ?? 0
-    seen.set(row.name, repeat + 1)
-    return { key: `${repeat}:${row.name}`, row }
-  })
-}
 
 /** Card open state where only mouse hover waits, to open and to close; any explicit change drops a pending hover. */
 function useContextCardOpen(): {
@@ -83,17 +68,14 @@ export function NativeChatContextUsageRing({
 }: {
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
-  const filled = Math.min(Math.max(usage.percentage, 0), 100)
-  const critical = usage.percentage >= CRITICAL_PERCENTAGE
-  const used = formatContextTokenCount(usage.usedTokens)
-  const window = formatContextTokenCount(usage.windowTokens)
+  const { filled, critical, used, window } = contextUsageRingReadout(usage)
   const label = translate(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
     { used, window, percent: String(usage.percentage) }
   )
   const { open, setOpen, setOpenAfterHover } = useContextCardOpen()
-  const rows = keyRows(usage.rows)
+  const rows = keyContextUsageRows(usage.rows)
   return (
     <div
       className="flex"

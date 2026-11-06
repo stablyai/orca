@@ -3,13 +3,13 @@ import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-hando
 import type {
   TerminalHttpLinkActionDestinations,
   TerminalLinkRoutingPreferenceRequester
-} from './terminal-url-link-hit-testing'
+} from './links/http/terminal-url-link-hit-testing'
 import type { PtyConnectionDeps } from './pty-connection-types'
-import type { LinkHandlerDeps } from './terminal-link-handlers'
+import type { LinkHandlerDeps } from './links/files/terminal-link-handlers'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
-import type { TerminalLinkActionContext } from './terminal-link-action-request'
-import type { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
+import type { TerminalLinkActionContext } from './links/terminal-link-action-request'
+import type { resolveTerminalHttpLinkSourceOwner } from './links/http/terminal-http-link-source-owner'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 
 export type TerminalPaneMountContext = {

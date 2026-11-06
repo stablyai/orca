@@ -1,11 +1,8 @@
+import { refreshMobileTaskPRChecks } from './mobile-task-pr-check-refresh'
 import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import { useClipboardWriter } from '../platform/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
-import {
-  buildGitHubCheckSummary,
-  scheduleMobileTaskCopyFeedbackReset,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { scheduleMobileTaskCopyFeedbackReset, useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
   type GitHubAssignableUser,
@@ -17,19 +14,22 @@ import {
   gitlabIssueCommentWrite,
   gitlabMergeRequestCommentWrite
 } from './mobile-task-item-comment-operations'
+import { githubReviewerRequest } from './mobile-task-item-state-operations'
 import {
-  githubPullRequestChecksRead,
-  githubReviewerRequest
-} from './mobile-task-item-state-operations'
+  isCommentSendUnconfirmed,
+  useMobileTaskCommentSendOutcome
+} from './use-mobile-task-comment-send-outcome'
 
 export type HostedCommentReviewActionsInput = Pick<
   HostedMetadataActionsModel,
+  | 'actionItem'
   | 'claimPublication'
   | 'client'
   | 'copiedLinkResetTimerRef'
   | 'detailPayload'
   | 'itemCommentDraft'
   | 'itemReviewersDraft'
+  | 'requestDetailRefresh'
   | 'tryBeginMutation'
   | 'setActionItem'
   | 'setCopiedLinkKey'
@@ -61,6 +61,8 @@ export function useMobileTasksHostedCommentReviewActions<
     setItemReviewersDraft,
     setItems
   } = model
+  const { commentSendNotice, beginCommentSend, holdUnconfirmedCommentSend, noteCommentNotSent } =
+    useMobileTaskCommentSendOutcome(model)
   const addHostedItemComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
@@ -77,7 +79,10 @@ export function useMobileTasksHostedCommentReviewActions<
         return
       }
       setError('')
+      const send = beginCommentSend(item)
       const isCurrent = claimPublication(item)
+      const clearDraft = () =>
+        setItemCommentDraft((current) => (current.trim() === body ? '' : current))
       try {
         const written =
           item.provider === 'github'
@@ -122,6 +127,7 @@ export function useMobileTasksHostedCommentReviewActions<
         if (written.ok === false) {
           throw new Error(written.error ?? 'Failed to add comment')
         }
+        clearDraft()
         if (!isCurrent()) {
           return
         }
@@ -131,7 +137,6 @@ export function useMobileTasksHostedCommentReviewActions<
           createdAt: new Date().toISOString(),
           author: 'You'
         }
-        setItemCommentDraft('')
         setDetailPayload((current) =>
           current &&
           ((item.provider === 'github' &&
@@ -142,6 +147,11 @@ export function useMobileTasksHostedCommentReviewActions<
             : current
         )
       } catch (err) {
+        if (isCommentSendUnconfirmed(err)) {
+          holdUnconfirmedCommentSend(send, 'comment', body, clearDraft)
+        } else if (!isCurrent()) {
+          noteCommentNotSent(send, 'comment')
+        }
         if (!isCurrent()) {
           return
         }
@@ -272,81 +282,14 @@ export function useMobileTasksHostedCommentReviewActions<
     [claimPublication, client, detailPayload, itemReviewersDraft, tryBeginMutation]
   )
 
-  const refreshGitHubChecks = async (
-    item: Extract<TaskItem, { provider: 'github' }>
-  ): Promise<void> => {
-    if (!client || item.source.type !== 'pr') {
-      return
-    }
-    const finish = tryBeginMutation()
-    if (!finish) {
-      return
-    }
-    setError('')
-    const isCurrent = claimPublication(item, detailPayload)
-    const requestedHeadSha =
-      detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
-    try {
-      const reply = await githubPullRequestChecksRead.request(
-        client,
-        {
-          repo: `id:${item.source.repoId}`,
-          prNumber: item.source.number,
-          prRepo: requireGitHubTaskTarget(item.source).repository,
-          headSha: requestedHeadSha,
-          noCache: true
-        },
-        { timeoutMs: 30_000 }
-      )
-      const checks = githubPullRequestChecksRead.interpret(reply)
-      if (!isCurrent()) {
-        return
-      }
-      const checksSummary = buildGitHubCheckSummary(checks)
-      const summaryFor = (source: typeof item.source) =>
-        requestedHeadSha !== undefined &&
-        source.headSha === requestedHeadSha &&
-        source.checksSummary?.state === checksSummary.state
-          ? source.checksSummary
-          : checksSummary
-      setDetailPayload((current) =>
-        current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
-          ? { ...current, checks }
-          : current
-      )
-      setActionItem((current) =>
-        sameGitHubTask(current, item)
-          ? {
-              ...current,
-              source: { ...current.source, checksSummary: summaryFor(current.source) }
-            }
-          : current
-      )
-      setItems((current) =>
-        current.map((candidate) =>
-          sameGitHubTask(candidate, item)
-            ? {
-                ...candidate,
-                source: { ...candidate.source, checksSummary: summaryFor(candidate.source) }
-              }
-            : candidate
-        )
-      )
-    } catch (err) {
-      if (!isCurrent()) {
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to refresh checks')
-    } finally {
-      finish()
-    }
-  }
   return Object.assign(model, {
+    commentSendNotice,
     addHostedItemComment,
     copyTaskLink,
     copyTextToClipboard,
     requestGitHubReviewers,
-    refreshGitHubChecks
+    refreshGitHubChecks: (item: Extract<TaskItem, { provider: 'github' }>) =>
+      refreshMobileTaskPRChecks(model, item)
   })
 }
 

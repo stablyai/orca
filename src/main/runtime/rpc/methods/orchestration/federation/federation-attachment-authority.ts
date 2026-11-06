@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederationEffect } from './federation-effects'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 

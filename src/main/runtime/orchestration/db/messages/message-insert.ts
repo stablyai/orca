@@ -1,4 +1,9 @@
-import type { MessageType, MessagePriority, MessageDeliveryContract, MessageRow } from '../../types'
+import type {
+  MessageType,
+  MessagePriority,
+  MessageDeliveryContract,
+  MessageRow
+} from '../orchestration-records'
 import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -20,6 +25,7 @@ export type MessageInsert = {
   payload?: string
   senderPaneKey?: string
   runId?: string
+  answerSenderSnapshot?: string
   deliveryContract?: MessageDeliveryContract
 }
 
@@ -43,9 +49,9 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
   const stmt = this.db.prepare(`
     INSERT INTO messages (
       id, run_id, delivery_contract, from_handle, to_handle, subject, body,
-      type, priority, thread_id, payload, sender_pane_key, read, delivered_at
+      type, priority, thread_id, payload, sender_pane_key, answer_sender_snapshot, read, delivered_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END)
   `)
   stmt.run(
     id,
@@ -60,6 +66,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     msg.threadId ?? null,
     msg.payload ?? null,
     msg.senderPaneKey ?? null,
+    msg.answerSenderSnapshot ?? null,
     handled,
     handled
   )

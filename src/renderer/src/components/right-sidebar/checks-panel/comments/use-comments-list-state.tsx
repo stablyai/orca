@@ -16,7 +16,7 @@ import {
   isPRCommentGroupQueueableForAI,
   partitionPRCommentGroupsForTriage,
   sortPRCommentGroupsByRecency
-} from '@/lib/pr-comment-action-state'
+} from '@/lib/source-control/review/comments/pr-comment-action-state'
 import { getPRCommentPresentationClasses } from './pr-comment-presentation'
 import type {
   GitHubReactionContent,

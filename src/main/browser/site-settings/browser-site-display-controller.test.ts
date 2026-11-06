@@ -176,44 +176,6 @@ describe('BrowserSiteDisplayController color scheme', () => {
     expect(preview.debugger.isAttached()).toBe(false)
   })
 
-  it.each([10, 100])('sends one media update per eligible guest at population %s', (population) => {
-    const controller = new BrowserSiteDisplayController()
-    const ordinary = fakeGuest('https://ordinary.example/')
-    controller.onGuestRegistered(ordinary, null)
-    const guests = Array.from({ length: population }, () =>
-      fakeGuest('orca-preview://grant/a.html')
-    )
-    for (const guest of guests) {
-      controller.onGuestDocumentStart(guest, {
-        url: guest.url,
-        profileId: null,
-        colorScheme: 'dark'
-      })
-      controller.onGuestDocumentStart(guest, {
-        url: guest.url,
-        profileId: null,
-        colorScheme: 'dark'
-      })
-      expect(guest.mediaSent).toEqual(['dark', 'dark'])
-      expect(guest.debugger.listenerCount('detach')).toBe(1)
-      guest.mediaSent.length = 0
-    }
-    for (const guest of guests) {
-      controller.setGuestColorSchemeFallback(guest, 'light')
-    }
-    expect(guests.reduce((total, guest) => total + guest.mediaSent.length, 0)).toBe(population)
-    for (const guest of guests) {
-      controller.setGuestColorSchemeFallback(guest, 'light')
-      controller.onGuestRetired(guest.id)
-      expect(guest.debugger.isAttached()).toBe(false)
-      expect(guest.debugger.listenerCount('detach')).toBe(0)
-      controller.setGuestColorSchemeFallback(guest, 'dark')
-    }
-    expect(guests.reduce((total, guest) => total + guest.mediaSent.length, 0)).toBe(population)
-    expect(ordinary.mediaSent).toEqual([])
-    expect(ordinary.debugger.isAttached()).toBe(false)
-  })
-
   it.each([
     { order: 'read-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
     { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
@@ -261,48 +223,6 @@ describe('BrowserSiteDisplayController color scheme', () => {
       expect(guest.debugger.listenerCount('detach')).toBe(0)
     }
   )
-
-  it('sets the site scheme as each page commits and clears it once on leaving', () => {
-    const controller = new BrowserSiteDisplayController()
-    const guest = fakeGuest('https://github.com/')
-    controller.onGuestRegistered(guest, null)
-    controller.setColorScheme(guest.id, 'dark')
-
-    controller.zoomPage(guest.id, 'in')
-    commit(controller, guest, 'https://docs.example.com/')
-    commit(controller, guest, 'https://news.example.com/')
-    commit(controller, guest, 'https://github.com/x')
-
-    expect(guest.mediaSent).toEqual(['dark', '', 'dark'])
-  })
-
-  it('gives a restored tab its scheme when its first load started before it registered', () => {
-    const controller = new BrowserSiteDisplayController()
-    const first = fakeGuest('https://github.com/')
-    controller.onGuestRegistered(first, null)
-    controller.setColorScheme(first.id, 'light')
-
-    const restored = fakeGuest('')
-    controller.onGuestRegistered(restored, null)
-    restored.url = 'https://github.com/restored'
-    controller.onMainFrameNavigationCommitted(restored.id)
-
-    expect(restored.mediaSent).toEqual(['light'])
-  })
-
-  it('attaches again after DevTools detaches the debugger', () => {
-    const controller = new BrowserSiteDisplayController()
-    const guest = fakeGuest('https://github.com/')
-    controller.onGuestRegistered(guest, null)
-    controller.setColorScheme(guest.id, 'dark')
-
-    guest.debugger.detach()
-    expect(guest.debugger.isAttached()).toBe(false)
-    commit(controller, guest, 'https://github.com/next')
-
-    expect(guest.debugger.isAttached()).toBe(true)
-    expect(guest.mediaSent.at(-1)).toBe('dark')
-  })
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))

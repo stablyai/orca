@@ -7,7 +7,7 @@ import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   notifyStructuredLaunchListeners
 } from './structured-agent-session-launch-registry'
-import { forgetUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+import { forgetUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
 
 function confirmStructuredLaunchFirstMessagePublication(
   worktreeId: string,

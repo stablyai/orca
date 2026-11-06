@@ -11,8 +11,8 @@ import {
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
 import {
@@ -22,7 +22,7 @@ import {
 import { codexItemRunState } from './codex-item-run-state'
 import { readRecord, readString, readTextContent } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
-import { journalReasoningBody } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+import { journalReasoningBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   const text =
@@ -92,6 +92,20 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
+function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJournalItem {
+  return {
+    body: {
+      kind: 'tool-call',
+      name: 'apply_patch',
+      callId: item.id,
+      input: { changes: item.changes ?? null },
+      state: codexItemRunState(item),
+      ...(output === undefined ? {} : { output: journalPayload(output) })
+    },
+    handled: true
+  }
+}
+
 function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
   const changes = Array.isArray(item.changes)
     ? item.changes.flatMap((change) => {
@@ -101,17 +115,8 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         return path && diff ? [{ path, diff }] : []
       })
     : []
-  if (changes.length === 0) {
-    return {
-      body: {
-        kind: 'tool-call',
-        name: 'apply_patch',
-        callId: item.id,
-        input: { changes: item.changes ?? null },
-        state: codexItemRunState(item)
-      },
-      handled: true
-    }
+  if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
+    return fileChangeToolCall(item)
   }
   const patch = changes.map((change) => change.diff).join('\n')
   return {
@@ -267,13 +272,7 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return commandItem({ ...item, aggregatedOutput: text })
   }
   if (item.type === 'fileChange') {
-    const path = Array.isArray(item.changes)
-      ? readString(readRecord(item.changes[0]), 'path')
-      : null
-    return {
-      body: { kind: 'diff', path: path ?? 'pending patch', patch: journalPayload(text) },
-      handled: true
-    }
+    return fileChangeToolCall(item, text)
   }
   if (item.type === 'plan') {
     return {

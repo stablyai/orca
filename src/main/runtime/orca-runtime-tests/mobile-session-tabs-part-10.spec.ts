@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   expectDesktopDropsPane,
@@ -13,7 +14,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('rejects missing requested split leaves instead of activating a sibling', async () => {

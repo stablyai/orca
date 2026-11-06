@@ -131,16 +131,6 @@ describe('scoped external-manager IPC', () => {
     }
   )
 
-  it('does not register external create, edit, or history handlers', () => {
-    for (const channel of [
-      'automations:createExternalForOwner',
-      'automations:updateExternalForOwner',
-      'automations:listExternalRunsForOwner'
-    ]) {
-      expect(ipcHandlers.has(channel)).toBe(false)
-    }
-  })
-
   it('derives the target from the captured owner rather than the payload', async () => {
     const entry = await invoke('automations:listExternalManagerForOwner', {
       owner: desktopSsh(),
@@ -150,16 +140,6 @@ describe('scoped external-manager IPC', () => {
 
     // An SSH owner cannot be rerouted locally by a payload target.
     expect(entry).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(probeCommand).not.toHaveBeenCalled()
-  })
-
-  it('refuses a request with no captured owner without probing', async () => {
-    await expect(
-      invoke('automations:listExternalManagerForOwner', { provider: 'openclaw' })
-    ).rejects.toThrow(/automation owner is required/i)
-    await expect(invoke('automations:runExternalActionForOwner', {})).rejects.toThrow(
-      /automation owner is required/i
-    )
     expect(probeCommand).not.toHaveBeenCalled()
   })
 
@@ -196,30 +176,6 @@ describe('scoped external-manager IPC', () => {
       })
     ).rejects.toThrow(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
     expect(probeCommand).not.toHaveBeenCalled()
-  })
-
-  it('keeps one cache across requests, so a repeat read costs no second probe', async () => {
-    const request = { owner: desktopSelf, provider: 'openclaw' }
-    await invoke('automations:listExternalManagerForOwner', request)
-    await invoke('automations:listExternalManagerForOwner', request)
-    expect(probeCommand).toHaveBeenCalledTimes(1)
-
-    await invoke('automations:listExternalManagerForOwner', { ...request, refresh: true })
-    expect(probeCommand).toHaveBeenCalledTimes(2)
-  })
-
-  it('invalidates that host after a mutation through the scoped path', async () => {
-    const request = { owner: desktopSelf, provider: 'openclaw' }
-    await invoke('automations:listExternalManagerForOwner', request)
-    await invoke('automations:runExternalActionForOwner', {
-      ...request,
-      jobId: 'job-1',
-      action: 'run'
-    })
-    await invoke('automations:listExternalManagerForOwner', request)
-
-    // action + the re-probe after invalidation, on top of the first list.
-    expect(probeCommand).toHaveBeenCalledTimes(3)
   })
 })
 

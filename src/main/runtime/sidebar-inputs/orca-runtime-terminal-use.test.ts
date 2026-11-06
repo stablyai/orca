@@ -14,7 +14,7 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../runtime-store-partial-fixture'
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

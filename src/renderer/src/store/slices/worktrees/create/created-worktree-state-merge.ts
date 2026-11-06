@@ -9,6 +9,7 @@ import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from '../listing/worktree-host-ownership'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
 /** Folds a fresh create result into the worktree, lineage and base-status maps. */
 export function applyCreatedWorktree(
@@ -39,6 +40,9 @@ export function applyCreatedWorktree(
     if (!merged) {
       nextWorktrees.push(createdWorktree)
     }
+    const crossStoreKey = result.crossStoreLineage
+      ? lineageStoreKeyOfRow({ id: result.worktree.id, hostId })
+      : undefined
     return {
       // Why: a listing scanned before this create must not be applied after it.
       ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
@@ -51,6 +55,18 @@ export function applyCreatedWorktree(
             workspaceLineageByChildKey: {
               ...s.workspaceLineageByChildKey,
               [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
+            }
+          }
+        : {}),
+      // The child's store saved a parent on another machine; nest it before the next lineage list.
+      ...(result.crossStoreLineage && crossStoreKey !== undefined
+        ? {
+            crossStoreLineageByStoreKey: {
+              ...s.crossStoreLineageByStoreKey,
+              [crossStoreKey]: {
+                ...s.crossStoreLineageByStoreKey[crossStoreKey],
+                [result.crossStoreLineage.childWorkspaceKey]: result.crossStoreLineage
+              }
             }
           }
         : {}),

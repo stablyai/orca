@@ -9,18 +9,23 @@ import { branchDisplayName } from '../../workspace-card/identity/worktree-branch
 import StatusIndicator from '../../workspace-card/surface/StatusIndicator'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { ParentMachineBadge } from './ParentMachineBadge'
 
 // The picker batches status reads once; memoized rows keep no store subscriptions.
 export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerRow({
   candidate,
   repo,
   status,
-  isCurrent
+  isCurrent,
+  machineHostId
 }: {
   candidate: Worktree
   repo: Pick<Repo, 'badgeColor' | 'connectionId' | 'displayName'> | undefined
   status: WorktreeStatus
   isCurrent: boolean
+  /** Set for a parent on another machine. */
+  machineHostId?: ExecutionHostId
 }): React.JSX.Element {
   useUiLanguageRevision()
   const branch = branchDisplayName(candidate.branch)
@@ -45,6 +50,7 @@ export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerR
               <span className="truncate lowercase">{repo.displayName}</span>
             </span>
           ) : null}
+          {machineHostId ? <ParentMachineBadge hostId={machineHostId} /> : null}
           {repo?.connectionId ? <Server className="size-3 shrink-0" /> : null}
           <GitBranch className="size-3 shrink-0" />
           <span className="truncate">{branch}</span>
