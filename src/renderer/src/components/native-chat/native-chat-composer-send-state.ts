@@ -78,6 +78,7 @@ export function nativeChatComposerSendState(input: {
     sendButtonDisabled,
     alternateSend,
     // Never where the chord queues, or a second press would steer the card the first one just queued.
-    chordSteersHead: !input.editSession && (alternateSend === 'steer' || !input.isWorking)
+    chordSteersHead:
+      input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
   }
 }
