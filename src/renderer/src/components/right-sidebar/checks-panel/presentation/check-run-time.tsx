@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { formatCheckTimestamp } from '@/components/github/pr-check-presentation'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
@@ -155,12 +156,12 @@ function useCheckRunNow(enabled: boolean): number {
 
 export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Element | null {
   const { status, startedAt, completedAt, notLatestCommitSha } = check
-  const locale = getIntlLocale()
+  const languageRevision = useUiLanguageRevision()
   // Clock ticks change only the age, so the exact times, duration and copy are built once per data or language change.
   const facts = useMemo(
     () => getCheckRunTimeFacts({ status, startedAt, completedAt, notLatestCommitSha }),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() and the date formatter read the UI language implicitly.
-    [status, startedAt, completedAt, notLatestCommitSha, locale]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() and the date formatter read the UI language and catalogs implicitly.
+    [status, startedAt, completedAt, notLatestCommitSha, languageRevision]
   )
   // Only the time a row is dated by ages; rows without it don't listen to the clock.
   const nowMs = useCheckRunNow(facts?.whenMs != null)
