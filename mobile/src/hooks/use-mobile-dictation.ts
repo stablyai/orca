@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useDictationCapture } from '../platform/dictation-capture'
+import type { RpcClient } from '../transport/rpc-client'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDictationMeter } from './mobile-dictation-meter'
@@ -10,6 +11,7 @@ import {
   type MobileDictationAudioPhase
 } from './mobile-dictation-audio-chunk'
 import { MobileDictationStartBuffer } from './mobile-dictation-start-buffer'
+import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import {
   createMobileDictationId,
   isCurrentMobileDictationFinish
@@ -49,7 +51,14 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const startBufferRef = useRef(new MobileDictationStartBuffer())
   const sendHeldAudioRef = useRef(() => {})
   const stopWhenStartedRef = useRef(false)
+  const hostCancelRef = useRef<Promise<void>>(Promise.resolve())
   const generationRef = useRef(0)
+
+  // A new start waits for the host to drop the session it replaces, or the host refuses it as already active.
+  const cancelOnHost = (client: RpcClient, dictationId: string): Promise<void> => {
+    hostCancelRef.current = cancelDesktopDictation(client, dictationId)
+    return hostCancelRef.current
+  }
 
   useLayoutEffect(() => {
     // Native audio events can arrive before passive Effects flush, but refs
@@ -99,7 +108,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       closeDictationAudio()
       if (client && dictationId) {
-        void cancelDesktopDictation(client, dictationId)
+        void cancelOnHost(client, dictationId)
       }
       const kept = keptTranscript.take(dictationId)
       if (kept) {
@@ -196,39 +205,27 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     stopWhenStartedRef.current = false
     setError(null)
     applyStatus('starting')
-    let opened
-    try {
-      opened = await capture.open()
-    } catch (err) {
-      // Stale refusal must neither idle the replacement nor toast over the closure already reported by disable.
-      if (generationRef.current !== generation || !enabledRef.current) {
-        return
-      }
-      // A page without audio grants can refuse capture; return to idle before rethrowing its message so starting cannot get stuck.
-      applyStatus('idle')
-      throw err instanceof Error ? err : new Error(String(err))
-    }
-    if (generationRef.current !== generation || !enabledRef.current) {
-      capture.release()
-      if (generationRef.current === generation) {
-        applyStatus('idle')
-      }
+    const isCurrentGeneration = () => generationRef.current === generation
+    const recording = await openMobileDictationCapture({
+      capture,
+      isCurrent: () => isCurrentGeneration() && enabledRef.current,
+      isCurrentGeneration,
+      setIdle: () => applyStatus('idle'),
+      // Record from the tap: speech during the host's engine build and the round trip is held, not lost.
+      hold: () => {
+        audioPhaseRef.current = 'holding'
+      },
+      close: closeDictationAudio
+    })
+    if (!recording) {
       return
-    }
-    if (!opened.ok) {
-      applyStatus('idle')
-      throw new Error(dictationSessionErrorMessage(opened.reason))
-    }
-
-    // Record from the tap: speech during the host's engine build and the round trip is held, not lost.
-    audioPhaseRef.current = 'holding'
-    if (!capture.begin()) {
-      closeDictationAudio()
-      applyStatus('idle')
-      throw new Error(dictationSessionErrorMessage('recording-failed'))
     }
     const dictationId = createMobileDictationId()
     activeIdRef.current = dictationId
+    await hostCancelRef.current
+    if (!isCurrentGeneration()) {
+      return
+    }
 
     await startMobileDictationDesktopSession({
       client,
@@ -274,7 +271,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         setError(null)
       }
       if (client && dictationId) {
-        await cancelDesktopDictation(client, dictationId)
+        await cancelOnHost(client, dictationId)
       }
     },
     [applyStatus, closeDictationAudio, reportError]
@@ -308,7 +305,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       closeDictationAudio()
       capture.release()
       if (clientRef.current && dictationId) {
-        void cancelDesktopDictation(clientRef.current, dictationId)
+        void cancelOnHost(clientRef.current, dictationId)
       }
     }
   }, [capture, closeDictationAudio])
