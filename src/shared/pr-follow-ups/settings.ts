@@ -4,7 +4,6 @@ export const PR_FOLLOW_UPS_CAPABILITY = 'pr-followups.v1' as const
 export type PrFollowUpsSettings = {
   enabled?: boolean
   events?: Record<string, string | undefined>
-  includeBotComments?: boolean
   maxAutoRunsPerPr?: number
 }
 

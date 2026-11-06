@@ -1,4 +1,8 @@
 import {
+  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
+  parseAgentSessionOperationTimestamp
+} from '../../shared/agent-session/agent-session-host-authority'
+import {
   decideAgentLaunchMode,
   resolveAgentLaunchModeOnHost
 } from '../agent-launch/agent-launch-mode'
@@ -57,15 +61,38 @@ function receipt(runtime: OrcaRuntimeService, result: AgentLaunchResult): Follow
 
 export async function recoverFollowUpLaunch(
   runtime: OrcaRuntimeService,
-  action: Pick<FollowUpAction, 'operationId'>
+  action: Pick<FollowUpAction, 'operationId'>,
+  absence?: {
+    ledger: unknown
+    complete: boolean
+    healthy: boolean
+    executorStopped: boolean
+    now: number
+  }
 ): Promise<FollowUpReceipt> {
   try {
     const store = await runtime.openAgentSessionRecordStore()
+    const timestamp = parseAgentSessionOperationTimestamp(action.operationId)
     const row = store.getOperationRow(rpcCallerOperationKey(CALLER), action.operationId)
+    if (
+      !row &&
+      absence?.ledger === store &&
+      absence.complete &&
+      absence.healthy &&
+      absence.executorStopped &&
+      timestamp !== null &&
+      absence.now >= timestamp &&
+      absence.now - timestamp < AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
+    ) {
+      return { status: 'absent' }
+    }
     if (row?.outcome.status === 'succeeded' && isAgentLaunchResult(row.outcome.launch)) {
       return receipt(runtime, row.outcome.launch)
     }
     if (row?.outcome.status === 'failed') {
+      if (row.expiresAt !== undefined && row.expiresAt <= (absence?.now ?? Date.now())) {
+        return { status: 'unconfirmed' }
+      }
       if (row.outcome.code === 'agent_launch_tab_closed') {
         return { status: 'declined' }
       }

@@ -1,9 +1,5 @@
 import Database from '../sqlite/sync-database'
-import type {
-  FollowUpAction,
-  FollowUpActionMetadata,
-  FollowUpPr
-} from '../../shared/pr-follow-ups/contracts'
+import type { FollowUpAction, FollowUpPr } from '../../shared/pr-follow-ups/contracts'
 
 export class FollowUpStore {
   constructor(private readonly db: Database.Database) {
@@ -16,22 +12,33 @@ export class FollowUpStore {
       CREATE INDEX IF NOT EXISTS followup_action_pr ON followup_action(pr_key);
     `)
     if (
-      !db
+      db
         .prepare('PRAGMA table_info(followup_action)')
         .all()
         .some((column) => column.name === 'metadata')
     ) {
       this.transaction(() =>
-        db.exec(`ALTER TABLE followup_action ADD COLUMN metadata TEXT;
-        UPDATE followup_action SET metadata = json_set(json_remove(payload, '$.launch'),
-          '$.agent', json_extract(payload, '$.launch.agent'));`)
+        db.exec(`
+        DROP INDEX IF EXISTS followup_action_session;
+        DROP INDEX IF EXISTS followup_action_pty;
+        DROP INDEX IF EXISTS followup_action_status;
+        DROP INDEX IF EXISTS followup_action_generation;
+        DROP INDEX IF EXISTS followup_action_started;
+        DROP INDEX IF EXISTS followup_action_latest;
+        UPDATE followup_action SET payload = metadata;
+        ALTER TABLE followup_action DROP COLUMN metadata;
+      `)
       )
     }
+    db.exec(`UPDATE followup_action SET payload = json_set(json_remove(payload, '$.launch'),
+      '$.agent', json_extract(payload, '$.launch.agent')) WHERE json_type(payload, '$.launch') IS NOT NULL;`)
     db.exec(`
-      CREATE INDEX IF NOT EXISTS followup_action_status ON followup_action(pr_key, json_extract(metadata, '$.status'), json_extract(metadata, '$.sessionEndedAt'));
-      CREATE INDEX IF NOT EXISTS followup_action_generation ON followup_action(pr_key, json_extract(metadata, '$.status'), json_extract(metadata, '$.generation'));
-      CREATE INDEX IF NOT EXISTS followup_action_started ON followup_action(pr_key, json_extract(metadata, '$.status'), COALESCE(json_extract(metadata, '$.sessionStartedAt'), json_extract(metadata, '$.attemptStartedAt')));
-      CREATE INDEX IF NOT EXISTS followup_action_latest ON followup_action(pr_key, json_extract(metadata, '$.attemptStartedAt') DESC);
+      CREATE INDEX IF NOT EXISTS followup_action_session ON followup_action(json_extract(payload, '$.sessionId'));
+      CREATE INDEX IF NOT EXISTS followup_action_pty ON followup_action(json_extract(payload, '$.terminalPtyId'));
+      CREATE INDEX IF NOT EXISTS followup_action_status ON followup_action(pr_key, json_extract(payload, '$.status'), json_extract(payload, '$.sessionEndedAt'));
+      CREATE INDEX IF NOT EXISTS followup_action_generation ON followup_action(pr_key, json_extract(payload, '$.status'), json_extract(payload, '$.generation'));
+      CREATE INDEX IF NOT EXISTS followup_action_started ON followup_action(pr_key, json_extract(payload, '$.status'), COALESCE(json_extract(payload, '$.sessionStartedAt'), json_extract(payload, '$.attemptStartedAt')));
+      CREATE INDEX IF NOT EXISTS followup_action_latest ON followup_action(pr_key, json_extract(payload, '$.attemptStartedAt') DESC);
     `)
   }
 
@@ -70,47 +77,50 @@ export class FollowUpStore {
   savePr(pr: FollowUpPr): void {
     this.db
       .prepare(
-        'INSERT INTO followup_pr VALUES (?, ?) ON CONFLICT(pr_key) DO UPDATE SET payload = excluded.payload'
+        'INSERT INTO followup_pr VALUES (?, ?) ON CONFLICT(pr_key) DO UPDATE SET payload = excluded.payload WHERE payload != excluded.payload'
       )
       .run(pr.prKey, JSON.stringify(pr))
   }
 
-  actions(prKey: string): FollowUpAction[] {
-    return this.metadata(prKey).map((action) => this.action(action.actionKey)!)
+  actions(prKey: string, pendingOnly = false): FollowUpAction[] {
+    return this.db
+      .prepare(
+        `SELECT payload FROM followup_action WHERE pr_key = ?${pendingOnly ? " AND (json_extract(payload, '$.status') IN ('claimed', 'unconfirmed') AND json_extract(payload, '$.recoveryFinalizedAt') IS NULL OR (json_extract(payload, '$.status') = 'accepted' AND json_extract(payload, '$.sessionEndedAt') IS NULL))" : ''}`
+      )
+      .all(prKey)
+      .map((row) => JSON.parse(String(row.payload)))
+  }
+
+  actionsForIdentity(identity: string): FollowUpAction[] {
+    return this.db
+      .prepare(
+        "SELECT payload FROM followup_action WHERE json_extract(payload, '$.sessionId') = ? OR json_extract(payload, '$.terminalPtyId') = ?"
+      )
+      .all(identity, identity)
+      .map((row) => JSON.parse(String(row.payload)))
   }
 
   action(actionKey: string): FollowUpAction | undefined {
     const row = this.db
-      .prepare('SELECT metadata, payload FROM followup_action WHERE action_key = ?')
+      .prepare('SELECT payload FROM followup_action WHERE action_key = ?')
       .get(actionKey)
-    return row
-      ? { ...JSON.parse(String(row.metadata)), launch: JSON.parse(String(row.payload)).launch }
-      : undefined
+    return row ? JSON.parse(String(row.payload)) : undefined
   }
 
-  metadata(prKey: string, pendingOnly = false): FollowUpActionMetadata[] {
-    return this.db
-      .prepare(
-        `SELECT metadata FROM followup_action WHERE pr_key = ?${pendingOnly ? " AND (json_extract(metadata, '$.status') IN ('claimed', 'unconfirmed') OR (json_extract(metadata, '$.status') = 'accepted' AND json_extract(metadata, '$.sessionEndedAt') IS NULL))" : ''}`
-      )
-      .all(prKey)
-      .map((row) => JSON.parse(String(row.metadata)))
-  }
-
-  latestAction(prKey: string): FollowUpActionMetadata | undefined {
+  latestAction(prKey: string): FollowUpAction | undefined {
     const row = this.db
       .prepare(
-        "SELECT metadata FROM followup_action WHERE pr_key = ? AND json_extract(metadata, '$.status') != 'absent' ORDER BY json_extract(metadata, '$.attemptStartedAt') DESC LIMIT 1"
+        "SELECT payload FROM followup_action WHERE pr_key = ? ORDER BY json_extract(payload, '$.attemptStartedAt') DESC LIMIT 1"
       )
       .get(prKey)
-    return row ? JSON.parse(String(row.metadata)) : undefined
+    return row ? JSON.parse(String(row.payload)) : undefined
   }
 
   acceptedCount(prKey: string, generation: number): number {
     return Number(
       this.db
         .prepare(
-          "SELECT COUNT(*) AS count FROM followup_action WHERE pr_key = ? AND json_extract(metadata, '$.status') = 'accepted' AND json_extract(metadata, '$.generation') = ?"
+          "SELECT COUNT(*) AS count FROM followup_action WHERE pr_key = ? AND json_extract(payload, '$.status') IN ('accepted', 'claimed', 'unconfirmed') AND json_extract(payload, '$.generation') = ?"
         )
         .get(prKey, generation)?.count ?? 0
     )
@@ -119,52 +129,72 @@ export class FollowUpStore {
   recentAcceptedStarts(prKey: string, since: number): number[] {
     return this.db
       .prepare(
-        "SELECT COALESCE(json_extract(metadata, '$.sessionStartedAt'), json_extract(metadata, '$.attemptStartedAt')) AS started FROM followup_action WHERE pr_key = ? AND json_extract(metadata, '$.status') = 'accepted' AND COALESCE(json_extract(metadata, '$.sessionStartedAt'), json_extract(metadata, '$.attemptStartedAt')) > ? ORDER BY started ASC"
+        "SELECT COALESCE(json_extract(payload, '$.sessionStartedAt'), json_extract(payload, '$.attemptStartedAt')) AS started FROM followup_action WHERE pr_key = ? AND json_extract(payload, '$.status') IN ('accepted', 'claimed', 'unconfirmed') AND COALESCE(json_extract(payload, '$.sessionStartedAt'), json_extract(payload, '$.attemptStartedAt')) > ? ORDER BY started ASC"
       )
       .all(prKey, since)
       .map((row) => Number(row.started))
   }
 
   saveAction(action: FollowUpAction): void {
-    const { launch, ...metadata } = action
     this.db
       .prepare(
-        'INSERT INTO followup_action (action_key, pr_key, payload, metadata) VALUES (?, ?, ?, ?) ON CONFLICT(action_key) DO UPDATE SET payload = excluded.payload, metadata = excluded.metadata'
+        'INSERT INTO followup_action(action_key, pr_key, payload) VALUES (?, ?, ?) ON CONFLICT(action_key) DO UPDATE SET payload = excluded.payload WHERE payload != excluded.payload'
       )
-      .run(
-        action.actionKey,
-        action.prKey,
-        JSON.stringify({ launch }),
-        JSON.stringify({ ...metadata, agent: launch.agent })
-      )
+      .run(action.actionKey, action.prKey, JSON.stringify(action))
   }
 
-  saveActionMetadata(action: FollowUpActionMetadata): void {
-    this.db
-      .prepare('UPDATE followup_action SET metadata = ? WHERE action_key = ?')
-      .run(JSON.stringify(action), action.actionKey)
+  pushAttributed(prKey: string, chatId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          "SELECT 1 FROM followup_action WHERE pr_key = ? AND json_extract(payload, '$.status') = 'accepted' AND (json_extract(payload, '$.sessionId') = ? OR json_extract(payload, '$.transcriptChatId') = ?) LIMIT 1"
+        )
+        .get(prKey, chatId, chatId)
+    )
+  }
+
+  workingOverlap(prKey: string, from: number, to: number): boolean {
+    return Boolean(
+      this.db
+        .prepare(`SELECT 1 FROM followup_action WHERE pr_key = ? AND json_extract(payload, '$.status') = 'accepted'
+      AND EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(payload, '$.workingIntervals'), json_array(json_object('start', COALESCE(json_extract(payload, '$.sessionStartedAt'), json_extract(payload, '$.attemptStartedAt')), 'end', json_extract(payload, '$.sessionEndedAt')))))
+      WHERE json_extract(value, '$.start') <= ? AND (json_extract(value, '$.end') IS NULL OR json_extract(value, '$.end') >= ?)) LIMIT 1`)
+        .get(prKey, to, from)
+    )
   }
 
   bind(prKey: string, instanceId: string): void {
     this.db.prepare('INSERT OR IGNORE INTO followup_binding VALUES (?, ?)').run(prKey, instanceId)
   }
 
-  reconcileBindings(liveInstanceIds: ReadonlySet<string>): void {
+  deleteBinding(instanceId: string): string[] {
+    const keys = this.db
+      .prepare('SELECT pr_key FROM followup_binding WHERE instance_id = ?')
+      .all(instanceId)
+      .map((row) => String(row.pr_key))
+    this.db.prepare('DELETE FROM followup_binding WHERE instance_id = ?').run(instanceId)
+    return keys
+  }
+
+  reconcileBindings(liveInstanceIds: ReadonlySet<string>): string[] {
+    const affected = new Set<string>()
     for (const row of this.db.prepare('SELECT pr_key, instance_id FROM followup_binding').all()) {
       if (!liveInstanceIds.has(String(row.instance_id))) {
+        affected.add(String(row.pr_key))
         this.db
           .prepare('DELETE FROM followup_binding WHERE pr_key = ? AND instance_id = ?')
           .run(row.pr_key, row.instance_id)
       }
     }
+    return [...affected]
   }
 
   retire(pr: FollowUpPr): boolean {
     const bound = this.db
       .prepare('SELECT 1 FROM followup_binding WHERE pr_key = ? LIMIT 1')
       .get(pr.prKey)
-    const pending = this.metadata(pr.prKey, true).length > 0
-    if ((bound && pr.state === 'open') || pending) {
+    const pending = this.actions(pr.prKey, true).length > 0
+    if ((bound && (pr.state === 'open' || pr.state === 'draft')) || pending) {
       return false
     }
     this.transaction(() => {

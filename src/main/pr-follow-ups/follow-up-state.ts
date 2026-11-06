@@ -1,15 +1,32 @@
-import type { FollowUpPr, FollowUpTarget, FollowUpView } from '../../shared/pr-follow-ups/contracts'
+import type {
+  FollowUpAction,
+  FollowUpObservation,
+  FollowUpPr,
+  FollowUpTarget,
+  FollowUpView
+} from '../../shared/pr-follow-ups/contracts'
+import type { PrFollowUpsSettings } from '../../shared/pr-follow-ups/settings'
 import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
 import type { FollowUpEngineDependencies } from './engine-contract'
 
-const DAY = 24 * 60 * 60 * 1000
+export const FOLLOW_UP_DAY = 24 * 60 * 60 * 1000
+
+export type FollowUpProjection = {
+  pr?: FollowUpPr
+  observation?: FollowUpObservation
+  latestAction?: FollowUpAction
+  pending: FollowUpAction[]
+  used: number
+  recentStarts: number[]
+  waitingForWindow?: string
+}
 
 export function eligibleFollowUpTargets(
   deps: FollowUpEngineDependencies,
   prKey: string
 ): FollowUpTarget[] {
   return deps
-    .targets()
+    .targets(prKey)
     .filter((target) => {
       const settings = resolvePrFollowUps(deps.globalSettings(), target.settings)
       return (
@@ -24,36 +41,32 @@ export function eligibleFollowUpTargets(
 }
 
 export function followUpPause(
-  deps: FollowUpEngineDependencies,
-  pr: FollowUpPr,
+  projection: Pick<FollowUpProjection, 'pr' | 'used' | 'recentStarts'>,
   limit: number
 ): Pick<FollowUpView, 'pauseReason' | 'resumesAt'> | undefined {
-  if (deps.store.acceptedCount(pr.prKey, pr.generation) >= limit) {
+  const { pr, used, recentStarts } = projection
+  if (used >= limit) {
     return { pauseReason: 'generation' }
   }
-  const recent = deps.store.recentAcceptedStarts(pr.prKey, (deps.now?.() ?? Date.now()) - DAY)
-  if (recent.length >= 6) {
-    return { pauseReason: 'daily', resumesAt: recent.at(-6)! + DAY }
+  if (recentStarts.length >= 6) {
+    return { pauseReason: 'daily', resumesAt: recentStarts.at(-6)! + FOLLOW_UP_DAY }
+  }
+  if (!pr) {
+    return undefined
   }
   if (pr.consecutiveReadFailures >= 8) {
     return { pauseReason: 'reads' }
-  }
-  if (pr.consecutiveCommentWakes >= 10) {
-    return { pauseReason: 'comments' }
   }
   return undefined
 }
 
 export function followUpView(
-  deps: FollowUpEngineDependencies,
-  prKey: string,
-  waitingForWindow: boolean,
-  workspaceTarget?: FollowUpTarget
+  projection: FollowUpProjection,
+  globalSettings: PrFollowUpsSettings | undefined,
+  target?: FollowUpTarget
 ): FollowUpView {
-  const target = workspaceTarget ?? eligibleFollowUpTargets(deps, prKey)[0]
-  const settings = resolvePrFollowUps(deps.globalSettings(), target?.settings)
-  const pr = deps.store.pr(prKey)
-  const used = pr ? deps.store.acceptedCount(prKey, pr.generation) : 0
+  const { pr, observation, latestAction, used, waitingForWindow } = projection
+  const settings = resolvePrFollowUps(globalSettings, target?.settings)
   const base = {
     used,
     limit: settings.maxAutoRunsPerPr,
@@ -65,13 +78,12 @@ export function followUpView(
       ? 'disabled'
       : settings.ciFailed === 'off'
         ? 'nothing'
-        : target && (target.archived || target.branch !== deps.source.latest(prKey)?.headRefName)
+        : target && (target.archived || target.branch !== observation?.headRefName)
           ? 'branch'
           : undefined
   if (!target || !pr || offReason) {
     return { ...base, state: 'off', offReason }
   }
-  const latestAction = deps.store.latestAction(prKey)
   const action = latestAction
     ? {
         worktreeId: latestAction.worktreeId,
@@ -83,24 +95,33 @@ export function followUpView(
   if (latestAction?.status === 'claimed') {
     return { ...base, state: 'starting', workingAgent: latestAction.agent, action }
   }
-  if (latestAction?.status === 'unconfirmed') {
-    return { ...base, state: 'unconfirmed', action }
-  }
-  const pause = followUpPause(deps, pr, base.limit)
+  const pause = followUpPause(projection, base.limit)
   if (pause) {
     return { ...base, ...pause, state: 'paused', action }
   }
-  const observation = deps.source.latest(prKey)
   const fresh = observation?.failingCheckNames.some((name) => !pr.handled.includes(name))
   if (fresh && target.workingAgent) {
     return { ...base, state: 'waiting', workingAgent: target.workingAgent }
   }
+  if (fresh && waitingForWindow) {
+    return { ...base, state: 'waiting-window', workingAgent: waitingForWindow }
+  }
+
   if (
     fresh &&
-    (waitingForWindow ||
-      (deps.recipe(target).surface === 'terminal' && !deps.canPublishAgentLaunchTab()))
+    latestAction &&
+    ['absent', 'failed'].includes(latestAction.status) &&
+    latestAction.headSha === observation?.headSha
   ) {
-    return { ...base, state: 'waiting-window', workingAgent: deps.recipe(target).agent }
+    return {
+      ...base,
+      state: 'failed',
+      workingAgent: latestAction.agent,
+      failureReason: latestAction.failureReason
+    }
+  }
+  if (latestAction?.status === 'unconfirmed' && latestAction.headSha === observation?.headSha) {
+    return { ...base, state: 'unconfirmed', action }
   }
   if (observation?.failingCheckNames.some((name) => pr.baselineNames.includes(name))) {
     return { ...base, state: 'baseline' }

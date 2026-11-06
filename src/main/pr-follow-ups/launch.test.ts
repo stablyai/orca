@@ -72,6 +72,37 @@ describe('follow-up launch receipts', () => {
       status: 'unconfirmed'
     })
   })
+  it('requires same-ledger completeness, a stopped executor and unprunable age before missing rows prove absence', async () => {
+    const host = runtime()
+    const ledger = await host.openAgentSessionRecordStore()
+    host.openAgentSessionRecordStore = async () => ledger
+    const operationId = '1700000000000-0123456789abcdef0123456789abcdef'
+    const proof = {
+      ledger,
+      complete: true,
+      healthy: true,
+      executorStopped: true,
+      now: 1700000001000
+    }
+    expect(await recoverFollowUpLaunch(host, { operationId }, proof)).toEqual({ status: 'absent' })
+    for (const patch of [
+      { ledger: {} },
+      { complete: false },
+      { healthy: false },
+      { executorStopped: false },
+      { now: 1700173000000 }
+    ]) {
+      expect(await recoverFollowUpLaunch(host, { operationId }, { ...proof, ...patch })).toEqual({
+        status: 'unconfirmed'
+      })
+    }
+    host.openAgentSessionRecordStore = async () => {
+      throw new Error('Ledger unavailable')
+    }
+    expect(await recoverFollowUpLaunch(host, { operationId }, proof)).toEqual({
+      status: 'unconfirmed'
+    })
+  })
 })
 
 it('uses the saved Fix checks recipe and falls back from preferred chat when the host cannot create it', async () => {

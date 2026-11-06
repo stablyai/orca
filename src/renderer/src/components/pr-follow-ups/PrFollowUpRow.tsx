@@ -35,7 +35,7 @@ function stateText(view: FollowUpView): string {
       return 'Handled for this commit'
     case 'paused':
       if (view.pauseReason === 'generation') {
-        return `Auto follow-ups paused (${view.used} of ${view.limit} used). A new push from you resets it once no automatic agent is still working there`
+        return `Auto follow-ups paused (${view.used} of ${view.limit} used). A new push from you resets it.`
       }
       if (view.pauseReason === 'daily') {
         return `Auto follow-ups paused (6 in 24 h). Resumes at ${new Date(view.resumesAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
@@ -45,6 +45,8 @@ function stateText(view: FollowUpView): string {
       return 'Already failing when follow-ups were turned on'
     case 'starting':
       return `Starting ${formatAgentTypeLabel(view.workingAgent)}…`
+    case 'failed':
+      return `Couldn’t start ${formatAgentTypeLabel(view.workingAgent)}. ${view.failureReason ?? 'Check Fix failing checks settings or start it manually.'}`
     case 'unconfirmed':
       return 'Couldn’t confirm the agent started'
     case 'prompt-unconfirmed':
@@ -68,9 +70,7 @@ export function PrFollowUpRow({
     return null
   }
   const { view } = current
-  const canResume =
-    view.stopped ||
-    (view.state === 'paused' && (view.pauseReason === 'reads' || view.pauseReason === 'comments'))
+  const canResume = view.stopped || (view.state === 'paused' && view.pauseReason === 'reads')
   const openWorkspace = (): void => {
     activateAndRevealWorkspace(view.action?.worktreeId ?? worktreeId)
   }
@@ -120,7 +120,7 @@ export function PrFollowUpRow({
           Open workspace
         </Button>
       )}
-      {view.state === 'baseline' && (
+      {['baseline', 'failed', 'unconfirmed'].includes(view.state) && (
         <Button variant="ghost" size="sm" onClick={onFixChecks}>
           Fix with AI
         </Button>

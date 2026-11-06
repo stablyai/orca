@@ -1,21 +1,19 @@
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type {
   FollowUpObservationSource,
+  FollowUpHostInputs,
   FollowUpWorkspace
 } from '../../shared/pr-follow-ups/contracts'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { sessionCrewChanges } from '../runtime/orchestration/crew/crew-changes'
-import { FollowUpEngine, type FollowUpEngineDependencies } from './engine'
+import { FollowUpEngine } from './engine'
 import { FollowUpStore } from './store'
 import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
 import { launchFollowUp, recoverFollowUpLaunch } from './launch'
 
-// The selected reader supplies its workspace bindings and check-log read; it owns all GitHub reads.
-export type FollowUpHostInputs = Pick<
-  FollowUpEngineDependencies,
-  'targets' | 'liveInstanceIds' | 'recipe' | 'prepare' | 'live' | 'working' | 'started'
-> & { workspaces(): readonly FollowUpWorkspace[] }
+export type { FollowUpHostInputs } from '../../shared/pr-follow-ups/contracts'
+import { followUpChatActivity } from './action-lifecycle'
 
 export function installPrFollowUps(
   runtime: OrcaRuntimeService,
@@ -25,6 +23,8 @@ export function installPrFollowUps(
   onGraphSync: (listener: () => void) => () => void,
   emit: (event: RuntimeClientEvent) => void
 ): { engine: FollowUpEngine; dispose(): Promise<void> } {
+  let workspaces = inputs.workspaces()
+  let workspaceByInstance = new Map(workspaces.map((item) => [item.instanceId, item]))
   const records = new FollowUpStore(runtime.getOrchestrationDb().db)
   const engine = new FollowUpEngine({
     ...inputs,
@@ -32,119 +32,229 @@ export function installPrFollowUps(
       inputs.started?.(action)
       emit({
         type: 'prFollowUpStarted',
-        prNumber:
-          inputs.workspaces().find((workspace) => workspace.instanceId === action.instanceId)
-            ?.prNumber ?? undefined,
+        prNumber: workspaceByInstance.get(action.instanceId)?.prNumber ?? undefined,
         failedCheckCount: action.failingNames.length,
         worktreeId: action.worktreeId,
         paneKey: action.paneKey,
         surface: action.surface,
-        agent: action.launch.agent
+        agent: action.agent
       })
     },
     source,
+    workspaceIds: () => workspaces.map((workspace) => workspace.worktreeId),
     store: records,
     globalSettings: () => store.getSettings().prFollowUps,
     canPublishAgentLaunchTab: () => runtime.canPublishAgentLaunchTab(),
     launch: (params) => launchFollowUp(runtime, params),
     recover: (action) => recoverFollowUpLaunch(runtime, action),
-    changed: () => emit({ type: 'prFollowUpsChanged' })
+    changed: (keys) => {
+      syncWatches(keys)
+      emit({ type: 'prFollowUpsChanged' })
+    }
   })
   let disposed = false
-  const watches = new Map<string, () => void>()
-  const syncWatches = (): void => {
+  const registrations = new Map<string, { fingerprint: string; unregister(): void }>()
+  let workspacesByPr = new Map<string, FollowUpWorkspace[]>()
+  const indexWatches = (): void => {
+    workspacesByPr = new Map()
+    const targets = new Map(inputs.targets().map((target) => [target.instanceId, target]))
+    for (const workspace of workspaces) {
+      const key = targets.get(workspace.instanceId)?.prKey ?? ''
+      const items = workspacesByPr.get(key) ?? []
+      items.push(workspace)
+      workspacesByPr.set(key, items)
+    }
+  }
+  const releaseWatch = (instanceId: string): void => {
+    registrations.get(instanceId)?.unregister()
+    registrations.delete(instanceId)
+  }
+  const syncWatches = (keys: readonly string[] = [...workspacesByPr.keys()]): void => {
     if (disposed) {
       return
     }
-    const wanted = new Set<string>()
-    for (const workspace of inputs.workspaces()) {
-      const settings = resolvePrFollowUps(store.getSettings().prFollowUps, workspace.settings)
-      const target = inputs.targets().find((item) => item.instanceId === workspace.instanceId)
-      const pr = target ? records.pr(target.prKey) : undefined
-      const paused =
-        pr &&
-        (pr.stoppedAt !== null ||
-          pr.consecutiveReadFailures >= 8 ||
-          pr.consecutiveCommentWakes >= 10)
-      if (
-        workspace.archived ||
-        paused ||
-        !workspace.branch ||
-        !settings.enabled ||
-        settings.ciFailed === 'off'
-      ) {
-        continue
-      }
-      const { repoPath, connectionId, branch, prNumber } = workspace
-      const key = JSON.stringify([repoPath, connectionId, branch, prNumber])
-      wanted.add(key)
-      if (!watches.has(key)) {
-        watches.set(
-          key,
-          source.watchWorkspace({
-            repoPath,
+    for (const prKey of keys) {
+      const pr = prKey ? records.pr(prKey) : undefined
+      const paused = pr && (pr.stoppedAt !== null || pr.consecutiveReadFailures >= 8)
+      for (const workspace of workspacesByPr.get(prKey) ?? []) {
+        const settings = resolvePrFollowUps(store.getSettings().prFollowUps, workspace.settings)
+        const { repoId, connectionId, branch, prNumber } = workspace
+        const key =
+          !workspace.archived &&
+          !paused &&
+          branch &&
+          settings.enabled &&
+          settings.ciFailed !== 'off'
+            ? JSON.stringify([repoId, connectionId, branch, prNumber])
+            : undefined
+        if (registrations.get(workspace.instanceId)?.fingerprint === key) {
+          continue
+        }
+        releaseWatch(workspace.instanceId)
+        if (!key) {
+          continue
+        }
+        registrations.set(workspace.instanceId, {
+          fingerprint: key,
+          ...source.registerPRWatch({
+            repoId,
             connectionId,
             branch,
             prNumber,
             reason: 'pr-follow-ups'
           })
-        )
-      }
-    }
-    for (const [key, release] of watches) {
-      if (!wanted.has(key)) {
-        release()
-        watches.delete(key)
+        })
       }
     }
   }
+  indexWatches()
+  const pending = new Set<string>()
   let scheduled = false
-  let again = false
-  const reconcile = (): void => {
-    if (disposed) {
-      return
+  const schedule = (keys: Iterable<string>, inventory = false): void => {
+    for (const key of keys) {
+      pending.add(key)
     }
-    if (scheduled) {
-      again = true
+    if (scheduled || (!pending.size && !inventory) || disposed) {
       return
     }
     scheduled = true
     queueMicrotask(() => {
-      syncWatches()
+      scheduled = false
+      const keys = [...pending]
+      pending.clear()
       void engine
-        .reconcile()
+        .reconcile(keys)
         .catch((error: unknown) => console.error('[pr-follow-ups] reconciliation failed', error))
-        .finally(() => {
-          scheduled = false
-          if (again) {
-            again = false
-            reconcile()
-          }
-        })
     })
   }
+  let workspaceKey = JSON.stringify(workspaces)
+  const inventoryChanged = (): void => {
+    const nextWorkspaces = inputs.workspaces()
+    const nextKey = JSON.stringify(nextWorkspaces)
+    workspaces = nextWorkspaces
+    const affected = engine.refreshInventory()
+    for (const target of inputs.targets()) {
+      const value = JSON.stringify(inputs.launchInputs(target))
+      if (launchKeys.get(target.instanceId) !== value) {
+        affected.add(target.prKey)
+      }
+      launchKeys.set(target.instanceId, value)
+    }
+    if (workspaceKey === nextKey && !affected.size) {
+      return
+    }
+    workspaceKey = nextKey
+    workspaceByInstance = new Map(workspaces.map((item) => [item.instanceId, item]))
+    const instances = new Set(workspaces.map((item) => item.instanceId))
+    for (const id of registrations.keys()) {
+      if (!instances.has(id)) {
+        releaseWatch(id)
+      }
+    }
+    indexWatches()
+    schedule(affected, true)
+    syncWatches()
+  }
+  const targetChanged = (worktreeId: string, activity = false): void => {
+    const target = inputs.target(worktreeId)
+    if (target) {
+      schedule([...engine.targetChanged(target), ...(activity ? [target.prKey] : [])])
+    }
+  }
+  const chatActivity = followUpChatActivity(engine, (id) => targetChanged(id, true))
+  const launchKeys = new Map(
+    inputs
+      .targets()
+      .map((target) => [target.instanceId, JSON.stringify(inputs.launchInputs(target))])
+  )
+  let settingsKey = JSON.stringify(store.getSettings().prFollowUps)
+  const paneStates = new Map<string, string>()
+  let inventoryWasComplete = inputs.inventoryComplete()
   const releases = [
+    inputs.subscribeInventory((change) => {
+      inventoryChanged()
+      if (change.deletedInstanceId) {
+        void engine.instanceDeleted(change.deletedInstanceId)
+      }
+      // Completeness may arrive after the last target change.
+      if (!inventoryWasComplete && inputs.inventoryComplete()) {
+        void engine.reconcile([])
+      }
+      inventoryWasComplete = inputs.inventoryComplete()
+    }),
     onGraphSync(() => {
       if (engine.waitingForWindow && runtime.canPublishAgentLaunchTab()) {
-        reconcile()
+        schedule(inputs.targets().map((target) => target.prKey))
       }
     }),
-    runtime.onWorktreeLifecycle(reconcile),
-    runtime.agentTransitions.subscribe(reconcile),
-    sessionCrewChanges.subscribe(reconcile),
+    runtime.onWorktreeLifecycle((event) => targetChanged(event.worktreeId)),
+    runtime.agentTransitions.subscribe((change) => {
+      if (change.kind === 'observed' || !change.workspace) {
+        return
+      }
+      const phase = change.kind === 'moved' ? change.to : change.phase
+      const state = JSON.stringify([change.workspace.worktreeId, phase])
+      if (paneStates.get(change.paneKey) === state) {
+        return
+      }
+      paneStates.set(change.paneKey, state)
+      void engine.activityObserved(
+        change.workspace.worktreeId,
+        change.paneKey,
+        phase === 'rest' ? 'unknown' : phase === 'working' || phase === 'needs-you',
+        change.at
+      )
+      targetChanged(change.workspace.worktreeId, true)
+    }),
+    sessionCrewChanges.subscribe((facets) => {
+      if (facets.has('topology')) {
+        chatActivity.refresh()
+        inventoryChanged()
+      }
+      if (facets.has('records') || facets.has('topology')) {
+        schedule(engine.activePrKeys())
+      }
+    }),
     runtime.onClientEvent(
       (event) => {
-        if (event.type === 'prFollowUpsChanged') {
-          syncWatches()
-        }
-        if (event.type === 'reposChanged' || event.type === 'worktreesChanged') {
-          reconcile()
+        if (
+          event.type === 'reposChanged' ||
+          (event.type === 'worktreesChanged' && !event.sortOrderOnly)
+        ) {
+          inventoryChanged()
         }
       },
       { consumesTerminalSideEffects: false }
     ),
-    store.onStateWritten?.(reconcile),
-    store.onSettingsChanged?.(reconcile)
+    store.onSettingsChanged?.((updates) => {
+      if (
+        !['prFollowUps', 'sourceControlAi', 'defaultTuiAgent', 'nativeChatProviders'].some(
+          (key) => key in updates
+        )
+      ) {
+        return
+      }
+      const key = JSON.stringify(store.getSettings().prFollowUps)
+      const affected = engine.refreshInventory()
+      if (settingsKey !== key) {
+        for (const target of inputs.targets()) {
+          affected.add(target.prKey)
+        }
+      }
+      settingsKey = key
+      // Effective input changes, rather than unrelated writes, wake parked attempts.
+      for (const target of inputs.targets()) {
+        const value = JSON.stringify(inputs.launchInputs(target))
+        if (launchKeys.get(target.instanceId) !== value) {
+          affected.add(target.prKey)
+        }
+        launchKeys.set(target.instanceId, value)
+      }
+      schedule(affected)
+      if (affected.size) {
+        syncWatches([...affected])
+      }
+    })
   ]
   void engine
     .start()
@@ -159,10 +269,11 @@ export function installPrFollowUps(
           release()
         }
       }
-      for (const release of watches.values()) {
-        release()
+      for (const registration of registrations.values()) {
+        registration.unregister()
       }
-      watches.clear()
+      registrations.clear()
+      chatActivity.dispose()
       await engine.dispose()
     }
   }

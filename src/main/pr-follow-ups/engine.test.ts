@@ -1,144 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import type {
-  FollowUpObservation,
-  FollowUpObservationSource,
-  FollowUpTarget
-} from '../../shared/pr-follow-ups/contracts'
-import { FollowUpEngine, type FollowUpEngineDependencies, type FollowUpReceipt } from './engine'
+import { describe, expect, it, vi } from 'vitest'
+import { FollowUpEngine, type FollowUpReceipt } from './engine'
 import { FollowUpStore } from './store'
 import Database from '../sqlite/sync-database'
 import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/pr-follow-ups'
-
-class FakeObservations implements FollowUpObservationSource {
-  watchWorkspace(): () => void {
-    return () => undefined
-  }
-  observations = new Map<string, FollowUpObservation>()
-  pushes: { headSha: string; chatId: string }[] = []
-  subscribe(): () => void {
-    return () => undefined
-  }
-  latest(key: string): FollowUpObservation | undefined {
-    return this.observations.get(key)
-  }
-  pullRequestActionsFor(): typeof this.pushes {
-    return this.pushes
-  }
-}
-const cleanups: (() => void)[] = []
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) {
-    cleanup()
-  }
-})
-
-function harness() {
-  const folder = mkdtempSync(join(tmpdir(), 'pr-followups-pr1-'))
-  const path = join(folder, 'host.db')
-  let db = new Database(path)
-  let store = new FollowUpStore(db)
-  const source = new FakeObservations()
-  let now = 1700000000000
-  const target: FollowUpTarget = {
-    worktreeId: 'w1',
-    instanceId: 'i1',
-    prKey: 'github.com/a/b#1',
-    branch: 'fix',
-    lastActiveAt: 1,
-    archived: false,
-    workingAgent: null
-  }
-  const global = { enabled: true, events: { ciFailed: 'new-agent' } }
-  const launch = vi
-    .fn<FollowUpEngineDependencies['launch']>()
-    .mockResolvedValue({ status: 'accepted', identity: { surface: 'chat', sessionId: 'auto-1' } })
-  const recover = vi
-    .fn<FollowUpEngineDependencies['recover']>()
-    .mockResolvedValue({ status: 'unconfirmed' })
-  const prepare = vi
-    .fn<FollowUpEngineDependencies['prepare']>()
-    .mockResolvedValue({ agent: 'codex', target: { kind: 'existing', worktree: 'id:w1' } })
-  const deps = (): FollowUpEngineDependencies => ({
-    store,
-    source,
-    globalSettings: () => global,
-    targets: () => [target],
-    liveInstanceIds: () => new Set([target.instanceId]),
-    recipe: () => ({ agent: 'Codex', surface: 'chat' }),
-    canPublishAgentLaunchTab: () => true,
-    working: () => false,
-    launch,
-    recover,
-    prepare,
-    live: async () => 'unknown',
-    now: () => now
-  })
-  let engine = new FollowUpEngine(deps())
-  const observe = async (
-    names: string[],
-    head = 'h1',
-    patch: Partial<FollowUpObservation> = {}
-  ) => {
-    now += 1000
-    const observation: FollowUpObservation = {
-      prKey: target.prKey,
-      state: 'open',
-      headSha: head,
-      headRefName: 'fix',
-      baseSha: 'base',
-      mergeable: 'clean',
-      checksFinal: true,
-      failingCheckNames: names,
-      commentSignal: {
-        comments: { totalCount: 0, newestIds: [] },
-        reviews: { totalCount: 0, newestIds: [] },
-        threads: { totalCount: 0, newestIds: [] }
-      },
-      readComplete: true,
-      observedAt: now,
-      ...patch
-    }
-    source.observations.set(target.prKey, observation)
-    await engine.observe(observation)
-  }
-  cleanups.push(() => {
-    store.close()
-    rmSync(folder, { recursive: true, force: true })
-  })
-  return {
-    source,
-    target,
-    launch,
-    prepare,
-    recover,
-    global,
-    observe,
-    get engine() {
-      return engine
-    },
-    get db() {
-      return db
-    },
-    get store() {
-      return store
-    },
-    advance: (milliseconds: number) => {
-      now += milliseconds
-    },
-    dependencies: deps,
-    restart: async () => {
-      await engine.dispose()
-      store.close()
-      db = new Database(path)
-      store = new FollowUpStore(db)
-      engine = new FollowUpEngine(deps())
-      await engine.start()
-    }
-  }
-}
+import { harness } from './engine.test-fixture'
 
 describe('automatic failing-check follow-ups', () => {
   it('baselines existing failures and fires once for each new failing name on a head, including after restart', async () => {
@@ -195,33 +60,51 @@ describe('automatic failing-check follow-ups', () => {
     expect(h.store.actions(h.target.prKey)).toHaveLength(1)
   })
 
-  it('does not reset the cap for an attributed follow-up push or a session interval overlapping across restart', async () => {
-    const h = harness()
-    await h.observe([])
-    await h.observe(['one'])
-    h.source.pushes = [{ chatId: 'auto-1', headSha: 'h2' }]
-    await h.observe(['one'], 'h2')
-    await h.restart()
-    await h.observe(['one'], 'h3')
-    await h.observe(['one'], 'h4')
-    expect(h.launch).toHaveBeenCalledTimes(3)
-    expect(h.engine.view(h.target.prKey)).toMatchObject({
-      state: 'paused',
-      pauseReason: 'generation'
-    })
-    h.advance(120000)
-    await h.observe(['one'], 'h5', { readComplete: false })
-    await h.engine.sessionEnded('auto-1', 1700000100000)
-    await h.restart()
-    await h.observe(['one'], 'h5')
-    expect(h.launch).toHaveBeenCalledTimes(3)
-    expect(h.engine.view(h.target.prKey)).toMatchObject({ state: 'paused', used: 3 })
-    h.advance(120000)
-    await h.observe([], 'h5')
-    await h.observe(['one'], 'h6')
-    expect(h.launch).toHaveBeenCalledTimes(4)
-    expect(h.store.pr(h.target.prKey)?.generation).toBe(1)
-  })
+  it.each(['chat', 'terminal'] as const)(
+    'does not reset the cap for an attributed push or a %s working interval across restart and an incomplete read',
+    async (surface) => {
+      const h = harness()
+      h.launch.mockResolvedValue({
+        status: 'accepted',
+        identity:
+          surface === 'chat'
+            ? { surface, sessionId: 'auto-1' }
+            : { surface, terminalPtyId: 'auto-1', transcriptChatId: 'auto-1' }
+      })
+      await h.observe([])
+      await h.observe(['one'])
+      h.source.pushes = [
+        {
+          chatId: 'auto-1',
+          headSha: 'h2',
+          kind: 'pushed',
+          anchor: { itemId: 'push', revision: 1 },
+          observedAt: h.now
+        }
+      ]
+      await h.observe(['one'], 'h2')
+      await h.restart()
+      await h.observe(['one'], 'h3')
+      await h.observe(['one'], 'h4')
+      expect(h.launch).toHaveBeenCalledTimes(3)
+      expect(h.engine.view(h.target.prKey)).toMatchObject({
+        state: 'paused',
+        pauseReason: 'generation'
+      })
+      h.advance(120000)
+      await h.observe(['one'], 'h5', { readComplete: false })
+      await h.engine.sessionEnded('auto-1', 1700000100000)
+      await h.restart()
+      await h.observe(['one'], 'h5')
+      expect(h.launch).toHaveBeenCalledTimes(3)
+      expect(h.engine.view(h.target.prKey)).toMatchObject({ state: 'paused', used: 3 })
+      h.advance(120000)
+      await h.observe([], 'h5')
+      await h.observe(['one'], 'h6')
+      expect(h.launch).toHaveBeenCalledTimes(4)
+      expect(h.store.pr(h.target.prKey)?.generation).toBe(1)
+    }
+  )
 
   it('enforces six accepted launches per rolling day even when independent pushes reset generations', async () => {
     const h = harness()
@@ -310,6 +193,8 @@ describe('automatic failing-check follow-ups', () => {
     h.launch.mockResolvedValueOnce({ status: 'absent' })
     await h.observe(['unit'])
     await h.engine.reconcile()
+    expect(h.launch).toHaveBeenCalledTimes(1)
+    await h.observe(['unit'])
     expect(h.launch).toHaveBeenCalledTimes(2)
     expect(h.launch.mock.calls[0]?.[0].operationId).not.toEqual(
       h.launch.mock.calls[1]?.[0].operationId
@@ -322,8 +207,8 @@ describe('automatic failing-check follow-ups', () => {
     await h.observe(['unit', 'lint', 'tc'])
     await h.restart()
     await h.observe(['unit', 'lint', 'tc', 'another'])
-    expect(h.launch).toHaveBeenCalledTimes(4)
-    expect(h.engine.view(h.target.prKey).state).toBe('unconfirmed')
+    expect(h.launch).toHaveBeenCalledTimes(5)
+    expect(h.engine.view(h.target.prKey).state).toBe('paused')
   })
 
   it.each<FollowUpReceipt>([
@@ -351,6 +236,8 @@ describe('automatic failing-check follow-ups', () => {
     await h.observe(['unit'])
     h.recover.mockResolvedValue({ status: 'absent' })
     await h.restart()
+    expect(h.launch).toHaveBeenCalledTimes(1)
+    await h.observe(['unit'])
     expect(h.launch).toHaveBeenCalledTimes(2)
     expect(h.store.actions(h.target.prKey)[0]?.attempt).toBe(2)
   })
@@ -384,9 +271,11 @@ describe('automatic failing-check follow-ups', () => {
     expect(engine.forWorkspace('w1')?.view).toMatchObject({ state: 'off', offReason: 'nothing' })
     expect(engine.forWorkspace('w2')?.view.state).toBe('armed')
     h.target.settings = { enabled: false }
+    await engine.reconcile()
     expect(engine.forWorkspace('w1')?.view.offReason).toBe('disabled')
     h.target.settings = { enabled: true }
     h.target.branch = 'other'
+    await engine.reconcile()
     expect(engine.forWorkspace('w1')?.view.offReason).toBe('branch')
     await engine.stop(h.target.prKey, true)
     expect(engine.forWorkspace('w2')?.view.offReason).toBe('stopped')
@@ -424,6 +313,66 @@ describe('automatic failing-check follow-ups', () => {
     expect(h.engine.view(h.target.prKey).state).toBe('paused')
   })
 
+  it('accepts draft observations without comment fields and attributes only pushed ownership records', async () => {
+    const h = harness()
+    await h.observe([], 'h1', { state: 'draft', baseSha: null, mergeable: undefined })
+    await h.observe(['unit'], 'h1', { state: 'draft' })
+    await h.engine.sessionEnded('auto-1', h.now)
+    h.advance(1000)
+    await h.observe([], 'h1')
+    h.source.pushes = [
+      {
+        headSha: 'h2',
+        chatId: 'auto-1',
+        kind: 'opened',
+        anchor: { itemId: 'open', revision: 1 },
+        observedAt: h.now
+      }
+    ]
+    await h.observe(['unit'], 'h2')
+    expect(h.store.pr(h.target.prKey)?.generation).toBe(1)
+    expect(h.launch).toHaveBeenCalledTimes(2)
+  })
+
+  it('serves the maintained projection while preparation and launch are outstanding', async () => {
+    const h = harness()
+    await h.observe([])
+    let prepared!: () => void
+    let releasePrepare!: () => void
+    const preparing = new Promise<void>((resolve) => {
+      prepared = resolve
+    })
+    h.prepare.mockImplementationOnce(async () => {
+      prepared()
+      await new Promise<void>((resolve) => {
+        releasePrepare = resolve
+      })
+      return { agent: 'codex', surface: 'chat', target: { kind: 'existing', worktree: 'id:w1' } }
+    })
+    let launched!: () => void
+    let releaseLaunch!: (receipt: FollowUpReceipt) => void
+    const launching = new Promise<void>((resolve) => {
+      launched = resolve
+    })
+    h.launch.mockImplementationOnce(() => {
+      launched()
+      return new Promise<FollowUpReceipt>((resolve) => {
+        releaseLaunch = resolve
+      })
+    })
+    const observation = h.observe(['unit'])
+    await preparing
+    expect(h.engine.snapshot().w1?.view.state).toBe('armed')
+    expect(h.engine.forWorkspace('w1')).toEqual(h.engine.snapshot().w1)
+    releasePrepare()
+    await launching
+    expect(h.engine.forWorkspace('w1')?.view).toMatchObject({ state: 'starting', used: 1 })
+    expect(h.engine.view(h.target.prKey).state).toBe('starting')
+    releaseLaunch({ status: 'accepted', identity: { sessionId: 'auto-1', surface: 'chat' } })
+    await observation
+    expect(h.engine.snapshot().w1?.view.state).toBe('handled')
+  })
+
   it.each([10, 100])(
     'does not read or parse old launch prompts through get, observations or retirement (%i old actions)',
     async (count) => {
@@ -435,16 +384,20 @@ describe('automatic failing-check follow-ups', () => {
       await h.observe(['unit', 'lint'])
       const oldPrompt = 'irrelevant-old-launch-prompt:'.repeat(8192)
       for (let index = 0; index < count; index += 1) {
-        h.store.saveAction({
+        const legacy = {
           ...accepted,
           actionKey: `old-${index}`,
           generation: -1,
           attemptStartedAt: 1699800000000,
           sessionStartedAt: 1699800000000,
           sessionEndedAt: 1699800010000,
-          launch: { ...accepted.launch, prompt: { text: oldPrompt, delivery: 'submit' } }
-        })
+          launch: { agent: 'codex', prompt: { text: oldPrompt, delivery: 'submit' } }
+        }
+        h.db
+          .prepare('INSERT INTO followup_action VALUES (?, ?, ?)')
+          .run(legacy.actionKey, legacy.prKey, JSON.stringify(legacy))
       }
+      new FollowUpStore(h.db)
       let irrelevantSqlBytes = 0
       let irrelevantParsedBytes = 0
       const instrument = () => {
@@ -485,7 +438,7 @@ describe('automatic failing-check follow-ups', () => {
       try {
         const get = PR_FOLLOW_UP_METHODS.find((method) => method.name === 'prFollowUps.get')!
         const read = async () => get.handler({}, { runtime: { prFollowUps: h.engine } } as never)
-        expect((await read()).workspaces.w1?.view.used).toBe(1)
+        expect((await read()).workspaces.w1?.view.used).toBe(2)
         await h.observe(['unit', 'lint', 'new'], 'h2')
         h.global.enabled = false
         await h.engine.reconcile()
@@ -493,20 +446,20 @@ describe('automatic failing-check follow-ups', () => {
         await h.engine.reconcile()
         await h.restart()
         instrument()
-        expect((await read()).workspaces.w1?.view.used).toBe(1)
+        expect((await read()).workspaces.w1?.view.used).toBe(3)
         expect(h.recover).toHaveBeenCalled()
         await h.observe(['unit'], 'h2')
         h.store.retire(h.store.pr(h.target.prKey)!)
         expect(irrelevantSqlBytes).toBe(0)
         expect(irrelevantParsedBytes).toBe(0)
-        expect(h.launch).toHaveBeenCalledTimes(2)
+        expect(h.launch).toHaveBeenCalledTimes(3)
       } finally {
         parseSpy.mockRestore()
       }
     }
   )
 
-  it('preserves existing saved launches when separating metadata from payloads', async () => {
+  it('preserves safety metadata while removing legacy launch payloads', async () => {
     const h = harness()
     await h.observe([])
     await h.observe(['unit'])
@@ -519,20 +472,23 @@ describe('automatic failing-check follow-ups', () => {
       db.prepare('INSERT INTO followup_action VALUES (?, ?, ?)').run(
         action.actionKey,
         action.prKey,
-        JSON.stringify(action)
+        JSON.stringify({ ...action, launch: { agent: 'codex', prompt: { text: 'legacy-prompt' } } })
       )
       const store = new FollowUpStore(db)
       expect(store.acceptedCount(action.prKey, 0)).toBe(1)
       expect(store.latestAction(action.prKey)?.agent).toBe('codex')
-      store.saveActionMetadata({
-        ...store.metadata(action.prKey)[0]!,
+      store.saveAction({
+        ...store.actions(action.prKey)[0]!,
         sessionEndedAt: 1700000100000
       })
       const reopened = new FollowUpStore(db)
       expect(reopened.action(action.actionKey)).toMatchObject({
-        launch: action.launch,
+        agent: 'codex',
         sessionEndedAt: 1700000100000
       })
+      expect(
+        String(db.prepare('SELECT payload FROM followup_action').get()?.payload)
+      ).not.toContain('legacy-prompt')
     } finally {
       db.close()
     }

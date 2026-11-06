@@ -1,10 +1,10 @@
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import type {
   FollowUpAction,
-  FollowUpActionMetadata,
   FollowUpObservation,
   FollowUpObservationSource,
-  FollowUpTarget
+  FollowUpTarget,
+  FollowUpWorking
 } from '../../shared/pr-follow-ups/contracts'
 import type { PrFollowUpsSettings } from '../../shared/pr-follow-ups/settings'
 import type { FollowUpStore } from './store'
@@ -31,20 +31,24 @@ export type FollowUpEngineDependencies = {
   source: FollowUpObservationSource
   store: FollowUpStore
   globalSettings(): PrFollowUpsSettings | undefined
-  targets(): readonly FollowUpTarget[]
+  targets(prKey?: string): readonly FollowUpTarget[]
+  workspaceIds(): readonly string[]
   liveInstanceIds(): ReadonlySet<string>
+  inventoryComplete(): boolean
+  // Fingerprint only effective recipe/configuration, selected-agent availability and target authority.
+  launchInputs(target: FollowUpTarget): { key: string; agent: string }
   prepare(
     observation: FollowUpObservation,
     names: string[],
     target: FollowUpTarget
   ): Promise<AgentLaunchParams>
   recipe(target: FollowUpTarget): { agent: string; surface: 'terminal' | 'chat' }
-  working(action: FollowUpActionMetadata): boolean
+  working(action: FollowUpAction): FollowUpWorking
   canPublishAgentLaunchTab(): boolean
   launch(params: AgentLaunchParams): Promise<FollowUpReceipt>
-  recover(action: FollowUpActionMetadata): Promise<FollowUpReceipt>
-  live(action: FollowUpActionMetadata): Promise<boolean | 'unknown'>
+  recover(action: FollowUpAction): Promise<FollowUpReceipt>
+  live(action: FollowUpAction): Promise<boolean | 'unknown'>
   started?(action: FollowUpAction): void
-  changed?(): void
+  changed?(keys: readonly string[]): void
   now?(): number
 }

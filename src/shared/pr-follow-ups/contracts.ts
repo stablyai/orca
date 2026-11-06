@@ -1,26 +1,24 @@
 import type { AgentLaunchParams } from '../rpc-contract/agent-launch-params'
+import type { PRMergeableState } from '../github/pull-request-types'
 import type { PrFollowUpsSettings } from './settings'
 
 export type FollowUpObservation = {
   prKey: string
-  state: 'open' | 'closed' | 'merged'
+  state: 'open' | 'draft' | 'closed' | 'merged'
   headSha: string
   headRefName: string
-  baseSha: string
-  mergeable: 'clean' | 'conflicting' | 'unknown'
+  baseSha?: string | null
+  mergeable?: PRMergeableState
   checksFinal: boolean
   failingCheckNames: string[]
-  commentSignal: Record<
-    'comments' | 'reviews' | 'threads',
-    { totalCount: number; newestIds: string[] }
-  >
   readComplete: boolean
   observedAt: number
 }
 
 export type FollowUpWorkspace = {
+  worktreeId: string
   instanceId: string
-  repoPath: string
+  repoId: string
   connectionId: string | null
   branch: string
   prNumber: number | null
@@ -29,14 +27,23 @@ export type FollowUpWorkspace = {
 }
 
 export type FollowUpObservationSource = {
-  watchWorkspace(
-    watch: Pick<FollowUpWorkspace, 'repoPath' | 'connectionId' | 'branch' | 'prNumber'> & {
-      reason: 'pr-follow-ups'
-    }
-  ): () => void
-  subscribe(onObservation: (observation: FollowUpObservation) => void): () => void
+  registerPRWatch(watch: {
+    repoId: string
+    connectionId?: string | null
+    branch: string
+    prNumber: number | null
+    reason: 'pr-follow-ups'
+  }): { unregister(): void }
+  subscribePRObservations(onObservation: (observation: FollowUpObservation) => void): () => void
   latest(prKey: string): FollowUpObservation | undefined
-  pullRequestActionsFor?(prKey: string): readonly { headSha: string; chatId: string }[]
+  pullRequestActionsFor?(prKey: string): readonly {
+    headSha: string | null
+    chatId: string
+    kind: 'opened' | 'pushed'
+    anchor: { itemId: string; revision: number }
+    observedAt: number
+  }[]
+  ownerChatFor?(prKey: string): string | null
 }
 
 export type FollowUpTarget = {
@@ -62,8 +69,9 @@ export type FollowUpAction = {
   attempt: number
   attemptStartedAt: number
   operationId: string
-  status: 'claimed' | 'accepted' | 'absent' | 'unconfirmed' | 'declined'
-  launch: AgentLaunchParams
+  status: 'claimed' | 'accepted' | 'absent' | 'unconfirmed' | 'declined' | 'failed'
+  agent: string
+  failureReason?: string
   sessionId?: string
   terminalHandle?: string
   paneKey?: string
@@ -71,11 +79,14 @@ export type FollowUpAction = {
   transcriptChatId?: string
   surface?: 'chat' | 'terminal'
   promptUnconfirmed?: boolean
+  recoveryFinalizedAt?: number
+  retryKey?: string
+  retryCount?: number
+  retryObservedAt?: number
+  workingIntervals?: { start: number; end?: number }[]
   sessionStartedAt?: number
   sessionEndedAt?: number
 }
-
-export type FollowUpActionMetadata = Omit<FollowUpAction, 'launch'> & { agent: string }
 
 export type FollowUpPr = {
   prKey: string
@@ -90,7 +101,6 @@ export type FollowUpPr = {
   generation: number
   stoppedAt: number | null
   consecutiveReadFailures: number
-  consecutiveCommentWakes: number
   pendingRead: boolean
   state: FollowUpObservation['state']
 }
@@ -106,12 +116,14 @@ export type FollowUpView = {
     | 'baseline'
     | 'unconfirmed'
     | 'starting'
+    | 'failed'
     | 'prompt-unconfirmed'
   used: number
   limit: number
   stopped: boolean
   offReason?: 'disabled' | 'nothing' | 'branch' | 'stopped'
-  pauseReason?: 'generation' | 'daily' | 'reads' | 'comments'
+  pauseReason?: 'generation' | 'daily' | 'reads'
+  failureReason?: string
   resumesAt?: number
   workingAgent?: string
   action?: Pick<FollowUpAction, 'worktreeId' | 'sessionId' | 'paneKey' | 'surface'>
@@ -120,4 +132,27 @@ export type FollowUpView = {
 export type FollowUpSnapshot = {
   available: boolean
   workspaces: Record<string, { prKey: string; view: FollowUpView; fixing: boolean } | null>
+}
+
+export type FollowUpWorking = boolean | 'unknown' | { working: boolean; at: number }
+
+// Complete inventory includes persisted archived, disabled, hidden and disconnected instances.
+export type FollowUpHostInputs = {
+  targets(): readonly FollowUpTarget[]
+  target(worktreeId: string): FollowUpTarget | undefined
+  subscribeInventory(listener: (change: { deletedInstanceId?: string }) => void): () => void
+  workspaces(): readonly FollowUpWorkspace[]
+  liveInstanceIds(): ReadonlySet<string>
+  inventoryComplete(): boolean
+  launchInputs(target: FollowUpTarget): { key: string; agent: string }
+  recipe(target: FollowUpTarget): { agent: string; surface: 'terminal' | 'chat' }
+  prepare(
+    observation: FollowUpObservation,
+    names: string[],
+    target: FollowUpTarget
+  ): Promise<AgentLaunchParams>
+  live(action: FollowUpAction): Promise<boolean | 'unknown'>
+  // False requires positive idle/turn-end evidence; absence, rest and stale titles are unknown.
+  working(action: FollowUpAction): FollowUpWorking
+  started?(action: FollowUpAction): void
 }
