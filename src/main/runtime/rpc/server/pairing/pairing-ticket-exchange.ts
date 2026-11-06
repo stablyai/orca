@@ -6,6 +6,17 @@ import { devicePrincipalOf } from './device-principal'
  * replacement; the pairing token keeps working until the client first signs in with the
  * replacement, so a lost reply never strands it. That sign-in retires the pairing token.
  */
+// Clients exchange right after their first sign-in. A code that has worked as a plain token for
+// longer may already be in use by several older clients, so it is never retired after that.
+export const TICKET_EXCHANGE_WINDOW_MS = 10 * 60_000
+
+/** Within the pairing window: first sighting known and recent. Unknown means it already served as a token. */
+export function isWithinTicketWindow(row: DeviceEntry, at: number): boolean {
+  return (
+    row.ticketFirstSeenAt !== undefined && at - row.ticketFirstSeenAt <= TICKET_EXCHANGE_WINDOW_MS
+  )
+}
+
 export class PairingTicketExchangeError extends Error {
   constructor(
     readonly code:
@@ -14,6 +25,8 @@ export class PairingTicketExchangeError extends Error {
       | 'delegated_device'
       | 'ticket_already_exchanged'
       | 'device_token_in_use'
+      | 'ticket_window_closed'
+      | 'ticket_exchange_pending'
   ) {
     super(code)
   }
@@ -23,7 +36,8 @@ export function planTicketExchange(
   devices: readonly DeviceEntry[],
   deviceId: string,
   presentedToken: string,
-  exchangeToken: string
+  exchangeToken: string,
+  now = Date.now()
 ): DeviceEntry[] {
   const row = devices.find((device) => device.deviceId === deviceId)
   if (!row) {
@@ -40,15 +54,25 @@ export function planTicketExchange(
   if (row.token !== presentedToken) {
     throw new PairingTicketExchangeError('ticket_already_exchanged')
   }
+  // A resent proposal (same token) is idempotent.
+  if (row.exchangeToken === exchangeToken) {
+    return [...devices]
+  }
+  // The first client to propose keeps its claim: a second one keeps using the code and is
+  // refused only once the first signs in with its token (single use), never the other way round.
+  if (row.exchangeToken !== undefined) {
+    throw new PairingTicketExchangeError('ticket_exchange_pending')
+  }
+  if (!isWithinTicketWindow(row, now)) {
+    throw new PairingTicketExchangeError('ticket_window_closed')
+  }
   if (
     devices.some(
-      (device) =>
-        device.token === exchangeToken || (device !== row && device.exchangeToken === exchangeToken)
+      (device) => device.token === exchangeToken || device.exchangeToken === exchangeToken
     )
   ) {
     throw new PairingTicketExchangeError('device_token_in_use')
   }
-  // A retry after a lost reply replaces the earlier proposal.
   return devices.map((device) => (device === row ? { ...row, exchangeToken } : device))
 }
 

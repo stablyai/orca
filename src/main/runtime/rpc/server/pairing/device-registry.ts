@@ -287,9 +287,13 @@ export class DeviceRegistry extends DeviceRegistryStore {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
-    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
-      withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
-    )
+    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) => {
+      const firstSighting =
+        device.ticket === true && device.lastSeenAt === 0
+          ? { ...device, ticketFirstSeenAt: seenAt }
+          : device
+      return withDeviceSighting(seen(firstSighting, seenAt, sourceClass), seenAt, framing)
+    })
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.

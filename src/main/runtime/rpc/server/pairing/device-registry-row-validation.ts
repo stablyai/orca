@@ -93,6 +93,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     offerExpiresAt: isTimestamp(device.offerExpiresAt) ? device.offerExpiresAt : undefined,
     ticket: device.ticket === true ? true : undefined,
     exchangeToken: isExchangeDeviceToken(device.exchangeToken) ? device.exchangeToken : undefined,
+    ticketFirstSeenAt: isTimestamp(device.ticketFirstSeenAt) ? device.ticketFirstSeenAt : undefined,
     ...validDeviceKeyFields(device)
   }
 }

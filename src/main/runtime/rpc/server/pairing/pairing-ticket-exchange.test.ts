@@ -72,16 +72,39 @@ describe('pairing ticket exchange', () => {
     expect(reloaded.validateToken(offer.token)).toBeNull()
   })
 
-  it('persists the proposal before replying, and a retry replaces it', () => {
+  it('persists the proposal before replying; a resend is idempotent and a second client cannot take over', () => {
     const registry = new DeviceRegistry(dir)
     const offer = pairedOffer(registry)
     registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
-    registry.exchangePairingTicket(offer.deviceId, offer.token, RETRY)
+    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
+    // Another client holding the same code keeps using it; the first proposal is never displaced.
+    expectExchangeError(
+      () => registry.exchangePairingTicket(offer.deviceId, offer.token, RETRY),
+      'ticket_exchange_pending'
+    )
 
     const reloaded = new DeviceRegistry(dir)
-    expect(reloaded.validateToken(REPLACEMENT)).toBeNull()
-    expect(reloaded.validateToken(RETRY)?.token).toBe(RETRY)
+    expect(reloaded.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+    expect(reloaded.validateToken(RETRY)).toBeNull()
+    expect(reloaded.validateToken(REPLACEMENT)?.token).toBe(REPLACEMENT)
     expect(reloaded.validateToken(offer.token)).toBeNull()
+  })
+
+  it('never retires a code that has already served as a plain token for a while', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(1_000_000)
+      const registry = new DeviceRegistry(dir)
+      const offer = pairedOffer(registry)
+      vi.setSystemTime(1_000_000 + 10 * 60_000 + 1)
+      expectExchangeError(
+        () => registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT),
+        'ticket_window_closed'
+      )
+      expect(registry.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('refuses rows that are not exchangeable tickets', () => {

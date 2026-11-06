@@ -46,6 +46,8 @@ export type DeviceEntry = {
   ticket?: true
   // Client-chosen replacement; first sign-in with it retires the pairing token (see pairing-ticket-exchange.ts).
   exchangeToken?: string
+  // First sign-in with a ticket; exchange is offered only shortly after it.
+  ticketFirstSeenAt?: number
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
