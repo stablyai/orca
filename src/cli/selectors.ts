@@ -7,6 +7,7 @@ import {
 import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { isLaunchedByAnotherRuntime } from './runtime/runtime-source-fence'
 import { getOptionalStringFlag, getPresentStringFlag, getRequiredStringFlag } from './flags'
 import {
   getCallerExecutionHostId,
@@ -213,8 +214,11 @@ export async function getBrowserWorktreeSelector(
     process.env.ORCA_WORKTREE_ID,
     purpose
   )
+  if (enclosing || isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {
+    return enclosing?.selector
+  }
   // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
-  return enclosing?.selector ?? selectCallerTerminalWorkspace(catalog, hostId)
+  return selectCallerTerminalWorkspace(catalog, hostId)
 }
 
 export async function getTerminalHandle(

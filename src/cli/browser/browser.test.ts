@@ -31,6 +31,7 @@ vi.mock('../runtime/types', () => {
 vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
+    userDataPath = '/tmp/orca-dev-profile'
     getCliStatus = vi.fn()
     openOrca = vi.fn()
   }
@@ -394,6 +395,27 @@ describe('orca cli browser page targeting', () => {
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.stubEnv('ORCA_WORKTREE_ID', 'global-floating-terminal')
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
+
+    expect(callMock).toHaveBeenLastCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it("ignores the terminal's worktree when it was launched by another Orca profile", async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/other', 'other')]),
+      okFixture('req_tab_create', { browserPageId: 'page-1' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_RUNTIME_SOURCE_ID', 'installed-source')
+    vi.stubEnv('ORCA_RUNTIME_SOURCE_INCARNATION', 'installed-runtime')
+    vi.stubEnv('ORCA_RUNTIME_SOURCE_PROFILE_PATH', '/tmp/orca-installed-profile')
+    vi.stubEnv('ORCA_WORKTREE_ID', 'repo::/tmp/repo/installed-only')
 
     await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
 
