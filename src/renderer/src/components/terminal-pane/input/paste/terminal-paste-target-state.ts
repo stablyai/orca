@@ -1,4 +1,4 @@
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableKeyboardTarget } from '../browser-pane/host-guest/browser-keyboard'
 
 type TerminalPastePaneIdentity = {
   id: number
@@ -78,12 +78,8 @@ export function isTerminalPanePasteFocusCurrent({
 
 function isOtherPasteTarget(element: Element | null): boolean {
   const tagName = element?.tagName?.toUpperCase()
-  return (
-    isXtermHelperTextarea(element) ||
-    isEditableTarget(element) ||
-    tagName === 'IFRAME' ||
-    tagName === 'WEBVIEW'
-  )
+  // Editable surfaces include other xterm helper textareas and Monaco's EditContext div.
+  return isEditableKeyboardTarget(element) || tagName === 'IFRAME' || tagName === 'WEBVIEW'
 }
 
 function isInertDocumentFocus(element: Element | null): boolean {
