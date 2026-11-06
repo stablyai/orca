@@ -195,15 +195,18 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   >()
 
   protected readonly mainDaemonAttachments = new MainDaemonAttachments({
-    isAttachableLocalSession: (ptyId) => {
-      if (this.pendingPtyRegistrationIncarnations.has(ptyId) || parseAppSshPtyId(ptyId)) {
+    isUnattachedLocalCandidate: (ptyId) => {
+      if (
+        this.headlessTerminals.has(ptyId) ||
+        this.providerSnapshotPreferredPtys.has(ptyId) ||
+        this.pendingPtyRegistrationIncarnations.has(ptyId) ||
+        parseAppSshPtyId(ptyId)
+      ) {
         return false
       }
       const pty = this.ptysById.get(ptyId)
       return pty !== undefined && pty.connectionId === null && pty.connected
     },
-    hasMainTerminalState: (ptyId) =>
-      this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
     attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
   })
 
