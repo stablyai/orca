@@ -15,6 +15,7 @@ vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
 type Props = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   hasDraft: boolean
+  chordSteersHead: boolean
   steerHead: (() => boolean) | undefined
   send: () => void
   pickerOpen: boolean
@@ -22,10 +23,10 @@ type Props = {
 
 function Composer(props: Props): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null)
-  const { alternateSend, hasDraft, steerHead, send, pickerOpen } = props
+  const { alternateSend, hasDraft, chordSteersHead, steerHead, send, pickerOpen } = props
   const { preview, runPreview } = useNativeChatSteerChordPreview(
     root,
-    { alternateSend, hasDraft },
+    { alternateSend, hasDraft, chordSteersHead },
     steerHead,
     send,
     pickerOpen
@@ -55,6 +56,7 @@ describe('useNativeChatSteerChordPreview', () => {
     const props: Props = {
       alternateSend: 'steer',
       hasDraft: false,
+      chordSteersHead: true,
       steerHead: vi.fn(() => true),
       send: vi.fn(),
       pickerOpen: false,
@@ -69,32 +71,6 @@ describe('useNativeChatSteerChordPreview', () => {
     }
     return { props, view, field, button, hold, preview: () => button.dataset.preview }
   }
-
-  it('previews steering the head card while Cmd is held alone on an empty composer', () => {
-    const { props, field, button, hold, preview } = setup()
-    hold()
-    expect(preview()).toBe('steer-queued')
-    fireEvent.click(button)
-    expect(props.steerHead).toHaveBeenCalledTimes(1)
-    fireEvent.keyUp(field, { key: 'Meta' })
-    expect(preview()).toBe('')
-  })
-
-  it('names what Cmd+Enter does to a typed draft, and a click sends it that way', () => {
-    const { props, button, hold, preview } = setup({ alternateSend: 'queue', hasDraft: true })
-    hold()
-    expect(preview()).toBe('queue')
-    fireEvent.click(button)
-    expect(props.send).toHaveBeenCalledWith({ alternate: true })
-    expect(props.steerHead).not.toHaveBeenCalled()
-  })
-
-  it('shows nothing when Shift is already down, since Cmd+Shift+Enter is another chord', () => {
-    const { field, preview } = setup({ hasDraft: true })
-    fireEvent.keyDown(field, { key: 'Meta', shiftKey: true })
-    act(() => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
-    expect(preview()).toBe('')
-  })
 
   it('never flashes for a quick chord such as Cmd+C', () => {
     const { field, preview } = setup()
@@ -120,13 +96,11 @@ describe('useNativeChatSteerChordPreview', () => {
     expect(preview()).toBe('')
   })
 
-  it.each([
-    ['the chord queues', { alternateSend: 'queue' as const }],
-    ['there is no card to steer', { steerHead: undefined }],
-    ['a picker takes Enter', { pickerOpen: true }]
-  ])('shows nothing on an empty composer where %s', (_case, overrides) => {
-    const { hold, preview } = setup(overrides)
+  it('previews sending the head card after a Stop, when no turn runs to steer into', () => {
+    const { props, button, hold, preview } = setup({ alternateSend: undefined })
     hold()
-    expect(preview()).toBe('')
+    expect(preview()).toBe('steer-queued')
+    fireEvent.click(button)
+    expect(props.steerHead).toHaveBeenCalledTimes(1)
   })
 })

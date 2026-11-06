@@ -1,3 +1,4 @@
+import { observeAcpForkSupport } from './acp-fork-support'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
@@ -163,6 +164,7 @@ export function createAcpModelCatalogProbe(
         async (connection) => {
           const initialized = await connection.initialize()
           assertStructuredAgentResolutionCurrent(operation)
+          observeAcpForkSupport(spec.agent, initialized)
           return listing.read(initialized, connection)
         },
         run
@@ -199,6 +201,7 @@ async function readSessionModels(
 ): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
+  observeAcpForkSupport(spec.agent, initialized)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)

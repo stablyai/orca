@@ -1,8 +1,8 @@
 import { translateMain } from '../i18n/main-i18n'
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
-import { constants, copyFile, readFile, stat } from 'node:fs/promises'
-import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
+import { readFile, stat } from 'node:fs/promises'
+import { basename, extname, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
   ShellOpenExternalEditorRequest,
@@ -21,6 +21,7 @@ import {
   resolveExternalEditorLaunchSpec
 } from '../external-editors/external-editor-launch'
 import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
+import { resolveOpenInEditorCommand } from '../external-editors/open-in-editor-command'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -56,11 +57,19 @@ async function openInFileManager(
   }
 }
 
+type ShellHandlerStore = Pick<Store, 'getSshTarget'> & {
+  getSettings: () => Pick<ReturnType<Store['getSettings']>, 'openInApplications'>
+}
+
 async function openInExternalEditor(
-  store: Pick<Store, 'getSshTarget'>,
+  store: ShellHandlerStore,
   request: ShellOpenExternalEditorRequest,
   listRuntimeEnvironments: ListRuntimeEnvironments
 ): Promise<ShellOpenExternalEditorResult> {
+  const command = resolveOpenInEditorCommand(request, store.getSettings().openInApplications)
+  if (command === null) {
+    return { ok: false, reason: 'launch-failed' }
+  }
   const connectionId = request.connectionId?.trim()
   if (connectionId) {
     const sshTarget = store.getSshTarget(connectionId)
@@ -78,7 +87,7 @@ async function openInExternalEditor(
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
       return { ok: false, reason: 'not-absolute' }
     }
-    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(request.command, request.path, sshTarget)
+    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(command, request.path, sshTarget)
     if (!remoteLaunch.ok) {
       return remoteLaunch
     }
@@ -96,7 +105,7 @@ async function openInExternalEditor(
   }
   try {
     // VS Code and Cursor derive --remote wsl+<distro> from UNC paths.
-    await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
+    await launchExternalEditor(resolveExternalEditorLaunchSpec(command, target.path))
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -120,7 +129,7 @@ async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): P
 }
 
 export function registerShellHandlers(
-  store: Pick<Store, 'getSshTarget'>,
+  store: ShellHandlerStore,
   listRuntimeEnvironments: ListRuntimeEnvironments = listAppRuntimeEnvironments
 ): void {
   ipcMain.handle(
@@ -316,18 +325,4 @@ export function registerShellHandlers(
     }
     return result.filePaths[0]
   })
-
-  // Relative image links keep Markdown small and portable.
-  ipcMain.handle(
-    'shell:copyFile',
-    async (_event, args: { srcPath: string; destPath: string }): Promise<void> => {
-      const src = normalize(args.srcPath)
-      const dest = normalize(args.destPath)
-      if (!isAbsolute(src) || !isAbsolute(dest)) {
-        throw new Error('Both source and destination must be absolute paths')
-      }
-      // Reject name collisions even if renderer deconfliction missed one; never overwrite existing data.
-      await copyFile(src, dest, constants.COPYFILE_EXCL)
-    }
-  )
 }

@@ -6,6 +6,7 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './pairing/device-registry'
 import { createMobileRpcSurfaceRuntime } from './runtime-rpc-mobile-method-allowlist-fixtures'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session/agent-session-registered-agents'
 
 /** Older hosts lack both registration and mobile allowlist entry, so unknown mobile probes return forbidden; method_not_found requires an allowlisted method.
  * Phone skew fallback must handle scope refusal too (pairing.provisionRelay/getEndpoints; docs/reference/remote-wire-compatibility.md). */
@@ -44,6 +45,11 @@ describe('an unknown method reaching a mobile-scoped device', () => {
     expect(reply.ok).toBe(false)
     expect(errorCode(reply)).toBe('forbidden')
     expect(errorCode(reply)).not.toBe('method_not_found')
+  })
+
+  it("lets a phone read the host's agents, which its fork action waits on", async () => {
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has(AGENT_SESSION_AGENTS_METHOD)).toBe(true)
+    expect(errorCode(await dispatchAs('mobile', AGENT_SESSION_AGENTS_METHOD))).not.toBe('forbidden')
   })
 
   it('answers method_not_found to a non-mobile peer for the same unknown method', async () => {
