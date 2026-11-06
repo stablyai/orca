@@ -13,27 +13,29 @@ export type LoadedOrchestrationWorkerPreferences = {
   migratedOrchestrationWorkerEfforts: GlobalSettings['orchestrationWorkerEfforts']
 }
 
-/** `repaired` reports that the stored values differ from these, so the profile owes a save;
+/** Marks the profile for a save when the stored values differ from these;
  *  without it a load-time repair would be redone on every launch. */
 export function prepareLoadedOrchestrationWorkerPreferences(
-  settings: PersistedState['settings'] | undefined
-): { preferences: LoadedOrchestrationWorkerPreferences; repaired: boolean } {
+  settings: PersistedState['settings'] | undefined,
+  markNeedsSave: () => void
+): LoadedOrchestrationWorkerPreferences {
   const models = normalizeOrchestrationWorkerModels(settings?.orchestrationWorkerModels)
   const efforts = normalizeOrchestrationWorkerEfforts(settings?.orchestrationWorkerEfforts, models)
   const agent = normalizeOrchestrationDefaultWorkerAgent(settings?.orchestrationDefaultWorkerAgent)
-  return {
-    preferences: {
-      migratedOrchestrationDefaultWorkerAgent: agent,
-      migratedOrchestrationWorkerModels: models,
-      migratedOrchestrationWorkerEfforts: efforts
+  const repaired = persistedOrchestrationWorkerPreferencesRepaired(
+    {
+      orchestrationDefaultWorkerAgent: settings?.orchestrationDefaultWorkerAgent,
+      orchestrationWorkerModels: settings?.orchestrationWorkerModels,
+      orchestrationWorkerEfforts: settings?.orchestrationWorkerEfforts
     },
-    repaired: persistedOrchestrationWorkerPreferencesRepaired(
-      {
-        orchestrationDefaultWorkerAgent: settings?.orchestrationDefaultWorkerAgent,
-        orchestrationWorkerModels: settings?.orchestrationWorkerModels,
-        orchestrationWorkerEfforts: settings?.orchestrationWorkerEfforts
-      },
-      { agent, models, efforts }
-    )
+    { agent, models, efforts }
+  )
+  if (repaired) {
+    markNeedsSave()
+  }
+  return {
+    migratedOrchestrationDefaultWorkerAgent: agent,
+    migratedOrchestrationWorkerModels: models,
+    migratedOrchestrationWorkerEfforts: efforts
   }
 }
