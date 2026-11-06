@@ -13,7 +13,6 @@ import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
-import { SessionLaunchNote } from './session-launch-note'
 
 import type {
   SessionState,
@@ -28,7 +27,6 @@ export class Session extends SessionProcessInspection {
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
-  readonly launchNote = new SessionLaunchNote()
   readonly wslDistro: string | null
   readonly processNameIsSpawnFile: boolean
   readonly shellIsRootChild: boolean
