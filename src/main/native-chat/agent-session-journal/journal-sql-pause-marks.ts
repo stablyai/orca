@@ -43,20 +43,11 @@ export class JournalSqlPauseMarks {
       resumedSequence: 0,
       reopenedSequence: 0
     })
-    this.encoded = new JournalEncodedScalar(() => {
-      const encoded = scope.db
-        .prepare(`SELECT value_json FROM journal_proj_scalars
-        WHERE session_id=? AND generation=? AND owner='pause-marks' AND name='encoded'`)
-        .get(...scope.prefix)
-      if (encoded) {
-        scope.examined(encoded)
-      }
-      if (typeof encoded?.value_json === 'string') {
-        scope.work.decodedBytes += Buffer.byteLength(encoded.value_json)
-        return encoded.value_json
-      }
-      return JSON.stringify(createJournalQueuePauseMarks())
-    })
+    this.encoded = new JournalEncodedScalar(
+      () =>
+        this.scalars.get<string | null>('encoded', null) ??
+        JSON.stringify(createJournalQueuePauseMarks())
+    )
     let members: readonly string[] | undefined
     const readMembers = () => (members ??= this.readMembers())
     const writeMembers = (next: readonly string[]) => {
@@ -126,11 +117,7 @@ export class JournalSqlPauseMarks {
       })
     )
     this.scalars.set('header', header)
-    this.scope.db
-      .prepare(`INSERT INTO journal_proj_scalars (session_id,generation,owner,name,value_json)
-      VALUES (?,?,'pause-marks','encoded',?) ON CONFLICT(session_id,generation,owner,name)
-      DO UPDATE SET value_json=excluded.value_json`)
-      .run(...this.scope.prefix, this.encoded.json)
+    this.scalars.set('encoded', this.encoded.json)
     this.scalars.set('stopVersion', this.stopVersion)
     this.scalars.set('clearVersion', this.clearVersion)
     this.dirty = false
