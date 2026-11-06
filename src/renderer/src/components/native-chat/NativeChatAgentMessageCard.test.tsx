@@ -11,7 +11,7 @@ import {
   resetSenderStore,
   setSenderSessionStatus
 } from './native-chat-agent-sender.test-fixture'
-import * as terminalLinks from '@/components/terminal-pane/terminal-handle-links'
+import * as terminalLinks from '@/components/terminal-pane/links/handles/terminal-handle-links'
 import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'

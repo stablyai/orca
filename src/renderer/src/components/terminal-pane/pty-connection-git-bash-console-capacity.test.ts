@@ -515,7 +515,8 @@ describe('Git Bash console-capacity pane retention', () => {
           })
         ).toBe(true)
       } else if (kind === 'accepted-paste') {
-        const { writeTerminalPastePtyInput } = await import('./terminal-pty-paste-writer')
+        const { writeTerminalPastePtyInput } =
+          await import('./input/paste/terminal-pty-paste-writer')
         const abort = new AbortController()
         accepted = writeTerminalPastePtyInput(view.transport, 'paste', 'driving', abort.signal)
         expect(accepted).toBeInstanceOf(Promise)

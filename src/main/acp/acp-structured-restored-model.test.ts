@@ -1,10 +1,10 @@
 import { afterEach, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import { PROVIDER_SESSION, replyChunk, waitFor } from './acp-structured-adapter.test-support'

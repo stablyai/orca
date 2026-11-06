@@ -187,7 +187,7 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
       (outcome.status === 'refused' || outcome.status === 'unsupported')
     ) {
       const { showOpenInGroupRefusedToast } =
-        await import('@/components/terminal-pane/terminal-file-open-in-group-toast')
+        await import('@/components/terminal-pane/links/files/terminal-file-open-in-group-toast')
       showOpenInGroupRefusedToast(request.url)
     }
     return outcome.status === 'opened' ? outcome.result.browserPageId : null
