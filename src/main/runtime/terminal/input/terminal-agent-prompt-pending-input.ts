@@ -1,7 +1,9 @@
 import { AgentPromptPendingInputError } from './agent-prompt-permission-hold'
-import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
-import { isTerminalSendSettlementAgent } from '../../agent-prompt-submission-verification'
-import { assertAgentPromptRequestActive, waitForAgentPromptDelay } from '../../orca-runtime-core'
+import {
+  type AgentPromptActivity,
+  isTerminalSendSettlementAgent
+} from './agent-prompt-submission-verification'
+import { assertAgentPromptRequestActive, waitForAgentPromptDelay } from './agent-prompt-signals'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
 
 const COMPOSER_DRAFT_READ_ATTEMPTS = 3
