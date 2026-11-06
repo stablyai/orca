@@ -15,6 +15,7 @@ import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { NavBar, NavBarTitleButton } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
 import { AutomationManager } from './AutomationManager'
 import { leaveThrough, type AutomationLeaveGuard } from './AutomationEditorNavigation'
@@ -35,6 +36,8 @@ export function MobileAutomationsScreen() {
   const [authority, setAuthority] = useState('paired')
   const [pickingHost, setPickingHost] = useState(false)
   const leaveGuard = useRef<AutomationLeaveGuard | null>(null)
+  // A discard prompt may follow, so switch once the picker's sheet is gone.
+  const hostPicker = useBottomDrawerFollowUp(() => setPickingHost(false))
   const selected = servers?.find((server) => server.hostId === authority)
   const selectedClient =
     authority === 'paired' ? client : selected ? (serverClients.get(selected.hostId) ?? null) : null
@@ -120,13 +123,15 @@ export function MobileAutomationsScreen() {
         selected={authority}
         onSelect={(next) => {
           if (next !== authority) {
-            leaveThrough(leaveGuard, () => {
-              setCreating(false)
-              setAuthority(next)
-            })
+            hostPicker.closeThen(() =>
+              leaveThrough(leaveGuard, () => {
+                setCreating(false)
+                setAuthority(next)
+              })
+            )
           }
         }}
-        onClose={() => setPickingHost(false)}
+        {...hostPicker.drawerProps}
         searchable={hostOptions.length > 6}
       />
     </View>

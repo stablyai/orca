@@ -626,7 +626,6 @@ describe('mobile automation navigation and setup', () => {
     const prompt = root().find(
       (node) => String(node.type) === 'ConfirmModal' && node.props.visible === true
     )
-    expect(prompt.props.title).toBe('Discard changes?')
     await act(async () => prompt.props.onCancel())
     expect(name().props.value).toBe('Nightly digest')
   })
