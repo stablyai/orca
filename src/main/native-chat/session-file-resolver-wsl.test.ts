@@ -59,8 +59,8 @@ const scanned = vi.hoisted(() => {
   }
   return state
 })
-vi.mock('../ai-vault/session-scanner-discovery', () => ({
-  walkSessionFiles: async (dir: string) => {
+vi.mock('../ai-vault/session-scanner-discovery', () => {
+  const walkSessionFiles = async (dir: string): Promise<string[]> => {
     scanned.dirs.push(dir)
     const wslHit = scanned.wslHits[dir]
     if (wslHit) {
@@ -70,6 +70,27 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
     return scanned.hostRootHasRollout && !isWslRoot
       ? ['C:\\host\\sessions\\rollout-wsl-sess.jsonl']
       : []
+  }
+  return {
+    walkSessionFiles,
+    forEachSessionFile: async (
+      dir: string,
+      _agent: string,
+      _issues: unknown[],
+      _options: unknown,
+      onFile: (path: string) => void
+    ) => {
+      for (const path of await walkSessionFiles(dir)) {
+        onFile(path)
+      }
+    }
+  }
+})
+// Host Claude roots use the bucket probe; keep it off this machine's real projects folder.
+vi.mock('./session-file-resolver-claude-probe', () => ({
+  findClaudeSessionFile: async (dir: string) => {
+    scanned.dirs.push(dir)
+    return scanned.hostRootHasRollout ? 'C:\\host\\sessions\\rollout-wsl-sess.jsonl' : null
   }
 }))
 
