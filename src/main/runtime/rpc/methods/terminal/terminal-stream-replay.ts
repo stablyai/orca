@@ -114,6 +114,7 @@ export function buildResumeGapChunk(output: PublishedTerminalOutput[]): Terminal
   }
   data += joined.slice(offset)
   const rawLength = output.reduce((total, chunk) => total + chunk.rawLength, 0)
+  const cwd = output.findLast((chunk) => chunk.cwd !== undefined)?.cwd
   return {
     data,
     bytes: terminalStreamByteLength(data),
@@ -122,7 +123,9 @@ export function buildResumeGapChunk(output: PublishedTerminalOutput[]): Terminal
       rawLength,
       ...(data.length !== rawLength || output.some((chunk) => chunk.transformed)
         ? { transformed: true }
-        : {})
+        : {}),
+      // The batcher sends this as a Metadata frame, as it did for each live chunk.
+      ...(cwd !== undefined ? { cwd } : {})
     }
   }
 }

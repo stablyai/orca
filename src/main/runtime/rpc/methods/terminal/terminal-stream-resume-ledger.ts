@@ -5,12 +5,15 @@ import {
 } from '../../terminal-output-frame-chunks'
 import { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import type {
+  PublishedOutputPosition,
   PublishedTerminalOutput,
   TerminalPublishedOutputRing
 } from '../../../terminal/output/terminal-published-output-ring'
 
-// The client reports its newest count; older points serve only output still in flight when it left.
-const MAX_RESUME_POINTS = 256
+export type TerminalResumeGap = { seq: number; output: PublishedTerminalOutput[] }
+
+// Points the ring no longer covers are dropped first; this only bounds a flood of tiny frames.
+const MAX_RESUME_POINTS = 4096
 
 type ResumePoint = { units: number; seq: number; epoch: number }
 
@@ -58,13 +61,15 @@ export class TerminalStreamResumeLedger {
         this.addPoint(frame.seq)
       }
     }
+    // A span stripped to nothing sends no frame but still advances the seq the client shows.
+    if (this.shownSeq !== null && typeof meta?.seq === 'number' && this.shownSeq !== meta.seq) {
+      this.shownSeq = meta.seq
+      this.addPoint(meta.seq)
+    }
   }
 
   /** Output the client missed after receiving `units`, or null unless that is a recorded point the ring still holds. */
-  readGap(
-    units: number,
-    current: Parameters<TerminalPublishedOutputRing['readAfter']>[2]
-  ): { seq: number; output: PublishedTerminalOutput[] } | null {
+  readGap(units: number, current: PublishedOutputPosition): TerminalResumeGap | null {
     const point = this.points.findLast((candidate) => candidate.units === units)
     if (!point) {
       return null
@@ -78,9 +83,9 @@ export class TerminalStreamResumeLedger {
       this.points.pop()
     }
     this.points.push({ units: this.units, seq, epoch: this.ring.epoch })
-    if (this.points.length > MAX_RESUME_POINTS) {
-      this.points.shift()
-    }
+    const covered = this.points.findIndex((point) => this.ring.covers(point.seq, point.epoch))
+    const drop = covered === -1 ? this.points.length : covered
+    this.points.splice(0, Math.max(drop, this.points.length - MAX_RESUME_POINTS))
   }
 }
 

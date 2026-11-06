@@ -2,6 +2,7 @@ import { buildResumeGapChunk, getOutputAfterSnapshotSeq } from './terminal-strea
 import { claimTerminalStreamResume, type TerminalStreamToken } from './terminal-stream-tokens'
 import type {
   TerminalSubscribeBinaryState,
+  TerminalSubscribeParams,
   TerminalSubscriptionArgs
 } from './terminal-subscribe-types'
 
@@ -10,19 +11,17 @@ export function tryPublishResumedOutput(
   args: TerminalSubscriptionArgs,
   state: TerminalSubscribeBinaryState,
   streamToken: TerminalStreamToken | null,
-  resume: { streamToken: string; units: number }
+  resume: NonNullable<TerminalSubscribeParams['resume']>
 ): boolean {
   const { runtime, ptyId, emit } = args
+  const size = runtime.getTerminalSize(ptyId)
   // Spend the presented token first, so even a declined resume can never be replayed.
   const gap = claimTerminalStreamResume(
     resume.streamToken,
     args.pairedDeviceId,
     ptyId,
     resume.units,
-    {
-      seq: runtime.getPtyOutputSequence(ptyId),
-      size: runtime.getTerminalSize(ptyId)
-    }
+    { seq: runtime.getPtyOutputSequence(ptyId), size }
   )
   const ledger = streamToken?.ledger
   if (
@@ -34,7 +33,6 @@ export function tryPublishResumedOutput(
   ) {
     return false
   }
-  const size = runtime.getTerminalSize(ptyId)
   state.displayMode = runtime.getMobileDisplayMode(ptyId)
   emit({
     type: 'subscribed',
@@ -54,10 +52,10 @@ export function tryPublishResumedOutput(
   state.buffering = false
   // Output buffered during this subscribe goes out as it would live; only older queries were answered elsewhere.
   const bufferedOutput = state.pendingOutput.splice(0)
-  const firstBuffered = bufferedOutput[0]?.meta
+  const firstBuffered = bufferedOutput[0]
   const bufferedStartSeq =
-    typeof firstBuffered?.seq === 'number'
-      ? firstBuffered.seq - (firstBuffered.rawLength ?? 0)
+    typeof firstBuffered?.meta?.seq === 'number'
+      ? firstBuffered.meta.seq - (firstBuffered.meta.rawLength ?? firstBuffered.data.length)
       : Number.POSITIVE_INFINITY
   const missed = buildResumeGapChunk(gap.output.filter((chunk) => chunk.seq <= bufferedStartSeq))
   if (missed) {

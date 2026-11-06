@@ -1,11 +1,16 @@
 type TerminalSize = { cols: number; rows: number } | null
 
+/** The PTY's output seq and size now; a gap is only valid if the ring still ends there on the same grid. */
+export type PublishedOutputPosition = { seq: number; size: TerminalSize }
+
 export type PublishedTerminalOutput = {
   data: string
   /** PTY output seq after this chunk. */
   seq: number
   rawLength: number
   transformed: boolean
+  /** Set when this chunk changed the working directory. */
+  cwd?: string
 }
 
 const RING_MAX_UNITS = 64 * 1024
@@ -16,33 +21,26 @@ let nextCoverageEpoch = 1
 /** The PTY output already published to stream subscribers, so a phone can resume from what it received. */
 export class TerminalPublishedOutputRing {
   /** Changes whenever coverage restarts; output recorded under an older epoch can't be resumed from. */
-  epoch = nextCoverageEpoch++
+  epoch = 0
   private chunks: PublishedTerminalOutput[] = []
   private units = 0
-  private startSeq: number
-  endSeq: number
-  private size: TerminalSize
+  private startSeq = 0
+  private endSeq = 0
+  private size: TerminalSize = null
 
   constructor(seq: number, size: TerminalSize) {
-    this.startSeq = seq
-    this.endSeq = seq
-    this.size = size
+    this.resetCoverage(seq, size)
   }
 
-  append(
-    data: string,
-    seq: number,
-    rawLength: number,
-    transformed: boolean,
-    size: TerminalSize
-  ): void {
-    const startSeq = seq - rawLength
+  append(chunk: PublishedTerminalOutput, size: TerminalSize): void {
+    const { seq } = chunk
+    const startSeq = seq - chunk.rawLength
     // Output written for another grid, or after output that never reached subscribers, replays wrong.
     if (startSeq !== this.endSeq || !sameSize(size, this.size)) {
       this.resetCoverage(startSeq, size)
     }
-    this.chunks.push({ data, seq, rawLength, transformed })
-    this.units += data.length
+    this.chunks.push(chunk)
+    this.units += chunk.data.length
     this.endSeq = seq
     let dropCount = 0
     while (this.units > RING_MAX_UNITS && dropCount < this.chunks.length) {
@@ -55,7 +53,7 @@ export class TerminalPublishedOutputRing {
     }
   }
 
-  resetCoverage(seq: number, size: TerminalSize = this.size): void {
+  resetCoverage(seq = this.endSeq, size: TerminalSize = this.size): void {
     this.epoch = nextCoverageEpoch++
     this.chunks = []
     this.units = 0
@@ -64,11 +62,15 @@ export class TerminalPublishedOutputRing {
     this.size = size
   }
 
+  covers(seq: number, epoch: number): boolean {
+    return epoch === this.epoch && seq >= this.startSeq
+  }
+
   /** Output published after `seq`, or null unless the ring holds all of it for this grid. */
   readAfter(
     seq: number,
     epoch: number,
-    current: { seq: number; size: TerminalSize }
+    current: PublishedOutputPosition
   ): PublishedTerminalOutput[] | null {
     if (
       epoch !== this.epoch ||
@@ -107,11 +109,11 @@ function sameSize(a: TerminalSize, b: TerminalSize): boolean {
 type PublishedOutputSource = {
   seq: number
   size: () => TerminalSize
-  /** Delivers each chunk as stream subscribers see it, before any subscriber registered later. */
+  /** Delivers each chunk as stream subscribers see it. */
   subscribe: (
     listener: (
       data: string,
-      meta?: { seq?: number; rawLength?: number; transformed?: boolean }
+      meta?: { seq?: number; rawLength?: number; transformed?: boolean; cwd?: string }
     ) => void
   ) => () => void
 }
@@ -136,11 +138,19 @@ export class TerminalPublishedOutputRings {
       const ring = new TerminalPublishedOutputRing(source.seq, source.size())
       const unsubscribe = source.subscribe((data, meta) => {
         if (typeof meta?.seq !== 'number') {
-          ring.resetCoverage(ring.endSeq)
+          ring.resetCoverage()
           return
         }
-        const rawLength = meta.rawLength ?? data.length
-        ring.append(data, meta.seq, rawLength, meta.transformed === true, source.size())
+        ring.append(
+          {
+            data,
+            seq: meta.seq,
+            rawLength: meta.rawLength ?? data.length,
+            transformed: meta.transformed === true,
+            ...(meta.cwd !== undefined ? { cwd: meta.cwd } : {})
+          },
+          source.size()
+        )
       })
       entry = { ring, holders: 0, unsubscribe }
       this.rings.set(ptyId, entry)
@@ -156,7 +166,7 @@ export class TerminalPublishedOutputRings {
         }
         released = true
         held.holders -= 1
-        if (held.holders === 0 && this.rings.get(ptyId) === held) {
+        if (held.holders === 0) {
           this.rings.delete(ptyId)
           held.unsubscribe()
         }

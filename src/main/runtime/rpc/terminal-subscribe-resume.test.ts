@@ -13,7 +13,7 @@ import {
 } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { TerminalPublishedOutputRings } from '../terminal/output/terminal-published-output-ring'
 
-type Listener = (data: string, meta?: { seq?: number; rawLength?: number }) => void
+type Listener = (data: string, meta?: { seq?: number; rawLength?: number; cwd?: string }) => void
 
 function createHost() {
   const registry = createSubscriptionRegistryDouble()
@@ -56,10 +56,10 @@ function createHost() {
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   // Mirrors onPtyData publishing a chunk to stream subscribers.
-  const output = (data: string) => {
+  const output = (data: string, cwd?: string) => {
     seq += data.length
     for (const listener of listeners) {
-      listener(data, { seq, rawLength: data.length })
+      listener(data, { seq, rawLength: data.length, ...(cwd ? { cwd } : {}) })
     }
   }
 
@@ -104,6 +104,12 @@ function createHost() {
     return {
       subscribed,
       received,
+      cwds: () =>
+        decoded().flatMap((frame) =>
+          frame.opcode === TerminalStreamOpcode.Metadata
+            ? [decodeTerminalStreamJson<{ cwd: string }>(frame.payload)?.cwd]
+            : []
+        ),
       // Output leaves through the stream's batcher, so wait for it rather than reading at once.
       receives: (text: string) => vi.waitFor(() => expect(received()).toBe(text)),
       snapshotKinds: () =>
@@ -125,7 +131,8 @@ function createHost() {
     resize: (next: { cols: number; rows: number }) => {
       size = next
     },
-    respawn: () => rings.get('pty-1')?.resetCoverage(seq)
+    // What a respawn does to the ring (advancePtyLifecycleGeneration).
+    resetCoverage: () => rings.get('pty-1')?.resetCoverage(seq)
   }
 }
 
@@ -184,6 +191,17 @@ describe('terminal.subscribe resume', () => {
     await second.stop()
   })
 
+  it('tells the phone about a directory change it missed', async () => {
+    const { host, token, units } = await endedStream()
+    host.output('cd done', '/tmp/elsewhere')
+
+    const second = await host.subscribe({ streamToken: token, units })
+    expect(second.subscribed.resumed).toBe(true)
+    await second.receives('againcd done')
+    expect(second.cwds()).toEqual(['/tmp/elsewhere'])
+    await second.stop()
+  })
+
   it.each([
     [
       'a reused token',
@@ -200,9 +218,9 @@ describe('terminal.subscribe resume', () => {
       }
     ],
     [
-      'a respawn',
+      'a coverage reset, as on respawn',
       async ({ host }: Awaited<ReturnType<typeof endedStream>>) => {
-        host.respawn()
+        host.resetCoverage()
         host.output('reborn')
       }
     ]

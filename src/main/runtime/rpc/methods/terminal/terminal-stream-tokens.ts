@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { TerminalStreamResumeLedger } from './terminal-stream-resume-ledger'
+import { TerminalStreamResumeLedger, type TerminalResumeGap } from './terminal-stream-resume-ledger'
+import type { PublishedOutputPosition } from '../../../terminal/output/terminal-published-output-ring'
 import type { TerminalSubscriptionArgs } from './terminal-subscribe-types'
 
 // A tab switch or a reconnect comes back within seconds; two minutes covers a phone left in a pocket.
@@ -61,13 +62,14 @@ export function registerTerminalStreamToken(
 }
 
 function retainForResume(token: string, entry: TerminalStreamTokenEntry): void {
-  const sameDevice = [...retainedStreams.keys()].filter(
-    (retained) => retainedStreams.get(retained)?.deviceId === entry.deviceId
+  const sameDevice = [...retainedStreams].filter(
+    ([, retained]) => retained.deviceId === entry.deviceId
   )
-  const excess = sameDevice.length - MAX_RETAINED_STREAMS_PER_DEVICE + 1
-  for (const oldToken of sameDevice.slice(0, Math.max(0, excess))) {
-    discardRetained(oldToken)
+  while (sameDevice.length >= MAX_RETAINED_STREAMS_PER_DEVICE) {
+    discardRetained(sameDevice.shift()![0])
   }
+  // Ended streams take no acks; don't keep the subscription's scope alive through this closure.
+  entry.acknowledgeOutput = () => {}
   entry.expiry = setTimeout(() => discardRetained(token), RESUME_RETAIN_MS)
   entry.expiry.unref?.()
   retainedStreams.set(token, entry)
@@ -89,8 +91,8 @@ export function claimTerminalStreamResume(
   deviceId: string | undefined,
   ptyId: string,
   units: number,
-  current: Parameters<TerminalStreamResumeLedger['readGap']>[1]
-): ReturnType<TerminalStreamResumeLedger['readGap']> {
+  current: PublishedOutputPosition
+): TerminalResumeGap | null {
   const live = liveStreams.get(token)
   if (live && live.deviceId === deviceId) {
     live.spent = true
