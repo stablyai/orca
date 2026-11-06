@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionSnapshotTab } from '../../shared/runtime-types'
-import { appendChatTabOrder, keepSnapshotChatTabs } from './mobile-session-tab-merge'
+import {
+  appendChatTabOrder,
+  keepSnapshotChatTabs
+} from './session-lifecycle/projection/mobile-session-tab-merge'
 
 const chat: RuntimeMobileSessionSnapshotTab = {
   type: 'agent-session',

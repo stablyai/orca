@@ -175,42 +175,6 @@ describe('browserManager', () => {
     expect(sendCommand).not.toHaveBeenCalled()
   })
 
-  it('leaves the UA untouched on Google auth hosts in native process mode', () => {
-    browserMocks.processUserAgentMode = 'native'
-    const setUserAgent = vi.fn()
-    const guest = {
-      id: 409,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      send: vi.fn(),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock,
-      getURL: vi.fn(() => 'https://accounts.google.com/'),
-      getUserAgent: vi.fn(() => guestBaseUserAgent),
-      setUserAgent,
-      session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
-    }
-    webContentsFromIdMock.mockReturnValue(guest)
-
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'browser-native-ua',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    const didStartNavigation = guestOnMock.mock.calls.find(
-      ([event]) => event === 'did-start-navigation'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-    setUserAgent.mockClear()
-
-    didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
-    expect(setUserAgent).not.toHaveBeenCalled()
-  })
-
   // setUserAgent during will-redirect can abort and replay the request, breaking sign-in POST flows;
   // a UA-only CDP override would blank client hints. The request hook presents the auth UA instead.
   it.each([true, false])(

@@ -1,12 +1,11 @@
 import { CrewChanges } from '../orchestration/crew/crew-changes'
-import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  OrchestrationDb,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
@@ -17,8 +16,8 @@ import {
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { publishLegacyWorkerReveal } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('requeues an active Task before clearing recovery for an authoritatively missing worker', async () => {

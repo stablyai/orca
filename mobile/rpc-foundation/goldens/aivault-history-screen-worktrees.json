@@ -80,22 +80,6 @@
         }
       }
     },
-    "3f48bd7d1369": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "Text": 3,
-        "View": 7
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": ["Agent Session History", "orca-history", "Loading agent sessions…"]
-    },
     "40fa6811eb00": {
       "name": "streams-registered-at-teardown",
       "ordinal": 10,
@@ -142,6 +126,22 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "7623e8b568b1": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Text": 3,
+        "View": 8
+      },
+      "labels": ["Back", "Refresh agent sessions"],
+      "text": ["Agent Session History", "orca-history", "Loading agent sessions…"]
     },
     "79fc75a7b709": {
       "name": "aiVault.listSessions#1",
@@ -303,7 +303,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "3f48bd7d1369",
+          "state": "7623e8b568b1",
           "effects": []
         }
       },
@@ -321,7 +321,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "3f48bd7d1369",
+          "state": "7623e8b568b1",
           "effects": []
         }
       },
@@ -339,7 +339,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "3f48bd7d1369",
+          "state": "7623e8b568b1",
           "effects": ["40fa6811eb00"]
         }
       }

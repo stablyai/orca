@@ -10,7 +10,7 @@ import { buildStructuredJournalArchive } from '../../orchestration/structured-wo
 import { projectSavedChatContextItems } from '../../../native-chat/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
+import type { StructuredWorkerIdentity } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }
 

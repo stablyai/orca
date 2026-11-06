@@ -24,7 +24,7 @@ vi.mock('../pty-host-bindings', () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })
 }))
-vi.mock('../../../daemon/daemon-provider-state', () => ({
+vi.mock('../../../daemon/providers/lifecycle/daemon-provider-state', () => ({
   isTerminalOnLegacyDaemon: (id: string, matches: (protocolVersion: number) => boolean) =>
     [...mocks.legacyDaemons].some(([version, ids]) => matches(version) && ids.has(id))
 }))

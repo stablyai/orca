@@ -15234,8 +15234,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "ex.: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Comando personalizado",
-            "4b2fc4b80c": "Esforço de raciocínio",
-            "be8917699e": "Modelo",
             "560d4feb00": "Personalizado",
             "29d119fe95": "Agente",
             "f9382b48a1": "Ativar autor de IA",
@@ -17478,7 +17476,6 @@
             "e8b3741ff7": "Ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Selecionar {{value0}}",
             "b771c92598": "Excluir selecionados",
             "7eee951968": "Escaneando espaços de trabalho",
@@ -17487,7 +17484,6 @@
             "b2c1331844": "Excluir Espaços de Trabalho Inativos",
             "7f451a3e2c": "Não foi possível ignorar a sugestão de limpeza",
             "662b8ec3f8": "Falha na varredura de limpeza de espaços de trabalho",
-            "4d0b72481c": "Ignorar",
             "9cc26c019d": "Remover",
             "0e2d235c63": "Varredura de espaços de trabalho pronta",
             "4a35c08764": "Revisar",
@@ -17495,9 +17491,6 @@
             "1d3503357d": "Você pode fechar isto e voltar enquanto a exclusão continua.",
             "4c2990886e": "{{value0}}/{{value1}} excluídos",
             "86ba852118": "{{value0}}, {{value1}} falharam",
-            "deletingCount": "Excluindo espaços de trabalho: {{value0}}",
-            "deleteCount": "Excluir espaços de trabalho: {{value0}}?",
-            "selectedForDeletionCount": "Selecionados para exclusão: {{value0}}",
             "deleteButtonCount": "Excluir {{value0}}",
             "archivedStatus": "Arquivado",
             "74f6c16279": "Voltar"
@@ -17512,7 +17505,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Contexto",
             "flagsLabel": "Flags",
             "collapseDetails": "Recolher detalhes",
@@ -18281,6 +18273,8 @@
               "25349b66fc": "Novo Arquivo Markdown",
               "784812ca24": "Abra uma aba de navegador no espaço de trabalho ativo.",
               "892bfa9339": "Nova Aba do Navegador",
+              "splitChatRight": "Dividir Chat à Direita",
+              "splitChatDown": "Dividir Chat para Baixo",
               "verbs": {
                 "newBrowser": "novo navegador",
                 "newBrowserTab": "nova aba do navegador",
@@ -18294,6 +18288,10 @@
                 "newTerminal": "novo terminal",
                 "newTerminalTab": "nova aba de terminal",
                 "newShell": "nova shell",
+                "splitChatRight": "dividir chat à direita",
+                "splitChatDown": "dividir chat para baixo",
+                "chatPaneRight": "painel de chat à direita",
+                "chatPaneBelow": "painel de chat abaixo",
                 "terminalTab": "aba de terminal",
                 "createWorktree": "criar worktree",
                 "addWorktree": "adicionar worktree",
@@ -18303,18 +18301,8 @@
                 "removeWorktree": "remover worktree",
                 "trashWorktree": "descartar worktree",
                 "addQuickCommand": "adicionar comando rápido",
-                "newQuickCommand": "novo comando rápido",
-                "splitChatRight": "dividir chat à direita",
-                "newChatRight": "novo chat à direita",
-                "chatPaneRight": "painel de chat à direita",
-                "splitChatDown": "dividir chat para baixo",
-                "newChatBelow": "novo chat abaixo",
-                "chatPaneBelow": "painel de chat abaixo"
-              },
-              "splitChatRight": "Dividir Chat à Direita",
-              "splitChatRightDescription": "Abra um novo chat em um painel dividido à direita.",
-              "splitChatDown": "Dividir Chat para Baixo",
-              "splitChatDownDescription": "Abra um novo chat em um painel dividido abaixo."
+                "newQuickCommand": "novo comando rápido"
+              }
             }
           },
           "palette": {
@@ -20050,8 +20038,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferenças",
-        "hideDiff": "Ocultar diferenças",
         "changedFiles_one": "{{count}} arquivo alterado",
         "changedFiles_other": "{{count}} arquivos alterados",
         "changedFiles_many": "{{count}} arquivos alterados"
@@ -21096,9 +21082,7 @@
         "browse": {
           "noSizes": "Nenhum tamanho de espaço de trabalho medido ainda.",
           "noSizesDescription": "Os tamanhos aparecem após o uso de disco ser medido.",
-          "measureSizes": "Verificar",
           "measureSizesTitle": "Verificar tamanhos dos espaços de trabalho",
-          "measureSizesDescription": "Verifique o uso de disco para comparar, ordenar e filtrar espaços de trabalho por tamanho.",
           "sizeOnDisk": "Tamanho em disco: {{value0}}",
           "checkingGitRow": "Verificando status do git",
           "searchPlaceholder": "Pesquisar nome, repositório, branch, caminho, host",
@@ -21614,7 +21598,10 @@
       "workerAutoClose": {
         "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
-        "keepOpen": "Manter aberto"
+        "keepOpen": "Manter aberto",
+        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "temporaryBadge": "Temporário"
       }
     },
     "wslHostMark": {

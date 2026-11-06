@@ -3,7 +3,6 @@ import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -68,8 +67,6 @@ export function NativeChatUserMessageRow({
   prose,
   rowRef,
   onRefolded,
-  onLinkClick,
-  allowFileUriLinks,
   runtimeContext,
   structuredAttachments = false,
   rewind,
@@ -80,8 +77,6 @@ export function NativeChatUserMessageRow({
   prose: ReturnType<typeof deriveNativeChatRowContent>['prose']
   rowRef: React.RefObject<HTMLDivElement | null>
   onRefolded: () => void
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks: boolean
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   rewind?: NativeChatRewindSurface
@@ -104,8 +99,6 @@ export function NativeChatUserMessageRow({
           from={from}
           textAttachmentContent={structuredAttachments ? markdown : undefined}
           runtimeContext={runtimeContext}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
           onRefolded={onRefolded}
         />
       ) : (
@@ -121,6 +114,8 @@ export function NativeChatUserMessageRow({
                 messageId={message.id}
                 markdown={markdown}
                 onRefolded={onRefolded}
+                // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
+                className="-mx-3.5 px-3.5"
               >
                 <NativeChatTextAttachments
                   content={markdown}
@@ -133,8 +128,6 @@ export function NativeChatUserMessageRow({
                       variant="document"
                       className="text-sm"
                       renderCodeBlock={NativeChatCodeBlock}
-                      onLinkClick={onLinkClick}
-                      allowFileUriLinks={allowFileUriLinks}
                     />
                   )}
                 />

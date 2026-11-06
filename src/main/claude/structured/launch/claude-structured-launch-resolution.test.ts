@@ -1,5 +1,5 @@
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { createClaudeStructuredLaunchResolver } from '../../../runtime/structured-agent-launch-composition.test-support'
+import { createClaudeStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -10,7 +10,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_SESSION_STATE_EVENTS_ENV,
-  CLAUDE_STRUCTURED_BASE_OPTIONS
+  CLAUDE_STRUCTURED_BASE_OPTIONS,
+  withClaudeArtifactDefault
 } from './claude-structured-launch-resolution'
 import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
 import {
@@ -211,6 +212,20 @@ describe('claude structured launch resolution', () => {
     }))({ identity: IDENTITY })
 
     expect(launch.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
+  })
+
+  it('keeps a configured Artifact tools opt-out over the default', async () => {
+    const launch = await resolverFor(record(), () => ({ CLAUDE_CODE_ARTIFACT: '0' }))({
+      identity: IDENTITY
+    })
+
+    expect(launch.env).toMatchObject({ CLAUDE_CODE_ARTIFACT: '0' })
+  })
+
+  it('keeps a Windows Artifact tools opt-out spelled in any case', () => {
+    expect(withClaudeArtifactDefault({ claude_code_artifact: '0' }, 'win32')).toEqual({
+      claude_code_artifact: '0'
+    })
   })
 
   it('launches when only the bookkeeping leaf moved, and refuses a changed session', async () => {

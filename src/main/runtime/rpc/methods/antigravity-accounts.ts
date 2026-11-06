@@ -16,8 +16,8 @@ import {
   subscribeAntigravityChatSignIn
 } from '../../../antigravity/antigravity-chat-sign-in'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
-import { structuredAgentHostLaunchSources } from '../../structured-agent-launch-support'
-import { stopStructuredAgentChats } from '../../structured-agent-chat-stop'
+import { structuredAgentHostLaunchSources } from '../../agent-session/launch/structured-agent-launch-support'
+import { stopStructuredAgentChats } from '../../agent-session/lifecycle/structured-agent-chat-stop'
 
 const chatSignInHost = (runtime: OrcaRuntimeService) => ({
   launchSources: (signal: AbortSignal) =>

@@ -12,9 +12,9 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
 import type { ServeReadiness } from '../../server/serve-readiness'

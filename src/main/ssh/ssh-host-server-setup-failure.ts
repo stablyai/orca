@@ -7,6 +7,8 @@ const MAX_FAILURE_DETAIL_CHARS = 16_000
 
 export type SetupFailure = {
   detail: string
+  /** The deferral code setup stopped on; thrown errors carry none. */
+  code?: string
   /** Contact was lost mid-setup: nothing proves the host failed, so it is never called a failure. */
   contactLost?: true
   nodeDownloadBlocked?: SshManagedServerNodeDownloadBlocked

@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(), skip: vi.fn() }
 const state = {
   activeModal: 'quick-open',
   activeWorktreeId: 'workspace',
-  closeModal: mocks.close,
-  getKnownWorktreeById: () => ({ path: '/workspace' })
+  closeModal: mocks.close
 }
 const history: readonly string[] = []
 const files = [
@@ -25,7 +24,10 @@ vi.mock('@/store', () => ({
     subscribe: () => () => {}
   })
 }))
-vi.mock('@/store/selectors', () => ({ useActiveWorktree: () => ({ path: '/workspace' }) }))
+vi.mock('@/store/selectors', () => ({
+  useActiveWorktree: () => ({ path: '/workspace' }),
+  selectFileListWorktree: () => ({ path: '/workspace' })
+}))
 vi.mock('./quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files, loading: false, loadError: null })
 }))

@@ -10,7 +10,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/workt
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
 import type { PairedServerRowsProducer } from './paired-server-rows-producer'
-import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
+import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
