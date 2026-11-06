@@ -108,6 +108,18 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ]
   ),
   featureRoute(
+    'feature.agent-descendant-kill',
+    ['agent-descendant-process-kill'],
+    [
+      'src/main/pty/process-retirement/pty-descendant-',
+      'src/main/daemon/sessions/terminal-descendant-shutdown.ts',
+      'src/main/daemon/terminal-host/terminal-session-teardown.ts',
+      'src/main/providers/local-pty/local-pty-termination.ts',
+      // Claude launch flags shift the stand-in agent's argv.
+      'src/main/claude/agent-view/'
+    ]
+  ),
+  featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
