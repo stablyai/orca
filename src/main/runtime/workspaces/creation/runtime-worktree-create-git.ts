@@ -1,5 +1,4 @@
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
-import { basename } from 'node:path'
 import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'
@@ -160,25 +159,23 @@ export async function getSelectedHostedReviewForBranch(
     : null
 }
 
-/** Branch and worktree-dir names a new candidate must not collide with; scan failures return []. */
+/**
+ * Existing local branch names a new candidate must not collide with; scan failures return [].
+ * Branches only: the create path must not rescan the worktree inventory, and a taken directory
+ * without a branch still fails the candidate loop's own path probe one suffix later.
+ */
 export async function listExistingWorktreeCandidateNames(
   repoPath: string,
   gitOptions: { wslDistro?: string }
 ): Promise<string[]> {
   try {
-    const [{ stdout }, worktrees] = await Promise.all([
-      gitExecFileAsync(['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], {
-        cwd: repoPath,
-        ...gitOptions
-      }),
-      listWorktrees(repoPath, gitOptions)
-    ])
-    return [
-      ...stdout.split(/\r?\n/).filter(Boolean),
-      ...worktrees.map((worktree) => basename(worktree.path))
-    ]
+    const { stdout } = await gitExecFileAsync(
+      ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
+      { cwd: repoPath, ...gitOptions }
+    )
+    return stdout.split(/\r?\n/).filter(Boolean)
   } catch (error) {
-    console.warn('[worktree-create] could not list existing worktree candidate names:', error)
+    console.warn('[worktree-create] could not list existing branch candidate names:', error)
     return []
   }
 }
