@@ -1,5 +1,5 @@
-import type { RemoteOpKind } from '../../source-control-primary-action'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { RemoteOpKind } from '../review/source-control-primary-action-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 export type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
 export type SourceControlActionErrorKind = RemoteOpKind | AbortActionErrorKind

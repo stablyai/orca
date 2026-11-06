@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
-import type { ReactNode, Ref } from 'react'
-import { act } from 'react'
+
+import { type ReactNode, type Ref, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
-import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import { createTestStore, seedStore } from '../../store/slices/store-test-helpers'
 import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup-browse'
 import { NOW, makeCandidate } from '../../store/slices/workspace-cleanup-slice-test-harness'

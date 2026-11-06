@@ -6,7 +6,7 @@ import {
   MOBILE_RELAY_HOSTS_LIST_METHOD,
   type MobileRelayHost,
   type MobileRelayHostRelay
-} from '../../../src/shared/mobile-relay-hosts-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { worktreeCatalogSchema } from './worktree-catalog-reply-schema'
@@ -36,7 +36,8 @@ const relayHostSchema = z.looseObject({
   health: z.enum(HEALTH).catch('error'),
   relay: z.enum(RELAY).catch('unavailable'),
   stoppedOnDesktop: z.literal(true).optional().catch(undefined),
-  unavailableOnDesktop: z.literal(true).optional().catch(undefined)
+  unavailableOnDesktop: z.literal(true).optional().catch(undefined),
+  installationId: z.string().optional().catch(undefined)
 }) satisfies z.ZodType<MobileRelayHost>
 
 export const relayHostsListRead = bindDeferredRpcOperation(

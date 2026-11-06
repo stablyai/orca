@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppShortcutState } from './app-command-handlers'
-import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault-scope-state'
+import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault/scope/ai-vault-scope-state'
 
 const mocks = vi.hoisted(() => ({ focusActiveTabSurface: vi.fn() }))
 

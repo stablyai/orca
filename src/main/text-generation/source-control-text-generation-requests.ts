@@ -2,28 +2,28 @@ import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
   type CommitMessageDraftContext
-} from '../../shared/commit-message-generation'
+} from '../../shared/source-control/ai/generation/commit-message-generation'
 import {
   buildPullRequestFieldsPrompt,
   parseGeneratedPullRequestFields,
   type GeneratedPullRequestFields,
   type PullRequestDraftContext
-} from '../../shared/pull-request-generation'
+} from '../../shared/source-control/ai/generation/pull-request-generation'
 import {
   buildBranchNamePrompt,
   sanitizeBranchSlug,
   type BranchNameWorkContext
-} from '../../shared/branch-name-from-work'
+} from '../../shared/source-control/ai/naming/branch-name-from-work'
 import {
   cleanGeneratedCommitMessage,
-  STAGED_DIFF_BYTE_BUDGET,
   stripPrefilledReasoningPreamble
-} from '../../shared/commit-message-prompt'
-import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
-import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
-import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
+import { STAGED_DIFF_BYTE_BUDGET } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { formatLinkedIssueTemplateValue } from '../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import { renderSourceControlActionCommandTemplate } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields

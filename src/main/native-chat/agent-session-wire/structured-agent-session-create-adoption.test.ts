@@ -1,15 +1,22 @@
 import { mkdir, realpath, rename, writeFile } from 'node:fs/promises'
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await original<object>()),
-    readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (original) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await original<object>()),
+      readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
@@ -22,12 +29,12 @@ import {
   codexLegacyMirrorRecords,
   writeCodexHistoryFixture
 } from '../agent-session-journal/codex-history-test-fixture'
-import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach
 } from '../../runtime/agent-session/structured-agent-session-create-adoption'
-import { prepareCodexAiVaultSessionResume } from '../../codex/codex-ai-vault-session-resume'
+import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
 
@@ -103,7 +110,8 @@ it.each([
             }) ?? undefined,
           transcriptPath: adoption.transcriptPath,
           providerSessionId: THREAD,
-          workspaceCwd: fixture.rig.root
+          workspaceCwd: fixture.rig.root,
+          conversationName: 'Fix the flaky login test'
         })
       })
     )
@@ -150,6 +158,7 @@ it.each([
     )
     expect(result.value.page.items).toEqual(snapshot.items)
     expect(fixture.rig.store.getRecord(SESSION)?.accountHome).toEqual(accountHome)
+    expect(fixture.rig.store.getRecord(SESSION)?.conversationName).toBe('Fix the flaky login test')
     expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain).toMatchObject([
       { origin: 'adopted', mintedAtFence: 1, handle: { nativeId: THREAD } }
     ])

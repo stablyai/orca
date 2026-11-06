@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { getLargeDiffRenderLimit } from '../../../shared/large-diff-render-limit'
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,

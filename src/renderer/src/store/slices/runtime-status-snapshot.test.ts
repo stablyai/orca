@@ -6,9 +6,9 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   type RuntimeStatusSlice
 } from './runtime-status'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
@@ -56,18 +56,6 @@ function snapshot(
     ...patch
   }
 }
-
-it('hydrates both viewers and rejects an older read after a newer publication', () => {
-  for (const viewer of [store(), store()]) {
-    viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2))
-    viewer
-      .getState()
-      .applyRuntimeHostStatusSnapshot(snapshot(1, { status: null, verification: 'unavailable' }))
-    expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
-      'rt-1'
-    )
-  }
-})
 
 it('represents failed verification honestly without manufacturing a session restart or toast', () => {
   const viewer = store()

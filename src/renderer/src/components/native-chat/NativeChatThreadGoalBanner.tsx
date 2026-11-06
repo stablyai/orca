@@ -12,10 +12,8 @@ import {
   agentSessionThreadGoalStatusChange
 } from '../../../../shared/agent-session/agent-session-thread-goal'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
-import {
-  formatNativeChatThreadGoalElapsed,
-  nativeChatThreadGoalStatusLabel
-} from './native-chat-thread-goal-presentation'
+import { formatAgentSessionThreadGoalElapsed } from '../../../../shared/agent-session/view/agent-session-thread-goal-presentation'
+import { nativeChatThreadGoalStatusLabel } from './native-chat-thread-goal-presentation'
 
 function GoalAction(props: {
   label: string
@@ -46,6 +44,7 @@ function GoalAction(props: {
 
 export function NativeChatThreadGoalBanner(props: {
   goal: AgentJournalThreadGoal
+  objectiveContent?: React.ReactNode
   pending: boolean
   /** False where only the agent's own `/goal` changes the goal, which has no pause. */
   hostChanges: boolean
@@ -67,7 +66,7 @@ export function NativeChatThreadGoalBanner(props: {
   if (label === null) {
     return null
   }
-  const elapsed = formatNativeChatThreadGoalElapsed(
+  const elapsed = formatAgentSessionThreadGoalElapsed(
     agentSessionThreadGoalElapsedSeconds(goal, now, runningTurn)
   )
   const expandLabel = expanded
@@ -77,7 +76,8 @@ export function NativeChatThreadGoalBanner(props: {
     <NativeChatComposerTabStrip data-native-chat-thread-goal={goal.status}>
       <Goal aria-hidden className="mt-1 size-3.5 shrink-0" />
       <p className={cn('min-w-0 flex-1 py-0.5', expanded ? 'break-words' : 'truncate')}>
-        <span className="font-semibold text-foreground">{label}</span> <span>{goal.objective}</span>
+        <span className="font-semibold text-foreground">{label}</span>{' '}
+        <span>{props.objectiveContent ?? goal.objective}</span>
         <span className="tabular-nums">{` • ${elapsed}`}</span>
       </p>
       <div className="flex shrink-0 items-center">

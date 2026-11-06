@@ -7,11 +7,14 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createCodexModelCatalogProbe } from '../../../codex/codex-model-catalog-probe'
+import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
 import type { runCodexAppServerSession } from '../../../codex/app-server/codex-app-server-session'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   agentModelCatalogFingerprintForRecord,
@@ -339,13 +342,14 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   })
 
   // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
-  it('does not build the host for a read that names no session', async () => {
+  it('reads without a host or journal for a read that names no session', async () => {
     const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
-      ensureStructuredAgentSessionHost: installHost
+      ensureStructuredAgentSessionHost: installHost,
+      structuredAgentModelCatalog: async () => ({ read, demand: vi.fn(async () => {}) })
     })
     expect(installHost).not.toHaveBeenCalled()
-    expect(reply).toMatchObject({ ok: false })
-    expect(read).not.toHaveBeenCalled()
+    expect(reply).toMatchObject({ ok: true, result: { origin: 'probe' } })
+    expect(read).toHaveBeenCalledWith({ agent: 'codex' })
   })
 
   it('does not build the host for a client that cannot read structured sessions', async () => {
@@ -413,4 +417,43 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
       expect(reply).toMatchObject({ ok: true, result: { models: [opus] } })
     }
   })
+})
+
+it('observes never-started after a delayed options read, including acquisition at the founding fence', async () => {
+  const record = agentSessionRecordFixture(
+    agentSessionLeaseFixture({
+      sessionId: SESSION,
+      runtimeFence: 1,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      handoffStage: null
+    })
+  )
+  record.providerHandleChain = []
+  const host = hostStub()
+  host.deps.store.getConversation = () => agentSessionConversationView(record)
+  setStructuredAgentSessionHost(host)
+  expect(
+    await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
+  ).toMatchObject({
+    ok: true,
+    result: { sessionNeverStarted: true }
+  })
+  let finish!: (value: Awaited<ReturnType<typeof host.readOptions>>) => void
+  let started!: () => void
+  const reading = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  host.readOptions = () => {
+    started()
+    return new Promise((resolve) => {
+      finish = resolve
+    })
+  }
+  const pending = call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
+  await reading
+  record.lease = { ...record.lease, claimStatus: 'live' }
+  finish({ models: [], current: { defaulted: [], acceptedInputSources: {} } })
+  expect(await pending).toMatchObject({ ok: true, result: { sessionNeverStarted: false } })
 })

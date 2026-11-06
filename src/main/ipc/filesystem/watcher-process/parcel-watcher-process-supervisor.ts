@@ -13,7 +13,7 @@ import {
 import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
 import { WatcherSupervisorCapacityWait } from './parcel-watcher-supervisor-capacity-wait'
 import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
-import { WatcherDeliveryHealthMonitor } from '../../parcel-watcher-delivery-health'
+import { WatcherDeliveryHealthMonitor } from './parcel-watcher-delivery-health'
 import { cancelInterruptedWatcherSubscribe } from './parcel-watcher-interrupted-cancellation'
 import {
   type PendingWatcherUnsubscribe,

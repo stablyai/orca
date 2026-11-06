@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
 import {

@@ -1,7 +1,7 @@
-import { collectAgentTitleEvidence } from './agent-title-evidence'
-import { resolvePaneAgentIdentity } from './pane-agent-identity-resolver'
-import type { TerminalAgent } from './terminal-agent'
-import type { TuiAgent } from './tui-agent'
+import { collectAgentTitleEvidence } from './agent-status/title/agent-title-evidence'
+import { resolvePaneAgentIdentity } from './agent-status/identity/pane-agent-identity-resolver'
+import type { TerminalAgent } from './agent-status/identity/terminal-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 /** Publish one host identity decision for routing/delivery/UI. Live hooks identify launcher-, shell- and resume-started agents.
  * Strict parsed titles remain the final fallback for hand-started WSL panes lacking launch/process/hooks (Windows sees wsl.exe);

@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { Repo } from '../repo-types'
 import type { SavedPortForward, SshRemotePtyLease } from '../ssh-types'
 

@@ -1,5 +1,5 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getCatalogOwnerHostId } from '../lib/worktree-runtime-owner-index'

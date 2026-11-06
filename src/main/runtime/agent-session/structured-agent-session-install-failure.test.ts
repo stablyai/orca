@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
-import type * as ModelCatalogWiring from '../structured-agent-model-catalog-wiring'
+import type * as ModelCatalogWiring from './model-catalog/structured-agent-model-catalog-wiring'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -15,15 +15,23 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 const mocks = vi.hoisted(() => ({ failWiring: vi.fn(() => false) }))
 
 // The last step before the host is built: a throw here comes after both stores opened.
-vi.mock('../structured-agent-model-catalog-wiring', async (importOriginal) => {
+vi.mock('./model-catalog/structured-agent-model-catalog-wiring', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelCatalogWiring>()
   return {
     ...actual,
-    modelCatalogHostDeps: async (input: Parameters<typeof actual.modelCatalogHostDeps>[0]) => {
-      if (mocks.failWiring()) {
-        throw new Error('model catalog wiring failed')
+    ensureStructuredAgentModelCatalogOwner: async (
+      ...args: Parameters<typeof actual.ensureStructuredAgentModelCatalogOwner>
+    ) => {
+      const owner = await actual.ensureStructuredAgentModelCatalogOwner(...args)
+      return {
+        ...owner,
+        attach: (...access: Parameters<typeof owner.attach>) => {
+          if (mocks.failWiring()) {
+            throw new Error('model catalog wiring failed')
+          }
+          return owner.attach(...access)
+        }
       }
-      return actual.modelCatalogHostDeps(input)
     }
   }
 })

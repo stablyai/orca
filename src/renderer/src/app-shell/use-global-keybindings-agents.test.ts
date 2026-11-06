@@ -3,7 +3,7 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type * as PluginPanels from '@/store/plugin-panels'
-import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault-scope-state'
+import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault/scope/ai-vault-scope-state'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { useGlobalKeybindings } from './use-global-keybindings'
 import { useAppChromeLayout } from './use-app-chrome-layout'
@@ -91,6 +91,28 @@ it('keeps an Option dead key with the search field even when it is bound', () =>
   const event = pressInSearchField('sidebar.agents.scopeNext', 'Alt+E', {
     key: 'Dead',
     code: 'KeyE',
+    altKey: true
+  })
+  expect(steps).toEqual([])
+  expect(event.defaultPrevented).toBe(false)
+})
+
+it('runs an Option+PageDown scope chord, which types and edits nothing', () => {
+  pressInSearchField('sidebar.agents.scopeNext', 'Alt+PageDown', {
+    key: 'PageDown',
+    code: 'PageDown',
+    altKey: true
+  })
+  expect(steps).toEqual([1])
+})
+
+it.each([
+  ['Alt+Left', 'ArrowLeft'],
+  ['Alt+Backspace', 'Backspace']
+])('keeps %s with the field for native word editing even when it is bound', (chord, key) => {
+  const event = pressInSearchField('sidebar.agents.scopeNext', chord, {
+    key,
+    code: key,
     altKey: true
   })
   expect(steps).toEqual([])

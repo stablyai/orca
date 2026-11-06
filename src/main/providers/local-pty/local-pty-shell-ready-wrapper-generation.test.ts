@@ -11,7 +11,7 @@ import {
 } from './local-pty-shell-ready-test-harness'
 import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
 import { getZshShellReadyWrapperFile } from './local-pty-shell-ready-wrapper-generation'
-import { makeUserZdotdir } from '../../zsh-user-config-dir-fixture'
+import { makeUserZdotdir } from '../../pty/shell-startup/zsh-user-config-dir-fixture'
 // Wrapper roots are content-addressed; resolve them instead of assuming a fixed path.
 import {
   getRequiredShellReadyWrapperPaths,

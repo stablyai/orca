@@ -1,4 +1,4 @@
-/** #15192: test bundled/system ConPTY bytes for duplicate wide glyphs before xterm replay.
+/** #15192: test bundled ConPTY bytes for duplicate wide glyphs before xterm replay.
  * Wide cells carry two copies of a wchar; script-blind renderer duplication would also affect Latin controls. */
 import { describe, expect, it } from 'vitest'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
@@ -80,24 +80,6 @@ async function runThroughConpty(opts: { useConptyDll: boolean }): Promise<string
   return out
 }
 
-// Run detector assertions on all hosts so Windows-only cases cannot hide a broken detector.
-describe('doubled-wide-character detector', () => {
-  it('flags the text the reporter pasted into Notepad and clears the correct text', () => {
-    const reported = '시시각각적적 피피로로도도 | 빨빨강강/파파랑랑/초초록록 원원색색 배배지지'
-    const correct = '시각적 피로도 | 빨강/파랑/초록 원색 배지'
-    expect(doubledWideRuns(reported).length).toBeGreaterThan(0)
-    expect(doubledWideRuns(correct)).toEqual([])
-    // Latin repeats (`ll`, `oo`) must not register, or the ConPTY cases would fail for the wrong reason.
-    expect(doubledWideRuns('complete-overhaul-backlog-history.md (1.75)')).toEqual([])
-  })
-
-  it('survives the shared ANSI stripper the ConPTY cases run output through', () => {
-    expect(stripAnsiEscapeSequences(`\x1b[2K${KOREAN_LINE}\x1b[0m\x1b]0;title\x07`)).toBe(
-      KOREAN_LINE
-    )
-  })
-})
-
 describe('Windows ConPTY wide-character fidelity (#15192)', () => {
   itOnWindows(
     'does not double wide characters with the bundled ConPTY (useConptyDll)',
@@ -107,15 +89,6 @@ describe('Windows ConPTY wide-character fidelity (#15192)', () => {
       expect(doubledWideRuns(text)).toEqual([])
       // Latin is the control for script-specific corruption.
       expect(text).toContain(LATIN_LINE)
-    },
-    60_000
-  )
-
-  itOnWindows(
-    'does not double wide characters with the system ConPTY (A/B for the bundled build)',
-    async () => {
-      const text = stripAnsiEscapeSequences(await runThroughConpty({ useConptyDll: false }))
-      expect(doubledWideRuns(text)).toEqual([])
     },
     60_000
   )

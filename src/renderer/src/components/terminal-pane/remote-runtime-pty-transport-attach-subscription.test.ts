@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
@@ -77,6 +77,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         desktopViewportClaims: 1,
         outputPause: 1,
         outputPauseDropNotice: 1,
+        paneVisibility: 1,
         writeUnavailable: 1,
         endpointLossNotice: 1,
         inputAck: 1

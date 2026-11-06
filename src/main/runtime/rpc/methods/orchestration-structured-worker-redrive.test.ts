@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import { withChatTabChanges } from '../../agent-session/agent-session-tab-layout'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import * as historyPages from '../../../native-chat/agent-session-wire/agent-session-history-page'
@@ -15,17 +15,18 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   structuredWorkerIdentities,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
 import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession
 } from './orchestration-structured-worker-session'
 import { stopStructuredWorker } from './orchestration-structured-worker-lifecycle'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { STATUS_METHODS } from './status'
-import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
+import { createKeyedTrailingEdgeCoalescer } from '../../client/events/keyed-trailing-edge-coalescer'
+import { subscribeForRedrive } from '../../orchestration/structured-session-journal-redrive'
 import { idOf, resultOf } from '../orchestration-session-caller-test-fixture'
 import { createStructuredWorkerSessionForWorktree } from './orchestration/worker/worker-topology'
 import { completeWorkerTerminalRelease } from './orchestration/worker/worker-release-completion'
@@ -51,6 +52,7 @@ const harness = createOrchestrationRpcHarness()
 let state: ReturnType<typeof harness.setup>
 let dispatchId: string
 let workerSessionIds: string[]
+let watches: (() => void)[]
 
 function createDispatch() {
   const task = state.db.createTask({ spec: 'redrive test' })
@@ -90,10 +92,12 @@ beforeEach(() => {
   })
   setStructuredAgentSessionHost(host)
   workerSessionIds = []
+  watches = []
   dispatchId = createDispatch()
 })
 
 afterEach(() => {
+  watches.forEach((dispose) => dispose())
   for (const id of workerSessionIds) {
     releaseStructuredWorkerSession(id, state.runtime)
   }
@@ -104,19 +108,25 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function startWorker(
-  onJournalActivity = vi.fn<(sessionId: string) => void>(),
-  workerDispatchId = dispatchId
-) {
+async function startWorker(workerDispatchId = dispatchId) {
   const { identity } = await createStructuredWorkerSession({
     runtime: state.runtime,
     worktreeId: 'workspace-1',
     agent: 'codex',
-    dispatchId: workerDispatchId,
-    onJournalActivity
+    dispatchId: workerDispatchId
   })
   workerSessionIds.push(identity.sessionId)
-  return { ...workerJournal(identity), onJournalActivity }
+  return workerJournal(identity)
+}
+
+/** A worker heard as parked mail hears it: every publication of its journal, coalesced. */
+async function startWatchedWorker() {
+  const worker = await startWorker()
+  const onJournalActivity = vi.fn<(sessionId: string) => void>()
+  watches.push(
+    subscribeForRedrive(worker.host, worker.identity.sessionId, onJournalActivity, () => true)
+  )
+  return { ...worker, onJournalActivity }
 }
 
 function workerJournal(identity: StructuredWorkerIdentity) {
@@ -228,7 +238,7 @@ async function reattach(sessionId: string) {
 
 describe('the structured redrive publication edge', () => {
   it.each(['stream', 'journal'] as const)(
-    '%s delivers real CLI mail after settlement, retains failed sends and cancels teardown',
+    '%s steers real CLI mail into the running turn, retains failed sends and cancels teardown',
     async (carrier) => {
       vi.useRealTimers()
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
@@ -333,25 +343,31 @@ describe('the structured redrive publication edge', () => {
       }
       try {
         await server.start()
-        const messageId = await sendMail('Continue after the current turn')
-        expect(state.db.getMessageById(messageId)?.delivered_at).toBeNull()
-        expect(dispatch).not.toHaveBeenCalled()
+        // A send that throws keeps its reservation; the session's next journal edge finds it never
+        // admitted and sends it again under the same id.
         const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
-        await worker.journal.appendTombstone(turn, { fence })
-        expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(false)
-        await vi.advanceTimersByTimeAsync(300)
-        expect(notify).toHaveBeenCalledWith(worker.identity.sessionId)
+        const messageId = await sendMail('Continue during the current turn')
         expect(send).toHaveBeenCalledTimes(1)
-        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
-        expect(dispatch).not.toHaveBeenCalled()
+        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+        expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
         await worker.append('provider-available')
         await vi.advanceTimersByTimeAsync(300)
         expect(send).toHaveBeenCalledTimes(2)
+        // Retried mail joins the current turn through the host's automatic drain.
+        expect(state.db.getMessageById(messageId)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String)
+        })
         expect(dispatch).toHaveBeenCalledTimes(1)
         expect(dispatch.mock.calls[0]![0].body).toMatchObject({
           kind: 'message',
           role: 'user',
-          blocks: [{ type: 'text', text: expect.stringContaining('orchestration check') }],
+          blocks: [
+            {
+              type: 'text',
+              text: expect.stringContaining('Subject: Continue during the current turn')
+            }
+          ],
           from: {
             orchestration: {
               message: 'mail-notice',
@@ -360,26 +376,15 @@ describe('the structured redrive publication edge', () => {
             }
           }
         })
-        expect(state.db.getMessageById(messageId)?.delivered_at).not.toBeNull()
-        const nextTurn = { provider: 'orca', clientMessageId: 'busy-at-teardown' } as const
-        await worker.journal.appendItem(
-          nextTurn,
-          { kind: 'turn', turnId: 'busy-at-teardown', state: 'running' },
-          { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-        expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(true)
-        await vi.advanceTimersByTimeAsync(300)
-        const cancelledId = await sendMail('Do not deliver after teardown')
-        expect(state.db.getMessageById(cancelledId)?.delivered_at).toBeNull()
-        await worker.journal.appendTombstone(nextTurn, { fence })
         releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
         disposeStream()
         notify.mockClear()
+        const cancelledId = await sendMail('Do not deliver after teardown')
         await worker.append('after-teardown')
         await vi.advanceTimersByTimeAsync(5_000)
         expect(notify).not.toHaveBeenCalled()
         expect(dispatch).toHaveBeenCalledTimes(1)
-        expect(state.db.getMessageById(cancelledId)).toMatchObject({ read: 0, delivered_at: null })
+        expect(state.db.getMessageById(cancelledId)).toMatchObject({ read: 0 })
       } finally {
         disposeStream()
         await server.stop()
@@ -439,7 +444,8 @@ describe('the structured redrive publication edge', () => {
       await vi.advanceTimersByTimeAsync(300)
       expect(send).toHaveBeenCalledTimes(1)
       expect(dispatch).not.toHaveBeenCalled()
-      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+      expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
       const attached = host.collaboratorsForTests().sessions.get(identity.sessionId)
       if (mode === 'kept-released-owner') {
         const child = attached?.child
@@ -528,20 +534,18 @@ describe('the structured redrive publication edge', () => {
         presentation
       )
       expect(savedSession).toEqual(savedBefore)
-      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+      // The send that threw keeps its reservation for the retry.
+      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+      expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
       if (mode === 'new-turn') {
         await journal.appendTombstone(newTurn, { fence: lease.runtimeFence })
         await vi.advanceTimersByTimeAsync(300)
         expect(observe).not.toHaveBeenCalled()
         expect(create).not.toHaveBeenCalled()
-        expect(send).toHaveBeenCalledTimes(2)
-        expect(dispatch).toHaveBeenCalledTimes(1)
-        expect(dispatch.mock.calls[0]![0].body).toMatchObject({
-          kind: 'message',
-          role: 'user',
-          from: { orchestration: { message: 'mail-notice', mailbox, messages: [{ messageId }] } }
-        })
-        expect(state.db.getMessageById(messageId)?.delivered_at).not.toBeNull()
+        // Its Dispatch settled: the mail goes to a follow-up, never into the chat that finished it.
+        expect(send).toHaveBeenCalledTimes(1)
+        expect(dispatch).not.toHaveBeenCalled()
+        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
       }
     }
   )
@@ -589,87 +593,24 @@ describe('the structured redrive publication edge', () => {
     }
   })
 
-  it.each([16, 160])('bounds publication work with %i resting workers', async (count) => {
+  it.each([16, 160])('watches no journal for %i resting workers', async (count) => {
     const { host } = hostTestState()
-    const observe = host.observeJournalPublications
-    const visits = new Map<string, ReturnType<typeof vi.fn<() => void>>>()
-    const registrations = vi
-      .spyOn(host, 'observeJournalPublications')
-      .mockImplementation((id, listener) => {
-        const visited = vi.fn(listener)
-        visits.set(id, visited)
-        return observe(id, visited)
-      })
+    const registrations = vi.spyOn(host, 'observeJournalPublications')
     const workers: Awaited<ReturnType<typeof startWorker>>[] = []
     for (let index = 0; index < count; index += 1) {
-      workers.push(await startWorker(undefined, index === 0 ? dispatchId : createDispatch()))
+      workers.push(await startWorker(index === 0 ? dispatchId : createDispatch()))
     }
-    expect(registrations).toHaveBeenCalledTimes(count)
-    const readCatalog = vi.fn(() => undefined)
-    let catalogChanged = () => {}
-    host.deps.adapter.atRestCommands = {
-      read: readCatalog,
-      onChange: (listener) => {
-        catalogChanged = listener
-        return () => {}
-      }
-    }
-    host['clientDelivery'].watchAtRestCommands(host.deps.adapter)
-    const hooks = host.collaboratorsForTests().subscribers['hooks']
+    // Only parked mail watches a chat's journal; resting workers cost a publication nothing.
+    expect(registrations).not.toHaveBeenCalled()
     const reads = [
-      readCatalog,
       vi.spyOn(host, 'subscribe'),
       vi.spyOn(historyPages, 'readAgentSessionHistory'),
-      vi.spyOn(historyPages, 'readAgentSessionHydrationPage'),
-      vi.spyOn(subscriberFrames, 'emitSubscriberFrame'),
-      vi.spyOn(hooks, 'readCommands'),
-      vi.spyOn(hooks, 'readQueuePublication'),
-      vi.spyOn(hooks, 'readBackgroundTasks')
+      vi.spyOn(subscriberFrames, 'emitSubscriberFrame')
     ]
-    for (const visited of visits.values()) {
-      visited.mockClear()
-    }
-    await workers[0]!.append('localized')
-    expect([...visits.values()].map((visited) => visited.mock.calls.length)).toEqual([
-      1,
-      ...Array.from({ length: count - 1 }, () => 0)
-    ])
-    vi.advanceTimersByTime(300)
-    for (const [index, worker] of workers.entries()) {
-      expect(worker.onJournalActivity).toHaveBeenCalledTimes(index === 0 ? 1 : 0)
-      worker.onJournalActivity.mockClear()
-      visits.get(worker.identity.sessionId)!.mockClear()
-      expect(
-        host.collaboratorsForTests().subscribers.subscriberCountForTests(worker.identity.sessionId)
-      ).toBe(0)
-    }
     for (const worker of workers) {
-      for (let batch = 0; batch < 3; batch += 1) {
-        await worker.append(`burst-${batch}`)
-        catalogChanged()
-      }
-      expect(worker.onJournalActivity).not.toHaveBeenCalled()
-    }
-    vi.advanceTimersByTime(300)
-    for (const worker of workers) {
-      expect(visits.get(worker.identity.sessionId)).toHaveBeenCalledTimes(3)
-      expect(worker.onJournalActivity).toHaveBeenCalledExactlyOnceWith(worker.identity.sessionId)
-      worker.onJournalActivity.mockClear()
-      visits.get(worker.identity.sessionId)!.mockClear()
-      await worker.append('pending-at-release')
-    }
-    for (const worker of workers) {
-      releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
-    }
-    for (const worker of workers) {
-      visits.get(worker.identity.sessionId)!.mockClear()
-      await worker.append('after-release')
+      await worker.append('resting')
     }
     vi.advanceTimersByTime(5_000)
-    for (const worker of workers) {
-      expect(visits.get(worker.identity.sessionId)).not.toHaveBeenCalled()
-      expect(worker.onJournalActivity).not.toHaveBeenCalled()
-    }
     for (const read of reads) {
       expect(read).not.toHaveBeenCalled()
     }
@@ -687,7 +628,7 @@ describe('the structured redrive publication edge', () => {
       }
     }
     host['clientDelivery'].watchAtRestCommands(host.deps.adapter)
-    const worker = await startWorker()
+    const worker = await startWatchedWorker()
     const hooks = host.collaboratorsForTests().subscribers['hooks']
     const reads = [
       vi.spyOn(historyPages, 'readAgentSessionHistory'),
@@ -716,7 +657,7 @@ describe('the structured redrive publication edge', () => {
   })
 
   it('wakes after a tombstone settles the running turn', async () => {
-    const { identity, journal, fence, onJournalActivity } = await startWorker()
+    const { identity, journal, fence, onJournalActivity } = await startWatchedWorker()
     const turn = { provider: 'orca', clientMessageId: 'running-turn' } as const
     await journal.appendItem(
       turn,
@@ -734,7 +675,7 @@ describe('the structured redrive publication edge', () => {
   })
 
   it('still re-evaluates a journal that never goes quiet', async () => {
-    const { append, onJournalActivity } = await startWorker()
+    const { append, onJournalActivity } = await startWatchedWorker()
     for (let batch = 0; batch < 60; batch += 1) {
       await append(`batch-${batch}`)
       vi.advanceTimersByTime(100)
@@ -744,7 +685,7 @@ describe('the structured redrive publication edge', () => {
   })
 
   it('wakes on the journal rollover that resets client cursors', async () => {
-    const { identity, journal, fence, onJournalActivity } = await startWorker()
+    const { identity, journal, fence, onJournalActivity } = await startWatchedWorker()
     const before = journal.cursor()
 
     await journal.rollEpoch('unreconcilable_prefix', fence)
@@ -755,7 +696,7 @@ describe('the structured redrive publication edge', () => {
   })
 
   it('keeps the observer across close and reattach with a new fence', async () => {
-    const { host, identity, onJournalActivity } = await startWorker()
+    const { host, identity, onJournalActivity } = await startWatchedWorker()
     await reattach(identity.sessionId)
     const snapshot = vi.spyOn(host.collaboratorsForTests().subscribers, 'snapshot')
     await host.close(identity.sessionId, 'evict')
@@ -771,7 +712,7 @@ describe('the structured redrive publication edge', () => {
   })
 
   it('wakes on row-free generation end without renewing idle activity', async () => {
-    const { host, identity, journal, onJournalActivity } = await startWorker()
+    const { host, identity, journal, onJournalActivity } = await startWatchedWorker()
     const sessions = host.collaboratorsForTests().sessions
     const before = {
       cursor: journal.cursor(),
@@ -788,20 +729,10 @@ describe('the structured redrive publication edge', () => {
   })
 
   it.each(['release', 'stop', 'abandon'] as const)(
-    '%s disposes the observer and cancels pending wakes',
+    '%s frees the worker and forgets its parked mail',
     async (action) => {
-      const { host } = hostTestState()
-      const observe = host.observeJournalPublications
-      const disposed = vi.fn()
-      vi.spyOn(host, 'observeJournalPublications').mockImplementation((id, listener) => {
-        const dispose = observe(id, listener)
-        return () => {
-          disposed()
-          dispose()
-        }
-      })
-      const { identity, append, onJournalActivity } = await startWorker()
-      await append('before-release')
+      const forget = vi.spyOn(state.runtime, 'forgetStructuredSessionMail')
+      const { identity } = await startWorker()
 
       if (action === 'release') {
         releaseStructuredWorkerSession(identity.sessionId, state.runtime)
@@ -821,14 +752,8 @@ describe('the structured redrive publication edge', () => {
         await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
       }
 
-      expect(disposed).toHaveBeenCalledTimes(1)
-      // A publication after teardown must not re-arm the disposed coalescer.
-      if (action === 'stop') {
-        await reattach(identity.sessionId)
-      }
-      await append('after-release')
-      vi.advanceTimersByTime(5_000)
-      expect(onJournalActivity).not.toHaveBeenCalled()
+      expect(forget).toHaveBeenCalledWith(identity.sessionId)
+      expect(structuredWorkerIdentities.get(identity.handle)).toBeNull()
     }
   )
 })

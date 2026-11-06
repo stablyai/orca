@@ -4,8 +4,10 @@ import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
+  BROWSER_AGENT_VIEWPORT_CHANNEL,
   type BrowserAgentActivityEvent,
-  type BrowserAgentCursorEvent
+  type BrowserAgentCursorEvent,
+  type BrowserAgentViewportEvent
 } from '../../../shared/browser-agent-activity-contract'
 import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser-user-agent-mode'
@@ -70,6 +72,12 @@ export const browserPageInteractionAndSessionsApi = {
     ) => callback(data)
     ipcRenderer.on('browser:capturePaintHold', listener)
     return () => ipcRenderer.removeListener('browser:capturePaintHold', listener)
+  },
+  onAgentViewportApplied: (callback: (data: BrowserAgentViewportEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserAgentViewportEvent) =>
+      callback(data)
+    ipcRenderer.on(BROWSER_AGENT_VIEWPORT_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BROWSER_AGENT_VIEWPORT_CHANNEL, listener)
   },
   onAgentInputFocusGuard: (
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
@@ -153,6 +161,12 @@ export const browserPageInteractionAndSessionsApi = {
     ) => callback(data)
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
+  },
+  onGuestEscape: (callback: (args: { browserPageId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { browserPageId: string }) =>
+      callback(data)
+    ipcRenderer.on('browser:guestEscape', listener)
+    return () => ipcRenderer.removeListener('browser:guestEscape', listener)
   },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   onSessionProfilesChanged: (callback: () => void): (() => void) => {

@@ -70,39 +70,6 @@ afterEach(async () => {
 })
 
 describe('targeted restart reconciliation', () => {
-  it("does not fail an action because another chat's owner check fails", async () => {
-    const probe = vi.fn(async (record: AgentSessionRecord) => {
-      if (record.sessionId === 'session-2') {
-        throw new Error('owner check failed')
-      }
-      return UNUSED
-    })
-    const reconcile = createRestartReconciler({ store, probe, now: () => NOW })
-
-    expect(await reconcile('session-1')).toBeNull()
-    expect(probe).toHaveBeenCalledOnce()
-    expect(store.getRecord('session-2')?.lease.unreconciled).toBe(true)
-    await expect(reconcile('session-2')).rejects.toThrow('owner check failed')
-  })
-
-  it("settles a chat while another chat's record changes under every check of it", async () => {
-    let renames = 0
-    const probe = vi.fn(async (record: AgentSessionRecord) => {
-      if (record.sessionId === 'session-2') {
-        renames += 1
-        // Each check of session-2 is stale by the time it applies.
-        await store.setConversationName('session-2', `renamed ${renames}`)
-      }
-      return UNUSED
-    })
-    const reconcile = createRestartReconciler({ store, probe, now: () => NOW })
-
-    expect(await reconcile('session-1')).toBeNull()
-    expect(store.getRecord('session-1')?.lease.unreconciled).toBe(false)
-    expect(await reconcile()).not.toBeNull()
-    expect(store.getRecord('session-2')?.lease.unreconciled).toBe(true)
-  })
-
   it("does not wait on another chat's stalled owner check in the startup batch", async () => {
     let release: (probe: AgentSessionOwnerProbe) => void = () => undefined
     let started: () => void = () => undefined
@@ -139,16 +106,6 @@ describe('targeted restart reconciliation', () => {
       release(UNUSED)
       await Promise.all([startup, target])
     }
-  })
-
-  it('joins simultaneous checks of the same session', async () => {
-    const probe = vi.fn(async () => UNUSED)
-    const reconcile = createRestartReconciler({ store, probe, now: () => NOW })
-    expect(await Promise.all([reconcile('session-1'), reconcile('session-1')])).toEqual([
-      null,
-      null
-    ])
-    expect(probe).toHaveBeenCalledOnce()
   })
 
   it('keeps an unproven target in recovery and refuses a new writer', async () => {

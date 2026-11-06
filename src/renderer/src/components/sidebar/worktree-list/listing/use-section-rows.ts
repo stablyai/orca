@@ -3,7 +3,8 @@ import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -35,7 +36,7 @@ import {
   buildSidebarHostOptions,
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
-} from '../../sidebar-host-options'
+} from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
@@ -86,6 +87,7 @@ function createSidebarHostOptionsSelector() {
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -144,6 +146,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () =>
       planSidebarRows({
         groupBy: args.groupBy,
+        sortBy: args.sortBy,
         worktrees,
         repoMap,
         repoOfWorktree,
@@ -152,6 +155,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         workspaceStatuses: args.workspaceStatuses,
         projectOrderBy: args.projectOrderBy,
         lineageById: args.worktreeLineageById,
+        lineageParentIdentities,
         worktreeMap: args.worktreeMap,
         nestLineage: true,
         projectGroups: args.visibleProjectGroupsForRows,
@@ -168,6 +172,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      args.sortBy,
       worktrees,
       repoMap,
       repoOfWorktree,
@@ -177,6 +182,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.workspaceStatuses,
       args.projectOrderBy,
       args.worktreeLineageById,
+      lineageParentIdentities,
       args.worktreeMap,
       args.projectGrouping,
       args.visibleProjectGroupsForRows,

@@ -1,5 +1,5 @@
 import type { NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { useTabAgentMenuLaunch } from './QuickLaunchButton'
@@ -18,7 +18,7 @@ export type TabBarCreateMenuController = {
   createMenuOptions: TabCreateMenuOption[]
   windowsShellEntries: WindowsShellMenuEntry[] | undefined
   handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
-  launchAgentFromNewTabEntry: (option: TabAgentLaunchOption) => void
+  launchAgentFromNewTabEntry: (option: TabAgentLaunchOption) => boolean | Promise<boolean>
   runPendingNewTabMenuFocusAfterClose: () => void
   clearPendingNewTabMenuFocusOnUnmount: (node: HTMLDivElement | null) => void
   queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void

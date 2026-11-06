@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import {
   hasAppImagePathEnvironment,
   resolveAppImageRuntimeIdentity
-} from '../appimage-runtime-identity'
+} from '../updater/linux-package/appimage-runtime-identity'
 import {
   ensureAppImageExtractedRoot,
   resolveAppImageCacheRootPath,
@@ -16,7 +16,7 @@ import { pruneAppImageExtractedRoots } from './appimage-extraction-pruning'
 import { resolveGenerationStableLauncherPath } from './appimage-generation-stable-launcher'
 import { withAppImageRegistrationLock } from './appimage-registration-lock'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 // Only marked dispatchers may be replaced; user-owned commands must survive repeat starts.
 const DISPATCHER_MARKER = '# orca-serve-bare-orca-dispatcher'

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS,
+  agentSessionConversationCommandFields,
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session/agent-session-conversation-command'
@@ -16,7 +17,8 @@ export function useStructuredAgentSessionCommandWrite(
   write: StructuredAgentSessionWrite
 ): (
   command: AgentSessionConversationCommand,
-  delivery?: 'queue-if-active'
+  delivery?: 'queue-if-active',
+  instructions?: string
 ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>> {
   // Null once the view left or unmounted, so a reply that lands later releases its hold.
   const shown = useRef<string | null>(sessionId)
@@ -30,12 +32,12 @@ export function useStructuredAgentSessionCommandWrite(
     }
   }, [sessionId])
   return useCallback(
-    async (command, delivery) => {
+    async (command, delivery, instructions) => {
       const send = () =>
         write<AgentSessionConversationCommandResult>(
           'agentSession.conversationCommand',
           'agentSession.conversationCommand',
-          { command, ...(delivery ? { delivery } : {}) }
+          agentSessionConversationCommandFields(command, { instructions, delivery })
         )
       if (command !== 'clear') {
         return send()

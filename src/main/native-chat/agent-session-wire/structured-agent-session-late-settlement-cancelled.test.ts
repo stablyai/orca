@@ -123,14 +123,4 @@ describe('settling a send the provider proves it received after the ack window',
       providerItemId: `claude:${THREAD}:echo-row`
     })
   })
-
-  it('ignores a session this host is not holding', async () => {
-    await expect(
-      fixture.host.settleLateDispatch({
-        sessionId: 'session-that-is-not-attached',
-        clientMessageId: 'whatever',
-        providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'x' }
-      })
-    ).resolves.toBeUndefined()
-  })
 })

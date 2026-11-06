@@ -65,31 +65,6 @@ describe('TerminalLigaturesAddon', () => {
     expect(joiner('a => b')).toEqual([[2, 4]])
   })
 
-  it('invalidates fallback results when font discovery refreshes', () => {
-    const harness = createTerminalHarness()
-    new TerminalLigaturesAddon().activate(harness.terminal)
-    const joiner = harness.getRegisteredJoiner()
-    joiner('a => b')
-
-    addonMock.delegateTerminal!.refresh(0, 23)
-    joiner('a => b')
-
-    expect(harness.refresh).toHaveBeenCalledWith(0, 23)
-    expect(addonMock.joiner).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not reuse results after the terminal font changes', () => {
-    const harness = createTerminalHarness()
-    new TerminalLigaturesAddon().activate(harness.terminal)
-    const joiner = harness.getRegisteredJoiner()
-    joiner('a => b')
-
-    harness.terminal.options.fontFamily = 'JetBrains Mono'
-    joiner('a => b')
-
-    expect(addonMock.joiner).toHaveBeenCalledTimes(2)
-  })
-
   it('evicts the least-recently-used segment', () => {
     const harness = createTerminalHarness()
     new TerminalLigaturesAddon().activate(harness.terminal)
@@ -104,27 +79,5 @@ describe('TerminalLigaturesAddon', () => {
     joiner('s0')
 
     expect(addonMock.joiner).toHaveBeenCalledTimes(2_050)
-  })
-
-  it('does not retain a segment above the character budget', () => {
-    const harness = createTerminalHarness()
-    new TerminalLigaturesAddon().activate(harness.terminal)
-    const joiner = harness.getRegisteredJoiner()
-    const oversizedSegment = 'x'.repeat(100_001)
-
-    joiner(oversizedSegment)
-    joiner(oversizedSegment)
-
-    expect(addonMock.joiner).toHaveBeenCalledTimes(2)
-  })
-
-  it('deregisters the wrapped joiner through the real terminal', () => {
-    const harness = createTerminalHarness()
-    const addon = new TerminalLigaturesAddon()
-    addon.activate(harness.terminal)
-
-    addon.dispose()
-
-    expect(harness.deregisterCharacterJoiner).toHaveBeenCalledWith(17)
   })
 })

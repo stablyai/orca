@@ -1,7 +1,7 @@
 import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 
 type TerminalStreamHandler = (frame: TerminalStreamFrame) => void
 type RawMessageHandler = (bytes: Uint8Array<ArrayBufferLike>) => void

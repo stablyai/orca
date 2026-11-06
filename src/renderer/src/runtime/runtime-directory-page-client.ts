@@ -10,7 +10,7 @@ import { FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY } from '../../../shared/files-ru
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { getRemoteFileArgs } from './runtime-file-routing'
 import { callRuntimeRpc } from './runtime-rpc-client'

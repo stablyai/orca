@@ -1,7 +1,10 @@
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments, removeEnvironment } from '../../shared/runtime-environment-store'
-import { getOrcadSshDeployment } from '../../shared/runtime-environments'
+import { removeManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import {
+  listEnvironments,
+  removeEnvironment
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** Remove destroyed VM servers so managed tunnels stop reconnecting. */
 export async function releaseEphemeralVmRuntimeEnvironments(

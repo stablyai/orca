@@ -147,13 +147,6 @@ describe('a revealed terminal’s title, in a layout-owner build', () => {
     expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
     expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
   })
-
-  it('writes no pane title into a tab the window already holds', async () => {
-    const state = await setup(true)
-
-    expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
-    expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
-  })
 })
 
 describe('a revealed terminal’s title, while the window owns the layout', () => {

@@ -41,6 +41,8 @@ export function conversationCommandFailure(
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
+  /** /compact only: free text that steers the summary. */
+  instructions?: string
   /** Only /compact queues: the drain delivers provider messages; /clear needs host-side execution. */
   delivery?: 'queue-if-active'
   userSend?: true

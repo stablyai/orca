@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const wslUncDirectoryExistsAsyncMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../wsl', async (importOriginal) => {
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock }
 })

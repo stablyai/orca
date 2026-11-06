@@ -6,10 +6,8 @@ import type {
   TaskSourceHostAvailability
 } from '../task-source-context-summary'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import {
-  getTaskSourceHostAvailabilityForHost,
-  getTaskPageRepoSourceContext
-} from './task-page-source-context'
+import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import { getTaskSourceAvailabilityNotice } from '../task-source-context-summary'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'

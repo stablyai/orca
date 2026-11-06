@@ -5,5 +5,9 @@ import type { OrcaRuntimeService } from './orca-runtime'
 export function publishHeadlessRuntimeGraph(
   runtime: Pick<OrcaRuntimeService, 'syncWindowGraph'>
 ): void {
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  runtime.syncWindowGraph(
+    HEADLESS_RUNTIME_WINDOW_ID,
+    { tabs: [], leaves: [] },
+    { includeAgentSenders: false }
+  )
 }

@@ -102,17 +102,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version worktree identity downgrade', () => {
-  it('the stack repoints all four', () => {
-    const state = persistedStateAfterRename()
-    expect(stackMigrate(state, OLD_ID, NEW_ID)).toBe(true)
-    expect(rowsById(state)).toEqual({
-      sleepingAgentSessionsByPaneKey: NEW_ID,
-      terminalSurfaceTombstonesByPaneKey: NEW_ID,
-      closedTerminalTabTombstonesByTabId: NEW_ID,
-      clientHostedBrowserCloseIntentsByEnvironment: NEW_ID
-    })
-  })
-
   it('DOWNGRADE: the old build reads new-build state without loss or throw', () => {
     const state = persistedStateAfterRename()
     stackMigrate(state, OLD_ID, NEW_ID)

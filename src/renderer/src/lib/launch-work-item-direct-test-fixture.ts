@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
-import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
+import type * as TuiAgentSelectionModule from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type * as TuiAgentStartupModule from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
 import type * as RuntimeRpcSubscribeModule from '@/runtime/runtime-rpc-subscribe'
 
@@ -133,8 +133,10 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('@/lib/tui-agent-startup', async () => {
-  const actual = await vi.importActual<typeof TuiAgentStartupModule>('@/lib/tui-agent-startup')
+vi.mock('../../../shared/agent-launch/startup/tui-agent-startup', async () => {
+  const actual = await vi.importActual<typeof TuiAgentStartupModule>(
+    '../../../shared/agent-launch/startup/tui-agent-startup'
+  )
   return {
     ...actual,
     buildAgentDraftLaunchPlan: vi.fn(actual.buildAgentDraftLaunchPlan),
@@ -142,9 +144,9 @@ vi.mock('@/lib/tui-agent-startup', async () => {
   }
 })
 
-vi.mock('../../../shared/tui-agent-selection', async () => {
+vi.mock('../../../shared/agent-launch/catalog/tui-agent-selection', async () => {
   const actual = await vi.importActual<typeof TuiAgentSelectionModule>(
-    '../../../shared/tui-agent-selection'
+    '../../../shared/agent-launch/catalog/tui-agent-selection'
   )
   return {
     ...actual,

@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
@@ -12,8 +12,8 @@ import {
   isAgentCompletionState
 } from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
-import { liveResumeRecord } from '../../../../../shared/agent-resume-record-from-status'
-import { agentMainAgentVerdict } from '../../../../../shared/agent-main-agent-verdict'
+import { liveResumeRecord } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { agentMainAgentVerdict } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
   existingSleepingRecord: SleepingAgentSessionRecord | undefined

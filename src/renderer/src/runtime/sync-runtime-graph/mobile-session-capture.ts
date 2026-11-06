@@ -9,7 +9,7 @@ import {
   findRegisteredTerminalTab,
   type RegisteredTerminalTab
 } from '../mounted-terminal-tab-registry'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function narrowRecordByKeys<T>(
   source: Record<string, T> | undefined,

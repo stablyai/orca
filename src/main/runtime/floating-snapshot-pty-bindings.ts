@@ -1,4 +1,4 @@
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab

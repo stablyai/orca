@@ -76,7 +76,16 @@ export type OrcadDeployOptions = {
 export type OrcadDeployResult =
   | { outcome: 'installed-and-activated'; fullVersion: string; verdict: OrcadActivationVerdict }
   | { outcome: 'already-active'; fullVersion: string }
-  | { outcome: 'installed-not-activated'; fullVersion: string; code: string; reason: string }
+  | {
+      outcome: 'installed-not-activated'
+      fullVersion: string
+      code: string
+      reason: string
+      /** The candidate's own preflight or launch check failed; a deferral never sets this. */
+      startCheckFailed?: true
+      /** This deploy uploaded the slot rather than finding it already installed. */
+      freshlyInstalled?: true
+    }
 
 export async function deployOrcad(
   input: OrcadDeployOptions,
@@ -130,12 +139,12 @@ export async function deployOrcad(
     return held()
   }
 
-  await installOrcadBundle(options, fullVersion, remoteDir)
+  const installed = await installOrcadBundle(options, fullVersion, remoteDir)
   if (options.sameVersionFencedByCaller && preUploadRecord.active === fullVersion) {
     return { outcome: 'already-active', fullVersion }
   }
 
-  return logOrcadActivationOutcome(
+  const result = await logOrcadActivationOutcome(
     `update to ${fullVersion}`,
     () =>
       withOrcadActivationLock(
@@ -146,4 +155,7 @@ export async function deployOrcad(
       ),
     ['installed-and-activated', 'already-active']
   )
+  return installed === 'uploaded' && result.outcome === 'installed-not-activated'
+    ? { ...result, freshlyInstalled: true }
+    : result
 }

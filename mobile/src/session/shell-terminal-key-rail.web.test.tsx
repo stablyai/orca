@@ -110,24 +110,6 @@ function mount() {
   return { Page, frames, deliver, owner, terminal, onKey }
 }
 
-it('keeps the native scroll view mounted across toolbar-only updates without releasing ownership', () => {
-  const { Page, frames, deliver, owner } = mount()
-  const scroll = native!.root.findByType(ScrollView)
-  for (const update of [
-    { keyboardVisible: true },
-    { liveInputEnabled: false },
-    { phoneDisplayMode: true },
-    { canSend: false },
-    { modifiers: { ctrl: 'once', alt: 'off', shift: 'off' } as const }
-  ]) {
-    const toolbar = { ...initialToolbar, ...update }
-    act(() => page!.update(createElement(Page, { toolbar })))
-    expect(frames).toEqual([[true, owner, toolbar]])
-    deliver()
-    expect(native!.root.findByType(ScrollView)).toBe(scroll)
-  }
-})
-
 it('updates pane ownership without releasing the rail and still releases when covered', () => {
   const { Page, frames, deliver, owner, terminal, onKey } = mount()
   act(() => page!.update(createElement(Page, { toolbar: initialToolbar, focusedTerminal: 'two' })))

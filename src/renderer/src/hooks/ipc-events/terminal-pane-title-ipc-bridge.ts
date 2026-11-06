@@ -6,8 +6,8 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layou
 import { findTerminalTabWorktreeId } from '@/components/native-chat/native-chat-file-link'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { useAppStore } from '../../store'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 

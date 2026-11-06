@@ -61,6 +61,11 @@ export function structuredSessionMailReach(
     resolveLineageRunningSession(store, record.sessionId),
     (id) => Boolean(addressableSessionParty(id, db, canonicalStore)),
     () => {
+      // One keyed question per check, never every visible tab to find one.
+      const retired = store.isSessionTabRetired
+      if (retired) {
+        return { present: true, isListed: (id: string) => !retired(id) }
+      }
       const visible = store.getVisibleSessionTabIndex?.()
       return visible
         ? { present: visible.present, isListed: (id: string) => visible.sessionIds.includes(id) }

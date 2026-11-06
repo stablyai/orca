@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { translate } from '@/i18n/i18n'
-import { formatTimeAgo, getProviderDisplayName, ProviderIcon, ProviderPanel } from './tooltip'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
+import { formatTimeAgo, ProviderIcon, ProviderPanel } from './tooltip'
 
 export function ProviderIdentityCard({
   p,

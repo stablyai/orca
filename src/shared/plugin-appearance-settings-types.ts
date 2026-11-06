@@ -1,4 +1,4 @@
-import type { TerminalPluginPalette } from './terminal-color-overrides'
+import type { TerminalPluginPalette } from './terminal-themes/terminal-color-overrides'
 
 /** A code editor theme: a plugin app theme of either base, or the built-in light or dark colors. */
 export type CodeEditorThemeChoice = 'light' | 'dark' | `plugin:${string}`

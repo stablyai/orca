@@ -4,7 +4,7 @@ import type {
   CreateHostedReviewResult,
   HostedReviewInfo,
   HostedReviewProvider
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   getAzureDevOpsPullRequest,
   getAzureDevOpsPullRequestForBranchOrThrow,
@@ -309,21 +309,4 @@ export const FORGE_PROVIDERS = [
 
 export function getForgeProviderById(id: ForgeProviderId): ForgeProvider {
   return FORGE_PROVIDERS.find((provider) => provider.id === id) ?? gitHubForgeProvider
-}
-
-export async function getForgeProviderForRepository(
-  context: ForgeProviderRepositoryContext
-): Promise<ForgeProvider | null> {
-  for (const provider of FORGE_PROVIDERS) {
-    if (await provider.resolveRepository(context)) {
-      return provider
-    }
-  }
-  return null
-}
-
-export async function detectHostedReviewProvider(
-  context: ForgeProviderRepositoryContext
-): Promise<HostedReviewProvider> {
-  return (await getForgeProviderForRepository(context))?.id ?? 'unsupported'
 }

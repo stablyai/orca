@@ -28,6 +28,20 @@ describe('PtyProcessListAdmission', () => {
     ).toThrow('invalid_pty_process_list')
   })
 
+  it('carries a WSL guest root and rejects a malformed one instead of stripping it', () => {
+    const session = {
+      id: 'pty',
+      cwd: '/',
+      title: 'shell',
+      wslDistro: 'Ubuntu',
+      wslGuestRoot: { pid: 4242, startTime: '0b1d2c3e-4f50-4617-8293-a4b5c6d7e8f9:98765' }
+    }
+    expect(new PtyProcessListAdmission().admit(session)).toEqual(session)
+    expect(() =>
+      new PtyProcessListAdmission().admit({ ...session, wslGuestRoot: { pid: 1, startTime: 'x' } })
+    ).toThrow('invalid_pty_process_list')
+  })
+
   it('admits diagnostic provenance and rejects malformed routing evidence', () => {
     const session = {
       id: 'pty',

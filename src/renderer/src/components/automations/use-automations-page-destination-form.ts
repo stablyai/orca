@@ -1,3 +1,4 @@
+import { resolveAutomationEditDestination } from './automation-orca-save-operations'
 import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
 import {
   recordedAutomationRunContext,
@@ -128,6 +129,27 @@ export function useAutomationsPageDestinationForm({
     automationAuthorityCatalogKey(editHostResolution.authority) !== dialogAuthorityKey
       ? editHostResolution.entry
       : null
+  const editSaveDestination = resolveAutomationEditDestination({
+    currentAutomation: editingRow?.automation ?? null,
+    editingAutomationId,
+    editingDestination: local.editingDestination,
+    draft,
+    targetEdited: local.targetEdited,
+    rowKey: editingRowKey,
+    automationDialogTarget,
+    editHostEntries,
+    rowRecoveryHost: base.rowRecoveryHost
+  })
+  const editorSaveAuthority =
+    editingAutomationId === null
+      ? base.createDestination.control.resolution.status === 'ready'
+        ? base.createDestination.control.resolution.authority
+        : undefined
+      : local.targetEdited
+        ? editSaveDestination.ok && editHostResolution.status === 'ready'
+          ? editHostResolution.authority
+          : undefined
+        : (captured.authority ?? base.automationDispatchContext.authority)
   const editDestinationRuntimeEnvironmentId =
     editHostResolution.status === 'ready' && editHostResolution.authority.kind === 'runtime'
       ? editHostResolution.authority.environmentId
@@ -242,6 +264,7 @@ export function useAutomationsPageDestinationForm({
 
   return {
     editingRow,
+    editorSaveAuthority,
     recordedTargetSelected,
     editingRowCapturedOwner,
     automationDialogTarget,

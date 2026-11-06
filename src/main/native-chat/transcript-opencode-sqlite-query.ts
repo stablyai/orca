@@ -1,6 +1,6 @@
-import { openOpenCodeDatabaseReadonly } from '../ai-vault/session-scanner-opencode-sqlite-open'
-import { zcodeVisibleMessageFilter } from '../ai-vault/session-scanner-zcode-visibility'
-import { zcodeTranscriptOrder } from '../ai-vault/session-scanner-zcode-order'
+import { openOpenCodeDatabaseReadonly } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
+import { zcodeVisibleMessageFilter } from '../ai-vault/scanners/zcode/session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from '../ai-vault/scanners/zcode/session-scanner-zcode-order'
 import {
   readOpenCode2TranscriptPage,
   readOpenCode2TranscriptSignal

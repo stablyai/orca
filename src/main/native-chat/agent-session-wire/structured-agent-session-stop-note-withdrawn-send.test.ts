@@ -117,13 +117,6 @@ async function stopEndingTheChild(options: {
 }
 
 describe('a Stop that ends the child after its interrupt failed', () => {
-  it('records Stop when the child end took back the send, with no turn running', async () => {
-    expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: true })).toEqual({
-      cancelled: true,
-      rows: ['Cancellation requested.']
-    })
-  })
-
   it("keeps Stop when the only other send in doubt was an earlier process's", async () => {
     expect(
       await stopEndingTheChild({

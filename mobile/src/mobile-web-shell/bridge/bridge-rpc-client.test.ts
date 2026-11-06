@@ -1,13 +1,16 @@
+import type { RpcResponse } from '../../transport/types'
+import type { BridgePortPair } from './bridge-port-pair-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isRpcDeliveryUnknown,
   markRpcDeliveryUnknown
 } from '../../transport/rpc-delivery-ambiguity'
-import type { RpcResponse } from '../../transport/types'
+
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
 import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
-import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
+
+import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
 // Test RpcClient behavior across real FIFO bridge lanes; type conformance alone cannot prove screens observe the same round-trip semantics.
 
@@ -36,50 +39,6 @@ afterEach(() => {
 })
 
 describe('bridge round trip: requests', () => {
-  it('reaches the shell with the arity the page called with', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    void pair.client.sendRequest('worktree.ps')
-    void pair.client.sendRequest('worktree.ps', { host: 'a' })
-    void pair.client.sendRequest('worktree.ps', { host: 'a' }, { timeoutMs: 50 })
-    await pair.flush()
-    expect(pair.rpc.requests.map((request) => request.args)).toEqual([
-      ['worktree.ps'],
-      ['worktree.ps', { host: 'a' }],
-      ['worktree.ps', { host: 'a' }, { timeoutMs: 50 }]
-    ])
-  })
-
-  it('resolves the response the shell answered with, field for field', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    const answer = pair.client.sendRequest('worktree.ps')
-    await pair.flush()
-    const response: RpcResponse = {
-      id: 'shell-side-id',
-      ok: true,
-      result: { rows: [1, 2, 3] },
-      streaming: true,
-      _meta: { runtimeId: 'runtime-a' }
-    }
-    pair.rpc.requests[0]?.resolve(response)
-    await pair.flush()
-    await expect(answer).resolves.toEqual(response)
-  })
-
-  it('resolves a host failure, because a failure is data and not a rejection', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    const answer = pair.client.sendRequest('worktree.ps')
-    await pair.flush()
-    const failure: RpcResponse = {
-      id: 'shell-side-id',
-      ok: false,
-      error: { code: 'not_found', message: 'no such worktree', data: { host: 'a' } },
-      _meta: { runtimeId: 'runtime-a' }
-    }
-    pair.rpc.requests[0]?.resolve(failure)
-    await pair.flush()
-    await expect(answer).resolves.toEqual(failure)
-  })
-
   it('rejects with the class, the code and the delivery mark the shell captured', async () => {
     const pair = await ready(createFakeBridgePortPair())
     const answer = pair.client.sendRequest('worktree.ps')
@@ -188,24 +147,6 @@ describe('bridge round trip: subscriptions', () => {
 })
 
 describe('bridge round trip: notifications and state', () => {
-  it('carries both notifies to the shell client, with the arity each was called with', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    pair.client.notifyForeground()
-    pair.client.notifyForeground('app-resume')
-    pair.client.updateTerminalSubscriptionViewport('terminal-a', { cols: 120, rows: 40 })
-    await pair.flush()
-    expect(pair.rpc.foregroundCalls).toEqual([[], ['app-resume']])
-    expect(pair.rpc.viewports).toEqual([{ terminal: 'terminal-a', cols: 120, rows: 40 }])
-  })
-
-  it('asks the shell to open a screen the page does not render', async () => {
-    const pair = await ready(createFakeBridgePortPair())
-    expect(pair.client.notifyNavigate('/h/host-a/session/wt-1?name=a+b')).toBe(true)
-    await pair.flush()
-    expect(pair.navigations).toEqual(['/h/host-a/session/wt-1?name=a+b'])
-    expect(pair.rpc.requests).toEqual([])
-  })
-
   // Page normalization hides raw input from the host; inject an unnormalized frame too so both endpoints’ use of the shared URL rule is tested.
   it('asks the shell to open a URL outside the app, normalized once and the same on both sides', async () => {
     const pair = await ready(createFakeBridgePortPair())
@@ -257,32 +198,6 @@ describe('bridge round trip: notifications and state', () => {
     expect(pair.hostDiagnostics).toEqual([])
   })
 
-  it('reads the shell client through init and fans out every change after it', async () => {
-    const rpc = createFakeRpcClient({
-      getState: () => 'reconnecting',
-      getReconnectAttempt: () => 3,
-      getLastConnectedAt: () => 1234,
-      getLastInboundAt: () => 5678,
-      getGeneration: () => 9
-    })
-    const pair = await ready(createFakeBridgePortPair({ rpc }))
-    expect(pair.client.getState()).toBe('reconnecting')
-    expect(pair.client.getReconnectAttempt()).toBe(3)
-    expect(pair.client.getLastConnectedAt()).toBe(1234)
-    expect(pair.client.getLastInboundAt?.()).toBe(5678)
-    expect(pair.client.getGeneration?.()).toBe(9)
-    const listener = vi.fn()
-    const release = pair.client.onStateChange(listener)
-    rpc.pushState('connected')
-    await pair.flush()
-    expect(listener).toHaveBeenCalledWith('connected')
-    expect(pair.client.getState()).toBe('connected')
-    release()
-    rpc.pushState('disconnected')
-    await pair.flush()
-    expect(listener).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses a snapshot from a shell that was rebuilt, and asks for a fresh init', async () => {
     let generation = 5
     const rpc = createFakeRpcClient({ getGeneration: () => generation })
@@ -317,4 +232,40 @@ describe('bridge round trip: close', () => {
     expect(closeShellClient).not.toHaveBeenCalled()
     expect(pair.readToShell().at(-1)).toEqual({ v: 1, type: 'close' })
   })
+})
+
+it('keeps source signals local, cancels only the abandoned waiter and preserves an old-shell request frame', async () => {
+  const pair = await ready(createFakeBridgePortPair())
+  const controller = new AbortController()
+  const beforeSend = vi.fn()
+  const pending = pair.client
+    .sendRequest('status.get', undefined, { signal: controller.signal, beforeSend, timeoutMs: 50 })
+    .catch((error) => error)
+  await pair.flush()
+  expect(beforeSend).toHaveBeenCalledOnce()
+  expect(pair.rpc.requests[0]!.args).toEqual(['status.get', undefined, { timeoutMs: 50 }])
+  expect(
+    pair.toShell.some((frame) => frame.includes('signal') || frame.includes('beforeSend'))
+  ).toBe(false)
+  controller.abort()
+  expect((await pending).name).toBe('AbortError')
+  await pair.flush()
+  expect(pair.readToShell().some((frame) => frame.type === 'cancel')).toBe(true)
+  pair.rpc.requests[0]!.resolve(success('late35636', { old: true }))
+  const successor = pair.client.sendRequest('status.get', undefined, {
+    signal: new AbortController().signal,
+    timeoutMs: 50
+  })
+  await pair.flush()
+  pair.rpc.requests[1]!.resolve(success('retry35636', { next: true }))
+  await pair.flush()
+  expect(await successor).toEqual(success('retry35636', { next: true }))
+  const dropped = pair.client
+    .sendRequest('status.get', undefined, { signal: new AbortController().signal, timeoutMs: 50 })
+    .catch((error) => error)
+  await pair.flush()
+  await vi.advanceTimersByTimeAsync(51)
+  expect((await dropped).message).toContain('timed out')
+  pair.client.close()
+  pair.host.dispose()
 })

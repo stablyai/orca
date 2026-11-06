@@ -27,7 +27,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
+import { structuredAgentRuntimeRegistration } from '../../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 let root: string

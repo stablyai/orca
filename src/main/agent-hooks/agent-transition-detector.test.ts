@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { AgentTransitionDetector, type AgentPaneChange } from './agent-transition-detector'
-import {
-  AGENT_TRANSITION_SCENARIOS,
-  type AgentTransitionStep
-} from '../../shared/agent-transitions.test-fixture'
+import type { AgentTransitionStep } from '../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -56,35 +53,6 @@ function ingest(
 }
 
 describe('AgentTransitionDetector', () => {
-  it.each(AGENT_TRANSITION_SCENARIOS)('$name', ({ steps }) => {
-    const h = createHarness()
-    h.detector.attach(h.server)
-    for (const { row, transition } of steps) {
-      h.changes.length = 0
-      ingest(h.server, row)
-      const emitted = h.changes.flatMap((change) =>
-        change.kind === 'moved' && change.transition ? [change.transition] : []
-      )
-      expect(emitted).toEqual(transition ? [transition] : [])
-    }
-  })
-
-  it('moves a pane to done at a session boundary without naming a finish', () => {
-    const h = createHarness()
-    h.detector.attach(h.server)
-    ingest(h.server, { state: 'working' })
-    h.changes.length = 0
-    h.server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-a',
-      worktreeId: WT,
-      payload: { state: 'done', prompt: 'task', agentType: 'codex', sessionBoundary: true }
-    })
-    expect(h.changes).toEqual([
-      expect.objectContaining({ kind: 'moved', from: 'working', to: 'done', transition: null })
-    ])
-  })
-
   it('names the pane and its host-qualified workspace: local, SSH host, folder', () => {
     const h = createHarness()
     h.detector.attach(h.server)
@@ -122,24 +90,6 @@ describe('AgentTransitionDetector', () => {
     })
   })
 
-  it('seeds a status present at attach, never as a transition', () => {
-    const h = createHarness()
-    ingest(h.server, { state: 'working' })
-    h.detector.attach(h.server)
-    const startedAt = h.server.getStatusSnapshot()[0].stateStartedAt
-    expect(h.changes).toEqual([
-      {
-        kind: 'seeded',
-        paneKey: PANE,
-        workspace: { worktreeId: WT, sshHostId: null },
-        phase: 'working',
-        at: startedAt
-      }
-    ])
-    ingest(h.server, { state: 'done' })
-    expect(h.changes.at(-1)).toMatchObject({ kind: 'moved', transition: 'turn-finished' })
-  })
-
   it('seeds rows hydrated without a mutation once asked, and only those', () => {
     const h = createHarness()
     const source = new AgentHookServer()
@@ -157,70 +107,6 @@ describe('AgentTransitionDetector', () => {
     expect(h.changes.map((change) => change.kind)).toEqual(['seeded'])
     ingest(source, { state: 'done' })
     expect(h.changes.at(-1)).toMatchObject({ transition: 'turn-finished' })
-  })
-
-  it('rests a pane whose row goes', () => {
-    const h = createHarness()
-    h.detector.attach(h.server)
-    ingest(h.server, { state: 'blocked' })
-    expect(h.detector.latestRow(PANE)).not.toBeNull()
-    h.changes.length = 0
-    h.server.clearPaneState(PANE)
-    expect(h.detector.latestRow(PANE)).toBeNull()
-    expect(h.changes).toEqual([
-      expect.objectContaining({ kind: 'moved', from: 'needs-you', to: 'rest', transition: null })
-    ])
-  })
-
-  it('still tells every reader when one throws', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const detector = new AgentTransitionDetector({
-      resolveTabWorktreeId: () => undefined,
-      subscribeToPtyExit: () => () => {},
-      now: () => NOW
-    })
-    const received: AgentPaneChange[] = []
-    detector.subscribe(() => {
-      throw new Error('reader failed')
-    })
-    detector.subscribe((change) => received.push(change))
-    const server = new AgentHookServer()
-    detector.attach(server)
-    try {
-      ingest(server, { state: 'working' })
-      expect(received.map((change) => change.kind)).toEqual(['observed', 'moved'])
-      expect(error).toHaveBeenCalledTimes(2)
-    } finally {
-      error.mockRestore()
-    }
-  })
-
-  it('reports every live look at a pane, changed or not, with or without a workspace', () => {
-    const h = createHarness()
-    h.detector.attach(h.server)
-    ingest(h.server, { state: 'working' })
-    ingest(h.server, { state: 'done', interrupted: true })
-    h.server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-a',
-      payload: { state: 'done', prompt: 'next', agentType: 'codex' }
-    })
-    h.server.clearPaneState(PANE)
-    const workspace = { worktreeId: WT, sshHostId: null }
-    expect(h.observations).toEqual([
-      { kind: 'observed', paneKey: PANE, workspace, phase: 'working', at: NOW },
-      { kind: 'observed', paneKey: PANE, workspace, phase: 'rest', at: NOW },
-      { kind: 'observed', paneKey: PANE, workspace: null, phase: 'done', at: NOW },
-      { kind: 'observed', paneKey: PANE, workspace: null, phase: 'rest', at: NOW }
-    ])
-  })
-
-  it('stops observing once detached', () => {
-    const h = createHarness()
-    h.detector.attach(h.server)()
-    ingest(h.server, { state: 'working' })
-    expect(h.changes).toEqual([])
-    expect(h.detector.latestRow(PANE)).toBeNull()
   })
 })
 

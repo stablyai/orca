@@ -76,16 +76,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Pairs with attestAgentHookCompatibilityAuthority.'
   },
   {
-    wiring: 'ctor:getPairedDeviceName',
-    missingOn: 'orcad',
-    reason: 'Unwired gap (follow-up): client-hosted browser rows show no paired-device name.'
-  },
-  {
-    wiring: 'ctor:orchestrationEnvironmentTransport',
-    missingOn: 'orcad',
-    reason: 'Cross-environment orchestration dials paired environments from the desktop only.'
-  },
-  {
     wiring: 'ctor:skillTransactionRecovery',
     missingOn: 'orcad',
     reason:
@@ -165,6 +155,68 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
   }
 ]
 
+type WindowAttachStart = {
+  reason: string
+  /** Where each headless host starts its own equivalent; omitted only when none needs one. */
+  headless?: Record<Root, { file: string; call: string }>
+}
+
+/** Background work started when a desktop window attaches; headless hosts never attach one (#37256). */
+const WINDOW_ATTACH_STARTS: Readonly<Record<string, WindowAttachStart>> = {
+  automations: {
+    reason: 'The desktop binds automations to its window; headless hosts start them at launch.',
+    headless: {
+      electron: {
+        file: 'src/main/startup/main-process-runtime-launch.ts',
+        call: 'automations?.start()'
+      },
+      orcad: { file: 'src/main/orcad/orcad-entry.ts', call: 'startOrcadAutomations(' }
+    }
+  },
+  'rateLimits.attach': {
+    reason: 'A focused window is one usage watcher; the shared account composition runs the poller.'
+  },
+  initTccPromptNotice: { reason: 'macOS privacy-prompt notices render in the window.' },
+  installPluginDesktopFrameServices: { reason: 'Plugin frames render inside the window.' },
+  attachMainWindowServices: {
+    reason: 'Window IPC and renderer wiring; its starts are listed here.'
+  },
+  hydrateLocalPtyRegistryAtBoot: {
+    reason: 'Headless PTY registration hydrates the same registry.',
+    headless: {
+      electron: {
+        file: 'src/main/startup/main-process-runtime-launch.ts',
+        call: 'registerHeadlessPtyRuntime('
+      },
+      orcad: { file: 'src/main/orcad/orcad-entry.ts', call: 'registerHeadlessPtyRuntime(' }
+    }
+  },
+  scheduleMainWindowAutoUpdaterSetup: {
+    reason: 'Serve sets up its own updater; orcad is updated by the client that manages it.'
+  },
+  scheduleWorktreeBaseDirectoryWatcherSync: {
+    reason: 'Unwired gap (follow-up): external worktree changes on a headless host push nothing.'
+  },
+  startFolderRepoGitUpgradeWatch: {
+    reason:
+      'Unwired gap (follow-up): git init in a headless folder project needs a manual type change.'
+  },
+  scheduleHistoryGc: {
+    reason: 'Unwired gap (follow-up): headless hosts never prune history of vanished worktrees.'
+  },
+  'openCodeHookService.configDirGc.schedule': {
+    reason: 'Unwired gap (follow-up): headless hosts never prune stale OpenCode overlays.'
+  },
+  'openCode2HookService.configDirGc.schedule': {
+    reason: 'Unwired gap (follow-up): headless hosts never prune stale OpenCode overlays.'
+  }
+}
+
+const WINDOW_ATTACH_SOURCES = [
+  { file: 'src/main/startup/main-window-core-services.ts', fn: 'attachMainWindowCoreServices' },
+  { file: 'src/main/window/attach-main-window-services.ts', fn: 'attachMainWindowServices' }
+] as const
+
 const UNWIRED_CONSTRUCTION_OPTIONS: Readonly<Record<string, string>> = {}
 
 const POSITIONAL_CONSTRUCTOR_PARAMETERS = ['stats'] as const
@@ -210,6 +262,10 @@ const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
   'accountLaunch?.runtimeDeps': {
     file: 'src/main/orcad/orcad-account-services.ts',
     anchor: 'runtimeDeps: {'
+  },
+  'pairedEnvironments.runtimeOptions': {
+    file: 'src/main/orcad/orcad-paired-environment-options.ts',
+    anchor: 'runtimeOptions: {'
   },
   'orcadWsPortOptions(': { file: 'src/main/orcad/orcad-ws-port-policy.ts', anchor: 'wsPort: port' }
 }
@@ -404,6 +460,31 @@ function sourceFilesUnder(dir: string): string[] {
     .map((file) => join(dir, file).split(sep).join('/'))
 }
 
+function functionBody(source: string, name: string): string {
+  const at = source.indexOf(`export function ${name}(`)
+  if (at === -1) {
+    throw new Error(`function not found: ${name}`)
+  }
+  const open = source.indexOf('(', at)
+  const paramsEnd = open + parenGroup(source, open).length + 1
+  return braceGroup(source, source.indexOf('{', paramsEnd))
+}
+
+/** Calls whose final member starts, schedules, hydrates, initializes, attaches or installs something. */
+function windowAttachStarts(): Set<string> {
+  const starts = new Set<string>()
+  for (const { file, fn } of WINDOW_ATTACH_SOURCES) {
+    const body = functionBody(read(file), fn)
+    for (const [, callee] of body.matchAll(
+      /(?<![\w$.])((?:[A-Za-z_$][\w$]*\??\.)*(?:start|schedule|hydrate|init|attach|install)[\w$]*)(?:\?\.)?\(/g
+    )) {
+      const path = callee.replaceAll('?', '')
+      starts.add(path.endsWith('.start') ? path.slice(0, -'.start'.length) : path)
+    }
+  }
+  return starts
+}
+
 function declaredConstructionOptions(): string[] {
   const source = read('src/main/runtime/construction/runtime-construction-dependencies.ts')
   const inner = objectLiteralAfter(source, 'export type RuntimeConstructionDependencies = {')
@@ -425,6 +506,9 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'ctor:getLocalProvider',
       'ctor:onTerminalAgentStatus',
       'ctor:agentSessionClaimSigner',
+      // #36853: without it a headless Run home refuses worker-start --on with server_required.
+      'ctor:orchestrationEnvironmentTransport',
+      'ctor:getPairedDeviceName',
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
       'runtime.setAccountServices',
@@ -497,6 +581,16 @@ describe('runtime composition parity (Electron vs orcad)', () => {
     }
   })
 
+  it('accounts for every service a desktop window starts, which headless hosts never attach', () => {
+    expect([...windowAttachStarts()].sort()).toEqual(Object.keys(WINDOW_ATTACH_STARTS).sort())
+    for (const [start, { headless }] of Object.entries(WINDOW_ATTACH_STARTS)) {
+      for (const [root, counterpart] of Object.entries(headless ?? {})) {
+        expect(read(counterpart.file), `${root} ${start}`).toContain(counterpart.call)
+      }
+    }
+  })
+
+  // #37256: one composition runs the usage poller on desktop, Electron serve and orcad alike.
   it('lists each advertised-but-unserved capability against what the host advertises', () => {
     for (const difference of DECLARED_HOST_DIFFERENCES) {
       expect(difference.reason, difference.wiring).not.toBe('')

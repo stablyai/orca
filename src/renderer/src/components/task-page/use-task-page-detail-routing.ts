@@ -3,7 +3,7 @@ import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
   projectLinearIssue,
   registerLinearIssueConsumer
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-write-publication'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import type { TaskPageGitHubIssueDraftModel } from './github/use-task-page-github-issue-draft'
 import { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react'

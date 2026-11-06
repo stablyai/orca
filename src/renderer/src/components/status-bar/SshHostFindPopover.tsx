@@ -9,7 +9,7 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
-import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
+import { STATUS_LABELS, statusColor } from '../settings/ssh/targets/SshTargetCard'
 import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 import { findSshHostMatches, type SshStatusMenuTarget } from './ssh-status-menu-rows'
 import {

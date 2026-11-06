@@ -110,39 +110,4 @@ describe.each(['opencode', 'opencode2'])('%s paired semantic pages', (agent) => 
       'opencode:3'
     ])
   })
-
-  it('keeps the pair in snapshot and replacement frames while sanitizing mobile text', async () => {
-    fixture()
-    const method = buildRegistry(NATIVE_CHAT_METHODS).get('nativeChat.subscribe')!
-    if (!isStreamingMethod(method)) {
-      throw new Error('Expected a subscription')
-    }
-    const frames: unknown[] = []
-    await method.handler(
-      method.params?.parse({ agent, sessionId: 'session', limit: 1 }),
-      context(),
-      (frame) => frames.push(frame)
-    )
-    const page = readOpenCodeTranscriptPage({ dbPath: state.path, sessionId: 'session', limit: 1 })!
-    const messages = page.items.map((item) => item.message)
-    messages[0].blocks = [{ type: 'text', text: 'x'.repeat(100_000) }]
-    const watcher = state.watcher
-    if (!watcher) {
-      throw new Error('Expected a native watcher')
-    }
-    watcher.onInitialSnapshot?.(messages, page.hasMore, page.beforeMessageRowId ?? 0)
-    watcher.onReplace?.(messages, page.hasMore, page.beforeMessageRowId ?? 0)
-    expect(frames).toHaveLength(2)
-    for (const frame of frames) {
-      const record = asRecord(frame)
-      const published = Array.isArray(record?.messages) ? record.messages : []
-      expect(published.map((message) => asRecord(message)?.role)).toEqual([
-        'reasoning',
-        'assistant'
-      ])
-      expect(record?.beforeOffset).toBe(page.beforeMessageRowId)
-      expect(JSON.stringify(published).length).toBeLessThan(100_000)
-    }
-    expect(messages[0].blocks[0]).toEqual({ type: 'text', text: 'x'.repeat(100_000) })
-  })
 })

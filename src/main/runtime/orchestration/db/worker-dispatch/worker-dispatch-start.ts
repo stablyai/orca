@@ -160,6 +160,13 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
+    if (creatorDispatchId && this.isWorkerStopRequested(creatorDispatchId)) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${creatorDispatchId} is being stopped, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
     const accepting = params.mutationReceipt ?? params.acceptedBy
     if (accepting) {
       this.db

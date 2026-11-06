@@ -18,6 +18,8 @@ export const STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY =
 // Save names only on rename-capable hosts; older hosts retain the local tab alias.
 export const STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY =
   'agent-session.structured.rename.v1' as const
+// A client that names chats without reading them (the paired CLI) asks for agentSession.rename alone.
+export const AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY = 'agent-session.rename-only.v1' as const
 // Negotiate resumeFrom before sending: old strict create schemas reject it, while unproven acceptance could silently start a blank chat.
 export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
   'agent-session.structured.resume-history.v1' as const
@@ -35,12 +37,19 @@ export const STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY =
 // Only these hosts admit the conversation after its source terminal closes.
 export const STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY =
   'agent-session.structured.close-terminal-for-chat.v1' as const
+// createSupport's resumeFrom: strict params on older hosts reject it, and they refuse only at create.
+export const STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY =
+  'agent-session.structured.resume-writer-admission.v1' as const
 // Gate the availability stream because old decoders silently drop its opcode; fall back to client facts/createSupport on click.
 export const STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY =
   'agent-session.structured.availability.v1' as const
 
 export const AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY =
   'agent-session.coherent-model-catalog.v1' as const
+
+// Older hosts reject unknown catalog keys; this observation never writes a chat option.
+export const AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY =
+  'agent-session.model-catalog.model-efforts.v1' as const
 
 export const AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY =
   'agent-session.commands-on-request.v1' as const
@@ -49,6 +58,7 @@ export const STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
+  AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
@@ -57,6 +67,7 @@ export const STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,

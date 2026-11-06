@@ -1,4 +1,4 @@
-import { formatAgentTypeLabel } from '../../../../src/shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../../src/shared/agent-status/presentation/agent-type-label'
 import { describeLoadError } from '../../components/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-producer'
@@ -16,8 +16,9 @@ import {
   isImageRefBlock,
   type NativeChatMessage
 } from '../../../../src/shared/native-chat/native-chat-types'
-import type { AgentType } from '../../../../src/shared/agent-status-types'
+import type { AgentType } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { orderNativeChatDisplayMessages } from '../../../../src/shared/native-chat/transcript/native-chat-message-order'
 import { translate } from '../../i18n/mobile-i18n'
 
 function mobileNativeChatEmptyStateCopy(
@@ -91,6 +92,7 @@ export type MobileNativeChatPendingItem = {
   text: string
   images?: string[]
   sentAt?: number
+  pendingSend?: NativeChatMessage['pendingSend']
 }
 
 export function foldMobileNativeChatMessages(
@@ -146,13 +148,12 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  // Desktop order: transcript rows, then the streaming preview, then unmatched echoes in send order.
-  const data: NativeChatMessage[] = [...renderedFolded]
+  const transient: NativeChatMessage[] = []
   if (streaming) {
-    data.push(nativeChatStreamingMessage(streaming))
+    transient.push(nativeChatStreamingMessage(streaming))
   }
   for (const item of pending) {
-    data.push({
+    transient.push({
       id: item.id,
       role: 'user',
       blocks: [
@@ -160,8 +161,13 @@ export function buildMobileNativeChatTransientData({
         ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
       ],
       timestamp: item.sentAt ?? null,
+      pendingSend: item.pendingSend ?? 'active',
       source: 'transcript'
     })
   }
-  return { folded: renderedFolded, streaming, data }
+  return {
+    folded: renderedFolded,
+    streaming,
+    data: [...renderedFolded, ...orderNativeChatDisplayMessages(transient)]
+  }
 }

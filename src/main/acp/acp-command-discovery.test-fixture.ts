@@ -36,12 +36,13 @@ export class CommandDiscoveryChild extends FakeAcpChild {
 
 export async function commandDiscoveryRig(
   script?: (child: CommandDiscoveryChild) => void,
-  overrides: Partial<AcpAtRestCommandDeps> = {}
+  overrides: Partial<AcpAtRestCommandDeps> = {},
+  spec = OMP
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-31999-commands-'))
   const workspacePath = (id: string) => join(root, 'work', id)
   const children: CommandDiscoveryChild[] = []
-  const catalog = new AcpAtRestCommandCatalog(OMP, {
+  const catalog = new AcpAtRestCommandCatalog(spec, {
     dataDirectory: root,
     resolveWorkspacePath: async (id) => {
       const path = workspacePath(id)

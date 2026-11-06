@@ -24,9 +24,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
-    reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
-    clearTerminalLiveInputDefault,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -82,7 +80,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
-        clearTerminalLiveInputDefault(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
         terminalsRef.current = next
         setTerminals(next)
@@ -146,7 +143,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           })
         }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
-        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -154,7 +150,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
-          clearTerminalLiveInputDefault(terminalHandle)
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)

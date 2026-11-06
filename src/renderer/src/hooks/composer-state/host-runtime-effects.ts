@@ -31,7 +31,10 @@ import {
   readWorkspaceSetupInspection,
   getComposerSetupInspectionCommit
 } from '@/lib/workspace-setup-preparation'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'

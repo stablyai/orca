@@ -7,6 +7,7 @@ import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
 import { projectCompatibilityFromRepos } from '../../../../shared/project-compatibility-merge'
 import { mergeByIdentity } from '../catalog-identity'
+import { isSavedHostCatalogRow } from './saved-host-catalog-rows'
 
 export function mergeFetchedReposForHost(
   previous: readonly Repo[],
@@ -24,7 +25,7 @@ export function mergeFetchedReposForHost(
       getRepoExecutionHostId(repo) !== hostId ||
       fetchedIdentities.has(identity) ||
       // Added after the request: an answer that predates it cannot drop it.
-      (requested !== null && !requested.has(identity))
+      (requested !== null && !requested.has(identity) && !isSavedHostCatalogRow(repo))
     )
   })
   return reconcileFetchedRepos(

@@ -1,6 +1,10 @@
 import { keybindingRunsInTextField, type KeybindingActionId } from '../../../shared/keybindings'
-import { isEditableTarget } from './editable-target'
+import { isEditableTarget, isNativeChatPromptTarget } from './editable-target'
 import { getShortcutPlatform } from './shortcut-platform'
+import {
+  nativeChatPromptClaimsShortcut,
+  textInputOwnsComposition
+} from '../../../shared/text-input-shortcut-policy'
 
 type TextKeyEvent = {
   target: EventTarget | null
@@ -15,15 +19,24 @@ type TextKeyEvent = {
   getModifierState?: (key: string) => boolean
 }
 
-export function textKeyComposesCharacter(event: TextKeyEvent): boolean {
-  return Boolean(
-    event.isComposing ||
-    event.key === 'Process' ||
-    event.key === 'Dead' ||
-    event.altGraph ||
-    event.getModifierState?.('AltGraph') ||
-    (getShortcutPlatform() === 'darwin' && event.altKey && (!event.metaKey || event.ctrlKey))
-  )
+const NATIVE_OPTION_EDIT_KEYS = [
+  'arrowleft',
+  'arrowright',
+  'arrowup',
+  'arrowdown',
+  'home',
+  'end',
+  'backspace',
+  'delete'
+]
+
+// Why: on macOS Option+key types a character or edits by word; only other named keys (PageDown, F-keys) can be app chords.
+export function macOptionChordBelongsToField(event: Omit<TextKeyEvent, 'target'>): boolean {
+  if (getShortcutPlatform() !== 'darwin' || !event.altKey || (event.metaKey && !event.ctrlKey)) {
+    return false
+  }
+  const key = event.key?.toLowerCase()
+  return !key || key.length === 1 || NATIVE_OPTION_EDIT_KEYS.includes(key)
 }
 
 export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
@@ -36,10 +49,13 @@ export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   ) {
     return true
   }
-  if (textKeyComposesCharacter(event)) {
+  if (textInputOwnsComposition(event)) {
     return true
   }
   const isMac = getShortcutPlatform() === 'darwin'
+  if (event.altKey && isMac && (!event.metaKey || event.ctrlKey)) {
+    return true
+  }
   const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
   if (!modifier) {
     return true
@@ -70,8 +86,11 @@ export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
 
 export function textFieldClaimsActionKey(
   event: TextKeyEvent,
-  actionId: KeybindingActionId
+  actionId?: KeybindingActionId
 ): boolean {
+  if (isNativeChatPromptTarget(event.target)) {
+    return nativeChatPromptClaimsShortcut(event, getShortcutPlatform(), actionId)
+  }
   if (!fileSearchClaimsTextKey(event)) {
     return false
   }
@@ -88,5 +107,5 @@ export function textFieldClaimsActionKey(
   ) {
     return true
   }
-  return !keybindingRunsInTextField(actionId, event, platform)
+  return !actionId || !keybindingRunsInTextField(actionId, event, platform)
 }

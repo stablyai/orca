@@ -6,7 +6,7 @@ import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent
 import {
   clampConversationNameFirstPrompt,
   conversationNameSeed
-} from '../../shared/conversation-name-generation'
+} from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
 import type { GlobalSettings } from '../../shared/global-settings-types'

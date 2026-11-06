@@ -1,14 +1,20 @@
 import { translate } from '@/i18n/i18n'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
   title: string
   body: string
+  /** Shown instead of `body` when the shortcut it names has no binding. */
+  bodyWithoutShortcut?: string
   primaryActionLabel?: string
   secondaryActionLabel?: string
 }
 
 type StepCopyThunk = () => LocalizedContextualTourStepCopy
+
+const getProjectsCollapseModifierLabel = (): string =>
+  getShortcutPlatform() === 'darwin' ? '⌥' : 'Alt'
 
 // Thunks resolve translate() in the language active at render time; `satisfies` makes a step without copy a type error.
 const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
@@ -32,6 +38,34 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Drag workspaces between lanes as their status changes.'
     )
   }),
+  'agent-sessions-new-tab': () => ({
+    title: translate(
+      'components.contextualTours.agentSessions.newTab.title',
+      'New agents start here'
+    ),
+    body: translate(
+      'components.contextualTours.agentSessions.newTab.body',
+      'Click + to start an agent, a terminal, or a browser tab.'
+    )
+  }),
+  'agent-sessions-split-chat': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
+      'Split a terminal pane'
+    ),
+    body: translate(
+      'components.contextualTours.agentSessions.splitChat.body',
+      'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.'
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.agentSessions.splitChat.bodyWithoutShortcut',
+      'Click the split button at the top of the chat. Each side gets its own tabs.'
+    ),
+    primaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',
+      'Split terminal'
+    )
+  }),
   'agent-sessions-split': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
@@ -40,6 +74,10 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.body',
       'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.'
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.agentSessions.split.bodyWithoutShortcut',
+      'Right-click the pane for split options.'
     ),
     primaryActionLabel: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',
@@ -202,6 +240,27 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.agent.body',
       'Pick the agent that should be opened when this worktree is created.'
+    )
+  }),
+  'projects-collapse-all-intro': () => ({
+    title: translate(
+      'components.contextualTours.projectsCollapseAll.intro.title',
+      'Collapse all projects at once'
+    ),
+    // {sidebar.projects.toggleCollapse} resolves to the user's current binding at render time.
+    body: translate(
+      'components.contextualTours.projectsCollapseAll.intro.body',
+      'Press {sidebar.projects.toggleCollapse}, click this button, or {{modifier}}-click any project header.',
+      { modifier: getProjectsCollapseModifierLabel() }
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.projectsCollapseAll.intro.bodyWithoutShortcut',
+      'Click this button, or {{modifier}}-click any project header.',
+      { modifier: getProjectsCollapseModifierLabel() }
+    ),
+    primaryActionLabel: translate(
+      'components.contextualTours.projectsCollapseAll.intro.action',
+      'Got it'
     )
   })
 } satisfies Record<ContextualTourStepId, StepCopyThunk>

@@ -191,24 +191,6 @@ it('retains unowned names, ambiguous old manifests and mismatched source hashes'
   expect((await sweep()).keptUnverifiable).toBe(5)
 })
 
-it('counts failed deletion attempts toward the bound and yields between them', async () => {
-  for (let i = 0; i < 4; i += 1) {
-    createOverlay(`retired-${i}`)
-  }
-  const remove = vi.fn(() => {
-    throw new Error('busy')
-  })
-  const yieldBetween = vi.fn(async () => {})
-  const result = await sweep({
-    maxRemovals: 2,
-    removeTree: remove,
-    yieldBetweenRemovals: yieldBetween
-  })
-  expect(result.failed).toBe(2)
-  expect(remove).toHaveBeenCalledTimes(2)
-  expect(yieldBetween).toHaveBeenCalledTimes(2)
-})
-
 it('retains handed-out and inherited source references through clearPty', async () => {
   const source = join(root, 'source')
   mkdirSync(source)

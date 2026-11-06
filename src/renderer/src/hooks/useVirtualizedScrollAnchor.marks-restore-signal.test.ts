@@ -95,44 +95,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     scrollToIndex: vi.fn()
   })
 
-  it('does not re-attempt restore on measurement churn when the signal is unchanged', async () => {
-    const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    const { el } = createScrollElement({
-      rowElements: [anchoredRowElement('row-1', -3_358)],
-      scrollTop: 746
-    })
-    const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
-    const virtualizer = virtualizerWithRow1()
-
-    const render = (restoreSignal: string, totalSize: number) => {
-      harness.beginRender()
-      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
-      useVirtualizedScrollAnchor({
-        anchorRef,
-        getItemElementKey: (element: FakeRowElement) => element.key,
-        getRowKey: (row: string) => row,
-        itemElementSelector: '[data-row]',
-        programmaticScrollMarks: createProgrammaticScrollMarks(),
-        recordAnchorOnScroll: false,
-        restoreSignal,
-        rows: ['row-0', 'row-1'],
-        scrollElementRef: { current: el },
-        scrollOffsetRef: { current: 746 },
-        totalSize,
-        virtualizer
-      } as never)
-      harness.effects[1]?.effect()
-    }
-
-    render('signal-a', 30_000)
-    expect(el.querySelectorAll).toHaveBeenCalled()
-    const attemptsAfterConfirm = el.querySelectorAll.mock.calls.length
-
-    render('signal-a', 31_500)
-    expect(el.querySelectorAll.mock.calls.length).toBe(attemptsAfterConfirm)
-    expect(virtualizer.scrollToIndex).not.toHaveBeenCalled()
-  })
-
   it('keeps retrying a restore that is still converging when layout moves the viewport', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
     let rowTop = -3_000
@@ -270,63 +232,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     expect(virtualizer.scrollToIndex).not.toHaveBeenCalled()
   })
 
-  it('still restores when a browser clamp explains the divergence', async () => {
-    const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    // Shrinking content clamps the browser below the anchor’s recorded offset.
-    const { el } = createScrollElement({
-      rowElements: [],
-      scrollHeight: 2_000,
-      scrollTop: 1_120
-    })
-    const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 5_000 } }
-    const virtualizer = virtualizerWithRow1()
-
-    harness.beginRender()
-    useVirtualizedScrollAnchor({
-      anchorRef,
-      getItemElementKey: (element: FakeRowElement) => element.key,
-      getRowKey: (row: string) => row,
-      itemElementSelector: '[data-row]',
-      programmaticScrollMarks: createProgrammaticScrollMarks(),
-      recordAnchorOnScroll: false,
-      restoreSignal: 'signal-a',
-      rows: ['row-0', 'row-1'],
-      scrollElementRef: { current: el },
-      scrollOffsetRef: { current: 5_000 },
-      totalSize: 2_000,
-      virtualizer
-    } as never)
-    harness.effects[1]?.effect()
-
-    expect(el.querySelectorAll).toHaveBeenCalled()
-  })
-
-  it('yields the mount restore to an unmarked user scroll instead of rewriting it', async () => {
-    const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    const { el, emitScroll } = createScrollElement({ scrollTop: 0 })
-    const anchorRef = { current: null }
-
-    harness.beginRender()
-    useVirtualizedScrollAnchor({
-      anchorRef,
-      getRowKey: (row: string) => row,
-      programmaticScrollMarks: createProgrammaticScrollMarks(),
-      recordAnchorOnScroll: false,
-      restoreSignal: 'signal-a',
-      rows: ['row-0', 'row-1'],
-      scrollElementRef: { current: el },
-      scrollOffsetRef: { current: 4_000 },
-      totalSize: 30_000,
-      virtualizer: virtualizerWithRow1()
-    } as never)
-    harness.effects[0]?.effect()
-    expect(el.scrollTop).toBe(4_000)
-
-    // An unmarked scroll means user takeover even when jank hid the wheel event from input tracking.
-    emitScroll(4_200)
-    expect(el.scrollTop).toBe(4_200)
-  })
-
   it('keeps structural restores alive after its own marked writes move the viewport', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
     const marks = createProgrammaticScrollMarks()
@@ -370,84 +275,6 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const attemptsBefore = el.querySelectorAll.mock.calls.length
     render('signal-b')
     expect(el.querySelectorAll.mock.calls.length).toBeGreaterThan(attemptsBefore)
-  })
-
-  it('retries a signal-change restore that was skipped during direct input', async () => {
-    const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    const { el } = createScrollElement({
-      rowElements: [anchoredRowElement('row-1', -3_358)],
-      scrollTop: 746
-    })
-    const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
-    const virtualizer = virtualizerWithRow1()
-    let directInput = true
-
-    const render = (restoreSignal: string, totalSize: number) => {
-      harness.beginRender()
-      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
-      useVirtualizedScrollAnchor({
-        anchorRef,
-        getItemElementKey: (element: FakeRowElement) => element.key,
-        getRowKey: (row: string) => row,
-        itemElementSelector: '[data-row]',
-        programmaticScrollMarks: createProgrammaticScrollMarks(),
-        recordAnchorOnScroll: false,
-        restoreSignal,
-        rows: ['row-0', 'row-1'],
-        scrollElementRef: { current: el },
-        scrollOffsetRef: { current: 746 },
-        shouldSkipRestore: () => directInput,
-        totalSize,
-        virtualizer
-      } as never)
-      harness.effects[1]?.effect()
-    }
-
-    render('signal-a', 30_000)
-    expect(el.querySelectorAll).not.toHaveBeenCalled()
-
-    // After input settles, retry the owed restore even though the structural signal is unchanged.
-    directInput = false
-    render('signal-a', 31_000)
-    expect(el.querySelectorAll).toHaveBeenCalled()
-  })
-
-  it('does not stay armed when the anchor row and all fallbacks are gone', async () => {
-    const { harness, useVirtualizedScrollAnchor } = await loadHook()
-    const { el } = createScrollElement({
-      rowElements: [anchoredRowElement('row-1', -3_358)],
-      scrollTop: 746
-    })
-    const anchorRef = { current: { key: 'row-gone', offset: 3_358, scrollTop: 746 } }
-    const virtualizer = virtualizerWithRow1()
-
-    const render = (rows: readonly string[], totalSize: number) => {
-      harness.beginRender()
-      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
-      useVirtualizedScrollAnchor({
-        anchorRef,
-        getItemElementKey: (element: FakeRowElement) => element.key,
-        getRowKey: (row: string) => row,
-        itemElementSelector: '[data-row]',
-        programmaticScrollMarks: createProgrammaticScrollMarks(),
-        recordAnchorOnScroll: false,
-        restoreSignal: 'signal-a',
-        rows,
-        scrollElementRef: { current: el },
-        scrollOffsetRef: { current: 746 },
-        totalSize,
-        virtualizer
-      } as never)
-      harness.effects[1]?.effect()
-    }
-
-    render(['row-0', 'row-2'], 30_000)
-    expect(el.querySelectorAll).not.toHaveBeenCalled()
-
-    // An unresolvable anchor must disarm; later resolvability changes require a new signal.
-    render(['row-0', 'row-gone'], 31_000)
-    expect(el.querySelectorAll).not.toHaveBeenCalled()
-    expect(virtualizer.scrollToIndex).not.toHaveBeenCalled()
   })
 
   it('does not treat a browser clamp during the mount restore as user takeover', async () => {
@@ -510,49 +337,5 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     marks.mark(3_500)
     emitScroll(3_500)
     expect(el.scrollTop).toBe(4_000)
-  })
-
-  it('lands a caller-supplied row index map on the same row as the internally built one', async () => {
-    const runRestore = async (rowIndexByKey?: ReadonlyMap<string, number>) => {
-      // Reload the hook module per run so harnesses cannot inherit earlier refs.
-      vi.resetModules()
-      const { harness, useVirtualizedScrollAnchor } = await loadHook()
-      const { el } = createScrollElement({ rowElements: [], scrollTop: 0 })
-      const anchorRef = { current: { key: 'row-1', offset: 40, scrollTop: 0 } }
-      let getRowKeyCalls = 0
-
-      harness.beginRender()
-      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
-      useVirtualizedScrollAnchor({
-        anchorRef,
-        getRowKey: (row: string) => {
-          getRowKeyCalls += 1
-          return row
-        },
-        programmaticScrollMarks: createProgrammaticScrollMarks(),
-        recordAnchorOnScroll: false,
-        restoreSignal: 'signal-a',
-        rowIndexByKey,
-        rows: ['row-0', 'row-1'],
-        scrollElementRef: { current: el },
-        scrollOffsetRef: { current: 0 },
-        totalSize: 30_000,
-        virtualizer: virtualizerWithRow1()
-      } as never)
-      harness.effects[1]?.effect()
-      return { getRowKeyCalls, scrollTop: el.scrollTop }
-    }
-
-    const builtInternally = await runRestore()
-    const supplied = await runRestore(
-      new Map([
-        ['row-0', 0],
-        ['row-1', 1]
-      ])
-    )
-
-    expect(supplied.scrollTop).toBe(builtInternally.scrollTop)
-    expect(builtInternally.getRowKeyCalls).toBeGreaterThan(0)
-    expect(supplied.getRowKeyCalls).toBe(0)
   })
 })

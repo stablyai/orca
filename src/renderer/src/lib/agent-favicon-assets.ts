@@ -1,5 +1,5 @@
 import qoderUrl from '../../../shared/agent-icons/qoder.png?url'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import grokUrl from '../../../shared/agent-icons/grok.png?url'
 import mimoCodeUrl from '../../../shared/agent-icons/mimo-code.png?url'
 import anteUrl from '../../../shared/agent-icons/ante.png?url'

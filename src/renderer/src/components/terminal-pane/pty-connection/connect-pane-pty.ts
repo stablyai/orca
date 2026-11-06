@@ -2,19 +2,19 @@ import { installPtyKittyFileReader } from './pty-kitty-file-reader'
 import { installSpawnDeferredSleep } from './spawn-deferred-sleep'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
-import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { createPaneWindowsPtyModel } from './pane-windows-pty-model'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../terminal-keyboard-protocol-pane-agent'
-import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyConnectionDeps } from '../pty-connection-types'
 import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
 import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
-import { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
+import { TerminalStreamPosition } from '../terminal-stream-position'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
-import type { AgentType } from '../../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
@@ -122,7 +122,8 @@ export function connectPanePty(
   }
   // Idle callbacks precede deferred setup; switch from the shared scheduler to the PTY writer to preserve hidden-byte ordering and recovery.
   session.idleCursorReset = new TerminalIdleCursorReset()
-  session.resumeEscapeGap = new TerminalResumeEscapeGap()
+  session.streamPosition = new TerminalStreamPosition()
+  session.skippedQueryCarry = null
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
@@ -163,6 +164,11 @@ export function connectPanePty(
   installSpawnDeferredSleep(session)
   installTitleSpawnBell(session)
   installAgentTaskCompleteNotify(session)
+  session.windowsPtyModel = createPaneWindowsPtyModel(() => ({
+    terminal: session.pane.terminal,
+    owner: session.ownerContext,
+    transport: session.transport ?? null
+  }))
   const backendContext = {
     userAgent: navigator.userAgent,
     osRelease: window.api.platform?.get?.()?.osRelease,
@@ -174,9 +180,9 @@ export function connectPanePty(
   }
   // Capture backend policy before the tracker and transport copy xterm's initial capability flags.
   const keyboardProtocol = buildTerminalKeyboardProtocolOptions(backendContext)
+  session.windowsPtyModel.apply()
   Object.assign(
     session.pane.terminal.options,
-    buildWindowsPtyCompatibilityOptions(backendContext),
     keyboardProtocol,
     // Merge: replacing vtExtensions would re-enable xterm's own mode-2031 reports.
     keyboardProtocol.vtExtensions

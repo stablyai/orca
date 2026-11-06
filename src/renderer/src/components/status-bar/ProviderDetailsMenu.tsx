@@ -81,7 +81,8 @@ export function ProviderDetailsMenu({
       ) : null}
       {children ? (
         <>
-          <DropdownMenuSeparator />
+          {/* Why: the account card is already bordered, so a rule under it is redundant. */}
+          {variant === 'account' && provider ? null : <DropdownMenuSeparator />}
           {children}
         </>
       ) : null}
