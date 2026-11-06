@@ -25,7 +25,7 @@ export function buildMobileNativeChatUnits(
   for (const source of grouped) {
     const kind = kinds.get(source)!
     if (active && (kind === 'tool' || kind === 'sidecar' || kind === 'pass')) {
-      members[members.length - 1]!.push(source)
+      members.at(-1)!.push(source)
     } else {
       members.push([source])
       active = source.role === 'assistant' && kind !== 'orphan'
