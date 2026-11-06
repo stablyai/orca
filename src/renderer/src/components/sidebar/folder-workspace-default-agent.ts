@@ -3,7 +3,10 @@ import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import {
+  getRuntimeEnvironmentRevision,
+  onRuntimeEnvironmentsRetired
+} from '@/runtime/runtime-environment-revision'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import {
   AgentLaunchChoiceCancelled,
@@ -64,9 +67,9 @@ export function detectFolderRepoAgents(repoId: string, executionHostId: Executio
   }
 }
 
-function ownerRevision(workspace: ProspectiveWorkspace): number | undefined {
+function runtimeOwnerOf(workspace: ProspectiveWorkspace): string | null {
   const host = parseExecutionHostId(workspace.executionHostId)
-  return host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined
+  return host?.kind === 'runtime' ? host.environmentId : null
 }
 
 /** The agent the new-workspace dialog would preselect, read from the target host at click time. */
@@ -74,7 +77,31 @@ export async function resolveDirectCreateAgent(
   workspace: ProspectiveWorkspace,
   detect: DetectAgents
 ): Promise<DirectCreateAgent> {
-  const revision = ownerRevision(workspace)
+  // Any pairing change cancels the whole click, as each acquisition inside it already does;
+  // the click gathered one snapshot and must not create with it on a re-paired server.
+  const environmentId = runtimeOwnerOf(workspace)
+  const revision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
+  let retired = false
+  const stopRetirement = environmentId
+    ? onRuntimeEnvironmentsRetired((ids) => {
+        retired ||= ids.includes(environmentId)
+      })
+    : () => {}
+  try {
+    const result = await pickDirectCreateAgent(workspace, detect)
+    if (environmentId && (retired || getRuntimeEnvironmentRevision(environmentId) !== revision)) {
+      throw new AgentLaunchChoiceCancelled('Agent launch owner changed')
+    }
+    return result
+  } finally {
+    stopRetirement()
+  }
+}
+
+async function pickDirectCreateAgent(
+  workspace: ProspectiveWorkspace,
+  detect: DetectAgents
+): Promise<DirectCreateAgent> {
   // One snapshot per click, so the agent picked and the profile it launches with agree.
   const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
   if (preferences.defaultTuiAgent === 'blank') {
@@ -83,7 +110,6 @@ export async function resolveDirectCreateAgent(
   // Bounded: an unanswered host must not swallow the click.
   const { detected } = await acquireAgentLaunchChoices(workspace, detect, undefined, true).catch(
     (error: unknown) => {
-      // An owner change cancels the click; it must not create on the replacement host.
       if (error instanceof AgentLaunchChoiceCancelled) {
         throw error
       }
@@ -103,10 +129,6 @@ export async function resolveDirectCreateAgent(
   }
   // Same 3s host answer the dialog-less task launch waits for before it picks Chat or Terminal.
   await awaitStructuredRouteHostAnswer(useAppStore.getState(), { agent, workspace }, 3000)
-  // The route wait is outside the acquisition's owner fence; a re-paired server is a different machine.
-  if (ownerRevision(workspace) !== revision) {
-    throw new AgentLaunchChoiceCancelled('Agent launch owner changed')
-  }
   return { agent: pick(), preferences }
 }
 

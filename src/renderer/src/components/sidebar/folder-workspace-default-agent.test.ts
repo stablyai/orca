@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => {
     awaitStructuredRouteHostAnswer: vi.fn(),
     agentChoiceMayOpenAsChat: vi.fn(),
     loadProjectLaunchContext: vi.fn(),
-    revision
+    revision,
+    retirementListeners: new Set<(ids: readonly string[]) => void>()
   }
 })
 
@@ -34,7 +35,11 @@ vi.mock('@/lib/agent-detection-target-inventory', () => ({
   loadDetectedAgentsForWorktree: vi.fn()
 }))
 vi.mock('@/runtime/runtime-environment-revision', () => ({
-  getRuntimeEnvironmentRevision: () => mocks.revision.current
+  getRuntimeEnvironmentRevision: () => mocks.revision.current,
+  onRuntimeEnvironmentsRetired: (listener: (ids: readonly string[]) => void) => {
+    mocks.retirementListeners.add(listener)
+    return () => mocks.retirementListeners.delete(listener)
+  }
 }))
 vi.mock('@/lib/agent-session-launch-plan', () => ({
   awaitStructuredRouteHostAnswer: mocks.awaitStructuredRouteHostAnswer
@@ -151,17 +156,31 @@ describe('resolveDirectCreateAgent', () => {
     expect(mocks.ensureDetectedAgentsForTarget).not.toHaveBeenCalled()
   })
 
-  it('drops the click when the paired server is re-paired during the route wait', async () => {
+  it.each([
+    {
+      change: 'its pairing revision moves',
+      act: () => {
+        mocks.revision.current = 2
+      }
+    },
+    {
+      change: 'it retires at the same revision',
+      act: () => {
+        for (const listener of mocks.retirementListeners) {
+          listener(['env-1'])
+        }
+      }
+    }
+  ])('drops the click when the paired server $change during the route wait', async ({ act }) => {
     const runtimeWorkspace = { kind: 'folder', executionHostId: 'runtime:env-1' } as const
     mocks.ensureAgentLaunchPreferences.mockResolvedValue({ defaultTuiAgent: 'codex' })
     hostAnswers(['codex'])
-    mocks.awaitStructuredRouteHostAnswer.mockImplementation(async () => {
-      mocks.revision.current = 2
-    })
+    mocks.awaitStructuredRouteHostAnswer.mockImplementation(async () => act())
 
     await expect(resolveDirectCreateAgent(runtimeWorkspace, detectLocal)).rejects.toBeInstanceOf(
       AgentLaunchChoiceCancelled
     )
+    expect(mocks.retirementListeners.size).toBe(0)
   })
 
   it('drops the click when the host owner changes while resolving', async () => {
