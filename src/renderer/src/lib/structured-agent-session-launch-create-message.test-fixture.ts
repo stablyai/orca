@@ -72,6 +72,7 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => {
   const feed = {
     activate: () => () => {},
     subscribe: () => () => {},
+    subscribeSession: () => () => {},
     getSnapshot: () => ({ get: () => (mocks.hostBusy ? working : idle) }),
     getSessionObservation: () => 'live'
   }
