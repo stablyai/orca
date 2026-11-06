@@ -1,5 +1,6 @@
 import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { RpcDispatcher } from '../../../dispatcher'
@@ -8,6 +9,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { MessageWake } from '../../../../runtime-message-waiters'
 
 function lifecycleGroupRecipientError(
   type: 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
@@ -61,6 +63,32 @@ describe('orchestration RPC methods', () => {
       expect(resolveProcessIncarnation).not.toHaveBeenCalled()
     })
 
+    it('keeps accepted sender snapshots internal while retaining inbox read and sequence', async () => {
+      setup()
+      const saved = db.insertMessage({
+        from: 'term_worker',
+        to: `run:${activeRunId}`,
+        runId: activeRunId,
+        subject: 'question',
+        answerSenderSnapshot: '{"version":1,"sender":{}}'
+      })
+      const receipt = z.object({ message: z.record(z.string(), z.unknown()) }).parse(
+        await call('orchestration.reply', {
+          id: saved.id,
+          from: 'term_coord',
+          body: 'answer'
+        })
+      )
+      expect(receipt.message).not.toHaveProperty('answer_sender_snapshot')
+      const inbox = z
+        .object({ messages: z.array(z.record(z.string(), z.unknown())) })
+        .parse(await call('orchestration.inbox', { terminal: `run:${activeRunId}` }))
+      const message = inbox.messages.find((item) => item.id === saved.id)!
+      expect(message).not.toHaveProperty('answer_sender_snapshot')
+      expect(message).toHaveProperty('read', 1)
+      expect(message).toHaveProperty('sequence')
+    })
+
     it('sends a message', async () => {
       setup()
       // Notify idle recipients on send so delivery does not wait for a status transition (#12536).
@@ -101,7 +129,7 @@ describe('orchestration RPC methods', () => {
       })) as { message: { to_handle: string } }
 
       expect(result.message.to_handle).toBe(`run:${activeRunId}`)
-      await expect(waiting).resolves.toBe('notified')
+      await expect(waiting).resolves.toBeInstanceOf(MessageWake)
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {
@@ -221,7 +249,10 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-      expect(result).toMatchObject({ lifecycle: { action: 'completed' } })
+      expect(result).toMatchObject({
+        lifecycle: { action: 'completed' },
+        next: 'Recorded. End your turn.'
+      })
     })
 
     it('fences a replacement process for a capability-less manual Dispatch', async () => {
@@ -439,12 +470,11 @@ describe('orchestration RPC methods', () => {
       expect(db.getMessageById(result.message.id)).toMatchObject({ read: 1 })
     })
 
-    it('still wakes waiters for a heartbeat on an active dispatch', async () => {
+    it('records a heartbeat without delivering it as coordinator mail', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
-      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
-      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+      const waiting = runtime.waitForMessage(`run:${activeRunId}`, { timeoutMs: 50 })
 
       await call('orchestration.send', {
         from: 'term_worker',
@@ -454,7 +484,9 @@ describe('orchestration RPC methods', () => {
         payload: JSON.stringify({ dispatchId: dispatch.id })
       })
 
-      expect(notify).toHaveBeenCalledWith(`run:${activeRunId}`, 'heartbeat')
+      await expect(waiting).resolves.toBe('timed_out')
+      expect(db.getUnreadMessages(`run:${activeRunId}`)).toEqual([])
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeTruthy()
     })
 
     it('allows an omitted recipient so an active Dispatch can default to its Run', () => {

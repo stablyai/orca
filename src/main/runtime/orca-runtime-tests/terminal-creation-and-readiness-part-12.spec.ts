@@ -1,17 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import { agentLaunchSurfaceFactory } from '../rpc/methods/agent-launch-surfaces'
 import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch-tab-publication'
 import { AgentLaunch } from '../../../shared/rpc-contract/agent-launch-params'
 import { DESKTOP_RPC_CALLER } from '../rpc/rpc-caller-identity'
 import type { RpcContext } from '../rpc/core'
-import type { AgentLaunchTabPublished } from '../../../shared/agent-launch-tab-publication'
+import type { AgentLaunchTabPublished } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 
 const RESERVED_TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const RESERVED_LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'

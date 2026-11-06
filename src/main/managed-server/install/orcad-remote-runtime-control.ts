@@ -6,6 +6,7 @@ import {
   type OrcadReadinessParse
 } from './orcad-remote-launch'
 import {
+  hasWindowsOrcadLaunchReport,
   readWindowsOrcadLaunchReport,
   readWindowsOrcadSlotRuntime,
   readWindowsOrcadSlotEntry,
@@ -22,6 +23,7 @@ import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { errorMessage } from '../../../shared/error-message'
 import {
   execCommand,
+  isSshCommandExitError,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -114,7 +116,7 @@ export async function launchOrcadAndAwaitReadiness(
     const slotRuntime = readWindowsOrcadSlotRuntime(slotAnswer)
     const slotEntry = readWindowsOrcadSlotEntry(slotAnswer, target.host, spec.remoteInstallDir)
     readWindowsOrcadLaunchReport(
-      await execOrcadRemote(
+      await windowsLaunchReportOutput(
         target,
         windowsOrcadLaunchCommand(target.host, spec, slotRuntime, slotEntry)
       )
@@ -126,7 +128,7 @@ export async function launchOrcadAndAwaitReadiness(
         target.host,
         spec,
         target.conn.orcadLaunchDetach ?? 'nohup',
-        (await target.conn.orcadLaunchEnv?.()) ?? []
+        (await target.conn.orcadLaunchEnv?.({ fullVersion: spec.fullVersion })) ?? []
       )
     )
   }
@@ -174,4 +176,20 @@ export async function launchOrcadAndAwaitReadiness(
     throw lastWaitError
   }
   return last
+}
+
+/** The launcher writes its report before exiting nonzero, so a failed launch still names its cause. */
+async function windowsLaunchReportOutput(
+  target: OrcadRemoteExecTarget,
+  command: string
+): Promise<string> {
+  try {
+    return await execOrcadRemote(target, command)
+  } catch (error) {
+    // Without a report the command error carries the better diagnostic.
+    if (isSshCommandExitError(error) && hasWindowsOrcadLaunchReport(error.stdout)) {
+      return error.stdout
+    }
+    throw error
+  }
 }

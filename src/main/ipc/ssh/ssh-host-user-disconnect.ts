@@ -1,10 +1,11 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import {
   clearSshUserDisconnected,
@@ -12,7 +13,10 @@ import {
   isSshUserDisconnected,
   recordSshUserDisconnected
 } from '../../ssh/ssh-user-disconnect'
-import { connectRegisteredSshTarget } from '../../ssh/targets/ssh-target-registry'
+import {
+  connectRegisteredSshTarget,
+  getSshTargetRegistryStore
+} from '../../ssh/targets/ssh-target-registry'
 import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected,
@@ -20,6 +24,8 @@ import {
 } from '../runtime-environments/runtime-environment-manual-disconnect'
 import { getRuntimeEnvironmentStatusOwner } from '../runtime-environments/runtime-environment-request-connections'
 import { disconnectRegisteredSshTarget } from './ssh-session-teardown'
+import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/runtime-environment-pairing-refusal-registry'
+import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
 
 /** Managed server and SSH host share user disconnect intent; only explicit Connect may restore either. */
 
@@ -99,11 +105,21 @@ export async function liftSshUserDisconnectForEnvironment(
   clearSshUserDisconnectedForEnvironment(environment)
 }
 
+/** Update, Recover and like actions lift what Connect lifts but dial the host themselves, skipping Connect's server-update check. Returns the servers to resume afterwards. */
+export function liftUserHoldsForServerAction(environment: KnownRuntimeEnvironment): string[] {
+  const lifted = isRuntimeEnvironmentManuallyDisconnected(environment.id) ? [environment.id] : []
+  clearRuntimeEnvironmentManualDisconnect(environment.id)
+  noteRuntimeEnvironmentConnectRequested(environment.id)
+  clearSshCredentialDeclinedForEnvironment(environment)
+  const targetId = getRuntimeSshAccess(environment)?.sshTargetId
+  return targetId ? [...new Set([...lifted, ...liftSshHostUserDisconnect(targetId)])] : lifted
+}
+
 let launchReconnectOptOutsHeld = false
 
 /** Opted-out hosts start each launch as if the user had disconnected them: nothing dials them, servers included, until Connect. Once per process, before server status probes start. */
 export function holdLaunchReconnectOptOuts(
-  targets: readonly Pick<SshTarget, 'id' | 'reconnectOnLaunch'>[],
+  targets: readonly Pick<SshTarget, 'id' | 'label' | 'reconnectOnLaunch'>[],
   userDataPath: string = appUserDataPath()
 ): void {
   if (launchReconnectOptOutsHeld) {
@@ -116,7 +132,10 @@ export function holdLaunchReconnectOptOuts(
     }
     recordSshUserDisconnected(target.id)
     for (const environment of environmentsReachedThrough(userDataPath, target.id)) {
-      markRuntimeEnvironmentManuallyDisconnected(environment.id)
+      markRuntimeEnvironmentManuallyDisconnected(
+        environment.id,
+        `Reconnect on launch is off for ${target.label}. Connect to resume.`
+      )
     }
   }
 }
@@ -125,9 +144,28 @@ export function resetLaunchReconnectOptOutsForTests(): void {
   launchReconnectOptOutsHeld = false
 }
 
+/** Stop and remove persists across reloads and restarts: automatic dials must not deploy a new server. */
+export function isManagedServerRemovalHeld(
+  target: Pick<SshTarget, 'managedServerRemoved' | 'orcadFence'> | undefined
+): boolean {
+  if (!target?.managedServerRemoved) {
+    return false
+  }
+  // An older desktop ignores the hold and may redeploy; its registered server stays reachable.
+  const environmentId = getManagedOrcadFenceEnvironmentId(target)
+  return (
+    !environmentId ||
+    !listEnvironments(appUserDataPath()).some((environment) => environment.id === environmentId)
+  )
+}
+
 /** Explicit host Connect lifts its servers; resume their status checks only after connection settles. */
 export function liftSshHostUserDisconnect(targetId: string): string[] {
   clearSshUserDisconnected(targetId)
+  const registry = getSshTargetRegistryStore()
+  if (registry?.getTarget(targetId)?.managedServerRemoved) {
+    registry.updateTarget(targetId, { managedServerRemoved: undefined })
+  }
   const lifted: string[] = []
   for (const environment of environmentsReachedThrough(appUserDataPath(), targetId)) {
     if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {

@@ -1,7 +1,10 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
-import { buildPaletteDocument, type PaletteDocument } from './palette-match/palette-document'
-import type { PaletteComposedEvidence } from './palette-match/evidence-composer'
+import {
+  buildPaletteDocument,
+  type PaletteDocument
+} from '../../../shared/palette-match/palette-document'
+import type { PaletteComposedEvidence } from '../../../shared/palette-match/evidence-composer'
 import {
   buildWorktreeAttachmentEvidence,
   buildWorktreeAutomationEvidence,
@@ -16,10 +19,10 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../shared/repo-types'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
-import { getWorkspaceAttachmentKey } from '../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
+import { getWorkspaceAttachmentKey } from '../../../shared/workspace-attachments/workspace-attachment-normalization'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../shared/worktree/github-pr-suppression'
 import {

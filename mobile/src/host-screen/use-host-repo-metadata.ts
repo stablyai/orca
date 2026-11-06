@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import { setCachedRepos } from '../cache/repo-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -7,7 +7,7 @@ import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-label
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import type { SectionRepo } from '../worktree/workspace-list-types'
 import type { HostRepoCatalogRow } from './host-screen-reply-schema'
-import { hostPlatformRead, hostRepoCatalogRead } from './host-screen-operations'
+import { hostPlatformRead, hostRepoCatalogSnapshotRead } from './host-screen-operations'
 import {
   acceptedMetadata,
   readHostSshTargetLabels,
@@ -46,6 +46,12 @@ export function useHostRepoMetadata(args: {
     setHostPlatform,
     setRepoHostIdByRepoId
   } = state
+  // The catalog behind the last snapshot id, per client: an unchanged reply reuses it.
+  const repoSnapshotRef = useRef<{
+    client: RpcClient
+    snapshotId: string
+    catalog: HostRepoCatalogRow[]
+  } | null>(null)
 
   const fetchRepoMetadata = useCallback(
     async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
@@ -68,18 +74,39 @@ export function useHostRepoMetadata(args: {
       try {
         do {
           fetchRepoMetadataPendingRef.current.delete(requestClient)
+          const held =
+            repoSnapshotRef.current?.client === requestClient ? repoSnapshotRef.current : null
           const repoReply = await settledMetadataReply(() =>
-            hostRepoCatalogRead.request(requestClient)
+            hostRepoCatalogSnapshotRead.request(requestClient, {
+              afterSnapshotId: held?.snapshotId ?? null
+            })
           )
           if (clientRef.current !== requestClient || hostId !== requestHostId) {
             return
           }
-          const repos = repoReply && hostRepoCatalogRead.interpret(repoReply)
+          const repos = repoReply && hostRepoCatalogSnapshotRead.interpret(repoReply)
           if (!repos || !repos.accepted) {
             return
           }
-          const catalog = repos.value
+          const reply = repos.value
+          const catalog =
+            reply.kind === 'catalog'
+              ? reply.repos
+              : reply.snapshotId === held?.snapshotId
+                ? held.catalog
+                : null
+          // An unchanged reply for a token this client no longer holds asks again in full next time.
+          if (!catalog) {
+            repoSnapshotRef.current = null
+            return
+          }
           repoMetadataFetchedAtRef.current = Date.now()
+          if (reply.kind === 'catalog') {
+            repoSnapshotRef.current = reply.snapshotId
+              ? { client: requestClient, snapshotId: reply.snapshotId, catalog }
+              : null
+          }
+          // Reapply on unchanged too: a host switch clears the shown repos while the token survives.
           setCachedRepos(requestHostId, catalog)
           setDesktopRepos(catalog.map(desktopSectionRepo))
           setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))

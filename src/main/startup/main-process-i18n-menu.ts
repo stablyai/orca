@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron'
-import { ensureMainI18n, setMainUiLanguage } from '../i18n/main-i18n'
+import { setMainUiLanguage } from '../i18n/main-i18n'
 import {
   registerAppMenu,
   rebuildAppMenu,
@@ -10,8 +10,8 @@ import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-win
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
+  getAppMenuQuitHandlers,
   openSettingsFromSystemMenu,
-  quitFromUserCommand,
   runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
   sendOpenFeatureTour,
@@ -26,12 +26,11 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   if (!store) {
     throw new Error('Store must be initialized before menu')
   }
-  await ensureMainI18n()
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
   registerAppMenu({
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
-    ...(state.isServeMode ? { onQuit: quitFromUserCommand } : {}),
+    ...getAppMenuQuitHandlers(),
     onCheckForUpdates: (options) => {
       ensureAutoUpdaterConfigured()
       runUserInitiatedUpdateCheck(options)

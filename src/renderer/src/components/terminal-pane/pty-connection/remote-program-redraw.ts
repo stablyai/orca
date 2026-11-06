@@ -1,11 +1,11 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   TERMINAL_VIEWPORT_MIN_ROWS,
   clampTerminalViewport
-} from '../../../../../shared/terminal-viewport'
+} from '../../../../../shared/terminal/viewport/terminal-viewport'
 import { onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
-import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 

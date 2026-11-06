@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { SshRemotePtyLease, SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import {
@@ -25,7 +25,7 @@ import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers
 } from './targets/ssh-target-orcad-preflight'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 import { allowsDirectSshRelay } from './connection/ssh-connection-store'
 
 // Load relay-era profiles through the real Store, then exercise terminal proof, lease retirement and fenced preflight.

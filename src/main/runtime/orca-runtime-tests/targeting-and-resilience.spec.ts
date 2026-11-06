@@ -1,23 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
+import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  assertWorktreeCleanForRemoval,
-  electronMocks,
-  ipcMain,
-  listWorktrees,
-  removeWorktree
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import { ipcMain } from 'electron'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   createRuntime,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   describe('browser page targeting', () => {
@@ -47,7 +45,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browserSnapshot({ page: 'page-1' })
 
       expect(result.browserPageId).toBe('page-1')
-      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1', { page: 'page-1' })
       expect(listWorktrees).not.toHaveBeenCalled()
     })
 
@@ -73,7 +71,10 @@ describe('OrcaRuntimeService', () => {
         page: 'page-1'
       })
 
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1', {
+        worktree: 'branch:feature/foo',
+        page: 'page-1'
+      })
     })
 
     it('routes tab switch and capture start by explicit page id', async () => {

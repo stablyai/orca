@@ -19,9 +19,34 @@ import {
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './web-session-tabs-sync/tracking'
 import { recoverMirroredTerminalOrphansBeforeApply } from './web-session-tabs-sync/mirror-terminal-orphan-recovery'
+import { applyReceivedAgentSenderPublications } from './web-session-tabs-sync/received-agent-sender-publications'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
+
+function importSessionTabsApplyModules() {
+  return Promise.all([
+    import('./web-session-tabs-sync/snapshot-api'),
+    import('./web-session-tabs-sync/store-patch'),
+    import('./web-session-tabs-sync/tracking-decisions'),
+    import('./web-session-tabs-sync/tracking-lifecycle')
+  ])
+}
+let sessionTabsApplyModules: ReturnType<typeof importSessionTabsApplyModules> | null = null
+
+// Concurrent refreshes share one load: vitest hands overlapping imports of a vi.mock'd module the real one.
+function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApplyModules> {
+  sessionTabsApplyModules ??= importSessionTabsApplyModules().catch((error: unknown) => {
+    sessionTabsApplyModules = null
+    throw error
+  })
+  return sessionTabsApplyModules
+}
+
+/** Lets a test pay this lazy load before a timed wait instead of inside it. */
+export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
+  await loadSessionTabsApplyModules()
+}
 
 export async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
@@ -43,28 +68,22 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     { applyWebSessionTabsSnapshot },
     { applyWebSessionTabsStorePatch },
     { decideWebSessionTabsSnapshot },
-    { getWebSessionTabsTrackingGeneration }
-  ] = await Promise.all([
-    import('./web-session-tabs-sync/snapshot-api'),
-    import('./web-session-tabs-sync/store-patch'),
-    import('./web-session-tabs-sync/tracking-decisions'),
-    import('./web-session-tabs-sync/tracking-lifecycle')
-  ])
+    trackingLifecycle
+  ] = await loadSessionTabsApplyModules()
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
   const expectedEnvironmentConnectionGeneration =
     getRuntimeEnvironmentConnectionGeneration(environmentId)
-  const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
+  const expectedTrackingGeneration =
+    trackingLifecycle.getWebSessionTabsTrackingGeneration(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(
     environmentId,
     expectedEnvironmentPairingRevision
   )
   try {
     if (options.acceptCurrentSnapshot) {
-      const { acceptReplayedWebSessionTabsSnapshot } =
-        await import('./web-session-tabs-sync/tracking-lifecycle')
       // Publication can beat structured create; reaccept its version after the exact provisional handoff is known.
-      acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
+      trackingLifecycle.acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
     const listSessionTabs =
       options.confirmAgentSessionHandoff || options.afterCurrentInFlight
@@ -113,6 +132,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
+    applyReceivedAgentSenderPublications(environmentId, [snapshot], runtimeId)
     const recovered = await recoverMirroredTerminalOrphansBeforeApply(
       useAppStore.getState(),
       snapshot,
@@ -139,10 +159,17 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
-      (state) => {
+      (state, changedAgentPaneKeys) => {
         // Eager refresh can outlive workspace switches; update tabs without taking focus.
         const patch = decision.apply
-          ? applyWebSessionTabsSnapshot(state, recovered, environmentId)
+          ? applyWebSessionTabsSnapshot(
+              state,
+              recovered,
+              environmentId,
+              undefined,
+              undefined,
+              changedAgentPaneKeys
+            )
           : state
         return patch === state ? state : patch
       },

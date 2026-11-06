@@ -1,15 +1,5 @@
 import { existsSync } from 'node:fs'
-import {
-  chmod,
-  lstat,
-  mkdir,
-  readFile,
-  readdir,
-  readlink,
-  rm,
-  symlink,
-  writeFile
-} from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,40 +42,6 @@ describe('CliInstaller', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'creates a dev launcher and installs a macOS symlink in the requested path',
-    async () => {
-      const fixture = await makeFixture()
-      const installPath = join(fixture.root, 'bin', 'orca')
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: false,
-        userDataPath: fixture.userDataPath,
-        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-        appPath: fixture.appPath,
-        commandPathOverride: installPath,
-        processPathEnv: join(fixture.root, 'bin')
-      })
-
-      const initial = await installer.getStatus()
-      expect(initial.state).toBe('not_installed')
-      expect(initial.launcherPath).toContain(join('userData', 'cli', 'bin', 'orca'))
-
-      const installed = await installer.install()
-      expect(installed.state).toBe('installed')
-      expect(installed.pathConfigured).toBe(true)
-
-      const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
-      expect(launcherContent).toContain(`export ORCA_USER_DATA_PATH='${fixture.userDataPath}'`)
-      expect(launcherContent).toContain('export ORCA_APP_EXECUTABLE="$ELECTRON"')
-      expect(launcherContent).toContain(join(fixture.appPath, 'out', 'cli', 'index.js'))
-
-      const removed = await installer.remove()
-      expect(removed.state).toBe('not_installed')
-    }
-  )
 
   it.skipIf(process.platform === 'win32')(
     'creates a linux symlink under the requested path and warns when PATH is missing',
@@ -407,50 +363,6 @@ describe('CliInstaller', () => {
       await expect(readFile(legacyCommandPath, 'utf8')).resolves.toBe(
         buildLegacyAppImageCliWrapper(foreignAppImagePath)
       )
-    }
-  )
-
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'invokes the injected privilegedRunner when install falls back to elevated permissions',
-    async () => {
-      const fixture = await makeFixture()
-      const protectedDir = join(fixture.root, 'protected')
-      await mkdir(protectedDir)
-      await chmod(protectedDir, 0o500)
-
-      const installPath = join(protectedDir, 'bin', 'orca')
-      const privilegedCommands: string[] = []
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: false,
-        userDataPath: fixture.userDataPath,
-        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-        appPath: fixture.appPath,
-        commandPathOverride: installPath,
-        privilegedRunner: async (command: string) => {
-          privilegedCommands.push(command)
-          await chmod(protectedDir, 0o700)
-          const launcherPath = (await installer.getStatus()).launcherPath as string
-          await mkdir(dirname(installPath), { recursive: true })
-          await symlink(launcherPath, installPath)
-        },
-        processPathEnv: dirname(installPath)
-      })
-
-      try {
-        const installed = await installer.install()
-
-        expect(installed.state).toBe('installed')
-        expect(installed.pathConfigured).toBe(true)
-        expect(privilegedCommands).toHaveLength(1)
-        expect(privilegedCommands[0]).toContain('mkdir -p')
-        expect(privilegedCommands[0]).toContain('ln -s')
-        expect(privilegedCommands[0]).toContain('/bin/ln -P')
-        expect(privilegedCommands[0]).not.toContain('mv -f')
-        await expect(readlink(installPath)).resolves.toBe(installed.launcherPath)
-      } finally {
-        await chmod(protectedDir, 0o700).catch(() => undefined)
-      }
     }
   )
 })

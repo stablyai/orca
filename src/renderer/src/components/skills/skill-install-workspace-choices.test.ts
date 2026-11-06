@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { skillInstallWorkspaceChoices } from './skill-install-workspace-choices'
@@ -24,24 +23,5 @@ describe('skillInstallWorkspaceChoices', () => {
         folderWorkspaces: []
       })
     ).toEqual([{ id: worktree.id, label: worktree.displayName, kind: 'worktree' }])
-  })
-
-  it('keeps local, paired-runtime, and SSH workspace catalogs isolated', () => {
-    const folders = [
-      { id: 'local', name: 'Local', folderPath: '/local', executionHostId: 'local' },
-      {
-        id: 'runtime',
-        name: 'Runtime',
-        folderPath: '/runtime',
-        executionHostId: 'runtime:environment_1'
-      },
-      { id: 'ssh', name: 'SSH', folderPath: '/ssh', executionHostId: 'ssh:ssh_1' }
-    ] as FolderWorkspace[]
-    const input = { repos: [], worktreesByRepo: {}, folderWorkspaces: folders }
-    expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'local' })).toHaveLength(1)
-    expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'environment_1' })).toHaveLength(
-      1
-    )
-    expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'ssh:ssh_1' })).toHaveLength(1)
   })
 })

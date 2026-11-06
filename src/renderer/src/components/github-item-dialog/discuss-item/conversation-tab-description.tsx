@@ -45,8 +45,9 @@ export function ConversationTabDescription({
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
         <span className="font-medium text-foreground">{authorLabel}</span>
         <span>
-          {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}{' '}
-          {formatRelativeTime(item.updatedAt)}
+          {translate('auto.components.GitHubItemDialog.updatedRelativeTime', 'updated {{time}}', {
+            time: formatRelativeTime(item.updatedAt)
+          })}
         </span>
         {canEditBody && !loading && detailsLoaded ? (
           bodyEditing ? (

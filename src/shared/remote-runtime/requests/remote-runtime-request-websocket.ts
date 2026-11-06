@@ -1,13 +1,13 @@
 import WebSocket from 'ws'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
-import { createRemoteRuntimeClientHandshake } from '../../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
+import { createRemoteRuntimeClientHandshake } from '../remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
 } from '../remote-runtime-connect-bound'
-import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../../remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import {
   invalidRemoteRuntimeResponseError,
   remoteRuntimeUnavailableError
@@ -20,6 +20,8 @@ export type RemoteRuntimeWebSocket = {
 }
 
 export type RemoteRuntimeWebSocketCallbacks = {
+  /** The opening handshake completed and the E2EE hello was sent. */
+  onOpen?: (ws: WebSocket) => void
   onClose: (ws: WebSocket, code: number, reason: Buffer) => void
   onError: (ws: WebSocket, error: RemoteRuntimeClientError) => void
   onTextFrame: (ws: WebSocket, frame: string) => void
@@ -45,6 +47,7 @@ export function openRemoteRuntimeWebSocket(
   let cleanedUp = false
   const onOpen = (): void => {
     ws.send(handshake.helloText())
+    callbacks.onOpen?.(ws)
   }
   const onError = (error: Error): void => {
     callbacks.onError(

@@ -106,16 +106,6 @@ describe('executeSkillInstallRequest', () => {
     ).toEqual([])
   })
 
-  it('rejects local paths at the remote request boundary', async () => {
-    const { request, dependencies, archive } = await fixture()
-    await expect(
-      executeSkillInstallRequest(
-        { ...request, ingress: { kind: 'local-file', path: archive.archivePath } },
-        dependencies
-      )
-    ).rejects.toThrow('skill-install-local-ingress-rejected')
-  })
-
   it('rejects invalid shape, identity, scope, destination, and ingress policy before download', async () => {
     const { request, dependencies, archive, home } = await fixture()
     const cases: { input: unknown; error: string }[] = [

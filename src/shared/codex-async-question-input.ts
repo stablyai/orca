@@ -1,4 +1,4 @@
-import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
+import type { AskPrompt, AskQuestion } from './native-chat/input/native-chat-ask-types'
 
 /** Return accepted immediately; nonblocking questions receive answers in later user messages ({questions:[{title, options?: string[]}]}). */
 export const CODEX_ASYNC_QUESTION_TOOL = 'request_user_input_async'

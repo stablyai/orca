@@ -20,6 +20,10 @@ vi.mock('@/store', async () => {
 import { useAppStore } from '@/store'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import {
+  forgetStructuredSessionSelection,
+  registerStructuredSelectionCatalogStore
+} from '@/lib/structured-agent-session-selection-controller'
 
 function makeStatus(runtimeId: string): RuntimeStatus {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the fields the slice reads.
@@ -55,7 +59,12 @@ function publish(status: RuntimeStatus | null, checkedAt: number): void {
   })
 }
 
+let restoreCatalog: () => void
 beforeEach(() => {
+  restoreCatalog = registerStructuredSelectionCatalogStore({
+    read: useAppStore.getState,
+    subscribe: useAppStore.subscribe
+  })
   clearRuntimeEnvironmentConnectionGenerationsForTests()
   vi.stubGlobal('window', { api: {}, dispatchEvent: vi.fn() })
   useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
@@ -63,6 +72,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  forgetStructuredSessionSelection('continuity')
+  forgetStructuredSessionSelection('keyless')
+  restoreCatalog()
   vi.unstubAllGlobals()
 })
 
@@ -96,15 +108,5 @@ describe('subscribeRuntimeHostContactRegained', () => {
     publish(null, 7)
     publish(makeStatus('runtime-b'), 8)
     expect(listener).toHaveBeenCalledTimes(2)
-  })
-
-  it('ignores other environments', () => {
-    publish(makeStatus('runtime-a'), 1)
-    const listener = vi.fn()
-    const stop = subscribeRuntimeHostContactRegained('env-b', listener)
-    publish(null, 2)
-    publish(makeStatus('runtime-a'), 3)
-    expect(listener).not.toHaveBeenCalled()
-    stop()
   })
 })

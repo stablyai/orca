@@ -1,8 +1,12 @@
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { vi, type Mock } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -13,6 +17,7 @@ import {
 } from './structured-agent-session-host-test-data'
 
 export type QueuedRigProviderOptions = {
+  agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
   recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
   /** Resume the saved thread on later children after close/death. */
@@ -94,7 +99,10 @@ export function createQueuedRigProvider(
         acquisitionGeneration: 'generation-1',
         link: {
           linkId: `link-${fence}`,
-          handle: codexProviderHandle(thread),
+          handle:
+            identity.agent === 'claude'
+              ? claudeProviderHandle(thread, null)
+              : codexProviderHandle(thread),
           origin: resumes ? ('resumed' as const) : ('created' as const),
           mintedAtFence: fence,
           observedAt: NOW
@@ -176,4 +184,14 @@ export function createQueuedRigProvider(
     finishCompact,
     providerEvents
   }
+}
+
+export function eventually(assertion: () => void | Promise<void>): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
+
+export type RigSendOptions = {
+  internal?: true
+  from?: AgentMessageSource
+  carried?: Readonly<Record<string, string>>
 }

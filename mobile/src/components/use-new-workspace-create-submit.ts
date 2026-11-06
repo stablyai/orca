@@ -3,6 +3,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc-client'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import {
@@ -24,7 +25,7 @@ import {
   type NewWorktreeRuntimeSettings
 } from './new-worktree-agent-selection'
 import type { MobileWorkspaceRepo, SetupRunPolicy } from './new-worktree-modal-types'
-import type { SetupTrustPrompt } from './SetupHookTrustDrawer'
+import type { OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 
@@ -37,6 +38,7 @@ type Composer = ReturnType<typeof useMobileComposerSource>
 
 export function useNewWorkspaceCreateSubmit(args: {
   client: RpcClient | null
+  repos: readonly MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
@@ -58,13 +60,14 @@ export function useNewWorkspaceCreateSubmit(args: {
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
   getAgentLaunchSupport: () => Promise<AgentLaunchSupport | false>
+  getBranchIntentSupport: (intent: 'open-existing-v2' | 'create-new') => Promise<boolean>
   transitionDrawer: (view: Exclude<NewWorktreeDrawerView, 'transition'>) => void
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
 }): {
   creating: boolean
-  setupTrustPrompt: SetupTrustPrompt | null
+  setupTrustPrompt: OrcaHookTrustPrompt | null
   create: () => Promise<void>
   approveSetupTrust: (alwaysTrust: boolean) => Promise<void>
   closeSetupTrust: () => void
@@ -73,7 +76,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   const createInFlightRef = useRef(false)
   const setupTrustActionInFlightRef = useRef(false)
   const [creating, setCreating] = useState(false)
-  const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
+  const [setupTrustPrompt, setSetupTrustPrompt] = useState<OrcaHookTrustPrompt | null>(null)
 
   async function create(options: CreateOptions = {}): Promise<void> {
     const { client, selectedRepo } = args
@@ -138,9 +141,15 @@ export function useNewWorkspaceCreateSubmit(args: {
         setupDecision === 'run' &&
         args.setupTrust &&
         args.setupTrust.contentHash !== options.approvedSetupContentHash &&
-        !isSetupHookTrusted(args.trustedOrcaHooks, selectedRepo.id, args.setupTrust.contentHash)
+        !isSetupHookTrusted(
+          args.trustedOrcaHooks,
+          args.repos,
+          selectedRepo.id,
+          args.setupTrust.contentHash
+        )
       ) {
         setSetupTrustPrompt({
+          kind: 'setup',
           repoId: selectedRepo.id,
           repoName: selectedRepo.displayName,
           scriptContent: args.setupTrust.scriptContent,
@@ -166,7 +175,10 @@ export function useNewWorkspaceCreateSubmit(args: {
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
-            agentLaunchSupported: args.getAgentLaunchSupport()
+            agentLaunchSupported: args.getAgentLaunchSupport(),
+            branchIntentSupported: args.getBranchIntentSupport(
+              selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
+            )
           })
         : await createBlankWorkspace({
             client,
@@ -180,12 +192,15 @@ export function useNewWorkspaceCreateSubmit(args: {
             agentLaunchSupported: args.getAgentLaunchSupport()
           })
       if ('error' in result) {
+        triggerError()
         args.setError(result.error)
         return
       }
+      triggerSuccess()
       args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
+      triggerError()
       args.setError(error instanceof Error ? error.message : 'Failed to create workspace')
     } finally {
       createInFlightRef.current = false

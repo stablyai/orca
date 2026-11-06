@@ -1,20 +1,20 @@
 import { useCallback, useEffect } from 'react'
-import { useCreatePullRequestDialogFields } from '../useCreatePullRequestDialogFields'
-import { useHostedReviewStackParent } from '../useHostedReviewStackParent'
+import { useCreatePullRequestDialogFields } from '../hosted-review/creation/useCreatePullRequestDialogFields'
+import { useHostedReviewStackParent } from '../hosted-review/provider-actions/useHostedReviewStackParent'
 import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
   shouldCommitChecksPanelAsyncResult
-} from '../checks-panel-async-result-key'
+} from './refresh/checks-panel-async-result-key'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
-import type { ChecksPanelGenerationState } from './use-checks-panel-generation'
+import type { ChecksPanelGenerationState } from './review-actions/use-checks-panel-generation'
 import {
   checksPanelReviewStableKey,
   clearPendingPRCommentAiAck
-} from '../pr-comments-ai-launch-ack'
+} from './comments/pr-comments-ai-launch-ack'
 
 type ChecksPanelComposerStateInput = Pick<
   ChecksPanelContextState,

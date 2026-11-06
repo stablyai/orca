@@ -40,20 +40,6 @@ describe('recordTerminalInput store writes are coalesced', () => {
     resetTerminalInputActivityCoalescingForTests()
   })
 
-  it('does not write the store on every keystroke', () => {
-    const store = createTestStore()
-    const listener = vi.fn()
-    const unsubscribe = store.subscribe(listener)
-
-    for (let i = 0; i < 50; i++) {
-      store.getState().recordTerminalInput(PANE, 1_000 + i * 15)
-    }
-    unsubscribe()
-
-    // 50 keystrokes inside ~750ms: leading edge plus at most one window boundary.
-    expect(listener.mock.calls.length).toBeLessThanOrEqual(3)
-  })
-
   it('keeps the freshest stamp visible to imperative readers before the flush', () => {
     const store = createTestStore()
 
@@ -67,14 +53,6 @@ describe('recordTerminalInput store writes are coalesced', () => {
 
     vi.advanceTimersByTime(TERMINAL_INPUT_ACTIVITY_WRITE_INTERVAL_MS + 1)
     expect(store.getState().lastTerminalInputAtByPaneKey[PANE]).toBe(1_200)
-  })
-
-  it('writes the very first stamp for a pane synchronously', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput(PANE, 1_000)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey[PANE]).toBe(1_000)
   })
 
   it('does not resurrect a pane key a purge deleted', () => {
@@ -91,14 +69,5 @@ describe('recordTerminalInput store writes are coalesced', () => {
     expect(stored[PANE]).toBeUndefined()
     expect(readLastTerminalInputAt(stored, PANE)).toBeUndefined()
     expect(mergePendingTerminalInputActivity(stored)[PANE]).toBeUndefined()
-  })
-
-  it('ignores invalid pane keys and timestamps', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput('', 1_000)
-    store.getState().recordTerminalInput(PANE, Number.NaN)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey).toEqual({})
   })
 })

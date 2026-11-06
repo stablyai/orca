@@ -1,4 +1,8 @@
-import type { ListMergeRequestsResult, MRListState } from '../../shared/gitlab-types'
+import type {
+  GitLabMRInvolvement,
+  ListMergeRequestsResult,
+  MRListState
+} from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapMRToWorkItem } from './mappers'
 import {
@@ -16,6 +20,46 @@ import {
   type LocalGitExecOptions
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
+
+const INVOLVEMENT_PARAM: Record<GitLabMRInvolvement, string> = {
+  authored: 'author_id',
+  reviewing: 'reviewer_id'
+}
+
+const SIGN_IN_REQUIRED_MESSAGE =
+  "GitLab isn't signed in here, so Orca can't filter merge requests by you. Run glab auth login in this environment, then refresh."
+
+class GitLabSignInRequiredError extends Error {}
+
+// A bare "401" would also match a port or host in the request URL of a network failure.
+const SIGNED_OUT_LOOKUP_FAILURE =
+  /\b401 unauthorized\b|http 401\b|not logged|not authenticated|no token/
+
+function isSignedOutLookupFailure(err: unknown): boolean {
+  return SIGNED_OUT_LOOKUP_FAILURE.test(
+    (err instanceof Error ? err.message : String(err)).toLowerCase()
+  )
+}
+
+// Uncached: a cached id goes stale when glab switches accounts on this host, a WSL distro or a paired server.
+async function involvementFilterParam(
+  involvement: GitLabMRInvolvement,
+  hostArgs: string[],
+  options: Parameters<typeof glabExecFileAsync>[1]
+): Promise<string> {
+  const { stdout } = await glabExecFileAsync(['api', ...hostArgs, 'user'], options).catch(
+    (err: unknown) => {
+      throw isSignedOutLookupFailure(err) ? new GitLabSignInRequiredError() : err
+    }
+  )
+  const viewer: unknown = JSON.parse(stdout)
+  const viewerId = viewer && typeof viewer === 'object' && 'id' in viewer ? viewer.id : undefined
+  if (typeof viewerId !== 'number' || !Number.isSafeInteger(viewerId) || viewerId <= 0) {
+    throw new Error('Could not identify the signed-in GitLab user.')
+  }
+  return `&${INVOLVEMENT_PARAM[involvement]}=${viewerId}`
+}
 
 function mrListStateFlags(state: MRListState): string[] {
   switch (state) {
@@ -38,7 +82,8 @@ export async function listMergeRequests(
   preference?: IssueSourcePreference,
   query?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  { involvement }: { involvement?: GitLabMRInvolvement } = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   // Resolve the same preference-selected project as issue listings.
@@ -50,6 +95,24 @@ export async function listMergeRequests(
     localGitOptions
   )
   if (!projectRef) {
+    if (await isTaskRepositoryIneligible(repoPath, 'gitlab', connectionId, localGitOptions)) {
+      return { items: [], page, perPage, totalCount: 0, totalPages: 0 }
+    }
+    if (involvement) {
+      // Before the SSH not_found: the task page hides that type, so the empty list would read as "none of yours".
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: {
+          type: 'unknown',
+          message:
+            "Orca couldn't identify this repository's GitLab project, so it can't filter its merge requests by you."
+        }
+      }
+    }
     if (connectionId) {
       // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {
@@ -116,23 +179,35 @@ export async function listMergeRequests(
     `projects/${encodedProject(projectRef.path)}/merge_requests?` +
     `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}`
   const repoId = projectRef.path
+  const execOptions = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  // A filtered list pins the project's host so the user lookup and the list share one account.
+  const hostArgs = involvement
+    ? ['--hostname', projectRef.host]
+    : glabHostnameArgs(projectRef, connectionId)
 
   await acquire()
   try {
+    const involvementParam = involvement
+      ? await involvementFilterParam(involvement, hostArgs, execOptions)
+      : ''
     const { body, headers } = await glabApiWithHeaders(
-      [...glabHostnameArgs(projectRef, connectionId), path],
-      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+      [...hostArgs, `${path}${involvementParam}`],
+      execOptions
     )
     const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(body)
+    const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
+    // GitLab omits both totals past 10,000 rows and proxies can strip them; a full page advertises one more probe.
+    const probedTotalPages = data.length < perPage ? page : page + 1
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
       perPage,
-      totalCount: parseGlabPaginationHeader(headers['x-total'], 0) ?? 0,
-      // Large/all-state listings may omit total-pages; derive it from total count when available.
+      totalCount: headerTotalCount ?? 0,
       totalPages:
         parseGlabPaginationHeader(headers['x-total-pages'], 1) ??
-        Math.max(1, Math.ceil((parseGlabPaginationHeader(headers['x-total'], 0) ?? 0) / perPage))
+        (headerTotalCount === undefined
+          ? probedTotalPages
+          : Math.max(1, Math.ceil(headerTotalCount / perPage)))
     }
   } catch (err) {
     return {
@@ -141,7 +216,10 @@ export async function listMergeRequests(
       perPage,
       totalCount: 0,
       totalPages: 0,
-      error: classifyListFetchError(err)
+      error:
+        err instanceof GitLabSignInRequiredError
+          ? { type: 'permission_denied', message: SIGN_IN_REQUIRED_MESSAGE }
+          : classifyListFetchError(err)
     }
   } finally {
     release()

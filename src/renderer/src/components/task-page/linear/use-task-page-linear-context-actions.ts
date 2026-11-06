@@ -3,8 +3,6 @@ import { toast } from 'sonner'
 
 import { translate } from '@/i18n/i18n'
 import type { LinearMode } from '@/components/task-page/task-page-localized-options'
-import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
-import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
   LinearCustomViewSummary,
   LinearProjectSummary
@@ -33,24 +31,6 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
     setLinearCustomViewIssueLoadingTargetPage,
     setLinearCustomViewProjectsResult
   } = model
-  const patchScopedLinearIssue = useCallback(
-    (issueId: string, patch: Partial<LinearIssue>) => {
-      const patchResult = (result: LinearCollectionResult<LinearIssue>) => ({
-        ...result,
-        items: result.items.map((item) =>
-          item.id === issueId
-            ? {
-                ...item,
-                ...patch
-              }
-            : item
-        )
-      })
-      setLinearProjectIssuesResult(patchResult)
-      setLinearCustomViewIssuesResult(patchResult)
-    },
-    [setLinearCustomViewIssuesResult, setLinearProjectIssuesResult]
-  )
   const selectLinearMode = useCallback(
     (mode: LinearMode) => {
       clearSelectedLinearIssue()
@@ -230,12 +210,10 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
     ]
   )
   const nextModel = model as typeof model & {
-    patchScopedLinearIssue: typeof patchScopedLinearIssue
     selectLinearMode: typeof selectLinearMode
     openLinearProjectContext: typeof openLinearProjectContext
     openLinearCustomViewContext: typeof openLinearCustomViewContext
   }
-  nextModel.patchScopedLinearIssue = patchScopedLinearIssue
   nextModel.selectLinearMode = selectLinearMode
   nextModel.openLinearProjectContext = openLinearProjectContext
   nextModel.openLinearCustomViewContext = openLinearCustomViewContext

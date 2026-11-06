@@ -10,9 +10,9 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 import type { AppState } from '../store/types'
-import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   buildStoreState,
   expectWorktreeRouting,
@@ -372,7 +372,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       const paneKey = makePaneKey(tabId, leafId)
       worktrees.push(makeWorktree({ id: worktreeId, repoId: TEST_REPO.id }))
       tabsByWorktree[worktreeId] = [
-        makeTab({ id: tabId, worktreeId, title: 'Pi', ptyId: `pty-${index}` })
+        makeTab({ id: tabId, worktreeId, title: 'Hermes', ptyId: `pty-${index}` })
       ]
       unifiedTabsByWorktree[worktreeId] = [makeUnifiedTab({ id: tabId, worktreeId, groupId: 'g' })]
       terminalLayoutsByTabId[tabId] = {
@@ -385,7 +385,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'waiting',
         prompt: `remote prompt ${index}`,
-        agentType: 'pi',
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_000 + index,
         stateStartedAt: 1_700_000_000_000 + index
       })
@@ -451,7 +451,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
-        'Pi - action required'
+        'Hermes - action required'
       )
       // Main derives layout-owner tab titles; its unmodeled frames draw them without renderer writes.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {

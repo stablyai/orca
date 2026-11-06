@@ -1,7 +1,11 @@
+import type { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { vi, type Mock } from 'vitest'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from './editor'
 import { translate } from '@/i18n/i18n'
 
@@ -191,5 +195,16 @@ export function makeTabGroup(
     activeTabId: null,
     tabOrder: [],
     ...overrides
+  }
+}
+
+export function admissionFromBusy(busy: () => boolean): typeof admitStructuredAgentSession {
+  return (_workspace, _tab, _intent, effect) => {
+    effect(busy(), {
+      current: () => true,
+      busy,
+      signal: new AbortController().signal
+    })
+    return Promise.resolve()
   }
 }

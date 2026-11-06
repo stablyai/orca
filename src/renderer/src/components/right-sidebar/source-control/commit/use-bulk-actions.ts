@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
@@ -14,13 +14,13 @@ import {
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry
-} from './discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import type {
   SourceControlDisplaySectionId,
   SourceControlEntryGroups
-} from '../listing/section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import type { FlatEntry } from '../listing/use-selection'
-import type { GitStageWorktreeScope } from '../../../../../../shared/git-stage-worktree-scope'
+import type { GitStageWorktreeScope } from '../../../../../../shared/git/paths/git-stage-worktree-scope'
 
 /** Handlers run with void; catch Git failures to avoid silent unhandled rejections. */
 function reportBulkMutationFailure(error: unknown): void {

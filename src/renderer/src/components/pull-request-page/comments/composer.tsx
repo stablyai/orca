@@ -17,6 +17,7 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function GHCommentComposer({
   className,
@@ -27,6 +28,7 @@ export function GHCommentComposer({
   itemType,
   prRepo,
   mentionOptions,
+  mentionError,
   onCommentAdded
 }: {
   className?: string
@@ -36,6 +38,7 @@ export function GHCommentComposer({
   issueNumber: number
   itemType: 'issue' | 'pr'
   prRepo?: GitHubOwnerRepo | null
+  mentionError?: string | null
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
@@ -78,6 +81,9 @@ export function GHCommentComposer({
         type: itemType,
         prRepo
       })
+      if (result.ok) {
+        onCommentAdded(result.comment)
+      }
       if (!mountedRef.current) {
         return
       }
@@ -85,10 +91,9 @@ export function GHCommentComposer({
         setBody('')
         requestAnimationFrame(autoGrow)
         // Why: use GitHub's returned comment so the optimistic row shows the real login/avatar without a reopen.
-        onCommentAdded(result.comment)
       } else {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.PullRequestPage.1208347ac0', 'Failed to add comment')
         )
       }
@@ -142,6 +147,7 @@ export function GHCommentComposer({
         placeholder={translate('auto.components.PullRequestPage.d2030fc8cd', 'Add a comment…')}
         rows={4}
         mentionOptions={mentionOptions}
+        mentionError={mentionError}
         wrapperClassName="flex min-h-20 w-full items-stretch"
         className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />

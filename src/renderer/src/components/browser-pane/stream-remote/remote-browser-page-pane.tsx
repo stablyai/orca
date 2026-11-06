@@ -251,7 +251,8 @@ export function RemoteBrowserPagePane({
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
-    handleRemoteScreenshotKeyDown
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste
   } = useRemoteBrowserPageInput({
     busy,
     imageRef,
@@ -414,6 +415,7 @@ export function RemoteBrowserPagePane({
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
+        handleRemoteScreenshotPaste={handleRemoteScreenshotPaste}
       />
     </div>
   )

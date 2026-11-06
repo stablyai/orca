@@ -28,11 +28,68 @@ export function collapsedToolInputPrefix(input: string): string {
   return collapsed
 }
 
-/** Strip login-shell wrappers only when the entire remainder is one quoted string. Pipelines/unpaired quotes stay literal.
+/** Strip login-shell wrappers only when the entire remainder is one quoted shell word. Pipelines/unpaired quotes stay literal.
  * Run before clipping: the closing quote proves the wrapper and would be lost from a bounded prefix. */
-const LOGIN_SHELL_COMMAND =
-  /^\s*(?:.*[\\/])?(?:ba|z|k|da|fi)?sh(?:\.exe)?\s+-[a-zA-Z]*c\s+(['"])([\s\S]*)\1\s*$/
+const LOGIN_SHELL_PREFIX =
+  /^\s*(?:[^'"]*[\\/])?(?:ba|z|k|da|fi)?sh(?:\.exe)?\s+-[a-zA-Z]*c\s+(?=['"])/
+const DOUBLE_QUOTED_RUN = /[^"\\]+/y
+const DOUBLE_QUOTE_ESCAPABLE = '$`"\\\n'
+const PLAIN_WORD_CHAR = /[\w@%+=:,./-]/
 
 export function unwrapLoginShellCommand(command: string): string {
-  return LOGIN_SHELL_COMMAND.exec(command)?.[2] ?? command
+  const prefix = LOGIN_SHELL_PREFIX.exec(command)
+  return prefix
+    ? (decodeQuotedShellWord(command.slice(prefix[0].length).trimEnd()) ?? command)
+    : command
+}
+
+// Agents join argv by switching quote styles mid-word (`"a'b"'$'`), so undo POSIX quoting, not just the outer pair.
+function decodeQuotedShellWord(word: string): string | null {
+  let decoded = ''
+  let index = 0
+  while (index < word.length) {
+    const char = word[index]
+    if (char === "'") {
+      const end = word.indexOf("'", index + 1)
+      if (end === -1) {
+        return null
+      }
+      decoded += word.slice(index + 1, end)
+      index = end + 1
+    } else if (char === '"') {
+      index += 1
+      for (;;) {
+        DOUBLE_QUOTED_RUN.lastIndex = index
+        if (DOUBLE_QUOTED_RUN.test(word)) {
+          decoded += word.slice(index, DOUBLE_QUOTED_RUN.lastIndex)
+          index = DOUBLE_QUOTED_RUN.lastIndex
+        }
+        if (index >= word.length) {
+          return null
+        }
+        if (word[index] === '"') {
+          index += 1
+          break
+        }
+        const next = word[index + 1]
+        if (next !== undefined && DOUBLE_QUOTE_ESCAPABLE.includes(next)) {
+          // A backslash-newline inside double quotes is a line continuation.
+          decoded += next === '\n' ? '' : next
+          index += 2
+        } else {
+          decoded += '\\'
+          index += 1
+        }
+      }
+    } else if (char === '\\' && index + 1 < word.length) {
+      decoded += word[index + 1] === '\n' ? '' : word[index + 1]
+      index += 2
+    } else if (PLAIN_WORD_CHAR.test(char)) {
+      decoded += char
+      index += 1
+    } else {
+      return null
+    }
+  }
+  return decoded
 }

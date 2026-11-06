@@ -1,5 +1,11 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
   if (value === true) {

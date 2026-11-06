@@ -1,4 +1,3 @@
-import { toast } from 'sonner'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject
@@ -13,7 +12,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { toastSshHostMoveRefused } from './ssh-managed-server-refusal-toast'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
 import { rekeyWorktreeVisitHost } from '@/lib/worktree-visit-recency'
@@ -54,12 +53,7 @@ export function applySshManagedServerTransition(
       previous.detail === next.detail
     )
   ) {
-    toast.error(
-      translate(
-        'auto.hooks.ipcEvents.sshManagedServer.refusedBlocked',
-        'Orca couldn’t set itself up on this SSH host. SSH Hosts in Settings shows why.'
-      )
-    )
+    toastSshHostMoveRefused(targetId, next)
   }
 }
 

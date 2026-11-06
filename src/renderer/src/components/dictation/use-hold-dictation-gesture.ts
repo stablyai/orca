@@ -123,7 +123,7 @@ export function useHoldDictationGesture({
 
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
-        if (!settings?.voice?.enabled || !settings.voice.sttModel) {
+        if (!settings?.voice?.enabled) {
           return
         }
         e.preventDefault()
@@ -188,7 +188,6 @@ export function useHoldDictationGesture({
   }, [
     settings?.voice?.dictationMode,
     settings?.voice?.enabled,
-    settings?.voice?.sttModel,
     keybindings,
     startDictation,
     stopDictation,

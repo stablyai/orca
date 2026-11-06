@@ -174,8 +174,8 @@ jobs:
           upper="$(printf '%s' "$CHANNEL" | tr '[:lower:]' '[:upper:]')"
           echo "ORCA_WIN_${upper}=1" >>"$GITHUB_ENV"
           echo "ORCA_${upper}_BUILD_VERSION=${VERSION}" >>"$GITHUB_ENV"
-          if [[ ! -f config/scripts/verify-dev-channel-packaging.mjs ]]; then
-            echo "::error::$TAG was built from a commit with no config/scripts/verify-dev-channel-packaging.mjs; that commit predates Windows dev builds, so it cannot produce one."
+          if [[ ! -f config/scripts/desktop-distribution/channel-policy/verify-dev-channel-packaging.mjs ]]; then
+            echo "::error::$TAG was built from a commit with no config/scripts/desktop-distribution/channel-policy/verify-dev-channel-packaging.mjs; that commit predates Windows dev builds, so it cannot produce one."
             exit 1
           fi
 
@@ -195,6 +195,12 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       # Cache Electron/NSIS/winCodeSign tools with release-cut’s key shape.
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -202,7 +208,7 @@ jobs:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 
@@ -222,7 +228,7 @@ jobs:
       # Validate packaging config after install, before the expensive build.
       - name: Verify dev-channel packaging identity
         shell: bash
-        run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
+        run: node config/scripts/desktop-distribution/channel-policy/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
 
       - name: Download shared JavaScript
         if: inputs.javascript_source_sha != ''
@@ -235,7 +241,11 @@ jobs:
         shell: bash
         run: |
           if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
-            node config/scripts/release-javascript-artifact.mjs restore
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+              RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+            fi
+            node "$RELEASE_JAVASCRIPT_ARTIFACT" restore
             pnpm run build:release:host
           else
             pnpm build:release
@@ -311,7 +321,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+          command: node $(if (Test-Path config/scripts/native-build/node-addons/ensure-native-runtime.mjs) { "config/scripts/native-build/node-addons/ensure-native-runtime.mjs" } else { "config/scripts/ensure-native-runtime.mjs" }) --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
@@ -346,7 +356,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+          command: node $(if (Test-Path config/scripts/native-build/node-addons/ensure-native-runtime.mjs) { "config/scripts/native-build/node-addons/ensure-native-runtime.mjs" } else { "config/scripts/ensure-native-runtime.mjs" }) --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
         env:
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
           ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}

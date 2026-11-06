@@ -4,7 +4,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, type Page } from '@stablyai/playwright-test'
-import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
+import { isServeMintedPtySessionId } from '../../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export type RuntimeRpcCall = <TResult>(method: string, params: unknown) => Promise<TResult>
 
@@ -39,7 +40,7 @@ const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 function isDaemonPtyIdForm(ptyId: string, worktreeId: string): boolean {
   return (
     ptyId.startsWith(`${worktreeId}@@`) &&
-    !ptyId.startsWith('serve-') &&
+    !isServeMintedPtySessionId(ptyId) &&
     !ptyId.startsWith('ssh-') &&
     ptyId.slice(`${worktreeId}@@`.length).length > 0
   )

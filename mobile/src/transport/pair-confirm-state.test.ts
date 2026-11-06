@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 
 import { resolvePairConfirmRouteState } from './pair-confirm-state'
-import type { PairingOffer } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 function encodeOffer(offer: PairingOffer): string {
   return Buffer.from(JSON.stringify(offer))
@@ -57,6 +57,14 @@ describe('resolvePairConfirmRouteState', () => {
     })
     const invalidOffer = Buffer.from(JSON.stringify({ ...offer, v: 99 })).toString('base64url')
     expect(resolvePairConfirmRouteState(invalidOffer)).toEqual({
+      kind: 'error',
+      offer: null,
+      errorMessage: 'Not a valid pairing code'
+    })
+  })
+
+  it('rejects repeated URL parameters instead of choosing a pairing offer', () => {
+    expect(resolvePairConfirmRouteState([encodeOffer(offer), encodeOffer(offer)])).toEqual({
       kind: 'error',
       offer: null,
       errorMessage: 'Not a valid pairing code'

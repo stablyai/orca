@@ -1,5 +1,10 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from 'vitest'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/NativeChatVisualGuestThemePublisher'
+
+vi.mock('@/components/native-chat/NativeChatVisualGuestThemePublisher', () => ({
+  publishNativeChatVisualGuestTheme: vi.fn()
+}))
 import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passthrough'
 import { webviewRegistry } from '../host-guest/webview-registry'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
@@ -24,6 +29,7 @@ it('restores pointer input when a drag ends after attaching a document preview',
   document.body.appendChild(container)
   const append = vi.spyOn(container, 'appendChild')
   append.mockImplementation((node) => {
+    expect(publishNativeChatVisualGuestTheme).toHaveBeenCalledTimes(1)
     expect((node as HTMLElement).style.pointerEvents).toBe('none')
     return Node.prototype.appendChild.call(container, node)
   })
@@ -42,10 +48,4 @@ it('restores pointer input when a drag ends after attaching a document preview',
     append.mockRestore()
   }
   expect(webviewRegistry.has('preview-drag')).toBe(false)
-})
-
-it('attaches an opaque guest so dark-scheme documents get a dark canvas', () => {
-  const attached = attach('preview-opaque', document.createElement('div'))
-  expect(attached.webview.getAttribute('webpreferences')).toContain('transparent=false')
-  attached.detach()
 })

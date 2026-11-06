@@ -11,7 +11,7 @@ import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
 import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
 import { requireSwitchedOn } from './require-switched-on'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../shared/workspace-unread-raise-capability'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -26,9 +26,9 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../runtime-store-partial-fixture'
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

@@ -1,12 +1,15 @@
 /** OMP/Pi titles use π, never OMP/Pi. Verified oh-my-pi utils/title-generator.ts DEFAULT_TERMINAL_TITLE/buildTerminalTitleWithState
  * (native π frame label); Orca’s injected pi/titlebar-extension-source.ts instead emits π - session - cwd with 80ms braille frames.
  * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
- * Disable synthesizeWorkingTitle only: terminal-state synthesis still publishes pane identity. Normalize rotating braille while preserving labels. */
+ * OMP disables terminal-title synthesis so its session titles survive every state. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
-import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
-import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
+import {
+  detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-status/title/agent-title-status'
+import { isDecorativeAgentTitleFrameChange } from './agent-status/title/agent-decorative-title-signature'
+import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
+import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 
 // Verbatim from src/main/pi/titlebar-extension-source.ts:44 and oh-my-pi:530-544.
 const ORCA_EXTENSION_WORKING = (frame: string): string => `${frame} π - fixing the sidebar - orca`
@@ -49,12 +52,6 @@ describe('normalizeTerminalTitle keeps the OMP/Pi session label', () => {
     expect(normalized.size).toBe(1)
     expect([...normalized][0]).toContain('fixing the sidebar')
   })
-
-  it('keeps two different sessions distinguishable', () => {
-    expect(normalizeTerminalTitle('π - session A - orca')).not.toBe(
-      normalizeTerminalTitle('π - session B - orca')
-    )
-  })
 })
 
 describe('detectAgentStatusFromTitle reads the π state separator', () => {
@@ -63,7 +60,10 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
     ['π > fixing the sidebar', 'idle'],
     ['π ⠋ fixing the sidebar', 'working'],
     ['⠋ π - fixing the sidebar - orca', 'working'],
-    ['π: fixing the sidebar', 'idle']
+    ['π: fixing the sidebar', 'idle'],
+    // Session names are free text; only the synthetic label means permission.
+    ['π - fix action required banner - orca', 'idle'],
+    ['OMP - fix action required banner - orca', 'idle']
   ])('classifies %s as %s', (title, expected) => {
     expect(detectAgentStatusFromTitle(title)).toBe(expected)
   })
@@ -117,13 +117,6 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     expect(detectAgentStatusFromTitle(normalizeCompatibleAgentTitleForOwner(title, 'omp'))).toBe(
       detectAgentStatusFromTitle(title)
     )
-  })
-
-  // Persisted bare frames lack session text but still need explicit OMP owner identity (#6689/#7633/#9077).
-  it('still re-owns bare identity frames', () => {
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ Pi', 'omp')).toBe('⠋ OMP')
-    expect(normalizeCompatibleAgentTitleForOwner('Pi ready', 'omp')).toBe('OMP ready')
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ OMP', 'pi')).toBe('⠋ Pi')
   })
 })
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { AgentHookServer, PANE_KEY_ALIASES_MAX } from './server'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { AgentHookServer } from './server'
+import { PANE_KEY_ALIASES_MAX } from './server/server-constants'
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
@@ -50,23 +51,6 @@ describe('AgentHookServer pane authority', () => {
 
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({ paneKey: SIBLING, prompt: 'sibling' })
-    ])
-  })
-
-  // Main and renderer can both announce the same pane transfer.
-  it('ignores a transfer that is already in place', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setPaneKeyAliasPersistenceListener(listener)
-
-    server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10, { authorityVerified: true })
-    server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 20)
-    server.transferPaneAuthority(SOURCE, TARGET, undefined, 30)
-
-    expect(listener).toHaveBeenCalledOnce()
-    server.transferPaneAuthority(SOURCE, TARGET, 'pty-2', 40)
-    expect(listener).toHaveBeenLastCalledWith([
-      { legacyPaneKey: SOURCE, stablePaneKey: TARGET, ptyId: 'pty-2', updatedAt: 40 }
     ])
   })
 

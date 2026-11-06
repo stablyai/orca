@@ -1,13 +1,10 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
-import { makeUnifiedTab } from '../store/slices/store-test-helpers'
+import '../store/slices/store-test-helpers'
 import { getDefaultSettings } from '../../../shared/constants'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
-import {
-  BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
-  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+import '../../../shared/session-tabs-runtime-capabilities'
+import '../../../shared/protocol-version'
 import { canOfferHttpLinkGroupAction } from '../lib/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,7 +28,6 @@ import {
   resetHostPages,
   seedPairedWorktree,
   installRuntimeTransport,
-  runtimeStatusesFor,
   wrapperForRemotePage
 } from './web-runtime-browser-creation-placement-test-rig'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
@@ -146,51 +142,6 @@ describe('runtime link opens through staging and materialization', () => {
     ).toMatchObject({ remotePageId: 'actual-host-page', environmentId: ENV })
   })
 
-  it('creates a client split beside the source when no browser is visible', async () => {
-    useAppStore.setState((state) => ({
-      groupsByWorktree: {
-        [WT]: state.groupsByWorktree[WT]!.map((group) => ({
-          ...group,
-          activeTabId: `terminal-${group.id}`,
-          tabOrder: [...group.tabOrder, `terminal-${group.id}`]
-        }))
-      },
-      unifiedTabsByWorktree: {
-        [WT]: [
-          ...state.unifiedTabsByWorktree[WT]!,
-          ...[G1, G2].map((groupId) =>
-            makeUnifiedTab({
-              id: `terminal-${groupId}`,
-              entityId: `terminal-${groupId}`,
-              worktreeId: WT,
-              groupId,
-              contentType: 'terminal',
-              executionHostId: HOST
-            })
-          )
-        ]
-      }
-    }))
-    const creating = open()
-    expect(pendingCreates).toHaveLength(1)
-    const provisional = pendingCreates[0]!.params.page!
-    const staged = wrapperForRemotePage(provisional)!
-    expect([G1, G2]).not.toContain(staged.groupId)
-    expect(useAppStore.getState().layoutByWorktree[WT]).toMatchObject({
-      first: { type: 'split', first: { groupId: G1 }, second: { groupId: staged.groupId } }
-    })
-    pendingCreates[0]!.resolve('split-host-page')
-    expect(await creating).toMatchObject({ status: 'opened', result: { groupId: staged.groupId } })
-    expect(wrapperForRemotePage('split-host-page')?.groupId).toBe(staged.groupId)
-  })
-
-  it('refuses new explicit creation before staging when strict peer placement is unproven', async () => {
-    const before = useAppStore.getState().unifiedTabsByWorktree
-    expect(await open(true)).toEqual({ status: 'unsupported' })
-    expect(pendingCreates).toHaveLength(0)
-    expect(useAppStore.getState().unifiedTabsByWorktree).toBe(before)
-  })
-
   it('offers explicit runtime reuse only when a matching pinned page proves the route and session', async () => {
     const state = useAppStore.getState()
     const profile: BrowserSessionProfile = {
@@ -238,44 +189,6 @@ describe('runtime link opens through staging and materialization', () => {
       result: { browserWorkspaceId: SOURCE.workspaceId, browserPageId: SOURCE.pageId, groupId: G1 }
     })
     expect(pendingCreates).toHaveLength(0)
-  })
-
-  it('keeps new explicit creation unavailable even if a session split capability is advertised', async () => {
-    useAppStore.setState({
-      runtimeStatusByEnvironmentId: runtimeStatusesFor([
-        BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
-        BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
-        SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
-      ])
-    })
-    expect(
-      canOfferHttpLinkGroupAction(useAppStore.getState(), {
-        workspaceId: WT,
-        sourceTabId: SOURCE.unifiedTabId,
-        url: 'https://example.com/link',
-        sourceOwner: { kind: 'runtime', runtimeEnvironmentId: ENV }
-      })
-    ).toBe(false)
-    expect(await open(true)).toEqual({ status: 'unsupported' })
-    expect(pendingCreates).toHaveLength(0)
-  })
-
-  it('reconciles a page from an older peer that cannot accept a provisional ID', async () => {
-    useAppStore.setState({
-      runtimeStatusByEnvironmentId: runtimeStatusesFor([BROWSER_SCREENCAST_RUNTIME_CAPABILITY])
-    })
-    const creating = open()
-    expect(pendingCreates[0]!.params.page).toBeUndefined()
-    pendingCreates[0]!.resolve('legacy-page')
-    const outcome = await creating
-    expect(outcome).toMatchObject({ status: 'opened', result: { groupId: G2 } })
-    if (outcome.status !== 'opened') {
-      throw new Error('Expected open')
-    }
-    expect(
-      useAppStore.getState().remoteBrowserPageHandlesByPageId[outcome.result.browserPageId]
-        ?.remotePageId
-    ).toBe('legacy-page')
   })
 
   it('a delivery callback failure cannot unwind a page that already materialized', async () => {

@@ -56,8 +56,9 @@ export function notificationTestScreenMountAdapters(
           }
           if (name === 'send-test') {
             // Invoke the handler the actual screen rendered; the inert Pressable never fires itself.
+            // Found by its label: the Troubleshooting row is a button too.
             const button = renderedElementProps(screen.tree(), 'Pressable').find(
-              (props) => props.accessibilityRole === 'button'
+              (props) => props.accessibilityLabel === 'Send test notification'
             )
             const press = button?.onPress
             if (typeof press !== 'function') {

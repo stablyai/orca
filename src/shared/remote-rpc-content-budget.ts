@@ -1,4 +1,4 @@
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit

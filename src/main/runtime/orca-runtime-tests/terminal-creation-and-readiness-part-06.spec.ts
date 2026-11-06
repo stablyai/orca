@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -7,7 +8,7 @@ import {
   antigravityReadyScreen,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('waits for exit on background terminal handles', async () => {
@@ -198,7 +199,6 @@ describe('OrcaRuntimeService', () => {
             tailTruncated: boolean
           }
         >
-        recentPtyPathCandidatesById: Map<string, string[]>
       }
     ).ptysById.get('pty-bg')
     expect(pty).toMatchObject({
@@ -211,11 +211,6 @@ describe('OrcaRuntimeService', () => {
       status: 'exited',
       tail: []
     })
-    expect(
-      (
-        runtime as unknown as { recentPtyPathCandidatesById: Map<string, string[]> }
-      ).recentPtyPathCandidatesById.has('pty-bg')
-    ).toBe(false)
   })
 
   it('bounds disconnected background PTY records and their synthetic handles', async () => {
@@ -242,14 +237,12 @@ describe('OrcaRuntimeService', () => {
       ptysById: Map<string, unknown>
       handles: Map<string, unknown>
       handleByPtyId: Map<string, string>
-      recentPtyPathCandidatesById: Map<string, string[]>
     }
     expect(internals.ptysById.size).toBeLessThanOrEqual(128)
     expect(internals.ptysById.has('pty-bg-0')).toBe(false)
     expect(internals.ptysById.has('pty-bg-139')).toBe(true)
     expect(internals.handleByPtyId.has('pty-bg-0')).toBe(false)
     expect(internals.handles.has(handles[0]!)).toBe(false)
-    expect(internals.recentPtyPathCandidatesById.has('pty-bg-0')).toBe(false)
 
     await expect(runtime.readTerminal(handles[0]!)).rejects.toThrow('terminal_handle_stale')
     await expect(runtime.readTerminal(handles.at(-1)!)).resolves.toMatchObject({

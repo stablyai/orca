@@ -9,7 +9,7 @@ import { installClaudeObservedConfigDirs } from '../claude-accounts/claude-profi
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
   probeAgentProcessPresence: async () => 'live'
 }))
 

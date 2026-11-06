@@ -24,6 +24,28 @@ export function findSecureDaclViolation(
   userSid: string,
   isDirectory: boolean
 ): string | null {
+  const privateViolation = findPrivateDaclViolation(dacl, userSid)
+  if (privateViolation || !dacl) {
+    return privateViolation
+  }
+  if (!dacl.protected) {
+    return 'DACL is not protected; the parent still propagates into it'
+  }
+  const inheritsToChildren = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
+  const usable = dacl.aces.some(
+    (ace) =>
+      ace.type === ACCESS_ALLOWED_ACE_TYPE &&
+      ace.sid === userSid &&
+      (ace.flags & INHERIT_ONLY_ACE) === 0 &&
+      ((ace.mask & GENERIC_ALL) !== 0 ||
+        (ace.mask & WINDOWS_FILE_ALL_ACCESS) === WINDOWS_FILE_ALL_ACCESS) &&
+      (!isDirectory || (ace.flags & inheritsToChildren) === inheritsToChildren)
+  )
+  return usable ? null : `missing full control for ${userSid}`
+}
+
+/** Private CLI files may inherit a private parent; reading must not rewrite their permissions. */
+export function findPrivateDaclViolation(dacl: WindowsDacl | null, userSid: string): string | null {
   if (!dacl) {
     return 'the path has a NULL DACL, which grants everyone everything'
   }
@@ -41,19 +63,5 @@ export function findSecureDaclViolation(
   if (stranger) {
     return `unexpected rule for ${stranger.sid}`
   }
-  if (!dacl.protected) {
-    return 'DACL is not protected; the parent still propagates into it'
-  }
-  const inheritsToChildren = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
-  // An inherit-only rule grants the directory itself nothing, so Orca could not write into it.
-  const usable = dacl.aces.some(
-    (ace) =>
-      ace.type === ACCESS_ALLOWED_ACE_TYPE &&
-      ace.sid === userSid &&
-      (ace.flags & INHERIT_ONLY_ACE) === 0 &&
-      ((ace.mask & GENERIC_ALL) !== 0 ||
-        (ace.mask & WINDOWS_FILE_ALL_ACCESS) === WINDOWS_FILE_ALL_ACCESS) &&
-      (!isDirectory || (ace.flags & inheritsToChildren) === inheritsToChildren)
-  )
-  return usable ? null : `missing full control for ${userSid}`
+  return null
 }

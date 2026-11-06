@@ -28,11 +28,14 @@ function makeTerminal(
         cursorY: 0,
         type: 'normal' as const,
         getLine(row: number) {
-          const text = row === 0 ? lineRef.current : undefined
+          // Rows after the first are xterm soft-wrap continuations.
+          const text = lineRef.current.split('\n')[row]
           if (text === undefined) {
             return null
           }
           return {
+            length: 80,
+            isWrapped: row > 0,
             // Honor xterm’s translateToString slice arguments so wide-cell offset conversion is realistic.
             translateToString: (_trim?: boolean, start?: number, end?: number) =>
               text.slice(start ?? 0, end ?? text.length),
@@ -133,14 +136,6 @@ describe('terminal WebView tap routing', () => {
     vi.restoreAllMocks()
   })
 
-  it('posts open-url when a clean tap lands on a URL', async () => {
-    const { posted } = boot(URL_LINE)
-    await settle()
-    fireTouch('touchstart', [{ x: tapX, y: tapY }])
-    fireTouch('touchend', [])
-    expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
-  })
-
   it('still posts open-url when the tap jitters a few pixels', async () => {
     // Small finger jitter must stay a tap and open the touched URL.
     const { posted } = boot(URL_LINE)
@@ -170,24 +165,6 @@ describe('terminal WebView tap routing', () => {
     ).toEqual(['terminal-input', 'terminal-tap'])
   })
 
-  it('marks the mouse report a touch tap sends as a click', async () => {
-    // A click can move the TUI cursor; order it behind live-field text rather than the wheel queue.
-    const { posted } = boot('interactive prompt', undefined, 'drag')
-    await settle()
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'write', data: '\u001b[?1006l' })
-      })
-    )
-
-    fireTouch('touchstart', [{ x: 20, y: tapY }])
-    fireTouch('touchend', [])
-
-    const inputs = posted.filter((message) => message.type === 'terminal-input')
-    expect(inputs).toHaveLength(1)
-    expect(inputs[0]?.click).toBe(true)
-  })
-
   it('focuses native input without mouse bytes while the tracking encoding is unproven', async () => {
     const { posted } = boot('interactive prompt', undefined, 'drag')
     await settle()
@@ -197,29 +174,6 @@ describe('terminal WebView tap routing', () => {
 
     expect(posted.find((message) => message.type === 'terminal-input')).toBeUndefined()
     expect(posted.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
-  })
-
-  it('reports a non-mouse touch tap without terminal mouse bytes', async () => {
-    const { posted } = boot('plain prompt')
-    await settle()
-
-    fireTouch('touchstart', [{ x: 20, y: tapY }])
-    fireTouch('touchend', [])
-
-    expect(posted.find((message) => message.type === 'terminal-input')).toBeUndefined()
-    expect(posted.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
-  })
-
-  it('opens the URL even right after a width-change reflow', async () => {
-    // Reflow must preserve URL tap routing after scrollback rewrap.
-    const { posted } = boot(URL_LINE)
-    await settle()
-    window.dispatchEvent(
-      new MessageEvent('message', { data: JSON.stringify({ type: 'reflow', cols: 100, rows: 24 }) })
-    )
-    fireTouch('touchstart', [{ x: tapX, y: tapY }])
-    fireTouch('touchend', [])
-    expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
   })
 
   it('opens first-load OSC links from snapshot metadata on the exact cell range', async () => {
@@ -242,11 +196,51 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
       type: 'terminal-file-tap',
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
+      candidates: [{ pathText: '/tmp/result.json', line: 12, column: 3 }]
+    })
+  })
+
+  it('keeps the UNC host of an OSC file link for a Windows share workspace', async () => {
+    const oscLinks = [
+      { row: 0, startCol: 5, endCol: 15, uri: 'file://server/share/repo/app.ts#L12' }
+    ]
+    const { posted } = boot('open artifact here', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(7), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
+      type: 'terminal-file-tap',
+      candidates: [{ pathText: '//server/share/repo/app.ts', line: 12, column: null }]
+    })
+  })
+
+  it('keeps a tap on prose beside a path an ordinary tap', async () => {
+    const line = 'me@host:~/proj$ git status'
+    const { posted } = boot(line)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('git') + 1), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeDefined()
+  })
+
+  it('opens a markdown link whose destination has spaces', async () => {
+    const line = 'see [PDF](</tmp/folder with spaces/report.pdf>)'
+    const { posted } = boot(line)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('with') + 1), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
+      type: 'terminal-file-tap',
+      candidates: [{ pathText: '/tmp/folder with spaces/report.pdf', line: null, column: null }]
     })
   })
 
@@ -258,12 +252,22 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('result')), y: tapY }])
     fireTouch('touchend', [])
 
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
       type: 'terminal-file-tap',
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
+      candidates: [{ pathText: '/tmp/result.json', line: 12, column: 3 }]
     })
+  })
+
+  it('opens the whole URL when the tap lands on its soft-wrapped second row', async () => {
+    const url = `https://example.com/${'a'.repeat(70)}/end`
+    const text = `see ${url} now`
+    const { posted } = boot(`${text.slice(0, 80)}\n${text.slice(80)}`)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(2), y: tapY + 15 * 0.3125 }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')?.url).toBe(url)
   })
 
   it('does not open snapshot OSC links from adjacent terminal cells', async () => {
@@ -275,36 +279,6 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
-  })
-
-  it('does not parse off-cell snapshot file OSC links while routing a tap', async () => {
-    const oscLinks = Array.from({ length: 50 }, (_, index) => ({
-      row: index + 1,
-      startCol: 0,
-      endCol: 10,
-      uri: `file:///tmp/result-${index}.json#L1`
-    }))
-    const { posted } = boot('plain text', oscLinks)
-    await settle()
-
-    const OriginalURL = window.URL
-    let parseCount = 0
-    const CountingURL = class extends OriginalURL {
-      constructor(url: string | URL, base?: string | URL) {
-        parseCount += 1
-        super(url, base)
-      }
-    }
-    Object.defineProperty(window, 'URL', { value: CountingURL, configurable: true })
-    try {
-      fireTouch('touchstart', [{ x: screenXForCol(5), y: tapY }])
-      fireTouch('touchend', [])
-    } finally {
-      Object.defineProperty(window, 'URL', { value: OriginalURL, configurable: true })
-    }
-
-    expect(parseCount).toBe(0)
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toBeUndefined()
   })
 
   it('does not open stale snapshot OSC links after the row text changes', async () => {

@@ -59,7 +59,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
-  // Why: Claude's Retry-After and agy's browser sign-in cooldown bind automated checks; user refreshes may pass.
+  // Claude's Retry-After and agy's sign-in hold bind automated checks; user refreshes may pass.
   protected shouldSkipAutomatedFetch(
     provider: ActiveRateLimitProvider,
     limits: ProviderRateLimits | null
@@ -172,8 +172,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Statusline lacks Fable scope; retain the latest OAuth value.
+        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
         fableWeekly: inherited?.fableWeekly ?? null,
+        extraUsage: inherited?.extraUsage ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',

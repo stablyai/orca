@@ -2,16 +2,18 @@
 // Build from existing create params and strip reserved agent fields so the legacy fallback stays equivalent.
 
 import {
+  isAgentLaunchChatFallback,
+  isAgentLaunchModeReceipt,
   withoutReservedAgentCreateFields,
   type AgentLaunchPlacement,
   type AgentLaunchPrompt,
   type AgentLaunchResult
-} from '../../../src/shared/agent-launch-intent'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-launch-runtime-capability'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
@@ -57,16 +59,24 @@ export function agentLaunchExistingParams(args: {
   worktreeId: string
   operationId: string
   prompt?: AgentLaunchPrompt
+  agentArgs?: string
+  surface?: 'chat' | 'terminal'
   launchSource?: string
   paneKey?: string
   sessionId?: string
   placement?: AgentLaunchPlacement
+  sessionOptions?: Readonly<Record<string, string>>
+  chatOptions?: Readonly<Record<string, string>>
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
+    ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
+    ...(args.surface ? { surface: args.surface } : {}),
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
+    ...(args.sessionOptions ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatOptions ? { chatOptions: { ...args.chatOptions } } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.paneKey ? { paneKey: args.paneKey } : {}),
     ...(args.sessionId ? { sessionId: args.sessionId } : {}),
@@ -83,15 +93,21 @@ export function readAgentLaunchCreateOutcome(result: unknown): AgentLaunchCreate
   if (typeof worktreeId !== 'string' || !worktreeId.trim()) {
     return null
   }
-  const warning = readTrimmedWarning(result)
+  const warning = readAgentLaunchNotice(result)
   return { worktreeId, ...(warning ? { warning } : {}) }
 }
 
-function readTrimmedWarning(source: unknown): string {
-  if (!source || typeof source !== 'object' || !('warning' in source)) {
+/** The launch reply's warning plus, when a chat-capable agent fell back to a terminal, the host's reason. */
+export function readAgentLaunchNotice(source: unknown): string {
+  if (!source || typeof source !== 'object') {
     return ''
   }
-  return typeof source.warning === 'string' ? source.warning.trim() : ''
+  const warning =
+    'warning' in source && typeof source.warning === 'string' ? source.warning.trim() : ''
+  const receipt =
+    'receipt' in source && isAgentLaunchModeReceipt(source.receipt) ? source.receipt : null
+  const fallback = receipt && isAgentLaunchChatFallback(receipt) ? receipt.detail.trim() : ''
+  return [warning, fallback].filter(Boolean).join(' ')
 }
 
 // Capability probing can beat this client’s advertisement; method refusal permits legacy create fallback.
@@ -104,5 +120,3 @@ export function isAgentLaunchUnsupportedRefusal(error: {
   }
   return (error.message ?? '').includes('agent_launch_unsupported')
 }
-
-export { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch-replay-refusal'

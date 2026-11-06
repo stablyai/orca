@@ -1,4 +1,4 @@
-import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import {
   classifyClaudeBackgroundTaskKind,
   record,

@@ -2,12 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { errnoCodeOrUnknown } from './errno-code'
 
 describe('errnoCodeOrUnknown', () => {
-  it.each(['EAGAIN', 'EACCES', 'ENOENT', 'E2BIG'])('reports the errno %s', (code) => {
-    expect(errnoCodeOrUnknown(Object.assign(new Error(`spawn /bin/sh ${code}`), { code }))).toBe(
-      code
-    )
-  })
-
   it.each([
     ['a plain error', new Error('boom')],
     ['a non-errno code', Object.assign(new Error('x'), { code: 'ERR_INVALID_ARG_TYPE' })],

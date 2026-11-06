@@ -4,19 +4,19 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/mobile-native-chat-permission-send'
+import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send'
 import {
   WRITE_ACCEPTED,
   writeUnverifiable,
   type WriteSettlement
-} from '../../../src/shared/pty-write-settlement'
+} from '../../../src/shared/terminal/pty/lifecycle/pty-write-settlement'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { createPtyWriteInput } from '../../../src/main/ipc/pty/ipc/write-input'
 import type { IPtyProvider } from '../../../src/main/providers/pty-provider-contract'
 import type * as PtyProviderRegistry from '../../../src/main/ipc/pty/provider/registry'
 import { ptyOwnership } from '../../../src/main/ipc/pty/provider/ownership-state'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { makeStore } from '../../../src/main/runtime/runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../../src/main/runtime/rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const io = vi.hoisted(() => ({
   getProvider: (): IPtyProvider => {
@@ -78,7 +78,7 @@ function createSettlingProvider(
       if (mode === 'lost') {
         return settleAfter(10, writeUnverifiable('transport_settlement_lost', true))
       }
-      if (mode === 'slow' && data.startsWith('X')) {
+      if (mode === 'slow' && (data.startsWith('X') || data.startsWith('\x1b[200~X'))) {
         return settleAfter(1300, WRITE_ACCEPTED)
       }
       return Promise.resolve(WRITE_ACCEPTED)
@@ -174,7 +174,7 @@ async function bundleMobilePermissionModule(): Promise<unknown> {
     entryPoints: [
       fileURLToPath(
         new URL(
-          '../../../mobile/src/session/mobile-native-chat-permission-send.ts',
+          '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send.ts',
           import.meta.url
         )
       )

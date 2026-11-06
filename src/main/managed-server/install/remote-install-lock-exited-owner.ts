@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import type { InstallLockOwnerFile } from './remote-install-lock-commands'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import {

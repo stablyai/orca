@@ -1,11 +1,11 @@
 /** Keep mounted-pane bell/title/completion/PR-link policy active while parking unmounts TerminalPane. */
 import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
-import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
-import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
+import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
   AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,
@@ -13,7 +13,7 @@ import {
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
-import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
+import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import {
   createParkedTerminalCommandStatusPolicy,
   readInFlightCommandCodeTurn
@@ -29,7 +29,7 @@ import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS

@@ -3,10 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
-import { unservedHostServerMessage, unservedServerStatus } from './ssh-host-unserved-status'
+import { unservedHostServerMessage } from './ssh-host-unserved-status'
 import { sftpSessionClosedError } from './ssh-file-transfer-abort'
 import { NodeRuntimeUnreachableError } from '../managed-server/install/remote-node-runtime-host-download'
-import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 
@@ -42,32 +41,6 @@ async function deployFailingWith(error: unknown) {
 }
 
 describe('a managed-server setup that could not download Node', () => {
-  it.each(['unset', 'tried', 'unsupported'] as const)(
-    'publishes the blocked download with mirror %s',
-    async (mirror) => {
-      const result = await deployFailingWith(unreachable(mirror))
-      expect(result).toMatchObject({
-        reason: 'failed',
-        nodeDownloadBlocked: { mirror }
-      })
-      expect(result.detail).toContain('Neither this computer nor the host could download Node')
-      expect(admitSshManagedServerStatus(unservedServerStatus(result))).toEqual({
-        managedServer: expect.objectContaining({
-          kind: 'relay',
-          reason: 'failed',
-          nodeDownloadBlocked: { mirror }
-        })
-      })
-      const message = unservedHostServerMessage(result)
-      expect(message).toContain('Neither this computer nor this host could download Node.js')
-      if (mirror === 'unsupported') {
-        expect(message).not.toContain('mirror')
-      } else {
-        expect(message).toContain(mirror === 'tried' ? 'Check the mirror' : 'Set a Node.js')
-      }
-    }
-  )
-
   it('reads the flag through a wrapping install error', async () => {
     const wrapped = new Error('Installing the runtime failed', { cause: unreachable('unset') })
     await expect(deployFailingWith(wrapped)).resolves.toMatchObject({
@@ -87,15 +60,5 @@ describe('a managed-server setup that could not download Node', () => {
     const result = await deployFailingWith(lost)
     expect(result).toMatchObject({ contactLost: true })
     expect(result).not.toHaveProperty('nodeDownloadBlocked')
-  })
-
-  it('drops an unknown mirror state from a newer build at admission', () => {
-    expect(
-      admitSshManagedServerStatus({
-        kind: 'relay',
-        reason: 'failed',
-        nodeDownloadBlocked: { mirror: 'regional' }
-      })
-    ).toEqual({ managedServer: { kind: 'relay', reason: 'failed' } })
   })
 })

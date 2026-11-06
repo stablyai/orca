@@ -11,7 +11,7 @@ function routerFixture() {
     getGeneration: vi.fn(() => 1),
     sendRequest: vi.fn(async () => ({}))
   } as unknown as StableLogicalRpcClient
-  const handleActiveNudge = vi.fn(() => 'probe' as const)
+  const handleActiveNudge = vi.fn()
   const setForeground = vi.fn((next: boolean) => {
     foreground = next
   })
@@ -22,7 +22,6 @@ function routerFixture() {
     isStopped: () => false,
     isForeground: () => foreground,
     setForeground,
-    replaceRelay: vi.fn(),
     scheduleDirectProbe
   })
   return { handleActiveNudge, logical, router, scheduleDirectProbe, setForeground }

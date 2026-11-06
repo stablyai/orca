@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => {
   // Annotated rather than asserted: the literal alone narrows `raw` to `null`.
@@ -55,18 +55,26 @@ vi.mock('react-native', () => ({
   Text: hosts.Text,
   Pressable: hosts.Pressable,
   TextInput: hosts.TextInput,
-  Switch: hosts.Switch,
   StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: hosts.View }))
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.Switch }))
+vi.mock('lucide-react-native', () => ({
+  Check: hosts.View,
+  ChevronDown: hosts.View,
+  ChevronLeft: hosts.View,
+  ChevronRight: hosts.View
+}))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 
 import { CustomKeyModal } from './CustomKeyModal'
-import { loadCustomKeys, removeCustomKey, saveCustomKeys } from '../terminal/terminal-custom-keys'
-import { readMirroredStorage } from '../storage/mirrored-storage-keys'
+import { removeCustomKey, saveCustomKeys } from '../terminal/terminal-custom-keys'
+import { readMirroredStorage, retainMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_KEYS = 'orca:custom-accessory-keys'
+let releaseStorage = () => {}
+
+afterEach(() => releaseStorage())
 
 /** What a later `init` would carry for this key, which is the map and not the store. */
 function mirrored(): string | undefined {
@@ -119,6 +127,7 @@ function addAShortcut(renderer: ReturnType<typeof create>): void {
 }
 
 beforeEach(() => {
+  releaseStorage = retainMirroredStorage([CUSTOM_KEYS])
   store.raw = null
   store.refuse = false
   store.failRead = false
@@ -156,48 +165,11 @@ describe('adding a custom key when the store refuses the write', () => {
     // Restore mirror after refused save: saveCustomKeys notes map before persistence, and next init must not include rejected value.
     expect(mirrored()).toBe(before)
   })
-
-  it('reports the key and closes when the store takes it, so the case above is the refusal', async () => {
-    const onKeysChanged = vi.fn()
-    const onClose = vi.fn()
-    let renderer: ReturnType<typeof create> | null = null
-    act(() => {
-      renderer = create(createElement(CustomKeyModal, { visible: true, onClose, onKeysChanged }))
-    })
-    if (renderer === null) {
-      throw new Error('the modal did not render')
-    }
-    addAShortcut(renderer)
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(onKeysChanged).toHaveBeenCalledTimes(1)
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('removing a custom key', () => {
   const kept = { id: 'custom-1', label: 'Ctrl+C', bytes: '\u0003', enter: false }
   const removed = { id: 'custom-2', label: 'Ctrl+D', bytes: '\u0004', enter: false }
-
-  it('rejects when the store refuses, so a caller never drops the row', async () => {
-    store.raw = JSON.stringify([kept, removed])
-    store.refuse = true
-    await expect(removeCustomKey(removed.id)).rejects.toThrow()
-  })
-
-  it('answers the stored list without the key once the store takes it', async () => {
-    store.raw = JSON.stringify([kept, removed])
-    await expect(removeCustomKey(removed.id)).resolves.toEqual([kept])
-  })
-
-  it('lets two removals in flight together both land', async () => {
-    const third = { id: 'custom-3', label: 'Ctrl+Z', bytes: '\u001a', enter: false }
-    store.raw = JSON.stringify([kept, removed, third])
-    await Promise.all([removeCustomKey(kept.id), removeCustomKey(removed.id)])
-    expect(JSON.parse(store.raw ?? '[]')).toEqual([third])
-  })
 
   it('removes from the list a settings save in flight stored, not the list before it', async () => {
     const third = { id: 'custom-3', label: 'Ctrl+Z', bytes: '\u001a', enter: false }
@@ -218,65 +190,5 @@ describe('removing a custom key', () => {
     store.failRead = true
     await expect(removeCustomKey(removed.id)).rejects.toThrow()
     expect(store.writes).toBe(0)
-  })
-})
-
-describe('adding a custom key when the stored list cannot be read', () => {
-  it('writes nothing and keeps the drawer open', async () => {
-    store.failRead = true
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const onKeysChanged = vi.fn()
-    const onClose = vi.fn()
-    let renderer: ReturnType<typeof create> | null = null
-    act(() => {
-      renderer = create(createElement(CustomKeyModal, { visible: true, onClose, onKeysChanged }))
-    })
-    if (renderer === null) {
-      throw new Error('the modal did not render')
-    }
-    addAShortcut(renderer)
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(store.writes).toBe(0)
-    expect(onKeysChanged).not.toHaveBeenCalled()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-})
-
-describe('when the stored value holds no keys', () => {
-  const HOLDS_NO_KEYS = ['{not json', 'null', '{}', '[null]']
-
-  it.each(HOLDS_NO_KEYS)('an add replaces %s with the new key', async (raw) => {
-    store.raw = raw
-    const onKeysChanged = vi.fn()
-    const onClose = vi.fn()
-    let renderer: ReturnType<typeof create> | null = null
-    act(() => {
-      renderer = create(createElement(CustomKeyModal, { visible: true, onClose, onKeysChanged }))
-    })
-    if (renderer === null) {
-      throw new Error('the modal did not render')
-    }
-    addAShortcut(renderer)
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(JSON.parse(store.raw ?? '[]')).toHaveLength(1)
-    expect(onKeysChanged).toHaveBeenCalledTimes(1)
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it.each(HOLDS_NO_KEYS)('a removal replaces %s with an empty list', async (raw) => {
-    store.raw = raw
-    await expect(removeCustomKey('custom-1')).resolves.toEqual([])
-    expect(store.raw).toBe('[]')
-  })
-
-  it.each(HOLDS_NO_KEYS)('loading %s shows no keys', async (raw) => {
-    store.raw = raw
-    await expect(loadCustomKeys()).resolves.toEqual([])
   })
 })

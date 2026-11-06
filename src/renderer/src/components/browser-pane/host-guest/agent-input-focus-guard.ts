@@ -1,6 +1,6 @@
 import { webviewRegistry } from './webview-registry'
 
-// Main brackets agent guest input; restore the user’s element afterward because guest/CDP focus would otherwise retain their keyboard. See docs/reference/agent-browser-focus-isolation.md.
+// Main brackets agent guest input; restore the user’s element afterward because guest/CDP focus would otherwise retain their keyboard.
 
 // Why: the input's own focus move can reach this renderer just after the end message.
 const LATE_FOCUS_RECHECK_MS = 50

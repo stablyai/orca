@@ -1,17 +1,17 @@
 import { useCallback, useState } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   getDiscardAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
-} from './discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
@@ -19,7 +19,7 @@ import {
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,
@@ -122,21 +122,33 @@ export function useSourceControlDiscardConfirmation({
           // Limit bulk failures to the first error and sample paths so the toast stays readable.
           const firstMsg = readIpcErrorMessage(errors[0])
           const sample = result.failed.slice(0, 3).join(', ')
-          const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
+          const hiddenCount = result.failed.length - 3
+          const samplePaths =
+            hiddenCount > 0
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.discardFailedSampleMore',
+                  '{{paths}}, +{{count}} more',
+                  {
+                    paths: sample,
+                    count: hiddenCount,
+                    defaultValue_one: '{{paths}}, +{{count}} more'
+                  }
+                )
+              : sample
           toast.error(
             translate(
-              'auto.components.right.sidebar.SourceControl.8eb3782a0c',
-              'Failed to discard {{value0}} file{{value1}}',
-              { value0: result.failed.length, value1: result.failed.length === 1 ? '' : 's' }
+              'auto.components.right.sidebar.SourceControl.discardFailed',
+              'Failed to discard {{count}} files',
+              { count: result.failed.length, defaultValue_one: 'Failed to discard {{count}} file' }
             ),
             {
               description: firstMsg
                 ? translate(
-                    'auto.components.right.sidebar.SourceControl.dc5a6465fc',
-                    '{{value0}} (e.g. {{value1}}{{value2}})',
-                    { value0: firstMsg, value1: sample, value2: more }
+                    'auto.components.right.sidebar.SourceControl.discardFailedWithSample',
+                    '{{error}} (e.g. {{paths}})',
+                    { error: firstMsg, paths: samplePaths }
                   )
-                : `${sample}${more}`
+                : samplePaths
             }
           )
         }

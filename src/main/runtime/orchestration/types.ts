@@ -1,4 +1,4 @@
-import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 export const MESSAGE_TYPES = [
   'status',
@@ -190,9 +190,14 @@ export type FederatedDispatchRow = {
   remote_terminal_handle: string | null
   to_home_imported_sequence: number
   to_home_acknowledged_sequence: number
+  home_auto_release_at: string | null
+  home_auto_release_state: FederatedHomeAutoReleaseState | null
   created_at: string
   updated_at: string
 }
+
+/** The home's own deadline for a host that cannot release settled workers by itself. */
+export type FederatedHomeAutoReleaseState = 'armed' | 'ended'
 
 export type RemoteDispatchAttachmentRow = {
   home_run_id: string
@@ -232,6 +237,7 @@ export type FederationRelayItemRow = {
   kind: string
   payload: string
   byte_count: number
+  answer_sender_report?: string | null
   acked_at: string | null
   created_at: string
 }
@@ -253,6 +259,7 @@ export type MessageRow = {
   created_at: string
   delivered_at: string | null
   sender_pane_key: string | null
+  answer_sender_snapshot?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null
@@ -313,6 +320,10 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** The settled Dispatch whose worker this follow-up continues. */
+  follow_up_of_dispatch_id: string | null
+  /** When its worker reported with coordinator mail unread, until that mail continues it. */
+  follow_up_mail_at: string | null
 }
 
 export type DecisionGateRow = {

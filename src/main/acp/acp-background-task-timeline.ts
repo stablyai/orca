@@ -2,8 +2,8 @@ import { BoundedMap } from '../../shared/bounded-map'
 import {
   backgroundTaskJournalBody,
   isSettledBackgroundTaskState
-} from '../../shared/native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
+} from '../../shared/native-chat/input/native-chat-background-task-row'
+import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
@@ -19,7 +19,11 @@ export class AcpBackgroundTaskTimeline {
     sizeOf: (block, key) => Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(block))
   })
 
-  constructor(private readonly toolTurn: (callId: string) => string | undefined) {}
+  constructor(private readonly toolJoin: (callId: string) => ProviderTimelineJoin) {}
+
+  reconcile(taskId: string, thread: string): ProviderTimelineEvent[] {
+    return this.translate([{ taskId, state: 'unverifiable', summary: '', error: '' }], { thread })
+  }
 
   translate(
     updates: AcpBackgroundTaskUpdate[],
@@ -43,12 +47,12 @@ export class AcpBackgroundTaskTimeline {
         this.settled.delete(block.taskId)
         this.running.set(block.taskId, block)
       }
-      const turn = block.parentToolUseId ? this.toolTurn(block.parentToolUseId) : undefined
+      const parent = block.parentToolUseId ? this.toolJoin(block.parentToolUseId) : {}
       return {
         type: 'item.update',
         item: `background-task:${block.taskId}`,
         body: backgroundTaskJournalBody(block),
-        join: { ...join, ...(turn === undefined ? {} : { turn }) }
+        join: { ...join, ...parent }
       }
     })
   }

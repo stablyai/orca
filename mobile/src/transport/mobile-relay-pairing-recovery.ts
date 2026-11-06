@@ -2,8 +2,8 @@ import { Platform } from 'react-native'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsResult
-} from '../../../src/shared/mobile-relay-credential-contract'
-import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
+import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { loadHosts, savePairedHost } from './host-store'
 import {
   promotePairingJournalCredential,

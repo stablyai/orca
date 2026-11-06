@@ -6,6 +6,10 @@ import type { PreloadApi } from '../api-types'
 export const reposApi = {
   list: () => ipcRenderer.invoke('repos:list'),
 
+  listWslMoved: () => ipcRenderer.invoke('repos:listWslMoved'),
+
+  listHostCatalogSnapshots: () => ipcRenderer.invoke('repos:listHostCatalogSnapshots'),
+
   add: (args) => ipcRenderer.invoke('repos:add', args),
 
   create: (args) => ipcRenderer.invoke('repos:create', args),

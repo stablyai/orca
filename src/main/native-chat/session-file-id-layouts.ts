@@ -1,6 +1,6 @@
 import { win32 } from 'node:path'
 import { GROK_CHAT_HISTORY_FILE } from '../../shared/grok-session-paths'
-import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
+import { isOmpConversationDirectory } from '../ai-vault/scanners/omp/session-scanner-omp-subagent-transcripts'
 
 export type SessionIdLookupAgent = 'claude' | 'codex' | 'grok' | 'omp'
 
@@ -16,7 +16,11 @@ function stem(path: string): string {
 }
 
 export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileIdLayout> = {
-  claude: { fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl` },
+  claude: {
+    fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl`,
+    // Transcripts sit in project buckets; `<id>/` folders below hold only subagent and tool output.
+    directoryPredicate: (_name, depth) => depth === 0
+  },
   codex: {
     fileMatchesId: (path, id) => {
       const name = stem(path)
@@ -34,6 +38,6 @@ export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileId
       return name === id || name.endsWith(`_${id}`)
     },
     // Prune subagent artifact directories: their suffix can match the parent ID and steal its transcript.
-    directoryPredicate: (name, depth) => depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+    directoryPredicate: isOmpConversationDirectory
   }
 }

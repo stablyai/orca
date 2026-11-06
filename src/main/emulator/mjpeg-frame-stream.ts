@@ -85,6 +85,7 @@ export class MjpegFrameStream {
       return
     }
 
+    this.accumulator.reset()
     const req = requestForUrl(this.streamUrl, (res) => {
       if (res.statusCode && res.statusCode >= 400) {
         this.callbacks.onError(`Simulator stream returned HTTP ${res.statusCode}.`)

@@ -6,7 +6,7 @@ import {
   createSupervisedProbeRig,
   waitFor,
   type SupervisedProbeRig
-} from '../codex/supervised-probe-owner.test-fixture'
+} from '../codex/structured/session-lifecycle/supervised-probe-owner.test-fixture'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 
 // Delay beyond stdin grace like a slow opencode serve startup; stdin EOF must not stop it.
@@ -62,9 +62,7 @@ describe.runIf(process.platform !== 'win32')('supervised OpenCode launch-context
     const pids = await rig.readPids()
 
     expect(context).toEqual({
-      primaryAgent: 'build',
-      availableModels: ['provider/model'],
-      primaryModel: null
+      primaryAgent: 'build'
     })
     expect(existsSync(rig.signalFile) && readFileSync(rig.signalFile, 'utf8')).toBe('SIGTERM')
     expect(alive(pids.provider)).toBe(false)

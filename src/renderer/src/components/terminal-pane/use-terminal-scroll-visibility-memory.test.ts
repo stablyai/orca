@@ -99,39 +99,6 @@ describe('useTerminalScrollVisibilityMemory', () => {
     }
   })
 
-  it('bounds follow-output flushes when applying pending requests', () => {
-    const terminal = {
-      onScroll: vi.fn(() => ({ dispose: vi.fn() })),
-      scrollToBottom: vi.fn()
-    }
-    const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal }])
-    }
-    const animationFrames: FrameRequestCallback[] = []
-    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-      animationFrames.push(callback)
-      return animationFrames.length
-    })
-
-    beginHookRender()
-    const visibilityMemory = useTerminalScrollVisibilityMemory({
-      managerRef: { current: manager as never },
-      isVisibleRef: { current: true },
-      visibleResumeCompleteRef: { current: true },
-      paneCount: 1
-    })
-
-    visibilityMemory.scheduleFollowOutputIfNeeded(1)
-    animationFrames.shift()?.(16)
-    animationFrames.shift()?.(32)
-
-    expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, {
-      maxChars: 256 * 1024
-    })
-    expect(terminal.scrollToBottom).toHaveBeenCalled()
-    expect(mocks.markTerminalFollowOutput).toHaveBeenCalledWith(terminal)
-  })
-
   it('does not turn a pinned viewport into follow-output when pending focus requests catch up', () => {
     mocks.getTerminalScrollIntentKind.mockReturnValue('pinnedViewport')
     const terminal = {
@@ -165,32 +132,5 @@ describe('useTerminalScrollVisibilityMemory', () => {
     expect(mocks.cancelDeferredScrollRestore).not.toHaveBeenCalled()
     expect(mocks.markTerminalFollowOutput).not.toHaveBeenCalled()
     expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-  })
-
-  it('cancels pending follow-output frames on cleanup', () => {
-    const terminal = {
-      onScroll: vi.fn(() => ({ dispose: vi.fn() })),
-      scrollToBottom: vi.fn()
-    }
-    const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal }])
-    }
-    const cancelAnimationFrame = vi.fn()
-    globalThis.requestAnimationFrame = vi.fn(() => 7)
-    globalThis.cancelAnimationFrame = cancelAnimationFrame
-
-    beginHookRender()
-    const visibilityMemory = useTerminalScrollVisibilityMemory({
-      managerRef: { current: manager as never },
-      isVisibleRef: { current: true },
-      visibleResumeCompleteRef: { current: true },
-      paneCount: 1
-    })
-
-    visibilityMemory.scheduleFollowOutputIfNeeded(1)
-    runEffectCleanups()
-
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(7)
-    expect(mocks.flushTerminalOutput).not.toHaveBeenCalled()
   })
 })

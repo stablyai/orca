@@ -3,6 +3,10 @@ import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { parseOrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { advertisedOrcadMigrationDestinationCapabilities } from '../orcad/orcad-migration-destination-capabilities'
+import { assertOrcadMigrationManifestDigest } from '../orcad/orcad-migration-manifest-digest'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcadMigrationDestinationCatalog } from './orcad-migration-cutover-coordinator'
 
 type Catalog = OrcadMigrationDestinationCatalog
@@ -14,7 +18,8 @@ export type FakeOrcadMigrationDestination = { commits: number } & {
 /** Model idempotent stage and receipt-keyed commit with separate catalog state for each migration, including later deltas. */
 export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
   const states = new Map<string, 'absent' | 'staged' | 'committed'>()
-  const stateOf = (manifest: OrcadMigrationManifest) => states.get(manifest.migrationId) ?? 'absent'
+  const stateOf = (manifest: Pick<OrcadMigrationManifest, 'migrationId'>) =>
+    states.get(manifest.migrationId) ?? 'absent'
   const view = (manifest: OrcadMigrationManifest): OrcadMigrationCatalogState => {
     const state = stateOf(manifest)
     const base = { migrationId: manifest.migrationId, manifestSha256: manifest.manifestSha256 }
@@ -75,7 +80,32 @@ export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
       states.delete(manifest.migrationId)
       return { ...identity, state: 'absent', aborted, durableAbsent: true }
     }),
-    stageChunk: vi.fn<Catalog['stageChunk']>()
+    stageChunk: vi.fn<Catalog['stageChunk']>(),
+    readCapabilities: vi.fn<Catalog['readCapabilities']>(async () => []),
+    stageBlobChunk: vi.fn<Catalog['stageBlobChunk']>()
   }
   return destination
+}
+
+/** A host server's real import, behind manifests sent as the RPC handler receives them. */
+export function storeBackedOrcadMigrationDestination(server: Store): Catalog {
+  const sent = (manifest: OrcadMigrationManifest): OrcadMigrationManifest => {
+    const raw = JSON.parse(JSON.stringify(manifest))
+    assertOrcadMigrationManifestDigest(raw)
+    return parseOrcadMigrationManifest(raw)
+  }
+  return {
+    readState: async (manifest) => server.getOrcadMigrationCatalogState(sent(manifest)),
+    stage: async (manifest) => server.stageOrcadMigrationCatalog(sent(manifest)),
+    commit: async (manifest) => server.commitStagedOrcadMigrationCatalog(sent(manifest)),
+    abort: async (manifest) => {
+      const result = server.abortStagedOrcadMigrationCatalog(sent(manifest))
+      return result.aborted ? result : { ...result, durableAbsent: true as const }
+    },
+    abortByReference: async (reference) =>
+      server.abortStagedOrcadMigrationCatalogByReference(reference),
+    stageChunk: async (request) => server.stageOrcadMigrationSnapshotChunk(request),
+    readCapabilities: async () => advertisedOrcadMigrationDestinationCapabilities(),
+    stageBlobChunk: async (request) => server.stageOrcadMigrationBlobChunk(request)
+  }
 }

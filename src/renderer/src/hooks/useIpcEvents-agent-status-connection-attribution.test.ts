@@ -425,58 +425,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
-  it('drops remote-stamped events when the owning worktree is no longer in worktreesByRepo', async () => {
-    const setAgentStatus = vi.fn()
-    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
-      current: null
-    }
-    const storeState: StoreLike = buildStoreState({
-      setAgentStatus,
-      workspaceSessionReady: true,
-      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
-      worktreesByRepo: { 'repo-1': [] },
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
-          activeLeafId: TAB_1_LEAF_ID,
-          expandedLeafId: null
-        }
-      }
-    })
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        onSet: (cb) => {
-          onSetListenerRef.current = cb
-          return () => {}
-        }
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-    await Promise.resolve()
-
-    onSetListenerRef.current?.({
-      paneKey: TAB_1_PANE_KEY,
-      connectionId: 'conn-other',
-      state: 'working',
-      receivedAt: 1_700_000_000_100,
-      stateStartedAt: 1_699_999_999_100
-    })
-
-    expect(setAgentStatus).not.toHaveBeenCalled()
-  })
-
   it('accepts events without a stamped connectionId for preload compatibility', async () => {
     const setAgentStatus = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {

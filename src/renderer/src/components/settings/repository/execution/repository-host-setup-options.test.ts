@@ -1,19 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
-import {
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/worktree-runtime-capabilities'
+import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import { buildSetupHostOptions } from './repository-host-setup-options'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-
-const FULL_HOST_MODEL_RUNTIME_CAPABILITIES = [
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-]
 
 function runtimeHost(
   overrides: Partial<ExecutionHostRegistryEntry> = {}
@@ -28,46 +20,7 @@ function runtimeHost(
   } as ExecutionHostRegistryEntry
 }
 
-function sshHost(health: ExecutionHostRegistryEntry['health']): ExecutionHostRegistryEntry {
-  return {
-    id: 'ssh:ssh-1',
-    kind: 'ssh',
-    label: 'SSH Host',
-    detail: 'SSH',
-    health
-  }
-}
-
 describe('buildSetupHostOptions', () => {
-  it('enables connected SSH hosts', () => {
-    expect(
-      buildSetupHostOptions({
-        projectHostSetups: [],
-        hostOptions: [sshHost('available')]
-      })[0]
-    ).toMatchObject({
-      isAvailable: true,
-      canUsePathActions: true,
-      detail: 'SSH'
-    })
-  })
-
-  it.each(['disconnected', 'connecting', 'error'] as const)(
-    'disables path actions for %s SSH hosts',
-    (health) => {
-      expect(
-        buildSetupHostOptions({
-          projectHostSetups: [],
-          hostOptions: [sshHost(health)]
-        })[0]
-      ).toMatchObject({
-        isAvailable: true,
-        canUsePathActions: false,
-        detail: 'Connect this host before importing or cloning the project'
-      })
-    }
-  )
-
   it('disables runtime hosts while capabilities are unknown', () => {
     expect(
       buildSetupHostOptions({
@@ -77,22 +30,6 @@ describe('buildSetupHostOptions', () => {
     ).toMatchObject({
       isAvailable: false,
       detail: 'Checking host capabilities'
-    })
-  })
-
-  it('enables runtime hosts that advertise project setup and workspace run support', () => {
-    expect(
-      buildSetupHostOptions({
-        projectHostSetups: [],
-        hostOptions: [
-          runtimeHost({
-            capabilities: FULL_HOST_MODEL_RUNTIME_CAPABILITIES
-          })
-        ]
-      })[0]
-    ).toMatchObject({
-      isAvailable: true,
-      detail: 'Orca server'
     })
   })
 

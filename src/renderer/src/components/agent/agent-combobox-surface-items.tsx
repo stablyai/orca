@@ -3,7 +3,7 @@ import { CommandItem, CommandSeparator } from '@/components/ui/command'
 import { AgentIcon, getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { NewTabAgentMenuModel } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import {
   chatUnavailableLabel,
@@ -13,10 +13,10 @@ import {
 } from '@/components/tab-bar/tab-agent-row-presentation'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { renderAgentComboboxItem } from './agent-combobox-items'
-import { AgentTerminalLaunchButton } from './AgentTerminalLaunchButton'
+import { AgentSurfaceLaunchButton } from './AgentSurfaceLaunchButton'
 
 /** The "+" menu's rows in the picker: a chat row picks the chat, its terminal button the CLI. */
 export type AgentComboboxSurfaceRows = {
@@ -194,7 +194,8 @@ export function SurfaceAgentItems({
               {chatUnavailableLabel(row.reason)}
             </span>
           ) : rowOffersTerminal(model, row) ? (
-            <AgentTerminalLaunchButton
+            <AgentSurfaceLaunchButton
+              surface="terminal"
               title={terminalPickTitle(agentLabel)}
               aria-pressed={pressed}
               className={cn(

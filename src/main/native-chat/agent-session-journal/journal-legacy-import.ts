@@ -1,19 +1,18 @@
-// Build a fresh epoch: import-scoped legacy identities cannot safely share structured sequence space.
-
+import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   adoptedTranscriptSourceObserver,
   validateAdoptedOpenCodeSource,
   type AdoptedTranscriptSource
 } from './adopted-transcript-source'
-import { createReadStream } from 'node:fs'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
@@ -21,19 +20,27 @@ import {
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from '../transcript-line-decoders'
-import { decodeTranscriptStream } from '../transcript-stream-lines'
+import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
-import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
-  boundInlineText,
+  boundLegacyImportBlock,
   boundToolInput,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
+// Hydrating a journal from a bridge-era transcript.
+//
+// Ordinary messages reuse the existing per-agent transcript decoders; Pi also
+// projects its saved branch and summaries. The decoders return a render model
+// with no identity, so the import wraps them: the wrapper
+// reads an identity anchor off the SAME raw line, then delegates the content.
+//
+// Import replaces provider presentation at a context boundary. Canonical input stays in the
+// ordered log; later structured history replaces only this reconstructed presentation.
 
 export const LEGACY_IMPORT_BLOCK_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 
@@ -42,12 +49,12 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
   source?: AdoptedTranscriptSource
   limits?: JournalPayloadLimits
   decodedMessageIdentities?: true
+  signal?: AbortSignal
 }
 
 const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
 // Keep only recent history in memory; the provider resumes the complete source transcript.
 const MAX_LEGACY_IMPORT_RETAINED_BYTES = 16 * 1024 * 1024
-const MAX_LEGACY_IMPORT_SUBAGENTS = 64
 
 export type LegacyImportResult =
   | {
@@ -60,7 +67,7 @@ export type LegacyImportResult =
   | { ok: false; error: string }
 
 type PreparedLegacyImport =
-  | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean }
+  | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
   | { ok: false; error: string }
 
 export async function importLegacyTranscriptIntoJournal(input: {
@@ -105,16 +112,20 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    const { items, consumedBytes } = await decodeReplacementItems({
+    const { items, consumedBytes, forkTipItemIds } = await decodeReplacementItems({
       filePath,
       transcriptAgent,
       agent: input.agent,
       sessionId: input.sessionId,
       source: options.source,
+      codexSessionsDirs: options.source?.conversationStore
+        ? [options.source.conversationStore]
+        : options.codexSessionsDirs,
+      signal: options.signal,
       decodedMessageIdentities: options.decodedMessageIdentities,
       limits
     })
-    return { ok: true, items, sourceEmpty: consumedBytes === 0 }
+    return { ok: true, items, sourceEmpty: consumedBytes === 0, forkTipItemIds }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -133,7 +144,7 @@ async function prepareOpenCodeImport(input: {
       return { ok: false, error: 'The conversation database is unavailable.' }
     }
     try {
-      await validateAdoptedOpenCodeSource(dbPath, input.options.source)
+      await validateAdoptedOpenCodeSource(dbPath, input.options.source, input.options.signal)
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -152,7 +163,19 @@ async function prepareOpenCodeImport(input: {
     recordId: message.id
   }))
   const items = replacementItems(read.messages, identities, input.limits)
-  return { ok: true, items, sourceEmpty: read.sourceEmpty === true }
+  return {
+    ok: true,
+    items,
+    sourceEmpty: read.sourceEmpty === true,
+    forkTipItemIds: read.forkTipItemIds?.map((recordId) =>
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: input.agent,
+        sessionId: input.sessionId,
+        recordId
+      })
+    )
+  }
 }
 
 function replacementItems(
@@ -186,7 +209,8 @@ function replacementItem(
 
 const TRANSCRIPT_DECODERS = {
   claude: decodeClaudeTranscriptLine,
-  codex: decodeCodexTranscriptLine,
+  codex: (line: string, fallbackId: string) =>
+    decodeCodexTranscriptLine(line, fallbackId, { historyImport: true }),
   grok: decodeGrokTranscriptLine,
   omp: decodeOmpTranscriptLine
 } as const
@@ -199,13 +223,16 @@ async function decodeReplacementItems(input: {
   sessionId: string
   decodedMessageIdentities?: true
   source?: AdoptedTranscriptSource
+  codexSessionsDirs?: string[]
+  signal?: AbortSignal
   limits: JournalPayloadLimits
-}): Promise<{ items: JournalReplacementItem[]; consumedBytes: number }> {
+}): Promise<{ items: JournalReplacementItem[]; consumedBytes: number; forkTipItemIds: string[] }> {
   const source = input.source
     ? adoptedTranscriptSourceObserver({
         agent: input.agent,
         filePath: input.filePath,
         source: input.source,
+        signal: input.signal,
         maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES
       })
     : null
@@ -214,7 +241,6 @@ async function decodeReplacementItems(input: {
     agent: input.agent,
     sessionId: input.sessionId
   })
-  const decode = TRANSCRIPT_DECODERS[input.transcriptAgent]
   const toItem = (message: NativeChatMessage, identity: AgentJournalItemIdentity) =>
     replacementItem(message, identity, input.limits)
   const retained = createNewestItemWindow(MAX_LEGACY_IMPORT_RETAINED_BYTES)
@@ -222,40 +248,42 @@ async function decodeReplacementItems(input: {
     input.agent === 'pi'
       ? createPiTranscriptCollector(toItem, (line, lineIndex) => tracker.identify(line, lineIndex))
       : null
+  const forkTip = createImportedForkTip()
   let lineIndex = 0
   try {
-    const { consumedBytes } = await decodeTranscriptStream(
-      createReadStream(input.filePath),
-      input.filePath,
-      0,
-      (line, fallbackId) => {
-        source?.observe(line)
-        const currentLineIndex = lineIndex
-        lineIndex += 1
+    const { consumedBytes } = await readLegacyImportTranscript(
+      {
+        filePath: input.filePath,
+        codex: input.transcriptAgent === 'codex',
+        roots: input.codexSessionsDirs
+      },
+      (line, fallbackId, recordId, selected = true) => {
+        if (selected) {
+          source?.observe(line)
+        }
+        const currentLineIndex = lineIndex++
         if (pi) {
           pi.record(line, fallbackId, currentLineIndex)
           return null
         }
-        const message = decode(line, fallbackId)
+        const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
         if (message) {
-          retained.push(
-            toItem(
-              message,
-              input.decodedMessageIdentities
-                ? {
-                    provider: 'legacy',
-                    agent: input.agent,
-                    sessionId: input.sessionId,
-                    recordId: message.id
-                  }
-                : tracker.identify(line, currentLineIndex)
-            )
-          )
+          const identity =
+            recordId || input.decodedMessageIdentities
+              ? {
+                  provider: 'legacy' as const,
+                  agent: input.agent,
+                  sessionId: input.sessionId,
+                  recordId: recordId ?? message.id
+                }
+              : tracker.identify(line, currentLineIndex)
+          retained.push(toItem(message, identity))
+        }
+        if (input.transcriptAgent === 'omp') {
+          observeOmpForkTip(forkTip, line, tracker.identify(line, currentLineIndex))
         }
         return null
-      },
-      true,
-      MAX_LEGACY_IMPORT_RECORD_BYTES
+      }
     )
     if (consumedBytes > 0) {
       await source?.validate()
@@ -263,7 +291,7 @@ async function decodeReplacementItems(input: {
     if (pi) {
       await pi.project(retained.push)
     }
-    return { items: retained.items(), consumedBytes }
+    return { items: retained.items(), consumedBytes, forkTipItemIds: forkTip.settledItems() }
   } finally {
     pi?.close()
   }
@@ -287,31 +315,8 @@ export function legacyItemBody(
   return {
     kind: 'message',
     role: message.role,
-    blocks: limits ? message.blocks.map((block) => boundBlock(block, limits)) : message.blocks
+    blocks: limits
+      ? message.blocks.map((block) => boundLegacyImportBlock(block, limits))
+      : message.blocks
   }
-}
-
-/** Bound every bulk-bearing block, including mixed-message tool calls; the transcript retains full content. */
-function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): NativeChatBlock {
-  if (block.type === 'text') {
-    return { ...block, text: boundInlineText(block.text, limits).text }
-  }
-  if (block.type === 'tool-result') {
-    return { ...block, output: boundInlineText(block.output, limits).text }
-  }
-  if (block.type === 'tool-call') {
-    return { ...block, input: boundToolInput(block.input, limits) }
-  }
-  if (block.type === 'subagent-group') {
-    return {
-      ...block,
-      agents: block.agents.slice(0, MAX_LEGACY_IMPORT_SUBAGENTS).map((agent) => ({
-        ...agent,
-        // Digest-based roster IDs keep children with shared prefixes distinct.
-        id: boundSubagentEntryId(agent.id),
-        label: boundInlineText(agent.label, limits).text
-      }))
-    }
-  }
-  return block
 }

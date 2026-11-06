@@ -37,10 +37,14 @@ export function fileTapOpenMountAdapters(
               worktreeId: WORKSPACE,
               worktreeName: 'workspace',
               terminalHandle: TERMINAL,
-              pathText: String(args.pathText ?? 'src/app.ts'),
               cwd: '/repo',
-              line: args.line === undefined ? null : Number(args.line),
-              column: null,
+              candidates: [
+                {
+                  pathText: String(args.pathText ?? 'src/app.ts'),
+                  line: args.line === undefined ? null : Number(args.line),
+                  column: null
+                }
+              ],
               pushPreviewRoute: (href) => effect('push-preview-route', href),
               openBrowser: (url: string) => effect('open-browser', { url }),
               triggerOpenFeedback: () => effect('open-feedback', {}),

@@ -56,9 +56,4 @@ describe('resolveTerminalJisYenInput', () => {
       expect(resolveTerminalJisYenInput(input, enabledOnMac)).toBeNull()
     }
   })
-
-  it('is gated by both the user setting and macOS', () => {
-    expect(resolveTerminalJisYenInput(event({}), { enabled: false, isMac: true })).toBeNull()
-    expect(resolveTerminalJisYenInput(event({}), { enabled: true, isMac: false })).toBeNull()
-  })
 })

@@ -208,8 +208,8 @@ function quadraticAccumulator(context, call, loop, declarations, assignedRoots) 
 
 function createRule(context) {
   const text = context.sourceCode.text
-  // Returning no visitors when Buffer.concat cannot appear skips AST transfer to JS.
-  if (!text.includes('Buffer') || !text.includes('concat')) {
+  // Empty visitors avoid JS AST deserialization when Buffer.concat cannot appear.
+  if ((!text.includes('Buffer') || !text.includes('concat')) && !text.includes('\\')) {
     return {}
   }
   const declarations = new Map()

@@ -86,14 +86,6 @@ describe('a desktop AI-button launch', () => {
     })
   })
 
-  // Nothing reads a click's launch record, so its launch carries no operation and writes none.
-  it('names no operation, and each click has its own pane', () => {
-    const first = launch().tabId
-    const second = launch().tabId
-    expect(queuedLaunch(first)?.launch).not.toHaveProperty('operationId')
-    expect(second).not.toBe(first)
-  })
-
   it("says the agent started once its pane's spawn returns, and not when main says it failed", async () => {
     const started = launch()
     const leafId = launchTab(started.tabId)!.agentLaunchPane!.leafId
@@ -110,5 +102,26 @@ describe('a desktop AI-button launch', () => {
     })
     settleAgentLaunchPaneStart(failed.tabId, failedLeaf, 'pty-2')
     await expect(failed.started).resolves.toBeNull()
+  })
+
+  it('keeps inactive launches in their requested group without revealing Terminal', () => {
+    const initial = store.getState()
+    const activeTabId = initial.activeTabId
+    const groupId = initial.createEmptySplitGroup(WT, initial.activeGroupIdByWorktree[WT], 'down', {
+      activate: false
+    })!
+    const { tabId } = launchAgentThroughHost({
+      agent: 'claude',
+      worktreeId: WT,
+      groupId,
+      prompt: 'p',
+      cwd: '/tmp/feature/sub',
+      activate: false
+    })
+    expect(store.getState().activeTabId).toBe(activeTabId)
+    expect(
+      store.getState().groupsByWorktree[WT].find((group) => group.id === groupId)?.tabOrder
+    ).toContain(tabId)
+    expect(queuedLaunch(tabId)?.launch.cwd).toBe('/tmp/feature/sub')
   })
 })

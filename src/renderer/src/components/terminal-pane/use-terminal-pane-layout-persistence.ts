@@ -4,13 +4,13 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
 import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-terminal-buffer-actions'
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
-} from '../../../../shared/terminal-pane-title-sanitization'
+} from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
@@ -19,7 +19,7 @@ import {
   mergeLayoutTitlesByLeafId,
   retainLayoutScrollback
 } from './terminal-pane-layout-snapshot-merge'
-import { retireLeavesFromTerminalLayout } from '../../../../shared/terminal-layout-leaf-retirement'
+import { retireLeavesFromTerminalLayout } from '../../../../shared/workspace-layout/terminal-layout-leaf-retirement'
 
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {

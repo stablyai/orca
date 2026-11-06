@@ -1,10 +1,10 @@
-import { refreshManagedOrcadPairing } from '../../shared/runtime-environment-managed-orcad-store'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { refreshManagedOrcadPairing } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 

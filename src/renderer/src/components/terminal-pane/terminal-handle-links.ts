@@ -1,12 +1,15 @@
 import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+
+import { type AppState, useAppStore } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  buildWrappedLogicalLine,
+  rangeForParsedFileLink
+} from '../../../../shared/terminal/links/wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,
   focusRuntimeOrchestrationTask,

@@ -8,11 +8,7 @@ import {
   openDecisionGateFromMessage,
   reblockTasksWithPendingGates
 } from './coordinator-decision-gates'
-import {
-  dispatchTaskToWorker,
-  listAvailableWorkerTerminals,
-  warnStaleDispatches
-} from './coordinator-task-dispatch'
+import { dispatchTaskToWorker, listAvailableWorkerTerminals } from './coordinator-task-dispatch'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../../../shared/nested-worker-depth'
 
 export type CoordinatorOptions = {
@@ -160,7 +156,6 @@ export class Coordinator {
     this.processMessages()
     this.processEscalations()
     reblockTasksWithPendingGates(this.db)
-    warnStaleDispatches(this.db, this.opts.onLog)
     await this.dispatchReadyTasks()
     return this.checkConvergence()
   }
@@ -182,13 +177,11 @@ export class Coordinator {
         case 'decision_gate':
           openDecisionGateFromMessage(this.db, msg, this.opts.onLog)
           break
-        case 'heartbeat':
-          this.handleLifecycleMessage(msg)
-          break
         case 'status':
           this.opts.onLog(`Status from ${msg.from_handle}: ${msg.subject}`)
           break
         case 'dispatch':
+        case 'heartbeat':
         case 'handoff':
         case 'merge_ready':
         case 'question':

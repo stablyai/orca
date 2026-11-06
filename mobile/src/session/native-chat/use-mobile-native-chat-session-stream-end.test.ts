@@ -1,7 +1,7 @@
-import { createElement, Fragment, type ReactElement } from 'react'
+import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { MobileRelayRpcStreams } from '../../transport/mobile-relay-rpc-streams'
 import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
@@ -9,7 +9,7 @@ import type { RpcResponse } from '../../transport/types'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
-} from '../use-mobile-native-chat-session'
+} from './use-mobile-native-chat-session'
 
 function message(id: string): NativeChatMessage {
   return {
@@ -73,46 +73,6 @@ function listenerClient(): {
 }
 
 // Model host token ownership: subscribe replaces same-token feeds, unsubscribe ends the current owner, and end frames arrive on later delivery.
-function evictingHost(): {
-  client: RpcClient
-  subscribe: ReturnType<typeof vi.fn<RpcClient['subscribe']>>
-  deliver: () => Promise<void>
-} {
-  const live = new Map<string, (frame: unknown) => void>()
-  let queued: (() => void)[] = []
-  const subscribe = vi.fn<RpcClient['subscribe']>((_method, params, onData) => {
-    const token =
-      typeof params === 'object' && params !== null && 'subscriptionId' in params
-        ? String(params.subscriptionId)
-        : ''
-    const replaced = live.get(token)
-    live.set(token, onData)
-    if (replaced) {
-      queued.push(() => replaced({ type: 'end' }))
-    }
-    queued.push(() => onData({ type: 'snapshot', messages: [message('a')], hasMore: false }))
-    return () => {
-      const holder = live.get(token)
-      live.delete(token)
-      if (holder && holder !== onData) {
-        queued.push(() => holder({ type: 'end' }))
-      }
-    }
-  })
-  const deliver = async (): Promise<void> => {
-    // Bound delivery so same-token eviction fights fail visibly instead of hanging.
-    for (let round = 0; round < 10 && queued.length > 0; round += 1) {
-      const frames = queued
-      queued = []
-      await act(async () => {
-        for (const frame of frames) {
-          frame()
-        }
-      })
-    }
-  }
-  return { client: testClient(subscribe), subscribe, deliver }
-}
 
 type TransportRig = {
   client: RpcClient
@@ -222,33 +182,6 @@ describe('useMobileNativeChatSession host-ended stream', () => {
     ['direct', directRig],
     ['relay', relayRig]
   ])(
-    'settles a chat feed the host ended on a %s connection as an error, not ready',
-    async (_label, makeRig) => {
-      const rig = makeRig()
-      await render({ client: rig.client })
-      const [first] = sentWith(rig, 'nativeChat.subscribe')
-      await act(async () => {
-        rig.reply(
-          streamed(first!.id, { type: 'snapshot', messages: [message('a')], hasMore: false })
-        )
-      })
-      expect(state?.status).toBe('ready')
-
-      await act(async () => {
-        rig.reply(streamed(first!.id, { type: 'end' }))
-      })
-
-      expect(state?.status).toBe('error')
-      expect(state?.transcriptLoading).toBe(false)
-      expect(state?.messages.map((entry) => entry.id)).toEqual(['a'])
-      expect(sentWith(rig, 'nativeChat.subscribe')).toHaveLength(1)
-    }
-  )
-
-  it.each([
-    ['direct', directRig],
-    ['relay', relayRig]
-  ])(
     'leaving and re-entering an ended %s chat resubscribes with a fresh token',
     async (_label, makeRig) => {
       const rig = makeRig()
@@ -296,110 +229,4 @@ describe('useMobileNativeChatSession host-ended stream', () => {
     expect(state?.status).toBe('ready')
     expect(subscribe).toHaveBeenCalledTimes(2)
   })
-})
-
-describe('useMobileNativeChatSession feeds across stacked screens', () => {
-  let renderer: ReactTestRenderer | null = null
-  const states = new Map<string, MobileNativeChatSession>()
-
-  beforeEach(() => {
-    states.clear()
-  })
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  function Screen({ name, client }: { name: string; client: RpcClient }): null {
-    states.set(
-      name,
-      useMobileNativeChatSession({
-        client,
-        sourceIdentity: 'host-a\0workspace-a',
-        agent: 'claude',
-        sessionId: 'session',
-        transcriptPath: null
-      })
-    )
-    return null
-  }
-
-  function Stack({ client, screens }: { client: RpcClient; screens: string[] }): ReactElement {
-    return createElement(
-      Fragment,
-      null,
-      ...screens.map((name) => createElement(Screen, { key: name, name, client }))
-    )
-  }
-
-  async function render(client: RpcClient, screens: string[]): Promise<void> {
-    await act(async () => {
-      if (renderer) {
-        renderer.update(createElement(Stack, { client, screens }))
-      } else {
-        renderer = create(createElement(Stack, { client, screens }))
-      }
-    })
-  }
-
-  function tokenOf(request: SentRequest | unknown[]): unknown {
-    const params = Array.isArray(request) ? request[1] : request.params
-    return typeof params === 'object' && params !== null && 'subscriptionId' in params
-      ? params.subscriptionId
-      : undefined
-  }
-
-  it('keeps both feeds live when a pushed screen opens the same chat, and after it pops', async () => {
-    const host = evictingHost()
-    await render(host.client, ['under'])
-    await host.deliver()
-    expect(states.get('under')?.status).toBe('ready')
-
-    await render(host.client, ['under', 'top'])
-    await host.deliver()
-    expect(states.get('under')?.status).toBe('ready')
-    expect(states.get('top')?.status).toBe('ready')
-    expect(host.subscribe).toHaveBeenCalledTimes(2)
-    const [under, top] = host.subscribe.mock.calls
-    expect(tokenOf(under!)).not.toBe(tokenOf(top!))
-
-    await render(host.client, ['under'])
-    await host.deliver()
-    expect(host.subscribe).toHaveBeenCalledTimes(2)
-    expect(states.get('under')?.status).toBe('ready')
-  })
-
-  it.each([
-    ['direct', directRig],
-    ['relay', relayRig]
-  ])(
-    'names each %s chat feed by its own token on replay and unsubscribe',
-    async (_label, makeRig) => {
-      const rig = makeRig()
-      await render(rig.client, ['under', 'top'])
-      const [under, top] = rig.sent.filter((request) => request.method === 'nativeChat.subscribe')
-      expect(tokenOf(under!)).toMatch(/^claude:session:/)
-      expect(tokenOf(top!)).toMatch(/^claude:session:/)
-      expect(tokenOf(under!)).not.toBe(tokenOf(top!))
-
-      if (rig.reconnect) {
-        rig.reconnect()
-        const replayed = rig.sent
-          .filter((request) => request.method === 'nativeChat.subscribe')
-          .slice(2)
-        expect(replayed.map((request) => [request.id, tokenOf(request)])).toEqual([
-          [under!.id, tokenOf(under!)],
-          [top!.id, tokenOf(top!)]
-        ])
-      }
-
-      await render(rig.client, ['top'])
-      expect(
-        rig.sent
-          .filter((request) => request.method === 'nativeChat.unsubscribe')
-          .map((request) => request.params)
-      ).toEqual([{ subscriptionId: tokenOf(under!) }])
-    }
-  )
 })

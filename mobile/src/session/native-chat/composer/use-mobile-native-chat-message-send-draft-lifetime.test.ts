@@ -1,3 +1,4 @@
+import type * as MobileNativeChatSendModule from '../mobile-native-chat-send'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,7 +7,7 @@ import type { RpcClient } from '../../../transport/rpc-client'
 const transport = vi.hoisted(() => ({
   heal: vi.fn<() => Promise<boolean>>(),
   clearInput: vi.fn<() => Promise<boolean>>(),
-  send: vi.fn<() => Promise<'accepted' | 'rejected'>>(),
+  send: vi.fn<() => Promise<'accepted' | 'rejected' | 'unknown'>>(),
   command: vi.fn(),
   error: vi.fn()
 }))
@@ -14,7 +15,8 @@ const transport = vi.hoisted(() => ({
 vi.mock('../mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: transport.heal
 }))
-vi.mock('../mobile-native-chat-send', () => ({
+vi.mock('../mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof MobileNativeChatSendModule>()),
   healMobileNativeChatStaleInput: transport.heal,
   clearMobileNativeChatInput: transport.clearInput,
   sendMobileNativeChatMessageWithOutcome: transport.send,
@@ -25,8 +27,11 @@ vi.mock('../mobile-native-chat-send', () => ({
 }))
 
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { useMobileNativeChatMessageSend } from '../../use-mobile-native-chat-message-send'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import { useMobileNativeChatMessageSend } from '../transcript/use-mobile-native-chat-message-send'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
 function deferred<T>() {
   let resolve: ((value: T) => void) | undefined
@@ -37,7 +42,7 @@ function deferred<T>() {
 }
 
 type HookState = {
-  drafts: ReturnType<typeof useMobileNativeChatDrafts>
+  drafts: ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
   sender: ReturnType<typeof useMobileNativeChatMessageSend>
 }
 
@@ -94,7 +99,8 @@ describe('mobile native-chat send across screen lifetimes', () => {
         holdUnconfirmedSend: drafts.holdUnconfirmedSend,
         onSendError: transport.error
       })
-      latest = { drafts, sender }
+      const composerText = useMobileNativeChatDraft(drafts.draftKey)
+      latest = { drafts: { ...drafts, composerText }, sender }
       return null
     }
     await act(async () => {
@@ -174,57 +180,6 @@ describe('mobile native-chat send across screen lifetimes', () => {
     await scenario('remount-same-text', true, 'ping')
   })
 
-  it('preserves deliberately retyped same text when the original screen stays mounted', async () => {
-    await scenario('same-mount-same-text', false, 'ping')
-  })
-
-  it('preserves different new text after Back/unmount and same-scope remount', async () => {
-    await scenario('remount-different-text', true, 'new draft')
-  })
-
-  it('times the echo at the press it is given, not when the host took the send', async () => {
-    const delivery = deferred<'accepted'>()
-    transport.heal.mockResolvedValue(true)
-    transport.clearInput.mockResolvedValue(true)
-    transport.send.mockImplementation(() => delivery.promise)
-    await mount('press-time')
-    const pressedAt = Date.now() - 10_000
-    let sending: Promise<unknown> | undefined
-    await act(async () => {
-      sending = current().sender.sendWithOutcome('ping', undefined, undefined, undefined, pressedAt)
-    })
-    await act(async () => {
-      delivery.resolve('accepted')
-      await sending
-    })
-    expect(current().drafts.pending.map((item) => item.sentAt)).toEqual([pressedAt])
-  })
-
-  it('clears an unchanged remounted draft when the original send finishes healing', async () => {
-    const heal = deferred<boolean>()
-    const delivery = deferred<'accepted'>()
-    transport.heal.mockImplementation(() => heal.promise)
-    transport.clearInput.mockResolvedValue(true)
-    transport.send.mockImplementation(() => delivery.promise)
-    await mount('unchanged')
-    await edit('ping')
-    let sending: Promise<boolean> | undefined
-    await act(async () => {
-      sending = current().sender.send('ping')
-    })
-    await remount('unchanged')
-    expect(current().drafts.composerText).toBe('ping')
-
-    await act(async () => heal.resolve(true))
-    expect(current().drafts.composerText).toBe('')
-    expect(current().drafts.getComposerEditGeneration()).toBe(0)
-    await act(async () => {
-      delivery.resolve('accepted')
-      expect(await sending).toBe(true)
-    })
-    expect(current().drafts.composerText).toBe('')
-  })
-
   it('restores a definitely rejected send after newer typing on a remounted screen', async () => {
     const delivery = deferred<'rejected'>()
     transport.heal.mockResolvedValue(true)
@@ -246,5 +201,35 @@ describe('mobile native-chat send across screen lifetimes', () => {
     })
     expect(current().drafts.composerText).toBe('new draft\n\nping')
     expect(transport.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an unknown command at its original destination beside later edits without replay', async () => {
+    const delivery = deferred<'unknown'>()
+    transport.heal.mockResolvedValue(true)
+    transport.clearInput.mockResolvedValue(true)
+    transport.send.mockImplementation(() => delivery.promise)
+    await mount('unknown-command')
+    const command = '/clear  \n'
+    await edit(command)
+    let sending: Promise<unknown> | undefined
+    await act(async () => {
+      sending = current().sender.sendWithOutcome(command)
+    })
+    expect(current().drafts.composerText).toBe('')
+    await edit('/compact')
+    await remount('different-tab')
+    await edit('other tab draft')
+    await act(async () => {
+      delivery.resolve('unknown')
+      expect(await sending).toBe('unknown')
+    })
+    expect(current().drafts.composerText).toBe('other tab draft')
+    await remount('unknown-command')
+    expect(current().drafts.composerText).toBe(`/compact\n\n${command}`)
+    expect(current().drafts.pending).toEqual([])
+    expect(transport.send).toHaveBeenCalledTimes(1)
+    expect(transport.error).toHaveBeenCalledWith(
+      'Delivery unconfirmed — check chat before retrying'
+    )
   })
 })

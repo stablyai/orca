@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./structured-agent-session-client', () => ({ callStructuredAgentSession: mocks.call }))
-vi.mock('./local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
 vi.mock('./local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => mocks.capabilities,
@@ -27,8 +26,9 @@ vi.mock('./host-structured-agents', () => ({
   }
 }))
 
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { getDefaultSettings } from '../../../shared/constants'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import {
   readHostModelCatalogSnapshot,
@@ -36,6 +36,7 @@ import {
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
 
 const LOCAL = { kind: 'local' } as const
 const PAIRED = { kind: 'environment', environmentId: 'server-1' } as const
@@ -56,47 +57,31 @@ describe('host model catalog snapshots', () => {
     resetHostModelCatalogSnapshotsForTests()
   })
 
-  it('serves a workspace’s own answer, and another’s only where the default cannot differ', () => {
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', null, list(true))
-    // Another workspace's config may replace the default a chat naming no model would show.
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toBeUndefined()
-    const seeded = readHostModelCatalogSnapshot(LOCAL, 'codex', { ...NEW_CHAT, seedsModel: true })
-    expect(seeded).toMatchObject({
-      listingNamesConfiguredModel: false,
-      models: [{ isDefault: false }]
-    })
-    // A reopened chat names no default anyway.
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', { ...NEW_CHAT, newLaunch: false })).toEqual(
-      list(true)
-    )
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', list(true))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toEqual(list(true))
-    // A list that names no default reads the same in every workspace.
-    recordHostModelCatalogSnapshot(LOCAL, 'grok', null, list(false))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual(list(false))
-    expect(readHostModelCatalogSnapshot(PAIRED, 'codex', NEW_CHAT)).toBeUndefined()
-  })
-
-  it('serves a list the host says is a workspace’s own to that workspace only', () => {
-    const ownList = { ...list(false), modelsDifferByWorkspace: true as const }
-    recordHostModelCatalogSnapshot(LOCAL, 'opencode', 'wt-1', ownList)
-    expect(readHostModelCatalogSnapshot(LOCAL, 'opencode', NEW_CHAT)).toEqual(ownList)
-    expect(
-      readHostModelCatalogSnapshot(LOCAL, 'opencode', { ...NEW_CHAT, worktree: 'wt-2' })
-    ).toBeUndefined()
-    expect(
-      readHostModelCatalogSnapshot(LOCAL, 'opencode', {
-        ...NEW_CHAT,
-        newLaunch: false,
-        worktree: 'wt-2'
-      })
-    ).toBeUndefined()
-  })
-
-  it('drops an agent’s answers when the host says the account has no list', () => {
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', list(true))
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', { origin: 'unknown' })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toBeUndefined()
+  it('retires a workspace answer and its derived account fallback, retaining independent answers', () => {
+    const worldwide = { ...list(true), defaultHoldsInEveryWorkspace: true as const }
+    const scoped = { ...list(false), modelsDifferByWorkspace: true as const }
+    const other = { ...NEW_CHAT, worktree: 'wt-2' }
+    recordHostModelCatalogSnapshot(PAIRED, 'grok', 'wt-1', worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'omp', 'wt-1', scoped)
+    for (const retired of [{ origin: 'unknown' } as const, { ...worldwide, models: [] }]) {
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', scoped)
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', retired)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBeUndefined()
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', other)).toBe(scoped)
+      expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toBe(worldwide)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toBe(scoped)
+    }
+    const newer = { ...worldwide, fetchedAt: 2 }
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', newer)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(newer)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', null, worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
   })
 })
 
@@ -106,12 +91,6 @@ const REGISTERED = ['claude', 'codex', 'grok', 'opencode', 'omp'].map((agent) =>
 function registerAgents(hostId: string, runtimeId: string | null): void {
   mocks.agents.set(hostId, { runtimeId, agents: REGISTERED })
   mocks.agentListeners.forEach((listener) => listener())
-}
-
-/** The host saved lists for Grok, OpenCode and OMP only; nothing for Claude or Codex. */
-function savedFor(agents: readonly string[]) {
-  return async (_target: unknown, _method: string, params: { agent: string }) =>
-    agents.includes(params.agent) ? list(false) : { origin: 'unknown' }
 }
 
 describe('host model catalog snapshots sync', () => {
@@ -126,6 +105,7 @@ describe('host model catalog snapshots sync', () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
+        agentDefaultSurface: 'chat',
         nativeChatSessionOptions: { claude: { model: 'opus[1m]' }, codex: {} }
       },
       runtimeStatusByEnvironmentId: new Map()
@@ -133,41 +113,121 @@ describe('host model catalog snapshots sync', () => {
   })
   afterEach(() => stop?.())
 
-  it('an older runtime: loads only agents with a saved pick, and forgets them on an account change', async () => {
-    stop = installHostModelCatalogSnapshotsSync()
-    await vi.waitFor(() =>
-      expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toEqual(list(false))
-    )
-    // Its read lists when nothing is saved: no saved-only read, and no agent the user never picked.
-    expect(mocks.call.mock.calls).toEqual([
-      [LOCAL, 'agentSession.modelCatalog', { agent: 'claude' }]
-    ])
-    registerAgents('local', null)
-    const settings = useAppStore.getState().settings!
-    useAppStore.setState({ settings: { ...settings, activeClaudeManagedAccountId: 'other' } })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBeUndefined()
-    await Promise.resolve()
-    expect(mocks.call).toHaveBeenCalledTimes(1)
-  })
-
-  it('loads every registered agent saved-only, picked or not; an agent with nothing saved stays unknown', async () => {
+  it('retires reconnect observers after catalog removals while preserving live hosts', async () => {
+    const count = 10
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      runtimeEnvironments: [],
+      runtimeStatusByEnvironmentId: new Map(),
+      removedRuntimeEnvironmentIds: new Set()
+    })
     mocks.capabilities = [SAVED_ONLY]
-    mocks.call.mockImplementation(savedFor(['grok', 'opencode', 'omp']))
-    stop = installHostModelCatalogSnapshotsSync()
-    // Nothing is read until the host's agents are known; their arrival reads them.
-    await Promise.resolve()
-    expect(mocks.call).not.toHaveBeenCalled()
-    registerAgents('local', null)
-    await vi.waitFor(() =>
-      expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toEqual(list(false))
-    )
-    expect(mocks.call.mock.calls.map(([, method, params]) => [method, params])).toEqual(
-      REGISTERED.map(({ agent }) => ['agentSession.modelCatalog', { agent, savedOnly: true }])
-    )
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual(list(false))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'opencode', NEW_CHAT)).toEqual(list(false))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBeUndefined()
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toBeUndefined()
+    const environment = (id: string): PublicKnownRuntimeEnvironment => ({
+      id,
+      name: id,
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [{ id: `ws-${id}`, kind: 'websocket', label: 'WebSocket', endpoint: 'ws://host' }],
+      preferredEndpointId: `ws-${id}`
+    })
+    const setStatus = (id: string, epoch: number): void => {
+      const response = createCompatibleRuntimeStatusResponse(`rt-${id}`)
+      if (!response.ok) {
+        throw new Error('Expected a compatible runtime status')
+      }
+      const statuses = new Map(useAppStore.getState().runtimeStatusByEnvironmentId)
+      statuses.set(id, {
+        status: { ...response.result, capabilities: [SAVED_ONLY] },
+        checkedAt: epoch,
+        hostContactEpoch: epoch,
+        connectionGeneration: 1
+      })
+      useAppStore.setState({ runtimeStatusByEnvironmentId: statuses })
+    }
+    const survivor = environment('survivor')
+    useAppStore.getState().setRuntimeEnvironments([survivor])
+    setStatus(survivor.id, 1)
+    mocks.agents.set('runtime:survivor', {
+      runtimeId: 'rt-survivor',
+      agents: [{ agent: 'codex' }]
+    })
+    const active = new Set<() => void>()
+    let callbacks = 0
+    const subscribe = useAppStore.subscribe
+    const spy = vi.spyOn(useAppStore, 'subscribe').mockImplementation((listener) => {
+      const unsubscribe = subscribe((state, oldState) => {
+        callbacks += 1
+        listener(state, oldState)
+      })
+      const release = (): void => {
+        active.delete(release)
+        unsubscribe()
+      }
+      active.add(release)
+      return release
+    })
+    try {
+      stop = installHostModelCatalogSnapshotsSync()
+      for (let index = 0; index < count; index += 1) {
+        const retired = environment(`retired-${index}`)
+        useAppStore.getState().setRuntimeEnvironments([survivor, retired])
+        setStatus(retired.id, 1)
+        if (index === 0) {
+          useAppStore.getState().clearRuntimeEnvironmentStatus(retired.id)
+          expect(active.size).toBe(3)
+        }
+        useAppStore.getState().setRuntimeEnvironments([survivor])
+      }
+      setStatus('retired-0', 3)
+      expect(active.size).toBe(2)
+      callbacks = 0
+      useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 }))
+      expect(callbacks).toBe(2)
+
+      mocks.call.mockClear()
+      useAppStore.getState().clearRuntimeEnvironmentStatus(survivor.id)
+      expect(active.size).toBe(2)
+      setStatus(survivor.id, 2)
+      await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+      expect(mocks.call.mock.calls[0][0]).toEqual({
+        kind: 'environment',
+        environmentId: survivor.id
+      })
+
+      const readded = environment('retired-0')
+      useAppStore.getState().setRuntimeEnvironments([survivor, readded])
+      setStatus(readded.id, 1)
+      expect(active.size).toBe(3)
+      mocks.agents.set('runtime:retired-0', {
+        runtimeId: 'rt-retired-0',
+        agents: [{ agent: 'codex' }]
+      })
+      mocks.call.mockClear()
+      setStatus(readded.id, 2)
+      await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+      expect(mocks.call.mock.calls[0][0]).toEqual({
+        kind: 'environment',
+        environmentId: readded.id
+      })
+
+      stop()
+      stop = null
+      expect(active.size).toBe(0)
+      callbacks = 0
+      useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 }))
+      expect(callbacks).toBe(0)
+    } finally {
+      stop?.()
+      stop = null
+      spy.mockRestore()
+      useAppStore.setState({
+        runtimeEnvironments: previous.runtimeEnvironments,
+        runtimeStatusByEnvironmentId: previous.runtimeStatusByEnvironmentId,
+        removedRuntimeEnvironmentIds: previous.removedRuntimeEnvironmentIds
+      })
+    }
   })
 
   it('reads again for the new account after an account change, dropping an answer sent before it', async () => {
@@ -191,29 +251,5 @@ describe('host model catalog snapshots sync', () => {
     answerOld(list(false))
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(readHostModelCatalogSnapshot(LOCAL, 'claude', reopened)).toEqual(list(true))
-  })
-
-  it('a paired host: saved-only at connect when it advertises it, nothing from an older one', async () => {
-    const status = (capabilities: string[]) =>
-      new Map([['server-1', { status: { runtimeId: 'rt-1', capabilities } }]])
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sync reads only status.runtimeId and status.capabilities.
-    useAppStore.setState({ runtimeStatusByEnvironmentId: status([]) as never })
-    stop = installHostModelCatalogSnapshotsSync()
-    registerAgents('runtime:server-1', 'rt-1')
-    await Promise.resolve()
-    expect(mocks.call.mock.calls.filter(([target]) => target.kind === 'environment')).toEqual([])
-    stop()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
-    useAppStore.setState({ runtimeStatusByEnvironmentId: status([SAVED_ONLY]) as never })
-    stop = installHostModelCatalogSnapshotsSync()
-    registerAgents('runtime:server-1', 'rt-1')
-    await vi.waitFor(() =>
-      expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toEqual(list(false))
-    )
-    expect(
-      mocks.call.mock.calls
-        .filter(([target]) => target.kind === 'environment')
-        .every(([, , params]) => params.savedOnly === true)
-    ).toBe(true)
   })
 })

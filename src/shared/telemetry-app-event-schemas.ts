@@ -128,7 +128,8 @@ export const agentPromptSentSchema = z
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
     request_kind: requestKindSchema,
-    nth_repo_added: nthRepoAddedSchema
+    nth_repo_added: nthRepoAddedSchema,
+    sample_rate: z.literal(0.01).optional()
   })
   .strict()
 

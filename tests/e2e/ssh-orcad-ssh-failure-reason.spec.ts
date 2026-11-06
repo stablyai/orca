@@ -26,8 +26,18 @@ test.afterEach(() => {
 })
 
 const CASES = [
-  { name: 'a refused SSH port', reason: /ECONNREFUSED/, refused: true },
-  { name: 'a key the host rejects', reason: /authentication methods failed/i, refused: false }
+  {
+    name: 'a refused SSH port',
+    reason: /ECONNREFUSED/,
+    nextStep: 'Nothing accepted the SSH connection at this address',
+    refused: true
+  },
+  {
+    name: 'a key the host rejects',
+    reason: /authentication methods failed/i,
+    nextStep: 'The host didn’t accept any sign-in Orca offered',
+    refused: false
+  }
 ] as const
 
 for (const fault of CASES) {
@@ -64,6 +74,7 @@ for (const fault of CASES) {
       }
       await expect(card).toContainText(fault.reason, { timeout: 2 * 60_000 })
       await page.screenshot({ path: testInfo.outputPath('card.png') })
+      await expect(card).toContainText(fault.nextStep)
       await expect(card).not.toContainText('couldn’t start its server')
       await expect(card.getByRole('button', { name: 'Open plain SSH terminal' })).toHaveCount(0)
       const toasts = page.locator('[data-sonner-toast]')

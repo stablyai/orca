@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { wslUncDirectoryExistsAsync } from '../../../wsl'
+import { wslUncDirectoryExistsAsync } from '../../../wsl/filesystem/unc-path-access'
 
 export async function probeLocalStartupCwdDirectory(path: string): Promise<boolean | null> {
   try {

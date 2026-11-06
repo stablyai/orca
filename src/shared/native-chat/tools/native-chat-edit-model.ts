@@ -1,3 +1,5 @@
+import { getRuntimePathBasename } from '../../cross-platform-path'
+
 /** Per-side diff rows: del lacks new number, add lacks old. gap marks skipped regions so concatenated snippets do not imply continuity. */
 export type NativeChatEditLineKind = 'context' | 'add' | 'del' | 'gap'
 
@@ -63,6 +65,19 @@ export function pushEditGap(lines: NativeChatEditLine[]): void {
  *  else on the new side. One column, so a replaced line repeats its number. */
 export function unifiedLineNumber(line: NativeChatEditLine): number | null {
   return line.kind === 'del' ? line.oldLineNumber : (line.newLineNumber ?? line.oldLineNumber)
+}
+
+export function nativeChatEditFileBaseName(path: string): string {
+  return getRuntimePathBasename(path) || path
+}
+
+/** Unknown positions get no gutter: snippet-relative numbers would imply real file lines. */
+export function nativeChatEditGutterChars(file: NativeChatEditFile): number {
+  if (!file.lineNumbersKnown) {
+    return 0
+  }
+  const widest = file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
+  return Math.max(3, String(widest).length + 1)
 }
 
 export function finalizeEditFile(

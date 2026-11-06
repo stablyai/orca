@@ -1,8 +1,8 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
 import { parseAppSshPtyId } from '../ssh-pty-id'
-import { isTerminalLeafId } from '../stable-pane-id'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { isTerminalLeafId } from './stable-pane-id'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 
 // Require one leaf per terminal and one tab per leaf ID; binding writes report breaches without removing them.
@@ -58,7 +58,7 @@ export function collectTerminalLeafOwners({
 }
 
 /** Relay ids like `pty-1` repeat across relay restarts, so without an incarnation they prove nothing. */
-function isRepeatingRelayPtyId(ptyId: string): boolean {
+export function isRepeatingRelayPtyId(ptyId: string): boolean {
   const relayPtyId = parseAppSshPtyId(ptyId)?.relayPtyId
   return relayPtyId !== undefined && /^pty-\d+$/.test(relayPtyId)
 }

@@ -1,9 +1,9 @@
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../shared/remote-runtime-pty-id'
+} from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 export type AgentStatusConnectionRouting = { connectionId: string | null }
 

@@ -1,12 +1,14 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from '../../MobileNativeChatBackgroundTasks'
+import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
+import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
+import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps
-} from '../../MobileNativeChatQueuedMessages'
+} from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
-import { useMobileNativeChatQueuedEditFocus } from '../../use-mobile-native-chat-queued-edit-focus'
+import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
@@ -22,22 +24,42 @@ export const NO_COMPOSER_TRAY: MobileNativeChatComposerTray = {}
 
 export function useMobileNativeChatComposerTray({
   queued,
+  taskList,
   backgroundTasks
 }: {
   queued: MobileNativeChatQueuedMessagesProps & {
     /** One card list per conversation: a pending action in one never disables another's. */
     sessionKey: string
   }
+  taskList: NativeChatTaskList | null
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
-  const { cards, onSend, onDelete, onClearAll, editor, pause, onResume, sessionKey, steerHeld } =
-    queued
+  const {
+    cards,
+    onSend,
+    onDelete,
+    onClearAll,
+    editor,
+    onMove,
+    pause,
+    onResume,
+    sessionKey,
+    steerHeld,
+    agentWorking
+  } = queued
   return useMemo(
     () => ({
       content: createElement(
         Fragment,
         null,
+        taskList
+          ? createElement(MobileNativeChatDockedTaskList, {
+              key: `${sessionKey}:docked-task-list`,
+              list: taskList,
+              conversationKey: sessionKey
+            })
+          : null,
         backgroundTasks
           ? // Use distinct conversation keys so pending actions stay scoped and each tray section survives changes to the other.
             createElement(MobileNativeChatBackgroundTasks, {
@@ -53,26 +75,31 @@ export function useMobileNativeChatComposerTray({
           onClearAll,
           onEdit: editQueuedMessage,
           editor,
+          onMove,
           pause,
           onResume,
-          steerHeld
+          steerHeld,
+          agentWorking
         })
       ),
       composerInputRef
     }),
     [
+      taskList,
       backgroundTasks,
       cards,
       composerInputRef,
       editQueuedMessage,
       editor,
+      onMove,
       onDelete,
       onClearAll,
       onResume,
       onSend,
       pause,
       sessionKey,
-      steerHeld
+      steerHeld,
+      agentWorking
     ]
   )
 }

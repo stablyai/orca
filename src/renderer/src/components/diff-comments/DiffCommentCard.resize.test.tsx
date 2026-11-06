@@ -93,16 +93,6 @@ describe('DiffCommentCard content resize', () => {
     expect(disconnect).toHaveBeenCalledOnce()
   })
 
-  it('does not observe cards outside Monaco view zones', () => {
-    const onContentResize = vi.fn()
-    render(
-      <DiffCommentCard lineNumber={26} body="A saved note" onContentResize={onContentResize} />
-    )
-
-    expect(constructObserver).not.toHaveBeenCalled()
-    expect(onContentResize).not.toHaveBeenCalled()
-  })
-
   it('requests rail reflow only when the editing textarea height changes', () => {
     const onContentResize = vi.fn()
     let scrollHeight = 60

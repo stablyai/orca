@@ -5,14 +5,14 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TabContentType } from '../../../shared/tab-types'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
-} from '../../../shared/terminal-surface-id'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+} from '../../../shared/workspace-layout/terminal-surface-id'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import type {
   PublishedEditorFile,
   PublishedPane,

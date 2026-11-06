@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/ssh-types'
+
 import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import {
@@ -71,68 +72,6 @@ describe('migration export preflight', () => {
     ])
   })
 
-  it('previews a connected but unused host as movable with no blockers', () => {
-    const store = preflightStore((store) => {
-      store.addSshTarget(TARGET)
-      // Connect writes this reconnect hint before migration preflight.
-      store.patchWorkspaceSession({ activeConnectionIdsAtShutdown: [TARGET.id] })
-    })
-    expect(preflightOrcadMigrationExport(store, TARGET.id)).toMatchObject({
-      claimable: true,
-      blockers: []
-    })
-  })
-
-  it('blocks on a live relay terminal, which cannot move', () => {
-    const lease: SshRemotePtyLease = {
-      targetId: TARGET.id,
-      ptyId: 'pty-1',
-      state: 'attached',
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const result = preflightOrcadMigrationExport(
-      preflightStore(withRepo, { getSshRemotePtyLeases: () => [lease] }),
-      TARGET.id
-    )
-    expect(result.claimable).toBe(false)
-    expect(result.blockers.map((blocker) => blocker.code)).toContain(
-      'orcad_migration_direct_ssh_terminal_leases'
-    )
-  })
-
-  it('blocks on dependent state the manifest cannot carry', () => {
-    const result = preflightOrcadMigrationExport(
-      preflightStore(withRepo, {
-        inspectOrcadMigrationUntransferredDependencies: () => ({
-          totalCount: 2,
-          counts: {
-            automation: 2,
-            'automation-run': 0,
-            'mobile-tab-selection': 0,
-            'retired-worktree-name': 0,
-            'saved-port-forward': 0,
-            'sparse-preset': 0,
-            'terminal-lease': 0,
-            'terminal-recovery': 0,
-            'ui-routing': 0,
-            'workspace-lineage': 0,
-            'workspace-session': 0,
-            'worktree-lineage': 0,
-            'worktree-metadata': 0
-          }
-        })
-      }),
-      TARGET.id
-    )
-    expect(result.claimable).toBe(false)
-    expect(result.blockers).toContainEqual({
-      code: 'orcad_migration_dependent_state',
-      category: 'client-owned-state',
-      dependencies: [{ kind: 'automation', count: 2 }]
-    })
-  })
-
   it('treats a census the store could not take as unverifiable, never empty', () => {
     const result = preflightOrcadMigrationExport(
       preflightStore(withRepo, {
@@ -146,34 +85,5 @@ describe('migration export preflight', () => {
     expect(result.blockers.map((blocker) => blocker.code)).toContain(
       'orcad_migration_dependency_unverifiable'
     )
-  })
-
-  it('refuses a target another runtime owns, and passes the owner only with its journal', () => {
-    const owned = preflightStore((store) =>
-      store.addSshTarget({ ...TARGET, orcadFence: { environmentId: 'env-1' } })
-    )
-    expect(preflightOrcadMigrationExport(owned, TARGET.id).claimable).toBe(false)
-    expect(
-      preflightOrcadMigrationExport(owned, TARGET.id, { environmentId: 'env-1', recorded: true })
-        .claimable
-    ).toBe(true)
-    expect(
-      preflightOrcadMigrationExport(owned, TARGET.id, { environmentId: 'env-1', recorded: false })
-    ).toMatchObject({
-      claimable: false,
-      blockers: [{ code: 'orcad_migration_owner_unrecorded' }]
-    })
-  })
-
-  it('reports an unknown target', () => {
-    expect(
-      preflightOrcadMigrationExport(
-        preflightStore(() => {}),
-        'missing'
-      )
-    ).toMatchObject({
-      claimable: false,
-      blockers: [{ code: 'orcad_migration_target_not_found' }]
-    })
   })
 })

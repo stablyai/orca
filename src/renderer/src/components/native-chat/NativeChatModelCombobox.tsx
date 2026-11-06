@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
   Command,
@@ -8,9 +8,11 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
+import { nativeChatModelDescription } from './native-chat-model-description'
 import { translate } from '@/i18n/i18n'
-import type { SessionOptionSelectChoice } from '../../../../shared/native-chat-session-options'
-import { nativeChatSessionChoiceLabel } from './native-chat-session-option-labels'
+import type { SessionOptionSelectChoice } from '../../../../shared/native-chat/input/native-chat-session-options'
+import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat/input/native-chat-session-option-labels'
+import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 
@@ -43,6 +45,7 @@ export function NativeChatModelCombobox({
 }: NativeChatModelComboboxProps): React.JSX.Element {
   const searchLabel = translate('components.native-chat.composer.searchModels', 'Search models…')
   const search = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState('')
   return (
     <Command
       surface="inline"
@@ -51,7 +54,7 @@ export function NativeChatModelCombobox({
       filter={modelChoiceFilter}
       defaultValue={currentValue}
     >
-      <CommandInput ref={search} placeholder={searchLabel} />
+      <CommandInput ref={search} placeholder={searchLabel} value={query} onValueChange={setQuery} />
       {readOnly && readOnlyReason ? (
         <div className="px-3 py-1.5 text-xs text-muted-foreground">{readOnlyReason}</div>
       ) : null}
@@ -73,34 +76,36 @@ export function NativeChatModelCombobox({
         </CommandEmpty>
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
-            {choices.map((choice) => {
-              const label = nativeChatSessionChoiceLabel(choice)
-              const current = choice.value === currentValue
-              return (
-                <CommandItem
-                  key={choice.value}
-                  value={choice.value}
-                  keywords={[label, choice.description ?? '']}
-                  selection="palette"
-                  disabled={readOnly}
-                  aria-current={current || undefined}
-                  onSelect={() => {
-                    if (!current) {
-                      onSelect(choice.value)
-                    }
-                  }}
-                >
-                  <NativeChatSessionOptionChoiceBody
-                    label={label}
-                    description={choice.description}
-                  />
-                  {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
-                  <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
-                  </span>
-                </CommandItem>
-              )
-            })}
+            {choices
+              .filter((choice) => !choice.searchOnly || query.trim())
+              .map((choice) => {
+                const label = nativeChatSessionChoiceLabel(choice, say)
+                const current = choice.value === currentValue
+                return (
+                  <CommandItem
+                    key={choice.value}
+                    value={choice.value}
+                    keywords={[label, choice.description ?? '']}
+                    selection="palette"
+                    disabled={readOnly}
+                    aria-current={current || undefined}
+                    onSelect={() => {
+                      if (!current) {
+                        onSelect(choice.value)
+                      }
+                    }}
+                  >
+                    <NativeChatSessionOptionChoiceBody
+                      label={label}
+                      description={nativeChatModelDescription(choice.value, choice.description)}
+                    />
+                    {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
+                    <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
+                      {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
+                    </span>
+                  </CommandItem>
+                )
+              })}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
       </CommandList>

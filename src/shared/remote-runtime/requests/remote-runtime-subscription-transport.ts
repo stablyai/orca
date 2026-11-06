@@ -2,13 +2,13 @@ import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
 import { throwIfSignalAborted, abortSignalReason } from '../../abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import {
   createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,
   ignoreSettledRemoteRuntimeSocketError
-} from '../../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+} from '../remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
@@ -17,15 +17,15 @@ import {
   isRemoteRuntimeBinaryFrameWithinLimit,
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
   serializeRemoteRuntimeRpcRequest
-} from '../../remote-runtime-memory-limits'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+} from '../remote-runtime-memory-limits'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { RemoteRuntimeSubscriptionFrameRouter } from './remote-runtime-subscription-frame-router'
 import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime-subscription-outbound'
 import { RemoteRuntimeSubscriptionRequestChannel } from './remote-runtime-subscription-request-channel'
 import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessMonitor
-} from '../../remote-runtime-socket-liveness'
+} from '../remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeSubscriptionOptions,
   RemoteRuntimeTransportSubscription,

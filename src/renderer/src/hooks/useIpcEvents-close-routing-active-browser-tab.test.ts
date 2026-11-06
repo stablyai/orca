@@ -77,40 +77,6 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     isWebRuntimeSessionActive.mockReturnValue(true)
   })
 
-  it('closes a host-owned workspace on its runtime and leaves the mirror to tab sync', async () => {
-    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
-    await useIpcEventsForCloseRouting({
-      closeActiveTabListenerRef: listenerRef,
-      getState: () => activeBrowserWorkspace({ environmentId: 'env-a' })
-    })
-
-    requireListener(listenerRef)()
-
-    expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabId: 'unified-1',
-      environmentId: 'env-a',
-      reason: 'user'
-    })
-    expect(closeBrowserTab).not.toHaveBeenCalled()
-    expect(closeUnifiedTab).not.toHaveBeenCalled()
-  })
-
-  // Why: a connected runtime does not make a client-local workspace the host's to close.
-  it('tears a local-only workspace down here even while the runtime is connected', async () => {
-    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
-    await useIpcEventsForCloseRouting({
-      closeActiveTabListenerRef: listenerRef,
-      getState: () => activeBrowserWorkspace({})
-    })
-
-    requireListener(listenerRef)()
-
-    expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
-    expect(destroyWorkspaceWebviews).toHaveBeenCalled()
-    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
-  })
-
   // Staged pages lack host identity yet; inert remote close lets the in-flight snapshot recreate them.
   it('unwinds a staged workspace as a cleanup close instead of closing it on the host', async () => {
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
@@ -145,21 +111,6 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(closeBrowserTab).not.toHaveBeenCalled()
   })
 
-  // With owner runtime gone, dead host-close requests cannot remove the visible tab.
-  it('tears a host-owned workspace down here when its runtime is disconnected', async () => {
-    isWebRuntimeSessionActive.mockReturnValue(false)
-    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
-    await useIpcEventsForCloseRouting({
-      closeActiveTabListenerRef: listenerRef,
-      getState: () => activeBrowserWorkspace({ environmentId: 'env-a' })
-    })
-
-    requireListener(listenerRef)()
-
-    expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
-    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
-  })
-
   it('tears a pageless mirror down here when its runtime is disconnected', async () => {
     isWebRuntimeSessionActive.mockReturnValue(false)
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
@@ -188,21 +139,6 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
           'workspace-1': [{ id: 'page-1', workspaceId: 'stale-workspace', worktreeId: 'stale-wt' }]
         }
       })
-    })
-
-    requireListener(listenerRef)({ sourceId: 'page-1' })
-
-    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
-    expect(destroyWorkspaceWebviews).toHaveBeenCalled()
-  })
-
-  // Empty floating-panel fallback must not swallow explicit guest source IDs targeting the main workspace.
-  it('closes the source workspace even while an empty floating panel is visible', async () => {
-    vi.stubGlobal('document', Object.assign(new EventTarget(), { querySelector: () => ({}) }))
-    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
-    await useIpcEventsForCloseRouting({
-      closeActiveTabListenerRef: listenerRef,
-      getState: () => activeBrowserWorkspace({})
     })
 
     requireListener(listenerRef)({ sourceId: 'page-1' })

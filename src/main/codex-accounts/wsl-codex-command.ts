@@ -4,7 +4,7 @@ import {
   buildWslExecArgs,
   buildWslLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000
 export const WSL_CODEX_NOT_FOUND_MESSAGE = 'Codex CLI not found in the WSL login-shell PATH.'

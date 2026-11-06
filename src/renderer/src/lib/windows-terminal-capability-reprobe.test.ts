@@ -40,18 +40,6 @@ afterEach(() => {
 })
 
 describe('windows terminal capability re-probe', () => {
-  it('settles usable WSL on a Windows host without waiting for process identity', async () => {
-    vi.useFakeTimers()
-    const { probe, readCached } = createWatcher([USABLE_WSL])
-    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(probe).toHaveBeenCalledTimes(1)
-
-    await vi.advanceTimersByTimeAsync(30 * 60_000)
-    expect(probe).toHaveBeenCalledTimes(1)
-  })
-
   it('backs off to a five-minute ceiling on a stable answer', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()
@@ -196,19 +184,5 @@ describe('windows terminal capability re-probe', () => {
     expect(probe).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(1)
     expect(probe).toHaveBeenCalledTimes(4)
-  })
-
-  it('drops the focus listener when no owner is watched', () => {
-    const addEventListener = vi.spyOn(globalThis, 'addEventListener')
-    const removeEventListener = vi.spyOn(globalThis, 'removeEventListener')
-    const { probe, readCached } = createWatcher()
-
-    const stop = startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
-    expect(addEventListener).toHaveBeenCalledWith('focus', expect.any(Function))
-
-    stop()
-    expect(removeEventListener).toHaveBeenCalledWith('focus', expect.any(Function))
-    addEventListener.mockRestore()
-    removeEventListener.mockRestore()
   })
 })

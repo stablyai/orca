@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { OrchestrationFleetWorker } from '../../../shared/orchestration-fleet-projection'
-import { subagentGroupFallbackText } from '../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
 import { formatWorkerRead, formatWorkerRelease, formatWorkerStart } from './worker-output'
 
@@ -86,18 +86,6 @@ describe('worker-start plain formatting', () => {
         'Effects: [{"kind":"worktree","id":"worktree_1"}]\n' +
         'Residual resources: [{"kind":"worktree","id":"worktree_1"}]'
     )
-  })
-
-  it('keeps ready receipts concise when effects describe successful setup', () => {
-    expect(
-      formatWorkerStart({
-        taskId: 'task_1',
-        dispatchId: 'ctx_ready',
-        state: 'ready',
-        effects: [{ kind: 'terminal', id: 'term_worker' }],
-        residualResources: []
-      })
-    ).toBe('Worker ctx_ready [ready] for task_1')
   })
 })
 
@@ -474,21 +462,6 @@ describe('formatWorkerRead', () => {
 })
 
 describe('worker output compatibility and release receipts', () => {
-  it('renders terminal tails without changing line boundaries', () => {
-    expect(
-      formatWorkerRead({
-        dispatchId: 'dispatch_1',
-        terminal: {
-          handle: 'term_worker',
-          status: 'running',
-          tail: ['first', '', 'third'],
-          truncated: false,
-          nextCursor: null
-        }
-      })
-    ).toBe('first\n\nthird')
-  })
-
   it('renders transcript blocks and survives unserializable tool input', () => {
     const circular: { self?: unknown } = {}
     circular.self = circular

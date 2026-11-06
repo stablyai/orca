@@ -35,41 +35,40 @@ export function createTerminalAccessoryRepeatController<TInput>() {
 
   const cancel = stop
 
-  const start = (input: TInput, send: TerminalAccessoryRepeatSender<TInput>) => {
+  const start = (
+    input: TInput,
+    send: TerminalAccessoryRepeatSender<TInput>,
+    firstRepeatDelayMs?: number
+  ) => {
     stop()
     const activeGeneration = generation
-    const pressedAt = Date.now()
+    const startedAt = Date.now()
+    let nextRepeatDelayMs = firstRepeatDelayMs
 
-    const schedule = (delayMs: number) => {
-      timer = setTimeout(() => {
-        timer = null
-        if (generation !== activeGeneration) {
-          return
-        }
-        void send(input).then(
-          (sent) => {
-            if (sent && generation === activeGeneration) {
-              schedule(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS)
-            }
-          },
-          () => undefined
-        )
-      }, delayMs)
+    const sendNext = () => {
+      timer = null
+      if (generation !== activeGeneration) {
+        return
+      }
+      void send(input).then(
+        (sent) => {
+          if (sent && generation === activeGeneration) {
+            const delayMs =
+              nextRepeatDelayMs === undefined
+                ? TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
+                : Math.min(
+                    nextRepeatDelayMs,
+                    Math.max(0, nextRepeatDelayMs - (Date.now() - startedAt))
+                  )
+            nextRepeatDelayMs = undefined
+            timer = setTimeout(sendNext, delayMs)
+          }
+        },
+        () => undefined
+      )
     }
 
-    void send(input).then(
-      (sent) => {
-        if (sent && generation === activeGeneration) {
-          schedule(
-            Math.min(
-              TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
-              Math.max(0, TERMINAL_ACCESSORY_REPEAT_DELAY_MS - (Date.now() - pressedAt))
-            )
-          )
-        }
-      },
-      () => undefined
-    )
+    sendNext()
   }
 
   return { cancel, start, stop }

@@ -1,5 +1,5 @@
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
-import { withoutNativeChatVisualDirectiveLines } from '../../shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../shared/native-chat/native-chat-visual-directive'
 
 export { sliceAtCodeUnitLimit }
 

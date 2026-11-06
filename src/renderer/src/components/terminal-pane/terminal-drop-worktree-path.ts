@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/execution-host'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
-import { isTerminalDropWindowsPathLike } from './terminal-drop-shell'
+import { isTerminalDropWindowsPathLike } from '../../../../shared/image-path-paste'
 
 export function resolveTerminalDropWorktreePath(
   worktreeId: string,

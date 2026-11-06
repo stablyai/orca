@@ -1,8 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getAntigravityAccountService } from './native-account-host'
+import { join } from 'node:path'
+import {
+  getAntigravityAccountService,
+  setAntigravityNativeCredentialChangeListener
+} from './native-account-host'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
+import { createEncryptedAntigravityAccountStore } from './native-account-store'
+import { credential, harness } from './native-account-test-fixtures'
+import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
 
 vi.mock('./native-credential-backend', () => ({ createAntigravityHostCredentialBackend: vi.fn() }))
+vi.mock('./native-account-store', () => ({ createEncryptedAntigravityAccountStore: vi.fn() }))
+vi.mock('../../shared/app-environment', () => ({
+  getAppEnvironment: () => ({ getPath: () => '/task/home' })
+}))
 
 describe('Antigravity runtime authority guard', () => {
   it.each(['Ubuntu', 'Debian', null])(
@@ -21,4 +32,38 @@ describe('Antigravity runtime authority guard', () => {
     )
     expect(createAntigravityHostCredentialBackend).not.toHaveBeenCalled()
   })
+})
+
+it('reports new credentials and verified account switches, but not baseline reads or sign-out', async () => {
+  const h = harness()
+  const parse = vi.fn(parseAntigravityWindowsSnapshot)
+  h.backend.parse = parse
+  vi.mocked(createAntigravityHostCredentialBackend).mockReturnValue(h.backend)
+  vi.mocked(createEncryptedAntigravityAccountStore).mockReturnValue(h.store)
+  const changed = vi.fn()
+  setAntigravityNativeCredentialChangeListener(changed)
+  const service = getAntigravityAccountService({ runtime: 'host' })
+  expect(createEncryptedAntigravityAccountStore).toHaveBeenCalledWith(
+    join('/task/home', 'antigravity-accounts', 'vault'),
+    parse
+  )
+  expect(getAntigravityAccountService({ runtime: 'host' })).toBe(service)
+  expect(createAntigravityHostCredentialBackend).toHaveBeenCalledTimes(1)
+
+  const a = (await service.addCurrentAccount()).activeAccountId!
+  await service.listAccounts()
+  expect(changed).not.toHaveBeenCalled()
+
+  h.setNative(null)
+  await service.listAccounts()
+  expect(changed).not.toHaveBeenCalled()
+
+  h.setNative(credential('b'))
+  await service.addCurrentAccount()
+  expect(changed).toHaveBeenCalledTimes(1)
+  await service.selectAccount(a)
+  expect(parse).toHaveBeenCalledWith(credential('a'))
+  expect(changed).toHaveBeenCalledTimes(2)
+  await service.listAccounts()
+  expect(changed).toHaveBeenCalledTimes(2)
 })

@@ -15,13 +15,15 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush, createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
 import {
   notifyLocalWatcherEvents,
   notifyLocalWatcherInterrupted
 } from './local-watcher-event-observers'
 
-// Match the watcher subprocess stat budget.
+// All local and WSL roots in main share this budget; watcher children have separate pools.
 const DIRECTORY_STAT_CONCURRENCY = 8
+const directoryStatSlots = new PrioritySemaphore(DIRECTORY_STAT_CONCURRENCY)
 
 // delete→create retains both for subtree/parent refresh; create→delete cancels within the window.
 function coalesceEvents(
@@ -67,10 +69,23 @@ function coalesceEvents(
   return result
 }
 
-async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined> {
+async function tryStatIsDirectory(
+  filePath: string,
+  root: WatchedRoot
+): Promise<boolean | undefined> {
+  const signal = root.batch.statAbortController.signal
   try {
-    const s = await stat(filePath)
-    return s.isDirectory()
+    const release = await directoryStatSlots.acquire(0, signal)
+    try {
+      // Cancellation can race with a slot grant before this continuation resumes.
+      signal.throwIfAborted()
+      if (root.listeners.size === 0) {
+        return undefined
+      }
+      return (await stat(filePath)).isDirectory()
+    } finally {
+      release()
+    }
   } catch {
     // Failed stat leaves the renderer's conservative file-event default.
     return undefined
@@ -131,9 +146,9 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       async (evt) => {
         // Deleted paths cannot be statted; let the renderer infer from dirCache.
         const isDirectory =
-          root.batch.cancelled || evt.type === 'delete'
+          root.batch.cancelled || root.listeners.size === 0 || evt.type === 'delete'
             ? undefined
-            : await tryStatIsDirectory(evt.path)
+            : await tryStatIsDirectory(evt.path, root)
 
         return {
           kind: evt.type,

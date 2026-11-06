@@ -2,7 +2,7 @@
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { NewGroupSplit } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../../types'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'

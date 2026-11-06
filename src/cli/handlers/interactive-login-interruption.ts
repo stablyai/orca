@@ -15,6 +15,7 @@ type TerminationDependencies = {
 
 export type InteractiveLoginSession = {
   child: ChildProcess | null
+  stopPhase?: (signal: NodeJS.Signals) => Promise<void>
   registering: boolean
   terminationPromise: Promise<void> | null
 }
@@ -130,7 +131,9 @@ export async function withInteractiveLoginCleanup<T>(
   }
   const onSignal = (signal: NodeJS.Signals): void => {
     if (session.child) {
-      session.terminationPromise ??= terminateInteractiveLoginProcess(session.child, signal)
+      session.terminationPromise ??= session.stopPhase
+        ? session.stopPhase(signal)
+        : terminateInteractiveLoginProcess(session.child, signal)
     }
     if (session.registering) {
       console.warn(

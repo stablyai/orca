@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
+import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,8 +11,9 @@ import {
   type CookieImportOptions
 } from '../browser-cookie-import-pipeline'
 import { databaseSameSite, deriveUrl, type ValidatedCookie } from './browser-cookie-validation'
-import type { DetectedBrowser } from './browser-cookie-detection-types'
+import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { diag } from '../browser-cookie-import-diagnostics'
+import { isMacPrivacyDenial } from './browser-cookie-macos-privacy-denial'
 
 export async function importCookiesFromFirefox(
   browser: DetectedBrowser,
@@ -35,12 +37,10 @@ export async function importCookiesFromFirefox(
         }
       }
     }
-  } catch {
+  } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
-    return {
-      ok: false,
-      reason: 'Could not copy Firefox cookies database. Try closing Firefox first.'
-    }
+    const code = isMacPrivacyDenial(err) ? 'macFullDiskAccess' : 'databaseCopyFailed'
+    return browserCookieImportFailure(code, { browser: 'Firefox' })
   }
 
   try {
@@ -75,7 +75,7 @@ export async function importCookiesFromFirefox(
     diag(`  Firefox source has ${rows.length} cookies`)
     if (rows.length === 0) {
       rmSync(tmpDir, { recursive: true, force: true })
-      return { ok: false, reason: 'No cookies found in Firefox.' }
+      return browserCookieImportFailure('noCookies', { browser: 'Firefox' })
     }
 
     const now = Math.floor(Date.now() / 1000)
@@ -112,22 +112,18 @@ export async function importCookiesFromFirefox(
     rmSync(tmpDir, { recursive: true, force: true })
 
     if (validated.length === 0) {
-      return { ok: false, reason: 'No valid cookies found in Firefox.' }
+      return browserCookieImportFailure('noValidCookies', { browser: 'Firefox' })
     }
 
     return importValidatedCookies(
       validated,
       rows.length,
       cookieImportTarget(targetPartition),
-      'replace-imported-domains',
       options
     )
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
     diag(`  Firefox import failed: ${String(err)}`)
-    return {
-      ok: false,
-      reason: 'Could not import cookies from Firefox. Try closing Firefox first.'
-    }
+    return browserCookieImportFailure('importFailedTryClosing', { browser: 'Firefox' })
   }
 }

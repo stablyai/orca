@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   BrowserTarget,
+  ExpectUrlBrowserTarget,
   OptionalBoolean,
   OptionalFiniteNumber,
   OptionalPlainString,
@@ -9,31 +10,31 @@ import {
   requiredStringAllowingEmpty
 } from './rpc-param-primitives'
 
-export const Element = BrowserTarget.extend({
+export const Element = ExpectUrlBrowserTarget.extend({
   element: requiredString('Missing required --element')
 })
 
-export const Goto = BrowserTarget.extend({
+export const Goto = ExpectUrlBrowserTarget.extend({
   url: requiredString('Missing required --url')
 })
 
-export const Fill = BrowserTarget.extend({
+export const Fill = ExpectUrlBrowserTarget.extend({
   element: requiredString('Missing required --element'),
   value: requiredStringAllowingEmpty('Missing required --value')
 })
 
-export const Type = BrowserTarget.extend({
+export const Type = ExpectUrlBrowserTarget.extend({
   input: requiredString('Missing required --input')
 })
 
-export const Select = BrowserTarget.extend({
+export const Select = ExpectUrlBrowserTarget.extend({
   element: requiredString('Missing required --element'),
   value: z.custom<string>((v) => typeof v === 'string', {
     message: 'Missing required --value'
   })
 })
 
-export const Scroll = BrowserTarget.extend({
+export const Scroll = ExpectUrlBrowserTarget.extend({
   direction: z.custom<'up' | 'down'>((v) => v === 'up' || v === 'down', {
     message: 'Missing required --direction (up or down)'
   }),
@@ -41,14 +42,6 @@ export const Scroll = BrowserTarget.extend({
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
     .pipe(z.union([z.number(), z.undefined()]))
-    .optional()
-})
-
-export const Screenshot = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
-    .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
     .optional()
 })
 
@@ -77,7 +70,7 @@ export const FullScreenshot = BrowserTarget.extend({
     .pipe(z.enum(['png', 'jpeg']))
 })
 
-export const Eval = BrowserTarget.extend({
+export const Eval = ExpectUrlBrowserTarget.extend({
   expression: requiredString('Missing required --expression')
 })
 
@@ -129,6 +122,10 @@ export const TabProfileClone = BrowserTarget.extend({
 
 export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
 
+export const ProfileClearGoogleCookies = ProfileDelete.extend({
+  executorRuntimeId: z.string().min(1)
+})
+
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
@@ -136,12 +133,12 @@ export const ProfileImportFromBrowser = z.object({
   supportsPartitionSkippedCookies: z.literal(true).optional()
 })
 
-export const Drag = BrowserTarget.extend({
+export const Drag = ExpectUrlBrowserTarget.extend({
   from: requiredString('Missing required --from and --to element refs'),
   to: requiredString('Missing required --from and --to element refs')
 })
 
-export const Upload = BrowserTarget.extend({
+export const Upload = ExpectUrlBrowserTarget.extend({
   element: requiredString('Missing required --element and --files'),
   files: z.custom<string[]>(
     (v) => Array.isArray(v) && v.length > 0 && v.every((f) => typeof f === 'string'),
@@ -163,7 +160,7 @@ export const Wait = BrowserTarget.extend({
   state: OptionalPlainString
 })
 
-export const Check = BrowserTarget.extend({
+export const Check = ExpectUrlBrowserTarget.extend({
   element: requiredString('Missing required --element'),
   checked: z
     .unknown()
@@ -172,11 +169,11 @@ export const Check = BrowserTarget.extend({
     .pipe(z.boolean())
 })
 
-export const Keypress = BrowserTarget.extend({
+export const Keypress = ExpectUrlBrowserTarget.extend({
   key: requiredString('Missing required --key')
 })
 
-export const SelectorPath = BrowserTarget.extend({
+export const SelectorPath = ExpectUrlBrowserTarget.extend({
   selector: requiredString('Missing required --selector and --path'),
   path: requiredString('Missing required --selector and --path')
 })
@@ -203,7 +200,7 @@ export const Is = BrowserTarget.extend({
   })
 })
 
-export const KeyboardInsert = BrowserTarget.extend({
+export const KeyboardInsert = ExpectUrlBrowserTarget.extend({
   text: requiredString('Missing required --text')
 })
 
@@ -211,7 +208,7 @@ export const LimitParam = BrowserTarget.extend({
   limit: OptionalFiniteNumber
 })
 
-export const Find = BrowserTarget.extend({
+export const Find = ExpectUrlBrowserTarget.extend({
   locator: requiredString('Missing required --locator, --value, and --action'),
   value: requiredString('Missing required --locator, --value, and --action'),
   action: requiredString('Missing required --locator, --value, and --action'),
@@ -272,7 +269,7 @@ export const InterceptEnable = BrowserTarget.extend({
     .optional()
 })
 
-export const MouseXY = BrowserTarget.extend({
+export const MouseXY = ExpectUrlBrowserTarget.extend({
   x: z.custom<number>((v) => typeof v === 'number', {
     message: 'Missing required x and y coordinates'
   }),
@@ -281,11 +278,11 @@ export const MouseXY = BrowserTarget.extend({
   })
 })
 
-export const MouseButton = BrowserTarget.extend({
+export const MouseButton = ExpectUrlBrowserTarget.extend({
   button: OptionalPlainString
 })
 
-export const MouseWheel = BrowserTarget.extend({
+export const MouseWheel = ExpectUrlBrowserTarget.extend({
   dy: z.custom<number>((v) => typeof v === 'number', {
     message: 'Missing required --dy'
   }),
@@ -322,7 +319,7 @@ export const ClipboardWrite = BrowserTarget.extend({
   text: requiredString('Missing required --text')
 })
 
-export const DialogAccept = BrowserTarget.extend({
+export const DialogAccept = ExpectUrlBrowserTarget.extend({
   text: OptionalPlainString
 })
 
@@ -330,7 +327,7 @@ export const StorageKey = BrowserTarget.extend({
   key: requiredString('Missing required --key')
 })
 
-export const StorageKeyValue = BrowserTarget.extend({
+export const StorageKeyValue = ExpectUrlBrowserTarget.extend({
   key: z.custom<string>((v) => typeof v === 'string' && v.length > 0, {
     message: 'Missing required --key and --value'
   }),

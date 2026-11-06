@@ -1,9 +1,9 @@
 import React from 'react'
 import { toast } from 'sonner'
 import type { useAppStore } from '@/store'
-import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
-import type { SourceControlActionRecipe } from '../../../../../shared/source-control-ai-actions'
+import { SourceControlAgentActionDialog } from '@/components/right-sidebar/source-control/ai/SourceControlAgentActionDialog'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
+import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { saveFixChecksActionDefault, startFixChecksFromDialog } from './fix-launch'
@@ -64,15 +64,7 @@ export function ChecksFixDialog({
           )
         )
       }}
-      onStart={({ agent, commandInput, agentArgs }) =>
-        startFixChecksFromDialog({
-          targetRepoId,
-          item,
-          agent,
-          commandInput,
-          agentArgs
-        })
-      }
+      onStart={(launch) => startFixChecksFromDialog({ targetRepoId, item, ...launch })}
     />
   )
 }

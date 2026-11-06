@@ -1,13 +1,14 @@
 // CLI close must route to the paired runtime that owns the process, not claim a local stop of its remote id (STA-7826).
 import { describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { store, makeRuntimeStoreWithWorkspaceSession } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 

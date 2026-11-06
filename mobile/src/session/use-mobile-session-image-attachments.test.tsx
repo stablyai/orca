@@ -1,10 +1,12 @@
 import { createElement } from 'react'
+import { resetMobileNativeChatDraftInputsForTests } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import { resetMobileNativeChatStaleInputForTests } from './native-chat/mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
+import { resetMobileNativeChatDraftStoreForTests } from './native-chat/composer/mobile-native-chat-draft-store'
 
 vi.mock('../platform/media-picker', () => ({
   useMediaPicker: () => ({
@@ -66,7 +68,9 @@ describe('useMobileSessionImageAttachments', () => {
   }
 
   beforeEach(() => {
+    resetMobileNativeChatDraftInputsForTests()
     vi.useFakeTimers()
+    resetMobileNativeChatDraftStoreForTests()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
   })
@@ -85,7 +89,7 @@ describe('useMobileSessionImageAttachments', () => {
       await hook.nativeChatImages.attachImage('library')
     })
     expect(hook.nativeChatImages.attachments).toEqual([
-      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
+      { id: expect.any(String), path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
     ])
   }
 
@@ -99,92 +103,29 @@ describe('useMobileSessionImageAttachments', () => {
     return accepted
   }
 
-  it('sends structured session images without a terminal input lease', async () => {
-    const args = baseArgs({ activeHandle: null, activeHandleRef: { current: null } })
-    await renderWithImage(args)
+  it.each(['accepted', 'queued', 'unknown', 'rejected'] as const)(
+    'sends structured session images without a terminal lease and clears captured chips unless refused: %s',
+    async (outcome) => {
+      const args = baseArgs({
+        activeHandle: null,
+        activeHandleRef: { current: null },
+        nativeChatBaseSend: vi.fn().mockResolvedValue(outcome)
+      })
+      await renderWithImage(args)
+      const image = hook.nativeChatImages.attachments[0]
 
-    expect(await send()).toBe(true)
-    expect(args.nativeChatBaseSend).toHaveBeenCalledWith(
-      'look',
-      ['file:///a.jpg'],
-      expect.any(Number),
-      [{ id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }]
-    )
-    expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.saveImageAsTempFile'
-    ])
-    expect(hook.nativeChatImages.attachments).toEqual([])
-  })
-
-  it.each([false, true])('gates terminal image delivery on input lease %s', async (leaseReady) => {
-    const args = baseArgs({
-      nativeChatInputLeaseReady: leaseReady,
-      structuredNativeChat: false
-    })
-    await renderWithImage(args)
-
-    expect(await send()).toBe(leaseReady)
-    const sends = args.client.sendRequest.mock.calls.filter(
-      ([method]) => method === 'terminal.send'
-    )
-    if (leaseReady) {
-      expect(sends).toEqual([
-        ['terminal.send', { terminal: 'term-1', text: '\x15', enter: false }, expect.any(Object)],
-        [
-          'terminal.send',
-          { terminal: 'term-1', text: '\x1b[200~/tmp/a.png\x1b[201~ ', enter: false },
-          expect.any(Object)
-        ]
-      ])
+      expect(await send()).toBe(outcome !== 'rejected')
       expect(args.nativeChatBaseSend).toHaveBeenCalledWith(
         'look',
         ['file:///a.jpg'],
         expect.any(Number),
-        undefined,
-        expect.any(Number)
+        [image]
       )
-      expect(hook.nativeChatImages.attachments).toEqual([])
-    } else {
-      expect(sends).toEqual([])
-      expect(args.nativeChatBaseSend).not.toHaveBeenCalled()
-      expect(args.onNativeChatSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-      expect(hook.nativeChatImages.attachments).toHaveLength(1)
+      expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+        'clipboard.startImageUpload',
+        'clipboard.saveImageAsTempFile'
+      ])
+      expect(hook.nativeChatImages.attachments).toEqual(outcome === 'rejected' ? [image] : [])
     }
-  })
-
-  it('keeps a structured session image pending when the connection drops', async () => {
-    const args = baseArgs()
-    await renderWithImage(args)
-    act(() => {
-      renderer?.update(createElement(Harness, { args: { ...args, connState: 'connecting' } }))
-    })
-
-    expect(await send()).toBe(false)
-    expect(args.nativeChatBaseSend).not.toHaveBeenCalled()
-    expect(args.onNativeChatSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-    expect(hook.nativeChatImages.attachments).toHaveLength(1)
-    expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.saveImageAsTempFile'
-    ])
-  })
-
-  it('keeps a terminal image pending until the live agent is confirmed', async () => {
-    const args = baseArgs({
-      nativeChatInputLeaseReady: true,
-      nativeChatAgentConfirmed: false,
-      structuredNativeChat: false
-    })
-    await renderWithImage(args)
-
-    expect(await send()).toBe(false)
-    expect(args.nativeChatBaseSend).not.toHaveBeenCalled()
-    expect(args.onNativeChatSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
-    expect(hook.nativeChatImages.attachments).toHaveLength(1)
-    expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.saveImageAsTempFile'
-    ])
-  })
+  )
 })
