@@ -2368,7 +2368,7 @@ html.native-shell .app-layout {
 }
 
 /* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
-/* One day per iteration avoids per-second React animation events. */
+/* Long iterations avoid per-second React animation events. */
 @keyframes agent-spinner-rotate {
   to {
     transform: rotate(86400turn);
@@ -2376,12 +2376,11 @@ html.native-shell .app-layout {
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 86400s linear infinite;
-  -webkit-mask-image: conic-gradient(from 45deg, transparent, black 60deg, black);
-  mask-image: conic-gradient(from 45deg, transparent, black 60deg, black);
+  /* 1.2 seconds per turn without changing the shared keyframes used by generic loaders. */
+  animation: agent-spinner-rotate 103680s linear infinite;
 }
 
-/* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+/* Generic loaders keep their 12-step cadence to avoid presenting on every refresh. */
 .loading-spinner {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
@@ -2412,8 +2411,6 @@ html.native-shell .app-layout {
   .animate-spin,
   .animate-pulse {
     animation: none;
-    -webkit-mask-image: none;
-    mask-image: none;
   }
 }
 
