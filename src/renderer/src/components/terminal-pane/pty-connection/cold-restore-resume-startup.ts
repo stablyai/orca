@@ -17,7 +17,7 @@ import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
 } from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
-import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -113,7 +113,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
+      ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
