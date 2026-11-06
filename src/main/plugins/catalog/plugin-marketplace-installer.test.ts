@@ -280,6 +280,41 @@ describe('PluginMarketplaceInstaller', () => {
     )
   })
 
+  it('persists the catalog author repository with a mirrored installed release', async () => {
+    git.v2 = true
+    git.pluginUrl = 'https://github.com/mirrors/notes.git'
+    const unpinned = await setup()
+    const first = await unpinned.installer.preview(unpinned.sourceId, 'community.notes')
+    git.release = {
+      version: '1.0.0',
+      commit: git.commit,
+      contentHash: first.contentHash,
+      execution: 'declarative',
+      minimumOrca: PLUGIN_SCHEMA_NEWEST_SINCE,
+      types: ['instructions'],
+      repository: 'https://github.com/community/notes'
+    }
+    const { root, installer, sourceId } = await setup()
+    const preview = await installer.preview(sourceId, 'community.notes')
+    expect(await installer.install(preview)).toMatchObject({ ok: true })
+    expect(
+      (await readPluginLockfile(join(root, 'plugins'))).plugins['community.notes']
+    ).toMatchObject({
+      authorRepository: 'https://github.com/community/notes',
+      source: { plugin: { url: 'https://github.com/mirrors/notes.git' } }
+    })
+    git.release.sourceUnavailable = true
+    const unavailable = await setup()
+    const unavailablePreview = await unavailable.installer.preview(
+      unavailable.sourceId,
+      'community.notes'
+    )
+    expect(await unavailable.installer.install(unavailablePreview)).toMatchObject({ ok: true })
+    expect(
+      (await readPluginLockfile(join(unavailable.root, 'plugins'))).plugins['community.notes']
+    ).not.toHaveProperty('authorRepository')
+  })
+
   it('lists a release for a newer Orca but refuses it before downloading', async () => {
     git.release = {
       version: '1.0.0',
