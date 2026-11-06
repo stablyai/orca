@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceSleepCoordinator, type WorkspaceSleepRuntime } from './workspace-sleep-runtime'
 import type { WorkspaceSleepPlatform } from './workspace-sleep-platform'
+import type { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 
 const WORKTREE_ID = 'repo-1::/tmp/vm'
 
@@ -14,9 +15,26 @@ function gate(): Gate {
   return { opened, open }
 }
 
-function coordinator(vm: Pick<WorkspaceSleepPlatform, 'suspendVm' | 'resumeVm'>) {
+/** A lifecycle queue that holds every command until the test releases it. */
+function heldLifecycleQueue() {
+  const held: (() => void)[] = []
+  const hold = (_key: unknown, command: { run: () => Promise<unknown> }) =>
+    new Promise((resolve, reject) => held.push(() => void command.run().then(resolve, reject)))
+  const queue = { submit: hold, submitResolving: hold, pausedKeys: () => [] }
+  return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sleep and wake paths only submit commands.
+    queue: queue as unknown as WorkspaceLifecycleQueue,
+    held,
+    releaseAll: () => held.splice(0).forEach((release) => release())
+  }
+}
+
+function coordinator(
+  vm: Pick<WorkspaceSleepPlatform, 'suspendVm' | 'resumeVm'>,
+  workspaceLifecycle: WorkspaceLifecycleQueue | null = null
+) {
   const runtime: WorkspaceSleepRuntime = {
-    workspaceLifecycle: null,
+    workspaceLifecycle,
     workspaceSleepPlatform: {
       callEnvironment: async () => {
         throw new Error('no paired servers')
@@ -128,5 +146,38 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     await Promise.all([olderWake, slept, click])
 
     expect(order).toEqual(['resume:1', 'suspend', 'resume:2'])
+  })
+
+  it("resumes the VM while the workspace's lifecycle queue waits on the host it runs", async () => {
+    const lifecycle = heldLifecycleQueue()
+    const resumeVm = async (): Promise<EphemeralVmRuntimeRecord | null> => null
+    const workspaceSleep = coordinator({ suspendVm: async () => {}, resumeVm }, lifecycle.queue)
+
+    await expect(workspaceSleep.wakeVm(WORKTREE_ID)).resolves.toBeNull()
+    expect(lifecycle.held).toHaveLength(0)
+  })
+
+  it('keeps the VM up when the workspace is opened while its sleep waits its turn', async () => {
+    const lifecycle = heldLifecycleQueue()
+    const order: string[] = []
+    const workspaceSleep = coordinator(
+      {
+        suspendVm: async () => {
+          order.push('suspend')
+        },
+        resumeVm: async () => {
+          order.push('resume')
+          return null
+        }
+      },
+      lifecycle.queue
+    )
+
+    const slept = sleep(workspaceSleep)
+    await workspaceSleep.wakeVm(WORKTREE_ID)
+    lifecycle.releaseAll()
+    await slept
+
+    expect(order).toEqual(['resume'])
   })
 })

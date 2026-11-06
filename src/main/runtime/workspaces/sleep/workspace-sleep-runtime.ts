@@ -139,20 +139,19 @@ export class WorkspaceSleepCoordinator {
 
   /** The one path that resumes a workspace's recipe VM. Each workspace's VM resumes and suspends
    *  one at a time, so a wake behind a running suspend resumes the VM it leaves asleep, and a wake
-   *  behind another wake finds the VM already up (the recipe's resume only runs on a suspended VM). */
+   *  behind another wake finds the VM already up (the recipe's resume only runs on a suspended VM).
+   *  Not through the lifecycle queue: that waits to observe the workspace's host, which is the VM
+   *  this wake brings back. */
   wakeVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
     const platform = this.runtime.workspaceSleepPlatform
     if (!platform?.ownsVm(worktreeId)) {
       return Promise.resolve(null)
     }
     this.noteReopened(worktreeId)
-    return queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {
-      kind: 'wake',
-      run: () => this.afterVmOperations(worktreeId, () => platform.resumeVm(worktreeId))
-    })
+    return this.afterVmOperations(worktreeId, () => platform.resumeVm(worktreeId))
   }
 
-  /** One VM operation at a time per workspace: lifecycle queueing alone is off in shipped builds. */
+  /** One VM operation at a time per workspace, whether or not lifecycle queueing is on. */
   private afterVmOperations<T>(worktreeId: string, operation: () => Promise<T>): Promise<T> {
     const run = (this.vmOperations.get(worktreeId) ?? Promise.resolve()).then(operation)
     const settled = run.then(

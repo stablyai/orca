@@ -180,10 +180,10 @@ async function sleepWorkspace(
   target: WorkspaceSleepTarget,
   markAsleep: boolean,
   batch: { chatsSettled: () => void; batchChatsSettled: Promise<unknown> },
+  reopened: () => boolean,
   projectMovePauseId?: string
 ): Promise<WorkspaceSleepAttempt> {
   const { worktreeId } = target
-  const reopened = deps.watchReopen(worktreeId)
   const move = projectMovePauseId ? { projectMovePauseId } : {}
   deps.notify({ worktreeId, phase: 'started', ...move })
   let failure: string | undefined
@@ -249,6 +249,8 @@ export async function sleepWorkspaces(
   return Promise.all(
     targets.map(async (target, index) => {
       const chatsSettled = releases[index]
+      // From the request, not the run: an open while this sleep waits its turn still keeps the VM up.
+      const reopened = deps.watchReopen(target.worktreeId)
       if (queue.paused(target)) {
         chatsSettled()
       }
@@ -264,6 +266,7 @@ export async function sleepWorkspaces(
                 chatsSettled,
                 batchChatsSettled
               },
+              reopened,
               request.projectMovePauseId
             ),
           outcome: (attempt) => (attempt.unverifiable ? 'unverifiable' : 'settled')
