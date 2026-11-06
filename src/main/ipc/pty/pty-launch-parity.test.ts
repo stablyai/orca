@@ -179,9 +179,12 @@ function pick(source: Record<string, unknown>, keys: string[]): Record<string, u
 function stubOpenCodeV2(): void {
   vi.mocked(applyManagedDataAccountEnvironment).mockReset()
   vi.mocked(resolveOpenCodeDirectModelExecutable).mockReset().mockResolvedValue('/bin/opencode')
-  vi.mocked(probeOpenCodeLaunchCapabilities)
-    .mockReset()
-    .mockResolvedValue({ version: '2.0.16', pluginApi: 'v2', promptMode: 'prefill' })
+  vi.mocked(probeOpenCodeLaunchCapabilities).mockReset().mockResolvedValue({
+    version: '2.0.16',
+    pluginApi: 'v2',
+    v1SessionPolicyFiltersTools: false,
+    promptMode: 'prefill'
+  })
   vi.mocked(probeOpenCodeLaunchModelContext)
     .mockReset()
     .mockResolvedValue({ primaryAgent: 'build' })
