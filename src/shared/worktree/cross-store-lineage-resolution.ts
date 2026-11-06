@@ -4,8 +4,9 @@ import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../remote-runtime/host-status/runtime-host-status'
-import { worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
+import type { WorkspaceKey } from '../workspace-scope'
 import { isCrossStoreWorkspaceLineage, validCrossStoreLineage } from './cross-store-lineage-records'
+import { lineageInstanceIdOfRow, workspaceKeyOfRow } from './lineage-row-identity'
 import type { Worktree } from './types'
 
 /** The viewer's own store; other stores are keyed by their paired runtime environment id. */
@@ -34,11 +35,6 @@ export function lineageStoreKeyOfRow(row: LineageStoreRow): string | undefined {
     return undefined
   }
   return host.kind === 'runtime' ? host.environmentId : OWN_LINEAGE_STORE_KEY
-}
-
-function workspaceKeyOfRow(row: Pick<Worktree, 'id'>): WorkspaceKey {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: folder rows carry their folder WorkspaceKey as id (folderWorkspaceToWorktree).
-  return row.id.startsWith('folder:') ? (row.id as WorkspaceKey) : worktreeWorkspaceKey(row.id)
 }
 
 /** Paired stores are identified by the installationId each server last reported. An offline server keeps
@@ -109,7 +105,8 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
   const childRowsByStoreAndKey = new Map<string, Map<WorkspaceKey, [string, Row][]>>()
   const rowsByStoreAndInstance = new Map<string, Map<string, Row[]>>()
   for (const [identity, row] of rowsByIdentity) {
-    if (!row.instanceId) {
+    const instanceId = lineageInstanceIdOfRow(row)
+    if (!instanceId) {
       continue
     }
     const storeKey = lineageStoreKeyOfRow(row)
@@ -125,7 +122,7 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
       rowsByStoreAndInstance.set(storeKey, byInstance)
     }
     pushTo(byKey, workspaceKeyOfRow(row), [identity, row])
-    pushTo(byInstance, row.instanceId, row)
+    pushTo(byInstance, instanceId, row)
   }
   const storeKeysByInstallationId = new Map<string, string[]>()
   for (const [storeKey, store] of view) {
@@ -147,7 +144,7 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
         childRowsByStoreAndKey
           .get(childStoreKey)
           ?.get(lineage.childWorkspaceKey)
-          ?.filter(([, row]) => row.instanceId === lineage.childInstanceId)
+          ?.filter(([, row]) => lineageInstanceIdOfRow(row) === lineage.childInstanceId)
       )
       // Two stores reporting one installationId are a copied profile; neither is the parent's.
       const parentStoreKey = soleRow(storeKeysByInstallationId.get(lineage.parent.installationId))
