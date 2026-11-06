@@ -1,8 +1,8 @@
 import type * as WorkerClient from './session-search-worker-client'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
-import { Worker } from 'node:worker_threads'
 import { vi } from 'vitest'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 
 vi.mock('./session-search-worker-client', async (importOriginal) => {
   const actual = await importOriginal<typeof WorkerClient>()
@@ -13,13 +13,14 @@ vi.mock('./session-search-worker-client', async (importOriginal) => {
     ...actual,
     SessionSearchWorkerClient: class extends actual.SessionSearchWorkerClient {
       constructor(onChange?: ConstructorParameters<typeof actual.SessionSearchWorkerClient>[0]) {
-        super(
-          onChange,
-          () =>
-            new Worker(`require(${JSON.stringify(loader)}); require(${JSON.stringify(entry)})`, {
+        super(onChange, () =>
+          spawnWorkerThread(
+            `require(${JSON.stringify(loader)}); require(${JSON.stringify(entry)})`,
+            {
               eval: true,
               execArgv: ['--conditions=orca-source']
-            })
+            }
+          )
         )
       }
     }
