@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { PanZoomImageSurface } from '@/components/editor/PanZoomImageSurface'
 import { usePanZoomViewport } from '@/components/editor/use-pan-zoom-viewport'
 import { renderImagePngDataUrl } from '@/components/editor/image-png-export'

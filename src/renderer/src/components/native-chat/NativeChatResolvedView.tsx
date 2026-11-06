@@ -268,12 +268,9 @@ export function NativeChatResolvedView({
     ) {
       setWorkingInterrupted(false)
     }
-    if (liveWorking && workingEpoch != null) {
-      previousWorkingEpochRef.current = workingEpoch
-    }
-    if (!liveWorking) {
-      previousWorkingEpochRef.current = null
-    }
+    previousWorkingEpochRef.current = liveWorking
+      ? (workingEpoch ?? previousWorkingEpochRef.current)
+      : null
   }, [liveWorking, workingInterrupted, workingEpoch])
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,

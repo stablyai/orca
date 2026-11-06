@@ -6,7 +6,7 @@ import {
   type RefObject
 } from 'react'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { PanZoomViewport } from '@/components/editor/use-pan-zoom-viewport'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import { imageCommentBadge, imageCommentPosition, type ImageCommentPin } from './image-comment-pins'
