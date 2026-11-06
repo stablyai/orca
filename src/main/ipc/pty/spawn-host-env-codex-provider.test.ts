@@ -48,8 +48,9 @@ function spawn(command: string, env?: Record<string, string>) {
     resumeOnSelectedAccount: false,
     emptySessionIdSkipsHostEnv: false,
     requestedAgentTeamsPath: undefined,
-    // This window-only env preparation returns before accessing provider operations.
-    provider: {} as IPtyProvider,
+    get provider(): IPtyProvider {
+      throw new Error('Window-only env preparation must not access provider operations')
+    },
     deps: {
       prepareCodexResumeHome: () => ({
         providerSession,

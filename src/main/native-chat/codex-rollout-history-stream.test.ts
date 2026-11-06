@@ -7,9 +7,9 @@ import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readCodexRolloutBytes } from './codex-rollout-history-stream'
 
-const input = vi.hoisted(() => ({
-  file: null as ReadStream | null,
-  ended: null as Promise<void> | null
+const input = vi.hoisted((): { file: ReadStream | null; ended: Promise<void> | null } => ({
+  file: null,
+  ended: null
 }))
 
 vi.mock('node:fs', async (importOriginal) => {

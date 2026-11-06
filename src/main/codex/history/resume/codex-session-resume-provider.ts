@@ -1,6 +1,7 @@
 import { StringDecoder } from 'node:string_decoder'
 import { readIndexedCodexThreadProvider } from '../index/codex-state-db'
 import { readCodexRolloutBytes } from '../../../native-chat/codex-rollout-history-stream'
+import { asRecord } from '../../../ai-vault/session-scanner-record-value'
 
 export async function readCodexSessionResumeProvider(args: {
   sessionId: string
@@ -35,32 +36,21 @@ async function readEffectiveRolloutProvider(
     ) {
       return
     }
-    let record: {
-      type?: unknown
-      id?: unknown
-      session_id?: unknown
-      thread_id?: unknown
-      payload?: {
-        type?: unknown
-        id?: unknown
-        session_id?: unknown
-        thread_id?: unknown
-        model_provider?: unknown
-        thread_settings?: { model_provider_id?: unknown }
-      }
-    }
+    let parsed: unknown
     try {
-      record = JSON.parse(line) as typeof record
+      parsed = JSON.parse(line)
     } catch {
       throw new Error('Codex resume stopped: the saved rollout could not be decoded')
     }
-    if (!record || typeof record !== 'object') {
+    const record = asRecord(parsed)
+    if (!record) {
       throw new Error('Codex resume stopped: the saved rollout could not be decoded')
     }
+    const payload = asRecord(record.payload)
     const id =
-      record.payload?.id ??
-      record.payload?.session_id ??
-      record.payload?.thread_id ??
+      payload?.id ??
+      payload?.session_id ??
+      payload?.thread_id ??
       record.id ??
       record.session_id ??
       record.thread_id
@@ -72,13 +62,13 @@ async function readEffectiveRolloutProvider(
       verifiedIdentity = true
     }
     if (record.type === 'session_meta') {
-      const value = record.payload?.model_provider
+      const value = payload?.model_provider
       if (canonical && typeof value === 'string') {
         provider = value || null
       }
-    } else if (record.type === 'event_msg' && record.payload?.type === 'thread_settings_applied') {
+    } else if (record.type === 'event_msg' && payload?.type === 'thread_settings_applied') {
       // Codex applies copied settings snapshots even when they retain their original thread_id.
-      const value = record.payload.thread_settings?.model_provider_id
+      const value = asRecord(payload.thread_settings)?.model_provider_id
       if (typeof value !== 'string') {
         throw new Error(
           'Codex resume stopped: saved thread settings have no verifiable model provider'
