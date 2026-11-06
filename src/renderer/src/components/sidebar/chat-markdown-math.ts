@@ -11,6 +11,13 @@ import type {
 } from 'micromark-util-types'
 import type { Processor } from 'unified'
 import type { VFile } from 'vfile'
+import {
+  endsDollarAmount,
+  isCitationBracketMath,
+  markdownMathCloser,
+  rejectsSingleDollarClose,
+  rejectsSingleDollarOpen
+} from '../../../../shared/markdown-math-rules'
 import { chatMathFromMarkdown, transformChatMath } from './chat-markdown-math-nodes'
 
 declare module 'micromark-util-types' {
@@ -27,16 +34,17 @@ declare module 'micromark-util-types' {
 }
 
 const lineEnding = (code: Code): boolean => code !== null && code < -2
-const whitespace = (code: Code): boolean => code === null || code < 0 || code === 32
 const digit = (code: Code): code is number => code !== null && code >= 48 && code <= 57
-const currencyTerminators = new Set([33, 41, 58, 59, 63])
+/** The character a code stands for; tabs, virtual spaces and line endings read as a space. */
+const charOf = (code: Code): string | undefined =>
+  code === null ? undefined : code < 0 ? ' ' : String.fromCharCode(code)
 
 type ExhaustedSearch = { from: number; to: number; last: Map<number, number> }
 
 function construct(flow: boolean): Construct {
   const searches = new WeakMap<TokenizeContext, Map<string, ExhaustedSearch>>()
   const tokenize: Tokenizer = function (effects, ok, nok) {
-    const afterWhitespace = () => whitespace(this.previous)
+    const previousChar = () => charOf(this.previous)
     const knowledge = flow ? undefined : (searches.get(this) ?? new Map<string, ExhaustedSearch>())
     if (knowledge) {
       searches.set(this, knowledge)
@@ -50,7 +58,7 @@ function construct(flow: boolean): Construct {
     let escaped = false
     let candidate: Token
     let closeSize = 0
-    let closeAfterWhitespace = false
+    let closePrevious: string | undefined
     const continuation: Construct = {
       partial: true,
       tokenize(e, yes, no) {
@@ -104,13 +112,10 @@ function construct(flow: boolean): Construct {
         }
         opener += String.fromCharCode(code)
         effects.consume(code)
-        closer = code === 91 ? '\\]' : '\\)'
-      } else {
-        if (flow && opener.length < 2) {
-          return nok(code)
-        }
-        closer = opener
+      } else if (flow && opener.length < 2) {
+        return nok(code)
       }
+      closer = markdownMathCloser(opener)
       effects.exit('chatMathMarker')
       token.chatMath = { opener, closer, flow, closed: false }
       family = opener.startsWith('$') && opener.length > 1 ? '$$' : opener
@@ -126,7 +131,7 @@ function construct(flow: boolean): Construct {
       return opener.startsWith('$') ? afterOpen(code) : between
     }
     function afterOpen(code: Code): State | undefined {
-      if (opener === '$' && whitespace(code)) {
+      if (opener === '$' && rejectsSingleDollarOpen(charOf(code))) {
         return nok(code)
       }
       if (opener === '$' && digit(code)) {
@@ -141,7 +146,7 @@ function construct(flow: boolean): Construct {
         body += String.fromCharCode(code)
         return leadingNumber
       }
-      if (whitespace(code) || (code !== null && currencyTerminators.has(code))) {
+      if (endsDollarAmount(charOf(code))) {
         return nok(code)
       }
       return data(code)
@@ -164,7 +169,7 @@ function construct(flow: boolean): Construct {
         return between
       }
       if (code === 36 && opener.startsWith('$')) {
-        closeAfterWhitespace = afterWhitespace()
+        closePrevious = previousChar()
         candidate = effects.enter('chatMathMarker')
         closeSize = 0
         return dollarClose(code)
@@ -193,7 +198,7 @@ function construct(flow: boolean): Construct {
         body += '$'.repeat(closeSize)
         return between(code)
       }
-      if (opener === '$' && (closeAfterWhitespace || digit(code))) {
+      if (opener === '$' && rejectsSingleDollarClose(closePrevious, charOf(code))) {
         return nok(code)
       }
       effects.exit('chatMathMarker')
@@ -241,7 +246,7 @@ function construct(flow: boolean): Construct {
       return data
     }
     function finish(code: Code): State | undefined {
-      if ((!flow && !token.chatMath?.closed) || (opener === '\\[' && /^[\d\s,]+$/.test(body))) {
+      if ((!flow && !token.chatMath?.closed) || isCitationBracketMath(opener, body)) {
         return nok(code)
       }
       effects.exit('chatMath')

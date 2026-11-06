@@ -22,6 +22,7 @@ import {
   publishUnservedHostServer
 } from './ssh-host-server-connect'
 import {
+  admittedConnectAuthority,
   assertSshConnectsNotFenced,
   connectInFlight,
   isCurrentConnectAttempt
@@ -88,10 +89,10 @@ async function admitConnect(targetId: string, automatic = false): Promise<SshCon
       return existing.promise
     }
   }
-  if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
+  const observedAuthority = admittedConnectAuthority(targetId, admissionAuthority)
+  if (!observedAuthority) {
     throw createCancelledConnectAttemptError()
   }
-  const observedAuthority = admissionAuthority
   if (existing) {
     if (connectInFlight.get(targetId) === existing) {
       connectInFlight.delete(targetId)

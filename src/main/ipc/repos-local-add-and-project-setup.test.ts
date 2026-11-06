@@ -29,6 +29,11 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+vi.mock('../ssh/targets/ssh-target-registry', () => ({
+  getSshTargetRegistryStore: () => ({
+    getTarget: (id: string) => (id === 'conn-1' ? { id, label: 'build box' } : undefined)
+  })
+}))
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>(), gitRepoProbeMocks)
 )
@@ -436,7 +441,7 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.removeProjectForHost).not.toHaveBeenCalled()
   })
 
-  it('refuses project setup on an SSH target with the not-connected text and adds no repo', async () => {
+  it('refuses project setup on an SSH target by its label, saying to connect it (#37767)', async () => {
     await expect(
       handlers.get('projectHostSetups:setupExistingFolder')!(null, {
         projectId: 'github:acme/orca',
@@ -444,7 +449,7 @@ describe('repos:add + repos:clone', () => {
         path: '/srv/orca',
         kind: 'git'
       })
-    ).rejects.toThrow('SSH connection "conn-1" not found or not connected')
+    ).rejects.toThrow(/build box/)
 
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })

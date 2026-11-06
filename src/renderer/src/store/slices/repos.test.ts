@@ -4,12 +4,13 @@ import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from '../github/cache-identity'
 
 import type { Repo } from '../../../../shared/repo-types'
-import 'sonner'
+import { toast } from 'sonner'
 import '../../../../shared/global-settings-test-fixture'
 import '../../web/preload-api/web-fallback-api'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,
+  projectsSetupExistingFolder,
   ptyKill,
   remoteRepo,
   reposRemoveForHost,
@@ -34,6 +35,34 @@ const ownerOf = (repo: Repo) => ({ hostId: getRepoExecutionHostId(repo) })
 const serverRepo: Repo = { ...remoteRepo, executionHostId: 'runtime:env-1' }
 
 describe('repo slice runtime routing', () => {
+  it('names an SSH host without a server and offers Connect, never its raw id (#37767)', async () => {
+    const store = createTestStore()
+    store.setState({ sshTargetLabels: new Map([['ssh-1', 'build box']]) })
+    const connect = vi.fn().mockResolvedValue(null)
+    Object.assign(window.api, { ssh: { connect } })
+
+    await expect(
+      store.getState().setupProjectExistingFolder({
+        projectId: 'github:acme/orca',
+        hostId: 'ssh:ssh-1',
+        path: '/srv/orca',
+        kind: 'git'
+      })
+    ).resolves.toBeNull()
+
+    expect(projectsSetupExistingFolder).not.toHaveBeenCalled()
+    const [, options] = vi.mocked(toast.error).mock.calls[0] ?? []
+    expect(options?.description).toContain('build box')
+    expect(options?.description).not.toContain('ssh-1')
+    const action = options?.action
+    if (!action || typeof action !== 'object' || !('onClick' in action)) {
+      throw new Error('expected a Connect action')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action ignores its click event.
+    action.onClick({} as never)
+    expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-1' })
+  })
+
   it('drops persisted visit timestamps for removed unhydrated SSH repos', async () => {
     const store = createTestStore()
     const sshWorktreeId = `${sshRepo.id}::/home/orca/wt`

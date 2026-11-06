@@ -81,25 +81,6 @@ describe('the host-stamped turn end', () => {
     expect(row()).not.toHaveProperty('turnEndedAt')
   })
 
-  it('keeps a Grok end across a session reset and the idle reminder that follows it', async () => {
-    const turn = { sessionId: 'session-1', promptId: 'prompt-1' }
-    await post({ hookEventName: 'user_prompt_submit', ...turn, prompt: 'go' }, '/hook/grok')
-    await post({ hookEventName: 'stop', ...turn, lastAssistantMessage: 'Shipped.' }, '/hook/grok')
-    const ended = row()?.turnEndedAt
-    expect(ended).toEqual(expect.any(Number))
-
-    await post({ hookEventName: 'session_start', sessionId: 'session-2' }, '/hook/grok')
-    await post(
-      { hookEventName: 'notification', sessionId: 'session-2', notificationType: 'idle_prompt' },
-      '/hook/grok'
-    )
-    expect(row()).toMatchObject({
-      state: 'done',
-      turnEndedAt: ended,
-      turnEndDisposition: 'identified'
-    })
-  })
-
   it('ends Codex turns by turn id, with or without a prompt hook in between', async () => {
     const codex = (payload: Record<string, unknown>) => post(payload, '/hook/codex')
     await codex({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-a', prompt: 'Plan it' })

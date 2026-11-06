@@ -298,8 +298,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
         payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
       }
     : args.envelope
-  const prepared = await resolveUncommittedStructuredCreate(() =>
-    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  const prepared = await resolveUncommittedStructuredCreate(
+    () => prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope }),
+    args.agent
   )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
