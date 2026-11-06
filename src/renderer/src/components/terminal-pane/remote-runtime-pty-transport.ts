@@ -1,15 +1,11 @@
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest
 } from '@/runtime/agent-session-create-request'
-import {
-  rebindPendingAgentStartupPrompt,
-  retireAgentStartupPromptForTerminal
-} from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,
@@ -325,34 +321,10 @@ export function createRemoteRuntimePtyTransport(
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
 
-  let startupDeliveryTabId = tabId
-  let startupDeliveryLaunchToken = launchToken
-
   function setAttachmentReady(ready: boolean): void {
     attachmentReady = ready
     if (!ready) {
       return
-    }
-    const boundPtyId = remotePtyId
-    const boundEpoch = lifecycleEpoch
-    if (tabId && boundPtyId) {
-      startupDeliveryLaunchToken =
-        opts.resolveStartupLaunchToken?.(startupDeliveryTabId ?? tabId, leafId, boundPtyId) ??
-        startupDeliveryLaunchToken
-    }
-    if (worktreeId && startupDeliveryTabId && startupDeliveryLaunchToken && boundPtyId) {
-      rebindPendingAgentStartupPrompt({
-        worktreeId,
-        tabId: startupDeliveryTabId,
-        launchToken: startupDeliveryLaunchToken,
-        ptyId: boundPtyId,
-        beforePaste: () =>
-          !destroyed &&
-          connected &&
-          attachmentReady &&
-          lifecycleEpoch === boundEpoch &&
-          remotePtyId === boundPtyId
-      })
     }
     for (const resolve of attachmentReadyWaiters) {
       resolve(true)
@@ -887,7 +859,6 @@ export function createRemoteRuntimePtyTransport(
     if (announceSpawn) {
       onPtySpawn?.(remotePtyId)
     }
-    retireAgentStartupPromptForTerminal(remotePtyId)
     retireWatchingForRebind(
       rebindWatch,
       hostRecordedExitCode(exited),
@@ -2488,9 +2459,6 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       remotePtyId ??= exitedPtyId
-      if (remotePtyId) {
-        retireAgentStartupPromptForTerminal(remotePtyId)
-      }
       const watch = rebindWatch
       rebindWatch = null
       retireWatchingForRebind(
@@ -2725,9 +2693,6 @@ export function createRemoteRuntimePtyTransport(
     }
     if (isRemoteTerminalGoneMessage(message)) {
       // Why: an explicit terminal-gone response is lifecycle evidence, unlike a replaceable stale handle seen during reconnect.
-      if (remotePtyId) {
-        retireAgentStartupPromptForTerminal(remotePtyId)
-      }
       retireRemoteTerminalId()
       return
     }
@@ -3262,9 +3227,6 @@ export function createRemoteRuntimePtyTransport(
           terminalEnded = true
           clearPendingViewportClaim()
           emitRecoveryState()
-          if (subscribedPtyId) {
-            retireAgentStartupPromptForTerminal(subscribedPtyId)
-          }
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
@@ -3652,7 +3614,6 @@ export function createRemoteRuntimePtyTransport(
       const launchConfigToSend = options.launchConfig ?? launchConfig
       const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
       const launchTokenToSend = options.launchToken ?? launchToken
-      startupDeliveryLaunchToken = launchTokenToSend
       const launchAgentToSend = options.launchAgent ?? launchAgent
       const restoreSpawnIntent = resumeProviderSessionToSend ? options.resumeSpawnIntent : undefined
       // Why only for a restore: an extra await would reorder every plain create against destroy.
@@ -3912,6 +3873,51 @@ export function createRemoteRuntimePtyTransport(
           }
         })
       }
+      if (freshLaunch && promptPlan && launchAgentToSend) {
+        const deliveryTabId =
+          created.disposition !== undefined && createdTerminal.tabId
+            ? toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(createdTerminal.tabId))
+            : tabId
+        const deliveryAccepted =
+          !launchTokenToSend ||
+          !deliveryTabId ||
+          beginAgentStartupDeliveryAttempt({
+            worktreeId,
+            tabId: deliveryTabId,
+            launchToken: launchTokenToSend
+          })
+        if (deliveryAccepted) {
+          void deliverCreatedWebRuntimeAgentSessionPrompt(
+            { outcome: { status: 'created' }, hostTabId: createdTerminal.tabId },
+            {
+              agent: launchAgentToSend,
+              rendererTabId: deliveryTabId,
+              ...hostedAgentPromptDelivery(
+                promptPlan,
+                freshLaunch.prompt,
+                freshLaunch.promptDelivery
+              ),
+              launchPty: Promise.resolve(
+                toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId)
+              ),
+              beforePaste: () =>
+                !destroyed &&
+                connected &&
+                lifecycleEpoch === connectLifecycleEpoch &&
+                handle === createdTerminal.handle
+            }
+          )
+            .catch(() => false)
+            .then((delivered) => {
+              if (!delivered) {
+                void import('@/lib/agent-launch-prompt-failure-notice').then(
+                  ({ notifyAgentLaunchPromptNotSent }) =>
+                    notifyAgentLaunchPromptNotSent(launchAgentToSend, freshLaunch.prompt)
+                )
+              }
+            })
+        }
+      }
       if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
         if (
           !hostSnapshotOwnsLaunch(created, createEnvironmentId) &&
@@ -3950,44 +3956,6 @@ export function createRemoteRuntimePtyTransport(
         return
       }
 
-      if (freshLaunch && promptPlan && launchAgentToSend && launchTokenToSend && tabId) {
-        const deliveryTabId =
-          created.disposition !== undefined && createdTerminal.tabId
-            ? toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(createdTerminal.tabId))
-            : tabId
-        registerAgentStartupTerminalBinding({
-          tabId: deliveryTabId,
-          leafId,
-          ptyId: remotePtyId,
-          launchToken: launchTokenToSend,
-          agent: launchAgentToSend,
-          launchConfig: createdTerminal.launchConfig ?? launchConfigToSend
-        })
-        startupDeliveryTabId = deliveryTabId
-        void deliverCreatedWebRuntimeAgentSessionPrompt(
-          { outcome: { status: 'created' }, hostTabId: createdTerminal.tabId },
-          {
-            agent: launchAgentToSend,
-            rendererTabId: deliveryTabId,
-            startupDelivery: {
-              worktreeId,
-              launchToken: launchTokenToSend,
-              environmentId: createEnvironmentId
-            },
-            ...hostedAgentPromptDelivery(
-              promptPlan,
-              freshLaunch.prompt,
-              freshLaunch.promptDelivery
-            ),
-            launchPty: Promise.resolve(remotePtyId),
-            beforePaste: () =>
-              !destroyed &&
-              connected &&
-              lifecycleEpoch === connectLifecycleEpoch &&
-              handle === createdTerminal.handle
-          }
-        )
-      }
       return {
         ...terminalLaunchFacts(createdTerminal),
         ...(createdTerminal.isReattach !== true && createdTerminal.coldRestore

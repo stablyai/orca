@@ -2,11 +2,6 @@ import { installTerminalLaunchInputAttempt } from '../terminal-launch-input-atte
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-import { registeredAgentStartupLaunchToken } from '@/lib/agent-startup-tab-binding'
-import {
-  agentStartupDeliveryKey,
-  pendingAgentStartupDeliveries
-} from '@/lib/agent-startup-delivery-guards'
 import {
   consumeCommittedPtyShutdownExit,
   deferPtyShutdownExit,
@@ -196,30 +191,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     }
     // Abrupt exits may omit title reset; always clear the cache countdown.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
-    // Unknown host loss clears transient status but keeps the same launch recoverable on remount.
-    const state = useAppStore.getState()
-    const launchToken =
-      isUnverifiedExit && !replacedByRestart && session.runtimeEnvironmentId
-        ? registeredAgentStartupLaunchToken(state, session.deps.tabId, session.pane.leafId, ptyId)
-        : undefined
-    const delivery = launchToken
-      ? pendingAgentStartupDeliveries.get(
-          agentStartupDeliveryKey({
-            worktreeId: session.deps.worktreeId,
-            tabId: session.deps.tabId,
-            launchToken
-          })
-        )
-      : undefined
-    if (
-      delivery &&
-      'prompt' in delivery &&
-      delivery.environmentId === session.runtimeEnvironmentId
-    ) {
-      state.removeAgentStatus(session.cacheKey, { preserveLaunchBinding: true })
-    } else {
-      state.removeAgentStatus(session.cacheKey)
-    }
+    useAppStore.getState().removeAgentStatus(session.cacheKey)
     useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)
     // Republish PTY loss to the runtime graph immediately; CLI bindings cannot wait for an unrelated layout change.
     scheduleRuntimeGraphSync()

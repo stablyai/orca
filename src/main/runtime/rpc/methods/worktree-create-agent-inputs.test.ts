@@ -5,11 +5,11 @@ import type { RuntimeManagedWorktreeCreateArgs } from '../../workspaces/creation
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { WORKTREE_METHODS } from './worktree'
+import { WORKTREE_METHODS } from './workspaces/worktree'
 import '../unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
-import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { buildManagedWorktreeCreateArgs } from './workspaces/worktree-create-args'
 
 it('keeps picks and authored empty Arguments across the worktree.create boundary', () => {
   const args = buildManagedWorktreeCreateArgs(

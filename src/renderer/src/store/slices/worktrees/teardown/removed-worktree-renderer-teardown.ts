@@ -4,10 +4,7 @@ import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/c
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
-import {
-  forgetAgentStartupDeliveriesForTabs,
-  forgetAgentStartupDeliveriesForWorktrees
-} from '@/lib/agent-startup-delivery-guards'
+import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/terminal-parked-watcher-registry'
@@ -47,7 +44,6 @@ export async function tearDownRemovedWorktreeRendererState(args: {
       )
     )
   }
-  forgetAgentStartupDeliveriesForWorktrees([worktreeId])
   // Why the captured keys: closing a structured chat keeps its conversation's draft, and a listing
   // refresh may already have dropped these tabs.
   deleteWorkspaceChatDrafts(beforeRemoval.chatDraftKeys)

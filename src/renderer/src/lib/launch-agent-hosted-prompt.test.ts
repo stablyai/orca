@@ -18,7 +18,8 @@ vi.mock('@/store', () => ({
       runtimeStatusByEnvironmentId: new Map(),
       setActiveTabType: vi.fn(),
       seedNativeChatLaunchDraft: vi.fn(),
-      seedNativeChatLaunchPrompt: vi.fn()
+      seedNativeChatLaunchPrompt: vi.fn(),
+      markNativeChatLaunchPromptFailed: vi.fn()
     })
   }
 }))
@@ -153,3 +154,32 @@ it('keeps an ordinary hosted Amp prompt unsubmitted', async () => {
     expect.objectContaining({ content: 'Explain the failing check', submit: false })
   )
 })
+
+it.each([undefined, true])(
+  'reports one failed prompt attempt with creation followup=%s',
+  async (submitFollowup) => {
+    mocks.paste.mockResolvedValueOnce(false)
+    const copy = vi.fn()
+    Object.assign(window, { api: { ui: { writeClipboardText: copy } } })
+    const result = await launchAgentInWebHostTab({
+      agent: 'aider',
+      worktreeId: 'wt',
+      environmentId: 'host',
+      prompt: 'fix the parser',
+      promptDelivery: 'draft',
+      submitFollowup,
+      buildStartup: () => {
+        throw new Error('no desktop preparation')
+      }
+    })
+    expect(result).toMatchObject({ delivered: false, failureNotified: true })
+    expect(mocks.paste).toHaveBeenCalledOnce()
+    expect(mocks.error).toHaveBeenCalledOnce()
+    if (submitFollowup) {
+      mocks.error.mock.calls[0]?.[1].action.onClick()
+      expect(copy).toHaveBeenCalledExactlyOnceWith('fix the parser')
+    } else {
+      expect(mocks.error.mock.calls[0]).toHaveLength(1)
+    }
+  }
+)

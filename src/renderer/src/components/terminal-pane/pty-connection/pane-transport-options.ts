@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import { registeredAgentStartupLaunchToken } from '@/lib/agent-startup-tab-binding'
 import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
 import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
@@ -160,8 +159,6 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
     ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
-    resolveStartupLaunchToken: (tabId, leafId, ptyId) =>
-      registeredAgentStartupLaunchToken(useAppStore.getState(), tabId, leafId, ptyId),
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,
     onPtyRebind: session.onPtyRebind,

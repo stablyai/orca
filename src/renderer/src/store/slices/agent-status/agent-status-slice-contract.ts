@@ -119,7 +119,7 @@ export type AgentStatusSlice = {
 
   registerAgentLaunchConfig: (
     paneKey: string,
-    launchConfig: SleepingAgentLaunchConfig | undefined,
+    launchConfig: SleepingAgentLaunchConfig,
     metadata?: AgentLaunchConfigRegistrationMetadata
   ) => void
   getAgentLaunchConfigForStatusEntry: (
@@ -135,7 +135,7 @@ export type AgentStatusSlice = {
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
   clearMigrationUnsupportedPty: (ptyId: string) => void
 
-  removeAgentStatus: (paneKey: string, opts?: { preserveLaunchBinding?: boolean }) => void
+  removeAgentStatus: (paneKey: string) => void
 
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 

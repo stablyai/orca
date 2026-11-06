@@ -1,10 +1,7 @@
 import type { AppState } from '../../../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
-import {
-  forgetAgentStartupDeliveriesForTabs,
-  forgetAgentStartupDeliveriesForWorktrees
-} from '@/lib/agent-startup-delivery-guards'
+import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { forgetAgentPaneAuthorityAliasesByTabIds } from '../../agent-pane-authority'
 import { forgetDetachedHeadAutoDerivedDisplayName } from '../metadata/detached-head-display-name'
 
@@ -20,7 +17,6 @@ export function collectWorktreePurgeDoomedIds(
   s: AppState,
   worktreeIdSet: Set<string>
 ): WorktreePurgeDoomedIds {
-  forgetAgentStartupDeliveriesForWorktrees(worktreeIdSet)
   const tabs: { id: string; ptyId: string | null }[] = []
   const browserWorkspaceIds: string[] = []
   const fileIds: string[] = []

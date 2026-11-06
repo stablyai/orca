@@ -1,5 +1,4 @@
 import { webTerminalPlacementParentTabId } from './web-session-terminal-placement'
-import { deliverPendingAgentStartupPrompt } from '../lib/agent-startup-delayed-delivery'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   deliverLaunchPromptToAgentTab,
@@ -48,7 +47,6 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   args: {
     agent: TuiAgent
     rendererTabId?: string
-    startupDelivery?: { worktreeId: string; launchToken: string; environmentId: string }
     beforePaste?: () => boolean
     launchPty?: Promise<string | null>
     promptAfterReady?: string
@@ -68,19 +66,6 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   if (args.promptAfterReady !== undefined) {
     if (!tabId) {
       return false
-    }
-    if (args.startupDelivery) {
-      return await deliverPendingAgentStartupPrompt({
-        ...args.startupDelivery,
-        tabId,
-        prompt: {
-          agent: args.agent,
-          content: args.promptAfterReady,
-          submit: args.submitPrompt === true,
-          forcePaste: args.forcePromptPaste === true
-        },
-        binding: { ptyId: (await args.launchPty) ?? undefined, beforePaste: args.beforePaste }
-      })
     }
     return await deliverLaunchPromptToAgentTab({
       tabId,

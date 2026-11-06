@@ -17,6 +17,7 @@ export function completeWebHostAgentLaunch(args: {
   failureMessage: string
   outcome: WebRuntimeTerminalCreateOutcome
   promptDelivered: boolean
+  submitFollowup?: boolean
   hostTabId?: string
 }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion {
   const { outcome, promptDelivered, hostTabId } = args
@@ -36,7 +37,7 @@ export function completeWebHostAgentLaunch(args: {
   }
   const failureNotified = hasPrompt && !promptDelivered
   if (failureNotified) {
-    notifyAgentLaunchPromptNotSent(args.agent)
+    notifyAgentLaunchPromptNotSent(args.agent, args.submitFollowup ? args.prompt : undefined)
   }
   return {
     delivered: promptDelivered,

@@ -1,51 +1,120 @@
-import {
-  deliverLaunchPromptToAgentTab,
-  settleAgentLaunchPromptFailure
-} from './agent-launch-prompt-delivery'
 import { useAppStore } from '@/store'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
-import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '@/components/terminal-pane/remote-runtime-pty-recovery-limits'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
-import {
-  getAgentStartupTabPtyId,
-  worktreeStillOwnsStartupTab,
-  getPendingStartupLaunchToken,
-  hasRegisteredStartupLaunch,
-  subscribeAgentStartupBindings,
-  scheduleStaleStartupRecheck
-} from './agent-startup-tab-binding'
-export { resolveAgentStartupTabId, getAgentStartupTabPtyId } from './agent-startup-tab-binding'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   agentStartupDeliveryKey as deliveryKey,
   clearConsumedAgentStartupDeliveriesForTests,
   isAgentStartupDeliveryConsumed,
   markAgentStartupDeliveryConsumed,
-  releaseAgentStartupDeliveryConsumed,
-  pendingAgentStartupDeliveries,
-  type DeliveryIdentity,
-  type PendingAgentStartupDelivery,
-  type PendingHostedPrompt,
-  type PromptBinding
+  releaseAgentStartupDeliveryConsumed
 } from './agent-startup-delivery-guards'
 
+type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
+
+type PendingAgentStartupDelivery = {
+  worktreeId: string
+  tabId: string
+  launchToken: string
+  startup: AgentStartupPlan
+  deliver: (tabId: string, ptyId: string, startup: AgentStartupPlan) => Promise<void>
+}
+
+const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
 const staleStartupRecheckTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
 let unsubscribePendingAgentStartupDeliveries: (() => void) | null = null
-let unsubscribeHostRetirement: (() => void) | null = null
+
+export function resolveAgentStartupTabId(
+  state: AppStoreSnapshot,
+  worktreeId: string,
+  primaryTabId: string | null | undefined
+): string | null {
+  // Prefer the caller’s exact startup tab; focus can change during creation.
+  return (
+    primaryTabId ??
+    state.activeTabIdByWorktree[worktreeId] ??
+    state.tabsByWorktree[worktreeId]?.[0]?.id ??
+    null
+  )
+}
+
+export function getAgentStartupTabPtyId(
+  state: AppStoreSnapshot,
+  tabId: string,
+  launchToken: string
+): string | null {
+  const livePtyIds = new Set(state.ptyIdsByTabId[tabId] ?? [])
+  if (livePtyIds.size === 0) {
+    return null
+  }
+  for (const [paneKey, entry] of Object.entries(state.agentLaunchConfigByPaneKey ?? {})) {
+    const identity = entry.identity
+    if (identity.tabId !== tabId || identity.launchToken !== launchToken) {
+      continue
+    }
+    const leafId = identity.leafId ?? parsePaneKey(paneKey)?.leafId
+    if (!leafId) {
+      continue
+    }
+    const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+    if (ptyId && livePtyIds.has(ptyId)) {
+      return ptyId
+    }
+  }
+  return null
+}
+
+function worktreeStillOwnsStartupTab(
+  state: AppStoreSnapshot,
+  worktreeId: string,
+  tabId: string
+): boolean {
+  return (state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+}
+
+function getPendingStartupLaunchToken(state: AppStoreSnapshot, tabId: string): string | undefined {
+  return state.pendingStartupByTabId?.[tabId]?.launchToken
+}
+
+function hasRegisteredStartupLaunch(
+  state: AppStoreSnapshot,
+  tabId: string,
+  launchToken: string
+): boolean {
+  return Object.values(state.agentLaunchConfigByPaneKey ?? {}).some(
+    (entry) => entry.identity.tabId === tabId && entry.identity.launchToken === launchToken
+  )
+}
 
 function ensurePendingAgentStartupSubscription(): void {
   if (unsubscribePendingAgentStartupDeliveries) {
     return
   }
-  unsubscribeHostRetirement = onRuntimeEnvironmentsRetired((ids) => {
-    for (const delivery of pendingAgentStartupDeliveries.values()) {
-      if ('prompt' in delivery && ids.includes(delivery.environmentId)) {
-        settleHostedPrompt(delivery, true)
-      }
+  const initial = useAppStore.getState()
+  // Capture references individually to avoid allocation and support subscribe adapters that reuse state objects.
+  let previousTabs = initial.tabsByWorktree
+  let previousPendingStartups = initial.pendingStartupByTabId
+  let previousLaunchConfigs = initial.agentLaunchConfigByPaneKey
+  let previousPtyIds = initial.ptyIdsByTabId
+  let previousLayouts = initial.terminalLayoutsByTabId
+  unsubscribePendingAgentStartupDeliveries = useAppStore.subscribe((state) => {
+    // Only five immutable slices affect delivery; title/status/focus/usage churn must not rescan indefinitely unmounted launches.
+    if (
+      state.tabsByWorktree === previousTabs &&
+      state.pendingStartupByTabId === previousPendingStartups &&
+      state.agentLaunchConfigByPaneKey === previousLaunchConfigs &&
+      state.ptyIdsByTabId === previousPtyIds &&
+      state.terminalLayoutsByTabId === previousLayouts
+    ) {
+      return
     }
+    // Update before flushing because delivery can synchronously write the store.
+    previousTabs = state.tabsByWorktree
+    previousPendingStartups = state.pendingStartupByTabId
+    previousLaunchConfigs = state.agentLaunchConfigByPaneKey
+    previousPtyIds = state.ptyIdsByTabId
+    previousLayouts = state.terminalLayoutsByTabId
+    flushPendingAgentStartupDeliveries()
   })
-  unsubscribePendingAgentStartupDeliveries = subscribeAgentStartupBindings(
-    flushPendingAgentStartupDeliveries
-  )
 }
 
 function stopPendingAgentStartupSubscriptionIfIdle(): void {
@@ -54,8 +123,6 @@ function stopPendingAgentStartupSubscriptionIfIdle(): void {
   }
   unsubscribePendingAgentStartupDeliveries()
   unsubscribePendingAgentStartupDeliveries = null
-  unsubscribeHostRetirement?.()
-  unsubscribeHostRetirement = null
 }
 
 export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDelivery): void {
@@ -63,158 +130,9 @@ export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDe
   if (isAgentStartupDeliveryConsumed(key)) {
     return
   }
-  delivery.retire = () => {
-    pendingAgentStartupDeliveries.delete(key)
-    clearStaleStartupRecheck(key)
-    stopPendingAgentStartupSubscriptionIfIdle()
-  }
   pendingAgentStartupDeliveries.set(key, delivery)
   ensurePendingAgentStartupSubscription()
   flushPendingAgentStartupDeliveries()
-}
-
-/** Readiness retains ownership; only the first actual PTY write consumes this launch. */
-export function deliverPendingAgentStartupPrompt(
-  args: DeliveryIdentity & {
-    environmentId: string
-    prompt: PendingHostedPrompt['prompt']
-    binding: PromptBinding
-  }
-): Promise<boolean> {
-  const key = deliveryKey(args)
-  if (isAgentStartupDeliveryConsumed(key)) {
-    return Promise.resolve(false)
-  }
-  const pending = pendingAgentStartupDeliveries.get(key)
-  const delivery: PendingHostedPrompt = pending && 'prompt' in pending ? pending : args
-  if (pending && 'prompt' in pending && pending.binding.ptyId !== args.binding.ptyId) {
-    return Promise.resolve(false)
-  }
-  delivery.binding = args.binding
-  pendingAgentStartupDeliveries.set(key, delivery)
-  if (!pending) {
-    delivery.registrationPaneKey = Object.entries(
-      useAppStore.getState().agentLaunchConfigByPaneKey
-    ).find(
-      ([, entry]) =>
-        entry.identity.tabId === delivery.tabId &&
-        entry.identity.launchToken === delivery.launchToken
-    )?.[0]
-    delivery.retire = () => settleHostedPrompt(delivery, false)
-    staleStartupRecheckTimers.set(
-      key,
-      globalThis.setTimeout(
-        () => settleHostedPrompt(delivery, true),
-        REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS +
-          resolveDraftPasteReadyTimeoutMs(delivery.prompt.agent)
-      )
-    )
-  }
-  ensurePendingAgentStartupSubscription()
-  return attemptPendingHostedPrompt(delivery)
-}
-
-/** Rebind the same unattempted launch after reconnect or pane replacement. */
-export function rebindPendingAgentStartupPrompt(args: DeliveryIdentity & PromptBinding): void {
-  const delivery = pendingAgentStartupDeliveries.get(deliveryKey(args))
-  if (
-    !delivery ||
-    !('prompt' in delivery) ||
-    delivery.binding.ptyId !== args.ptyId ||
-    isAgentStartupDeliveryConsumed(deliveryKey(args))
-  ) {
-    return
-  }
-  if (
-    delivery.running &&
-    delivery.binding.ptyId === args.ptyId &&
-    delivery.binding.beforePaste?.() !== false
-  ) {
-    delivery.binding.beforePaste = args.beforePaste
-    return
-  }
-  delivery.binding = { ptyId: args.ptyId, beforePaste: args.beforePaste }
-  void attemptPendingHostedPrompt(delivery)
-}
-
-function attemptPendingHostedPrompt(delivery: PendingHostedPrompt): Promise<boolean> {
-  if (delivery.running) {
-    return delivery.running
-  }
-  const binding = delivery.binding
-  if (delivery.attemptedBinding === binding) {
-    return Promise.resolve(false)
-  }
-  delivery.attemptedBinding = binding
-  const key = deliveryKey(delivery)
-  delivery.running = deliverLaunchPromptToAgentTab({
-    ...delivery.prompt,
-    onDeliveryFailure: () => {
-      if (isAgentStartupDeliveryConsumed(key)) {
-        settleHostedPrompt(delivery, true)
-      }
-    },
-    tabId: delivery.tabId,
-    beforePaste: () =>
-      pendingAgentStartupDeliveries.get(key) === delivery &&
-      delivery.binding === binding &&
-      binding.beforePaste?.() !== false,
-    ...(binding.ptyId ? { launchPty: Promise.resolve(binding.ptyId) } : {}),
-    claimFirstWrite: () => {
-      if (
-        pendingAgentStartupDeliveries.get(key) !== delivery ||
-        isAgentStartupDeliveryConsumed(key)
-      ) {
-        return false
-      }
-      markAgentStartupDeliveryConsumed(key)
-      return true
-    }
-  })
-    .catch(() => false)
-    .then((delivered) => {
-      if (pendingAgentStartupDeliveries.get(key) !== delivery) {
-        return false
-      }
-      if (delivered || isAgentStartupDeliveryConsumed(key)) {
-        settleHostedPrompt(delivery, !delivered)
-      }
-      return delivered
-    })
-    .finally(() => {
-      delivery.running = undefined
-      if (
-        pendingAgentStartupDeliveries.get(key) === delivery &&
-        !isAgentStartupDeliveryConsumed(key) &&
-        delivery.binding !== binding
-      ) {
-        void attemptPendingHostedPrompt(delivery)
-      }
-      stopPendingAgentStartupSubscriptionIfIdle()
-    })
-  return delivery.running
-}
-
-function settleHostedPrompt(delivery: PendingHostedPrompt, failed: boolean): void {
-  const key = deliveryKey(delivery)
-  if (pendingAgentStartupDeliveries.get(key) !== delivery) {
-    return
-  }
-  pendingAgentStartupDeliveries.delete(key)
-  clearStaleStartupRecheck(key)
-  markAgentStartupDeliveryConsumed(key)
-  stopPendingAgentStartupSubscriptionIfIdle()
-  if (failed) {
-    settleAgentLaunchPromptFailure({ ...delivery.prompt, tabId: delivery.tabId })
-  }
-}
-
-export function retireAgentStartupPromptForTerminal(ptyId: string): void {
-  for (const delivery of pendingAgentStartupDeliveries.values()) {
-    if ('prompt' in delivery && delivery.binding.ptyId === ptyId) {
-      settleHostedPrompt(delivery, true)
-    }
-  }
 }
 
 export function resetAgentStartupDelayedDeliveryForTests(): void {
@@ -226,8 +144,6 @@ export function resetAgentStartupDelayedDeliveryForTests(): void {
   staleStartupRecheckTimers.clear()
   unsubscribePendingAgentStartupDeliveries?.()
   unsubscribePendingAgentStartupDeliveries = null
-  unsubscribeHostRetirement?.()
-  unsubscribeHostRetirement = null
 }
 
 export function beginAgentStartupDeliveryAttempt(args: {
@@ -257,22 +173,8 @@ function flushPendingAgentStartupDeliveries(): void {
   const state = useAppStore.getState()
   for (const [key, delivery] of pendingAgentStartupDeliveries) {
     const { tabId, launchToken } = delivery
-    if ('prompt' in delivery) {
-      const queued = getPendingStartupLaunchToken(state, tabId)
-      const registration = delivery.registrationPaneKey
-        ? state.agentLaunchConfigByPaneKey[delivery.registrationPaneKey]
-        : undefined
-      if (
-        (queued && queued !== launchToken) ||
-        (registration?.identity.launchToken && registration.identity.launchToken !== launchToken)
-      ) {
-        settleHostedPrompt(delivery, false)
-      }
-      continue
-    }
     if (!worktreeStillOwnsStartupTab(state, delivery.worktreeId, tabId)) {
       pendingAgentStartupDeliveries.delete(key)
-      clearStaleStartupRecheck(key)
       continue
     }
     const queuedLaunchToken = getPendingStartupLaunchToken(state, tabId)
@@ -283,12 +185,7 @@ function flushPendingAgentStartupDeliveries(): void {
       continue
     }
     if (queuedLaunchToken === undefined && !launchRegistered) {
-      scheduleStaleStartupRecheck(
-        key,
-        staleStartupRecheckTimers,
-        flushPendingAgentStartupDeliveries,
-        stopPendingAgentStartupSubscriptionIfIdle
-      )
+      scheduleStaleStartupRecheck(key)
       continue
     }
     const ptyId = getAgentStartupTabPtyId(state, tabId, launchToken)
@@ -305,9 +202,37 @@ function flushPendingAgentStartupDeliveries(): void {
   stopPendingAgentStartupSubscriptionIfIdle()
 }
 
+function scheduleStaleStartupRecheck(key: string): void {
+  if (staleStartupRecheckTimers.has(key)) {
+    return
+  }
+  staleStartupRecheckTimers.set(
+    key,
+    globalThis.setTimeout(() => {
+      staleStartupRecheckTimers.delete(key)
+      const delivery = pendingAgentStartupDeliveries.get(key)
+      if (!delivery) {
+        stopPendingAgentStartupSubscriptionIfIdle()
+        return
+      }
+      const state = useAppStore.getState()
+      const queuedLaunchToken = getPendingStartupLaunchToken(state, delivery.tabId)
+      if (
+        queuedLaunchToken === undefined &&
+        !hasRegisteredStartupLaunch(state, delivery.tabId, delivery.launchToken)
+      ) {
+        pendingAgentStartupDeliveries.delete(key)
+      } else {
+        flushPendingAgentStartupDeliveries()
+      }
+      stopPendingAgentStartupSubscriptionIfIdle()
+    }, 1000)
+  )
+}
+
 function clearStaleStartupRecheck(key: string): void {
   const timer = staleStartupRecheckTimers.get(key)
-  if (timer === undefined) {
+  if (!timer) {
     return
   }
   globalThis.clearTimeout(timer)
