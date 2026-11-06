@@ -392,6 +392,27 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
     payload: { ...record.payload, turn_id: 'prior' }
   }))
   expect(project([...prior, ...source], 4096)).toMatchObject({ endedAs: 'interrupted' })
+  const background = await recordedCodexRollout('b')
+  const oldTurnReplay = collect(
+    [
+      ...background.slice(0, 8),
+      ...Array.from({ length: 100 }, (_, n) => ({
+        ...background[12]!,
+        payload: {
+          ...background[12]!.payload,
+          item: { ...readRecord(background[12]!.payload.item), id: `r2-evict-${n}` }
+        }
+      })),
+      ...background.slice(13),
+      background[7]!
+    ],
+    16384
+  )
+  expect(oldTurnReplay.findLast((row) => row.body.kind === 'turn')?.body).toMatchObject({
+    turnId: '01a1b0e2-453d-7e60-9b93-ea786b5b7ae1',
+    state: 'interrupted',
+    outcome: 'cancellation'
+  })
   const running = {
     ...closure,
     payload: {

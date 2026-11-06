@@ -1,10 +1,11 @@
 import type { CodexHistoryRecord } from '../../codex-local-history'
 import { readRecord, readString } from '../../../codex/app-server/codex-item-field-readers'
 import { codexRolloutItem } from '../../../codex/history/rollouts/codex-rollout-item-projection'
-import { projectCodexHistoryItem } from '../../../codex/history/journal-views/codex-history-projection'
-import { historicalTurnLifecycle } from '../../../codex/structured/journal/codex-structured-journal-translation-restore'
+import {
+  projectCodexHistoryItem,
+  projectCodexHistoryTurn
+} from '../../../codex/history/journal-views/codex-history-projection'
 import { codexTurnLifecycleIdentity } from '../../../codex/structured/journal/codex-structured-journal-translation-turns'
-import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import { createNewestItemWindow } from './journal-newest-item-window'
@@ -48,6 +49,7 @@ export function createCodexHistoryCollector(
     position = 0,
     segment = '',
     lastStart = -Infinity,
+    lastTurnOrder = 0,
     lastRecordAt = 0,
     lastTurnId: string | null = null
   let interval: { at: number; position: number; turnKey: string } | null = null
@@ -85,22 +87,13 @@ export function createCodexHistoryCollector(
     window.upsert(key, row, 128)
   }
   const turnRow = (turn: Turn) => {
-    const lifecycle = historicalTurnLifecycle(segment, turn.source)!
-    delete lifecycle.userItemId
-    if (turn.userItemId) {
-      lifecycle.userItemId = turn.userItemId
+    const row: JournalReplacementItem = {
+      identity: codexTurnLifecycleIdentity(sessionId, turn.id),
+      body: projectCodexHistoryTurn(segment, turn.source, turn.userItemId),
+      ownerFence: 0,
+      turnScope: { kind: 'thread' }
     }
-    store(
-      `turn:${segment}:${turn.id}`,
-      {
-        identity: codexTurnLifecycleIdentity(sessionId, turn.id),
-        body: agentJournalTurnBody(lifecycle),
-        ownerFence: 0,
-        turnScope: { kind: 'thread' }
-      },
-      turn.order,
-      -Infinity
-    )
+    store(`turn:${segment}:${turn.id}`, row, turn.order, -Infinity)
   }
   return {
     push(row: JournalReplacementItem) {
@@ -116,6 +109,7 @@ export function createCodexHistoryCollector(
         factBytes = 0
         interval = null
         lastStart = -Infinity
+        lastTurnOrder = ++order
         lastRecordAt = 0
         lastTurnId = null
         window.reserve(0)
@@ -146,9 +140,10 @@ export function createCodexHistoryCollector(
           interval = null
           lastStart = time
           lastTurnId = turnId
+          lastTurnOrder = ++order
           turn = {
             id: turnId,
-            order: ++order,
+            order: lastTurnOrder,
             complete: true,
             source: {
               id: turnId,
@@ -158,7 +153,12 @@ export function createCodexHistoryCollector(
           }
         }
         if (!turn) {
-          turn = { id: turnId, order: ++order, complete: false, source: { id: turnId } }
+          const retained = window.get(turnKey)
+          // Lost proof cannot promote old metadata past the latest established root.
+          const group =
+            (retained ? placement.get(retained)?.group : undefined) ??
+            (turnId === lastTurnId ? lastTurnOrder : lastTurnOrder - 0.5)
+          turn = { id: turnId, order: group, complete: false, source: { id: turnId } }
         }
         if (payload.type !== 'task_started') {
           const wasTerminal = ['completed', 'failed', 'interrupted'].includes(
