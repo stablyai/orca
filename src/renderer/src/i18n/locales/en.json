@@ -19838,7 +19838,11 @@
         "partial": "Partial diff",
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files",
-        "showMoreFiles": "Show {{count}} more"
+        "showMoreFiles": "Show {{count}} more",
+        "hide": "Hide",
+        "hideTitle": "Hide changed files in every chat",
+        "hidden": "Hidden",
+        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat</settings>"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -21064,6 +21068,10 @@
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
         "linkPreviewsSearchHover": "hover card",
+        "turnDiffSummaryTitle": "Changed files summary",
+        "turnDiffSummaryCopy": "Shows the files each turn changed, with line counts, below the reply.",
+        "turnDiffSummarySearchDiff": "diff",
+        "turnDiffSummarySearchEdits": "edits",
         "usageLimitContinueTitle": "Continue chats automatically when a usage limit resets",
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",

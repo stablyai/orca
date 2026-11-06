@@ -1,6 +1,10 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, EyeOff } from 'lucide-react'
+import { Trans } from 'react-i18next'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
@@ -60,6 +64,41 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
   )
 }
 
+function openTurnDiffSetting(): void {
+  const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
+  openSettingsPage()
+  openSettingsTarget({
+    pane: 'chat',
+    repoId: null,
+    sectionId: NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID
+  })
+}
+
+/** Hiding turns the global setting off, so every chat drops the card; the toast links back to it. */
+function hideTurnDiffSummaries(): void {
+  void useAppStore.getState().updateSettings({ nativeChatTurnDiffSummary: false })
+  toast(translate('components.native-chat.turnDiff.hidden', 'Hidden'), {
+    description: (
+      <Trans
+        i18n={i18n}
+        defaults={translate(
+          'components.native-chat.turnDiff.hiddenDescription',
+          'You can change this anytime in <settings>Settings › Chat</settings>'
+        )}
+        components={{
+          settings: (
+            <button
+              type="button"
+              className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={openTurnDiffSetting}
+            />
+          )
+        }}
+      />
+    )
+  })
+}
+
 export function NativeChatTurnDiffRollup({
   diff
 }: {
@@ -84,6 +123,19 @@ export function NativeChatTurnDiffRollup({
         {diff.truncated ? (
           <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
+        <Button
+          variant="ghost"
+          size="xs"
+          className="ml-auto shrink-0"
+          title={translate(
+            'components.native-chat.turnDiff.hideTitle',
+            'Hide changed files in every chat'
+          )}
+          onClick={hideTurnDiffSummaries}
+        >
+          <EyeOff aria-hidden className="size-3.5" />
+          {translate('components.native-chat.turnDiff.hide', 'Hide')}
+        </Button>
       </div>
       <div className="space-y-1">
         {files.map((file) => (
