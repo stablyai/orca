@@ -1,12 +1,12 @@
 import {
   deliverLaunchPromptToAgentTab,
-  notifyAgentLaunchPromptNotSent
+  notifyAgentLaunchPromptNotSent,
+  settleAgentLaunchPromptFailure
 } from './agent-launch-prompt-delivery'
 import { useAppStore } from '@/store'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '@/components/terminal-pane/remote-runtime-pty-recovery-limits'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
-import { settleAgentLaunchPromptFailure } from './agent-launch-prompt-delivery'
 import {
   getAgentStartupTabPtyId,
   worktreeStillOwnsStartupTab,

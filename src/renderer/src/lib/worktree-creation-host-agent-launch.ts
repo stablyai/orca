@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
-import type { CreateWorktreeCallOptions } from '@/store/slices/worktrees/create/worktree-create-payload'
 import { toast } from 'sonner'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -10,6 +9,7 @@ import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-laun
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { InitialTerminalOptions } from '@/lib/worktree-activation-store-contract'
 import type {
+  CreateWorktreeCallOptions,
   CreatedWorktreeResult,
   HostAgentLaunch
 } from '@/store/slices/worktrees/create/worktree-create-payload'

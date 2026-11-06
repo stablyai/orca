@@ -1,5 +1,8 @@
 import { createBrowserUuid } from './browser-uuid'
-import type { FreshWorkspaceAgentLaunch } from '@/lib/worktree-startup-payload'
+import type {
+  AgentStartedTelemetry,
+  FreshWorkspaceAgentLaunch
+} from '@/lib/worktree-startup-payload'
 import { toast } from 'sonner'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
@@ -7,7 +10,6 @@ import {
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'

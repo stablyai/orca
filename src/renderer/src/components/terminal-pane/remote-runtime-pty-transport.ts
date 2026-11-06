@@ -1,6 +1,5 @@
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
 import {
@@ -126,7 +125,8 @@ import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobi
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
   isWebTerminalSurfaceTabId,
-  toHostSessionTabId
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
 } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
