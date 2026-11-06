@@ -9,6 +9,7 @@ const MIN_DOC_FREQUENCY = 2
 const MIN_SIMILARITY = 0.82
 const MAX_CANDIDATES = 4000
 const MAX_VISIBILITY_PROBES = 8
+const MAX_EXAMINED_POSTINGS = 1024
 // Cap frequency tie-break counts so common terms cannot make repair unbounded.
 const MAX_COUNTED_ROWS = 64
 
@@ -40,28 +41,32 @@ export class SessionSearchTypoRepair {
 
   constructor(db: SyncDatabase) {
     this.liveRows = db.prepare(
-      `SELECT count(*) AS rows FROM (
-         SELECT m.id FROM messages_fts
-         JOIN messages m ON m.id = messages_fts.rowid
+      // Why: admit unscoped postings before filtering so tools and orphans consume the same budget.
+      `WITH postings AS MATERIALIZED (
+         SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?
+         LIMIT ${MAX_EXAMINED_POSTINGS + 1}
+       ), visible AS (
+         SELECT m.id FROM (SELECT rowid FROM postings LIMIT ${MAX_EXAMINED_POSTINGS}) admitted
+         JOIN messages m ON m.id = admitted.rowid
          JOIN sessions s ON s.id = m.session_row_id
-         WHERE messages_fts MATCH ? AND m.role != 'tool' LIMIT ${MAX_COUNTED_ROWS})`
+         WHERE m.role != 'tool' AND (? = 'all' OR EXISTS (
+           SELECT 1 FROM messages_fts WHERE rowid = admitted.rowid AND messages_fts MATCH ?
+         )) LIMIT ${MAX_COUNTED_ROWS}
+       ) SELECT count(*) AS rows, (SELECT count(*) FROM postings) AS examined FROM visible`
     )
     // Term order uses the vocab index and keeps the candidate cutoff independent of orphan counts.
     this.candidatesByPrefix = db.prepare(
       `SELECT term FROM messages_vocab
        WHERE term >= ? AND term < ? AND length(term) BETWEEN ? AND ?
-         AND EXISTS (SELECT 1 FROM messages_fts
-           JOIN messages m ON m.id = messages_fts.rowid
-           JOIN sessions s ON s.id = m.session_row_id
-           WHERE messages_fts MATCH (? || '"' || replace(messages_vocab.term, '"', '""') || '"')
-             AND m.role != 'tool')
        ORDER BY term LIMIT ?`
     )
   }
 
   private countRows(term: string, scope: SessionSearchScope): number {
-    const row = this.liveRows.get(scopedExpression(scope, quoteFtsTerm(term))) as { rows: number }
-    return row.rows
+    const quoted = quoteFtsTerm(term)
+    const row = this.liveRows.get(quoted, scope, scopedExpression(scope, quoted))
+    const rows = Number(row?.rows ?? 0)
+    return rows >= MAX_COUNTED_ROWS || Number(row?.examined) <= MAX_EXAMINED_POSTINGS ? rows : 0
   }
 
   hasPostings(term: string, scope: SessionSearchScope): boolean {
@@ -89,7 +94,7 @@ export class SessionSearchTypoRepair {
 
   /** Probe several ranked candidates so an invisible best match does not suppress a live repair. */
   private bestVisible(lowered: string, prefix: string, scope: SessionSearchScope): string | null {
-    const counted = this.ranked(lowered, prefix, scope)
+    const counted = this.ranked(lowered, prefix)
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope) }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
@@ -101,22 +106,14 @@ export class SessionSearchTypoRepair {
       .term
   }
 
-  private ranked(
-    lowered: string,
-    prefix: string,
-    scope: SessionSearchScope
-  ): { term: string; score: number }[] {
-    return this.candidates(prefix, lowered.length, scope)
+  private ranked(lowered: string, prefix: string): { term: string; score: number }[] {
+    return this.candidates(prefix, lowered.length)
       .map((row) => ({ term: row.term, score: similarity(lowered, row.term) }))
       .filter((candidate) => candidate.score >= MIN_SIMILARITY)
       .sort((left, right) => right.score - left.score || (left.term < right.term ? -1 : 1))
   }
 
-  private candidates(
-    prefix: string,
-    length: number,
-    scope: SessionSearchScope
-  ): { term: string }[] {
+  private candidates(prefix: string, length: number): { term: string }[] {
     const last = prefix.charCodeAt(prefix.length - 1)
     const upper = prefix.slice(0, -1) + String.fromCharCode(last + 1)
     const rows = this.candidatesByPrefix.all(
@@ -124,7 +121,6 @@ export class SessionSearchTypoRepair {
       upper,
       Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK),
       length + LENGTH_SLACK,
-      scope === 'all' ? '' : '{user_text assistant_text}: ',
       MAX_CANDIDATES
     )
     return rows.flatMap((row) => (typeof row.term === 'string' ? [{ term: row.term }] : []))

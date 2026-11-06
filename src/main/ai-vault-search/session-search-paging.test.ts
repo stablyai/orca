@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SessionSearchRequest } from './session-search-engine-types'
+import type { SessionSearchRankedCursor } from './session-search-ranked-cursor'
 import {
   addSyntheticSession,
   openSessionSearchHarness,
@@ -335,7 +336,7 @@ it('validates frozen cursor bounds, query scopes and message ownership before ex
   const first = engine.search(request)
   const raw = first.page.cursor!
   const payload = JSON.parse(Buffer.from(raw.slice(4), 'base64url').toString('utf8'))
-  const forged = (patch: object) =>
+  const forged = (patch: Partial<SessionSearchRankedCursor>) =>
     `ss2.${Buffer.from(JSON.stringify({ ...payload, ...patch })).toString('base64url')}`
   for (const patch of [
     { o: -1 },
