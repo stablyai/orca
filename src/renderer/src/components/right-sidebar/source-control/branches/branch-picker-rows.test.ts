@@ -110,6 +110,33 @@ it('orders the current branch before recent local commits', () => {
   ).toEqual(['old', 'new', 'middle'])
 })
 
+it('keeps an older exact local match reachable ahead of newer prefix and substring matches', () => {
+  const newer = Array.from({ length: 60 }, (_, n) => `feature-${n}`)
+  const branches = ['main', 'feature', 'other-feature', ...newer]
+  const local = indexLocalBranchRows(
+    {
+      current: 'main',
+      branches,
+      committedAt: {
+        feature: 1,
+        'other-feature': 1000,
+        ...Object.fromEntries(newer.map((name, n) => [name, n + 10]))
+      }
+    },
+    '/repo',
+    null
+  )
+  const page = branchPickerRows(local, new Set(branches), null, 'feature')
+  expect(page.rows).toHaveLength(50)
+  expect(page.rows.slice(0, 4).map((row) => row.label)).toEqual([
+    'main',
+    'feature',
+    'feature-59',
+    'feature-58'
+  ])
+  expect(page.rows.some((row) => row.label === 'other-feature')).toBe(false)
+})
+
 it('shows an exact remote at the end of a full local and remote window instead of hiding both actions', () => {
   const branches = Array.from({ length: 50 }, (_, n) => `feat-${n}`)
   const local = indexLocalBranchRows({ current: null, branches }, '/repo', null)

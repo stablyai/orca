@@ -77,9 +77,24 @@ export function branchPickerRows(
   query: string
 ): { rows: BranchPickerRow[]; moreLocal: boolean } {
   const name = query.trim()
-  const matches = localRows.filter(
-    (row) => row.current || row.label.toLowerCase().includes(name.toLowerCase())
-  )
+  const normalized = name.toLowerCase()
+  const current: BranchPickerRow[] = []
+  const exact: BranchPickerRow[] = []
+  const prefix: BranchPickerRow[] = []
+  const rest: BranchPickerRow[] = []
+  for (const row of localRows) {
+    const label = row.label.toLowerCase()
+    if (row.current) {
+      current.push(row)
+    } else if (row.label === name) {
+      exact.push(row)
+    } else if (label.startsWith(normalized)) {
+      prefix.push(row)
+    } else if (label.includes(normalized)) {
+      rest.push(row)
+    }
+  }
+  const matches = [...current, ...exact, ...prefix, ...rest]
   const rows = matches.slice(0, LOCAL_BRANCH_WINDOW)
   const remoteRows = remote?.refDetails ?? []
   const canCreate =
