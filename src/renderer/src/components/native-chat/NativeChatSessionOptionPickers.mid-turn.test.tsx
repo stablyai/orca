@@ -11,6 +11,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapability: () => true,
   useStructuredAgentSessionOwnPermissionState: () => 'supported',
+  useStructuredAgentSessionHostCapabilityState: () => 'unknown',
   structuredAgentSessionHostKey: () => 'local'
 }))
 vi.mock('./native-chat-session-option-settings-write', () => ({

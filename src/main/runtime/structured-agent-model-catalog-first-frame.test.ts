@@ -224,7 +224,7 @@ describe('a running chat’s listing, saved for the next chat', () => {
     catalog.recordLiveListing(record.sessionId, {
       models: [
         { id: 'a', label: 'A', isDefault: false, efforts: [{ value: 'high', label: 'High' }] },
-        { id: 'b', label: 'B', isDefault: false, efforts: [] }
+        { id: 'b', label: 'B', isDefault: false, effortsKnown: false, efforts: [] }
       ]
     })
     const read = await catalog.read({ agent: 'opencode', sessionId: 'oc' })

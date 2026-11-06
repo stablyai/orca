@@ -62,7 +62,18 @@
         "searchTerminal": "Terminal",
         "searchCli": "CLI"
       },
-      "permissionsDescriptionOwnAgents": "Los chats nuevos siguen el permiso de cada agente en Configuración → Agentes."
+      "permissionsDescriptionOwnAgents": "Los chats nuevos siguen el permiso de cada agente en Configuración → Agentes.",
+      "launch": {
+        "on": "La interfaz de chat está activada",
+        "off": "La interfaz de chat está desactivada",
+        "agents": "Modo de inicio predeterminado por agente",
+        "agentsDescription": "Elige si cada agente se abre en la interfaz de chat o en su CLI.",
+        "chatDescription": "Los agentes nuevos se iniciarán en modo de chat de forma predeterminada.",
+        "cliDescription": "Los agentes nuevos se iniciarán en la CLI de forma predeterminada.",
+        "turnOn": "Activar",
+        "turnOff": "Desactivar",
+        "toggle": "Usar la interfaz de chat de forma predeterminada"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC o EE. UU. — Option envía secuencias Alt/Esc",
@@ -526,6 +537,28 @@
         "notPng": "Los iconos del repositorio deben ser archivos PNG.",
         "tooLarge": "La imagen del icono del repositorio debe tener un tamaño máximo de 256 KB."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Formatear al guardar",
+      "description": "Formatea el texto antes de guardar manual o automáticamente. Configura un comando de formateo en Configuración > Proyectos. Desactivado de forma predeterminada.",
+      "keywords": "formateador formatear al guardar prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Insertar salto de línea final",
+      "description": "Añade un salto de línea al guardar un archivo de código no vacío que no termine con uno. Desactivado de forma predeterminada.",
+      "keywordNewline": "salto de línea",
+      "keywordEndOfFile": "fin de archivo"
+    },
+    "repositoryFormatter": {
+      "title": "Comando de formateo",
+      "description": "Usa el formateador de este proyecto para formatear al guardar.",
+      "saveFailed": "No se pudo guardar la configuración del formateador.",
+      "command": "Comando",
+      "commandHelp": "Se ejecuta en el host del archivo, en la raíz del espacio de trabajo. Lee el búfer desde stdin y debe imprimir solo el texto formateado en stdout. Usa ${file} o ${relativeFile} para la ruta. Los argumentos se pasan directamente, sin un shell. No uses --write. Déjalo vacío para desactivarlo en este proyecto.",
+      "include": "Patrones glob incluidos (uno por línea)",
+      "includeHelp": "Compara rutas relativas a la raíz del espacio de trabajo. Si ningún patrón coincide, no se aplica formato. * y ** omiten los nombres que empiezan por punto; inclúyelos explícitamente, por ejemplo .github/**/*.yml. Activa Formatear al guardar en General > Editor para usar este comando.",
+      "saving": "Guardando…",
+      "save": "Guardar formateador"
     }
   },
   "menu": {
@@ -7582,6 +7615,9 @@
           "browserExtensions": {
             "copy": "Añade Ajustes › Navegador › Extensiones para los perfiles de navegador locales.",
             "toggleLabel": "Activar o desactivar extensiones del navegador"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Activar o desactivar el panel de orquestación"
           }
         },
         "FloatingWorkspacePane": {
@@ -9737,6 +9773,14 @@
               "extension": "extensión",
               "chrome": "chrome",
               "password": "gestor de contraseñas"
+            },
+            "orchestrationPanel": {
+              "title": "Panel de orquestación",
+              "description": "Muestra con qué agentes trabaja cada agente, junto a su chat o terminal.",
+              "orchestration": "orquestación",
+              "agents": "agentes",
+              "workers": "trabajadores",
+              "manager": "gestor"
             }
           }
         },
@@ -10867,7 +10911,8 @@
                   "supportedAgents": "Agentes compatibles con esta receta: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} no puede ejecutar esta acción de generación de texto. Elige uno de los agentes compatibles a continuación.",
                   "resolveComments": "Inicia un agente a partir de comentarios de PR o MR sin resolver seleccionados.",
-                  "fixPushFailure": "Inicia un agente cuando falla un hook pre-push o un git push."
+                  "fixPushFailure": "Inicia un agente cuando falla un hook pre-push o un git push.",
+                  "commitMessageSharedModel": "Los detalles de la solicitud de extracción, el nombre de la rama y el nombre del chat también pueden usar este modelo si no eligen uno propio; su opción «Igual que el predeterminado» muestra qué modelo usan."
                 }
               }
             }
@@ -12676,13 +12721,16 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "Usar sus colores de terminal",
           "matchTerminal": "Coincidir con el terminal",
-          "dynamic": "dinámico"
+          "dynamic": "dinámico",
+          "searchThemes": "Buscar temas…",
+          "noThemes": "Ningún tema coincide con tu búsqueda."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Tema de iconos",
             "description": "Iconos de archivos y carpetas de un plugin habilitado.",
-            "builtIn": "Integrado"
+            "builtIn": "Integrado",
+            "search": "Buscar temas de iconos…"
           },
           "lightTheme": "Tema claro",
           "darkTheme": "Tema oscuro",
@@ -13018,6 +13066,9 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Crear"
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Sin resultados."
         }
       },
       "right": {
@@ -19460,7 +19511,10 @@
         "emptyAnswer": "Respuesta vacía",
         "resolved": "Resuelto",
         "resolver": "Respondido en {{device}}",
-        "cancelledBy": "Cancelado en {{device}}"
+        "cancelledBy": "Cancelado en {{device}}",
+        "thisComputer": "este ordenador",
+        "computer": "el ordenador",
+        "otherDevice": "otro dispositivo"
       },
       "backgroundTasks": {
         "groupAgents": "Agentes",
@@ -19615,7 +19669,11 @@
         "handedOffToAgent": "Entregado a un agente",
         "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarea del coordinador",
-        "updateFromWorker": "Actualización del trabajador"
+        "updateFromWorker": "Actualización del trabajador",
+        "senderReplaced": "{{name}} ya no se está ejecutando en su terminal; ahora se ejecuta otro agente allí. Si necesitas esa terminal, ábrela desde la barra lateral.",
+        "senderAmbiguous": "Orca no puede determinar en qué terminal se ejecuta {{name}}. Ábrela desde la barra lateral.",
+        "senderNotRunning": "{{name}} ya no se está ejecutando. Inicia un nuevo agente desde la barra lateral para continuar su trabajo.",
+        "unnamedSenderSubject": "Un agente"
       },
       "goal": {
         "placeholder": "Describe tu objetivo y define resultados medibles para obtener mejores resultados",
@@ -19846,7 +19904,24 @@
         "scheduled": "Orca continuará este chat a las {{time}}.",
         "cancel": "No continuar"
       },
-      "settings": "Configuración del chat"
+      "settings": "Configuración del chat",
+      "textAttachmentPreview": {
+        "copiedContents": "Contenido copiado",
+        "textAttachment": "Archivo de texto adjunto",
+        "byteSize": "{{size}} bytes",
+        "copyContents": "Copiar contenido",
+        "saveFile": "Guardar archivo",
+        "copyTooLarge": "Este archivo es demasiado grande para copiarlo. Guárdalo en su lugar.",
+        "exportError": "No se pudo exportar el archivo adjunto. Inténtalo de nuevo.",
+        "unreadableReply": "No se pudo leer la respuesta del archivo adjunto. Inténtalo de nuevo.",
+        "incompleteReply": "El archivo adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
+        "notText": "No se puede previsualizar este archivo como texto. Guárdalo para abrirlo en otra aplicación.",
+        "openFailed": "No se pudo abrir el archivo adjunto. Inténtalo de nuevo.",
+        "hostUpdate": "Este host aún no puede abrir archivos de texto adjuntos. Actualiza Orca en ese host y vuelve a intentarlo.",
+        "hostUnavailable": "El host del archivo adjunto no está disponible. Vuelve a conectarte y a intentarlo.",
+        "connectionChanged": "La conexión cambió. Cierra este archivo adjunto y vuelve a abrirlo.",
+        "readFailed": "No se pudo leer este archivo adjunto en su host. Vuelve a conectarte y a intentarlo. Es posible que el archivo se haya eliminado o modificado."
+      }
     },
     "tab": {
       "bar": {
@@ -20454,6 +20529,11 @@
     },
     "wslHostMark": {
       "runsOn": "Se ejecuta en WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "No se pudo formatear {{file}}. Se guardará sin formatear: {{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -21123,7 +21203,10 @@
         "reviewBody_many": "No se trasladaron {{count}} sesiones más de Claude a {{next}}.",
         "body_one": "{{count}} sesión de Claude sigue ejecutándose en {{previous}}. Al reiniciarla, la conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
         "body_other": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
-        "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse."
+        "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
+        "reasonSharedSession": "También abierta en otro panel",
+        "sharedOne": "1 sesión de Claude permanece en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarla podría volver a abrir la conversación del otro panel.",
+        "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel."
       }
     },
     "hostSignIn": {
@@ -23029,7 +23112,11 @@
     "use": "Usar",
     "select": "Seleccionar agente",
     "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",
-    "promptPlaceholderFilesOnly": "Agregar un prompt (opcional): @ para archivos"
+    "promptPlaceholderFilesOnly": "Agregar un prompt (opcional): @ para archivos",
+    "workspaceStartupFailed": "No se pudo iniciar {{agent}}. Comprueba los argumentos de esta configuración e inténtalo de nuevo.",
+    "sameAsTextDefault": "Igual que el predeterminado · {{value0}}",
+    "chatChoicesNote": "Las opciones de modelo o esfuerzo de {{agent}} sin una marca de CLI se aplican a los chats.",
+    "composedChoicesNote": "Las opciones de esfuerzo y velocidad de {{agent}} se incluyen en el argumento del modelo."
   },
   "wslMove": {
     "entry": {

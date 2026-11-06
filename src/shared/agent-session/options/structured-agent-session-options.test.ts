@@ -33,6 +33,46 @@ function viewModel(
 }
 
 describe('structured agent session options', () => {
+  it('fills unknown OpenCode menus without changing choices or replacing a live known-empty menu', () => {
+    const seed = structuredAgentSessionSeedCatalog('opencode2')
+    const row = { id: 'provider/model', label: 'Live label', isDefault: false, efforts: [] }
+    const current = {
+      model: row.id,
+      effort: 'high',
+      acceptedInputSources: { model: 'saved' as const, effort: 'saved' as const }
+    }
+    const unknown = { models: [{ ...row, effortsKnown: false as const }], current }
+    let state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('opencode2', seed),
+      seed,
+      unknown
+    )
+    const catalog = {
+      origin: 'probe' as const,
+      fetchedAt: 1,
+      models: [
+        {
+          ...row,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ]
+    }
+    state = applyStructuredAgentSessionModelCatalog(state, seed, catalog, { newLaunch: false })
+    expect(
+      state.catalog?.models[0]?.options.find((row) => row.id === 'effort')?.kind
+    ).toMatchObject({ choices: catalog.models[0]!.efforts })
+    state = applyStructuredAgentSessionOptions(state, seed, unknown)
+    expect(state.catalog?.models[0]?.options.find((row) => row.id === 'effort')).toBeDefined()
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: row.id, effort: 'high' })
+    state = applyStructuredAgentSessionOptions(state, seed, { models: [row], current })
+    state = applyStructuredAgentSessionModelCatalog(state, seed, catalog, { newLaunch: false })
+    expect(state.catalog?.models[0]?.options.find((row) => row.id === 'effort')).toBeUndefined()
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: row.id, effort: 'high' })
+  })
+
   it('accepts a later catalog after a live answer becomes unknown', () => {
     const seed = structuredAgentSessionSeedCatalog('pi')
     const unknown = { models: [], modelsKnown: false as const, current: { defaulted: [] } }

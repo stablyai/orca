@@ -1,7 +1,10 @@
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   IN_PROCESS_OPTIONS_READER,
@@ -26,6 +29,7 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
 import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
+import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 
 export {
   recordStructuredAgentSessionOptionIntent,
@@ -133,6 +137,15 @@ export async function readStructuredAgentSessionOptions(
   const floor = session.journal.context.floor()
   const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
+  if (live && usesModelSpecificAcpEfforts(agent)) {
+    options = {
+      ...options,
+      models: fillUnknownModelEfforts(
+        options.models,
+        restingOptions.inventory.origin === 'unknown' ? [] : restingOptions.inventory.models
+      )
+    }
+  }
   const resting = live ? restingOptions : null
   const record = store.getConversation(sessionId)
   const permissionMode = record

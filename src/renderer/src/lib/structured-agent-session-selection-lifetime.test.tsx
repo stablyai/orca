@@ -54,6 +54,7 @@ vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapability: () => true,
   useStructuredAgentSessionOwnPermissionState: () => 'supported',
+  useStructuredAgentSessionHostCapabilityState: () => 'unknown',
   structuredAgentSessionHostKey: () => 'paired-host'
 }))
 vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
