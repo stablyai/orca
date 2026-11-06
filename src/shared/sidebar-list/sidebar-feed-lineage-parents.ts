@@ -21,7 +21,7 @@ const NO_LINEAGE_MAP: Readonly<Record<string, WorktreeLineage>> = {}
 
 /** How a reader treats an older server's edge that carries no instance ids. */
 export type FeedLineagePolicy = {
-  /** The phone has always nested by such edges; desktop never has. */
+  /** The phone has always nested by such edges, and kept their loops; desktop never has. */
   acceptLegacyLineage?: boolean
 }
 
@@ -68,7 +68,8 @@ export function resolveFeedLineageParentIdentities(
       getSameStoreLineageParent(row, NO_LINEAGE_MAP, rows) ?? legacyParentOf(row),
     crossStoreLineage:
       crossStoreByRow.size > 0 ? crossStoreViewOf(domains, rows, crossStoreByRow) : undefined,
-    folderRecordOf: folderEdgeByRow.size > 0 ? (row) => folderEdgeByRow.get(row) : undefined
+    folderRecordOf: folderEdgeByRow.size > 0 ? (row) => folderEdgeByRow.get(row) : undefined,
+    keepSameStoreCycles: policy.acceptLegacyLineage
   })
   return new Map(
     [...parents].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])

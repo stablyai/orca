@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { WorkspaceLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
+import type { WorktreeWithInlineLineage } from '../worktree/workspace-lineage-graph'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { cloneDefaultWorkspaceStatuses } from '../workspace-statuses'
 import { getFolderWorkspaceWorktree } from '../folder-workspaces/folder-workspace-worktree'
@@ -81,10 +82,12 @@ const folderRecord: WorkspaceLineage = {
 function plan(
   groupBy: WorktreeGroupBy,
   record: WorkspaceLineage | undefined,
-  worktrees: Worktree[] = [nested, other]
+  worktrees: Worktree[] = [nested, other],
+  hidden: Worktree[] = [],
+  repos: Repo[] = [repo]
 ): Row[] {
   const rows = new Map(
-    [...worktrees, getFolderWorkspaceWorktree(folder)].map((entry) => [
+    [...worktrees, ...hidden, getFolderWorkspaceWorktree(folder)].map((entry) => [
       getWorktreeHostIdentity(entry),
       entry
     ])
@@ -93,7 +96,7 @@ function plan(
     groupBy,
     sortBy: 'name',
     worktrees,
-    repoMap: new Map([[repo.id, repo]]),
+    repoMap: new Map(repos.map((entry) => [entry.id, entry])),
     prGroupOf: () => 'in-progress',
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     projectOrderBy: 'manual',
@@ -101,7 +104,7 @@ function plan(
     lineageParentIdentities: resolveSidebarLineageParentIdentities({}, rows, undefined, (entry) =>
       entry.id === nested.id ? record : undefined
     ),
-    worktreeMap: new Map(worktrees.map((entry) => [entry.id, entry])),
+    worktreeMap: new Map([...worktrees, ...hidden].map((entry) => [entry.id, entry])),
     nestLineage: true,
     projectGroups: [group],
     placeholderRepoIds: new Set(),
@@ -175,6 +178,34 @@ describe('folder workspaces as sidebar parents', () => {
       'header Done 1',
       'nested'
     ])
+  })
+
+  it('groups a row under a hidden folder child by its own project', () => {
+    const web: Repo = { ...repo, id: 'repo-2', path: '/work/multi/web', displayName: 'web' }
+    const archived = { ...nested, isArchived: true }
+    const grandchild: WorktreeWithInlineLineage = {
+      ...row('grandchild'),
+      repoId: web.id,
+      lineage: {
+        worktreeId: 'grandchild',
+        worktreeInstanceId: 'grandchild#instance',
+        parentWorktreeId: nested.id,
+        parentWorktreeInstanceId: 'nested#instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    expect(shape(plan('repo', folderRecord, [grandchild, other], [archived], [repo, web]))).toEqual(
+      [
+        'header Multi repo 3',
+        'folder Release children=0',
+        'header web 1',
+        'grandchild',
+        'header api 1',
+        'other'
+      ]
+    )
   })
 
   it('ignores a record saved for an earlier workspace at the same path', () => {

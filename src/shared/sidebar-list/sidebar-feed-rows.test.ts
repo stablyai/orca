@@ -437,6 +437,23 @@ describe('buildSidebarFeedRows reads an older server’s edge without instance i
       'runtime:a|r::/r/p@0'
     ])
   })
+
+  it('keeps an older server’s loop for the phone, as its direct list does', () => {
+    const loop = [
+      { worktreeId: 'r::/r/a', parentWorktreeId: 'r::/r/b' },
+      { worktreeId: 'r::/r/b', parentWorktreeId: 'r::/r/a' }
+    ].flatMap((row) => normalizePairedServerRow('runtime:a', { repoId: 'r', ...row }) ?? [])
+    const looped = domains({
+      pairedServerHosts: feed.pairedServerHosts,
+      pairedServerRows: new Map(loop.map((row) => [row.key, row]))
+    })
+    expect(
+      outline(
+        buildSidebarFeedRows(looped, catalog(repos), view(), { acceptLegacyLineage: true })
+          .sectionRows
+      )
+    ).toEqual(['runtime:a|r::/r/b@0', 'runtime:a|r::/r/a@1'])
+  })
 })
 
 describe('buildSidebarFeedRows nests a server’s workspace under its folder workspace', () => {

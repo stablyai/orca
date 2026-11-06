@@ -66,16 +66,25 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
         bound.add(row)
         sectionItemsByGroupId.get(groupId)?.push(row)
       }
-      for (const folder of pairByIdentity.keys()) {
-        for (const top of childrenByParentIdentity.get(folder) ?? []) {
-          const pending = [top]
-          for (let row = pending.pop(); row; row = pending.pop()) {
-            const identity = getWorktreeHostIdentity(row)
-            if (groupingRootByIdentity.get(identity) !== top) {
-              groupingRootByIdentity.set(identity, top)
-              pending.push(...(childrenByParentIdentity.get(identity) ?? []))
-            }
-          }
+      // A bound row groups by its top listed ancestor below the folder; hidden rows (archived, filtered)
+      // pass through, so a row under one groups by its own repo, as it would without the folder.
+      const listed = new Set(natural)
+      const visited = new Set<string>()
+      const pending: { row: Worktree; top?: Worktree }[] = [...pairByIdentity.keys()].flatMap(
+        (folder) => (childrenByParentIdentity.get(folder) ?? []).map((row) => ({ row }))
+      )
+      for (let next = pending.pop(); next; next = pending.pop()) {
+        const identity = getWorktreeHostIdentity(next.row)
+        if (visited.has(identity)) {
+          continue
+        }
+        visited.add(identity)
+        const top = next.top ?? (listed.has(next.row) ? next.row : undefined)
+        if (top && bound.has(next.row)) {
+          groupingRootByIdentity.set(identity, top)
+        }
+        for (const child of childrenByParentIdentity.get(identity) ?? []) {
+          pending.push({ row: child, top })
         }
       }
       return { bound, sectionItemsByGroupId, groupingRootByIdentity }
