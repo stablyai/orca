@@ -14,6 +14,7 @@ import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-suppo
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { PRWatchServiceDeps, PRWatchWorkspace } from '../../../github/pr-watch/pr-watch-types'
 
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
@@ -86,4 +87,9 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
   /** See `StructuredAgentSessionHostDeps.launchAccountHome`. */
   launchAccountHome?: StructuredAgentSessionHostDeps['launchAccountHome']
+  /** Resolves git checkouts for chats' CI lines; absent, the host writes none. */
+  pullRequestWatch?: {
+    resolveWorkspace: (workspaceId: string) => Promise<PRWatchWorkspace | null>
+    resolveRepo: PRWatchServiceDeps['resolveRepo']
+  }
 } & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'statusSink'>

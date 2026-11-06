@@ -1,0 +1,152 @@
+import type Database from '../../sqlite/sync-database'
+
+/** Added without a user_version change, so an older build opens the journal and ignores them. */
+export function ensurePRWatchTables(db: Database.Database): void {
+  db.exec(`
+CREATE TABLE IF NOT EXISTS pr_chat_actions (
+  chat_id         TEXT    NOT NULL,
+  anchor_item_id  TEXT    NOT NULL,
+  anchor_revision INTEGER NOT NULL,
+  forge_host      TEXT    NOT NULL,
+  owner           TEXT    NOT NULL,
+  repo            TEXT    NOT NULL,
+  number          INTEGER NOT NULL,
+  kind            TEXT    NOT NULL,
+  head_sha        TEXT,
+  observed_at     INTEGER NOT NULL,
+  PRIMARY KEY (chat_id, anchor_item_id, number, kind)
+);
+CREATE INDEX IF NOT EXISTS pr_chat_actions_by_pr
+  ON pr_chat_actions (forge_host, owner, repo, number);
+CREATE TABLE IF NOT EXISTS pr_check_events (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  pr_key          TEXT    NOT NULL,
+  head_sha        TEXT    NOT NULL,
+  occurrence      INTEGER NOT NULL,
+  verdict         TEXT    NOT NULL,
+  completed_at    INTEGER NOT NULL,
+  observed_at     INTEGER NOT NULL,
+  is_current_head INTEGER NOT NULL,
+  UNIQUE (pr_key, head_sha, occurrence)
+);
+CREATE TABLE IF NOT EXISTS pr_event_deliveries (
+  chat_id  TEXT    NOT NULL,
+  event_id INTEGER NOT NULL,
+  state    TEXT    NOT NULL,
+  item_id  TEXT,
+  PRIMARY KEY (chat_id, event_id)
+);
+CREATE TABLE IF NOT EXISTS pr_pending_heads (
+  pr_key        TEXT    NOT NULL,
+  head_sha      TEXT    NOT NULL,
+  first_seen_at INTEGER NOT NULL,
+  moved_at      INTEGER,
+  expires_at    INTEGER,
+  PRIMARY KEY (pr_key, head_sha)
+);
+CREATE TABLE IF NOT EXISTS pr_check_contexts (
+  pr_key       TEXT    NOT NULL,
+  head_sha     TEXT    NOT NULL,
+  context      TEXT    NOT NULL,
+  last_state   TEXT,
+  last_run_id  TEXT,
+  pending_seen INTEGER NOT NULL,
+  PRIMARY KEY (pr_key, head_sha, context)
+);
+`)
+}
+
+export type PRChatActionKind = 'opened' | 'pushed'
+
+export type PRChatAction = {
+  chatId: string
+  anchor: { itemId: string; revision: number }
+  forgeHost: string
+  owner: string
+  repo: string
+  number: number
+  kind: PRChatActionKind
+  headSha: string | null
+  observedAt: number
+}
+
+type ActionRow = {
+  chat_id: string
+  anchor_item_id: string
+  anchor_revision: number
+  forge_host: string
+  owner: string
+  repo: string
+  number: number
+  kind: PRChatActionKind
+  head_sha: string | null
+  observed_at: number
+}
+
+export const PR_KEY_SQL = `forge_host || '/' || owner || '/' || repo || '#' || number`
+
+function actionFromRow(row: ActionRow): PRChatAction {
+  return {
+    chatId: row.chat_id,
+    anchor: { itemId: row.anchor_item_id, revision: row.anchor_revision },
+    forgeHost: row.forge_host,
+    owner: row.owner,
+    repo: row.repo,
+    number: row.number,
+    kind: row.kind,
+    headSha: row.head_sha,
+    observedAt: row.observed_at
+  }
+}
+
+export function insertPRChatAction(db: Database.Database, action: PRChatAction): boolean {
+  const result = db
+    .prepare(
+      `INSERT OR IGNORE INTO pr_chat_actions
+        (chat_id, anchor_item_id, anchor_revision, forge_host, owner, repo, number, kind, head_sha, observed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      action.chatId,
+      action.anchor.itemId,
+      action.anchor.revision,
+      action.forgeHost.toLowerCase(),
+      action.owner.toLowerCase(),
+      action.repo.toLowerCase(),
+      action.number,
+      action.kind,
+      action.headSha,
+      action.observedAt
+    )
+  return Number(result.changes) > 0
+}
+
+export function readPRChatActions(db: Database.Database, prKey?: string): PRChatAction[] {
+  const rows = (
+    prKey === undefined
+      ? db.prepare('SELECT * FROM pr_chat_actions ORDER BY observed_at').all()
+      : db
+          .prepare(`SELECT * FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? ORDER BY observed_at`)
+          .all(prKey)
+  ) as ActionRow[]
+  return rows.map(actionFromRow)
+}
+
+export function readPRWatchChatIds(db: Database.Database): string[] {
+  return (
+    db
+      .prepare('SELECT chat_id FROM pr_chat_actions UNION SELECT chat_id FROM pr_event_deliveries')
+      .all() as { chat_id: string }[]
+  ).map((row) => row.chat_id)
+}
+
+/** A gone chat takes its actions and deliveries; events no chat still holds go with them. */
+export function deletePRWatchChats(db: Database.Database, chatIds: readonly string[]): void {
+  const actions = db.prepare('DELETE FROM pr_chat_actions WHERE chat_id = ?')
+  const deliveries = db.prepare('DELETE FROM pr_event_deliveries WHERE chat_id = ?')
+  for (const chatId of chatIds) {
+    actions.run(chatId)
+    deliveries.run(chatId)
+  }
+  db.exec('DELETE FROM pr_check_events WHERE id NOT IN (SELECT event_id FROM pr_event_deliveries)')
+}

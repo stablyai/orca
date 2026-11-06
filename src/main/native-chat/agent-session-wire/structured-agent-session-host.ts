@@ -37,7 +37,8 @@ export class StructuredAgentSessionHost {
     delivery: () => this.conversationDelivery,
     opened: (id) => usageLimit.opened(this.usageLimitContinue, this.queued, id),
     logger: () => this.deps.logger,
-    now: () => this.now()
+    now: () => this.now(),
+    observeRows: () => this.deps.observeCommittedRows
   })
   private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
   // Journal publication renews idle activity.

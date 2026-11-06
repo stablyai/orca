@@ -34,6 +34,7 @@ import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/re
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import type { QueuedMessageOwed } from '../agent-session-journal/queued-message-consume-error'
@@ -203,6 +204,12 @@ export type StructuredAgentSessionHostDeps = {
    *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
+  /** Every committed journal batch, after request-failure observation; must not throw. */
+  observeCommittedRows?: (
+    sessionId: string,
+    journal: AgentSessionJournal,
+    rows: readonly JournalRow[] | undefined
+  ) => void
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,
