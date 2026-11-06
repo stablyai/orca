@@ -927,6 +927,13 @@
       "wrapLines": "Переносить строки",
       "disableLineWrap": "Выключить перенос строк"
     },
+    "markdownCallout": {
+      "note": "Заметка",
+      "tip": "Совет",
+      "important": "Важно",
+      "warning": "Предупреждение",
+      "caution": "Осторожно"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
     },

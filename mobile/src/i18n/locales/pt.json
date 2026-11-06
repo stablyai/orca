@@ -889,6 +889,13 @@
       "wrapLines": "Quebrar linhas",
       "disableLineWrap": "Desativar quebra de linha"
     },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Dica",
+      "important": "Importante",
+      "warning": "Aviso",
+      "caution": "Cuidado"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
     },

@@ -119,6 +119,27 @@ function attrValue(tag: string, name: string): string {
 const tagAttributesSource = `(?:[^<>"']|"[^"]*"|'[^']*')*`
 const imageTagPattern = new RegExp(`<img\\b${tagAttributesSource}>`, 'gi')
 
+export type HtmlImage = { start: number; end: number; src: string; alt: string; width?: number }
+
+/** The `<img>` tags in HTML with an https source, where they sit, and their authored width. */
+export function htmlImages(html: string): HtmlImage[] {
+  return [...html.matchAll(imageTagPattern)].flatMap((match) => {
+    const src = attrValue(match[0], 'src')
+    const width = Number.parseInt(attrValue(match[0], 'width'), 10)
+    return /^https:\/\//i.test(src)
+      ? [
+          {
+            start: match.index,
+            end: match.index + match[0].length,
+            src,
+            alt: attrValue(match[0], 'alt'),
+            ...(width > 0 ? { width } : {})
+          }
+        ]
+      : []
+  })
+}
+
 function normalizeAnchorTags(value: string): string {
   const lowerValue = value.toLowerCase()
   let output = ''

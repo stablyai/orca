@@ -889,6 +889,13 @@
       "wrapLines": "Retour à la ligne",
       "disableLineWrap": "Désactiver le retour à la ligne"
     },
+    "markdownCallout": {
+      "note": "Remarque",
+      "tip": "Conseil",
+      "important": "Important",
+      "warning": "Avertissement",
+      "caution": "Attention"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fermer le panneau"
     },

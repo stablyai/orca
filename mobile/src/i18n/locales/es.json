@@ -889,6 +889,13 @@
       "wrapLines": "Ajustar líneas",
       "disableLineWrap": "Desactivar ajuste de línea"
     },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"
     },

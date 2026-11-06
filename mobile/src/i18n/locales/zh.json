@@ -847,6 +847,13 @@
       "wrapLines": "自动换行",
       "disableLineWrap": "关闭自动换行"
     },
+    "markdownCallout": {
+      "note": "备注",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
     },

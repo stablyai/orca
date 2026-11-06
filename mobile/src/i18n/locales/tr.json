@@ -851,6 +851,13 @@
       "wrapLines": "Satırları kaydır",
       "disableLineWrap": "Satır kaydırmayı kapat"
     },
+    "markdownCallout": {
+      "note": "Not",
+      "tip": "İpucu",
+      "important": "Önemli",
+      "warning": "Uyarı",
+      "caution": "Dikkat"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Alt paneli kapat"
     },

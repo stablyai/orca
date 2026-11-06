@@ -851,6 +851,13 @@
       "wrapLines": "Zeilen umbrechen",
       "disableLineWrap": "Zeilenumbruch deaktivieren"
     },
+    "markdownCallout": {
+      "note": "Hinweis",
+      "tip": "Tipp",
+      "important": "Wichtig",
+      "warning": "Warnung",
+      "caution": "Vorsicht"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
     },

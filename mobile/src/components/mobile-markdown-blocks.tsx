@@ -1,5 +1,6 @@
 import type { Code, List, Nodes, PhrasingContent, RootContent, Table } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
+import { Square, SquareCheck } from 'lucide-react-native'
 import {
   Pressable,
   ScrollView,
@@ -21,13 +22,14 @@ import {
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
 import { MarkdownText } from './mobile-markdown-text'
 import { codeFenceClosed } from './mobile-markdown-code-nodes'
-import { plainText } from './mobile-markdown-tree'
+import { plainText } from './mobile-markdown-plain-text'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MobileMarkdownCallout } from './MobileMarkdownCallout'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownDetails } from './MobileMarkdownDetails'
 import { MobileMarkdownMath } from './MobileMarkdownMath'
 import { translate } from '../i18n/mobile-i18n'
-import { pressedStyle } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -44,7 +46,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
   /** Null or undefined leaves the image a link. */
-  renderImage?: (href: string, alt: string) => ReactNode
+  renderImage?: (href: string, alt: string, width?: number) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   mermaidOccurrences: Map<string, number>
 }
@@ -78,15 +80,22 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={ctx.listMarker}>
-            {item.checked == null
-              ? node.ordered
-                ? `${(node.start ?? 1) + itemIndex}.`
-                : '•'
-              : item.checked
-                ? '[x]'
-                : '[ ]'}
-          </NativeText>
+          {item.checked == null ? (
+            <NativeText style={ctx.listMarker}>
+              {node.ordered ? `${(node.start ?? 1) + itemIndex}.` : '•'}
+            </NativeText>
+          ) : (
+            // A GitHub task's read-only box, centred on the item's first line.
+            <View
+              style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
+            >
+              {item.checked ? (
+                <SquareCheck size={14 * ctx.textScale} color={colors.accentBlue} strokeWidth={2} />
+              ) : (
+                <Square size={14 * ctx.textScale} color={colors.textSecondary} strokeWidth={2} />
+              )}
+            </View>
+          )}
           <View style={styles.listItemBody}>
             {renderBlocks(item.children, ctx, itemText, depth + 1)}
           </View>
@@ -173,7 +182,8 @@ function renderImageParagraph(
     run = []
   }
   for (const child of children) {
-    const image = child.type === 'image' ? renderImage(child.url, child.alt ?? '') : null
+    const image =
+      child.type === 'image' ? renderImage(child.url, child.alt ?? '', child.data?.width) : null
     if (image === null || image === undefined) {
       run.push(child)
       continue
@@ -291,7 +301,12 @@ function renderBlock(
         </MarkdownText>
       )
     case 'blockquote':
-      return (
+      // A GitHub alert's body is ordinary text, not a muted quote.
+      return node.data?.callout ? (
+        <MobileMarkdownCallout key={key} kind={node.data.callout}>
+          {renderBlocks(node.children, ctx, { style: text.style, selectable: true }, depth + 1)}
+        </MobileMarkdownCallout>
+      ) : (
         <View key={key} style={styles.quote}>
           {renderBlocks(
             node.children,
@@ -345,7 +360,7 @@ function renderBlock(
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={ctx.listMarker}>{`[${node.label ?? node.identifier}]`}</NativeText>
+          <NativeText style={ctx.listMarker}>{`${node.label ?? node.identifier}.`}</NativeText>
           <View style={styles.listItemBody}>
             {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
           </View>

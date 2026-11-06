@@ -847,6 +847,13 @@
       "wrapLines": "行を折り返す",
       "disableLineWrap": "行の折り返しを無効にする"
     },
+    "markdownCallout": {
+      "note": "メモ",
+      "tip": "ヒント",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
     },

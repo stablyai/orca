@@ -847,6 +847,13 @@
       "wrapLines": "줄 바꿈",
       "disableLineWrap": "줄 바꿈 끄기"
     },
+    "markdownCallout": {
+      "note": "참고",
+      "tip": "팁",
+      "important": "중요",
+      "warning": "경고",
+      "caution": "주의"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "하단 패널 닫기"
     },

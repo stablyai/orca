@@ -1,9 +1,13 @@
 import MarkdownIt from 'markdown-it'
 import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
-import type { AlignType, Nodes, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
+import type { AlignType, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
 import remend from 'remend'
+import { forEachGitHubCallout } from '../../../src/shared/github/github-callouts'
 import { codeNode, type Token } from './mobile-markdown-code-nodes'
+import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
+import { readTaskMarker } from './mobile-markdown-task-items'
+import { plainText } from './mobile-markdown-plain-text'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
 import { mobileMarkdownMath } from './mobile-markdown-math'
 import {
@@ -14,6 +18,7 @@ import {
   mathFenceNode,
   withoutMath
 } from './mobile-markdown-math-nodes'
+import { withImagesSplitOut } from './mobile-markdown-html-images'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
 
@@ -30,7 +35,6 @@ endLinkifyUrlsAtProsePunctuation(markdown.linkify)
 type MathEnv = { chatMath: boolean }
 
 const PATH_FLANK = /[\w\\/]/
-const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
 const LINE_BREAK_TAG = /^<br\s*\/?>$/i
 const HEADING_DEPTHS = [1, 2, 3, 4, 5, 6] as const
 /** Parents that hold blocks; any other parent holds inline content. */
@@ -48,17 +52,6 @@ const CLOSING_TOKENS = new Set([
   'td_close',
   'footnote_close'
 ])
-
-/** The text a node draws, as mdast-util-to-string reads it. */
-export function plainText(node: Nodes): string {
-  if ('value' in node) {
-    return node.value
-  }
-  if (node.type === 'image') {
-    return node.alt ?? ''
-  }
-  return 'children' in node ? node.children.map(plainText).join('') : ''
-}
 
 function pushText(nodes: PhrasingContent[], value: string): void {
   if (!value) {
@@ -92,7 +85,13 @@ function phrasing(
     } else if (token.type === 'code_inline') {
       nodes.push({ type: 'inlineCode', value: token.content })
     } else if (token.type === 'html_inline') {
-      nodes.push({ type: 'html', value: token.content })
+      const pair = inlineTagPairs(tokens).get(index - 1)
+      if (pair) {
+        nodes.push(inlineTagNode(pair.tag, phrasing(tokens.slice(index, pair.close), 0).nodes))
+        index = pair.close + 1
+      } else {
+        nodes.push({ type: 'html', value: token.content })
+      }
     } else if (token.type === 'image') {
       nodes.push({ type: 'image', url: token.attrGet('src') ?? '', alt: token.content || null })
     } else if (token.type === 'math_inline') {
@@ -136,17 +135,6 @@ function phrasing(
 function alignOf(token: Token): AlignType {
   const align = /text-align:\s*(left|right|center)/.exec(token.attrGet('style') ?? '')?.[1]
   return align === 'left' || align === 'right' || align === 'center' ? align : null
-}
-
-/** GitHub task list items: `[ ]` or `[x]` opening the item's first paragraph. */
-function readTaskMarker(item: Parent & { checked?: boolean | null }): void {
-  const paragraph = item.children[0]
-  const text = paragraph?.type === 'paragraph' ? paragraph.children[0] : undefined
-  const marker = text?.type === 'text' ? TASK_MARKER.exec(text.value) : null
-  if (text?.type === 'text' && marker) {
-    item.checked = marker[1] !== ' '
-    text.value = text.value.slice(marker[0].length)
-  }
 }
 
 /** A `<details>` summary's inline HTML and Markdown as spans. */
@@ -263,19 +251,25 @@ function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
     if (inline && LINE_BREAK_TAG.test(child.value.trim())) {
       return [{ type: 'break' }]
     }
-    const text = normalizeMobileMarkdownPreviewHtml(child.value)
-    if (!text) {
-      return []
-    }
-    if (inline) {
-      return [{ type: 'text', value: text }]
-    }
-    if (nested) {
-      return [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
-    }
-    const blocks = toTree(markdown.parse(text, env), text, env)
-    withoutHtml(blocks, true, env)
-    return blocks.children
+    // An https `<img>` draws as an image with its authored width; the HTML around it as before.
+    return withImagesSplitOut(child.value).flatMap((piece): RootContent[] => {
+      if (typeof piece !== 'string') {
+        return inline ? [piece] : [{ type: 'paragraph', children: [piece] }]
+      }
+      const text = normalizeMobileMarkdownPreviewHtml(piece)
+      if (!text) {
+        return []
+      }
+      if (inline) {
+        return [{ type: 'text', value: text }]
+      }
+      if (nested) {
+        return [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
+      }
+      const blocks = toTree(markdown.parse(text, env), text, env)
+      withoutHtml(blocks, true, env)
+      return blocks.children
+    })
   })
 }
 
@@ -307,6 +301,10 @@ export function parseMobileMarkdownTree(source: string, growing: boolean, chatMa
   }
   const root = toTree(tokens, text, env)
   withoutHtml(root, false, env)
+  // GitHub's `> [!NOTE]` alerts, read by desktop's rule.
+  forEachGitHubCallout(root, (quote, kind) => {
+    quote.data = { ...quote.data, callout: kind }
+  })
   return root
 }
 
