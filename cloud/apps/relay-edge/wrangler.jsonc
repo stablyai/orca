@@ -56,6 +56,7 @@
         "EDGE_BACKEND": "object",
         "EDGE_CELL_ID": "edge",
         "ADMIN_ISSUER": "https://director.phase2-test.invalid",
+        "ERASE_ISSUER": "orca-account-erasure",
         "RELAY_JWT_AUDIENCE": "orca-relay",
         "PING_INTERVAL_MS": "45000",
         "SILENCE_TIMEOUT_MS": "75000",
