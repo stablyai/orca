@@ -120,8 +120,10 @@ import {
   deferred,
   refuse,
   resetCliChatResumeRun,
+  showAgentInSource,
   tabs
 } from './cli-chat-resume-run.test-fixture'
+import { STRUCTURED_AGENT_SESSION_SOURCE_TERMINAL_ARGS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 let main: TabsDrawnFromMain | undefined
 afterEach(() => {
@@ -196,6 +198,37 @@ describe('CLI identity resume through the existing launch owner', () => {
     await running
     expect(tabs()).toHaveLength(1)
     expect(isEmptyWorkspaceDefaultSurfacePending('wt-1')).toBe(false)
+  })
+
+  it.each([
+    ['--mcp-config /work/mcp.json', '--mcp-config /work/mcp.json'],
+    ['x'.repeat(9 * 1024), undefined]
+  ])('sends recorded launch args %s only within the wire bound', async (recorded, sent) => {
+    const reply = deferred<unknown>()
+    mocks.call.mockReturnValue(reply.promise)
+    mocks.closeCapability.mockImplementation(
+      async (_target: unknown, capability: string) =>
+        capability === STRUCTURED_AGENT_SESSION_SOURCE_TERMINAL_ARGS_RUNTIME_CAPABILITY
+    )
+    showAgentInSource()
+    useAppStore.setState({
+      agentLaunchConfigByPaneKey: {
+        [SOURCE.paneKey]: {
+          registeredAt: 1,
+          launchConfig: { agentArgs: recorded, agentEnv: {} },
+          identity: {
+            agentType: 'claude',
+            providerSession: { key: 'session_id', id: SOURCE.providerSessionId }
+          }
+        }
+      }
+    })
+    const running = runCliChatResume(SOURCE)
+    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const params: StructuredAgentSessionCreateParams = mocks.call.mock.calls[0][2]
+    expect(params.resumeFrom?.agentArgs).toBe(sent)
+    reply.resolve({ ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } })
+    await running
   })
 
   it('retires an unsent click during create capability waiting, even if the same source returns', async () => {

@@ -13,6 +13,8 @@ export type StructuredAgentSessionResumeSource = {
   providerSessionId: string
   /** Host-owned pane evidence; send only with the CLI-source create capability. */
   cliSource?: { workspaceId: string; paneKey: string }
+  /** The terminal's recorded agent arguments; send only with the source-terminal-args capability. */
+  agentArgs?: string
 }
 
 /** The source chat and the response whose turn the fork copies through. */

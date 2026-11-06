@@ -78,4 +78,43 @@ describe('claude structured launch resolution', () => {
       })
     ).rejects.toThrow('durable resume identity changed before spawn')
   })
+
+  it('resumes the same conversation with the continued terminal flags added to the configured ones', async () => {
+    const resolve = resolverFor(
+      record({
+        providerHandleChain: RESUMABLE.providerHandleChain,
+        sourceTerminalArgs: [
+          '--mcp-config',
+          '/work/mcp.json',
+          '--dangerously-load-development-channels',
+          'server:relay',
+          '--model',
+          'opus',
+          '--add-dir',
+          '/shared',
+          '--dangerously-skip-permissions',
+          '--resume',
+          'old-terminal-session',
+          '--fork-session'
+        ]
+      }),
+      undefined,
+      'system',
+      async () => true,
+      () => ['--model', 'sonnet', '--add-dir', '/shared', '--strict-mcp-config']
+    )
+
+    const launch = await resolve({ identity: identityAt('leaf-current') })
+
+    expect(launch.options.resume).toBe('provider-current')
+    expect(launch.options.forkSession).toBeUndefined()
+    expect(launch.options.additionalDirectories).toEqual(['/shared'])
+    expect(launch.options.extraArgs).toEqual({
+      'mcp-config': '/work/mcp.json',
+      'dangerously-load-development-channels': 'server:relay',
+      model: 'opus',
+      'strict-mcp-config': null,
+      'replay-user-messages': null
+    })
+  })
 })

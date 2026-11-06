@@ -55,6 +55,7 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
     permissionMode: 'accept-edits',
     launchArgs: ['--no-daemon'],
+    sourceTerminalArgs: ['--mcp-config', '/work/mcp.json'],
     launchDirectory: rig.root,
     providerHandleChain: [
       {
@@ -281,6 +282,7 @@ it('copies the selected retained root, founds its relationship, and replays befo
     },
     options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
     launchArgs: ['--no-daemon'],
+    sourceTerminalArgs: ['--mcp-config', '/work/mcp.json'],
     providerHandleChain: [
       expect.objectContaining({
         origin: 'adopted',

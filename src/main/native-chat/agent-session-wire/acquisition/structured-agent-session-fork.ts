@@ -240,6 +240,7 @@ export async function prepareStructuredAgentSessionFork(input: {
         : {})
     },
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
+    ...(record.sourceTerminalArgs ? { sourceTerminalArgs: record.sourceTerminalArgs } : {}),
     adopt: structuredAgentSessionAdoptAttach({
       definition: metadata.definition,
       handleNamesTranscript: importer.handleNamesTranscript,

@@ -25,7 +25,10 @@ import {
   type ClaudeChildEnvSources,
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
-import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import {
+  claudeStructuredLaunchArgs,
+  withClaudeSourceTerminalArgs
+} from './claude-structured-launch-args'
 import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from '../../claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/native-chat-visuals-delivery'
@@ -227,7 +230,10 @@ export function claudeStructuredLaunchPart(
       record.sessionId,
       probeLaunch
     )
-    const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const configured = withClaudeSourceTerminalArgs(
+      claudeStructuredLaunchArgs(await deps.resolveLaunchArgs()),
+      record.sourceTerminalArgs
+    )
     const { thinkingDisplayArgs, visuals } = await launchFlags
     const additionalDirectories = [
       ...configured.additionalDirectories,
