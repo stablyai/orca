@@ -1,8 +1,5 @@
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import {
-  registeredAgentStartupLaunchToken,
-  registerAgentStartupTerminalBinding
-} from '@/lib/agent-startup-tab-binding'
+import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
@@ -340,12 +337,8 @@ export function createRemoteRuntimePtyTransport(
     const boundEpoch = lifecycleEpoch
     if (tabId && boundPtyId) {
       startupDeliveryLaunchToken =
-        registeredAgentStartupLaunchToken(
-          useAppStore.getState(),
-          startupDeliveryTabId ?? tabId,
-          leafId,
-          boundPtyId
-        ) ?? startupDeliveryLaunchToken
+        opts.resolveStartupLaunchToken?.(startupDeliveryTabId ?? tabId, leafId, boundPtyId) ??
+        startupDeliveryLaunchToken
     }
     if (worktreeId && startupDeliveryTabId && startupDeliveryLaunchToken && boundPtyId) {
       rebindPendingAgentStartupPrompt({
@@ -894,9 +887,7 @@ export function createRemoteRuntimePtyTransport(
     if (announceSpawn) {
       onPtySpawn?.(remotePtyId)
     }
-    if (exited) {
-      retireAgentStartupPromptForTerminal(remotePtyId)
-    }
+    retireAgentStartupPromptForTerminal(remotePtyId)
     retireWatchingForRebind(
       rebindWatch,
       hostRecordedExitCode(exited),

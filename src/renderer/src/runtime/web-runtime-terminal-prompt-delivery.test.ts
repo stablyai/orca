@@ -22,6 +22,7 @@ import { useAppStore } from '@/store'
 import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
 import { installSleepingRecordAccess } from '@/components/terminal-pane/pty-connection/sleeping-record-access'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
+import { buildPaneTransportOptions } from '@/components/terminal-pane/pty-connection/pane-transport-options'
 import { installPtyExitHibernate } from '@/components/terminal-pane/pty-connection/pty-exit-hibernate'
 import { installPanePtyVisibilityBind } from '@/components/terminal-pane/pty-connection/pane-pty-visibility-bind'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '@/components/terminal-pane/remote-runtime-pty-recovery-limits'
@@ -97,9 +98,11 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
       paneTransportsRef: { current: new Map([[1, transport]]) },
       updateTabPtyId: vi.fn(),
       onStartupBound: () => useAppStore.getState().consumeTabStartupCommand('tab-1', startup),
-      isVisibleRef: { current: true }
+      isVisibleRef: { current: true },
+      isActiveRef: { current: true }
     },
-    pane: { id: 1, leafId },
+    pane: { id: 1, leafId, terminal: { options: {} } },
+    windowsPtyModel: { apply: vi.fn() },
     cacheKey: `tab-1:${leafId}`,
     paneStartup: startup,
     launchToken: 'launch-1',
@@ -242,7 +245,8 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
   const replacement = createRemoteRuntimePtyTransport('env', {
     worktreeId: 'wt',
     tabId: 'tab-1',
-    leafId
+    leafId,
+    resolveStartupLaunchToken: buildPaneTransportOptions(exitSession).resolveStartupLaunchToken
   })
   replacement.attach({ existingPtyId: ptyId, callbacks: {} })
   await vi.waitFor(() =>
@@ -260,6 +264,64 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
   expect(useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]).toBeUndefined()
   forgetAgentStartupDeliveriesForTabs(['tab-1'])
   expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(false)
+})
+
+it('settles the prompt when the host proves its surface closed but discarded the exit record', async () => {
+  const ready = Promise.withResolvers<boolean>()
+  mocks.ready.mockReturnValue(ready.promise)
+  const pending = deliver('ship it')
+  await vi.waitFor(() => expect(mocks.ready).toHaveBeenCalledOnce())
+  Object.assign(window, {
+    api: {
+      runtimeEnvironments: {
+        call: async ({ method }: { method: string }) => ({
+          id: 'reply',
+          _meta: { runtimeId: 'runtime' },
+          ...(['session.tabs.activate', 'terminal.resolvePane', 'terminal.show'].includes(method)
+            ? { ok: false, error: { code: 'terminal_not_found', message: 'terminal_not_found' } }
+            : {
+                ok: true,
+                result:
+                  method === 'status.get'
+                    ? {
+                        runtimeProtocolVersion: 3,
+                        minCompatibleRuntimeClientVersion: 2,
+                        capabilities: []
+                      }
+                    : {
+                        worktree: 'wt',
+                        publicationEpoch: 'retired',
+                        snapshotVersion: 3,
+                        activeGroupId: null,
+                        activeTabId: null,
+                        activeTabType: null,
+                        tabs: [],
+                        retiredTerminalSurfaces: [
+                          { parentTabId: 'tab-1', leafId, ptyId: 'process-1', terminal: 'pty-1' }
+                        ]
+                      }
+              })
+        })
+      }
+    }
+  })
+  const { createRemoteRuntimePtyTransport } =
+    await import('@/components/terminal-pane/remote-runtime-pty-transport')
+  const exited = vi.fn()
+  const terminal = createRemoteRuntimePtyTransport('env', {
+    worktreeId: 'wt',
+    tabId: 'web-terminal-tab-1',
+    leafId,
+    onPtyExit: exited
+  })
+  await terminal.connect({ url: '', callbacks: {} })
+  expect(exited).toHaveBeenCalledWith(ptyId)
+  expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(true)
+  expect(mocks.error).toHaveBeenCalledOnce()
+  ready.resolve(true)
+  await expect(pending).resolves.toBe(false)
+  expect(mocks.write).not.toHaveBeenCalled()
+  terminal.destroy?.()
 })
 
 it('keeps the initial readiness attempt when its pane confirms the same PTY', async () => {
