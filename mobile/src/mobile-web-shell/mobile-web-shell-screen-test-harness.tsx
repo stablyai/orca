@@ -187,10 +187,10 @@ export type ScreenComponent = ComponentType<{
   route: { pathname: string }
 }>
 
-function element(Screen: ScreenComponent): ReactElement {
+function element(Screen: ScreenComponent, pathname: string): ReactElement {
   return createElement(Screen, {
     hostId: 'host-1',
-    route: { pathname: '/h/host-1' }
+    route: { pathname }
   })
 }
 
@@ -209,7 +209,7 @@ export async function renderScreen(
   setScreenState(dependencies, state)
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
-    rendered.tree = create(element(Screen))
+    rendered.tree = create(element(Screen, dependencies.pathname))
   })
   if (rendered.tree === null) {
     throw new Error('screen did not render')
@@ -226,7 +226,7 @@ export async function updateScreen(
 ): Promise<void> {
   setScreenState(dependencies, state)
   await act(async () => {
-    tree.update(element(Screen))
+    tree.update(element(Screen, dependencies.pathname))
   })
 }
 

@@ -506,6 +506,63 @@ describe('a refused update is said beside the page, not in front of it', () => {
 
 // Keep a cover until first paint; uncovering at ready exposed bare surface during measured 1.42-second cached-page startup.
 describe('the frame under a page that has not painted', () => {
+  it('keeps the shell frame over a mounted view, with the view underneath it', async () => {
+    dependencies.pageFrame = 'unpainted'
+    const tree = await renderScreen(readyState('session-a'))
+    expect(
+      tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-cover')
+    ).toHaveLength(1)
+    // Keep the document mounted and loading under the cover.
+    expect(byName(tree, 'ShellViewProbe')).toHaveLength(1)
+    expect(textOf(tree)).toContain('Loading host')
+  })
+
+  it('carries the same label the screen was already painting while it opened the generation', async () => {
+    const opening = await renderScreen({ kind: 'activating', source: 'cache' })
+    expect(textOf(opening)).toContain('Loading host')
+    dependencies.pageFrame = 'unpainted'
+    await updateScreen(opening, readyState('session-a'))
+    // The frame does not change when the state does, which is what makes the handover invisible.
+    expect(textOf(opening)).toContain('Loading host')
+  })
+
+  it('calls a workspace route a workspace, and the host route a host', async () => {
+    dependencies.pathname = '/h/host-1/session/wt-1'
+    dependencies.pageFrame = 'unpainted'
+    const workspace = await renderScreen(readyState('session-workspace'))
+    expect(textOf(workspace)).toContain('Opening workspace')
+    expect(textOf(workspace)).not.toContain('Loading host')
+  })
+
+  it('takes the frame down once the page reports one of its own', async () => {
+    dependencies.pageFrame = 'unpainted'
+    const tree = await renderScreen(readyState('session-a'))
+    dependencies.pageFrame = 'painted'
+    await updateScreen(tree, readyState('session-a'))
+    expect(tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-cover')).toEqual([])
+  })
+
+  it('covers the same box the view gets, which the keyboard does not shorten', async () => {
+    // View and absolute cover share the padded content box; keyboard overlays it rather than resizing it, so neither can expose an inset gap.
+    dependencies.pageFrame = 'unpainted'
+    const tree = await renderScreen(readyState('session-keyboard-cover'))
+    const root = tree.root.find((node) => node.props.testID === 'mobile-web-shell-ready')
+    await act(async () => {
+      dependencies.keyboardListeners.get('keyboardWillShow')?.({ endCoordinates: { height: 336 } })
+    })
+    expect(root.props.style[1]).toEqual({ paddingTop: 0 })
+    const cover = tree.root.find((node) => node.props.testID === 'mobile-web-shell-cover')
+    expect(cover.props.style[0]).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0
+    })
+    expect(hostParentOf(cover)).toBe('mobile-web-shell-ready')
+    expect(hostParentOf(byName(tree, 'ShellViewProbe')[0])).toBe('mobile-web-shell-ready')
+  })
+
   it('hands the page report to the session', async () => {
     dependencies.pageFrame = 'unpainted'
     dependencies.client = createFakeRpcClient()
