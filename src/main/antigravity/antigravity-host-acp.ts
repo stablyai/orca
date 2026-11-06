@@ -1,5 +1,6 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
+import { existsSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
@@ -9,7 +10,11 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
-import { createAntigravityHostCredentialBackend } from './native-credential-backend'
+import {
+  createAntigravityHostCredentialBackend,
+  isAntigravityFileStorageHost
+} from './native-credential-backend'
+import { hasAntigravityMacOSCredential } from './native-macos-credentials'
 
 /** First release verified with Orca chats; it also leaves the chat's folder untouched. */
 export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
@@ -99,6 +104,13 @@ export async function hasManagedAntigravityChatSignIn(managedHome: string): Prom
 /** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */
 export async function hasAgyCredential(homePath: string): Promise<boolean> {
   try {
+    // Reading the macOS secret would ask the person for keychain access; its attributes do not.
+    if (process.platform === 'darwin' && !isAntigravityFileStorageHost(process.env)) {
+      return (
+        (await hasAntigravityMacOSCredential()) ||
+        existsSync(join(homePath, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'))
+      )
+    }
     return (await createAntigravityHostCredentialBackend(homePath).read()) !== null
   } catch {
     return false

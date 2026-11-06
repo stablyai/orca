@@ -12,7 +12,11 @@ vi.mock('./native-credential-backend', () => ({
   createAntigravityHostCredentialBackend: () => ({
     read: async () => (agyCredential.present ? { contents: '{}' } : null),
     write: async () => {}
-  })
+  }),
+  isAntigravityFileStorageHost: () => false
+}))
+vi.mock('./native-macos-credentials', () => ({
+  hasAntigravityMacOSCredential: async () => agyCredential.present
 }))
 
 // Trimmed from `agy acp` 1.5.2's initialize response.

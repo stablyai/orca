@@ -68,13 +68,22 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
+// An inherited Gemini API key switches agy to key auth, which its models reject (401).
+function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
+  const removed = ['GEMINI_API_KEY', 'GOOGLE_API_KEY']
+  for (const key of removed) {
+    delete env[key]
+  }
+  return removed
+}
+
 // The host's `agy acp` uses agy's own sign-in and history; Orca neither signs it in nor out.
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
   args: () => ['acp'],
   env: {},
-  scrubEnvironment: undefined,
+  scrubEnvironment: scrubAgyHostApiKeys,
   authMethod: undefined,
   signIn: undefined,
   dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },

@@ -91,11 +91,12 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
       { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment }
     ) => {
-      // A host program without the chat's permission mode never takes it.
+      // A host program without the chat's permission mode never takes it; `own` sets none.
       const host =
         spec.hostBackend &&
         purpose === 'launch' &&
         (permissionMode === undefined ||
+          permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
               .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory))
