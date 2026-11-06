@@ -94,7 +94,7 @@ export function useTerminalWebViewController(
     [pendingMessages, sendToDocument]
   )
 
-  // Coalesce busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
+  // Native coalesces busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
   const writeCoalescer = useMemo(
     () =>
       createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data }), { coalesce }),

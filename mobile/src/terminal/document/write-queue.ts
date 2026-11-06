@@ -14,7 +14,7 @@ const CLAUDE_STATUS_DOT_PATTERN = /\u23fa[\ufe0e\ufe0f]*/g
 const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
 
 // xterm yields to input and paint only between writes, so bound each one.
-export const TERMINAL_WRITE_SLICE_UNITS = 16 * 1024
+const TERMINAL_WRITE_SLICE_UNITS = 16 * 1024
 
 export function resetWriteQueue(scope: TerminalDocumentScope) {
   scope.writeQueue = []
@@ -127,16 +127,15 @@ function nextWriteSlice(scope: TerminalDocumentScope) {
     return next
   }
   let slice = next
-  for (;;) {
-    const following = scope.writeQueue[scope.writeQueueHead]
-    if (
-      typeof following !== 'string' ||
-      slice.length + following.length > TERMINAL_WRITE_SLICE_UNITS
-    ) {
-      return slice
-    }
+  let following = scope.writeQueue[scope.writeQueueHead]
+  while (
+    typeof following === 'string' &&
+    slice.length + following.length <= TERMINAL_WRITE_SLICE_UNITS
+  ) {
     slice += nextQueuedWrite(scope)
+    following = scope.writeQueue[scope.writeQueueHead]
   }
+  return slice
 }
 
 export function pumpWrites(scope: TerminalDocumentScope, gen: number): void {
