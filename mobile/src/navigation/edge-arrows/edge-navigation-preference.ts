@@ -11,16 +11,26 @@ export const DEFAULT_EDGE_NAVIGATION_MODE: EdgeNavigationMode = 'orbs'
 export const DEFAULT_EDGE_SWITCHER_CHIP_HIDDEN = true
 
 export function resolveEdgeNavigationMode(
-  layout: Pick<TerminalAccessoryLayout, 'edgeNavigationMode'> | null | undefined
+  layout:
+    | Pick<TerminalAccessoryLayout, 'edgeNavigationMode' | 'directionPadEnabled'>
+    | null
+    | undefined,
+  directionPadAvailable = false
 ): EdgeNavigationMode {
   const mode = layout?.edgeNavigationMode
-  return mode === 'pills' ||
+  if (
+    mode === 'pills' ||
     mode === 'strips' ||
     mode === 'orbs' ||
     mode === 'gamepad' ||
     mode === 'off'
-    ? mode
-    : DEFAULT_EDGE_NAVIGATION_MODE
+  ) {
+    return mode
+  }
+  if (directionPadAvailable && layout?.directionPadEnabled !== false) {
+    return 'off'
+  }
+  return DEFAULT_EDGE_NAVIGATION_MODE
 }
 
 export function isEdgeSwitcherChipHidden(

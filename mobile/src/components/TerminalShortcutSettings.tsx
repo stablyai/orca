@@ -185,6 +185,7 @@ export function TerminalShortcutSettings({
     <>
       <EdgeNavigationSettingsSection
         shortcutLayout={shortcutLayout}
+        directionPadAvailable={hasPad}
         onChangeLayout={(updater) =>
           setShortcutLayout((current) => {
             const next = updater(current)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useDirectionPadAvailable } from '../../layout/use-shell-side-rail'
 import { subscribeMirroredKey } from '../../storage/mirrored-storage-keys'
 import {
   getDefaultTerminalAccessoryLayout,
@@ -23,14 +24,17 @@ import {
 } from './edge-navigation-state'
 
 export function GlobalEdgeNavigationProvider({ children }: { children: ReactNode }) {
-  const [layout, setLayout] = useState<TerminalAccessoryLayout>(getDefaultTerminalAccessoryLayout)
+  const directionPadAvailable = useDirectionPadAvailable()
+  const [layout, setLayout] = useState<TerminalAccessoryLayout>(() =>
+    getDefaultTerminalAccessoryLayout(directionPadAvailable)
+  )
   const layoutRef = useRef<TerminalAccessoryLayout>(layout)
   layoutRef.current = layout
   const [sheetVisible, setSheetVisible] = useState(false)
 
   useEffect(() => {
     let active = true
-    void loadTerminalAccessoryLayout().then((loaded) => {
+    void loadTerminalAccessoryLayout(directionPadAvailable).then((loaded) => {
       if (active) {
         layoutRef.current = loaded
         setLayout(loaded)
@@ -44,13 +48,17 @@ export function GlobalEdgeNavigationProvider({ children }: { children: ReactNode
       TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
       (rawValue) => {
         if (rawValue === null) {
-          const fallback = getDefaultTerminalAccessoryLayout()
+          const fallback = getDefaultTerminalAccessoryLayout(directionPadAvailable)
           layoutRef.current = fallback
           setLayout(fallback)
           return
         }
         try {
-          const parsed = normalizeTerminalAccessoryLayoutPreference(JSON.parse(rawValue))
+          const parsed = normalizeTerminalAccessoryLayoutPreference(
+            JSON.parse(rawValue),
+            undefined,
+            directionPadAvailable
+          )
           layoutRef.current = parsed
           setLayout(parsed)
         } catch {
@@ -63,7 +71,7 @@ export function GlobalEdgeNavigationProvider({ children }: { children: ReactNode
       unsubscribeLocal()
       unsubscribeMirror()
     }
-  }, [])
+  }, [directionPadAvailable])
 
   const persistUpdate = useCallback(
     (updater: (current: TerminalAccessoryLayout) => TerminalAccessoryLayout) => {
@@ -75,7 +83,7 @@ export function GlobalEdgeNavigationProvider({ children }: { children: ReactNode
     []
   )
 
-  const mode = resolveEdgeNavigationMode(layout)
+  const mode = resolveEdgeNavigationMode(layout, directionPadAvailable)
   const switcherChipHidden = isEdgeSwitcherChipHidden(layout)
 
   const setMode = useCallback(
@@ -87,10 +95,12 @@ export function GlobalEdgeNavigationProvider({ children }: { children: ReactNode
 
   const cycleMode = useCallback(() => {
     persistUpdate((current) => {
-      const nextMode = cycleEdgeNavigationMode(resolveEdgeNavigationMode(current))
+      const nextMode = cycleEdgeNavigationMode(
+        resolveEdgeNavigationMode(current, directionPadAvailable)
+      )
       return setTerminalEdgeNavigationMode(current, nextMode)
     })
-  }, [persistUpdate])
+  }, [directionPadAvailable, persistUpdate])
 
   const setSwitcherChipHidden = useCallback(
     (hidden: boolean) => {

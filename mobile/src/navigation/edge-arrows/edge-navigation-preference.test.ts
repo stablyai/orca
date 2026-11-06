@@ -96,4 +96,17 @@ describe('edge navigation preference in terminal-accessory-layout', () => {
     expect(hiddenChip.edgeSwitcherChipHidden).toBe(true)
     expect(isEdgeSwitcherChipHidden(hiddenChip)).toBe(true)
   })
+
+  it('defaults unset edgeNavigationMode to off when a side-rail D-pad is active while honoring explicit overrides', () => {
+    const duoDefault = getDefaultTerminalAccessoryLayout(true)
+    expect(duoDefault.directionPadEnabled).toBe(true)
+    expect(resolveEdgeNavigationMode(duoDefault, true)).toBe('off')
+    expect(resolveEdgeNavigationMode(duoDefault, false)).toBe('orbs')
+
+    const duoPadDisabled = { ...duoDefault, directionPadEnabled: false }
+    expect(resolveEdgeNavigationMode(duoPadDisabled, true)).toBe('orbs')
+
+    const duoExplicitOrbs = setTerminalEdgeNavigationMode(duoDefault, 'orbs')
+    expect(resolveEdgeNavigationMode(duoExplicitOrbs, true)).toBe('orbs')
+  })
 })

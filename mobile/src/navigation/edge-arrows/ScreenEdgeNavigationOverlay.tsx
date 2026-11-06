@@ -228,8 +228,9 @@ export function ScreenEdgeNavigationOverlay({
     mode !== 'gamepad' && centerX + horizontalControlWidth > width - 104
   const settingsDockBottom =
     PANE_EDGE_INSET + safeBottomRightOffset + (narrowBottomCollision ? 30 : 0)
-  const gamepadRightClusterBottom =
-    (switcherChipHidden ? PANE_EDGE_INSET + 4 : settingsDockBottom + 36)
+  const gamepadRightClusterBottom = switcherChipHidden
+    ? PANE_EDGE_INSET + 4 + safeBottomRightOffset
+    : settingsDockBottom + 36
 
   const flavourShortLabel =
     mode === 'pills'

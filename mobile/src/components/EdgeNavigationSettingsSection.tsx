@@ -25,9 +25,11 @@ const styles = themedStyleSheet(() => ({
 
 export function EdgeNavigationSettingsSection({
   shortcutLayout,
+  directionPadAvailable = false,
   onChangeLayout
 }: {
   shortcutLayout: TerminalAccessoryLayout
+  directionPadAvailable?: boolean
   onChangeLayout: (updater: (current: TerminalAccessoryLayout) => TerminalAccessoryLayout) => void
 }) {
   useMobileColorScheme()
@@ -45,7 +47,7 @@ export function EdgeNavigationSettingsSection({
         <MobileSegmentedControl<EdgeNavigationMode>
           fill
           testIDPrefix="edge-arrows-mode-"
-          selected={resolveEdgeNavigationMode(shortcutLayout)}
+          selected={resolveEdgeNavigationMode(shortcutLayout, directionPadAvailable)}
           onSelect={(nextMode) =>
             onChangeLayout((current) => setTerminalEdgeNavigationMode(current, nextMode))
           }

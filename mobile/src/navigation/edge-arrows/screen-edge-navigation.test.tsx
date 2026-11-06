@@ -15,6 +15,12 @@ import type { MobileSessionController } from '../../session/use-mobile-session-c
 const storage = vi.hoisted(() => new Map<string, string>())
 const appState = vi.hoisted(() => ({ listener: (_state: string) => {} }))
 const platformState = vi.hoisted(() => ({ OS: 'ios' as 'ios' | 'web' }))
+const sideRailState = vi.hoisted(() => ({ directionPadAvailable: false }))
+
+vi.mock('../../layout/use-shell-side-rail', () => ({
+  useDirectionPadAvailable: () => sideRailState.directionPadAvailable,
+  useShellSideRail: () => sideRailState.directionPadAvailable
+}))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -62,6 +68,7 @@ afterEach(() => {
   renderer = undefined
   storage.clear()
   platformState.OS = 'ios'
+  sideRailState.directionPadAvailable = false
   vi.useRealTimers()
 })
 
@@ -480,5 +487,40 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
       expect(resolveEffectiveOpacity(action.props.style({ pressed: false }))).toBe(0.5)
       expect(resolveEffectiveOpacity(action.props.style({ pressed: true }))).toBe(0.92)
     }
+  })
+
+  it('offsets the Gamepad right action diamond above bottomRightOffset even when switcherChipHidden is true', async () => {
+    storage.set(
+      'orca:terminal-accessory-layout',
+      JSON.stringify({
+        version: 2,
+        orderedBuiltInIds: ['escape', 'tab'],
+        visibleBuiltInIds: ['escape', 'tab'],
+        edgeNavigationMode: 'gamepad',
+        edgeSwitcherChipHidden: true
+      })
+    )
+    const target: EdgeNavigationTarget = {
+      id: 'native-chat-gamepad-clearance',
+      kind: 'scrollable',
+      preparePress: () => ({ tap: () => {} })
+    }
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          GlobalEdgeNavigationProvider,
+          null,
+          createElement(PaneEdgeNavigationOverlay, { target, bottomRightOffset: 50 })
+        )
+      )
+    })
+
+    const rightCluster = renderer!.root.findByProps({ testID: 'gamepad-action-cluster' })
+    const clusterPlacement = (rightCluster.props.style as readonly unknown[]).find(
+      (entry): entry is { right: number; bottom: number } =>
+        Boolean(entry && typeof entry === 'object' && 'bottom' in entry && 'right' in entry)
+    )
+    expect(clusterPlacement).toEqual({ right: 10, bottom: 60 })
   })
 })
