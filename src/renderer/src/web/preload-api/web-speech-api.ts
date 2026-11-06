@@ -12,7 +12,7 @@ import {
   PCM_BYTES_PER_SAMPLE
 } from '../../../../shared/rpc-contract/speech-params'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { errorMessage } from '../../../../shared/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
 
@@ -135,7 +135,7 @@ export function createWebSpeechApi(): Pick<
     startDictation: async (_modelId, _hotwords, sessionId) => {
       const dictation: HostDictation = {
         sessionId,
-        dictationId: `web-${createBrowserUuid()}`,
+        dictationId: `web-${createNonSecureContextUuid()}`,
         seq: 0,
         sampleRate: 0,
         pending: [],
