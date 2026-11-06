@@ -154,10 +154,10 @@ declare module 'orca/host' {
       result: { revision: string }
       surfaces: "worker"
     }
-    /** Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement. Since host API 1.4. */
+    /** Publishes owned app/editor and terminal colors and selects them unless the user picked another theme. Returns publication, not renderer acknowledgement. Since host API 1.4. */
     "appearance.apply": {
       params: { expectedRevision: string; app: string; terminal: string }
-      result: { revision: string; themeId: string; mode: "dark" | "light"; delivery: "published" }
+      result: { revision: string; themeId: string; mode: "dark" | "light"; selected: boolean; delivery: "published" }
       surfaces: "worker"
     }
     /** Lists every workspace, Git worktrees and folders, on every host Orca reaches. Since host API 1.3. */

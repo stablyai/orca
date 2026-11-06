@@ -1,9 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import { z } from 'zod'
+import { existsSync } from 'node:fs'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { writeSecureFile } from '../../../shared/secure-file'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type {
@@ -13,8 +10,20 @@ import type {
 import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../plugin-discovery'
 import { getPluginsDataDir, isInvalidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginService } from '../plugin-service'
-import { pluginDataDir } from '../plugin-storage-store'
 import { PluginHostCallError, type PluginHostCallScope } from '../workers/plugin-host-call-scope'
+import {
+  APPEARANCE_SELECTION_KEYS,
+  appearancePaletteRefresh,
+  appearanceRevertUpdates,
+  followsPluginAppearance,
+  recordAppearanceRestore
+} from './plugin-appearance-restore'
+import {
+  appearanceSnapshotFile,
+  readAppearanceSnapshot,
+  writeAppearanceSnapshot,
+  type AppearanceSnapshot
+} from './plugin-appearance-snapshot'
 import {
   preparePluginAppearanceColors,
   type PreparedPluginAppearance
@@ -25,13 +34,7 @@ export type PluginAppearanceSettingsStore = {
   updateSettings(updates: Partial<GlobalSettings>): void
 }
 
-const colors = z.strictObject({ app: z.string().max(16384), terminal: z.string().max(16384) })
-const snapshot = z.strictObject({
-  schemaVersion: z.literal(1),
-  dark: colors.optional(),
-  light: colors.optional()
-})
-type Snapshot = z.infer<typeof snapshot>
+type Snapshot = AppearanceSnapshot
 type OwnerState = { snapshot: Snapshot; themes: PreparedPluginAppearance[] }
 
 function assertActive(scope: PluginHostCallScope): void {
@@ -61,17 +64,7 @@ export class PluginAppearanceService {
   read(): PluginHostResult<'appearance.read'> {
     const settings = this.options.settings.getSettings()
     const selection = {
-      theme: settings.theme,
-      appDark: settings.pluginAppThemeDark,
-      appLight: settings.pluginAppThemeLight,
-      editorDark: settings.editorThemeDark,
-      editorLight: settings.editorThemeLight,
-      terminalDark: settings.terminalThemeDark,
-      terminalLight: settings.terminalThemeLight,
-      separate: settings.terminalUseSeparateLightTheme,
-      palettes: settings.terminalPluginPalettes,
-      terminalOverrides: settings.terminalColorOverrides,
-      terminalOverridesLight: settings.terminalColorOverridesLight,
+      settings: APPEARANCE_SELECTION_KEYS.map((key) => settings[key]),
       resources: [...this.owners]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => [key, value.snapshot])
@@ -88,19 +81,7 @@ export class PluginAppearanceService {
   settingsChanged(updates: Partial<GlobalSettings>): void {
     if (
       Object.keys(updates).some((key) =>
-        [
-          'theme',
-          'pluginAppThemeDark',
-          'pluginAppThemeLight',
-          'editorThemeDark',
-          'editorThemeLight',
-          'terminalThemeDark',
-          'terminalThemeLight',
-          'terminalUseSeparateLightTheme',
-          'terminalPluginPalettes',
-          'terminalColorOverrides',
-          'terminalColorOverridesLight'
-        ].includes(key)
+        APPEARANCE_SELECTION_KEYS.some((selected) => selected === key)
       )
     ) {
       this.fingerprint = null
@@ -132,16 +113,33 @@ export class PluginAppearanceService {
       this.options.settings.getSettings()
     )
     const previous = this.owners.get(pluginKey)
+    const current = this.options.settings.getSettings()
+    const selected = followsPluginAppearance(
+      pluginKey,
+      prepared.app.base,
+      previous?.snapshot,
+      current
+    )
     const next: Snapshot = {
       ...(previous?.snapshot ?? { schemaVersion: 1 }),
-      [prepared.app.base]: { app: input.app, terminal: input.terminal }
+      [prepared.app.base]: { app: input.app, terminal: input.terminal },
+      ...(selected
+        ? {
+            restore: recordAppearanceRestore(previous?.snapshot.restore, prepared.settings, current)
+          }
+        : {})
     }
+    const updates = selected
+      ? prepared.settings
+      : appearancePaletteRefresh(prepared.app.id, prepared.settings, current)
     const staged = this.prepare(plugin, next)
     assertActive(scope)
     this.persist(pluginKey, next)
     this.owners.set(pluginKey, staged)
     try {
-      this.options.settings.updateSettings(prepared.settings)
+      if (updates) {
+        this.options.settings.updateSettings(updates)
+      }
     } catch (error) {
       if (previous) {
         this.owners.set(pluginKey, previous)
@@ -164,40 +162,71 @@ export class PluginAppearanceService {
       revision: this.read().revision,
       themeId: prepared.app.id,
       mode: prepared.app.base,
+      selected,
       delivery: 'published'
     }
   }
 
-  /** Reloads persisted snapshots at startup and drops owners that are no longer installed. */
-  reconcile(discovered: readonly DiscoveredPlugin[]): void {
+  /**
+   * Returns the user's prior selection for keys still holding what this owner wrote, then forgets
+   * the owner so re-enabling it starts as a fresh opt-in.
+   */
+  private revert(pluginKey: string, owner: OwnerState, present: boolean): void {
+    this.owners.delete(pluginKey)
+    const updates = appearanceRevertUpdates(
+      pluginKey,
+      owner.snapshot.restore,
+      this.options.settings.getSettings()
+    )
+    try {
+      if (Object.keys(updates).length > 0) {
+        this.options.settings.updateSettings(updates)
+      }
+      // Why only when present: an uninstall removes the data folder; do not recreate it.
+      if (present && existsSync(this.file(pluginKey))) {
+        this.persist(pluginKey, { schemaVersion: 1 })
+      }
+    } catch (error) {
+      this.options.warn(
+        pluginKey,
+        `could not restore the prior appearance: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  /**
+   * Reloads persisted snapshots, then reverts owners that are no longer installed or approved so
+   * the user's prior selection returns instead of a silent built-in fallback.
+   */
+  reconcile(
+    discovered: readonly DiscoveredPlugin[],
+    isApproved: (plugin: ValidDiscoveredPlugin) => boolean = () => true
+  ): void {
     const present = new Set<string>()
+    const approved = new Set<string>()
     for (const plugin of discovered) {
       if (isInvalidDiscoveredPlugin(plugin)) {
         continue
       }
       present.add(plugin.pluginKey)
+      if (isApproved(plugin)) {
+        approved.add(plugin.pluginKey)
+      }
       if (this.owners.has(plugin.pluginKey)) {
         continue
       }
-      const file = this.file(plugin.pluginKey)
       try {
-        if (!existsSync(file)) {
-          continue
+        const stored = readAppearanceSnapshot(this.file(plugin.pluginKey))
+        if (stored) {
+          this.owners.set(plugin.pluginKey, this.prepare(plugin, stored))
         }
-        if (statSync(file).size > 256 * 1024) {
-          throw new Error('appearance snapshot exceeds 256 KiB')
-        }
-        this.owners.set(
-          plugin.pluginKey,
-          this.prepare(plugin, snapshot.parse(JSON.parse(readFileSync(file, 'utf8'))))
-        )
       } catch (error) {
         this.options.warn(plugin.pluginKey, error instanceof Error ? error.message : String(error))
       }
     }
-    for (const key of this.owners.keys()) {
-      if (!present.has(key)) {
-        this.owners.delete(key)
+    for (const [key, owner] of this.owners) {
+      if (!approved.has(key)) {
+        this.revert(key, owner, present.has(key))
       }
     }
   }
@@ -253,11 +282,11 @@ export class PluginAppearanceService {
   }
 
   private file(pluginKey: string): string {
-    return join(pluginDataDir(this.options.pluginsDataDir, pluginKey), 'appearance.json')
+    return appearanceSnapshotFile(this.options.pluginsDataDir, pluginKey)
   }
 
   private persist(pluginKey: string, state: Snapshot): void {
-    writeSecureFile(this.file(pluginKey), JSON.stringify(state))
+    writeAppearanceSnapshot(this.file(pluginKey), state)
   }
 }
 
