@@ -328,15 +328,16 @@ async function main(): Promise<void> {
     await waitFor(() => revoked.state.closed !== null, 4000)
     // A cell's database path answers any credential it cannot place with WRONG_CELL (today's
     // behaviour); the phone then re-resolves, and the director must refuse the revoked token.
-    const resolveA = await fetch(`${DIRECTOR}/v1/resolve`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ v: 1, relayHostId: host.relayHostId, resumeToken: tokenA })
-    })
+    // B first: a failed resolve rate-limits the host's next one (today's director rule).
     const resolveB = await fetch(`${DIRECTOR}/v1/resolve`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ v: 1, relayHostId: host.relayHostId, resumeToken: tokenB })
+    })
+    const resolveA = await fetch(`${DIRECTOR}/v1/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, relayHostId: host.relayHostId, resumeToken: tokenA })
     })
     record(
       '5 phone A (revoked on the edge) is not admitted on the cell, and the director will not resolve it',
