@@ -8,7 +8,7 @@ import {
   showOsc52ClipboardBlockedToast,
   showOsc52ClipboardCopyRetryToast,
   showOsc52ClipboardFailedToast
-} from './osc52-clipboard-toast'
+} from './clipboard/osc52-clipboard-toast'
 import { parseOsc7 } from './parse-osc7'
 import { mergePaneCwdFromOsc7, settlePaneCwdDeferredSpawn } from './resolve-split-cwd'
 import {
@@ -29,8 +29,8 @@ import {
   clearQueuedInitialCwdAfterFirstPane
 } from './terminal-pane-lifecycle-primitives'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
-import { installTerminalPaneInputHandling } from './terminal-pane-pane-input'
-import { installTerminalPaneLinkHandling } from './terminal-pane-pane-links'
+import { installTerminalPaneInputHandling } from './input/terminal-pane-pane-input'
+import { installTerminalPaneLinkHandling } from './links/terminal-pane-pane-links'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
 export type PaneCreatedSetupContext = TerminalPaneManagerOptionsContext

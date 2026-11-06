@@ -4784,18 +4784,18 @@
       "invariant": "Selecting Orca Browser for an HTTP link in a runtime-owned terminal creates exactly one browser page on that owning runtime and exactly one mirrored client browser workspace, with matching remote page identity and no client external-browser call. Explicit System Browser remains client-owned, direct SSH remains system-browser-only, and unknown or mismatched owners fail closed.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Use the focused routing contracts as the byte-identical baseline/candidate oracle. Require runtime OSC, WebLinksAddon, click fallback, action-menu, and modifier paths to target the exact owner without client fallback, while direct SSH and generic remote document links stay external. Separately run one byte-identical headed paired Electron journey on the candidate and with only runtime browser registration disabled. Require one new host browser tab, one new client mirror with exact page identity, rendered fixture DOM, explicit browser-tab activation, zero client shell.openExternal calls, exact close convergence, unchanged terminal counts, and continued output on the original PTY.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/links/http/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/links/terminal-link-action-routing.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/links/http/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/links/terminal-link-action-routing.test.ts",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-browser-link.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts",
+        "src/renderer/src/components/terminal-pane/links/http/terminal-runtime-host-link-routing.test.ts",
+        "src/renderer/src/components/terminal-pane/links/terminal-link-action-routing.test.ts",
         "tests/e2e/paired-remote-terminal-browser-link.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/links/http/terminal-runtime-host-link-routing.test.ts",
           "assertions": [
             "OSC, WebLinksAddon, and click-fallback activations route through the exact runtime owner",
             "direct SSH continues to use only the system browser"
@@ -4899,7 +4899,7 @@
       "oracle": "Audit1421 narrows renderer unit coverage as recorded in coverageNotes. Prior oracle descriptions are historical for the changed suite. The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Retained unchanged-selector receipts are the only current execution evidence. Reduced-source assertions await validation. Historical prior oracle: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): In paired Electron, write an HTML fixture that declares its own title on the host, invoke the Explorer preview action on the client, and require the document text to be readable out of the orca-preview guest before judging any absence. With that presence established, require the client to hold exactly one browser workspace more than its baseline and that workspace to be the document one: page and tab url blank, the document path mirrored onto both, the tab named by the document's title, the chip naming the file, no editor row of the retired preview species anywhere, and the guest URL carrying the orca-preview scheme. Ask the host through its own page registry as well as through the tab snapshot, and in the same run open an ordinary URL browser tab from the same client and require that one to arrive in both — the presence precondition without which “the host gained nothing” is satisfied just as well by an oracle that cannot see browser pages at all. Require the preview to sit in a group other than the source editor's while the active group and tab remain the source editor's. Then click away to the terminal, click the preview tab, require it to reactivate and still render, close it with its own X, and require the document tab to be gone while the host still holds only the URL tab and the source group, source editor and terminal survive. Quit the client with a document tab open and relaunch it on the same profile: require the same workspace row to come back, blank and named by the document, rendering the document again over a grant URL that differs from the one that was quit, with no preview-scheme or document-named page anywhere in what the host holds. Prove the halves are live by flipping one product property at a time and requiring the run to fail: publish document workspaces to the host like ordinary ones, and stop mirroring the document onto the workspace row. Have the fixture document attempt its own egress on every load — an unattended window.open and location.href to an off-machine URL, plus an inline ICE gathering probe — and require the same baseline counts and a candidate count of zero, so the document's own attempts are measured rather than assumed. Then, as a separate phase after the close oracle has already run, bring the client window to the front, press the document's heading with a real mouse event, and require the document to report that the same press drove it to attempt a second window.open and location.href while both browser counts stay at that phase's baseline and nothing routes — the case a recent-input gate cannot distinguish from the press's own effect. Only then press the target=_blank link with a real mouse event and require both a recorded routing call that returned success and a browser count above that baseline, with the preview tab still open. Drive the preload's click policy as a unit oracle over a real document: a dispatched click, a trusted press on an external anchor, an anchor reached through what it wraps, an SVG animated href, a sibling preview link, fragment and percent-encoded fragment targets, a bare hash, and a middle click. Create a browser page located by a workspace document, handing creation a live grant URL, and require its stored url, its mirrored tab url and the written session payload all to be blank with no orca-preview string anywhere in what was written, while an ordinary page created the same way keeps the URL it was given and asks for the address bar the document page never does. Parse the written page and tab through the session schema and require the document to survive both halves. Hydrate them back and require the document page to return blank and still named — including when its page row was salvaged away and only the tab's own copy remains, and when a foreign session carried a grant URL into both rows. Drive the mirror across a page switch out of the document and back, and across a repair in which the document is the only mirrored field that differs. Name a document page from its document and require the tab to take that name, name it with an empty title and require the file, name it with a live grant URL and require the file again with no preview scheme anywhere in the written session, and require an ordinary blank browser tab beside it to still be called New Tab. Dispatch a title update out of a rendered preview's own guest and require it to reach the page state while the identity chip still reads the document's workspace-relative path. Attach a browsing guest and a workspace-document guest through the same method in one run and require the browsing one to take clicked-link routing, popup handling and auth-identity detach tracking while the document guest takes none of them, stays inside the grant it is showing, denies every window it asks for, and is dropped from the page-keyed document registry by the same teardown that frees its id for a later attach. Register a browsing guest and attach a workspace-document guest in one run against the real manager, require the one door to answer each page with the guest of its own half, and require the document page to be absent from the browsing map and from its enumeration. Drive both browsing registration entry points with a page the document half already holds and require them to register nothing, and drive the mint channel with a page the browsing half already holds and require it to refuse; and drive the offscreen one with a guest that is missing and with one already destroyed, requiring the same refusal. Arm a grab on a live preview target, drive the unregister channel at that same target in the window before the queued operation runs, and require the grab to reach the guest anyway — then drive the same sequence for an ordinary browser page and require its grab state to be disposed after all. Hold one viewport-bridge op open, queue a second behind it, swap the page's guest while that second op waits, and require the injection to land in the guest the page has then. Revoke a grant after a tool has run against its page and require that page's grab state to be cancelled and disposed. Ask a tool for a document page whose guest has not attached, require the request to park in the registration wait, attach the guest, and require the same request to arm on it; require a page nothing ever renders to answer not-ready once that wait elapses. With a document open, ask a tool for a browsing page id and require it to be answered by the browsing half or not at all, with the same channel reaching the document guest under the page it really renders. Drive open-externally for a document whose per-file owner is remote while the workspace-scoped owner is unresolved, for a runtime-owned worktree whose preview tab carries no runtime id of its own, and for a worktree that resolves no runtime owner while the tab still carries one, requiring the download route in each; and for an owner that cannot be resolved at all, and for an unknown workspace root while nothing names another host, requiring a refusal that neither opens nor downloads. Drive the headless backend with a page the document half already holds and require it to reject, destroy the window, and unregister nothing — then shut the backend down and require it still to have unregistered nothing. Navigate a bound preview guest at a second grant through both latch events and require it to stay on the grant it bound to. Mount a preview while a renderer drag is already in flight and require its guest to be click-through at the moment it is appended, not a turn later. Render the editor panel shell in each remaining tab mode and require the path header exactly where the surface does not already name itself. Drive the preview action and require a browser tab located by the document rather than an editor tab, require a second open of the same document to activate the tab it is already in, and require closing that tab to revoke its grant while a URL tab closed beside it revokes none. Publish a worktree holding a document tab and a URL tab and require only the URL tab to reach the mobile snapshot. Install the shared partition policies for a preview partition and for an ordinary browsing partition in the same run, fire each one's own will-download listener, and require the preview's to cancel while the browsing one still reaches the download router — then require the preview protocol installer to be what asks for that deny. In the same run, require the cancelled download to raise a reader-facing notice and the routed one to raise none. require the guest registry to name the bound grant for a live preview guest and nothing for a contents that is not one, has committed no document, or is gone. Drive the shell with a refusal and require one fixed sentence, still one row after three more refusals, standing beside an asset failure rather than being counted with it, gone behind the failure panel, and ignored when it names another preview's grant. Drive the main-side report gate directly for a sender that is no preview guest, a guest with no bound or a revoked grant, a genuine press Electron's webview focus flag misreports as unfocused, and non-web URLs; drive the reader-facing confirmation for accept, cancel, and a confirmed tab the browser refuses; and drive will-attach-webview in both preload directions. Run the per-owner reader, grant-containment, scheme-admission, guest-policy, and plan-routing contracts as unit oracles, including a host-reported truncation, an over-cap binary, and an out-of-worktree paired path. Drive the reader-facing component with the payloads the reader can actually produce — the entry document fails only as truncated or unreadable, a subresource additionally as a refused format — and require the asset case to leave the guest mounted. Drive the closed-tab cleanup hook, the window installer, and the grant IPC handlers directly, requiring the grant to be released when the preview tab closes, cleared at window creation and on a cross-document main-frame navigation, and refused to any sender that is not the trusted renderer. For the browser creations this gate still owns, run the unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host, requiring the original unsupported error or visible toast, zero RPCs, and no retained new split; hold a real navigation response beyond the 15-second client deadline after host creation and require the first RPC to return the exact host inventory page ID, one host page, and no retry; repeat reconciliation faults against headless serve and retain the separate exact-page reconciliation rollback oracle.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser/client-pages/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser/browser.test.ts src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync-browser-tabs.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/document-preview/doc-preview-grant-registry.test.ts src/main/browser/document-preview/doc-preview-file-reader.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/main/browser/document-preview/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/document-preview/doc-preview-grant-registry.test.ts src/main/browser/document-preview/doc-preview-file-reader.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/main/browser/document-preview/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/links/files/terminal-file-link-actions.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/sessions/browser-session-partition-policies.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/sessions/browser-session-partition-policies.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/window/main-window-webview-security.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts",
@@ -4950,7 +4950,7 @@
         "src/renderer/src/lib/doc-preview-grants.test.ts",
         "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
         "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+        "src/renderer/src/components/terminal-pane/links/files/terminal-file-link-actions.test.ts",
         "src/main/ipc/doc-preview-grant-ipc.test.ts",
         "src/renderer/src/components/link-actions/LinkActionPopover.test.tsx",
         "src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts",
@@ -8227,8 +8227,8 @@
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal/adoption/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts"
       ],
       "testFiles": [
         "src/main/providers/pty-process-inspection.test.ts",
@@ -8238,7 +8238,7 @@
         "src/main/runtime/orca-runtime.test.ts",
         "tests/e2e/remote-agent-completion-authority.unit.test.ts",
         "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
-        "src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts",
+        "src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts",
         "src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts",
         "src/shared/claimed-agent-pty-owner.test.ts",
@@ -11064,35 +11064,35 @@
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. A live preedit must stay visible across an IME-resumed transaction, preserve every committed row-tail cell hidden by its opaque overlay, mask only a structurally verified Codex or Claude placeholder and never a row carrying typed text, keep the themed insertion caret and native candidate anchor inside the terminal at the final column, and clean up without stale overlay children or ownership classes. Layout-native Option text must preserve negotiated CSI-u alternate/associated fields and lock modifiers, distinguish repeat from press, and resolve releases with the press's primary identity plus the actual keyup modifiers without exposing a partial or stale layout refresh. An in-focus macOS input-source change must invalidate both renderer authorities before the next key can use the old source. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, resumed Windows event traces reactivate the visible preedit, an opaque mid-line overlay reproduces the committed row tail it covers, arbitrary DIM output remains visible, and final-column layout keeps both caret and textarea candidate anchor within the available screen width. The retained candidate-anchor slice checks layout-read caching, deferred timer coalescing, recognized-screen follow-ups and refit refresh with deterministic DOM fixtures. A Codex frame whose prompt row is bold and whose dimmed model footer sits below a blank gap acquires the mask class while composing; the same placeholder text without that footer, a framed-versus-unframed Claude prompt, a row of arbitrary dimmed output, and a row carrying typed text do not. The class is gone after composition end, after a blur that is not followed by a session end, and after disposal. Rendered Electron/CDP geometry independently proves the overlay reproduces every committed cell it hides, that a real Codex placeholder at column 2 is masked rather than repeated, and that the final-column caret, preedit, and textarea right edges all land inside the screen. Input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and real fcitx4/Sogou captures send only the committed candidate for Space/digit picks while ordinary typing, literal Space and digits stay available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text. Real legacy IME commit preservation, native candidate-window placement, and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-fcitx4-trace-replay.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-xterm-midline-preedit-tail.test.ts src/renderer/src/components/terminal-pane/terminal-ime-xterm-resumed-preedit-visibility.test.ts src/renderer/src/components/terminal-pane/terminal-ime-xterm-trailing-preedit-occlusion.test.ts src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composer-placeholder-mask.test.ts src/shared/terminal/input/terminal-composer-draft.test.ts src/main/daemon/emulation/testing/terminal-cursor-line-context.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/input/paste/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/input/keyboard/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/input/keyboard/xterm-bypass-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-linux-fcitx4-trace-replay.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-midline-preedit-tail.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-resumed-preedit-visibility.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-trailing-preedit-occlusion.test.ts src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composer-placeholder-mask.test.ts src/shared/terminal/input/terminal-composer-draft.test.ts src/main/daemon/emulation/testing/terminal-cursor-line-context.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-option-composed-ascii.spec.ts"
       ],
       "testFiles": [
         "tests/e2e/terminal-option-composed-ascii.spec.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-linux-fcitx4-trace-replay.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-xterm-midline-preedit-tail.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-xterm-resumed-preedit-visibility.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-xterm-trailing-preedit-occlusion.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-macos-keybinding-dict-trace.test.ts",
+        "src/renderer/src/components/terminal-pane/input/paste/terminal-paste-runtime.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composition-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-candidate-key-release-guard.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-linux-fcitx4-trace-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-midline-preedit-tail.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-resumed-preedit-visibility.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-trailing-preedit-occlusion.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-composer-placeholder-mask.test.ts",
+        "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composer-placeholder-mask.test.ts",
         "src/shared/terminal/input/terminal-composer-draft.test.ts",
         "src/main/daemon/emulation/testing/terminal-cursor-line-context.test.ts",
-        "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
-        "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts",
+        "src/renderer/src/components/terminal-pane/input/keyboard/xterm-bypass-policy-non-mac.test.ts",
+        "src/renderer/src/components/terminal-pane/input/keyboard/xterm-bypass-policy.test.ts",
+        "src/renderer/src/components/terminal-pane/input/keyboard/terminal-kitty-csi-u-encoding.test.ts",
+        "src/renderer/src/components/terminal-pane/input/keyboard/terminal-shortcut-option-compose.test.ts",
+        "src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts",
         "src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts",
         "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
         "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
@@ -11110,7 +11110,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder.test.ts",
           "assertions": [
             "native text commits route once to the intended PTY",
             "composition/preedit bookkeeping does not leak premature text",
@@ -11118,11 +11118,11 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/paste/terminal-paste-runtime.test.ts",
           "assertions": ["paste/runtime forwarding avoids duplicate terminal payloads"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composition-tracker.test.ts",
           "assertions": [
             "empty Sogou-style compositionupdate keeps composition active",
             "stale composition state expires so editing keys cannot stay suppressed indefinitely",
@@ -11130,7 +11130,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-candidate-key-release-guard.test.ts",
           "assertions": [
             "suppressed candidate keydown arms only the matching keypress/keyup release guard",
             "held-key repeat keydowns stay guarded until their keyup, even past expiry",
@@ -11138,7 +11138,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-linux-fcitx4-trace-replay.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-linux-fcitx4-trace-replay.test.ts",
           "assertions": [
             "real fcitx4 Sogou captures (GTK module and XIM) send only the committed candidate for Space and digit picks, under legacy keys and kitty flags 1 and 5",
             "a real fcitx4 Google Pinyin in-client preedit still commits through the composition path",
@@ -11146,7 +11146,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-xterm-midline-preedit-tail.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-midline-preedit-tail.test.ts",
           "assertions": [
             "a mid-line preedit reproduces committed cells hidden by its opaque overlay and refreshes that tail after terminal renders",
             "arbitrary fully dimmed output remains visible even at column zero",
@@ -11155,7 +11155,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-composer-placeholder-mask.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composer-placeholder-mask.test.ts",
           "assertions": [
             "a bold Codex prompt row with a dimmed model footer below a blank gap, and a framed Claude prompt, acquire the mask class only while composing",
             "the same placeholder text without its footer or frame, and arbitrary dimmed output, acquire nothing",
@@ -11164,7 +11164,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-xterm-resumed-preedit-visibility.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-resumed-preedit-visibility.test.ts",
           "assertions": [
             "recorded Windows Korean compositionupdate-without-compositionstart traces reactivate a visible preedit transaction",
             "the resumed transaction commits exactly once and cleans up normally",
@@ -11172,14 +11172,14 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-xterm-trailing-preedit-occlusion.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-trailing-preedit-occlusion.test.ts",
           "assertions": [
             "rolling Korean input keeps only the uncommitted trailing syllable in the themed overlay",
             "the overlay remains anchored to the live cursor cell and clears after commit"
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/keyboard/xterm-bypass-policy-non-mac.test.ts",
           "assertions": [
             "standalone Linux 229 keydowns reach xterm while Windows 229 keydowns stay suppressed",
             "candidate Space/digit selectors are suppressed only while candidate guards are active"
@@ -11195,7 +11195,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts",
           "assertions": [
             "owned releases use live Shift and Option state and current alternate-key flags",
             "owned releases retain the delivered press identity across layout, Shift, and NumLock changes",
@@ -11313,7 +11313,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-fcitx4-trace-replay.test.ts",
           "result": "passed",
           "durationSeconds": 1.99,
-          "summary": "1 replay test file and 37 tests passed on macOS: real fcitx4 Sogou (GTK module and XIM) and Google Pinyin captures through the full Linux pane keyboard stack under legacy keys and kitty flags 1 and 5, plus XIM release pairing under kitty flags 3. The same captures were also replayed with real fcitx4 + Sogou in an Ubuntu 22.04 container, with every scenario sending only the committed text."
+          "summary": "1 replay test file and 37 tests passed on macOS: real fcitx4 Sogou (GTK module and XIM) and Google Pinyin captures through the full Linux pane keyboard stack under legacy keys and kitty flags 1 and 5, plus XIM release pairing under kitty flags 3. The same captures were also replayed with real fcitx4 + Sogou in an Ubuntu 22.04 container, with every scenario sending only the committed text.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-linux-fcitx4-trace-replay.test.ts"
         },
         {
           "date": "2026-07-11",

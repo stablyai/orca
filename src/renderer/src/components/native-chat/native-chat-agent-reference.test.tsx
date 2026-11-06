@@ -20,7 +20,7 @@ import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { captureTerminalDropTarget } from '../terminal-pane/terminal-drop-target'
+import { captureTerminalDropTarget } from '../terminal-pane/input/file-drop/terminal-drop-target'
 import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
 import { clearStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
