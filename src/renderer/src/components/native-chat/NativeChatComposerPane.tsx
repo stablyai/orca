@@ -215,19 +215,18 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         resolveTarget
       })
 
-    const { surface: ptySessionOptionsSurface, snapshot: ptySessionOptionsSnapshot } =
-      useNativeChatSessionOptions({
-        agent,
-        terminalTabId,
-        targetPtyId,
-        dispatchCommand: dispatchSessionOptionCommand,
-        onAgentPicker: onSwitchToTerminal,
-        readTerminalScreen,
-        paneKey
-      })
-    const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptionsSurface
+    const ptySessionOptions = useNativeChatSessionOptions({
+      agent,
+      terminalTabId,
+      targetPtyId,
+      dispatchCommand: dispatchSessionOptionCommand,
+      onAgentPicker: onSwitchToTerminal,
+      readTerminalScreen,
+      paneKey
+    })
+    const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptions.surface
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
-    const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptionsSnapshot
+    const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptions.snapshot
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
@@ -248,7 +247,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSlashCommand,
       onSubmitted,
       answerCommandLocally,
-      sessionOptionsSurface: ptySessionOptionsSurface,
+      sessionOptionsSurface: ptySessionOptions.surface,
       trackPendingSend,
       setDraft,
       setCaret,
@@ -269,11 +268,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       optimisticSendOutcome,
       terminalTabId
     })
-    const {
-      goalMode,
-      messageDelivery,
-      send: sendMessage
-    } = useNativeChatComposerSubmit({
+    const submission = useNativeChatComposerSubmit({
       structuredTransport,
       draftScopeKey,
       draft,
@@ -289,9 +284,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setCaret
     })
 
+    const { goalMode } = submission
     const { sendHeld, ...sendButton } = nativeChatComposerSendState({
       draft,
-      messageDelivery,
+      messageDelivery: submission.messageDelivery,
       imageAttachments,
       pastedTextSaving: attachments.pastedTextSaving,
       disabled,
@@ -318,7 +314,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         sendStructured,
         ptyCommandRouting: { ...ptyCommandRouting, setActiveSuggestion },
         setNotice,
-        sendMessage
+        sendMessage: submission.send
       })
 
     const interrupt = useNativeChatComposerInterrupt({
