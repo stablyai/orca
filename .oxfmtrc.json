@@ -4,18 +4,6 @@
   "semi": false,
   "printWidth": 100,
   "trailingComma": "none",
-  "overrides": [
-    {
-      "files": [
-        "src/renderer/src/components/editor/editor-navigation-history.ts",
-        "src/renderer/src/components/editor/editor-navigation-restoration.ts",
-        "src/renderer/src/components/editor/monaco-navigation-history.ts"
-      ],
-      "options": {
-        "semi": true
-      }
-    }
-  ],
   "ignorePatterns": [
     "cloud/**",
     "resources/licenses/**",
