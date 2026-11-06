@@ -510,10 +510,7 @@
         "searchAgents": "ajanlar",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Antigravity sohbetleri, Orca'nın bu ana makineye indirdiği ve agy CLI'dan ayrı olan bir sunucuyu çalıştırır.",
-        "antigravityNotSignedIn": "Oturum açılmadı. Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir.",
-        "antigravityAccount": "Hesap",
-        "antigravitySignInNeeded": "Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir."
+        "antigravityAccount": "Hesap"
       },
       "permissionsDescriptionOwnAgents": "Yeni sohbetlerde her ajanın Ayarlar → Ajanlar bölümündeki izni geçerlidir.",
       "launch": {
@@ -21632,7 +21629,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity sohbetleri",
-      "chatDescription": "Sohbetler, yukarıdaki agy hesabınızdan ayrı bir Antigravity oturumu kullanır. Bu cihazda bir kez oturum açın.",
       "chatSignIn": "Oturum aç",
       "chatChangeAccount": "Hesabı değiştir",
       "chatRetry": "Oturum açmayı yeniden dene",
@@ -21645,14 +21641,11 @@
       "chatVerifying": "Oturum açma tamamlanıyor…",
       "chatPasteHelp": "Oturum açtıktan sonra son sayfa yüklenmezse tarayıcınızdan tam adresini kopyalayıp buraya yapıştırın.",
       "chatContinue": "Devam et",
-      "chatSignedInOn": "{{host}} üzerinde oturum açıldı.",
       "chatCancelled": "Oturum açma iptal edildi.",
       "chatExpired": "Oturum açma zaman aşımına uğradı. Yeniden deneyin.",
       "chatFailed": "Oturum açılamadı. Yeniden deneyin.",
-      "chatNotSignedIn": "{{host}} üzerinde oturum açılmamış.",
       "chatOtherClient": "Başka bir istemcide oturum açma işlemi devam ediyor.",
       "chatReadFailed": "{{host}} üzerindeki oturum durumu kontrol edilemedi.",
-      "scope": "{{host}} üzerindeki agy'nin kendi hesabını yönetin.",
       "signIn": "Bu ana makinede agy'yi başlatıp tarayıcıda oturum açma işlemini tamamlayın, ardından mevcut hesabı kaydedin. Farklı bir hesap eklemek için agy'de /logout kullanıp yeniden oturum açın.",
       "docs": "Oturum açma talimatları",
       "retry": "Tekrar dene",
