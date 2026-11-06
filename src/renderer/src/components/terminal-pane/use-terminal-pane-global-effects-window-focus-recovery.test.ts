@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   focusActivePane: vi.fn(),
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
-  handleTerminalFileDrop: vi.fn(),
   enforceTerminalCurrentScrollIntent: vi.fn(),
   syncTerminalScrollIntentFromViewport: vi.fn(),
   pasteTerminalText: vi.fn(),
@@ -79,10 +78,6 @@ vi.mock('@/lib/pane-manager/pane-scroll', () => ({
 vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   enforceTerminalCurrentScrollIntent: mocks.enforceTerminalCurrentScrollIntent,
   syncTerminalScrollIntentFromViewport: mocks.syncTerminalScrollIntentFromViewport
-}))
-
-vi.mock('./input/file-drop/terminal-drop-handler', () => ({
-  handleTerminalFileDrop: mocks.handleTerminalFileDrop
 }))
 
 vi.mock('./input/paste/terminal-bracketed-paste', () => ({

@@ -20,9 +20,12 @@ vi.mock('@/store/index', () => ({
 }))
 
 vi.mock('./terminal-file-open-routing', () => ({
+  openDetectedFilePath: mocks.openDetectedFilePath
+}))
+
+vi.mock('../../host-files/terminal-file-path-mapping', () => ({
   getTerminalFileContext: () => ({ sourceHostResolved: true }),
   mapTerminalFilePath: (filePath: string) => filePath,
-  openDetectedFilePath: mocks.openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault: () => mocks.canOpenWithSystemDefault,
   terminalLinkWslDistro: () => null
 }))
