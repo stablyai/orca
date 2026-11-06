@@ -7,6 +7,7 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
@@ -33,6 +34,8 @@ export type SubmitFolderWorkspaceCreateParams = {
   chatSessionOptions?: Readonly<Record<string, string>>
   autoRenameBranchFromWork: boolean | undefined
   settings?: AgentStartupSettings
+  /** Preferences the caller already read for this attempt; otherwise read here. */
+  agentLaunchPreferences?: AgentLaunchPreferences
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>

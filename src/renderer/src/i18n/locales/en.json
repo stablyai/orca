@@ -7548,6 +7548,10 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
+        },
+        "folderWorkspaceCreate": {
+          "agentHostUnknown": "Could not start {{agent}}. {{reason}}",
+          "agentStartFailed": "Could not start {{agent}}. Check its Arguments in Settings → Agents, then try again."
         }
       },
       "shared": {

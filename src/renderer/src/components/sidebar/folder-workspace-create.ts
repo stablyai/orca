@@ -12,7 +12,8 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
+import { ensureDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import {
   getRepoExecutionHostId,
@@ -20,11 +21,20 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getSuggestedCreatureName } from './workspace-creation/naming/worktree-name-suggestions'
 import { submitFolderWorkspaceCreate } from './workspace-creation/folder/folder-workspace-composer-submit'
+import { getFolderWorkspaceAgentLaunchFact } from './workspace-creation/folder/folder-workspace-agent-startup'
+import {
+  beginDirectFolderCreate,
+  directCreateAgentFailure,
+  directCreateDetectionTarget,
+  isDirectCreateCancelled,
+  resolveDirectCreateAgent
+} from './folder-workspace-default-agent'
+import { startFolderRepoWorkspace } from './folder-repo-direct-create'
 import {
   getHeaderCreateWorkspaceTarget,
   openHeaderCreateComposer
@@ -32,6 +42,7 @@ import {
 
 type FolderCreateSource = {
   folderPath?: string
+  executionHostId: ExecutionHostId
   connectionId: string | null
   runtimeEnvironmentId: string | null
 }
@@ -44,13 +55,6 @@ export type CurrentWorkspaceCreate =
       initialWorkspaceTarget?: WorkspaceCreationTargetHint
     }
   | { kind: 'unavailable' }
-
-function dismissCoveringModal(): void {
-  const state = useAppStore.getState()
-  if (state.activeModal && state.activeModal !== 'none') {
-    state.closeModal()
-  }
-}
 
 function runtimeEnvironmentIdOf(executionHostId: string | null | undefined): string | null {
   const host = parseExecutionHostId(executionHostId)
@@ -75,61 +79,71 @@ export async function createFolderWorkspaceFromSidebar(
   if (!projectGroup.parentPath) {
     return
   }
-  dismissCoveringModal()
-  const { createFolderWorkspace } = useAppStore.getState()
+  beginDirectFolderCreate()
+  const { createFolderWorkspace, settings } = useAppStore.getState()
   const runtimeEnvironmentId = source
     ? source.runtimeEnvironmentId
     : runtimeEnvironmentIdOf(projectGroup.executionHostId)
+  // The resolved source's host owns the agent launch as well as the create.
+  const launchGroup = source
+    ? {
+        ...projectGroup,
+        executionHostId: source.executionHostId,
+        connectionId: source.connectionId
+      }
+    : projectGroup
+  const executionHostId = getNewWorkspaceProjectGroupHostId(launchGroup)
+  let agent: TuiAgent | null = null
+  let createStarted = false
   try {
+    const resolved = await resolveDirectCreateAgent(
+      { kind: 'folder', runtimeEnvironmentId, executionHostId },
+      () =>
+        ensureDetectedAgentsForTarget(
+          useAppStore.getState(),
+          directCreateDetectionTarget(executionHostId)
+        )
+    )
+    agent = resolved.agent
     await submitFolderWorkspaceCreate({
-      projectGroup,
+      projectGroup: launchGroup,
       name: '',
       lastAutoName: '',
       linkedWorkItem: null,
       note: '',
-      quickAgent: null,
-      autoRenameBranchFromWork: undefined,
-      agentCmdOverrides: undefined,
+      quickAgent: agent,
+      autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
+      settings: settings ?? undefined,
+      agentLaunchPreferences: resolved.preferences,
+      agentCmdOverrides: settings?.agentCmdOverrides,
+      terminalWindowsShell: settings?.terminalWindowsShell,
       runtimeEnvironmentId,
       ...(source?.folderPath ? { folderPath: source.folderPath } : {}),
       ...(source ? { connectionId: source.connectionId } : {}),
-      createFolderWorkspace: (input) => createFolderWorkspace(input, { runtimeEnvironmentId }),
+      createFolderWorkspace: (input) => {
+        createStarted = true
+        return createFolderWorkspace(input, { runtimeEnvironmentId })
+      },
       onOpenChange: () => {}
     })
   } catch (error) {
-    toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)))
+    if (isDirectCreateCancelled(error)) {
+      return
+    }
+    toast.error(
+      agent && !createStarted
+        ? directCreateAgentFailure(
+            agent,
+            getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), launchGroup)
+          )
+        : getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
+    )
   }
-}
-
-function directFolderProgressMode(repo: Repo): 'stepped' | 'indeterminate' {
-  // The setup panel stays hidden only for an explicit stepped request, which is what an ordinary folder submit uses unless the repo is on an environment.
-  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
-  return host?.kind === 'runtime' ? 'indeterminate' : 'stepped'
-}
-
-function startFolderRepoWorkspace(repo: Repo): void {
-  dismissCoveringModal()
-  const state = useAppStore.getState()
-  runBackgroundWorktreeCreation({
-    repoId: repo.id,
-    executionHostId: getRepoExecutionHostId(repo),
-    worktreeCreateProgressMode: directFolderProgressMode(repo),
-    name: getSuggestedCreatureName(selectWorktreesByRepo(state)),
-    nameWasGenerated: true,
-    setupDecision: 'skip',
-    agent: null,
-    pendingFirstAgentMessageRename: false,
-    note: '',
-    startupPlan: null,
-    quickPrompt: '',
-    quickTelemetry: null,
-    telemetrySource: 'sidebar'
-  })
 }
 
 export function createWorkspaceForRepoHeader(repo: Repo, options: { pinHost: boolean }): void {
   if (isFolderRepo(repo)) {
-    startFolderRepoWorkspace(repo)
+    void startFolderRepoWorkspace(repo)
     return
   }
   openHeaderCreateComposer(repo, options)
@@ -173,6 +187,7 @@ export function startCreateFromCurrentWorkspace(): CurrentWorkspaceCreate {
       ...(result.value.workspace.folderPath
         ? { folderPath: result.value.workspace.folderPath }
         : {}),
+      executionHostId: result.value.hostId,
       connectionId: result.value.connectionId,
       runtimeEnvironmentId: host?.kind === 'runtime' ? host.environmentId : null
     })
@@ -196,7 +211,7 @@ export function startCreateFromCurrentWorkspace(): CurrentWorkspaceCreate {
     return { kind: 'unavailable' }
   }
   if (isFolderRepo(repo)) {
-    startFolderRepoWorkspace(repo)
+    void startFolderRepoWorkspace(repo)
     return { kind: 'started' }
   }
   return {
