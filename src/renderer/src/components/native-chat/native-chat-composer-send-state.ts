@@ -47,6 +47,7 @@ export function nativeChatComposerSendState(input: {
   const runsWhileHostHolds =
     input.orcaCommand === true ||
     (transport !== undefined &&
+      !input.messageDelivery &&
       input.goalMode !== true &&
       input.imageAttachments.length === 0 &&
       isStructuredAgentSessionHostCommand(

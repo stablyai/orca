@@ -25,6 +25,7 @@ import {
   structuredAgentSessionPickEntersGoalMode
 } from '../../../../shared/agent-session/view/structured-agent-session-goal-mode'
 import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { promptHasInteractionModeSkill } from './native-chat-prompt-document'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 import {
   writeNativeChatComposerText,
@@ -247,13 +248,21 @@ export function useNativeChatComposerSubmit(args: {
 
   const exit = useCallback(() => setEntered(false), [])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])
+  const commandText = structuredTransport
+    ? resolveNativeChatPastedText(draftScopeKey, draft)
+    : draft
   const messageDelivery =
     !(active && threadGoal !== undefined) &&
     !args.matchesOrcaCommand?.(draft) &&
     !(
       structuredTransport &&
+      !promptHasInteractionModeSkill(
+        args.agent ?? '',
+        commandText,
+        readNativeChatComposerDraft(draftScopeKey).document
+      ) &&
       isStructuredAgentSessionHostCommand(
-        resolveNativeChatPastedText(draftScopeKey, draft),
+        commandText,
         threadGoal !== undefined,
         args.agent,
         structuredTransport.optionSnapshot

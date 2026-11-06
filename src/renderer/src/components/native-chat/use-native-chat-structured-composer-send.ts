@@ -1,4 +1,3 @@
-import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import {
   hasNativeChatStagedFiles,
@@ -10,7 +9,7 @@ import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentati
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { SkillRefLimitError } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { promptSkillRefs } from './native-chat-prompt-document'
+import { promptHasInteractionModeSkill, promptSkillRefs } from './native-chat-prompt-document'
 import type { StructuredAgentSessionAttachmentPreparation } from './structured-agent-session-send-slot'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
@@ -83,9 +82,7 @@ export function useNativeChatStructuredComposerSend({
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       const submittedText = text
       text = projectNativeChatPastedText(text, submitted.pastedTextFiles)
-      const pickedModeSkill =
-        agentSessionInteractionCommand(agent, text) !== null &&
-        promptSkillRefs(submitted.document).some((skill) => text.trimEnd() === `/${skill.name}`)
+      const pickedModeSkill = promptHasInteractionModeSkill(agent, text, submitted.document)
       const hostCommand =
         !pickedModeSkill &&
         isStructuredAgentSessionHostCommand(
