@@ -1,3 +1,6 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-native-draft-prefill'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
@@ -30,6 +33,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   forcePaste: boolean
   timeoutMs?: number
   beforePaste?: () => boolean
+  claimFirstWrite?: () => boolean
   onTimeout?: () => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
@@ -82,6 +86,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     onTimeout,
     onUnconfirmedDelivery,
     beforePaste: args.beforePaste,
+    claimFirstWrite: args.claimFirstWrite,
     ...(launchPty ? { launchPty } : {})
   }).then(
     (delivered) => {
@@ -96,5 +101,15 @@ export function deliverLaunchPromptToAgentTab(args: {
       }
       throw error
     }
+  )
+}
+
+export function notifyAgentLaunchPromptNotSent(agent: TuiAgent): void {
+  toast.error(
+    translate(
+      'agentLaunch.terminalPromptFailed',
+      'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
+      { value0: structuredAgentLabel(agent) }
+    )
   )
 }

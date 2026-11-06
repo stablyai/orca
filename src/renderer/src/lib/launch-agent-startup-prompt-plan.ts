@@ -1,3 +1,5 @@
+import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -24,16 +26,20 @@ export function planLaunchAgentStartupPrompt(args: {
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   isFollowupPath: boolean
+  submitFollowup?: boolean
 }): LaunchAgentStartupPromptPlan {
   const { base, prompt, promptDelivery, isFollowupPath } = args
   const hasPrompt = prompt.length > 0
-  const pasteAfterReady = (submit: boolean): LaunchAgentStartupPromptPlan => ({
+  const pasteAfterReady = (
+    submit: boolean,
+    suppressUpdater = submit
+  ): LaunchAgentStartupPromptPlan => ({
     startupPlan: buildAgentStartupPlan({
       ...base,
       prompt: '',
       allowEmptyPromptLaunch: true,
       // Why: Orca's own Enter must not answer a startup update prompt.
-      suppressStartupUpdatePrompt: submit
+      suppressStartupUpdatePrompt: suppressUpdater
     }),
     pasteDraftAfterLaunch: prompt,
     submitPastedPrompt: submit
@@ -68,7 +74,7 @@ export function planLaunchAgentStartupPrompt(args: {
     }
   }
   if (hasPrompt && isFollowupPath) {
-    return pasteAfterReady(true)
+    return pasteAfterReady(args.submitFollowup === true, false)
   }
   return {
     startupPlan: buildAgentStartupPlan({
@@ -85,12 +91,28 @@ export function planLaunchAgentStartupPrompt(args: {
 export function planHostedAgentPrompt(
   agent: TuiAgent,
   prompt: string,
-  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready',
+  facts: { platform?: NodeJS.Platform; shell?: AgentStartupShell; submitFollowup?: boolean } = {}
 ) {
+  if (
+    prompt &&
+    promptDelivery === 'draft' &&
+    (!facts.platform || (facts.platform === 'win32' && !facts.shell))
+  ) {
+    return { startupPlan: null, pasteDraftAfterLaunch: prompt, submitPastedPrompt: false }
+  }
   return planLaunchAgentStartupPrompt({
-    base: { agent, cmdOverrides: {}, agentArgs: null, platform: 'linux', isRemote: true },
+    base: {
+      agent,
+      cmdOverrides: {},
+      agentArgs: null,
+      platform: facts.platform ?? 'linux',
+      shell: facts.shell,
+      isRemote: true
+    },
     prompt,
     promptDelivery,
+    submitFollowup: facts.submitFollowup,
     isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
   })
 }
@@ -121,5 +143,24 @@ export function hostedAgentPromptRequest(
         prompt,
         promptDelivery: delivery === 'draft' ? ('draft' as const) : ('auto-submit' as const)
       }
-    : {}
+    : plan.pasteDraftAfterLaunch !== null && plan.submitPastedPrompt
+      ? { promptDelivery: 'auto-submit' as const }
+      : {}
+}
+
+export function hostedAgentPromptHostFacts(
+  platform: NodeJS.Platform | undefined,
+  terminalWindowsShell: string | null | undefined
+): { platform?: NodeJS.Platform; shell?: AgentStartupShell } {
+  return {
+    platform,
+    shell:
+      platform && (platform !== 'win32' || terminalWindowsShell)
+        ? resolveHostAgentStartupShell({
+            platform,
+            isRemote: true,
+            hostTerminalWindowsShell: terminalWindowsShell
+          })
+        : undefined
+  }
 }

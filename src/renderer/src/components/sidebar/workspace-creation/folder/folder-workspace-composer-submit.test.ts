@@ -121,3 +121,25 @@ it('keeps the folder legacy Arguments projection while carrying the entire non-n
     submitPastedPrompt: false
   })
 })
+
+it('delivers an old-host Aider folder note using the plan whose bare command executes', async () => {
+  mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'folder-aider' })
+  await submitFolderWorkspaceCreate({
+    projectGroup: makeProjectGroup(),
+    name: 'folder',
+    lastAutoName: '',
+    linkedWorkItem: null,
+    note: 'fix the folder',
+    quickAgent: 'aider',
+    autoRenameBranchFromWork: false,
+    agentCmdOverrides: {},
+    createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+    onOpenChange: vi.fn()
+  })
+  const startup = mocks.activateAndRevealFolderWorkspace.mock.lastCall?.[1].startup
+  expect(startup.command).toBe('aider')
+  const compatibility = startup.freshAgentLaunch.legacy()
+  expect(compatibility.startupPlan.launchCommand).toBe('aider')
+  expect(compatibility.pasteDraftAfterLaunch).toBe('fix the folder')
+  expect(compatibility.submitPastedPrompt).toBe(true)
+})

@@ -277,28 +277,27 @@ export async function launchWorkItemDirect(
       // Report a workspace disappearing between create and activation rather than silently drop its draft.
       return reportFailure(workspaceActivationErrorMessage())
     }
-    const primaryTabId = structuredResult.completed
-      ? structuredResult.primaryTabId
-      : activation.primaryTabId
-
     store.setSidebarOpen(true)
 
     if (structuredResult.completed) {
       return true
     }
 
-    const completed =
-      context.target.kind === 'environment' && !startupPlanFailed
-        ? true
-        : finishDirectWorkItemPrompt({
-            primaryTabId,
-            effectiveAgent,
-            promptDelivery,
-            draftContent,
-            startupPlan,
-            draftLaunchedNatively,
-            startupPlanFailed
-          })
+    const primaryTabId = activation.primaryTabId
+    if (context.target.kind === 'environment') {
+      // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
+      const startupSeeded = Boolean(primaryTabId && startupPlan?.launchToken && !startupPlanFailed)
+      return startupSeeded || reportFailure(workspaceActivationErrorMessage())
+    }
+    const completed = finishDirectWorkItemPrompt({
+      primaryTabId,
+      effectiveAgent,
+      promptDelivery,
+      draftContent,
+      startupPlan,
+      draftLaunchedNatively,
+      startupPlanFailed
+    })
     if (!completed) {
       args.onFailureNotified?.()
     }

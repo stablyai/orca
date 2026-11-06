@@ -5,7 +5,6 @@ import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-l
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import '@/components/terminal-pane/terminal-bracketed-paste'
 import '../../../shared/terminal/input/terminal-bracketed-paste-text'
@@ -13,8 +12,7 @@ import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/termi
 import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
-import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { waitForAgentDraftInputReady, waitForExpectedAgentOnPty } from './agent-draft-readiness'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -44,6 +42,7 @@ export async function pasteDraftWhenAgentReady(args: {
   /** The launch pane's PTY once its spawn says the agent started there; null when it didn't. */
   launchPty?: Promise<string | null>
   beforePaste?: () => boolean
+  claimFirstWrite?: () => boolean
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -98,7 +97,8 @@ export async function pasteDraftWhenAgentReady(args: {
     submit: submit === true,
     agent,
     inputKind: 'launch',
-    beforePaste: args.beforePaste
+    beforePaste: args.beforePaste,
+    claimFirstWrite: args.claimFirstWrite
   })
 }
 
@@ -176,6 +176,7 @@ async function sendBracketedPasteToAgent(args: {
   agent?: TuiAgent
   inputKind: TerminalInputKind
   beforePaste?: () => boolean
+  claimFirstWrite?: () => boolean
 }): Promise<boolean> {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
@@ -186,7 +187,26 @@ async function sendBracketedPasteToAgent(args: {
       if (args.beforePaste && !args.beforePaste()) {
         return false
       }
-      const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind)
+      let claimed = false
+      const pasted = await sendAgentDraftPasteContentNow(
+        ptyId,
+        content,
+        inputKind,
+        args.claimFirstWrite
+          ? (data) => {
+              if (!claimed) {
+                if (
+                  (args.beforePaste && !args.beforePaste()) ||
+                  (args.claimFirstWrite && !args.claimFirstWrite())
+                ) {
+                  return false
+                }
+                claimed = true
+              }
+              return sendRuntimePtyInputVerified(ptyId, data, inputKind)
+            }
+          : undefined
+      )
       if (!pasted || !submit) {
         return pasted
       }
@@ -281,54 +301,5 @@ function waitForAgentDraftInputReadyOnTab(args: {
     }
     unsubscribeStore = useAppStore.subscribe(bindFromState)
     bindFromState(useAppStore.getState())
-  })
-}
-
-async function waitForExpectedAgentOnPty(
-  ptyId: string,
-  expectedProcess: string,
-  timeoutMs: number
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const process = await withDeadline(
-        inspectRuntimeTerminalProcess(ptyId),
-        Math.max(0, deadline - Date.now())
-      )
-      if (!process) {
-        return false
-      }
-      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
-        return true
-      }
-    } catch {
-      // Ignore transient PTY inspection failures and keep polling.
-    }
-    const delayMs = Math.min(120, Math.max(0, deadline - Date.now()))
-    if (delayMs > 0) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs))
-    }
-  }
-  return false
-}
-
-function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  if (timeoutMs <= 0) {
-    return Promise.resolve(null)
-  }
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => resolve(null), timeoutMs)
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer)
-        resolve(value)
-      },
-      (error) => {
-        window.clearTimeout(timer)
-        reject(error)
-      }
-    )
   })
 }

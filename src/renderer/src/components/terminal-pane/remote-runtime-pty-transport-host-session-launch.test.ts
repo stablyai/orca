@@ -670,6 +670,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       { outcome: { status: 'created' }, hostTabId: 'host-adopted' },
       expect.objectContaining({
         agent: 'codex',
+        rendererTabId: 'tab-1',
         promptAfterReady: 'ship it',
         submitPrompt: false,
         forcePromptPaste: true
@@ -677,6 +678,24 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     const delivered = delivery.mock.calls[0]?.[1]
     await expect(delivered?.launchPty).resolves.toBe('remote:env-1@@term-remote')
+    expect(delivered?.beforePaste?.()).toBe(true)
+    const { streamId } = latestRemoteSubscribePayload()
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotStart,
+        streamId,
+        seq: 1,
+        payload: encodeTerminalStreamJson({ kind: 'scrollback' })
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotEnd,
+        streamId,
+        seq: 2,
+        payload: new Uint8Array()
+      })
+    )
     expect(delivered?.beforePaste?.()).toBe(true)
     transport.disconnect()
     expect(delivered?.beforePaste?.()).toBe(false)
@@ -725,7 +744,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       agent: 'aider' as const,
       delivery: 'auto-submit' as const,
       submit: true,
-      command: "aider '--no-check-update' '--no-show-release-notes'"
+      command: 'aider'
     }
   ])(
     'delivers ordinary legacy $agent text once without a recovery flag',
@@ -745,6 +764,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           base: { agent, cmdOverrides: {}, agentArgs: null, platform: 'linux', isRemote: true },
           prompt: 'ordinary work',
           promptDelivery,
+          submitFollowup: true,
           isFollowupPath: agent === 'aider'
         })
       const startup = prepare().startupPlan!
@@ -765,8 +785,9 @@ describe('createRemoteRuntimePtyTransport', () => {
         })
       )
       expect(delivery).toHaveBeenCalledExactlyOnceWith(
-        { outcome: { status: 'created' }, hostTabId: 'ordinary-tab' },
+        { outcome: { status: 'created' }, hostTabId: undefined },
         expect.objectContaining({
+          rendererTabId: 'ordinary-tab',
           promptAfterReady: 'ordinary work',
           submitPrompt: submit,
           forcePromptPaste: true

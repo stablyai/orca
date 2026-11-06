@@ -66,6 +66,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
         base: inputs,
         prompt: draftPrompt ?? prompt,
         promptDelivery: draftPrompt ? 'draft' : 'auto-submit',
+        submitFollowup: true,
         isFollowupPath: TUI_AGENT_CONFIG[inputs.agent].promptInjectionMode === 'stdin-after-start'
       })
     : undefined

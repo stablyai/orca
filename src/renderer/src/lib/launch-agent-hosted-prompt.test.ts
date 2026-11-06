@@ -48,6 +48,7 @@ it('keeps stdin auto-submit intent when normalizing an ordinary hosted fresh lau
     environmentId: 'host',
     prompt: 'do the work',
     promptDelivery: 'auto-submit',
+    submitFollowup: true,
     buildStartup: () => {
       throw new Error('host-composed launch must not compile desktop settings')
     }
@@ -97,4 +98,58 @@ it('cancels after asynchronous compatibility preparation without dispatching or 
   expect(dispatch).not.toHaveBeenCalled()
   expect(mocks.paste).not.toHaveBeenCalled()
   expect(mocks.error).not.toHaveBeenCalled()
+})
+
+it('keeps the Codex submit marker on a clean hosted request', async () => {
+  await launchAgentInWebHostTab({
+    agent: 'codex',
+    worktreeId: 'wt',
+    environmentId: 'host',
+    prompt: 'Fix checks',
+    promptDelivery: 'submit-after-ready',
+    buildStartup: () => {
+      throw new Error('no desktop preparation')
+    }
+  })
+  expect(mocks.create.mock.calls[0]?.[0]).toMatchObject({
+    agent: 'codex',
+    promptDelivery: 'auto-submit'
+  })
+  expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
+})
+
+it('launches a Windows cmd multiline Claude draft cleanly and pastes the retained text', async () => {
+  await launchAgentInWebHostTab({
+    agent: 'claude',
+    worktreeId: 'wt',
+    environmentId: 'host',
+    launchPlatform: 'win32',
+    launchShell: 'cmd',
+    prompt: 'first line\nsecond line',
+    promptDelivery: 'draft',
+    buildStartup: () => {
+      throw new Error('no desktop preparation')
+    }
+  })
+  expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
+  expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('promptDelivery')
+  expect(mocks.paste).toHaveBeenCalledWith(
+    expect.objectContaining({ content: 'first line\nsecond line', submit: false, forcePaste: true })
+  )
+})
+
+it('keeps an ordinary hosted Amp prompt unsubmitted', async () => {
+  await launchAgentInWebHostTab({
+    agent: 'amp',
+    worktreeId: 'wt',
+    environmentId: 'host',
+    prompt: 'Explain the failing check',
+    promptDelivery: 'auto-submit',
+    buildStartup: () => {
+      throw new Error('no desktop preparation')
+    }
+  })
+  expect(mocks.paste).toHaveBeenCalledWith(
+    expect.objectContaining({ content: 'Explain the failing check', submit: false })
+  )
 })

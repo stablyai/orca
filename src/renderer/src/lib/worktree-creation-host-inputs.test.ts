@@ -276,3 +276,39 @@ it('preserves the untouched draft payload shape and prepares the current held me
   expect(held?.startupPlan?.launchCommand).toContain("'held message'")
   expect(held?.startupPlan?.launchCommand).not.toContain('https://example.com/42')
 })
+
+it('keeps main legacy Aider command bytes on a host without creation options', async () => {
+  mocks.cached.mockReturnValue(false)
+  mocks.supports.mockResolvedValue(false)
+  const quick = await prepareQuickComposerStartup({
+    ...input,
+    agent: 'aider',
+    note: 'fix it',
+    linkedWorkItem: { provider: 'linear', number: 0, url: '' },
+    launchInputs: { agentArgs: '' }
+  })
+  await createWorktreeOnRuntimeHost(
+    'host',
+    {
+      repoId: 'repo',
+      name: 'test',
+      setupDecision: 'skip',
+      startup: quick.backendStartup,
+      options: worktreeCreationAgentLaunchOptions({
+        ...creationRequest(quick, { agentArgs: '' }),
+        agent: 'aider'
+      })
+    },
+    attempt,
+    {}
+  )
+  expect(mocks.call.mock.calls[0]?.[2]).toEqual({
+    repo: 'repo',
+    name: 'test',
+    baseBranch: undefined,
+    setupDecision: 'skip',
+    sparseCheckout: undefined
+  })
+  expect(quick.startupPlan?.launchCommand).toBe('aider')
+  expect(quick.startupPlan?.followupPrompt).toBe('fix it')
+})

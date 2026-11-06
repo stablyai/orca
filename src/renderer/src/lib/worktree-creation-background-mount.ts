@@ -38,6 +38,7 @@ export function openBackgroundDeclinedTerminal(
   if (host.kind === 'environment' && args.request.agent) {
     const completion = launchAgentInWebHostTab({
       ...(built?.freshAgentLaunch ?? args.request.launchInputs),
+      submitFollowup: true,
       agent: args.request.agent,
       environmentId: host.environmentId,
       worktreeId: args.worktreeId,

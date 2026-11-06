@@ -322,6 +322,7 @@ it.each(['dialog', 'saved-action'] as const)(
             })
         }))
     const startup = mocks.activateAndRevealWorktree.mock.lastCall?.[1].startup
+    expect(startup?.launchToken).toEqual(expect.any(String))
     expect(startup?.freshAgentLaunch).toMatchObject({ actionAgentArgs: '--verbose' })
     expect(startup?.freshAgentLaunch).not.toHaveProperty('agentArgs')
     const call = vi.fn(async () => ({

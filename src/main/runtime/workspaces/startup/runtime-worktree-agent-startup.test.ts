@@ -522,3 +522,36 @@ it('compiles an OpenCode model inside host startup while retaining draft deliver
   expect(substituted?.startup.command).not.toContain('/claude-only')
   expect(substituted?.draftPaste).toEqual({ agent: 'opencode', content: 'ship it' })
 })
+
+it('keeps the legacy OpenCode model recipe on SSH, including inherited choices and draft delivery', async () => {
+  const environment = {
+    repo: makeRepo({ connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }),
+    settings: {
+      ...settings,
+      agentLaunchChoices: { opencode: { model: 'provider/model' } },
+      agentDefaultArgs: { opencode: '--port 5000' }
+    },
+    getLaunchRuntime: () => ({
+      platform: 'linux' as const,
+      shell: 'posix' as const,
+      launchRuntime: new Error('SSH runtime')
+    })
+  }
+  const built = await buildWorktreeStartupForAgent({
+    ...environment,
+    agent: 'opencode',
+    prompt: 'go',
+    toSessionOptions: () => undefined,
+    sessionOptions: { model: 'provider/picked' }
+  })
+  expect(built.startup.command).toBe(
+    "opencode '--port' '5000' '--model' 'provider/picked' --prompt 'go'"
+  )
+  const inherited = await buildWorktreeStartupForDraft({
+    ...environment,
+    requestedAgent: 'opencode',
+    draft: 'ship it'
+  })
+  expect(inherited?.startup.command).toBe("opencode '--port' '5000' '--model' 'provider/model'")
+  expect(inherited?.draftPaste).toEqual({ agent: 'opencode', content: 'ship it' })
+})

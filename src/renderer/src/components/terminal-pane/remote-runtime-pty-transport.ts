@@ -1,11 +1,14 @@
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
+import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest
 } from '@/runtime/agent-session-create-request'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { rebindPendingAgentStartupPrompt } from '@/lib/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
+  hostedAgentPromptHostFacts,
   hostedAgentPromptDelivery,
   hostedAgentPromptRequest
 } from '@/lib/launch-agent-startup-prompt-plan'
@@ -14,7 +17,10 @@ import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import {
+  getRuntimeEnvironmentStatus,
+  runtimeEnvironmentSupportsCapability
+} from '@/runtime/runtime-rpc-client'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { remoteRestoreSpawnIntentParams } from '../../runtime/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
@@ -308,10 +314,29 @@ export function createRemoteRuntimePtyTransport(
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
 
+  let startupDeliveryTabId = tabId
+  let startupDeliveryLaunchToken = launchToken
+
   function setAttachmentReady(ready: boolean): void {
     attachmentReady = ready
     if (!ready) {
       return
+    }
+    const boundPtyId = remotePtyId
+    const boundEpoch = lifecycleEpoch
+    if (worktreeId && startupDeliveryTabId && startupDeliveryLaunchToken && boundPtyId) {
+      rebindPendingAgentStartupPrompt({
+        worktreeId,
+        tabId: startupDeliveryTabId,
+        launchToken: startupDeliveryLaunchToken,
+        ptyId: boundPtyId,
+        beforePaste: () =>
+          !destroyed &&
+          connected &&
+          attachmentReady &&
+          lifecycleEpoch === boundEpoch &&
+          remotePtyId === boundPtyId
+      })
     }
     for (const resolve of attachmentReadyWaiters) {
       resolve(true)
@@ -3490,6 +3515,7 @@ export function createRemoteRuntimePtyTransport(
       const launchConfigToSend = options.launchConfig ?? launchConfig
       const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
       const launchTokenToSend = options.launchToken ?? launchToken
+      startupDeliveryLaunchToken = launchTokenToSend
       const launchAgentToSend = options.launchAgent ?? launchAgent
       const restoreSpawnIntent = resumeProviderSessionToSend ? options.resumeSpawnIntent : undefined
       // Why only for a restore: an extra await would reorder every plain create against destroy.
@@ -3546,9 +3572,21 @@ export function createRemoteRuntimePtyTransport(
         ...(activate === true ? { activate: true } : {})
       }
       const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
+      const promptStatus = freshLaunch
+        ? await getRuntimeEnvironmentStatus(createEnvironmentId).catch(() => null)
+        : null
+      const promptPlatform = authoritativeHostPlatform ?? promptStatus?.hostPlatform
       let promptPlan =
         freshLaunch && launchAgentToSend
-          ? planHostedAgentPrompt(launchAgentToSend, freshLaunch.prompt, freshLaunch.promptDelivery)
+          ? planHostedAgentPrompt(
+              launchAgentToSend,
+              freshLaunch.prompt,
+              freshLaunch.promptDelivery,
+              {
+                ...hostedAgentPromptHostFacts(promptPlatform, promptStatus?.terminalWindowsShell),
+                submitFollowup: true
+              }
+            )
           : undefined
       const legacyCreate = async (epoch = connectLifecycleEpoch) => {
         const fallback = freshLaunch?.legacy?.()
@@ -3774,34 +3812,30 @@ export function createRemoteRuntimePtyTransport(
       }
 
       if (freshLaunch && promptPlan && launchAgentToSend && launchTokenToSend && tabId) {
-        const deliveryTabId = createdTerminal.tabId ?? tabId
-        const beforePaste = () =>
-          !destroyed &&
-          connected &&
-          lifecycleEpoch === connectLifecycleEpoch &&
-          handle === createdTerminal.handle
-        if (
-          beforePaste() &&
-          beginAgentStartupDeliveryAttempt({
-            worktreeId,
-            tabId: deliveryTabId,
-            launchToken: launchTokenToSend
-          })
-        ) {
-          void deliverCreatedWebRuntimeAgentSessionPrompt(
-            { outcome: { status: 'created' }, hostTabId: deliveryTabId },
-            {
-              agent: launchAgentToSend,
-              ...hostedAgentPromptDelivery(
-                promptPlan,
-                freshLaunch.prompt,
-                freshLaunch.promptDelivery
-              ),
-              launchPty: Promise.resolve(remotePtyId),
-              beforePaste
-            }
-          )
-        }
+        const deliveryTabId =
+          created.disposition !== undefined && createdTerminal.tabId
+            ? toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(createdTerminal.tabId))
+            : tabId
+        startupDeliveryTabId = deliveryTabId
+        void deliverCreatedWebRuntimeAgentSessionPrompt(
+          { outcome: { status: 'created' }, hostTabId: createdTerminal.tabId },
+          {
+            agent: launchAgentToSend,
+            rendererTabId: deliveryTabId,
+            startupDelivery: { worktreeId, launchToken: launchTokenToSend },
+            ...hostedAgentPromptDelivery(
+              promptPlan,
+              freshLaunch.prompt,
+              freshLaunch.promptDelivery
+            ),
+            launchPty: Promise.resolve(remotePtyId),
+            beforePaste: () =>
+              !destroyed &&
+              connected &&
+              lifecycleEpoch === connectLifecycleEpoch &&
+              handle === createdTerminal.handle
+          }
+        )
       }
       return {
         ...terminalLaunchFacts(createdTerminal),

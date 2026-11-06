@@ -119,6 +119,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     startup?.freshAgentLaunch && launchAgent
       ? launchAgentInWebHostTab({
           ...startup.freshAgentLaunch,
+          submitFollowup: true,
           agent: launchAgent,
           environmentId: runtimeEnvironmentId,
           worktreeId,

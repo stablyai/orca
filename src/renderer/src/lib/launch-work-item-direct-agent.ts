@@ -1,3 +1,4 @@
+import { createBrowserUuid } from './browser-uuid'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/worktree-startup-payload'
 import { toast } from 'sonner'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -106,6 +107,7 @@ export function buildDirectWorkItemStartupOpts(
   startup?: {
     command: string
     freshAgentLaunch?: FreshWorkspaceAgentLaunch
+    launchToken?: string
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
@@ -125,7 +127,9 @@ export function buildDirectWorkItemStartupOpts(
   return {
     startup: {
       command: plan.launchCommand,
-      ...(freshAgentLaunch ? { freshAgentLaunch } : {}),
+      ...(freshAgentLaunch
+        ? { freshAgentLaunch, launchToken: (plan.launchToken ??= createBrowserUuid()) }
+        : {}),
       ...(plan.env ? { env: plan.env } : {}),
       launchConfig: plan.launchConfig,
       ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),

@@ -1,4 +1,4 @@
-import { prepareOpenCodeModelStartupInputs } from '../../../opencode/opencode-model-startup-plan'
+import { prepareWorktreeModelStartupInputs } from './runtime-worktree-model-startup'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
@@ -118,7 +118,7 @@ export async function buildWorktreeStartupForDraft(
         }
       : {})
   })
-  const prepared = await prepareOpenCodeModelStartupInputs({
+  const prepared = await prepareWorktreeModelStartupInputs({
     inputs: resolvedInputs,
     cwd: repo.path,
     isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
@@ -201,7 +201,7 @@ export async function buildWorktreeStartupForAgent(
     sessionOptions:
       environment.sessionOptions ?? environment.toSessionOptions(environment.launchPreferences)
   })
-  const prepared = await prepareOpenCodeModelStartupInputs({
+  const prepared = await prepareWorktreeModelStartupInputs({
     inputs: resolvedInputs,
     cwd: repo.path,
     isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)

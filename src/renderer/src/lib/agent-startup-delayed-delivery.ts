@@ -1,6 +1,16 @@
+import {
+  deliverLaunchPromptToAgentTab,
+  notifyAgentLaunchPromptNotSent
+} from './agent-launch-prompt-delivery'
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  getAgentStartupTabPtyId,
+  worktreeStillOwnsStartupTab,
+  getPendingStartupLaunchToken,
+  hasRegisteredStartupLaunch
+} from './agent-startup-tab-binding'
+export { resolveAgentStartupTabId, getAgentStartupTabPtyId } from './agent-startup-tab-binding'
 import {
   agentStartupDeliveryKey as deliveryKey,
   clearConsumedAgentStartupDeliveriesForTests,
@@ -9,7 +19,11 @@ import {
   releaseAgentStartupDeliveryConsumed
 } from './agent-startup-delivery-guards'
 
-type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
+type DeliveryIdentity = {
+  worktreeId: string
+  tabId: string
+  launchToken: string
+}
 
 type PendingAgentStartupDelivery = {
   worktreeId: string
@@ -19,71 +33,25 @@ type PendingAgentStartupDelivery = {
   deliver: (tabId: string, ptyId: string, startup: AgentStartupPlan) => Promise<void>
 }
 
-const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
+type PromptBinding = { ptyId?: string; beforePaste?: () => boolean }
+type PendingHostedPrompt = DeliveryIdentity & {
+  prompt: Omit<
+    Parameters<typeof deliverLaunchPromptToAgentTab>[0],
+    'tabId' | 'launchPty' | 'beforePaste' | 'claimFirstWrite'
+  >
+  binding: PromptBinding
+  attemptedBinding?: PromptBinding
+  running?: Promise<boolean>
+  tabObserved?: boolean
+  failureNotified?: boolean
+}
+
+const pendingAgentStartupDeliveries = new Map<
+  string,
+  PendingAgentStartupDelivery | PendingHostedPrompt
+>()
 const staleStartupRecheckTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
 let unsubscribePendingAgentStartupDeliveries: (() => void) | null = null
-
-export function resolveAgentStartupTabId(
-  state: AppStoreSnapshot,
-  worktreeId: string,
-  primaryTabId: string | null | undefined
-): string | null {
-  // Prefer the caller’s exact startup tab; focus can change during creation.
-  return (
-    primaryTabId ??
-    state.activeTabIdByWorktree[worktreeId] ??
-    state.tabsByWorktree[worktreeId]?.[0]?.id ??
-    null
-  )
-}
-
-export function getAgentStartupTabPtyId(
-  state: AppStoreSnapshot,
-  tabId: string,
-  launchToken: string
-): string | null {
-  const livePtyIds = new Set(state.ptyIdsByTabId[tabId] ?? [])
-  if (livePtyIds.size === 0) {
-    return null
-  }
-  for (const [paneKey, entry] of Object.entries(state.agentLaunchConfigByPaneKey ?? {})) {
-    const identity = entry.identity
-    if (identity.tabId !== tabId || identity.launchToken !== launchToken) {
-      continue
-    }
-    const leafId = identity.leafId ?? parsePaneKey(paneKey)?.leafId
-    if (!leafId) {
-      continue
-    }
-    const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
-    if (ptyId && livePtyIds.has(ptyId)) {
-      return ptyId
-    }
-  }
-  return null
-}
-
-function worktreeStillOwnsStartupTab(
-  state: AppStoreSnapshot,
-  worktreeId: string,
-  tabId: string
-): boolean {
-  return (state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
-}
-
-function getPendingStartupLaunchToken(state: AppStoreSnapshot, tabId: string): string | undefined {
-  return state.pendingStartupByTabId?.[tabId]?.launchToken
-}
-
-function hasRegisteredStartupLaunch(
-  state: AppStoreSnapshot,
-  tabId: string,
-  launchToken: string
-): boolean {
-  return Object.values(state.agentLaunchConfigByPaneKey ?? {}).some(
-    (entry) => entry.identity.tabId === tabId && entry.identity.launchToken === launchToken
-  )
-}
 
 function ensurePendingAgentStartupSubscription(): void {
   if (unsubscribePendingAgentStartupDeliveries) {
@@ -135,6 +103,98 @@ export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDe
   flushPendingAgentStartupDeliveries()
 }
 
+/** Readiness retains ownership; only the first actual PTY write consumes this launch. */
+export function deliverPendingAgentStartupPrompt(
+  args: DeliveryIdentity & { prompt: PendingHostedPrompt['prompt']; binding: PromptBinding }
+): Promise<boolean> {
+  const key = deliveryKey(args)
+  if (isAgentStartupDeliveryConsumed(key)) {
+    return Promise.resolve(false)
+  }
+  const pending = pendingAgentStartupDeliveries.get(key)
+  const delivery: PendingHostedPrompt = pending && 'prompt' in pending ? pending : args
+  delivery.binding = args.binding
+  delivery.tabObserved ||= worktreeStillOwnsStartupTab(
+    useAppStore.getState(),
+    delivery.worktreeId,
+    delivery.tabId
+  )
+  pendingAgentStartupDeliveries.set(key, delivery)
+  ensurePendingAgentStartupSubscription()
+  return attemptPendingHostedPrompt(delivery)
+}
+
+/** Rebind the same unattempted launch after reconnect or pane replacement. */
+export function rebindPendingAgentStartupPrompt(args: DeliveryIdentity & PromptBinding): void {
+  const delivery = pendingAgentStartupDeliveries.get(deliveryKey(args))
+  if (!delivery || !('prompt' in delivery) || isAgentStartupDeliveryConsumed(deliveryKey(args))) {
+    return
+  }
+  if (delivery.running && delivery.binding.ptyId === args.ptyId) {
+    delivery.binding.beforePaste = args.beforePaste
+    return
+  }
+  delivery.binding = { ptyId: args.ptyId, beforePaste: args.beforePaste }
+  void attemptPendingHostedPrompt(delivery)
+}
+
+function attemptPendingHostedPrompt(delivery: PendingHostedPrompt): Promise<boolean> {
+  if (delivery.running) {
+    return delivery.running
+  }
+  const binding = delivery.binding
+  if (delivery.attemptedBinding === binding) {
+    return Promise.resolve(false)
+  }
+  delivery.attemptedBinding = binding
+  const key = deliveryKey(delivery)
+  delivery.running = deliverLaunchPromptToAgentTab({
+    ...delivery.prompt,
+    tabId: delivery.tabId,
+    beforePaste: () =>
+      pendingAgentStartupDeliveries.get(key) === delivery &&
+      delivery.binding === binding &&
+      binding.beforePaste?.() !== false,
+    ...(binding.ptyId ? { launchPty: Promise.resolve(binding.ptyId) } : {}),
+    claimFirstWrite: () => {
+      if (!beginAgentStartupDeliveryAttempt(delivery)) {
+        return false
+      }
+      pendingAgentStartupDeliveries.set(key, delivery)
+      return true
+    }
+  })
+    .catch(() => false)
+    .then((delivered) => {
+      if (pendingAgentStartupDeliveries.get(key) !== delivery) {
+        return false
+      }
+      if (delivered) {
+        pendingAgentStartupDeliveries.delete(key)
+      } else {
+        // A failed/unknown write stays consumed; retained text may only be resumed if no write was attempted.
+        pendingAgentStartupDeliveries.set(key, delivery)
+        if (!delivery.failureNotified) {
+          delivery.failureNotified = true
+          notifyAgentLaunchPromptNotSent(delivery.prompt.agent)
+        }
+      }
+      return delivered
+    })
+    .finally(() => {
+      delivery.running = undefined
+      if (
+        pendingAgentStartupDeliveries.get(key) === delivery &&
+        !isAgentStartupDeliveryConsumed(key) &&
+        delivery.binding !== binding
+      ) {
+        void attemptPendingHostedPrompt(delivery)
+      }
+      stopPendingAgentStartupSubscriptionIfIdle()
+    })
+  return delivery.running
+}
+
 export function resetAgentStartupDelayedDeliveryForTests(): void {
   pendingAgentStartupDeliveries.clear()
   clearConsumedAgentStartupDeliveriesForTests()
@@ -174,7 +234,14 @@ function flushPendingAgentStartupDeliveries(): void {
   for (const [key, delivery] of pendingAgentStartupDeliveries) {
     const { tabId, launchToken } = delivery
     if (!worktreeStillOwnsStartupTab(state, delivery.worktreeId, tabId)) {
+      if ('prompt' in delivery && !delivery.tabObserved) {
+        continue
+      }
       pendingAgentStartupDeliveries.delete(key)
+      continue
+    }
+    if ('prompt' in delivery) {
+      delivery.tabObserved = true
       continue
     }
     const queuedLaunchToken = getPendingStartupLaunchToken(state, tabId)
@@ -216,6 +283,10 @@ function scheduleStaleStartupRecheck(key: string): void {
         return
       }
       const state = useAppStore.getState()
+      if ('prompt' in delivery) {
+        flushPendingAgentStartupDeliveries()
+        return
+      }
       const queuedLaunchToken = getPendingStartupLaunchToken(state, delivery.tabId)
       if (
         queuedLaunchToken === undefined &&

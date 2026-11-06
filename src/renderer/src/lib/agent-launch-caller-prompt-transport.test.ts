@@ -121,7 +121,7 @@ const TRANSPORT_TABLE: readonly {
     mode: 'stdin-after-start',
     promptDelivery: 'auto-submit',
     transport: 'paste',
-    submits: true
+    submits: false
   },
   {
     agent: 'amp',
