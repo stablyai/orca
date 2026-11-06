@@ -3,6 +3,11 @@ import { withDeviceSighting, type DeviceSightingFraming } from './device-sightin
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
+import {
+  isExchangeSignIn,
+  planTicketExchange,
+  promoteExchangedTicket
+} from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
 import { DeviceRegistryStore } from './device-registry-store'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
@@ -201,7 +206,34 @@ export class DeviceRegistry extends DeviceRegistryStore {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    return findTokenDevice(this.devices, token, this.seenDeviceIds)
+    const device = findTokenDevice(this.devices, token, this.seenDeviceIds)
+    return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
+  }
+
+  /** Durable before the reply, so a client that stores the replacement can always sign in with it. */
+  exchangePairingTicket(deviceId: string, presentedToken: string, exchangeToken: string): void {
+    this.adoptExternalEdits()
+    const next = planTicketExchange(this.devices, deviceId, presentedToken, exchangeToken)
+    this.devices = this.save(next, { durable: true })
+  }
+
+  /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
+  private retirePairingToken(device: DeviceEntry & { exchangeToken: string }): DeviceEntry {
+    const promoted = promoteExchangedTicket(device)
+    try {
+      this.devices = this.save(
+        this.devices.map((d) => (d === device ? promoted : d)),
+        { durable: true }
+      )
+      return this.getDevice(device.deviceId) ?? promoted
+    } catch (error) {
+      console.error('[runtime] Failed to retire an exchanged pairing token:', error)
+      return {
+        ...device,
+        token: device.exchangeToken,
+        callerFingerprint: promoted.callerFingerprint
+      }
+    }
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
