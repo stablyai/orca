@@ -153,6 +153,7 @@ ${joinBlocks([
   ),
   `  if [[ -n "\${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
+    [[ ! -r "$HISTFILE" ]] || builtin fc -RI "$HISTFILE"
   fi`,
   lineInitRegistration
 ])}
