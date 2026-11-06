@@ -1016,7 +1016,9 @@
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
-      "sameAsChoice": "Same as {{agent}} · {{choice}}"
+      "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
+      "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1126,7 +1128,7 @@
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
         "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
         "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
-        "zipformerStreamingEn": "English only. Lightweight 20M-param model, good balance of speed and size.",
+        "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
         "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
         "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
@@ -2538,6 +2540,7 @@
         "cb55b0390f": "Manage",
         "4f9313984d": "Reviewers",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Could not load this item. Refresh to try again.",
         "be3d291837": "Files",
         "c996e2962c": "Conversation",
         "b3c156dd51": "Refresh",
@@ -4504,7 +4507,8 @@
             "chatUnavailableAfterSelection": "Couldn't start a {{value0}} chat.",
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
-            "agentsLoading": "Loading agents"
+            "agentsLoading": "Loading agents",
+            "chatNotOnWindows": "No chat on Windows yet"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -6428,7 +6432,6 @@
           "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Save local setup",
           "3933401d28": "Configure",
           "31b8b01a45": "Settings",
           "4a98f907ae": "Retry",
@@ -6443,7 +6446,15 @@
           "5bfd5c8779": "Dismiss setup scripts",
           "detectedFromSource": "Detected from <source>{{source}}</source>",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
-          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees."
+          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.",
+          "reviewSetupScript": "Review setup script"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Review setup script",
+          "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
+          "setupScript": "Setup script",
+          "archiveScript": "Archive script",
+          "save": "Save local setup"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -13397,6 +13408,7 @@
           "needsOrcaTitle": "Needs Orca {{value0}} or later",
           "needsOrcaBody": "You have Orca {{value0}}.",
           "back": "Plugins",
+          "backToPlugin": "Back",
           "info": "Info",
           "version": "Version",
           "latest": "Latest",
@@ -13505,6 +13517,20 @@
           "update": "Update",
           "review": "Review",
           "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
+        },
+        "PluginAuthor": {
+          "publisher": "Publisher",
+          "catalogByline": "Listed as {{publisher}} by {{catalog}}",
+          "publisherByline": "Publisher: {{publisher}}",
+          "declaredByline": "Declared publisher: {{publisher}}",
+          "catalogClaim": "Publisher listed by {{catalog}}. Authorship is not verified.",
+          "unnamedCatalogClaim": "Publisher listed by the catalog. Authorship is not verified.",
+          "gitClaim": "Publisher derived by Orca from the repository URL. Authorship is not verified.",
+          "unknownClaim": "Publisher source is unknown. Authorship is not verified.",
+          "manifestClaim": "Publisher declared by the plugin. Authorship is not verified.",
+          "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
+          "shownPluginCount_other": "{{count}} matching plugins shown, including this one",
+          "samePublisher": "More listed as {{value0}}"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13691,7 +13717,8 @@
           "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
           "manyDescription": "They won’t update until you review them.",
           "review": "Review",
-          "dismiss": "Dismiss"
+          "dismiss": "Dismiss",
+          "movedInstalled": "It stays off until you review it."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",
@@ -18041,6 +18068,8 @@
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
+          "fullOutputUnavailable": "Couldn't load the full output.",
+          "retryFullOutput": "Retry",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
@@ -19360,6 +19389,9 @@
           "conflict": "Not used: {{value0}}, installed first, replaces it",
           "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
           "switch": "Use {{value0}} instead of Orca’s {{value1}}"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -19583,6 +19615,18 @@
         "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
         "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
+      },
+      "agyInstall": {
+        "open": "Install",
+        "title": "Install Antigravity",
+        "description": "Press Enter in the terminal to run the official installer. Closing this terminal stops any command still running.",
+        "target": "Install location: {{location}}",
+        "thisDevice": "This device",
+        "wslLocation": "WSL {{distro}}",
+        "terminal": "Antigravity installer",
+        "detected": "Antigravity is detected on PATH. Close the terminal when the installer has finished.",
+        "close": "Close terminal",
+        "recheck": "Re-check agents"
       },
       "agentSurface": {
         "chat": {
@@ -19900,6 +19944,9 @@
       },
       "composer": {
         "send": "Send",
+        "planMode": "Plan",
+        "moreControls": "More chat controls",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
         "previewQueue": "Queue",
         "previewSteer": "Steer",
@@ -20693,7 +20740,8 @@
         "hidden": "Orca won't show opened pull requests anymore",
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
-      }
+      },
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
     },
     "tab": {
       "bar": {
@@ -22255,6 +22303,18 @@
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
       "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
+      "authMethod": "Sign in with",
+      "personal": "Google account",
+      "enterprise": "Gemini Enterprise",
+      "gcpProject": "Google Cloud project",
+      "gcpLocation": "Google Cloud location",
+      "projectPlaceholder": "my-project-id",
+      "locationPlaceholder": "us-central1",
+      "signInAgainWith": "Sign in again to use {{method}}.",
+      "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
+      "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
+      "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
+      "signInWith": "Signs in with {{method}} on {{host}}.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet"
     },
@@ -22375,6 +22435,9 @@
     "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
   },
   "worktree": {
+    "setupTrust": {
+      "createdBranchSkipped": "Setup didn't run: this branch's orca.yaml setup commands differ from the ones you approved."
+    },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
       "review": "Delete with nested worktrees…",

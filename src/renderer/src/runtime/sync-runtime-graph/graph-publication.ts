@@ -3,7 +3,7 @@ import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/termina
 import {
   collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherPaneIdsByPtyId
-} from '@/components/terminal-pane/terminal-parked-watcher-registry'
+} from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type {

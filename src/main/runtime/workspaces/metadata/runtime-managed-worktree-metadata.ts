@@ -72,7 +72,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (!target) {
     throw new Error('selector_ambiguous')
   }
-  if (lineage?.parentWorktree) {
+  if (lineage?.parentWorktree && !folderParent) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
   }
@@ -126,13 +126,13 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     }
   } else if (folderParent) {
     const { folderWorkspaceId } = await args.ports.resolveFolderParent(folderParent)
-    if (!worktree.instanceId || !args.store.setWorkspaceParent) {
+    if (!worktree.instanceId || !args.store.setFolderParentLineage) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_MISSING',
         'Worktree instance identity or lineage storage was unavailable.'
       )
     }
-    const recorded = args.store.setWorkspaceParent(target, {
+    const recorded = args.store.setFolderParentLineage(target, {
       childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
       childInstanceId: worktree.instanceId,
       parentWorkspaceKey: folderWorkspaceKey(folderWorkspaceId),
@@ -163,7 +163,6 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'Worktree lineage storage was unavailable.'
       )
     }
-    const createdAt = Date.now()
     const recorded = args.store.setWorktreeLineage(target, {
       worktreeId: worktree.id,
       worktreeInstanceId: worktree.instanceId,
@@ -171,7 +170,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       parentWorktreeInstanceId: parent.instanceId,
       origin: 'manual',
       capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt
+      createdAt: Date.now()
     })
     if (!recorded) {
       throw new RuntimeLineageError(
@@ -179,15 +178,6 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'A same-id workspace on another host owns this lineage.'
       )
     }
-    args.store.setWorkspaceLineage?.({
-      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-      childInstanceId: worktree.instanceId,
-      parentWorkspaceKey: worktreeWorkspaceKey(parent.id),
-      parentInstanceId: parent.instanceId,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt
-    })
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   // Recheck removal: an earlier resolution snapshot may still contain this workspace (#22712).

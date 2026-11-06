@@ -108,15 +108,16 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   }
 
   const dropDraft = (draftAgent: TuiAgent): void => {
-    const dropped = draft !== ''
+    const droppedText = draft
     draft = ''
     phase = 'closed'
-    if (dropped && !session.disposed) {
+    if (droppedText !== '' && !session.disposed) {
       createPasteReadinessTimeoutNotice({
         worktreeId: session.deps.worktreeId,
         tabId: session.deps.tabId,
         agent: draftAgent,
-        submitted: false
+        submitted: false,
+        droppedText
       }).onTimeout()
     }
   }

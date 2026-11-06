@@ -47,6 +47,9 @@ export type {
 
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
+/** The created worktree's shared setup commands, when they differ from what the client approved. */
+export type SetupTrustMismatch = { contentHash: string; scriptContent: string }
+
 export type WorktreeCreateTimingPhase = {
   phase: string
   startedAtMs: number
@@ -106,6 +109,8 @@ export type CreateWorktreeArgs = {
   /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence. */
   branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new'
   setupDecision?: SetupDecision
+  /** SHA-256 of the setup trust content the user approved; hosts run shared setup only if the created worktree's matches. Older clients omit it. */
+  approvedSetupHash?: string
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean
   sparseCheckout?: CreateSparseCheckoutRequest
@@ -191,6 +196,8 @@ export type CreateWorktreeResult = {
     terminalHandle?: string
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
+  /** Setup and default-tab commands were skipped because the created branch's differ from the approved ones. */
+  setupTrustMismatch?: SetupTrustMismatch
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent

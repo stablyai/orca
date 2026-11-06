@@ -1,4 +1,4 @@
-import { prepareWorktreeCreationHooks } from '@/lib/workspace/creation/worktree-creation-hook-preparation'
+import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
 import {
   activateAndRevealWorktree,
@@ -91,7 +91,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
-          setupOnly: preparedRequest.setupOnly,
+          ...setupCreateArgs(preparedRequest),
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
           executionHostId: creationHostId,

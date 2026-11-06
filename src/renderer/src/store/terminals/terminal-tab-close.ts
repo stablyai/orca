@@ -6,7 +6,7 @@ import {
   pushRecentlyClosedTabKind
 } from '../slices/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
-import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import {
   buildTerminalTabRetirementPlan,
   removeSleepingAgentSessionsForTab

@@ -79,7 +79,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
       'src/renderer/src/components/terminal-pane/terminal-freeze-breadcrumbs.ts',
-      'src/renderer/src/components/terminal-pane/terminal-render-desync-trigger.ts',
+      'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',

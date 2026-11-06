@@ -3,6 +3,7 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { toWorkspaceLineageRow } from '../../../../../../shared/worktree/worktree-lineage-workspace-row'
 
 /** Older hosts report only the worktree lineage; the workspace record is its projection. */
 export function projectWorktreeLineageToWorkspaceLineage(
@@ -16,21 +17,7 @@ export function projectWorktreeLineageToWorkspaceLineage(
     delete next[childWorkspaceKey]
     return next
   }
-  next[childWorkspaceKey] = {
-    childWorkspaceKey,
-    childInstanceId: lineage.worktreeInstanceId,
-    parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
-    parentInstanceId: lineage.parentWorktreeInstanceId,
-    origin: lineage.origin,
-    capture: lineage.capture,
-    ...(lineage.taskId ? { taskId: lineage.taskId } : {}),
-    ...(lineage.orchestrationRunId ? { orchestrationRunId: lineage.orchestrationRunId } : {}),
-    ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
-    ...(lineage.createdByTerminalHandle
-      ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
-      : {}),
-    createdAt: lineage.createdAt
-  }
+  next[childWorkspaceKey] = toWorkspaceLineageRow({ ...lineage, worktreeId })
   return next
 }
 

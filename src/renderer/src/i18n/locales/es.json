@@ -409,7 +409,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} siguen como chats, como lo configuraste.",
       "defaultSurfaceSetAllChat": "Poner todos en Chat",
       "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
-      "sameAsChoice": "Igual que {{agent}} · {{choice}}"
+      "sameAsChoice": "Igual que {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat aún no está disponible en Windows, así que {{value0}} se abre en una terminal en este host. Los chats en un host macOS o Linux siguen funcionando."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "enlace simbólico",
@@ -505,7 +506,7 @@
         "parakeetV2": "Solo inglés. Más rápido que v3 con una precisión similar. Puntuación y mayúsculas y minúsculas.",
         "zipformerBilingual": "Chino + inglés con alternancia de idiomas. Streaming en tiempo real de baja latencia.",
         "paraformerBilingual": "Chino (mandarín + dialectos) + inglés. Buen rendimiento con acentos y variantes regionales del chino.",
-        "zipformerStreamingEn": "Solo inglés. Modelo ligero de 20 millones de parámetros, con buen equilibrio entre velocidad y tamaño.",
+        "zipformerStreamingEnRetired": "Ya no se ofrece: omite el comienzo de las frases. Elimínalo para liberar espacio.",
         "zipformerStreamingZh": "Solo chino. Modelo ultraligero de 14 millones de parámetros, ideal para dispositivos con pocos recursos.",
         "zipformerStreamingKo": "Solo coreano. Streaming en tiempo real de baja latencia.",
         "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
@@ -1889,6 +1890,7 @@
         "cb55b0390f": "Gestionar",
         "4f9313984d": "Revisores",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "No se pudo cargar este elemento. Actualiza para volver a intentarlo.",
         "be3d291837": "Archivos",
         "c996e2962c": "Conversación",
         "b3c156dd51": "Actualizar",
@@ -3801,7 +3803,8 @@
             "cliTag": "(CLI)",
             "agentsLoading": "Cargando agentes",
             "terminalListNeedsServerUpdate": "Actualiza Orca en este servidor para ver los agentes de terminal",
-            "terminalListFailed": "No se pudieron listar los agentes de terminal de este espacio de trabajo"
+            "terminalListFailed": "No se pudieron listar los agentes de terminal de este espacio de trabajo",
+            "chatNotOnWindows": "Chat aún no disponible en Windows"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -5762,7 +5765,6 @@
           "savedInProjectSettings": "Guardado en los <settings>ajustes de este proyecto</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Guardar configuración local",
           "3933401d28": "Configurar",
           "31b8b01a45": "Ajustes",
           "4a98f907ae": "Reintentar",
@@ -5777,7 +5779,15 @@
           "5bfd5c8779": "Descartar scripts de configuración",
           "detectedFromSource": "Detectado en <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositorio ignora los scripts de configuración compartidos de <yaml>orca.yaml</yaml>. Añade un comando local o cambia la fuente en Ajustes.",
-          "foundSetupCommandIn": "Se encontró un comando de configuración en <source>{{source}}</source>. Guárdalo para ejecutarlo en los nuevos worktrees."
+          "foundSetupCommandIn": "Se encontró un comando de configuración en <source>{{source}}</source>. Guárdalo para ejecutarlo en los nuevos worktrees.",
+          "reviewSetupScript": "Revisar script de configuración"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Revisar script de configuración",
+          "description": "Al guardarlo, se ejecutará cada vez que Orca cree un worktree para {{repo}}.",
+          "setupScript": "Script de configuración",
+          "archiveScript": "Script de archivado",
+          "save": "Guardar configuración local"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancelar",
@@ -13009,7 +13019,8 @@
           "oneDescription": "Publicado por {{value0}}. No se actualizará hasta que lo revises.",
           "manyDescription": "No se actualizarán hasta que las revises.",
           "review": "Revisar",
-          "dismiss": "Descartar"
+          "dismiss": "Descartar",
+          "movedInstalled": "Seguirá desactivado hasta que lo revises."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Asegúrate de que confías en esta carpeta",
@@ -17390,6 +17401,8 @@
           "noRunUsageYet": "Aún no hay uso de ejecución",
           "noWorkspace": "Sin espacio de trabajo",
           "latestSavedOutput": "Última salida guardada",
+          "fullOutputUnavailable": "No se pudo cargar la salida completa.",
+          "retryFullOutput": "Reintentar",
           "backToList": "Todas las automatizaciones",
           "tableName": "Nombre",
           "tableProject": "Proyecto",
@@ -18727,6 +18740,9 @@
           "cancel": "Cancelar",
           "add": "Añadir catálogo",
           "body": "Un enlace pidió mostrar {{value0}} de este catálogo. Añade catálogos solo de personas en las que confíes."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -19060,6 +19076,7 @@
         "notDoneGoalChangeIncomplete": "No se pudo terminar de cambiar el objetivo. Revisa el chat."
       },
       "composer": {
+        "planMode": "Planificar",
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",
@@ -19896,7 +19913,8 @@
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "El chat de este agente aún no está disponible en Windows. Ábralo en una terminal."
     },
     "tab": {
       "bar": {

@@ -6,7 +6,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import {
   applyDesktopFitFallbackAfterReplay,
   fitAndRefreshDesktopPane
-} from './desktop-fit-fallback'
+} from './viewport/desktop-fit-fallback'
 import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
 import type { PtyTransport } from './pty-transport/pty-transport-types'
 

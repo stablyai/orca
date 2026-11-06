@@ -58,47 +58,44 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
-  it('moves a worktree under a folder parent and avoids blaming the child for missing parents', async () => {
+  it('sends folder parents only to hosts that accept them and avoids blaming the child for missing parents', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
     const child = 'id:repo::/tmp/repo/child'
     try {
-      const answer = (capabilities: string[]) => (method: string) =>
-        Promise.resolve({
-          id: 'req',
-          ok: true,
-          result:
-            method === 'status.get'
-              ? { capabilities }
-              : { worktree: { id: 'repo::/tmp/repo/child' } },
-          _meta: { runtimeId: 'runtime_1' }
-        })
       for (const parent of ['folder:folder-1', 'id:folder:folder-1']) {
-        callMock.mockReset()
-        callMock.mockImplementation(answer(['worktree.lineage.folderParent']))
-        await main(
-          ['worktree', 'set', '--worktree', child, '--parent-worktree', parent, '--json'],
-          '/tmp/repo'
-        )
-        expect(callMock).toHaveBeenCalledWith(
-          'worktree.set',
-          expect.objectContaining({ worktree: child, parentWorktree: 'id:folder:folder-1' })
-        )
+        for (const capabilities of [[], ['worktree.set.folder-parent.v1']]) {
+          callMock.mockReset()
+          logSpy.mockClear()
+          process.exitCode = priorExitCode
+          callMock.mockImplementation(async (method: string) =>
+            method === 'status.get'
+              ? { id: 'req_status', ok: true, result: { capabilities } }
+              : { id: 'req_set', ok: true, result: { worktree: { id: 'repo::/tmp/repo/child' } } }
+          )
+          await main(
+            ['worktree', 'set', '--worktree', child, '--parent-worktree', parent, '--json'],
+            '/tmp/repo'
+          )
+          if (capabilities.length === 0) {
+            expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+            const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
+            expect(output.message).toContain(
+              'to attach a worktree to a folder workspace. Nothing was changed.'
+            )
+            expect(process.exitCode).toBe(1)
+          } else {
+            expect(callMock).toHaveBeenCalledWith(
+              'worktree.set',
+              expect.objectContaining({ parentWorktree: 'folder:folder-1' })
+            )
+          }
+        }
       }
-      // An older host would read the folder as an unknown worktree: refuse before writing.
       callMock.mockReset()
-      callMock.mockImplementation(answer([]))
-      logSpy.mockClear()
-      await main(
-        ['worktree', 'set', '--worktree', child, '--parent-worktree', 'folder:folder-1', '--json'],
-        '/tmp/repo'
-      )
-      expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
-      expect(JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error.code).toBe('invalid_argument')
       process.exitCode = priorExitCode
 
-      callMock.mockReset()
       callMock.mockRejectedValueOnce(
         new RuntimeRpcFailureError({
           id: 'req_missing_parent',
@@ -159,7 +156,12 @@ describe('orca cli worktree awareness', () => {
           if (stage === 'preflight') {
             callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(rpc))
           } else {
-            queueFixtures(callMock, worktreeListFixture([]))
+            queueFixtures(
+              callMock,
+              worktreeListFixture([]),
+              // A parent's current directory may be a native folder, which isn't a catalog row.
+              ...(stage === 'parent' ? [okFixture('req_folders', { folderWorkspaces: [] })] : [])
+            )
           }
           const args = ['worktree', 'set', '--worktree', worktree, '--parent-worktree', parent]
           if (stage === 'preflight') {
@@ -168,9 +170,13 @@ describe('orca cli worktree awareness', () => {
           await main([...args, ...(json ? ['--json'] : [])], cwd)
           const text = String((json ? log : err).mock.calls.at(-1)?.[0])
           const response = json ? JSON.parse(text) : undefined
-          expect(callMock.mock.calls.map(([method]) => method)).toEqual([
-            stage === 'preflight' ? 'worktree.show' : 'worktree.list'
-          ])
+          expect(callMock.mock.calls.map(([method]) => method)).toEqual(
+            stage === 'preflight'
+              ? ['worktree.show']
+              : stage === 'parent'
+                ? ['worktree.list', 'folderWorkspace.list']
+                : ['worktree.list']
+          )
           expect(text).toContain(
             stage === 'preflight' ? 'Inspect original request.' : `current directory: ${cwd}`
           )

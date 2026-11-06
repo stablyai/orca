@@ -176,6 +176,11 @@ export function isTabClosedTransportError(message: string): boolean {
   )
 }
 
+/** agent-browser's handshake error when Orca's CDP proxy refuses its endpoint (wrong or missing token). */
+export function isCdpProxyRejectedError(message: string): boolean {
+  return /websocket connect failed\b.*\b40[34]\b/i.test(message)
+}
+
 export function pageUnavailableMessageForSession(sessionName: string): string {
   const prefix = ORCA_TAB_SESSION_PREFIX
   const browserPageId = sessionName.startsWith(prefix) ? sessionName.slice(prefix.length) : null

@@ -116,10 +116,9 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
 
   async showManagedWorktree(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector, { requiredHostId })
-    const crossStoreLineage = this.store?.getCrossStoreWorkspaceLineage?.(
-      worktreeWorkspaceKey(worktree.id)
-    )
-    const workspaceLineage = this.store?.getWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
+    const childKey = worktreeWorkspaceKey(worktree.id)
+    const crossStoreLineage = this.store?.getCrossStoreWorkspaceLineage?.(childKey)
+    const workspaceLineage = this.store?.getWorkspaceLineage?.(childKey)
     return {
       ...worktree,
       linkedItems: getWorkspaceAttachments(worktree),

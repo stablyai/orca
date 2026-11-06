@@ -2,6 +2,7 @@ import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-atta
 import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import { toWorkspaceLineageRow } from '../../../shared/worktree/worktree-lineage-workspace-row'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -242,7 +243,9 @@ export class MetadataLineageOperations {
       return undefined
     }
     state.worktreeLineageById[target.id] = lineage
-    // A child has at most one parent record.
+    // A child has at most one parent record; the workspace row mirrors this link.
+    state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)] =
+      toWorkspaceLineageRow(lineage)
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
     return lineage
@@ -289,15 +292,8 @@ export class MetadataLineageOperations {
     return this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey
   }
 
-  /** A folder workspace parent replaces the child's other records at once; undefined if a twin owns the bucket. */
-  setWorkspaceParent(target: HostWorktreeTarget, lineage: WorkspaceLineage) {
-    if (!ownsRawIdBucket(this[metadataLineageOperationsContext].runtime.state, target)) {
-      return undefined
-    }
-    delete this[metadataLineageOperationsContext].runtime.state.worktreeLineageById[target.id]
-    return this.setWorkspaceLineage(lineage)
-  }
-
+  /** For a worktree parent whose worktree link couldn't be recorded; folder parents use
+   * setFolderParentLineage, which keeps the child to one parent. */
   setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
     const state = this[metadataLineageOperationsContext].runtime.state
     state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage

@@ -1,4 +1,5 @@
 import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
@@ -6,14 +7,14 @@ import type {
 import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage-row-identity'
 import {
   assertCrossStoreLineageSupported,
-  supportsCrossStoreLineage,
-  supportsFolderParent
+  assertFolderParentSetSupported,
+  supportsCrossStoreLineage
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
+import { getOptionalParentSelector } from '../caller-folder-workspace'
 
 const CALLER_PARENT_INFERENCE_BUDGET_MS = 3_000
 
@@ -183,20 +184,9 @@ export async function resolveSetParentFields(
   client: RuntimeClient
 ): Promise<{ crossStoreParent?: CrossStoreParentRef; parentWorktree?: string }> {
   const raw = getOptionalStringFlag(flags, 'parent-worktree')
-  const scope = raw
-    ? parseWorkspaceKey(raw.startsWith('id:') ? raw.slice('id:'.length) : raw)
-    : null
-  if (scope?.type === 'folder') {
-    // A folder workspace on the host itself, as for create; the host resolves it.
-    const status = (await client.call<RuntimeStatus>('status.get')).result
-    // An older host reads a folder parent as an unknown worktree; refuse before the request.
-    if (!supportsFolderParent(status.capabilities)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Update Orca on ${client.isRemote ? serverLabel(client) : 'this computer'} to move a workspace under a folder workspace. Nothing was changed.`
-      )
-    }
-    return { parentWorktree: `id:${folderWorkspaceKey(scope.folderWorkspaceId)}` }
+  const rawKey = raw?.startsWith('id:') ? raw.slice('id:'.length) : raw
+  if (rawKey && parseWorkspaceKey(rawKey)?.type === 'folder') {
+    return { parentWorktree: await assertFolderParentSetSupportedBy(client, rawKey) }
   }
   if (client.isRemote && (raw === 'active' || raw === 'current')) {
     const selector = await getOptionalWorktreeSelector(
@@ -207,11 +197,25 @@ export async function resolveSetParentFields(
     )
     return { crossStoreParent: await resolveCallerCrossStoreParent(client, selector) }
   }
+  const parentWorktree = await withWorktreeSelectorRecovery(
+    getOptionalParentSelector(flags, cwd, client),
+    parentCwdNextSteps(raw),
+    raw
+  )
   return {
-    parentWorktree: await withWorktreeSelectorRecovery(
-      getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-      parentCwdNextSteps(raw),
-      raw
-    )
+    parentWorktree:
+      parentWorktree && parseWorkspaceKey(parentWorktree)?.type === 'folder'
+        ? await assertFolderParentSetSupportedBy(client, parentWorktree)
+        : parentWorktree
   }
+}
+
+/** An older host refuses a folder parent as "not found"; say it needs an update instead. */
+async function assertFolderParentSetSupportedBy(
+  client: RuntimeClient,
+  folderKey: string
+): Promise<string> {
+  const status = (await client.call<RuntimeStatus>('status.get')).result
+  assertFolderParentSetSupported(status.capabilities, client.environmentSelector ?? 'this machine')
+  return folderKey
 }

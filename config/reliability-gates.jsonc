@@ -7440,7 +7440,7 @@
       "invariant": "Reconnect, replay, or lifecycle observations from a viewer that negotiated explicit close intent must never kill a live PTY. A capable reasonless close must keep and republish; a legacy paired viewer must retain current-main behavior because its intentional close and cleanup echo are wire-identical. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Start isolated v25 and v26 daemon generations with one capable-viewer PTY and one legacy-viewer PTY per generation in four target worktrees plus an unaddressed control PTY in a fifth worktree. Route them through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router. First issue sequential reasonless closes from an authenticated capable connection and require refusal, snapshot republish, zero shutdown calls, exact process survival, and post-close I/O. Then issue the byte-identical requests without the negotiated capability and require current-main behavior: two ordered immediate shutdowns, session-killed events, and exact root/descendant death, while capable and control PTYs survive. An observer lists all targets before, between, and after while issuing zero closes. Unit contracts also require in-process reasonless refusal, legacy runtime/mobile compatibility, explicit user closes, encrypted client-auth advertisement, and old-server lifecycle calls never to fall back.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs/session-tabs.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs/session-tabs.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
         "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -7460,7 +7460,7 @@
         "src/renderer/src/web/web-runtime-client.test.ts",
         "src/renderer/src/components/terminal/terminal-tab-actions.test.ts",
         "src/renderer/src/components/terminal/terminal-close-incarnation.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
         "tests/e2e/daemon-generation-reconnect-safety.spec.ts",
         "tests/e2e/daemon-generation-legacy-close-safety.spec.ts"
       ],
@@ -7537,7 +7537,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
           "assertions": [
             "parked lifecycle closes carry the exact exiting PTY and cannot borrow a replacement or sibling incarnation"
           ]
@@ -9479,8 +9479,8 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/query/runtime-terminal-inventory-contracts.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/paired-client-first-terminal-unopened-host-worktree.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat.test.ts src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts tests/e2e/session-tabs-decorative-title-fanout.unit.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx src/renderer/src/components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.react185.test.tsx src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs/session-tabs-inventory-census-race.test.ts src/main/runtime/rpc/methods/session-tabs/session-tabs.test.ts src/main/daemon/terminal-host/testing/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
@@ -9503,8 +9503,8 @@
         "src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts",
         "tests/e2e/session-tabs-decorative-title-fanout.unit.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx",
-        "src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx",
-        "src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.react185.test.tsx",
+        "src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/renderer/src/web/web-preload-api-runtime-environment.test.ts",
         "src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
@@ -9518,15 +9518,15 @@
         "src/main/runtime/rpc/methods/session-tabs/session-tabs.test.ts",
         "src/main/daemon/terminal-host/testing/terminal-host-agent-session.test.ts",
         "tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts",
-        "src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/output-watchers/parked-terminal-byte-watcher.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-worktree-retention.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-reconciliation.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-partial-reconciliation.test.ts",
         "src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts",
         "src/renderer/src/runtime/runtime-client-events.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-activation-inventory-fallback.test.ts",
@@ -9561,7 +9561,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx",
+          "file": "src/renderer/src/components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.react185.test.tsx",
           "assertions": [
             "StrictMode cleanup replay restores watcher ownership",
             "detached split-PTY and layout replacement reconciles",
@@ -9678,7 +9678,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-worktree-retention.test.ts",
           "assertions": [
             "treats a host-backed paired PTY as settled despite activation residue",
             "preserves real startup work and non-paired activation guards",
@@ -9699,7 +9699,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/parking/output-watchers/parked-terminal-byte-watcher.test.ts",
           "assertions": ["consumes host facts without a raw terminal stream for paired PTYs"]
         },
         {
@@ -9714,7 +9714,7 @@
           "assertions": ["restores configured paired scrollback after an ordinary park reveal"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts",
           "assertions": [
             "selects only reachable hosts advertising the paired parking contract",
             "accepts paired ptys only for the exact snapshot-capable owner",
@@ -9728,11 +9728,11 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
           "assertions": ["starts a fact watcher for snapshot-capable paired PTYs"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-partial-reconciliation.test.ts",
           "assertions": [
             "retains a continuing watcher and title while reconciling a reminted split leaf"
           ]
@@ -10447,14 +10447,14 @@
       "invariant": "PTY snapshot capability discovery must never synchronously block renderer JavaScript. Restored daemon capability must be known before workspace readiness enables cold activation; unknown or legacy capability must remain eager. A healthy SSH provider must return definitive false without polling. One unresponsive capability batch must fail open within one second regardless of PTY count, and stale async responses must not update current bindings.",
       "oracle": "During an injected 1.5-second Electron main-thread stall, a renderer-owned 50ms interval must keep a maximum gap below 500ms and each API call must return within 100ms. The production cold-activation journey must still mount at most three of eight daemon tabs after reload, while Docker SSH restoration remains eager.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx",
         "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts",
         "tests/e2e/pty-snapshot-capability-main-stall.spec.ts"
       ],
       "assertionRefs": [
@@ -13848,15 +13848,15 @@
       "invariant": "Ordinary PTY output must never clear the shared WebGL glyph atlas, including synchronized frames, hidden output, renderer-risk glyphs, and alternate-screen entry, redraw, or exit. Affected visible panes still receive pane-local refresh after parsing. Explicit paste, reveal, visibility-resume, system-resume, context-loss, and confirmed-desync recovery remain available and may reset visible renderers.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste recovery. Completed settled tab-reveal repaint is not verified by the remaining unit evidence. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
+        "src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
         "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts"
@@ -13873,11 +13873,11 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts",
           "assertions": ["limits atlas recovery to explicit renderer lifecycle events"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.test.ts",
           "assertions": ["persists and recovers after the same cells stay missing twice"]
         },
         {
@@ -14140,12 +14140,12 @@
       "oracle": "Paint and capture a coherent frame, hide the real terminal tab, build a distinct full-screen frame while DEC 2026 is held, reveal through production, and require zero atlas clears plus pixel-equivalence with the coherent frame. Then release normally and through the one-second watchdog, requiring both compositor frames to match a direct renderer present.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/render-health/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
       ],
@@ -15620,16 +15620,16 @@
       "invariant": "Cold parking or restarting a host renderer/runtime never retires a live PTY's runtime-graph leaf, erases a paired viewer's last verified leaf binding merely because the host temporarily publishes pending-handle, or drops the surviving PTY's history writer. A split request for a cold-parked tab replays against its stable source leaf after exact-tab remount without switching workspaces or focusing the tab. The paired stream, input, resize, pane identity, multi-pane routing, checkpoint, and output log converge to the authoritative ready handle; the binding clears only after positive replacement, mismatch, or two consecutive authoritative absence observations without an intervening ready surface.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Cold-park a host-owned pane while a paired client actively views it, require the host manager to unmount, then type through the client and require the same PTY to receive and echo the token without any disconnected sample. Restart a real pinned-port headless runtime while its daemon PTY survives, observe a pending-handle snapshot, require the viewer binding never to become empty, then require rendered output, focused keyboard input, a post-recovery window resize, the pre-restart checkpoint, and post-restart output-log append to reach the same PTY and process before authoritative close clears the binding. Invoke the real `orca-dev terminal split` against a cold-parked renderer-owned tab, require only that tab to acquire and release the existing background-mount lease, complete before the historical timeout, preserve the active worktree/tab/focus, then reveal two rendered panes and type through each while retaining the stable source leaf and PTY. Deterministically require synchronous stable-leaf replay after lifecycle registration and fail closed for a missing or stale leaf. Separately publish multi-pane parked leaves with exact pane runtime IDs and require per-PTY disposal to remove only the retired leaf.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.test.ts src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts tests/e2e/host-cold-park-remote-subscriber.unit.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.test.ts src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts tests/e2e/host-cold-park-remote-subscriber.unit.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-cold-restore-reanchor.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-protocol-compatibility.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-history-recovery.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/host-parked-pane-remote-viewer.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-parked-cli-split.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.test.ts",
-        "src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts",
         "src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts",
         "src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts",
         "src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts",

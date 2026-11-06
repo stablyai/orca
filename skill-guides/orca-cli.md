@@ -91,6 +91,8 @@ A native folder parent with an explicit Git destination:
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 ```
 
+A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and listed in its Attached worktrees panel. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
+
 Other common commands:
 
 ```text
@@ -112,6 +114,7 @@ ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree folder:<folderId> --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
@@ -306,11 +309,11 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 
 ## Plugins
 
-Make, validate, load and manage Orca plugins with `ORCA plugin ...`. Themes, icons, syntaxes and
-translations load without approval; anything that runs code returns `approval_required` with
-exactly what it would get and an `--approve <fingerprint>` re-run command. Load
-`references/plugins.md` before creating, loading, enabling or publishing a plugin. To design,
-write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
+Make, validate, load, install, update and manage Orca plugins with `ORCA plugin ...`. Themes,
+icons, syntaxes and translations install without approval; anything that runs code returns
+`approval_required` with exactly what it would get and an `--approve <fingerprint>` re-run
+command. Load `references/plugins.md` before creating, loading, installing, enabling or publishing
+a plugin. To design, write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
 
 ## Agent Session Search
 
@@ -348,5 +351,5 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
-| Creating, validating, loading, enabling, approving, or publishing an Orca plugin                                | `references/plugins.md`          |
+| Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |
