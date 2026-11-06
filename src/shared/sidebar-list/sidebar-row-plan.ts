@@ -130,6 +130,14 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     list.push(creation)
     pendingByRepo.set(creation.repoId, list)
   }
+  const nonemptyProjectKeys =
+    inputs.hideEmptyProjects && groupBy === 'repo'
+      ? new Set(
+          [...worktrees.map((worktree) => worktree.repoId), ...pendingByRepo.keys()].map(
+            (repoId) => getProjectGroupingForRepo(repoId, repoMap, projectIndex).key
+          )
+        )
+      : null
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   const occurrencePlan = buildWorktreeOccurrencePlan({
@@ -168,7 +176,10 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               repoOrder,
               projectOrderBy,
               folderWorkspaces: renderableFolderWorkspaces
-            })
+            }).filter(
+              ([key, group]) =>
+                !nonemptyProjectKeys || group.items.length > 0 || nonemptyProjectKeys.has(key)
+            )
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
       }
