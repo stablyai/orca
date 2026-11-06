@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/git/remotes/git-fork-sync'
 import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git/remotes/git-rebase-source'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { translate } from '@/i18n/i18n'
@@ -65,6 +66,20 @@ export async function getRuntimeGitUpstreamStatus(
       ...(pushTarget ? { pushTarget } : {})
     },
     { timeoutMs: 15_000 }
+  )
+}
+
+/** Runs the host's guarded switch, which refuses unsafe switches with a plain reason. */
+export async function checkoutRuntimeGitBranch(
+  target: RuntimeClientTarget,
+  worktreeId: string,
+  branch: string
+): Promise<void> {
+  await callRuntimeRpc(
+    target,
+    'git.checkout',
+    { worktree: toRuntimeWorktreeSelector(worktreeId), branch },
+    { timeoutMs: 30_000 }
   )
 }
 
