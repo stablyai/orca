@@ -47,12 +47,13 @@ describe('resolveAgentSmartKeys', () => {
     ])
   })
 
-  it('declines one Codex approval with n and stops OpenCode with two separate Escapes', () => {
-    const codexNo = resolveAgentSmartKeys('codex', {
+  it('answers a Codex approval with y or n only and stops OpenCode with two separate Escapes', () => {
+    // Codex's "don't ask again" key is `p` or `a` depending on the approval, which the hook doesn't carry.
+    const codexApproval = resolveAgentSmartKeys('codex', {
       state: 'waiting',
       interactivePrompt: approval
-    })?.keys.find((key) => key.name === 'no')
-    expect(codexNo?.writes).toEqual(['n'])
+    })?.keys.map((key) => key.writes)
+    expect(codexApproval).toEqual([['y'], ['n']])
     const openCodeStop = resolveAgentSmartKeys('opencode', { state: 'working' })?.keys.find(
       (key) => key.name === 'stop'
     )

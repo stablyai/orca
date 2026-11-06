@@ -104,8 +104,9 @@ const STATE_KEYS: Record<
       // Pulls the last queued message back into the composer.
       word('edit', '⇧←', [SHIFT_LEFT])
     ],
+    // No Always: it is `p` for a command-prefix rule and `a` otherwise, and the hook doesn't say which.
     // `n` turns down only this request; Esc would also drop every queued approval.
-    permission: [word('yes', 'y', ['y'], true), word('always', 'a', ['a']), word('no', 'n', ['n'])]
+    permission: [word('yes', 'y', ['y'], true), word('no', 'n', ['n'])]
   },
   opencode: {
     // OpenCode asks for a second Esc before it interrupts.
