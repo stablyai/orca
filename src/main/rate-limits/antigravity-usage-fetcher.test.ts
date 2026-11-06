@@ -3,16 +3,30 @@ import {
   fetchAntigravityRateLimits,
   resetAntigravityUsageSupportForTests
 } from './antigravity-usage-fetcher'
+import { ANTIGRAVITY_USAGE_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { hostShellEnvironmentMock } = vi.hoisted(() => ({
-  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
-}))
+const { hostShellEnvironmentMock, runWslProcessMock, wslRunningMock, defaultDistroMock } =
+  vi.hoisted(() => ({
+    hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' })),
+    runWslProcessMock: vi.fn(),
+    wslRunningMock: vi.fn(async () => true),
+    defaultDistroMock: vi.fn(async (): Promise<string | null | symbol> => 'Ubuntu')
+  }))
 
 vi.mock('../runtime/agent-session/environment/structured-agent-shell-environment', () => ({
   hostShellEnvironment: hostShellEnvironmentMock
 }))
-void JSON.stringify({
+vi.mock('../wsl/discovery/wsl-default-distro', () => ({
+  resolveWslDefaultDistro: defaultDistroMock,
+  UNRESOLVED_WSL_DEFAULT: Symbol('unresolved')
+}))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({
+  isWslDistroRunningForBackgroundWork: wslRunningMock
+}))
+
+const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
   status: 'SUCCESS',
   command: {
@@ -106,5 +120,96 @@ describe('agy versions that answer /usage as a prompt', () => {
     await h.fetch()
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('a WSL runtime target', () => {
+  const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
+
+  beforeEach(() => {
+    resetAntigravityUsageSupportForTests()
+    wslRunningMock.mockReset().mockResolvedValue(true)
+    defaultDistroMock.mockReset().mockResolvedValue('Ubuntu')
+    runWslProcessMock
+      .mockReset()
+      .mockImplementation(async (spec: { args: readonly string[] }) =>
+        spec.args[0] === '--version'
+          ? processResult({ stdout: 'agy version 1.2.11\n' })
+          : processResult({ stdout: USAGE_ENVELOPE })
+      )
+  })
+
+  it('reads quota from the agy inside the selected distro, never the host CLI', async () => {
+    const h = harness()
+    const result = await fetchAntigravityRateLimits({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock returns a ProcessResult, which is the whole contract runProcess exposes to this fetcher.
+      runCommand: h.runCommand as never,
+      resolveCommand: h.resolveCommand,
+      target: ubuntu
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.usageMetadata?.authProvenance).toBe('wsl:ubuntu')
+    expect(h.runCommand).not.toHaveBeenCalled()
+    expect(h.resolveCommand).not.toHaveBeenCalled()
+    expect(runWslProcessMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        distro: 'Ubuntu',
+        loginPath: 'preferred',
+        program: 'agy',
+        args: ANTIGRAVITY_USAGE_ARGS,
+        env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+      })
+    )
+  })
+
+  it('reads the default distro WSL reports, not the first one listed', async () => {
+    defaultDistroMock.mockResolvedValue('Debian')
+
+    const result = await fetchAntigravityRateLimits({ target: { runtime: 'wsl', wslDistro: null } })
+
+    expect(result.usageMetadata?.authProvenance).toBe('wsl:debian')
+    expect(wslRunningMock).toHaveBeenCalledWith('Debian')
+    expect(runWslProcessMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ distro: 'Debian' })
+    )
+  })
+
+  it.each([true, false])(
+    'distinguishes a missing CLI from an unresolved login environment: %s',
+    async (environmentResolved) => {
+      runWslProcessMock.mockResolvedValue({
+        ...processResult({ code: 127, stderr: 'agy: not found' }),
+        environmentResolved
+      })
+
+      const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+      expect(result.status).toBe(environmentResolved ? 'unavailable' : 'error')
+      expect(result.error).toContain(environmentResolved ? 'was not found' : 'login environment')
+      expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('never starts a stopped distro to read quota', async () => {
+    wslRunningMock.mockResolvedValue(false)
+
+    const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+    expect(result.status).toBe('unavailable')
+    expect(runWslProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('latches a CLI that spent a model turn only in its own runtime', async () => {
+    runWslProcessMock.mockImplementation(async (spec: { args: readonly string[] }) =>
+      spec.args[0] === '--version'
+        ? processResult({ stdout: 'agy version 1.2.11\n' })
+        : processResult({ stdout: MODEL_TURN_ENVELOPE })
+    )
+    await fetchAntigravityRateLimits({ target: ubuntu })
+
+    const host = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
+
+    expect(host.status).toBe('ok')
   })
 })
