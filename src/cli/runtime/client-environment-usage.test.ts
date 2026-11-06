@@ -8,11 +8,10 @@ import { addEnvironmentFromPairingCode } from './environments'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { RUNTIME_PROTOCOL_VERSION } from '../../shared/protocol-version'
 
-const mocks = vi.hoisted(() => ({
-  remote: vi.fn(),
-  remotePreflight: vi.fn(),
-  unownedPath: null as string | null
-}))
+const mocks = vi.hoisted(() => {
+  const state: { unownedPath: string | null } = { unownedPath: null }
+  return { remote: vi.fn(), remotePreflight: vi.fn(), state }
+})
 
 vi.mock('./websocket-transport', () => ({
   sendWebSocketRequest: mocks.remote,
@@ -23,7 +22,7 @@ vi.mock('./websocket-transport', () => ({
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof nodeFs>()
   const chmodSync: typeof actual.chmodSync = (path, mode) => {
-    if (path === mocks.unownedPath) {
+    if (path === mocks.state.unownedPath) {
       throw Object.assign(new Error(`EPERM: operation not permitted, chmod '${path}'`), {
         code: 'EPERM'
       })
@@ -37,7 +36,7 @@ const roots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
-  mocks.unownedPath = null
+  mocks.state.unownedPath = null
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -47,7 +46,10 @@ function success(result: unknown) {
   return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-remote' } }
 }
 
-it('returns remote replies when the saved environment store cannot be updated', async () => {
+// Windows hardens the profile through ACLs, not chmod, so this EPERM cannot be injected there.
+const posixIt = process.platform === 'win32' ? it.skip : it
+
+posixIt('returns remote replies when the saved environment store cannot be updated', async () => {
   const root = mkdtempSync(join(tmpdir(), 'cli-env-usage-'))
   roots.push(root)
   const pairingCode = encodePairingOffer({
@@ -58,7 +60,7 @@ it('returns remote replies when the saved environment store cannot be updated', 
     scope: 'runtime'
   })
   addEnvironmentFromPairingCode(root, { name: 'workstation', pairingCode })
-  mocks.unownedPath = root
+  mocks.state.unownedPath = root
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.remote.mockResolvedValue(success({ server: 'remote' }))
   mocks.remotePreflight.mockImplementation(
