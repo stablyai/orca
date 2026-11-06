@@ -25,10 +25,12 @@ const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
   // The subcommand must end its shell word: `gh pr create#x` runs another one.
   run: new RegExp(`${COMMAND_START}${command.source}(?=$|[\\s;&|)])`, 'gu')
 }))
-// Heredoc bodies, quoted strings and comments are text a command carries, not commands it runs.
+// Heredoc bodies, quoted strings, comments and escaped characters (`\;`) are text a command carries,
+// not commands it runs. Unlike the common pattern, escapes count too: `printf x \; gh pr create` runs
+// only printf.
 const HEREDOC_BODY =
   /<<-?[ \t]*(['"]?)(\w+)\1[^\n]*\n(?:(?:[\s\S]*?\n)?[ \t]*\2[ \t]*(?=\n|$)|[\s\S]*$)/gu
-const QUOTED_OR_COMMENT = /'[^']*'|"(?:\\[\s\S]|[^"\\])*"|(?<=^|[\s;&|(])#[^\n]*/gmu
+const QUOTED_OR_COMMENT = /'[^']*'|"(?:\\[\s\S]|[^"\\])*"|(?<=^|[\s;&|(])#[^\n]*|\\[\s\S]/gmu
 const COMMAND_SEPARATOR = /&&|\|\||[;|\n]/u
 // Commands that print other change requests' URLs, so output beside them proves nothing.
 const LISTS_CHANGE_REQUESTS =

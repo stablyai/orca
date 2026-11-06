@@ -301,6 +301,18 @@ describe('PowerShell create commands', () => {
     expect(opened("pwsh -Command 'gh pr create --fill' && echo done")).toEqual([])
   })
 
+  it('reads an escaped separator as an argument, not a command boundary', () => {
+    // Only printf runs, printing `;`, `gh`, `pr`, `create` and the URL each on its own line.
+    expect(
+      openedIn(
+        bashTurn(
+          { command: String.raw`printf '%s\n' \; gh pr create "$PR_URL"` },
+          ';\ngh\npr\ncreate\nhttps://github.com/stablyai/orca/pull/38712\n'
+        )
+      )
+    ).toEqual([])
+  })
+
   it('leaves cmd launches and unrecognized wrappers as text, a miss rather than a guess', () => {
     // No agent is recorded launching cmd, whose quoting POSIX analysis can't read.
     for (const command of [
