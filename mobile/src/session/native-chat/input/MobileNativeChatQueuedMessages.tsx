@@ -1,6 +1,6 @@
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
@@ -15,6 +15,7 @@ import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-messag
 import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
 
 // Use NUL-prefixed header keys because message ids cannot contain NUL.
 // Resume and Clear all share one key: a Resume would send the cards a Clear is deleting.
@@ -51,6 +52,8 @@ export function MobileNativeChatQueuedMessages({
   agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
+  const lowerRegion = useMobileNativeChatLowerRegion()
+  useLayoutEffect(() => lowerRegion?.layoutChanged())
   const t = useMobileTranslation()
   // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -138,7 +141,7 @@ export function MobileNativeChatQueuedMessages({
   return (
     <View style={[styles.list, editor && styles.inlineList]}>
       {}
-      <View style={[styles.box, styles.yielding, editor && styles.inlineBox]} testID="queued-box">
+      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
