@@ -120,7 +120,7 @@ export function ActivityThreadListPane({
   scrollTopRef?: React.MutableRefObject<number>
 }): React.JSX.Element {
   const t = useTranslate()
-  const projectLabelsByRepoId = useActivityProjectLabels()
+  const projectLabelsByRepoHost = useActivityProjectLabels()
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
     () => new Set()
   )
@@ -364,7 +364,7 @@ export function ActivityThreadListPane({
                 >
                   <ActivityThreadVirtualRow
                     item={item}
-                    projectLabelsByRepoId={projectLabelsByRepoId}
+                    projectLabelsByRepoHost={projectLabelsByRepoHost}
                     collapsed={
                       item.type === 'header' && effectiveCollapsedGroupKeys.has(item.group.key)
                     }

@@ -7,10 +7,15 @@ import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/prese
 import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import {
   buildProjectGroupingIndex,
-  getProjectGroupingForRepo,
+  isCheckoutScopedProjectSetup,
   type ProjectGroupingModel
 } from '../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { Repo } from '../../../../../shared/repository/repo-types'
+import {
+  getRepoHostIdentity,
+  getRepoHostIdentityForParts,
+  type HostScopedRepoKey
+} from '../../../../../shared/repository/repo-host-identity'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import {
   activityThreadStatusId,
@@ -27,14 +32,28 @@ function activityStatusRank(thread: AgentPaneThread): number {
   return AGENT_LIST_STATUS_RANK[activityThreadStatusId(thread)]
 }
 
-export function getActivityProjectLabelsByRepoId(
+export function getActivityProjectLabelsByRepoHost(
   repos: readonly Repo[],
   projectGrouping: ProjectGroupingModel
-): ReadonlyMap<string, string> {
-  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+): ReadonlyMap<HostScopedRepoKey, string> {
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  const setupByRepoHost = new Map(
+    projectGrouping.projectHostSetups.map((setup) => [
+      getRepoHostIdentityForParts(setup.repoId, setup.hostId),
+      setup
+    ])
+  )
   return new Map(
-    repos.map((repo) => [repo.id, getProjectGroupingForRepo(repo.id, repoMap, projectIndex).label])
+    repos.map((repo) => {
+      const key = getRepoHostIdentity(repo)
+      const setup = setupByRepoHost.get(key)
+      const project = setup ? projectIndex?.projectById.get(setup.projectId) : undefined
+      const label =
+        setup && project && projectIndex && !isCheckoutScopedProjectSetup(setup, projectIndex)
+          ? project.displayName
+          : repo.displayName
+      return [key, label]
+    })
   )
 }
 

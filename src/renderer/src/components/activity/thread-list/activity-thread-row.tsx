@@ -104,7 +104,10 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
     activityThreadRowCopy(thread, t)
   const projectPrefix = projectLabel?.trim()
   const { showProject, showWorkspace } = activityThreadRowIdentity(
-    { repo: projectPrefix ? { displayName: projectPrefix } : thread.repo, worktree: thread.worktree },
+    {
+      repo: projectPrefix ? { displayName: projectPrefix } : thread.repo,
+      worktree: thread.worktree
+    },
     groupBy
   )
   const showMarkdownStatus = statusKind === 'message'
@@ -112,7 +115,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const showProjectPrefix =
     Boolean(projectPrefix) &&
     projectPrefix?.toLowerCase() !== projectGroupLabel?.trim().toLowerCase()
-  const accessibleTitle = showProjectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle
+  const accessibleTitle = projectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle
 
   return (
     <ActivityThreadHoverCard
