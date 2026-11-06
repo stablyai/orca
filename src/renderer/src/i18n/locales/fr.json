@@ -933,7 +933,9 @@
         "cb4d287238": "Nom du serveur",
         "3affe7de3a": "Collez une URL d'appairage provenant d'un serveur Orca accessible depuis ce navigateur.",
         "e3bcd082ac": "Se connecter à Orca",
-        "mobileScopeRejected": "Ce code QR accorde un accès limité (mobile). Pour utiliser l'application web complète, ouvrez le lien d'accès navigateur depuis Paramètres → Environnements d'exécution → Partager ce serveur Orca → Nouveau lien."
+        "mobileScopeRejected": "Ce code QR accorde un accès limité (mobile). Pour utiliser l'application web complète, ouvrez le lien d'accès navigateur depuis Paramètres → Environnements d'exécution → Partager ce serveur Orca → Nouveau lien.",
+        "replaceSavedServer": "Ce lien se connecte à un autre serveur que « {{name}} » ({{endpoint}}). Connectez-vous uniquement si vous faites confiance au point de terminaison ci-dessous.",
+        "keepSavedServer": "Garder le serveur enregistré"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "L'historique des sessions d'agent n'est pas disponible pour cet hôte d'exécution.",
@@ -2779,7 +2781,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "En attente de relecture",
         "7698af5263": "À moi",
         "94f0339621": "Assignés à moi",
         "c2268a9982": "Tous",
@@ -2876,6 +2877,8 @@
         "loadGitHubWorkFailed": "Impossible de charger le travail GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Tout le monde",
+        "gitlabInvolvementReviewing": "En relecture",
         "gitlabViewTodos": "Mes tâches",
         "startWorkspaceFromMr": "Démarrer un espace de travail depuis la MR {{number}}",
         "startWorkspaceFromIssue": "Démarrer un espace de travail depuis l’issue {{number}}",
@@ -11780,7 +11783,7 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes.",
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
           "uiWarning": "Exécute le code de l’éditeur dans Orca pour afficher sa vue. Orca indique ce à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {

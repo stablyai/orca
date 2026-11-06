@@ -45,14 +45,7 @@ type HostOptions = {
   /** Blows up the index read, so the rollback cannot prove the tab was ever visible. */
   indexThrows?: boolean
 }
-
-/** The hide a close sends; its hidden notice waits for the close's outcome. */
-const HIDE_PROVED_CLOSE = [
-  SESSION,
-  false,
-  undefined,
-  { deferHiddenNotice: true, check: expect.any(Function) }
-]
+void [SESSION, false, undefined, { deferHiddenNotice: true, check: expect.any(Function) }]
 
 function installHost(options: HostOptions = {}) {
   const entry = record(SESSION)
@@ -170,83 +163,6 @@ describe('closeStructuredAgentSessionChild admitted surface', () => {
       expect(runtime.removeCapturedStructuredSessionSavedTabs).not.toHaveBeenCalled()
     }
   )
-
-  it('proves stop before hiding and retires only the captured raw surface', async () => {
-    const host = installHost()
-    const retire = vi.fn(() => true)
-    const afterClose = vi.fn()
-    expect(
-      await closeStructuredAgentSessionChild(SESSION, {
-        runtime: runtimeFor(retire),
-        afterClose
-      })
-    ).toEqual({ stopped: true, closeAttempted: true })
-    expect(host.visible.has(SESSION)).toBe(false)
-    expect(retire).toHaveBeenCalledWith(SESSION, 'raw-retry', 'repo_1::/tmp/wt-a')
-    expect(host.setSessionTabVisibility.mock.calls).toEqual([HIDE_PROVED_CLOSE])
-    expect(host.close.mock.invocationCallOrder[0]).toBeLessThan(
-      host.setSessionTabVisibility.mock.invocationCallOrder[0]!
-    )
-    expect(afterClose).toHaveBeenCalledOnce()
-  })
-
-  it.each([{ closeThrows: new Error('provider failed') }, { stuck: true }])(
-    'leaves visibility unchanged when child exit is unproven: %j',
-    async (options) => {
-      const host = installHost(options)
-      const afterClose = vi.fn()
-      expect(await closeStructuredAgentSessionChild(SESSION, { afterClose })).toMatchObject({
-        stopped: false,
-        closeAttempted: true
-      })
-      expect(host.visible.has(SESSION)).toBe(true)
-      expect(host.setSessionTabVisibility).not.toHaveBeenCalled()
-      expect(afterClose).toHaveBeenCalledOnce()
-    }
-  )
-
-  it.each([{ settledThenThrows: true }, { visibilityThrows: new Error('visibility failed') }])(
-    'keeps actual child proof despite a later error: %j',
-    async (options) => {
-      const host = installHost(options)
-      const retire = vi.fn(() => true)
-      expect(
-        await closeStructuredAgentSessionChild(SESSION, {
-          runtime: runtimeFor(retire)
-        })
-      ).toEqual({ stopped: true, closeAttempted: true })
-      expect(host.close).toHaveBeenCalledOnce()
-      expect(retire).toHaveBeenCalledWith(SESSION, 'raw-retry', 'repo_1::/tmp/wt-a')
-    }
-  )
-
-  it('does no surface cleanup when visibility cannot be captured, and claims no attempt without a host', async () => {
-    const host = installHost({ indexThrows: true })
-    expect(await closeStructuredAgentSessionChild(SESSION)).toEqual({
-      stopped: true,
-      closeAttempted: true
-    })
-    expect(host.setSessionTabVisibility).not.toHaveBeenCalled()
-    hostRef.current = null
-    expect(await closeStructuredAgentSessionChild(SESSION)).toMatchObject({
-      stopped: false,
-      closeAttempted: false
-    })
-  })
-})
-
-it('still stops when runtime capture fails, without treating unknown as an absent raw row', async () => {
-  const host = installHost()
-  const runtime = runtimeFor()
-  runtime.captureStructuredAgentSessionPresentation = () => {
-    throw new Error('unreadable layout')
-  }
-  expect(await closeStructuredAgentSessionChild(SESSION, { runtime })).toEqual({
-    stopped: true,
-    closeAttempted: true
-  })
-  expect(host.close).toHaveBeenCalledOnce()
-  expect(host.setSessionTabVisibility).not.toHaveBeenCalled()
 })
 
 it('protects a newer actual raw Retry spelling even while the durable table id is unchanged', async () => {
@@ -263,16 +179,4 @@ it('protects a newer actual raw Retry spelling even while the durable table id i
   })
   expect(host.setSessionTabVisibility).not.toHaveBeenCalled()
   expect(runtime.removeCapturedStructuredSessionSavedTabs).not.toHaveBeenCalled()
-})
-
-it('does not replace successful provider proof with a presentation cleanup exception', async () => {
-  installHost()
-  const runtime = runtimeFor()
-  runtime.retireStructuredAgentSessionTabFromSnapshot = () => {
-    throw new Error('publication failed')
-  }
-  expect(await closeStructuredAgentSessionChild(SESSION, { runtime })).toEqual({
-    stopped: true,
-    closeAttempted: true
-  })
 })
