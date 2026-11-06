@@ -72,6 +72,7 @@ describe('ACP sign-out at the first prompt', () => {
           })
         )
         if (spec.agent === 'grok') {
+          const rejected = rig.settled.find((item) => 'state' in item && item.state === 'rejected')
           expect(rejected && 'reason' in rejected ? rejected.reason : '').toContain(detail)
         }
       }
