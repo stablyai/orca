@@ -75,7 +75,7 @@ it('keeps mentions aligned with display text and emits only a completed URL', as
   const held = Promise.withResolvers<string>()
   upload.mockReset().mockReturnValue(held.promise)
   const view = render(<Draft mentions />)
-  const field = view.getByRole('combobox') as HTMLTextAreaElement
+  const field = view.getByRole<HTMLTextAreaElement>('combobox')
   paste(field)
   expect(field.value).toContain('Uploading screen.png')
   expect(view.container.querySelector('output')?.textContent).toBe('hello ')
@@ -93,7 +93,7 @@ it('removes an entire partly deleted marker and never restores it on completion'
   const held = Promise.withResolvers<string>()
   upload.mockReset().mockReturnValue(held.promise)
   const view = render(<Draft />)
-  const field = view.getByRole('textbox') as HTMLTextAreaElement
+  const field = view.getByRole<HTMLTextAreaElement>('textbox')
   paste(field)
   fireEvent.change(field, { target: { value: field.value.slice(0, -1) } })
   expect(field.value).toBe('hello ')
@@ -105,7 +105,7 @@ it('delivers a File drop through the registered owner and detaches an externally
   const held = Promise.withResolvers<string>()
   upload.mockReset().mockReturnValue(held.promise)
   const view = render(<Draft />)
-  const field = view.getByRole('textbox') as HTMLTextAreaElement
+  const field = view.getByRole<HTMLTextAreaElement>('textbox')
   const drop = new Event('drop', { bubbles: true, cancelable: true, composed: true })
   Object.defineProperties(drop, {
     isTrusted: { value: true },
@@ -132,7 +132,7 @@ it.each([2, 20])(
     upload.mockReset().mockResolvedValue('https://github.com/user-attachments/assets/completed')
     const changed = vi.fn()
     const view = render(<Draft initialBody={'text '.repeat(count * 100)} onChange={changed} />)
-    const field = view.getByRole('textbox') as HTMLTextAreaElement
+    const field = view.getByRole<HTMLTextAreaElement>('textbox')
     field.setSelectionRange(field.value.length, field.value.length)
     fireEvent.paste(field, {
       clipboardData: {
@@ -180,7 +180,7 @@ it('removes an undo-restored owned label after an incomplete user label prefix',
   upload.mockReset().mockReturnValue(held.promise)
   const prefix = '![Uploading note '
   const view = render(<Draft initialBody={prefix} />)
-  const field = view.getByRole('textbox') as HTMLTextAreaElement
+  const field = view.getByRole<HTMLTextAreaElement>('textbox')
   paste(field)
   const restored = field.value
   fireEvent.change(field, { target: { value: field.value.slice(0, -1) } })
