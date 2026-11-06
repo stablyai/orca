@@ -7,6 +7,7 @@ import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   asRateLimitWindow,
+  errorProvider,
   FakeRateLimitWindow,
   mockFreshBackgroundProviderFetches,
   okProvider,
@@ -65,6 +66,74 @@ vi.mock('./grok-auth', () => ({
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
+
+describe('RateLimitService Antigravity runtime switching', () => {
+  beforeEach(() => {
+    resetRateLimitProviderMocks()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+  })
+
+  it('drops stale usage when the default distro resolves to a different runtime', async () => {
+    const withRuntime = (result: ProviderRateLimits, runtime: string): ProviderRateLimits => ({
+      ...result,
+      usageMetadata: { ...result.usageMetadata, authProvenance: runtime }
+    })
+    vi.mocked(fetchAntigravityRateLimits)
+      .mockResolvedValueOnce(withRuntime(okProvider('antigravity', 30), 'wsl:ubuntu'))
+      .mockResolvedValueOnce(withRuntime(errorProvider('antigravity', 'timed out'), 'wsl:debian'))
+    const service = new RateLimitService()
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: null })
+
+    await service.refresh()
+    await service.refresh()
+
+    expect(service.getState().antigravity?.status).toBe('error')
+    expect(service.getState().antigravity?.session).toBeNull()
+  })
+
+  it.each([false, true])(
+    'discards an outgoing read even after switching back: %s',
+    async (switchBack) => {
+      const started = Promise.withResolvers<void>()
+      const pending = Promise.withResolvers<ProviderRateLimits>()
+      vi.mocked(fetchAntigravityRateLimits).mockImplementationOnce(() => {
+        started.resolve()
+        return pending.promise
+      })
+      const service = new RateLimitService()
+      const refresh = service.refresh()
+      await started.promise
+
+      service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      if (switchBack) {
+        service.setAntigravityFetchTarget({ runtime: 'host', wslDistro: null })
+      }
+      pending.resolve(okProvider('antigravity', 30))
+      await refresh
+
+      expect(service.getState().antigravity).toBeNull()
+    }
+  )
+
+  it('drops the old runtime cooldown before an automated refresh', async () => {
+    vi.mocked(fetchAntigravityRateLimits)
+      .mockResolvedValueOnce({
+        ...unavailableProvider('antigravity', 'Sign in with agy'),
+        usageMetadata: { retryAtMs: Date.now() + 60 * 60 * 1000 }
+      })
+      .mockResolvedValue(okProvider('antigravity', 30))
+    const service = new RateLimitService()
+    await service.refresh()
+
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    await service.refreshIfStale()
+
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(30)
+  })
+})
 
 describe('Antigravity usage gating', () => {
   beforeEach(() => {
