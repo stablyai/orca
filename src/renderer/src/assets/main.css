@@ -1835,6 +1835,8 @@ html.native-shell .app-layout {
 
 .agent-working-spinner {
   animation: agent-spinner-rotate 86400s linear infinite;
+  -webkit-mask-image: conic-gradient(from 45deg, transparent, black 60deg, black);
+  mask-image: conic-gradient(from 45deg, transparent, black 60deg, black);
 }
 
 /* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
@@ -1850,6 +1852,8 @@ html.native-shell .app-layout {
 @media (prefers-reduced-motion: reduce) {
   .agent-working-spinner {
     animation: none;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 
