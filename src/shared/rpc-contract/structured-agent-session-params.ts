@@ -337,7 +337,7 @@ export const HistoryParams = z
 
 export const SubscribeParams = OptionsParams.extend({
   cursor: JournalCursor.optional(),
-  // Not strict: this host ignores flags a newer client adds, so they need no host capability of their own.
+  // Not strict: this host drops keys a newer client adds; a new value for a known key still needs a capability.
   capabilities: z.object({ textAppend: z.literal(1).optional() }).optional()
 }).strict()
 

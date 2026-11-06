@@ -19,6 +19,8 @@ import {
   type StructuredAgentSessionState
 } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
+import { readRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import { AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   agentSessionReadFailureRefusal,
@@ -38,7 +40,6 @@ export function useMobileStructuredAgentState(args: {
   enabled: boolean
   // Reacquire holds after transport loss while keeping the transcript visible through the outage.
   connected: boolean
-  textAppend?: boolean
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
@@ -53,11 +54,6 @@ export function useMobileStructuredAgentState(args: {
   useLayoutEffect(() => {
     commandsChanged.current = args.onCommandsChanged
   }, [args.onCommandsChanged])
-  // A ref, not an effect dependency: support arriving must not reopen the hold and stream.
-  const textAppend = useRef(args.textAppend === true)
-  useLayoutEffect(() => {
-    textAppend.current = args.textAppend === true
-  }, [args.textAppend])
   // Bound synchronous per-session retention so offline tab switches cannot grow memory indefinitely.
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
@@ -138,7 +134,11 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
-      textAppend: () => textAppend.current,
+      // This connection's status answer, read at each open; React state would lag it by a commit.
+      textAppend: () =>
+        readRuntimeStatusProbe(client)?.capabilities?.includes(
+          AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY
+        ) === true,
       subscribeRetryNow: subscribeConnectionRevival
     })
     return () => {
