@@ -119,7 +119,9 @@ const STOCK_PLACEHOLDERS: ReadonlySet<string> = new Set([
   'Use /skills to list available skills',
   'Check recently modified functions for compatibility',
   'How many files have been modified?',
-  'Will this algorithm scale well?'
+  'Will this algorithm scale well?',
+  // Shown while the pane watches one of its sub-agents (`/subagents`).
+  'Viewing sub-agent — direct input is disabled'
 ])
 
 function isStockPlaceholder(

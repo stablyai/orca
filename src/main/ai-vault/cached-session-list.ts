@@ -93,6 +93,9 @@ type LocalAiVaultScanRoots = Required<
     | 'antigravityChatBrainDir'
   >
 
+export const codexSessionsDirs = (homes: readonly string[]): string[] =>
+  homes.map((home) => join(home, 'sessions'))
+
 /** Resolve fresh WSL roots for both listing and indexing; distros can start or stop between scans. */
 export async function localAiVaultScanRoots(): Promise<LocalAiVaultScanRoots> {
   return (await resolveLocalAiVaultScanRoots()).roots
@@ -113,9 +116,7 @@ async function resolveLocalAiVaultScanRoots(): Promise<{
   return {
     wslConfirmed: wsl.confirmed,
     roots: {
-      additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) =>
-        join(homePath, 'sessions')
-      ),
+      additionalCodexSessionsDirs: codexSessionsDirs(additionalCodexHomes),
       wslHomeDirs: wsl.homes,
       // Scanner workers have no account router; supply profile roots from this process.
       claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),

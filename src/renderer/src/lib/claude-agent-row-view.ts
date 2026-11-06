@@ -3,12 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { resolveOwnerOrLocal } from './worktree-runtime-owner'
-import { findActiveRuntimeTerminal } from './active-agent-note-target'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { authorityKey } from '../../../shared/host-authority'
+import { findAgentRowParentTerminal, startAgentRowIntent } from './agent-row-parent-terminal'
 import type { ClaudeAgentViewResult } from '../../../shared/claude-agent-view'
 
 const pendingViews = new Map<string, AbortController>()
@@ -40,85 +35,38 @@ export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<
   }
   const child = agent.rowSource === 'subagent'
   let parentDestination = !child || opensClaudeParentConversation(agent)
-  // A newer click owns this pane even while terminal resolution or a local RPC is still pending.
-  pendingViews.get(paneKey)?.abort()
-  const intent = new AbortController()
-  pendingViews.set(paneKey, intent)
-  const latest = () => pendingViews.get(paneKey) === intent
-  let current = latest
+  const intent = startAgentRowIntent(pendingViews, paneKey)
+  let current = intent.latest
   try {
-    const parsed = parsePaneKey(paneKey)
     const sessionId = parent.providerSession?.id
-    const owner = resolveOwnerOrLocal(state, { workspaceId: agent.tab.worktreeId })
     const agentId = child ? (agent.childRow?.providerId ?? agent.childRow?.id) : undefined
-    if (!parsed || !sessionId || owner.kind !== 'resolved' || (!parentDestination && !agentId)) {
+    if (!sessionId || (!parentDestination && !agentId)) {
       if (child) {
         toast.info(viewFailure(parentDestination))
       }
       return
     }
-    const { target } = hostRouteForAuthority(owner.owner)
-    const revision =
-      target.kind === 'environment'
-        ? getRuntimeEnvironmentRevision(target.environmentId)
-        : undefined
-    const ptyId = state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]
-    current = () => {
-      const now = useAppStore.getState()
-      const liveParent = now.agentStatusByPaneKey[paneKey]
-      const liveOwner = resolveOwnerOrLocal(now, { workspaceId: agent.tab.worktreeId })
-      return (
-        latest() &&
-        !intent.signal.aborted &&
-        liveParent?.agentType === 'claude' &&
-        !liveParent.structuredHostOwned &&
-        liveParent.paneKey === paneKey &&
-        liveParent.providerSession?.id === sessionId &&
-        liveOwner.kind === 'resolved' &&
-        authorityKey(liveOwner.owner) === authorityKey(owner.owner) &&
-        (target.kind === 'local' ||
-          (revision !== undefined &&
-            getRuntimeEnvironmentRevision(target.environmentId) === revision)) &&
-        now.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] === ptyId
-      )
-    }
-    const options = {
-      signal: intent.signal,
-      expectedEnvironmentPairingRevision: revision,
-      beforeSend: () => {
-        if (!current()) {
-          throw new Error('Claude view action superseded')
-        }
-      }
-    }
-    if (!current()) {
-      if (child) {
+    const parentTerminal = await findAgentRowParentTerminal({
+      intent,
+      agentType: 'claude',
+      paneKey,
+      worktreeId: agent.tab.worktreeId,
+      sessionId
+    })
+    if (parentTerminal.status !== 'found') {
+      if (child && parentTerminal.status === 'unavailable') {
         toast.info(viewFailure(parentDestination))
       }
       return
     }
-    const terminal = await findActiveRuntimeTerminal(
-      target,
-      agent.tab.worktreeId,
-      parsed,
-      3000,
-      options
-    )
-    if (!current()) {
-      return
-    }
-    if (!terminal) {
-      if (child) {
-        toast.info(viewFailure(parentDestination))
-      }
-      return
-    }
+    const { target, options } = parentTerminal
+    current = parentTerminal.current
     const view = () =>
       callRuntimeRpc<{ view: ClaudeAgentViewResult }>(
         target,
         'terminal.viewClaudeAgent',
         {
-          terminal: terminal.handle,
+          terminal: parentTerminal.handle,
           sessionId,
           ...(!parentDestination ? { agentId } : {}),
           client: { id: 'orca-desktop', type: 'desktop' }
@@ -166,9 +114,6 @@ export async function viewClaudeAgentFromRow(agent: DashboardAgentRow): Promise<
       toast.info(viewFailure(parentDestination))
     }
   } finally {
-    if (latest()) {
-      pendingViews.delete(paneKey)
-    }
-    intent.abort()
+    intent.finish()
   }
 }

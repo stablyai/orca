@@ -4416,6 +4416,9 @@
             "3ccc7981bb": "Host unavailable",
             "54f29b7c0d": "Loading host…"
           },
+          "CodexAgentSwitchCover": {
+            "switching": "Switching agent…"
+          },
           "TerminalRestoringPlaceholder": {
             "restoring": "Restoring terminal…"
           },
@@ -23985,5 +23988,17 @@
     "discussionAction": "Join the discussion",
     "checkAction": "Check compatibility",
     "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
+  },
+  "codex": {
+    "agentView": {
+      "draft": "Clear the Codex message box before switching agents.",
+      "finished": "This Codex agent is no longer running.",
+      "permission": "Answer Codex’s approval prompt before switching agents.",
+      "unavailable": "Codex could not switch to this agent. Try /subagents in the Codex pane."
+    },
+    "nativeChild": {
+      "open": "Open live agent",
+      "openHint": "Show this agent in its parent's Codex pane"
+    }
   }
 }

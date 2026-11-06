@@ -1,6 +1,13 @@
+import {
+  recordedCodexChildParent,
+  useCodexChildOpening,
+  viewRecordedCodexChild
+} from '@/lib/codex-child-row-view'
+import { useAppStore } from '@/store'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useId } from 'react'
 import type React from 'react'
-import { Bot, ChevronRight, FileJson, Play } from 'lucide-react'
+import { Bot, ChevronRight, FileJson, Play, SquareTerminal } from 'lucide-react'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -50,7 +57,7 @@ export function SessionSubagentsSection(props: SectionProps): React.JSX.Element 
   const expansion = useSubagentExpansion()
   if (
     props.session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    props.session.subagentTranscriptCount === 0
+    (props.session.subagentTranscriptCount === 0 && props.session.agent !== 'codex')
   ) {
     return null
   }
@@ -67,8 +74,16 @@ function SubagentsBranch({
   session,
   resume,
   ancestors
-}: SectionProps & { ancestors: string[] }): React.JSX.Element {
+}: SectionProps & { ancestors: string[] }): React.JSX.Element | null {
   const subagents = useSubagentSessions(session)
+  // Codex has no transcript count to gate on; show the section only once children exist.
+  if (
+    session.agent === 'codex' &&
+    subagents.status !== 'error' &&
+    subagents.sessions.length === 0
+  ) {
+    return null
+  }
   return (
     <section className="space-y-1.5" aria-busy={subagents.status === 'loading'}>
       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
@@ -199,6 +214,14 @@ function SubagentSessionLine({
   const resumeState =
     resume && isIndependentlyResumableSubagent(session) ? resume.getState(session) : null
   const dotState = session.subagent?.status ? SUBAGENT_DOT_STATES[session.subagent.status] : null
+  // Offered only while the live parent it opens from is in this worktree.
+  const canOpenLive = useAppStore(
+    (state) =>
+      resume !== null &&
+      session.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      recordedCodexChildParent(state, session) !== null
+  )
+  const openingLive = useCodexChildOpening(canOpenLive ? session.sessionId : undefined)
 
   return (
     <div className="min-w-0 space-y-1.5 rounded-md border border-sidebar-border/70 bg-sidebar-accent/25 px-2.5 py-1.5">
@@ -216,6 +239,32 @@ function SubagentSessionLine({
         >
           {session.title}
         </span>
+        {canOpenLive ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            draggable={false}
+            title={translate(
+              'codex.nativeChild.openHint',
+              "Show this agent in its parent's Codex pane"
+            )}
+            aria-label={translate('codex.nativeChild.open', 'Open live agent')}
+            aria-busy={openingLive || undefined}
+            disabled={openingLive}
+            onClick={(event) => {
+              event.stopPropagation()
+              void viewRecordedCodexChild(session)
+            }}
+            className="shrink-0 text-muted-foreground"
+          >
+            {openingLive ? (
+              <LoadingSpinner className="size-3.5" />
+            ) : (
+              <SquareTerminal className="size-3.5" />
+            )}
+          </Button>
+        ) : null}
         {resumeState ? (
           <Button
             type="button"
