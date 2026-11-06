@@ -19159,7 +19159,8 @@
           "2d5b9fabf9": "Acesso ao microfone negado. Conceda acesso nas configurações do sistema e reinicie o Orca.",
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
-          "micDisconnected": "Microfone desconectado. O ditado foi interrompido."
+          "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
+          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Parar ditado",

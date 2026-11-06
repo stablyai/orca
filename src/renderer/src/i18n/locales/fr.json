@@ -16862,7 +16862,8 @@
           "2d5b9fabf9": "Accès au micro refusé. Accordez l'autorisation dans les réglages système, puis redémarrez Orca.",
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
-          "micDisconnected": "Micro déconnecté. Dictée arrêtée."
+          "micDisconnected": "Micro déconnecté. Dictée arrêtée.",
+          "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Arrêter la dictée",

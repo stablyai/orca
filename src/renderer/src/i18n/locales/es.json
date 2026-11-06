@@ -16638,7 +16638,8 @@
           "2d5b9fabf9": "Acceso al micrófono denegado. Conceda acceso en la configuración del sistema, luego reinicie Orca.",
           "5d2c3e7ae3": "No se detectó ninguna voz.",
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
-          "micDisconnected": "Micrófono desconectado. Dictado detenido."
+          "micDisconnected": "Micrófono desconectado. Dictado detenido.",
+          "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Detener dictado",

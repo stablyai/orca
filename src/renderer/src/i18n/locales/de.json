@@ -16909,7 +16909,8 @@
           "2d5b9fabf9": "Mikrofonzugriff verweigert. Zugriff in den Systemeinstellungen erlauben und anschließend Orca neu starten.",
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
-          "micDisconnected": "Mikrofon getrennt. Diktat gestoppt."
+          "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
+          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Diktat stoppen",

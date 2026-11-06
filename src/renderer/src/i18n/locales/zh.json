@@ -16236,7 +16236,8 @@
           "2d5b9fabf9": "麦克风访问被拒绝。在系统设置中授予访问权限，然后重新启动 Orca。",
           "5d2c3e7ae3": "未检测到语音。",
           "micFallback": "所选麦克风不可用。使用系统默认值。",
-          "micDisconnected": "麦克风已断开。听写停止了。"
+          "micDisconnected": "麦克风已断开。听写停止了。",
+          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止听写",

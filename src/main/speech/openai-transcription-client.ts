@@ -5,9 +5,12 @@ export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-transcribe': 'gpt-4o-transcribe'
 }
 
-const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
+export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
-const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
+const MAX_CLOUD_AUDIO_SAMPLES = 10 * 60 * CLOUD_TRANSCRIPTION_SAMPLE_RATE
+// Room to answer plus the upload time of the WAV at 1 Mbit/s (125 bytes per ms).
+const TRANSCRIPTION_RESPONSE_ALLOWANCE_MS = 30_000
+const UPLOAD_BYTES_PER_MS = 125
 
 type OpenAiTranscriptionResponse = {
   text?: unknown
@@ -77,7 +80,7 @@ function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): st
 
 export class OpenAiTranscriptionSession {
   private chunks: Float32Array[] = []
-  private audioSeconds = 0
+  private audioSamples = 0
   private readonly abortController = new AbortController()
 
   constructor(
@@ -87,20 +90,21 @@ export class OpenAiTranscriptionSession {
 
   cancel(): void {
     this.chunks = []
-    this.audioSeconds = 0
+    this.audioSamples = 0
     this.abortController.abort()
   }
 
-  feedAudio(samples: Float32Array, sampleRate: number): void {
-    if (this.abortController.signal.aborted) {
-      return
+  /** Keeps audio up to the 10-minute upload cap; returns true on the chunk that reaches it. */
+  feedAudio(samples: Float32Array, sampleRate: number): boolean {
+    const room = MAX_CLOUD_AUDIO_SAMPLES - this.audioSamples
+    if (this.abortController.signal.aborted || room <= 0) {
+      return false
     }
     const normalized = resampleToRate(samples, sampleRate, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
-    this.audioSeconds += normalized.length / CLOUD_TRANSCRIPTION_SAMPLE_RATE
-    if (this.audioSeconds > MAX_CLOUD_AUDIO_SECONDS) {
-      throw new Error('Cloud transcription is limited to 10 minutes per dictation')
-    }
-    this.chunks.push(new Float32Array(normalized))
+    const kept = normalized.slice(0, room)
+    this.audioSamples += kept.length
+    this.chunks.push(kept)
+    return this.audioSamples === MAX_CLOUD_AUDIO_SAMPLES
   }
 
   async finish(): Promise<string> {
@@ -122,9 +126,23 @@ export class OpenAiTranscriptionSession {
     // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
+    const timeout = AbortSignal.timeout(
+      TRANSCRIPTION_RESPONSE_ALLOWANCE_MS + Math.ceil(wav.byteLength / UPLOAD_BYTES_PER_MS)
+    )
+    try {
+      return await this.upload(form, AbortSignal.any([this.abortController.signal, timeout]))
+    } catch (error) {
+      if (timeout.aborted && !this.abortController.signal.aborted) {
+        throw new Error('OpenAI transcription timed out. Check your connection and try again.')
+      }
+      throw error
+    }
+  }
+
+  private async upload(form: FormData, signal: AbortSignal): Promise<string> {
     const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
       method: 'POST',
-      signal: this.abortController.signal,
+      signal,
       headers: {
         Authorization: `Bearer ${this.readApiKey()}`
       },

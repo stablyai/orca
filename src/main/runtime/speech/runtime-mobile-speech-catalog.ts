@@ -19,9 +19,9 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
-  hasOpenAiSpeechApiKey,
-  saveOpenAiSpeechApiKey
+  hasOpenAiSpeechApiKey
 } from '../../speech/openai-api-key-store'
+import { saveVerifiedOpenAiSpeechApiKey } from '../../speech/openai-api-key-verification'
 import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
 
 export type OpenAiSpeechKeyStatus = {
@@ -118,8 +118,8 @@ export class RuntimeMobileSpeechCatalog {
     return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
   }
 
-  setOpenAiKey(apiKey: string): OpenAiSpeechKeyStatus {
-    saveOpenAiSpeechApiKey(apiKey)
+  async setOpenAiKey(apiKey: string): Promise<OpenAiSpeechKeyStatus> {
+    await saveVerifiedOpenAiSpeechApiKey(apiKey)
     return this.openAiKeyStatus()
   }
 

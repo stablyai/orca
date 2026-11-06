@@ -16684,7 +16684,8 @@
           "2d5b9fabf9": "麥克風存取被拒絕。在系統設定中授予存取權限，然後重新啟動 Orca。",
           "5d2c3e7ae3": "未偵測到語音。",
           "micFallback": "所選麥克風不可用。使用系統預設值。",
-          "micDisconnected": "麥克風已中斷連線。聽寫已停止。"
+          "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
+          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止聽寫",

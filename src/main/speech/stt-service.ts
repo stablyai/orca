@@ -30,24 +30,25 @@ export class SttService {
     return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner)
   }
 
-  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {
+  /** Returns true on the chunk that fills a cloud session's upload cap; later audio is dropped. */
+  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {
     if (this.state.stopping) {
-      return
+      return false
     }
     const currentOwner = this.state.activeOwner ?? this.state.startingOwner
     if (!currentOwner) {
-      return
+      return false
     }
     if (currentOwner !== owner) {
       throw new Error('dictation_owner_mismatch')
     }
     if (this.state.cloudSession) {
-      this.state.cloudSession.feedAudio(samples, sampleRate)
-      return
+      return this.state.cloudSession.feedAudio(samples, sampleRate)
     }
     this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
       samples.buffer as ArrayBuffer
     ])
+    return false
   }
 
   stopDictation(
