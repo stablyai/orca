@@ -273,11 +273,73 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
       ),
       row(
         l('running'),
-        { kind: 'tool-call', name: 'command', input: {}, state: 'running' },
+        { kind: 'tool-call', name: 'command', callId: 'call-running', input: {}, state: 'running' },
         l('root1')
       ),
       row(l('dependent'), { kind: 'status', text: 'linked work' }, l('running')),
       row(l('transitive'), { kind: 'status', text: 'linked descendant' }, l('dependent')),
+      row(
+        l('helper'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            { type: 'text', text: 'Kicked off subagent Audit' },
+            {
+              type: 'subagent',
+              id: 'child-1',
+              label: 'Audit',
+              groupId: 'T1',
+              state: 'working',
+              background: true
+            }
+          ]
+        },
+        l('root1')
+      ),
+      row(
+        l('legacy-helpers'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'subagent-group',
+              groupId: 'T1',
+              agents: [{ id: 'legacy-child', label: 'Legacy', state: 'working' }]
+            }
+          ]
+        },
+        l('root1')
+      ),
+      {
+        ...row(l('helper-output'), { kind: 'status', text: 'completed child output' }),
+        agentId: 'child-1',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('nested-output'), { kind: 'status', text: 'nested output' }),
+        agentId: 'nested',
+        parentAgentId: 'child-1',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('legacy-output'), { kind: 'status', text: 'legacy output' }),
+        agentId: 'legacy-child',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('linked-tool-output'), { kind: 'status', text: 'tool output' }),
+        agentId: 'tool-child',
+        providerParentRef: 'call-running',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('tool-descendant'), { kind: 'status', text: 'tool descendant' }),
+        agentId: 'tool-descendant',
+        parentAgentId: 'tool-child',
+        producerKind: 'agent'
+      },
       row(k(4), { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'second' }] }),
       row(
         l('late'),
@@ -301,12 +363,14 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
       )
     ]
   }
+  const original = structuredClone(snapshot)
   const copied = prepareForkSnapshot({
     snapshot,
     nextItemId: k(4),
     sourceThreadId: 'source',
     childThreadId: 'child'
   })
+  expect(snapshot).toEqual(original)
   expect(copied.map((item) => agentJournalItemKey(item.identity))).toEqual([
     'codex:child:T1:0',
     'legacy:codex:source:root1',

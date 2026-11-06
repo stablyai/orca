@@ -159,30 +159,34 @@ export async function prepareCodexRewind(
   if (!admission.ok) {
     return admission
   }
-  let found = false
-  const keptTurnId = await findInCodexTurnsNewestFirst(
-    session,
-    (id) => {
-      if (found) {
-        return id
-      }
-      if (id === input.beforeTurnId) {
-        found = true
-      }
-      return undefined
-    },
-    timeoutMs
-  )
-  return found
-    ? {
-        ok: true,
-        revert: {
-          threadId: session.threadId,
-          beforeTurnId: input.beforeTurnId,
-          keptTurnId: keptTurnId ?? null
+  try {
+    let found = false
+    const keptTurnId = await findInCodexTurnsNewestFirst(
+      session,
+      (id) => {
+        if (found) {
+          return id
         }
-      }
-    : { ok: false, reason: 'invalid-target' }
+        if (id === input.beforeTurnId) {
+          found = true
+        }
+        return undefined
+      },
+      timeoutMs
+    )
+    return found
+      ? {
+          ok: true,
+          revert: {
+            threadId: session.threadId,
+            beforeTurnId: input.beforeTurnId,
+            keptTurnId: keptTurnId ?? null
+          }
+        }
+      : { ok: false, reason: 'invalid-target' }
+  } catch {
+    return { ok: false, reason: 'provider-refused' }
+  }
 }
 
 export async function rewindCodexSession(

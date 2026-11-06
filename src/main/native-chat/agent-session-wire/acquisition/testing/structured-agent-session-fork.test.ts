@@ -1,3 +1,7 @@
+import { usableJournalHistoryOrigin } from '../../../agent-session-journal/context-epochs/journal-history-origin'
+import { catchUpCodexThread } from '../../../../codex/structured/threads/codex-structured-thread-catch-up'
+import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
 import { copyAcpConversation } from '../../../../acp/acp-conversation-copy'
 import { acpLaunchSpecFor } from '../../../../acp/acp-launch-specs'
 import type { AcpStructuredConnection } from '../../../../acp/acp-structured-connection'
@@ -319,6 +323,21 @@ it('copies the selected retained root, founds its relationship, and replays befo
     ]
   })
 
+  const sessionId = test.intent.envelope.sessionId
+  const origin = {
+    version: 1,
+    kind: 'native_copy',
+    providerHandle: { kind: 'codex', threadId: COPY },
+    agent: 'codex',
+    unit: 'codex-turn',
+    ids: ['completed-turn']
+  }
+  expect(
+    usableJournalHistoryOrigin(
+      rig.host.collaboratorsForTests().sessions.get(sessionId)!.journal.historyOrigin()
+    )
+  ).toEqual(origin)
+
   setStructuredAgentSessionHost(rig.host)
   const runtime = new OrcaRuntimeService()
   vi.spyOn(runtime, 'resolveStructuredAgentSessionLocation').mockResolvedValue(test.record.location)
@@ -333,6 +352,53 @@ it('copies the selected retained root, founds its relationship, and replays befo
     ok: true,
     replayed: true
   })
+  await rig.restart()
+  expect(await rig.host.create({ callerKey: 'device-1' }, replay.attachParams)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  const journal = rig.host.collaboratorsForTests().sessions.get(sessionId)!.journal
+  expect(usableJournalHistoryOrigin(journal.historyOrigin())).toEqual(origin)
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  deferred.bind({
+    journal,
+    fence: rig.store.getRecord(sessionId)!.lease.runtimeFence,
+    publish: () => {}
+  })
+  try {
+    await catchUpCodexThread({
+      sessionId,
+      threadId: COPY,
+      sink: deferred.sink,
+      connection: { request: async () => ({ data: [], nextCursor: null }) },
+      returnedTurns: [
+        ['completed-turn', 'copied'],
+        ['new-cli-turn', 'new CLI']
+      ].map(([id, text]) => ({
+        id,
+        status: 'completed',
+        items: [
+          {
+            type: 'userMessage',
+            id: `${id}-user`,
+            content: [{ type: 'text', text: `${text} prompt` }]
+          },
+          { type: 'agentMessage', id: `${id}-answer`, text: `${text} answer` }
+        ]
+      }))
+    })
+    expect(
+      journal
+        .snapshot()
+        .items.flatMap((item) =>
+          item.body.kind === 'message'
+            ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            : []
+        )
+    ).toEqual(['Remember the nonce 57319', 'Remembered', 'new CLI prompt', 'new CLI answer'])
+  } finally {
+    deferred.close()
+  }
 })
 
 it('keeps captured Codex options over native imported effort through reload and send', async () => {

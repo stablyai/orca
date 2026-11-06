@@ -650,3 +650,40 @@ it('recovers the active main chain only when a copied leaf is truly absent, igno
     c.journal.snapshot().items.map((item) => item.itemId)
   )
 })
+
+it('keeps terminal turns before the recorded compaction bridge during catch-up', async () => {
+  const c = await chat()
+  await c.live()
+  await c.write([
+    ...chatTurn,
+    ...outsideTurn,
+    {
+      type: 'system',
+      subtype: 'compact_boundary',
+      uuid: 'compact',
+      parentUuid: null,
+      logicalParentUuid: 'a3',
+      isSidechain: false,
+      sessionId: SID,
+      timestamp: '2026-10-21T12:00:07.000Z',
+      content: 'Conversation compacted',
+      compactMetadata: { trigger: 'manual', preTokens: 1000 }
+    },
+    prompt('summary', 'compact', 'Summary of the conversation', 8),
+    prompt('p3', 'summary', 'ask after compaction', 9),
+    reply('a4', 'p3', 'msg_d', { type: 'text', text: 'answer after compaction' }, 10)
+  ])
+  expect(await c.open('a1')).toBe(true)
+  const messages = c.journal
+    .snapshot()
+    .items.flatMap((item) =>
+      item.body.kind === 'message'
+        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+  expect(messages).toContain('ask 2')
+  expect(messages).toContain('answer 2')
+  expect(messages).toContain('ask after compaction')
+  expect(messages).toContain('answer after compaction')
+  expect(c.warn).not.toHaveBeenCalled()
+})

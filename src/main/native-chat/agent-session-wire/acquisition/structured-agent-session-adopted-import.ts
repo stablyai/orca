@@ -101,7 +101,10 @@ export async function importAdoptedTranscript(
       await attached.journal.replaceEpochItems(
         params.adopt && !params.fork ? 'legacy_import' : 'session_created',
         record.lease.runtimeFence,
-        prepared ?? []
+        prepared ?? [],
+        undefined,
+        params.fork?.historyOrigin?.providerHandle,
+        params.fork?.historyOrigin
       )
     }
     return

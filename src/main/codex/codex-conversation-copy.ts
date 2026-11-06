@@ -45,11 +45,17 @@ export async function codexForkHistory(input: {
   const roots: Root[] = []
   let selected: Root | undefined
   let lineIndex = 0
+  let referenceBacked = false
   await readCodexLocalHistory({
     filePath: input.path,
     roots: input.roots,
+    visitRecord: ({ record, selected }) => {
+      if (selected && record?.type === 'session_meta') {
+        referenceBacked = asRecord(record.payload)?.history_base != null
+      }
+    },
     visit: (line, fallbackId, selectedSegment, recordId) => {
-      if (input.inheritedOnly && selectedSegment) {
+      if (input.inheritedOnly && referenceBacked && selectedSegment) {
         return
       }
       input.signal?.throwIfAborted()

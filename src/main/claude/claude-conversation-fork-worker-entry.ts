@@ -90,7 +90,12 @@ async function recover(filePath: string) {
     for await (const line of createInterface({ input: stream, crlfDelay: Infinity })) {
       try {
         const value = JSON.parse(line)
-        if (value && isClaudeConversationEntry(value)) {
+        if (
+          value &&
+          typeof value.uuid === 'string' &&
+          value.isSidechain !== true &&
+          value.parent_tool_use_id == null
+        ) {
           rows.push(value)
         }
       } catch {

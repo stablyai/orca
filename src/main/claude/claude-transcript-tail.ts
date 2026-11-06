@@ -96,9 +96,15 @@ export function mainChain(rows: Record<string, unknown>[], leafUuid: string): Cl
   const byUuid = new Map<string, Record<string, unknown>>()
   let newest: Record<string, unknown> | null = null
   for (const row of rows) {
-    if (isClaudeConversationEntry(row)) {
-      byUuid.set(String(row.uuid), row)
-      newest = row
+    if (
+      typeof row.uuid === 'string' &&
+      row.isSidechain !== true &&
+      row.parent_tool_use_id == null
+    ) {
+      byUuid.set(row.uuid, row)
+      if (isClaudeConversationEntry(row)) {
+        newest = row
+      }
     }
   }
   const chain: Record<string, unknown>[] = []

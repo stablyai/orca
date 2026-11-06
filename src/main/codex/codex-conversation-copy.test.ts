@@ -1,3 +1,4 @@
+import { recordedCodexRollout } from './__fixtures__/codex-rollout-recordings'
 import type * as AppServerSession from './app-server/codex-app-server-session'
 import type * as LocalHistory from '../native-chat/codex-local-history'
 import type * as RolloutStream from '../native-chat/codex-rollout-history-stream'
@@ -84,7 +85,7 @@ async function history(id: string, records: object[]) {
   state.paths.set(id, path)
   return path
 }
-function copy(selected = `${SOURCE}:a1`, settled = true) {
+function copy(selected = `${SOURCE}:a1`, settled = true, turnId?: string) {
   return copyCodexConversation(
     {
       record: agentSessionRecordFixture({
@@ -110,7 +111,8 @@ function copy(selected = `${SOURCE}:a1`, settled = true) {
           sessionId: SOURCE,
           recordId: selected
         }),
-        settled
+        settled,
+        ...(turnId ? { turnId } : {})
       }
     },
     {
@@ -323,5 +325,34 @@ it('freezes all-unrecorded root IDs on the source, excluding child replacements 
   await expect(copy()).resolves.toEqual({
     sessionId: CHILD,
     coverage: { unit: 'codex-turn', ids: ['S1'] }
+  })
+})
+
+it('certifies recorded turns in a standalone copied rollout with no physical history base', async () => {
+  const rows = await recordedCodexRollout('c')
+  const source = rows.find((row) => row.type === 'session_meta')!
+  const started = rows.find(
+    (row) => row.type === 'event_msg' && row.payload.type === 'task_started'
+  )!
+  const through = rows.findIndex(
+    (row) => row.type === 'event_msg' && row.payload.type === 'task_complete'
+  )
+  const captured = rows.slice(0, through + 1)
+  for (const [id, meta] of [
+    [SOURCE, source],
+    [CHILD, source]
+  ] as const) {
+    const path = await history(id, [])
+    const serialized = captured
+      .map((row) =>
+        JSON.stringify(row === meta ? { ...row, payload: { ...row.payload, id } } : row)
+      )
+      .join('\n')
+    await writeFile(path, `${serialized}\n`)
+  }
+  state.request.mockResolvedValue({ thread: { id: CHILD } })
+  await expect(copy(undefined, true, String(started.payload.turn_id))).resolves.toEqual({
+    sessionId: CHILD,
+    coverage: { unit: 'codex-turn', ids: ['01a1b0d7-ac1d-7e00-85b8-806a4d8d494b'] }
   })
 })

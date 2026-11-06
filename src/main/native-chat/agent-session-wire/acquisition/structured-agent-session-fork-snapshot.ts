@@ -12,6 +12,8 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { turnMembership } from '../rewind/structured-rewind-cut'
+import { namedSubagents } from '../../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/native-chat-background-task-row'
 
 /** Freeze presentation once; native history supplies context and coverage, never the copied bodies. */
@@ -50,6 +52,11 @@ export function prepareForkSnapshot(input: {
   const omitted = new Set(keys.omitted)
   const dependents = new Map<string, string[]>()
   const mapped = new Map<string, string>()
+  const depend = (parent: string, child: string) => {
+    const children = dependents.get(parent) ?? []
+    children.push(child)
+    dependents.set(parent, children)
+  }
   for (const item of candidates) {
     const identity = parseAgentJournalItemKey(keys.providerKey(item.itemId))
     if (!identity) {
@@ -76,12 +83,36 @@ export function prepareForkSnapshot(input: {
       references.push(item.turnScope.turnItemId)
     }
     for (const ref of references) {
-      const children = dependents.get(ref) ?? []
-      children.push(item.itemId)
-      dependents.set(ref, children)
+      depend(ref, item.itemId)
+    }
+    if (item.agentId !== undefined) {
+      depend(`agent:${item.agentId}`, item.itemId)
+      depend(item.itemId, `agent:${item.agentId}`)
+      if (item.parentAgentId !== undefined) {
+        depend(`agent:${item.parentAgentId}`, `agent:${item.agentId}`)
+      }
+    }
+    if (item.providerParentRef !== undefined) {
+      depend(`tool:${item.providerParentRef}`, item.itemId)
     }
     const body = item.body
+    const calls =
+      body.kind === 'tool-call'
+        ? [body]
+        : body.kind === 'message'
+          ? body.blocks.filter((block) => block.type === 'tool-call')
+          : []
+    for (const call of calls) {
+      if (call.callId !== undefined) {
+        depend(item.itemId, `tool:${call.callId}`)
+      }
+    }
+    const helpers = body.kind === 'message' ? body.blocks.flatMap(namedSubagents) : []
+    for (const helper of helpers) {
+      depend(item.itemId, `agent:${helper.id}`)
+    }
     if (
+      helpers.some((helper) => !isTerminalSubagentState(helper.state)) ||
       readAgentJournalTurn(body)?.state === 'running' ||
       (body.kind === 'tool-call' && body.state === 'running') ||
       (body.kind === 'message' &&
