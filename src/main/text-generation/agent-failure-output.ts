@@ -1,4 +1,4 @@
-import { stripAnsiControlSequences } from '../../shared/commit-message-agent-output'
+import { stripAnsiControlSequences } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 
 /** Bounded failure output is display-on-demand only; never persist or sync it. */
 export type AgentGenerationFailureOutput = {

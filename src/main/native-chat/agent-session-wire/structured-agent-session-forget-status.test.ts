@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {

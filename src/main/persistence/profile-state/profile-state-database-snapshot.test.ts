@@ -19,7 +19,7 @@ import {
 import { exportProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
 import type Database from '../../sqlite/sync-database'
-import * as durableFileWrite from '../../durable-file-write'
+import * as durableFileWrite from '../../filesystem/durable-file-write'
 import * as fsPromises from 'node:fs/promises'
 
 vi.mock('node:fs/promises', async (importOriginal) => {

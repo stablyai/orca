@@ -15,12 +15,12 @@ import { afterEach, vi } from 'vitest'
 import type { LinearIssue } from '../../src/shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
 import type { Repo } from '../../src/shared/repo-types'
-import { WorkspaceAttachmentSourceStatus } from '../../src/renderer/src/components/sidebar/WorkspaceAttachmentSourceStatus'
+import { WorkspaceAttachmentSourceStatus } from '../../src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentSourceStatus'
 import { Command } from '@/components/ui/command'
 import {
   referenceLinearIssue,
   referenceRepo
-} from '../../src/renderer/src/components/sidebar/workspace-reference-fixtures.test-support'
+} from '../../src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
 import { SmartWorkspaceSourceResultList } from '../../src/renderer/src/components/new-workspace/SmartWorkspaceSourceResultList'
 import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-workspace/use-work-item-source-search'
 
@@ -60,6 +60,7 @@ const detailTransport = vi.hoisted(() => {
     workspaces: ['workspace-1'],
     accountFixture: false,
     credential,
+    LinearError: class LinearError extends Error {},
     AuthError: class AuthenticationLinearError extends Error {}
   }
 })
@@ -79,7 +80,9 @@ vi.mock('../../src/main/linear/client', async (original) => {
               workspace: { id: workspaceId, organizationName: 'Acme' },
               client: {
                 issue: (id: string) => detailTransport.issue(id, workspaceId),
-                client: { rawRequest: (...args: unknown[]) => detailTransport.search(...args) }
+                client: {
+                  rawRequest: (...args: unknown[]) => detailTransport.search(...args, workspaceId)
+                }
               }
             }
           ]
@@ -98,7 +101,11 @@ vi.mock('../../src/main/linear/linear-sdk', () => {
     }
   }
   return {
-    loadLinearSdk: () => ({ AuthenticationLinearError: detailTransport.AuthError, LinearClient }),
+    loadLinearSdk: () => ({
+      LinearError: detailTransport.LinearError,
+      AuthenticationLinearError: detailTransport.AuthError,
+      LinearClient
+    }),
     createLinearClient: (options: { apiKey: string }) => new LinearClient(options)
   }
 })

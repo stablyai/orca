@@ -14,8 +14,13 @@ export type WorkerLineageFacts<D extends Dispatch, R extends Resource> = {
 
 export function resolveWorkerLineageFacts<D extends Dispatch, R extends Resource>(
   facts: WorkerLineageFacts<D, R>,
-  dispatchId: string
+  dispatchId: string,
+  cache?: Map<string, { latest: D; resource: R | undefined }>
 ): { latest: D; resource: R | undefined } | undefined {
+  const cached = cache?.get(dispatchId)
+  if (cached) {
+    return cached
+  }
   const addressed = facts.dispatch(dispatchId)
   if (!addressed) {
     return undefined
@@ -23,6 +28,12 @@ export function resolveWorkerLineageFacts<D extends Dispatch, R extends Resource
   let latest = addressed
   const resourceOf = (id: string) => facts.ownedResource(id) ?? facts.formerResource(id)
   const seen = new Set([latest.id])
+  const remember = (value: { latest: D; resource: R | undefined }) => {
+    for (const id of seen) {
+      cache?.set(id, value)
+    }
+    return value
+  }
   // A follow-up that never got a worker continues the nearest one before it that did.
   let resource = resourceOf(latest.id)
   for (let back = addressed; !resource && back.follow_up_of_dispatch_id;) {
@@ -35,12 +46,16 @@ export function resolveWorkerLineageFacts<D extends Dispatch, R extends Resource
     resource = resourceOf(prior.id)
   }
   for (;;) {
+    const suffix = cache?.get(latest.id)
+    if (suffix) {
+      return remember({ latest: suffix.latest, resource: suffix.resource ?? resource })
+    }
     const transferred = resource && resource.owner_dispatch_id !== latest.id ? resource : undefined
     const next =
       facts.followUp(latest.id) ??
       (transferred ? facts.dispatch(transferred.owner_dispatch_id) : undefined)
     if (!next || seen.has(next.id)) {
-      return { latest, resource }
+      return remember({ latest, resource })
     }
     seen.add(next.id)
     latest = next

@@ -33,6 +33,14 @@ export class OrcadActiveReadinessError extends Error {
   }
 }
 
+/** A launched orcad that did not publish acceptable readiness; inspection failures stay the base error. */
+export class OrcadLaunchReadinessError extends OrcadActiveReadinessError {
+  constructor(verdict: OrcadReadinessFailureVerdict, message: string) {
+    super(verdict, message)
+    this.name = 'OrcadLaunchReadinessError'
+  }
+}
+
 function gatedReadiness(
   parsed: OrcadReadinessParse,
   expectation: OrcadActivationExpectation,
@@ -148,6 +156,6 @@ export async function launchOrcadSlotAndAwaitReadiness(
       throw error
     }
     const message = await withOrcadLogTail(target, spec.remoteInstallDir, error.message)
-    throw new OrcadActiveReadinessError(error.verdict, message)
+    throw new OrcadLaunchReadinessError(error.verdict, message)
   }
 }

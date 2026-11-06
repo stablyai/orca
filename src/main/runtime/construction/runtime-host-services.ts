@@ -1,47 +1,46 @@
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
-import type { RuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
+import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-repository-command-surface'
 
-import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
 import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
-import { RuntimePreservedBranchCleanup } from '../runtime-preserved-branch-cleanup'
-import type * as TerminalContracts from '../runtime-terminal-contracts'
+import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
+import type { AgentSessionCreateOperation } from '../session-construction/agent-session/agent-session-create-operation'
+import type * as CompatibilityAuthority from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
 
-import { RuntimeAccountController } from '../runtime-account-controller'
-import { RuntimeMobileSpeechCatalog } from '../runtime-mobile-speech-catalog'
-import { RuntimeMobileDictationController } from '../runtime-mobile-dictation-controller'
-import { RuntimeProjectHostSetupController } from '../runtime-project-host-setup-controller'
-import { RuntimeProjectGroupController } from '../runtime-project-group-controller'
-import { RuntimeNestedRepoImport } from '../runtime-nested-repo-import'
-import { RuntimeRepositoryRegistrationController } from '../runtime-repository-registration-controller'
-import { RuntimeRepositoryCloneController } from '../runtime-repository-clone-controller'
-import { RuntimeRepositorySettingsController } from '../runtime-repository-settings-controller'
-import { RuntimeRepositorySparsePresets } from '../runtime-repository-sparse-presets'
-import { RuntimeRepositoryRefQueries } from '../runtime-repository-ref-queries'
-import { RuntimeServerEnvironmentCommands } from '../runtime-server-environment-commands'
-import { RuntimeRepositoryForkBackfill } from '../runtime-repository-fork-backfill'
-import { RuntimeWorkspaceSessionController } from '../runtime-workspace-session-controller'
+import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
+import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
+import { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
+import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
+import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
+import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'
+import { RuntimeRepositoryRegistrationController } from '../repositories/runtime-repository-registration-controller'
+import { RuntimeRepositoryCloneController } from '../repositories/runtime-repository-clone-controller'
+import { RuntimeRepositorySettingsController } from '../repositories/runtime-repository-settings-controller'
+import { RuntimeRepositorySparsePresets } from '../repositories/runtime-repository-sparse-presets'
+import { RuntimeRepositoryRefQueries } from '../repositories/runtime-repository-ref-queries'
+import { RuntimeServerEnvironmentCommands } from '../files/server-browse/runtime-server-environment-commands'
+import { RuntimeRepositoryForkBackfill } from '../repositories/runtime-repository-fork-backfill'
+import { RuntimeWorkspaceSessionController } from '../workspaces/session-hosts/runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from '../runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
-import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
-import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
-
-type SessionCreateOperation = TerminalContracts.AgentSessionCreateOperation
+import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
+import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
@@ -136,8 +135,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   }
 
   /** Includes resume-identity-only provider rows. */
-  getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
-    return this.getAgentProviderSessionSnapshotFn?.() ?? []
+  getAgentProviderSessionRows(tabId?: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.(tabId) ?? []
   }
 
   getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
@@ -190,7 +189,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly agentSessionClaimSigner!: HostBindings['agentSessionClaimSigner']
 
-  protected readonly agentSessionCreateOperations = new Map<string, SessionCreateOperation>()
+  protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
 
   protected readonly agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
 
@@ -205,7 +204,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly orchestrationCompatibilitySshAttachments = new Map<
     string,
-    TerminalContracts.OrchestrationCompatibilitySshAttachmentAuthority
+    CompatibilityAuthority.OrchestrationCompatibilitySshAttachmentAuthority
   >()
 
   protected sshRelayRecoveryGenerationByTargetId = new Map<string, number>()
@@ -263,7 +262,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected restoredOrchestrationAuthorityByPtyId = new Map<
     string,
-    TerminalContracts.RestoredOrchestrationAuthorityReceipt
+    CompatibilityAuthority.RestoredOrchestrationAuthorityReceipt
   >()
 
   protected ptyControllerInventorySequence = 0

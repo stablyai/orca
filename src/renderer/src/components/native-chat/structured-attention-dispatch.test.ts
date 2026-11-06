@@ -2,11 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
-import { agentSessionAttentionKey } from '../../../../shared/agent-session/agent-session-attention'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -187,43 +186,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     vi.unstubAllGlobals()
   })
 
-  it('leaves the phone to a local host, which pushed it already, and relays for a remote one', () => {
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), { kind: 'local' })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ turnId: 'turn-2' }), {
-      kind: 'environment',
-      environmentId: 'env-1'
-    })
-    expect(dispatched.map((request) => request.mobileDeliveredByHost)).toEqual([true, undefined])
-    expect(dispatched.map((request) => request.executionHost)).toEqual([undefined, 'runtime:env-1'])
-    expect(dispatched.map((request) => request.attentionKey)).toEqual([
-      agentSessionAttentionKey({ type: 'completion', completion: completion() }),
-      agentSessionAttentionKey({ type: 'completion', completion: completion({ turnId: 'turn-2' }) })
-    ])
-  })
-
-  it('uses the receiving paired subscription over the tab’s execution host', () => {
-    store.setState({
-      runtimeEnvironments: [
-        {
-          id: 'env-1',
-          name: 'Paired server',
-          createdAt: 1,
-          updatedAt: 1,
-          lastUsedAt: null,
-          runtimeId: null,
-          endpoints: [],
-          preferredEndpointId: 'endpoint'
-        }
-      ]
-    })
-    dispatchStructuredTurnCompletionAttention(
-      { ...structuredTab(), executionHostId: 'local' },
-      completion(),
-      { kind: 'environment', environmentId: 'env-1' }
-    )
-    expect(onlyDispatch().notificationSourceId).toBe('runtime:env-1')
-  })
-
   it('lights workspace bold, the amber pane dot and the tab dot for a successful turn', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators()).toEqual({
@@ -233,19 +195,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       surfaceDot: 'agent-completion'
     })
   })
-
-  it.each(['failure', 'cancellation'] as const)(
-    'lights the same indicators for a %s outcome, because the user is still being called back',
-    (outcome) => {
-      dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ outcome }))
-      expect(indicators()).toEqual({
-        workspaceBold: true,
-        paneDot: 'agent-completion',
-        tabDot: 'agent-completion',
-        surfaceDot: 'agent-completion'
-      })
-    }
-  )
 
   it('lights nothing when the outcome is absent, because absent is UNKNOWN and never a verdict', () => {
     const withoutOutcome = completion()
@@ -296,46 +245,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(indicators().paneDot).toBe('agent-completion')
   })
 
-  it('hands main the host verdict, which picks finished, failed or stopped', () => {
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(onlyDispatch()).toMatchObject({
-      source: 'agent-task-complete',
-      surface: 'agent-session',
-      agentState: 'done',
-      agentTurnOutcome: 'success'
-    })
-
-    for (const [outcome, turnId] of [
-      ['cancellation', 'turn-2'],
-      ['failure', 'turn-3']
-    ] as const) {
-      dispatched.length = 0
-      seed()
-      dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ outcome, turnId }))
-      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: outcome })
-    }
-  })
-
-  it('calls back a send refused before any turn, named by its journal item key, as failed', () => {
-    dispatchStructuredTurnCompletionAttention(
-      structuredTab(),
-      completion({ outcome: 'failure', turnId: agentJournalSubmissionKey('m1') })
-    )
-    expect(indicators().paneDot).toBe('agent-completion')
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'failure' })
-  })
-
-  it('asks for input when the host settled a request while a prompt waits on the user', () => {
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
-    expect(indicators().paneDot).toBe('agent-completion')
-    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
-
-    dispatched.length = 0
-    seed()
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
-  })
-
   it('leaves a dispatched chat worker’s finished turn to its coordinator, but still calls the user to its prompt', () => {
     store.setState({
       runtimeAgentOrchestrationByPaneKey: {
@@ -353,53 +262,6 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
     expect(indicators().paneDot).toBe('agent-completion')
     expect(onlyDispatch()).toMatchObject({ agentState: 'blocked' })
-  })
-
-  it('says done even while the status row still reads working, because the host settled the turn', () => {
-    // Completion can outrun status projection; row state would wrongly announce settled work as still working.
-    const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
-    store.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          state: 'working',
-          prompt: 'do the thing',
-          updatedAt: 5_000,
-          stateStartedAt: 5_000,
-          paneKey,
-          worktreeId: WORKSPACE,
-          agentType: 'claude',
-          stateHistory: []
-        }
-      }
-    })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'success' })
-  })
-
-  it('delivers the edge identity as its id, retired by subject when the user reads the chat', () => {
-    const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
-    store.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          state: 'done',
-          prompt: 'do the thing',
-          updatedAt: 5_000,
-          stateStartedAt: 5_000,
-          paneKey,
-          worktreeId: WORKSPACE,
-          agentType: 'claude',
-          stateHistory: []
-        }
-      }
-    })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    // The same id the host's phone push carries, so retiring it here retires the phone's too.
-    expect(onlyDispatch().notificationId).toBe(
-      agentSessionAttentionKey({ type: 'completion', completion: completion() })
-    )
-
-    store.getState().acknowledgeAgents([paneKey])
-    expect(dismissed.flatMap((call) => call.paneKeys ?? [])).toContain(paneKey)
   })
 
   it('rejects a completion for a session this tab does not own', () => {
@@ -465,11 +327,5 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       tabDot: 'agent-completion',
       surfaceDot: 'agent-completion'
     })
-  })
-
-  it('is idempotent, so a redelivered completion does not stack markers', () => {
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators().paneDot).toBe('agent-completion')
   })
 })

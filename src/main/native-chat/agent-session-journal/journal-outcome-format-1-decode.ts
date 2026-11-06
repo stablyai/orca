@@ -79,6 +79,9 @@ function applyScalar(state: JournalReducerState, key: string, value: unknown): v
     case 'oldestSequence':
       state.oldestSequence = f.oldestSequence.parse(value)
       return
+    case 'contextBoundary':
+      state.contextBoundary = f.contextBoundary.parse(value) ?? 1
+      return
     case 'highestFence':
       state.highestFence = f.highestFence.parse(value)
       return

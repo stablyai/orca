@@ -1,9 +1,9 @@
 import {
   agentChildWorkStopEvidence,
   type AgentChildWorkStopAcknowledgement
-} from '../../../shared/agent-child-work-stop-targets'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+} from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 

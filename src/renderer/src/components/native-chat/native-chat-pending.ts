@@ -3,14 +3,14 @@ import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
   type NativeChatPendingSend
-} from '../../../../shared/native-chat-pending-sends'
+} from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
   assignNativeChatPendingOccurrence,
   matchingNativeChatUserContentCounts,
   nativeChatPendingContentKey
-} from '../../../../shared/native-chat-pending-occurrence'
+} from '../../../../shared/native-chat/transcript/native-chat-pending-occurrence'
 
 export type NativeChatPendingSendScope = {
   paneKey: string
@@ -105,6 +105,4 @@ export function nextNativeChatPendingSendId(now = Date.now()): string {
   return `${now}-${pendingSendCounter}`
 }
 
-export function isLaunchPromptMessageId(id: string): boolean {
-  return id.startsWith('launch-pending:')
-}
+export { isLaunchPromptMessageId } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'

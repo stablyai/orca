@@ -8,7 +8,7 @@ import { LegacyRelayExitProofs, LegacyRelayRetry } from './legacy-relay-bridge-t
 import type { LegacyRelayClient } from './legacy-relay-client'
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
 import type { LegacyRelayTargetBridge } from './legacy-relay-target-bridge'
-import { PtyRetirementWithoutProof } from '../../pty-exit-proof'
+import { PtyRetirementWithoutProof } from '../../pty/process-retirement/pty-exit-proof'
 
 type StopTarget = Pick<
   LegacyRelayTargetBridge,

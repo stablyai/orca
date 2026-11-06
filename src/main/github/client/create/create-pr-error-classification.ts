@@ -1,4 +1,4 @@
-import type { CreateHostedReviewResult } from '../../../../shared/hosted-review'
+import type { CreateHostedReviewResult } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { extractExecError } from '../../../git/exec-error'
 export function classifyCreatePRError(error: unknown): CreateHostedReviewResult {
   const { stderr, stdout } = extractExecError(error)

@@ -11,10 +11,18 @@ import type { AcpAgentError } from '../acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,
+  ClientCapabilities,
   InitializeResponse,
   ModelInfo,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
+
+export const pendingAcpResolution = {
+  state: 'pending',
+  selectedOptionId: null,
+  resolvedBy: null,
+  resolvedAt: null
+} as const
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -52,6 +60,7 @@ export type AcpDialectNotification =
       started?: boolean
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
+      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit'>
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -67,6 +76,8 @@ export type AcpTurnEnding = {
   failureDetail?: string
   notSignedIn?: boolean
   usageLimit?: AgentSessionUsageLimit
+  /** Structured error data shows the model provider failed; runtime only. */
+  providerFailure?: boolean
   hookBlock?: AcpHookBlock
 }
 
@@ -118,6 +129,8 @@ export type AcpDialect = {
   }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
+  /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
@@ -125,7 +138,7 @@ export type AcpDialect = {
   promptFailure?(
     error: AcpAgentError,
     at: number
-  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
+  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit' | 'providerFailure'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
   /** The agent dropped this session; only a new child can reopen it. */
   sessionLost?(error: AcpAgentError, sessionId: string): boolean

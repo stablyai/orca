@@ -11,6 +11,8 @@ import type { RuntimeFileStatLike } from './file-grants'
 export async function statLocalTerminalArtifact(absolutePath: string): Promise<{
   stats: RuntimeFileStatLike & { isDirectory: () => boolean }
   contentDigest: string | null
+  /** Null for a folder or a file too large to read whole. */
+  binary: boolean | null
 }> {
   await assertLocalTerminalArtifactPathStillCanonical(absolutePath)
   const handle = await open(absolutePath, LOCAL_READ_OPEN_FLAGS)
@@ -19,10 +21,10 @@ export async function statLocalTerminalArtifact(absolutePath: string): Promise<{
     if (!stats.isDirectory() && !stats.isFile()) {
       throw new Error(NOT_A_REGULAR_FILE_MESSAGE)
     }
-    const contentDigest = stats.isDirectory()
-      ? null
+    const content = stats.isDirectory()
+      ? { contentDigest: null, binary: null }
       : await localTerminalArtifactContentDigest(handle, stats.size)
-    return { stats, contentDigest }
+    return { stats, ...content }
   } finally {
     await handle.close()
   }

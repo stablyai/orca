@@ -12,6 +12,8 @@ export type TaskPageGitHubLandingRefreshModel = Pick<
   | 'githubMode'
   | 'appliedTaskSearch'
   | 'setTasksLoading'
+  | 'setLandingRequestKey'
+  | 'selectedReposKey'
   | 'setTasksRefreshing'
   | 'setTasksFiltering'
   | 'setTasksError'

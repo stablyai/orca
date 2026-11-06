@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resolveTerminalHandleForPane } from '../terminal-pane/terminal-handle-copy'
 

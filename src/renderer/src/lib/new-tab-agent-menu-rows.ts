@@ -3,14 +3,7 @@ import {
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import type { HostChatAnswer } from '../../../shared/agent-launch-picker-rows'
-export { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-rows'
-export type {
-  HostChatAnswer,
-  ChatUnavailableReason,
-  NewTabAgentMenuRow,
-  NewTabAgentMenuSettings
-} from '../../../shared/agent-launch-picker-rows'
+import type { HostChatAnswer } from '../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export function hostChatAnswer(input: AgentLaunchRoutingInput): HostChatAnswer {
   const support = structuredAgentLaunchSupport(input)

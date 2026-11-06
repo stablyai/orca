@@ -18,11 +18,6 @@ import {
   type HostScopedWorktreeSelection
 } from './caller-host-worktree-selection'
 
-export type BrowserCliTarget = {
-  worktree?: string
-  page?: string
-}
-
 export type ComputerCliTarget = {
   session?: string
   worktree?: string
@@ -79,7 +74,7 @@ export async function normalizeWorktreeSelectorForCaller(
   return resolveCallerDistroPathSelector(normalized, cwd, client)
 }
 
-function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
+export function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
   if (!client.isRemote) {
     return
   }
@@ -220,30 +215,6 @@ export async function getTerminalHandle(
     ...(options.requireUnambiguous ? { requireUnambiguous: true } : {})
   })
   return response.result.handle
-}
-
-export async function getBrowserCommandTarget(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  client: RuntimeClient
-): Promise<BrowserCliTarget> {
-  const page = getOptionalStringFlag(flags, 'page')
-  if (!page) {
-    return { worktree: await getBrowserWorktreeSelector(flags, cwd, client) }
-  }
-
-  const explicitWorktree = getOptionalStringFlag(flags, 'worktree')
-  if (!explicitWorktree || explicitWorktree === 'all') {
-    return { page }
-  }
-  if (explicitWorktree === 'active' || explicitWorktree === 'current') {
-    assertLocalCwdWorktreeSelector(explicitWorktree, client)
-    return { page, worktree: await resolveCurrentWorktreeSelector(cwd, client) }
-  }
-  return {
-    page,
-    worktree: await normalizeWorktreeSelectorForCaller(explicitWorktree, cwd, client)
-  }
 }
 
 export async function getComputerCommandTarget(

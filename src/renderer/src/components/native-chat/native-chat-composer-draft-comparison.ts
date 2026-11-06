@@ -1,6 +1,6 @@
 import { textLeftAfterSubmission } from '../../../../shared/submitted-draft-text'
 import type { JSONContent } from '@tiptap/react'
-import { slicePromptDocument } from './native-chat-prompt-document-text'
+import { promptTextContent, slicePromptDocument } from './native-chat-prompt-document-text'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
@@ -38,6 +38,15 @@ export function nativeChatComposerDraftLeftAfterSend(
   current: NativeChatComposerDraft,
   sent: NativeChatComposerDraft
 ): NativeChatComposerDraft | null {
+  if (
+    current.text === sent.text &&
+    !sameNativeChatComposerDraftDocument(
+      current.document ?? promptTextContent(current.text),
+      sent.document ?? promptTextContent(sent.text)
+    )
+  ) {
+    return null
+  }
   const left = textLeftAfterSubmission(current.text, sent.text)
   if (!left) {
     return null

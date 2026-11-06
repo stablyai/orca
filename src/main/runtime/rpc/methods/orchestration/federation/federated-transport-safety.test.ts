@@ -262,7 +262,11 @@ describe('federated transport safety', () => {
       'orchestration.federationImport'
     ])
     for (const call of callOrchestrationWorkerServer.mock.calls) {
-      expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
+      expect((call as unknown[])[5]).toEqual(
+        call[1] === 'orchestration.federationImport'
+          ? { expectedEnvironmentPairingRevision: 73, prepareRequest: expect.any(Function) }
+          : { expectedEnvironmentPairingRevision: 73 }
+      )
     }
   })
 
@@ -270,7 +274,8 @@ describe('federated transport safety', () => {
     const db = {
       getFederatedDispatch: () => federatedDispatch(),
       beginWorkerStop: () => ({ disposition: 'stopping', worker: { state: 'stopping' } }),
-      reconcileFederatedWorkerStop: () => ({ state: 'stopped' })
+      reconcileFederatedWorkerStop: () => ({ state: 'stopped' }),
+      listHelperDispatchIds: () => []
     }
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) =>
       method === 'status.get'
@@ -295,6 +300,77 @@ describe('federated transport safety', () => {
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
     }
+  })
+})
+
+describe('worker-stop of a remote worker already settled at home', () => {
+  async function stopSettledRemote(helpers: Record<string, string[]>, rootHelpers?: unknown) {
+    const db = {
+      getFederatedDispatch: () => federatedDispatch(),
+      beginWorkerStop: () => ({ disposition: 'already_settled', worker: { state: 'succeeded' } }),
+      getWorkerDispatch: () => ({ state: 'succeeded' }),
+      listHelperDispatchIds: (id: string) => helpers[id] ?? []
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop reads only these runtime members.
+    const runtime = {
+      getOrchestrationDb: () => db,
+      getRuntimeId: () => 'runtime-home',
+      resolveOrchestrationWorkerServer: () => server,
+      callOrchestrationWorkerServer: vi.fn(async (_selector, method: string, params) => {
+        if (method === 'status.get') {
+          return runtimeStatus(['orchestration.worker-stop-helpers.v1'])
+        }
+        if (method === 'orchestration.federationStop') {
+          if (
+            params.dispatchId === 'dispatch-worker' &&
+            (helpers['dispatch-worker'] || rootHelpers)
+          ) {
+            return {
+              state: 'succeeded',
+              alreadySettled: true,
+              processAction: 'none',
+              helpers: rootHelpers
+            }
+          }
+          throw new Error('timed out')
+        }
+        return { keptOpen: false }
+      })
+    } as unknown as OrcaRuntimeService
+    const method = ORCHESTRATION_WORKER_STOP_METHODS[0]!
+    return method.handler(method.params!.parse({ dispatch: 'dispatch-worker' }), {
+      runtime,
+      orchestrationMutation: { requestId: 'request-stop' }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime and orchestrationMutation.
+    } as never)
+  }
+
+  it('fails the stop when its host cannot be reached to stop its helpers', async () => {
+    await expect(stopSettledRemote({})).resolves.toMatchObject({
+      state: 'succeeded',
+      alreadySettled: true,
+      helperStopError: expect.stringContaining('timed out')
+    })
+  })
+
+  it('fails the stop when a capable host returns an unreadable helper list', async () => {
+    await expect(stopSettledRemote({}, 'not a list')).resolves.toMatchObject({
+      helperStopError: expect.stringContaining('cannot read')
+    })
+  })
+
+  it('reports a settled helper whose host could not stop its helpers as unconfirmed', async () => {
+    await expect(
+      stopSettledRemote({ 'dispatch-worker': ['dispatch-helper'] })
+    ).resolves.toMatchObject({
+      helpers: [
+        {
+          dispatchId: 'dispatch-helper',
+          outcome: 'unconfirmed',
+          lastError: expect.stringContaining('timed out')
+        }
+      ]
+    })
   })
 })
 

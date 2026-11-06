@@ -3,8 +3,8 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
-import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { assertAgentPromptRequestActive } from '../../terminal/input/agent-prompt-signals'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   refuse,
   AgentSessionRefusalError
@@ -298,8 +298,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
         payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
       }
     : args.envelope
-  const prepared = await resolveUncommittedStructuredCreate(() =>
-    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  const prepared = await resolveUncommittedStructuredCreate(
+    () => prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope }),
+    args.agent
   )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }

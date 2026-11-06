@@ -8,7 +8,7 @@ import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../loading-store/store'
 import { wslMoveAutomationHostFilterUpdate } from './wsl-move-automation-filter-rewrite'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'

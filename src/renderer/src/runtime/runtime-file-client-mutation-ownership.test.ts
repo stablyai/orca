@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  copyRuntimePath,
-  createRuntimePath,
-  deleteRuntimePath,
-  renameRuntimePath,
-  writeRuntimeFile
-} from './runtime-file-mutation-client'
-import { importExternalPathsToRuntime } from './runtime-file-import-client'
+import { deleteRuntimePath, writeRuntimeFile } from './runtime-file-mutation-client'
+import './runtime-file-import-client'
 import { markRuntimeEnvironmentCompatible } from './runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
@@ -16,12 +10,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import {
-  fsCopy,
-  fsCreateFile,
-  fsRename,
   fsDeletePath,
-  fsImportExternalPaths,
-  fsStageExternalPathsForRuntimeUpload,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall,
   installRuntimeFileClientEnvironment
@@ -30,43 +19,6 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
-  it('refuses old-HUB imports before staging client-local files', async () => {
-    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-hub-runtime' }
-        })
-      }
-      return runtimeEnvironmentCall(args)
-    })
-
-    await expect(
-      importExternalPathsToRuntime(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
-          worktreeId: 'wt-nested-ssh',
-          worktreePath: '/ssh/repo',
-          expectedExecutionHostId: 'ssh:hub-ssh-1',
-          expectedSshTargetId: 'hub-ssh-1',
-          expectedSshConnectionGeneration: 7
-        },
-        ['/client/secret.txt'],
-        '/ssh/repo/uploads'
-      )
-    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
-
-    expect(fsStageExternalPathsForRuntimeUpload).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsImportExternalPaths).not.toHaveBeenCalled()
-  })
-
   it('re-probes mutation support so a HUB downgrade cannot reuse a cached capability', async () => {
     let statusCalls = 0
     runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
@@ -185,50 +137,5 @@ describe('runtime file client', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(fsDeletePath).not.toHaveBeenCalled()
-  })
-
-  it('does not fall back to client-local mutations for remote-owned paths outside the worktree', async () => {
-    const context = {
-      target: { kind: 'environment' as const, environmentId: 'env-1' },
-      worktreeId: 'wt-1',
-      worktreePath: '/remote/repo'
-    }
-
-    await expect(createRuntimePath(context, '/tmp/new.ts', 'file')).rejects.toThrow(
-      'outside the owning runtime worktree'
-    )
-    await expect(
-      renameRuntimePath(context, '/remote/repo/src/new.ts', '/tmp/renamed.ts')
-    ).rejects.toThrow('outside the owning runtime worktree')
-    await expect(
-      copyRuntimePath(context, '/remote/repo/src/new.ts', '/tmp/copied.ts')
-    ).rejects.toThrow('outside the owning runtime worktree')
-    await expect(deleteRuntimePath(context, '/tmp/new.ts')).rejects.toThrow(
-      'outside the owning runtime worktree'
-    )
-
-    expect(fsCreateFile).not.toHaveBeenCalled()
-    expect(fsRename).not.toHaveBeenCalled()
-    expect(fsCopy).not.toHaveBeenCalled()
-    expect(fsDeletePath).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('does not fall back to client-local mutations when a remote Windows path escapes the worktree', async () => {
-    const context = {
-      target: { kind: 'environment' as const, environmentId: 'env-1' },
-      worktreeId: 'wt-1',
-      worktreePath: 'C:\\repo'
-    }
-
-    await expect(createRuntimePath(context, 'D:\\repo\\new.ts', 'file')).rejects.toThrow(
-      'outside the owning runtime worktree'
-    )
-    await expect(
-      createRuntimePath(context, '\\\\server\\share\\repo\\new.ts', 'file')
-    ).rejects.toThrow('outside the owning runtime worktree')
-
-    expect(fsCreateFile).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

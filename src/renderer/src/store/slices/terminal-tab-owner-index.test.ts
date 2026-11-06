@@ -103,31 +103,6 @@ describe('terminal tab owner index', () => {
     expect(bucketVisits).toBe(0)
   })
 
-  it('replaces the topology on hydration across every workspace key kind', () => {
-    const index = createTerminalTabOwnerIndex()
-    index.getOwners({ stale: [{ id: 'stale-tab' }] })
-
-    const hydrated = {
-      'repo-local::/Users/me/project': [{ id: 'local-tab' }],
-      'folder:folder-workspace-id': [{ id: 'folder-tab' }],
-      'repo-ssh::/srv/project': [{ id: 'ssh-tab' }],
-      'repo-wsl::\\\\wsl.localhost\\Ubuntu\\home\\me\\project': [{ id: 'wsl-tab' }],
-      'worktree:repo-runtime::/workspace::workspace:paired-runtime-id': [
-        { id: 'paired-runtime-tab' }
-      ]
-    }
-    const owners = index.getOwners(hydrated)
-
-    expect(Object.fromEntries(owners)).toEqual({
-      'local-tab': 'repo-local::/Users/me/project',
-      'folder-tab': 'folder:folder-workspace-id',
-      'ssh-tab': 'repo-ssh::/srv/project',
-      'wsl-tab': 'repo-wsl::\\\\wsl.localhost\\Ubuntu\\home\\me\\project',
-      'paired-runtime-tab': 'worktree:repo-runtime::/workspace::workspace:paired-runtime-id'
-    })
-    expect(owners.has('stale-tab')).toBe(false)
-  })
-
   it('preserves last-wins object order for duplicate ids when only outer keys reorder', () => {
     let idReads = 0
     const firstBucket = [

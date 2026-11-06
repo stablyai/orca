@@ -128,3 +128,5 @@ export const KeyValue = 'KeyValue'
 export const Callout = 'Callout'
 export const Skeleton = 'Skeleton'
 export const RelativeTime = 'RelativeTime'
+// Catalog 4 (Orca 1.4.248).
+export const Box = 'Box'

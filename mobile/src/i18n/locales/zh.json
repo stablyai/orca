@@ -5,10 +5,13 @@
       "connecting": "正在连接到主机…",
       "connectingTo": "正在连接到 {{name}}…",
       "default": "系统默认",
+      "fableWindow": "Fable",
       "hostNotFound": "未找到主机",
       "invalidSnapshot": "主机返回的账户快照无效",
       "loadingAccounts": "正在加载账户…",
       "manageAccountsHint": "请在桌面的“设置 → 账户”中添加账户或重新进行账户身份验证。",
+      "mcpWindow": "MCP",
+      "otherAgents": "其他智能体",
       "refreshAccounts": "刷新账户",
       "sessionWindow": "5小时",
       "switchFailed": "无法切换账户",
@@ -110,13 +113,8 @@
       "tryAgain": "重试"
     },
     "terminalSettings": {
-      "autocomplete": "自动补全与自动纠正",
-      "autocompleteOff": "关闭",
-      "autocompleteOn": "开启",
       "defaultText": "默认（100%）",
       "keepPhoneSize": "保持手机尺寸（默认）",
-      "keyboardInputDescription": "自动补全、自动纠正和拼写建议仅适用于缓冲命令输入。点击键盘上方的双箭头按钮，从实时输入切换到缓冲输入，即可先编辑命令，再点击“发送”。默认关闭，以免改写命令、选项或路径。",
-      "keyboardInputHeading": "键盘输入",
       "largeText": "大（125%）",
       "largerText": "更大（150%）",
       "largestText": "最大（200%）",
@@ -191,6 +189,11 @@
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根据上一次响应的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
       "file": "文件",
@@ -222,10 +225,22 @@
       "clipboardRejected": "剪贴板拒绝接收该文本。",
       "copyFailed": "复制失败",
       "copyMessage": "复制消息",
-      "selectText": "选择文本"
+      "selectText": "选择文本",
+      "rewind": "回溯到此处"
     },
     "nativeChatImageViewer": {
-      "closeImage": "关闭图片"
+      "closeImage": "关闭图片",
+      "imageActions": "图片操作",
+      "copyImage": "拷贝图片",
+      "saveImage": "存储图片",
+      "share": "共享…",
+      "imageCopied": "已拷贝图片",
+      "imageSaved": "已存储图片",
+      "copyFailed": "无法拷贝图片",
+      "saveFailed": "无法存储图片",
+      "shareFailed": "无法共享图片",
+      "photosAccessDenied": "请在“设置”中允许 Orca 添加照片",
+      "imageTooLarge": "图片过大"
     },
     "nativeChatProse": {
       "attachedImage": "附件图片",
@@ -283,7 +298,10 @@
       "stoppedManually": "已手动停止",
       "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
       "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
-      "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。"
+      "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
+      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。",
+      "signIn": "登录",
+      "signInHint": "在运行此聊天的电脑上打开终端"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -292,6 +310,13 @@
       "remote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
       "unnamedServer": "远程服务器",
       "update": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。"
+    },
+    "interruptedContinue": {
+      "failed": "无法继续此聊天。请重试，或发送一条消息。",
+      "explanation": "继续后，智能体会先检查其上一步是否已完成。"
+    },
+    "sendError": {
+      "dismiss": "关闭"
     },
     "permission": {
       "needsAccessTo": "需要访问： ",
@@ -330,7 +355,10 @@
       "emptyAnswer": "空回答",
       "resolved": "已解决",
       "resolver": "回复于 {{device}}",
-      "unavailable": "所选答案不可用"
+      "unavailable": "所选答案不可用",
+      "thisPhone": "此手机",
+      "computer": "电脑",
+      "otherDevice": "其他设备"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "会话开始后可用。",
@@ -373,7 +401,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "默认",
-      "notReportedMarker": "未上报"
+      "notReportedMarker": "未上报",
+      "moreModels": "更多模型",
+      "fewerModels": "较少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认"
@@ -525,6 +555,65 @@
     "agentMessage": {
       "handedOffToAgent": "已移交给智能体",
       "startedAgent": "已启动智能体"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "无法读取附件响应。请重试。",
+      "incompleteReply": "附件已更改或响应不完整。请关闭后重试。",
+      "notText": "无法以文本形式预览此文件。请保存后在其他应用中打开。",
+      "openFailed": "无法打开附件。请重试。",
+      "hostUpdate": "此主机暂不支持打开文本附件。请更新该主机上的 Orca，然后重试。",
+      "copyTooLarge": "文件太大，无法复制。请改为保存。",
+      "connectionChanged": "连接已更改。请重试以重新打开附件。",
+      "hostChanged": "附件所在的主机已更改。请关闭附件并重新打开。",
+      "readFailed": "无法读取附件。请重新连接后重试。文件可能已被删除或更改。",
+      "copyFrame": "完整复制此附件需要即将发布的手机更新。",
+      "copyFailed": "无法复制附件。请重试。",
+      "pastedText": "粘贴的文本",
+      "textAttachment": "文本附件",
+      "byteSize": "{{size}} 字节",
+      "saveUpdate": "保存功能将在手机更新中提供。",
+      "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新连接…",
+      "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
+      "server": "服务器",
+      "unavailable": "无法从手机访问 {{hostName}}。请在你的电脑上打开它的一个项目。"
+    },
+    "goal": {
+      "chip": "目标",
+      "exitMode": "退出目标模式",
+      "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
+      "pursuing": "正在追求目标",
+      "set": "目标已设定",
+      "paused": "目标已暂停",
+      "blocked": "目标受阻",
+      "limited": "目标受限",
+      "clear": "清除目标",
+      "expand": "显示完整目标",
+      "collapse": "隐藏完整目标",
+      "attachmentsUnsupported": "在设定目标之前删除附件。",
+      "pause": "暂停",
+      "resume": "继续"
+    },
+    "rewind": {
+      "title": "回溯到此处？",
+      "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便您编辑并重新发送。磁盘上的文件更改会保留。",
+      "confirm": "回溯",
+      "unsupported": "此聊天无法返回到更早的消息。",
+      "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
+      "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+      "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
+      "invalidTarget": "对话无法返回到此消息。未做任何更改。",
+      "historyLimit": "此对话过长，无法回溯。未做任何更改。",
+      "providerRefused": "智能体无法返回到此消息。",
+      "proofMismatch": "智能体的历史记录与此聊天不匹配。请在继续前检查对话。",
+      "outcomeUnknown": "Orca 无法确认对话是否已返回到更早的消息。它会在发送您的下一条消息前进行检查。",
+      "refused": "Orca 无法返回到此消息。请在继续前检查对话。",
+      "unavailable": "请等待聊天完成连接。",
+      "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。您的消息已回到输入框中，Orca 会在发送您的下一条消息前检查对话。",
+      "timeout": "返回到此消息后聊天未更新。请重新打开以查看最新内容。",
+      "pending": "请等待对话回溯到更早的消息。"
     }
   },
   "common": {
@@ -719,12 +808,14 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
+      "needsYou_one": "{{count}} 个需要您处理",
+      "needsYou_other": "{{count}} 个需要您处理",
       "openHost": "打开 {{title}}",
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
       "repairHint": "轻点以重新与桌面配对",
+      "sameNetworkOnlyHint": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对",
       "unlockHint": "解锁手机后，轻点重试",
-      "updateDesktopHint": "更新桌面端 Orca 并登录，即可随时随地连接",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃"
     },
     "hostDiagnosticsLink": {
@@ -752,7 +843,9 @@
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
-      "openImage": "打开图片"
+      "openImage": "打开图片",
+      "wrapLines": "自动换行",
+      "disableLineWrap": "关闭自动换行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
@@ -799,7 +892,8 @@
     },
     "prSidebar": {
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。"
+      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。",
+      "retryLoading": "重试加载 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
@@ -1181,6 +1275,10 @@
       "retryLoading": "重试加载 {{path}}",
       "unavailable": "移动端不可用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "复制名称",
+      "copyRelativePath": "复制相对路径"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",
       "copySource": "复制 Markdown 源码",
@@ -1251,10 +1349,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} 个活跃",
+      "heading": "智能体",
+      "showAll": "显示全部 {{count}} 个",
+      "showFewer": "收起"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
       "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新"
+    },
+    "automationsTab": {
+      "connectDesktop": "请连接 {{desktop}}，才能查看和运行自动化。",
+      "createHint": "轻点 + 以安排智能体。",
+      "emptyTitle": "安排智能体工作",
+      "lastStatus": "上次：{{status}}",
+      "newAutomation": "新建自动化",
+      "noAutomations": "暂无自动化",
+      "pairDesktop": "请先配对桌面，才能查看和运行自动化。",
+      "paused": "已暂停",
+      "scheduled": "已计划",
+      "showFor": "选择要显示自动化的桌面",
+      "toggleFailed": "无法更新 {{name}}",
+      "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化。"
     },
     "emptyState": {
       "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密。",
@@ -1266,9 +1384,7 @@
       "title": "连接桌面"
     },
     "listFooter": {
-      "hostPickerTitle": "选择打开任务的主机",
-      "automationsHeading": "自动化",
-      "automationsHostPickerTitle": "选择主机以打开自动化"
+      "hostPickerTitle": "选择打开任务的主机"
     },
     "listHeader": {
       "desktopsHeading": "台式机"
@@ -1279,6 +1395,33 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "removeHostTitle": "移除主机",
       "tryAgain": "请重试。"
+    },
+    "stats": {
+      "agentTime": "智能体时间",
+      "agentsSpawned": "已启动智能体",
+      "days": "{{days}} 天",
+      "heading": "你的统计",
+      "hours": "{{hours}} 小时",
+      "minutes": "{{minutes}} 分钟",
+      "prsCreated": "已创建 PR"
+    },
+    "tabs": {
+      "automations": "自动化",
+      "chooseDesktop": "{{desktop}}，选择其他桌面",
+      "feed": "动态",
+      "usage": "使用情况"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "请在桌面的“设置 → 账户”中添加账户。",
+      "connectDesktop": "请连接 {{desktop}}，才能查看智能体账户使用情况。",
+      "emptyTitle": "暂无使用情况",
+      "openAccountsHint": "打开此桌面的账户",
+      "pairDesktop": "请先配对桌面，才能查看智能体账户使用情况。",
+      "refresh": "刷新使用情况",
+      "showUsageFor": "选择要显示使用情况的桌面",
+      "updatedAgo": "{{time}}前更新",
+      "updatedJustNow": "刚刚更新"
     }
   },
   "hooks": {
@@ -1479,7 +1622,7 @@
       "notificationsTitle": "智能体需要您时，及时收到提醒",
       "openInChatUi": "在聊天界面中打开会话",
       "openInTerminal": "在终端中打开会话",
-      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可稍后在“设置”中更改默认方式。",
+      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可随时在“设置”→“聊天界面”中更改默认方式。",
       "sessionViewTitle": "以何种方式打开会话？",
       "skipNotifications": "暂不启用通知",
       "useChatUi": "使用聊天界面"
@@ -1639,7 +1782,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "当前分支不可用。",
-      "providerUnavailable": "此提供商的托管评审面板不可用。"
+      "githubRemoteRequired": "此标签页需要 GitHub 远程仓库才能显示拉取请求详情。对于其他受支持的平台，请在“更改”中创建审查，然后在浏览器中打开。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "加载人员失败",
@@ -1662,15 +1805,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "关闭键盘",
       "sendKey": "发送 {{label}}",
-      "modifierHint": "应用于下一个按键。双击可保持启用。",
       "typeCharacter": "输入 {{character}}",
       "interrupt": "中断终端",
       "keysModeLabel": "按键模式：输入内容直接发送到终端。切换到消息模式",
       "messageModeLabel": "消息模式：输入后发送。切换到按键模式",
-      "keysMode": "按键",
-      "messageMode": "消息",
       "moreKeys": "更多按键和操作",
-      "showKeyboard": "显示键盘"
+      "showKeyboard": "显示键盘",
+      "dismissKeyboardHint": "隐藏软键盘，并保持当前终端会话打开。",
+      "switchToDesktopMode": "切换到桌面模式",
+      "switchToPhoneMode": "切换到手机模式",
+      "pasteFromClipboard": "从剪贴板粘贴",
+      "paste": "粘贴",
+      "addCustomShortcut": "添加自定义快捷键"
     },
     "activeContent": {
       "createTab": "创建标签页",
@@ -1694,13 +1840,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "来自 {{sender}}",
-      "fromMore": "来自 {{sender}} 及其他 {{count}} 个智能体",
-      "fromUnnamed": "来自智能体",
-      "messageFrom": "来自 {{sender}} 的消息",
-      "messageFromMore": "来自 {{sender}} 及其他 {{count}} 个智能体的消息",
-      "messageFromUnnamed": "来自智能体的消息",
-      "unnamedSender": "一个智能体"
+      "unnamedSender": "一个智能体",
+      "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "创建终端失败",
@@ -1725,6 +1866,7 @@
       "countWorkflows_one": "{{count}} 个工作流程",
       "countWorkflows_other": "{{count}} 个工作流程",
       "detailsUnavailable": "此会话的任务详细信息不可用。",
+      "outputFile": "输出：{{value0}}",
       "groupAgents": "智能体",
       "groupMonitors": "监控",
       "groupShell": "Shell",
@@ -1781,11 +1923,7 @@
     },
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
-      "liveInputLabel": "终端实时输入",
-      "sendCommand": "发送命令",
-      "messageAgentPlaceholder": "向 {{agent}} 发送消息",
-      "writeCommandPlaceholder": "输入命令后发送",
-      "theAgent": "智能体"
+      "liveInputLabel": "终端实时输入"
     },
     "contentRow": {
       "dismissCreationWarning": "关闭工作区创建警告"
@@ -1834,6 +1972,7 @@
       "attachmentAtMost": "{{agent}} 每条消息最多接受 {{limit}} 张图片，因此此消息未发送。",
       "attachmentEmpty": "此消息中的一张图片为空，因此消息未发送。",
       "attachmentInvalid": "此消息中的附件无法发送给智能体。",
+      "attachmentsExpired": "{{names}} 已过期。",
       "attachmentLargerThan": "此消息中的一张图片超过 {{size}} MB，因此消息未发送。",
       "attachmentNoSource": "此消息中的一张图片没有可发送的文件，因此消息未发送。",
       "attachmentNotAFile": "此消息中的一张图片不是文件，因此消息未发送。",
@@ -2038,7 +2177,7 @@
     },
     "prActionsEngine": {
       "mergeFailed": "合并 PR 失败。",
-      "refreshFailed": "刷新 PR 失败。"
+      "refreshFailed": "无法刷新拉取请求。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "智能体已启动",
@@ -2071,8 +2210,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "排队消息中不能保存命令。",
-      "editing": "正在编辑消息",
-      "editingAttributed": "正在编辑消息 · {{attribution}}"
+      "editing": "正在编辑消息"
     },
     "quickCommandEditorForm": {
       "action": "操作",
@@ -2419,6 +2557,7 @@
       "queueTooLarge": "队列中等待的文本过多。",
       "quitTerminalAgent": "请退出该智能体，以便在此处继续聊天。",
       "reattachFile": "请将其移除后重新附加。",
+      "reattachFiles": "请将它们移除后重新附加。",
       "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
       "recordUnreadable": "Orca 无法读取此聊天的已保存状态。",
       "reopenChat": "请重新打开聊天以再次检查。",
@@ -2465,14 +2604,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "无法保存布局",
       "saveFailedMessage": "此布局暂时生效。请再次选择以重试保存。"
-    },
-    "terminalArrowPad": {
-      "label": "方向键",
-      "hint": "点击一侧可按一次方向键，或按住并拖动以重复",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
     },
     "terminalMoreKeys": {
       "sendKey": "发送 {{label}}",
@@ -2645,6 +2776,9 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各智能体自己的设置"
     }
   },
   "sourceControl": {
@@ -3190,7 +3324,6 @@
       "pipelineJobs_one": "{{count}} 个作业",
       "pipelineJobs_other": "{{count}} 个作业",
       "rerunAll": "重新运行全部",
-      "rerunFailed": "重新运行失败项",
       "subIssueTitle": "子议题标题",
       "subIssues": "子议题"
     },
@@ -3421,7 +3554,6 @@
       "requestReview": "请求评审",
       "requestReviewers": "邀请评审人",
       "rerunAll": "全部重新运行",
-      "rerunFailed": "重新运行失败项",
       "reviewers": "评审人",
       "viewFile": "查看"
     },
@@ -3870,7 +4002,6 @@
       "unknownResult": "未知结果",
       "notReported": "未报告",
       "searchOptions": "搜索选项",
-      "scheduleAgentWorkAndViewRuns": "安排代理工作并查看运行",
       "task": "任务",
       "review": "检查"
     },

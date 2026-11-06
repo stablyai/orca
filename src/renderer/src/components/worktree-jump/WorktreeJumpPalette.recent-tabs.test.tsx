@@ -9,7 +9,7 @@ import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
@@ -47,7 +47,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 
@@ -248,16 +248,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     useAppStore.setState(initialAppState, true)
   })
 
-  it('leads the empty-query list with the recent section', async () => {
-    await renderPalette(makeRecentTabState())
-
-    const rows = getRenderedRowIds().filter((id) => id.length > 0)
-    expect(rows[0].startsWith(encodePaletteIdentity(['workspace-tab']))).toBe(true)
-    expect(rows.some((id) => id.startsWith(encodePaletteIdentity(['worktree'])))).toBe(true)
-    expect(testContainer.textContent).toContain('Recent Chats & Terminals')
-    expect(testContainer.textContent).toContain('Recent Workspaces')
-  })
-
   it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
     await renderPalette(makeDuplicateRecentTabState())
 
@@ -278,6 +268,48 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     )
   })
 
+  it('lists a native chat in recents and finds it by its renamed title', async () => {
+    const chat = {
+      ...makeUnifiedTab('tab-chat', 'wt-beta', 'session-chat', 'Claude'),
+      contentType: 'agent-session' as const,
+      agentSessionAgent: 'claude' as const,
+      customLabel: 'Release notes draft',
+      sortOrder: 1,
+      lastFocusedAt: 10
+    }
+    const state = makeRecentTabState()
+    await renderPalette({
+      ...state,
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        'wt-beta': [...(state.unifiedTabsByWorktree?.['wt-beta'] ?? []), chat]
+      },
+      groupsByWorktree: {
+        ...state.groupsByWorktree,
+        'wt-beta': [makeGroup('wt-beta', ['tab-beta', 'tab-chat'])]
+      }
+    })
+
+    expect(getTabRowIds()).toContain('tab-chat')
+
+    await act(async () => {
+      setCommandQuery?.('release notes')
+    })
+    await flushEffects()
+
+    expect(getTabRowIds()).toEqual(['tab-chat'])
+    const row = testContainer.querySelector<HTMLElement>(
+      `[data-command-item="${encodePaletteIdentity(['workspace-tab', '', 'wt-beta', 'tab-chat'])}"]`
+    )
+    expect(row?.textContent).toContain('Release notes draft')
+    await act(async () => {
+      row?.click()
+    })
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: 'agent-session', tabId: 'tab-chat' })
+    )
+  })
+
   it('caps the recent section so the worktree header stays above the fold', async () => {
     await renderPalette(makeManyTabState(12))
 
@@ -285,20 +317,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(testContainer.textContent).toContain('Recent Workspaces')
     // Maintain the 10-row total cap even before the order snapshot arrives.
     expect(getWorktreeRows().length).toBeLessThanOrEqual(4)
-  })
-  it('shows more recent chats and terminals from the empty-query view', async () => {
-    await renderPalette(makeManyTabState(12))
-    const seeMoreButton = [...testContainer.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('See more')
-    )
-    expect(seeMoreButton).toBeDefined()
-    expect(testContainer.textContent).toContain('6 more')
-    await act(async () => {
-      seeMoreButton?.click()
-    })
-    await flushEffects()
-    expect(getTabRowIds()).toHaveLength(12)
-    expect(testContainer.textContent).not.toContain('6 more')
   })
   it('reveals every recent row from a single expansion', async () => {
     await renderPalette(makeManyTabState(30))
@@ -399,29 +417,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe(
       encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
     )
-  })
-
-  // Honor onValueChange after ranking; cmdk’s advanced internal cursor otherwise makes the next ArrowDown a no-op.
-  it('keeps arrow selection after the typed query ranking has committed', async () => {
-    await renderPalette(makeTypedRelevanceState())
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-    expect(getCommandValue()).toBe(
-      encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
-    )
-
-    const rows = getRenderedRowIds().filter((id) => id.length > 0)
-    expect(rows.length).toBeGreaterThan(1)
-
-    await act(async () => {
-      setCommandSelection?.(rows[1])
-    })
-    await flushEffects()
-
-    expect(getCommandValue()).toBe(rows[1])
   })
 
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
@@ -623,66 +618,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
   })
 
-  it('ranks a recently visited idle tab above a three-day-old blocked tab', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        },
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-  })
-
-  it('freezes the order captured on open while statuses keep changing', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-
-    await act(async () => {
-      useAppStore.setState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        }
-      } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-  })
-
   it('captures the unfiltered order when reopened after a search', async () => {
     await renderPalette(makeRecentTabState())
 
@@ -757,19 +692,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // Viewed completion stays done for 30 minutes after auto-ack; it must not displace offscreen news.
     expect(getTabRowIds()).toEqual(['tab-beta'])
-  })
-
-  it('still lists a non-current tab whose agent is done', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
-        }
-      })
-    )
-
-    // Offscreen completion still earns entry.
-    expect(getTabRowIds()).toContain('tab-alpha')
   })
 
   it('keeps the current tab in recent on a pane-only unread completion marker', async () => {

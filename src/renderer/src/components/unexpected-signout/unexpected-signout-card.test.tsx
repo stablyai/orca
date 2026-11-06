@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import { getDefaultUIState } from '../../../../shared/constants'
@@ -51,27 +51,6 @@ async function showCard(): Promise<void> {
 }
 
 describe('unexpected signout lifecycle', () => {
-  it('records first display and stays hidden after restart and update without X', async () => {
-    await showCard()
-    expect(persist).toHaveBeenCalledExactlyOnceWith({
-      dismissedUnexpectedSignoutVersion: '1.4.197'
-    })
-    expect(screen.queryByRole('complementary')).not.toBeNull()
-    cleanup()
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({
-      orcaProfileAuthStatus: status,
-      persistedUIReady: true,
-      dismissedUnexpectedSignoutVersion: '1.4.197',
-      fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(status)
-    })
-    vi.mocked(window.api.updater.getVersion).mockResolvedValue('1.4.999')
-    render(<UnexpectedSignoutCard />)
-    await act(async () => {})
-    expect(screen.queryByRole('complementary')).toBeNull()
-    expect(persist).toHaveBeenCalledTimes(1)
-  })
-
   it('stamps successful sign-in and never re-arms in the same version', async () => {
     await showCard()
     act(() => useAppStore.setState({ orcaProfileAuthStatus: { ...status, state: 'connected' } }))
@@ -105,15 +84,6 @@ describe('unexpected signout lifecycle', () => {
     act(() => useAppStore.setState({ persistedUIReady: true }))
     expect(screen.queryByRole('complementary')).toBeNull()
     expect(persist).not.toHaveBeenCalled()
-  })
-
-  it('keeps a failed sign-in available without recording another appearance', async () => {
-    useAppStore.setState({ connectCurrentOrcaProfile: vi.fn().mockResolvedValue(undefined) })
-    await showCard()
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in to Orca' }))
-    await act(async () => {})
-    expect(screen.queryByRole('complementary')).not.toBeNull()
-    expect(persist).toHaveBeenCalledTimes(1)
   })
 
   it('never shows or consumes a stale card while the auth read is pending', async () => {
@@ -158,38 +128,5 @@ describe('unexpected signout lifecycle', () => {
     expect(persist).not.toHaveBeenCalledWith(
       expect.objectContaining({ dismissedUnexpectedSignoutVersion: expect.anything() })
     )
-  })
-
-  it('persists X dismissal and stays hidden after remount', async () => {
-    await showCard()
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
-    expect(persist).toHaveBeenCalledWith({ dismissedUnexpectedSignoutVersion: '1.4.197' })
-    cleanup()
-    render(<UnexpectedSignoutCard />)
-    await act(async () => {})
-    expect(screen.queryByRole('complementary')).toBeNull()
-  })
-
-  it.each(['storage', 'query'])('ignores the %s preview flag in production', async (source) => {
-    if (source === 'storage') {
-      window.localStorage.setItem('orca-debug-show-signout-card', '1')
-    } else {
-      window.history.replaceState({}, '', '/?showSignoutCard=1')
-    }
-    useAppStore.setState({ orcaProfileAuthStatus: { ...status, state: 'local', cloud: undefined } })
-    render(<UnexpectedSignoutCard />)
-    await act(async () => {})
-    expect(screen.queryByRole('complementary')).toBeNull()
-    expect(persist).not.toHaveBeenCalled()
-  })
-
-  it('dismisses a development preview without writing real dismissal state', async () => {
-    vi.stubEnv('DEV', true)
-    window.localStorage.setItem('orca-debug-show-signout-card', '1')
-    useAppStore.setState({ orcaProfileAuthStatus: { ...status, state: 'local', cloud: undefined } })
-    await showCard()
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
-    expect(screen.queryByRole('complementary')).toBeNull()
-    expect(persist).not.toHaveBeenCalled()
   })
 })

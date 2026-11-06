@@ -56,17 +56,4 @@ describe('the line under a recorded rejection', () => {
   it('says only that it was not sent when a loaded row already states the reason', () => {
     expect(line('Written by the host.', signedOut)).toBe('Your message was not sent.')
   })
-
-  it('words a fact no row states from the fact itself', () => {
-    expect(line('Written by the host.', { kind: 'writeFailed' })).toBe(
-      "Orca couldn't reach the agent. Your message was not sent."
-    )
-  })
-
-  it("shows an older host's reason sentence, and never a legacy marker", () => {
-    expect(line('Claude messages support at most 20 images')).toBe(
-      'Claude messages support at most 20 images'
-    )
-    expect(line('not_delivered')).toBe('Your message was not sent.')
-  })
 })

@@ -1,8 +1,8 @@
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 function layoutNodeContainsLeaf(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
   if (!node) {

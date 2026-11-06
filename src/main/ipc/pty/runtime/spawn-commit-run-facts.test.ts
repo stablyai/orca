@@ -11,7 +11,7 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   formatTerminalStartFailure,
   terminalExitError
-} from '../../../../shared/terminal-start-failure'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { requireAcceptedSpawn } from '../spawn-outcome'
 import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session/agent-session-host-authority'
 

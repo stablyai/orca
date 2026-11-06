@@ -8,7 +8,7 @@ import {
   wslDistroForPath,
   WslDistroStoppedError,
   WslDistroUnverifiableError
-} from '../wsl/wsl-unc-access-gate'
+} from '../wsl/filesystem/wsl-unc-access-gate'
 import { stablePathId, type SkillScanRoot } from './skill-discovery-sources'
 
 const ALL_SOURCE_KINDS: readonly SkillSourceKind[] = ['home', 'repo', 'bundled', 'plugin']

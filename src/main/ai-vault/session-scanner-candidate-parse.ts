@@ -1,28 +1,28 @@
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { isConversationNameRequestSession } from './conversation-name-request-sessions'
-import { candidateFileTime } from './antigravity-transcript-candidates'
+import { candidateFileTime } from './scanners/antigravity/antigravity-transcript-candidates'
 import {
   aiVaultAgentLabel,
   isAiVaultSessionResumableContent,
   isAiVaultSessionRecoverableEmpty,
   type AiVaultScanIssue,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
-import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { ScannedSessionCollection } from './session-root-dedup'
-import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import type { AntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
 import {
   parseAgentSessionFileCached,
   parseListedSessionFile,
   type SessionParseStats
-} from './session-scanner-parse-cache'
+} from './parse-cache/session-scanner-parse-cache'
 import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import {
   getSessionParseCacheEntry,
   noteSessionParseCacheListed,
   sessionParseCacheKey
-} from './session-parse-cache-store'
+} from './parse-cache/session-parse-cache-store'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import type { SessionFileCandidate, SessionParseResult } from './session-scanner-types'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { agentSessionCompactCommandText } from '../../../shared/agent-session/agent-session-conversation-command'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
@@ -20,7 +21,11 @@ export async function dispatchClaudeCommand(
   try {
     const admission = await dispatchClaudeTurn(session, {
       clientMessageId: command.clientMessageId,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: '/compact' }] },
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: agentSessionCompactCommandText(command.instructions) }]
+      },
       ...(command.running.requestedAt === undefined
         ? {}
         : { requestedAt: command.running.requestedAt }),

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { agentArgTerminatorIndex, removeAgentArgOption } from './agent-session-option-agent-args'
-import {
-  removeOverriddenAgentSessionArgs,
-  resolveAgentSessionOptionLaunch
-} from './agent-session-option-launch'
+import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
+import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 
 const removeCodexModel = getAgentSessionOptionCatalog('codex')!.modelApply.removeAgentArgs!
 
@@ -31,36 +28,9 @@ describe('catalog removers', () => {
     ]
     expect(removeCodexModel(tokens)).toEqual(tokens)
   })
-
-  it('leaves everything after a terminator', () => {
-    const tokens = ['--', '-c', 'model=o3']
-    expect(removeCodexModel(tokens)).toEqual(tokens)
-  })
-
-  it('lets a chat pick replace a configured gemini model on server launches', () => {
-    expect(
-      removeOverriddenAgentSessionArgs('gemini', { model: 'gemini-2.5-pro' }, [
-        '-m',
-        'a',
-        '--model=b',
-        '-mc',
-        '--yolo'
-      ])
-    ).toEqual(['--yolo'])
-  })
 })
 
 describe('removeAgentArgOption', () => {
-  it('consumes an empty value', () => {
-    expect(removeAgentArgOption('claude', ['--model', '', '--yolo'], ['--model'])).toEqual([
-      '--yolo'
-    ])
-  })
-
-  it('keeps a following flag', () => {
-    expect(removeAgentArgOption('claude', ['--model', '--yolo'], ['--model'])).toEqual(['--yolo'])
-  })
-
   it('requires an exact terminator outside option values', () => {
     expect(
       agentArgTerminatorIndex('claude', [

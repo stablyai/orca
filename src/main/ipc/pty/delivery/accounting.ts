@@ -1,7 +1,7 @@
 import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryStateReport
-} from '../../../../shared/pty-renderer-delivery-health'
+} from '../../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import { tryGetProviderForPty } from '../provider/registry'
 import { mainDeliveryBreadcrumbs } from './debug'
 import {

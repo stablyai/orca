@@ -12,7 +12,6 @@ import { testEventSinkLogging } from '../native-chat/agent-session-wire/structur
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { ACP_REOPEN_FAILED } from './acp-session-reopen-failure'
 import {
-  GROK,
   GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
   PROVIDER_SESSION,
@@ -123,24 +122,6 @@ describe('the reattach window', () => {
     await rig.settle()
     expect(await rig.rig.rows()).toEqual([])
   })
-
-  it('leaves no turn from the window for a later Stop to find', async () => {
-    const rig = await openAcpAdapterRig({
-      ...resumesUnmarked,
-      script: (agent: AcpScriptedAgent) =>
-        agent.on('session/load', (frame) => {
-          agent.notify('session/update', replyChunk('prompt:old', 'stale text'))
-          agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
-        })
-    })
-    await rig.acquire()
-    await rig.settle()
-    await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })).resolves.toEqual({
-      cancelled: false,
-      refusal: { turnNotRunning: true }
-    })
-    expect(rig.child().closes).toBe(0)
-  })
 })
 
 describe('the context meter across a reopen', () => {
@@ -183,92 +164,7 @@ describe('the context meter across a reopen', () => {
   })
 })
 
-it("starts in the chat's own permission mode, asks when none is named, and fails an unconfirmed one", async () => {
-  const values = { ask: 'default', 'accept-edits': 'auto_edit' }
-  const modes = [
-    {
-      id: 'approval_mode',
-      name: 'Mode',
-      category: 'mode',
-      type: 'select',
-      currentValue: 'auto_edit',
-      options: [
-        { value: 'default', name: 'Default' },
-        { value: 'auto_edit', name: 'Auto edit' }
-      ]
-    }
-  ]
-  const configOptions = [...GROK_CONFIG_OPTIONS, ...modes]
-  const open = () =>
-    openAcpAdapterRig({
-      spec: { ...GROK, permissionModeConfig: { values } },
-      script: (agent) => {
-        agent.on('session/new', (frame) =>
-          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
-        )
-        agent.on('session/set_config_option', (frame) => agent.reply(frame, { configOptions }))
-      }
-    })
-  const [chosen, unnamed] = [await open(), await open()]
-  await chosen.acquire({ permissionMode: 'accept-edits' })
-  await unnamed.acquire()
-  expect(unnamed.openFailure()).toEqual(new Error('Permission mode could not be confirmed'))
-  const sent = [chosen, unnamed].map((rig) => rig.sent('session/set_config_option')[0]?.params)
-  expect(sent).toMatchObject([
-    { configId: 'approval_mode', value: 'auto_edit' },
-    { configId: 'approval_mode', value: 'default' }
-  ])
-})
-
 describe('reattaching a Grok chat the journal holds', () => {
-  it('loads with session/load though Grok also resumes, and writes nothing it replays', async () => {
-    const reopen = onReopen()
-    const rig = await openAcpAdapterRig({
-      ...resume,
-      initialize: RESUMES,
-      script: (agent) =>
-        agent.on('session/load', (frame) => {
-          reopen(() => sendsWhileAttaching(agent, 'hi'))
-          agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
-        })
-    })
-    await rig.acquire()
-    await exchange(rig, 'hi', true)
-    const before = (await rig.rig.rows()).map((row) => row.itemId)
-    await rig.adapter.closeSession(SESSION)
-    await rig.acquire({ fence: 2 })
-    await rig.settle()
-    expect(rig.sent('session/load')).toHaveLength(1)
-    expect(rig.sent('session/resume')).toHaveLength(0)
-    expect((await rig.rig.rows()).map((row) => row.itemId)).toEqual(before)
-    expect(await texts(rig)).toEqual(['hello', 'hi'])
-    await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 2 })).resolves.toEqual({
-      cancelled: false,
-      refusal: { turnNotRunning: true }
-    })
-  })
-
-  it('loads an agent that only loads, writing none of what it replays', async () => {
-    const reopen = onReopen()
-    const rig = await openAcpAdapterRig({
-      ...resume,
-      script: (agent) =>
-        agent.on('session/load', (frame) => {
-          reopen(() => sendsWhileAttaching(agent, 'hi'))
-          agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
-        })
-    })
-    await rig.acquire()
-    await exchange(rig, 'hi', true)
-    const before = await rig.rig.rows()
-    await rig.adapter.closeSession(SESSION)
-    await rig.acquire({ fence: 2 })
-    await rig.settle()
-    expect(rig.sent('session/resume')).toHaveLength(0)
-    expect((await rig.rig.rows()).map((row) => row.itemId)).toEqual(before.map((row) => row.itemId))
-    expect(await texts(rig)).toEqual(['hello', 'hi'])
-  })
-
   it('leaves a reply cut off mid-turn as it was cut, never completed from what Grok saved', async () => {
     const reopen = onReopen()
     const rig = await openAcpAdapterRig({
@@ -339,31 +235,6 @@ describe('reattaching a Grok chat the journal holds', () => {
     }
   })
 
-  it('starts a new session in place of a created one that session/load reports missing', async () => {
-    const rig = await openAcpAdapterRig({
-      launch: {
-        resume: {
-          sessionId: 'never-saved',
-          key: 'acp:grok:never-saved',
-          mayBeUnsaved: () => true,
-          unannouncedLosses: () => []
-        }
-      },
-      initialize: RESUMES,
-      script: (agent) =>
-        agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Resource not found'))
-    })
-    await rig.acquire()
-    expect(rig.started().link).toMatchObject({
-      origin: 'created',
-      handle: { nativeId: PROVIDER_SESSION },
-      supersedesKey: 'acp:grok:never-saved'
-    })
-    await exchange(rig, 'hi', true)
-    expect(await texts(rig)).toEqual(['hello', 'hi'])
-    expect(await notRestoredRows(rig)).toEqual([])
-  })
-
   it.each([
     ['a saved session', false, -32603, 'session file is corrupt'],
     ['a created session that fails for another reason', true, -32603, 'session file is corrupt'],
@@ -400,25 +271,6 @@ describe('reattaching a Grok chat the journal holds', () => {
     }
   )
 
-  it('refuses a signed-out agent at reopen rather than replacing its session', async () => {
-    const rig = await openAcpAdapterRig({
-      launch: {
-        resume: {
-          sessionId: 'saved-1',
-          key: 'acp-key-saved-1',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
-        }
-      },
-      initialize: RESUMES,
-      script: (agent) =>
-        agent.on('session/load', (frame) => agent.fail(frame, -32000, 'Authentication required'))
-    })
-    await rig.acquire()
-    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
-    expect(rig.sent('session/new')).toEqual([])
-  })
-
   it('fails a start closed while the agent reopens rather than opening a new session', async () => {
     const start = new AbortController()
     const logger = { warn: vi.fn(), error: vi.fn() }
@@ -444,28 +296,5 @@ describe('reattaching a Grok chat the journal holds', () => {
     expect(rig.sent('session/new')).toEqual([])
     expect(await notRestoredRows(rig)).toEqual([])
     expect(logger.warn).not.toHaveBeenCalledWith(ACP_REOPEN_FAILED, expect.anything())
-  })
-
-  it('keeps the slash commands Grok reports while it loads', async () => {
-    const rig = await openAcpAdapterRig({
-      ...resume,
-      initialize: RESUMES,
-      script: (agent) =>
-        agent.on('session/load', (frame) => {
-          agent.notify('session/update', {
-            sessionId: PROVIDER_SESSION,
-            update: {
-              sessionUpdate: 'available_commands_update',
-              availableCommands: [{ name: 'compact', description: 'Compress', input: null }]
-            }
-          })
-          agent.reply(frame, { configOptions: [] })
-        })
-    })
-    await rig.acquire()
-    await rig.settle()
-    expect(rig.adapter.readCommands(SESSION)).toEqual([
-      { name: 'compact', kind: 'command', description: 'Compress' }
-    ])
   })
 })

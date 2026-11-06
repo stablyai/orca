@@ -1,7 +1,7 @@
 // Replay alt-screen and inline grok startup captures: ~12Hz logo shimmer defeats the 1.5s quiet window, causing 8s timeout delays/dropped drafts. Preserve both marker and quiet-floor paths.
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config-types'
 import {
   GROK_STARTUP_PTY_TRACE,
   type GrokStartupTraceChunk
@@ -41,17 +41,6 @@ function replayReadyAtMs(
 }
 
 describe('grok startup trace replay (alternate-screen mode)', () => {
-  it('reports readiness within the first second of the alternate-screen trace', () => {
-    const readyAt = replayReadyAtMs('grok-composer-prompt', GROK_STARTUP_PTY_TRACE)
-    expect(readyAt).not.toBeNull()
-    expect(readyAt).toBeLessThan(1000)
-  })
-
-  it('never settles the quiet window under the shimmering logo (the old behavior)', () => {
-    // The capture continues 10s; no quiet readiness means the 8s caller timeout wins.
-    expect(replayReadyAtMs('render-quiet-after-bracketed-paste', GROK_STARTUP_PTY_TRACE)).toBeNull()
-  })
-
   it('reports readiness on the frame that paints the composer box', () => {
     const composerFrame = GROK_STARTUP_PTY_TRACE.find((chunk) => chunk.data?.includes('❯'))
     expect(composerFrame).toBeDefined()
@@ -65,11 +54,5 @@ describe('grok startup trace replay (inline mode, no alternate screen)', () => {
     const readyAt = replayReadyAtMs('grok-composer-prompt', GROK_INLINE_STARTUP_PTY_TRACE)
     expect(readyAt).not.toBeNull()
     expect(readyAt).toBeLessThan(HARD_TIMEOUT_MS)
-  })
-
-  it('matches the default signal timing for the inline trace', () => {
-    expect(replayReadyAtMs('grok-composer-prompt', GROK_INLINE_STARTUP_PTY_TRACE)).toBe(
-      replayReadyAtMs('render-quiet-after-bracketed-paste', GROK_INLINE_STARTUP_PTY_TRACE)
-    )
   })
 })

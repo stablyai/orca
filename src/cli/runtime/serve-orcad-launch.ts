@@ -14,6 +14,7 @@ import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
 import { orcadServeArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-package'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
@@ -83,7 +84,9 @@ export function serveWithOrcad(
       ORCA_USER_DATA: userDataPath,
       ORCA_VERSION: selection.version,
       // Always set: a value inherited from an Orca terminal would name another install's copy.
-      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? ''
+      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? '',
+      // A service manager restarts this server, so it must not run terminals that die with it.
+      [ORCA_SERVE_SUPERVISED_ENV]: args.supervise === true ? '1' : ''
     }
   }
   const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)

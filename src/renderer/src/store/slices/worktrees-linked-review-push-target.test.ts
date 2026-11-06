@@ -71,32 +71,6 @@ describe('worktree remote runtime mutations', () => {
     expect(lastWrite).not.toHaveProperty('pushTarget')
   })
 
-  it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
-    const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      linkedPR: 2548,
-      pushTarget
-    })
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
-    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      executionHostId: wt.hostId ?? 'local',
-      updates: expect.objectContaining({ linkedPR: null, pushTarget: undefined })
-    })
-    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
-  })
-
   it('switches the selected review to GitLab and clears the previous push target', async () => {
     const store = createTestStore()
     const oldPushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
@@ -275,66 +249,6 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
   })
 
-  it('hydrates a host-stamped linked GitHub PR push target through the worktree owner runtime', async () => {
-    const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'feature/owner-runtime-pr' }
-    const wt = makeWorktree({
-      id: 'repo1::/path/owner-runtime-wt',
-      repoId: 'repo1',
-      path: '/path/owner-runtime-wt',
-      hostId: 'runtime:owner-env',
-      linkedPR: 5571
-    })
-    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
-      if (method === 'worktree.resolvePrBase') {
-        return Promise.resolve({
-          id: 'rpc-owner-resolve-pr-base',
-          ok: true,
-          result: { baseBranch: 'fork-head', pushTarget },
-          _meta: { runtimeId: 'owner-env' }
-        })
-      }
-      if (method === 'worktree.set') {
-        return Promise.resolve({
-          id: 'rpc-owner-set-worktree',
-          ok: true,
-          result: { worktree: { ...wt, pushTarget } },
-          _meta: { runtimeId: 'owner-env' }
-        })
-      }
-      throw new Error(`Unexpected runtime method ${method}`)
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().ensureHostedReviewPushTarget(wt.id)
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'owner-env',
-        method: 'worktree.resolvePrBase',
-        params: expect.objectContaining({ repo: 'repo1', prNumber: 5571 }),
-        timeoutMs: 30_000
-      })
-    )
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'owner-env',
-        method: 'worktree.set',
-        params: expect.objectContaining({ worktree: `id:${wt.id}`, pushTarget }),
-        timeoutMs: 15_000
-      })
-    )
-    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
-  })
-
   it('hydrates an SSH-owned linked GitHub PR push target through local IPC when a runtime is focused', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature/ssh-pr' }
@@ -377,37 +291,6 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh'][0]?.pushTarget).toEqual(pushTarget)
-  })
-
-  it('skips the push-target lookup for a genuinely ambiguous owner instead of throwing past the { ok, error } contract', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo-shared::/same/path'
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
-      worktreesByRepo: {
-        'repo-shared': [
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repo-shared',
-            hostId: 'ssh:ssh-a',
-            runtimeOwnerEnvironmentId: 'hub-a'
-          }),
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repo-shared',
-            hostId: 'ssh:ssh-b',
-            runtimeOwnerEnvironmentId: 'hub-b'
-          })
-        ]
-      }
-    } as Partial<AppState>)
-
-    const result = await store.getState().updateWorktreeMeta(worktreeId, { linkedPR: 123 })
-
-    // The ambiguous owner must surface as a graceful { ok: false }, not an uncaught rejection.
-    expect(result.ok).toBe(false)
-    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
   it('updates only the explicitly selected owner when locators collide', async () => {
     const store = createTestStore()

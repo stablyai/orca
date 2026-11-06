@@ -3,7 +3,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - 'src/shared/commit-message-agent-specs-primary.ts'
+      - 'src/shared/source-control/ai/generation/commit-message-agent-specs-primary.ts'
       - 'tests/tools/pi-provider-runtime-smoke.mjs'
       - 'src/main/pi/rpc-history-*.ts'
       - '.github/workflows/pi-provider-runtime.yml'

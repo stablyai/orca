@@ -4,11 +4,11 @@ import {
   GIT_AUTHENTICATION_FAILED_MESSAGE,
   formatSubmodulePushFailureDetail,
   stripCredentialsFromMessage
-} from '../../../shared/git-remote-error'
+} from '../../../shared/git/remotes/git-remote-error'
 import {
   isPushHookFailure,
   summarizePushFailure
-} from '../../../shared/source-control-push-failure'
+} from '../../../shared/source-control/recovery/source-control-push-failure'
 import {
   type PullLikeOperation,
   type PushLikeOperation,

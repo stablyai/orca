@@ -2,12 +2,12 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/ke
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
-} from '../../shared/terminal-custom-themes'
+} from '../../shared/terminal-themes/terminal-custom-themes'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
-  GhosttyImportPreview,
-  GhosttyImportSource,
-  GlobalSettings
-} from '../../shared/global-settings-types'
+  TerminalConfigImportPreview,
+  TerminalConfigImportSource
+} from '../../shared/terminal/appearance/terminal-config-import-preview'
 
 export type SettingsApi = {
   get: () => Promise<GlobalSettings>
@@ -19,7 +19,10 @@ export type SettingsApi = {
   }) => Promise<GlobalSettings>
   updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
-  previewGhosttyImport: (source?: GhosttyImportSource) => Promise<GhosttyImportPreview>
+  previewGhosttyImport: (
+    source?: TerminalConfigImportSource
+  ) => Promise<TerminalConfigImportPreview>
+  previewKittyImport: (source?: TerminalConfigImportSource) => Promise<TerminalConfigImportPreview>
   previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
   onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
 }

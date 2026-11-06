@@ -1,16 +1,16 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
-import { pickPrimaryHostForClaims } from '../../../shared/workspace-session-contested-primary-host'
+import { normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId } from '../../../shared/workspace-scope'
+import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
+import { pickPrimaryHostForClaims } from '../../../shared/workspace-session/workspace-session-contested-primary-host'
 import {
   isWorkspaceSessionRecord,
   type WorkspaceSessionRecord
-} from '../../../shared/workspace-session-host-records'
+} from '../../../shared/workspace-session/workspace-session-host-records'
 import type { WorkspaceRuntimeOwnerProjection } from './workspace-runtime-host-ownership'
 import {
   mergeWorkspaceSessionsFromHosts,
@@ -26,7 +26,6 @@ const WORKTREE_KEYED_FIELDS = (
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'worktreeKeyed')
 
 /** Share session-key normalization with partition adoption so read and write cannot drift. */
-export const normalizeWorkspaceSessionKeyToWorktreeId = normalizeWorkspaceSessionKeyToWorkspaceId
 
 function resolveClaimedHostId(
   worktree: WorkspaceRuntimeOwnerProjection,

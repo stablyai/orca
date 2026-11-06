@@ -1,7 +1,7 @@
 import type {
   PairedE2EEAuthReply,
   PairedE2EEClientHandshake
-} from '../../../shared/paired-e2ee-client-handshake'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { resolveWebRuntimeAuthRejection } from './web-runtime-auth-verdict'
 import {
@@ -13,7 +13,7 @@ import {
   sealWebRuntimePlanAuth,
   type WebRuntimeConnectionState
 } from './web-runtime-connection-frame-router'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { WEB_PAIRED_E2EE_PRIMITIVES } from './web-paired-e2ee-primitives'
 import {
   tokenOnlyCredentialSource,

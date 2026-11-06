@@ -1,11 +1,19 @@
+import { capturePRCheckContract, type PRCheckContract } from './pr-check-observation-contract'
+import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { getWorkItemRepo } from './work-item-repo-row'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
-import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callGitHubTargetOperation } from './github-work-item-target-request'
+import {
+  GITHUB_EXACT_OPERATION_UNSUPPORTED,
+  matchesGitHubWorkItemTarget,
+  GitHubWorkItemTargetError,
+  requireGitHubWorkItemTargetDetails
+} from '../../../shared/github/work-item-target'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
@@ -18,6 +26,7 @@ type GitHubWorkItemLookupArgs = {
   sourceContext?: TaskSourceContext | null
   number: number
   type?: 'issue' | 'pr'
+  checkContract?: PRCheckContract
 }
 
 type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
@@ -38,7 +47,9 @@ type GitHubWorkItemDetailsLookupArgs = {
   number: number
   type: 'issue' | 'pr'
   ownerRepo?: GitHubOwnerRepo | null
+  target?: RuntimeClientTarget
   canonical?: boolean
+  expectedGhAccount?: GhAccountBinding | null
   accepts?: () => boolean
   rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
@@ -67,6 +78,15 @@ export async function lookupGitHubWorkItemForSource(
 ): Promise<GitHubWorkItem | null> {
   const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
+  const contract =
+    args.type === 'pr'
+      ? (args.checkContract ??
+        capturePRCheckContract(
+          (await import('@/store')).useAppStore.getState,
+          target,
+          args.sourceContext
+        ))
+      : null
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -77,7 +97,10 @@ export async function lookupGitHubWorkItemForSource(
             number: args.number,
             type: args.type
           },
-          { timeoutMs: 30_000 }
+          {
+            timeoutMs: 30_000,
+            ...(args.checkContract ? contract?.rpcOptions : contract?.sourceRpcOptions)
+          }
         )
       : await window.api.gh.workItem({
           repoPath: args.repoPath,
@@ -85,7 +108,13 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  if (contract && !(args.checkContract ? contract.current() : contract.sourceCurrent())) {
+    return null
+  }
+  let row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {
+    row = acceptPRCheckObservation(row, null, { ...contract, current: contract.current() })
+  }
   return row && records ? records.cache.acceptSearch([row], records.binding)[0] : row
 }
 
@@ -97,6 +126,15 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   }
   const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
+  const contract =
+    args.type === 'pr'
+      ? (args.checkContract ??
+        capturePRCheckContract(
+          (await import('@/store')).useAppStore.getState,
+          target,
+          args.sourceContext
+        ))
+      : null
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -113,8 +151,14 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           },
           {
             timeoutMs: 30_000,
+            ...(args.checkContract ? contract?.rpcOptions : contract?.sourceRpcOptions),
             ...args.rpcOptions,
             beforeSend: () => {
+              const contractOptions = args.checkContract
+                ? contract?.rpcOptions
+                : contract?.sourceRpcOptions
+              contractOptions?.beforeSend?.()
+              args.rpcOptions?.beforeSend?.()
               if (args.accepts?.() === false) {
                 throw new Error('Task source changed.')
               }
@@ -135,7 +179,21 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   if (args.accepts?.() === false) {
     return null
   }
-  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  if (contract && !(args.checkContract ? contract.current() : contract.sourceCurrent())) {
+    return null
+  }
+  let row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  const requestedTarget = {
+    repository: { owner: args.owner, repo: args.repo, ...(args.host ? { host: args.host } : {}) },
+    number: args.number,
+    type: args.type
+  }
+  if (row && !matchesGitHubWorkItemTarget(row, requestedTarget)) {
+    throw new GitHubWorkItemTargetError(requestedTarget)
+  }
+  if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {
+    row = acceptPRCheckObservation(row, null, { ...contract, current: contract.current() })
+  }
   // A canonical verification read publishes through its record, not as a search reading.
   return row && records && !args.accepts
     ? records.cache.acceptSearch([row], records.binding)[0]
@@ -150,72 +208,83 @@ export async function lookupGitHubWorkItemDetailsForSource(
   }
   const sourceContext = args.sourceContext
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
-  if (
-    args.canonical &&
-    runtimeHost &&
-    !(await runtimeEnvironmentSupportsCapability(
-      runtimeHost.environmentId,
-      GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
-    ))
-  ) {
-    // A canonical read an old server can't serve is unavailable, never an ordinary cached read.
-    return null
-  }
-  if (args.accepts?.() === false) {
-    return null
-  }
-  const result = await (runtimeHost
-    ? callRuntimeRpc<GitHubWorkItemDetails | null>(
-        { kind: 'environment', environmentId: runtimeHost.environmentId },
-        'github.workItemDetails',
-        {
-          repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
+  const contract =
+    args.type === 'pr'
+      ? capturePRCheckContract(
+          (await import('@/store')).useAppStore.getState,
+          args.target ?? getGitHubSourceRuntimeTarget(sourceContext),
+          sourceContext
+        )
+      : null
+  let result: GitHubWorkItemDetails | null
+  try {
+    result = await callGitHubTargetOperation<GitHubWorkItemDetails | null>({
+      target:
+        args.target ??
+        (runtimeHost
+          ? { kind: 'environment', environmentId: runtimeHost.environmentId }
+          : { kind: 'local' }),
+      ownerRepo: args.ownerRepo,
+      expectedGhAccount: args.expectedGhAccount,
+      canonical: args.canonical ?? false,
+      read: true,
+      method: 'github.workItemDetails',
+      params: {
+        repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
+        number: args.number,
+        type: args.type
+      },
+      rpcOptions: {
+        ...contract?.sourceRpcOptions,
+        ...args.rpcOptions,
+        beforeSend: () => {
+          contract?.sourceRpcOptions.beforeSend?.()
+          args.rpcOptions?.beforeSend?.()
+          if (args.accepts?.() === false) {
+            throw new Error('Task context changed.')
+          }
+        }
+      },
+      local: (exact) =>
+        window.api.gh.workItemDetails({
+          repoPath: args.repoPath,
+          repoId: args.repoId,
+          sourceContext,
           number: args.number,
           type: args.type,
-          ...(args.canonical && args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
-        },
-        {
-          timeoutMs: 30_000,
-          ...args.rpcOptions,
-          ...(args.accepts
-            ? {
-                beforeSend: () => {
-                  if (!args.accepts?.()) {
-                    throw new Error('Task context changed.')
-                  }
-                }
-              }
-            : {})
-        }
-      )
-    : window.api.gh.workItemDetails({
-        repoPath: args.repoPath,
-        repoId: args.repoId,
-        sourceContext,
-        number: args.number,
-        type: args.type,
-        ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {}),
-        ...(args.canonical ? { canonical: true } : {})
-      }))
-  if (args.accepts?.() === false) {
-    return null
-  }
-  if (args.canonical && result) {
-    const returned = parseGitHubIssueOrPRLink(result.item.url)
+          ...exact
+        })
+    })
+  } catch (error) {
     if (
-      !returned ||
-      !args.ownerRepo ||
-      result.item.type !== args.type ||
-      result.item.number !== args.number ||
-      returned.type !== args.type ||
-      returned.number !== args.number ||
-      githubRepoIdentityKey(returned.slug) !== githubRepoIdentityKey(args.ownerRepo)
+      args.canonical &&
+      error instanceof Error &&
+      error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED
     ) {
       return null
     }
-    return result.item.assignees === undefined
-      ? result
-      : { ...result, assignees: result.item.assignees.map((user) => user.login) }
+    throw error
   }
-  return result
+  if (args.accepts?.() === false) {
+    return null
+  }
+  if (contract && !contract.sourceCurrent()) {
+    return null
+  }
+  if (result && contract?.complete && contract.current()) {
+    result.item = acceptPRCheckObservation(result.item, null, {
+      ...contract,
+      current: contract.current()
+    })!
+  }
+  if (args.ownerRepo) {
+    requireGitHubWorkItemTargetDetails(result, {
+      repository: args.ownerRepo,
+      type: args.type,
+      number: args.number
+    })
+  }
+  return args.canonical && result?.item.assignees !== undefined
+    ? { ...result, assignees: result.item.assignees.map((user) => user.login) }
+    : result
 }

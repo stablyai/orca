@@ -7,7 +7,7 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -22,12 +22,12 @@ import { withChatTabChanges } from './agent-session-tab-layout'
 import {
   chatTabCommandsSettled as settled,
   layoutApplyOn
-} from '../session-layout-apply.test-fixture'
+} from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 const WT = 'workspace-1'
 // Session ids are 8 to 128 characters; a shorter one is not a readable record.

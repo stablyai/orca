@@ -9,7 +9,7 @@ import { resolveWindowsShellStartupFamily } from '../../../shared/windows-termin
 import {
   resolveStartupShell,
   type AgentStartupShell
-} from '../../../shared/tui-agent-startup-shell'
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'

@@ -1,4 +1,4 @@
-import type { AgentLaunchTabViewerRule } from '../../../shared/agent-launch-tab-publication'
+import type { AgentLaunchTabViewerRule } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { focusTerminalInitiatedTab } from '../hooks/ipc-events/terminal-command-state'
 import { useAppStore } from '../store'
 import { revealWorkspaceSurface } from './workspace-surface-reveal'

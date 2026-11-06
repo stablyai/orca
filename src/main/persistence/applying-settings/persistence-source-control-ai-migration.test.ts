@@ -13,7 +13,7 @@ import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { setSourceControlActionDefault } from '../../../shared/source-control-ai-actions'
+import { setSourceControlActionDefault } from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

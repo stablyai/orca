@@ -4,7 +4,7 @@ import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/exec
 import {
   getFileExplorerOperationOwnerFromState,
   type FileExplorerOwnerState
-} from '@/components/right-sidebar/file-explorer-operation-owner'
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { resolveOwner } from './resolve-owner'
 
 /** Track server owner (null for this app) and nested SSH owner (null for server-local, undefined for unknown). */

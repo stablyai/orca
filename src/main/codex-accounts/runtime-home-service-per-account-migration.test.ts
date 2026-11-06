@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
-import { readHookTrustEntries } from '../codex/config-toml-trust'
-import { writeCodexStateDbBackfillStatus } from '../codex/codex-state-db-test-fixture'
+import { readHookTrustEntries } from '../codex/trust/toml/config-toml-trust'
+import { writeCodexStateDbBackfillStatus } from '../codex/history/index/codex-state-db-test-fixture'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
 
-vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) =>
-  (await import('../codex/codex-hook-trust-derivation.test-fixture')).answeringCodexForTests(
-    await importOriginal()
-  )
+vi.mock('../codex/trust/hooks/codex-hook-trust-derivation', async (importOriginal) =>
+  (
+    await import('../codex/trust/hooks/codex-hook-trust-derivation.test-fixture')
+  ).answeringCodexForTests(await importOriginal())
 )
 vi.mock('electron', () => ({ app: { getPath: () => testState.userData } }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userData }))
@@ -24,7 +24,7 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => testState.home }
 })
 // Prevent the selection-triggered history bridge from spawning a real app-server.
-vi.mock('../codex/codex-account-session-index-heal', () => {
+vi.mock('../codex/history/index/codex-account-session-index-heal', () => {
   const upToDate = async () => ({
     outcome: 'up-to-date',
     healedThreads: 0,
@@ -95,8 +95,11 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     writeFileSync(sharedAuthPath(), accountOneMigrated)
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { CodexHookService } = await import('../codex/hook-service')
-    const { startCodexHookHashLookup } = await import('../codex/codex-hook-hash-lookup')
+    const [, { CodexHookService }] = await Promise.all([
+      import('../codex/hooks/installation/hook-service'),
+      import('../codex/hooks/installation/codex-hook-service-implementation')
+    ])
+    const { startCodexHookHashLookup } = await import('../codex/trust/hooks/codex-hook-hash-lookup')
     startCodexHookHashLookup(Promise.resolve())
     const service = new CodexRuntimeHomeService(store as never)
     const hookService = new CodexHookService()
@@ -240,7 +243,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     writeCodexStateDbBackfillStatus(accountTwo.managedHomePath, 'complete')
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const bridge = await import('../codex/codex-account-session-bridge')
+    const bridge = await import('../codex/history/bridges/codex-account-session-bridge')
     const service = new CodexRuntimeHomeService(store as never)
 
     selectManagedAccount(settings, accountTwo.id)

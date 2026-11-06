@@ -15,6 +15,7 @@ import {
   markUnclaimedUploadForSweep
 } from './agent-session-attachment-claims'
 import {
+  agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
@@ -42,6 +43,31 @@ describe('agentSessionAttachmentReferences', () => {
       'linux'
     )
     expect([...references].sort()).toEqual([UPLOAD_A, UPLOAD_B].sort())
+  })
+
+  it.each([
+    [
+      'an image path, whose spaces are part of it',
+      { type: 'image-ref', path: 'my shot.png' },
+      'my shot.png'
+    ],
+    ['a quoted reference', { type: 'text', text: 'read @"$/my notes.txt" please' }, 'my notes.txt'],
+    [
+      'a bare reference, at the next space',
+      { type: 'text', text: 'read @$/notes.txt please' },
+      'notes.txt'
+    ],
+    ['a reference with no file name, by its id', { type: 'text', text: 'see $ please' }, UPLOAD_A]
+  ] as const)('names %s', (_case, block, name) => {
+    const stored = `${root}/${UPLOAD_A}`
+    const body = message(
+      block.type === 'text'
+        ? { ...block, text: block.text.replace('$', stored) }
+        : { ...block, path: `${stored}/${block.path}` }
+    )
+    expect(agentSessionAttachmentReferenceNames(root, body, [UPLOAD_A], 'linux')).toEqual([
+      { uploadId: UPLOAD_A, name }
+    ])
   })
 
   it("leaves a mention of any other store path as text: another server's, a ~ form, a bare name", () => {

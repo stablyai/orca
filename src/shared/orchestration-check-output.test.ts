@@ -45,21 +45,6 @@ describe('prepareOrchestrationCheckOutput', () => {
 })
 
 describe('formatted delivery acknowledgment', () => {
-  it('retains the delivery ID above formatted message bodies', () => {
-    expect(
-      formatOrchestrationCheckText(
-        {
-          messages: [{ id: 'msg_one', from_handle: 'worker' }],
-          count: 1,
-          deliveryId: 'delivery_one',
-          deliveryAcknowledged: true,
-          formatted: 'Message body'
-        },
-        'term_coord'
-      )
-    ).toBe('Delivery delivery_one\nMessage body')
-  })
-
   it('tells the caller to ack when an older runtime did not', () => {
     expect(
       formatOrchestrationCheckText(

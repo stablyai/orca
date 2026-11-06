@@ -1,5 +1,5 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
@@ -7,6 +7,7 @@ import {
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/agent-session/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -45,6 +46,7 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
@@ -150,8 +152,22 @@ function buildStructuredAgentSessionLaunchIntent(
 
 /** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
 export function retryStructuredAgentSessionLaunchIntent(
-  intent: StructuredAgentSessionLaunchIntent
+  intent: StructuredAgentSessionLaunchIntent,
+  retainOpening = false
 ): StructuredAgentSessionLaunchIntent {
+  if (retainOpening) {
+    const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
+    return {
+      ...retained,
+      params: {
+        ...intent.params,
+        envelope: {
+          ...intent.params.envelope,
+          clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid)
+        }
+      }
+    }
+  }
   return {
     ...buildStructuredAgentSessionLaunchIntent(
       intent.worktreeId,

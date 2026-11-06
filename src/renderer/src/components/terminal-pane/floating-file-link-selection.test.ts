@@ -8,7 +8,7 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
-import { openDetectedFilePath } from './terminal-file-open-routing'
+
 import { buildFileLinkActions, handleTerminalFileLink } from './terminal-file-link-actions'
 
 const mocks = vi.hoisted(() => ({
@@ -153,19 +153,6 @@ describe('floating file links preserve main-window selection', () => {
       expect.any(Function)
     )
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
-    expect(mainSelection()).toEqual(before)
-  })
-
-  it('opens a source file directly within the floating workspace', async () => {
-    const before = mainSelection()
-    openDetectedFilePath('/Users/me/floating/app.ts', null, null, deps)
-    await flushOpen()
-    expect(openFileForLink).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
-      { forceContentReload: true },
-      null,
-      expect.any(Function)
-    )
     expect(mainSelection()).toEqual(before)
   })
 

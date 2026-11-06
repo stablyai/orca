@@ -1,13 +1,19 @@
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationDismissEvent
-} from './runtime-mobile-notification-controller'
+} from './push/notifications/runtime-mobile-notification-controller'
 
 export async function captureOriginalDeliveryRetirement(directory: string): Promise<{
   originalEpoch: string
   restartedEpoch: string
   event: MobileNotificationDismissEvent
 }> {
+  const scope = {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: 'folder',
+    workspaceKind: 'folder'
+  } as const
   const original = new RuntimeMobileNotificationController()
   original.configureDismissalStore(directory)
   original.dispatch({
@@ -17,12 +23,7 @@ export async function captureOriginalDeliveryRetirement(directory: string): Prom
     body: '',
     notificationId: 'same',
     structuredOrigin: {
-      scope: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'folder',
-        workspaceKind: 'folder'
-      },
+      scope,
       sessionId: 'session-a',
       journalCursor: { epoch: 'journal-a', sequence: 1 },
       cause: { kind: 'prompt', promptId: 'A' }
@@ -37,9 +38,14 @@ export async function captureOriginalDeliveryRetirement(directory: string): Prom
       event = value
     }
   })
-  restarted.retireStructuredAttention({
-    sessionId: 'session-a',
-    observedCursor: { epoch: 'journal-a', sequence: 1 }
+  restarted.acknowledgeAttention({
+    reads: [
+      {
+        scope,
+        sessionId: 'session-a',
+        observedCursor: { epoch: 'journal-a', sequence: 1 }
+      }
+    ]
   })
   // Why: the caller deletes the directory next; an unflushed write would recreate it.
   await restarted.closeDismissals()

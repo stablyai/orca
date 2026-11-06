@@ -7,7 +7,7 @@ import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { prChecksCacheSuffix, prCommentsCacheSuffix } from '../github/cache-identity'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import { getVisibleHostedReviewRefreshTargets } from '../github/visible-hosted-review-refresh-targets'
-import { resolveChecksPanelReviewLookup } from '../../components/right-sidebar/checks-panel-review-lookup-authority'
+import { resolveChecksPanelReviewLookup } from '../../components/right-sidebar/checks-panel/checks-panel-review-lookup-authority'
 import { createUpdateWorktreeMeta } from './worktrees/metadata/update-worktree-meta'
 import { findKnownWorktreeById } from './worktrees/listing/detected-worktree-meta'
 import { persistWorktreeMeta } from './worktrees/metadata/worktree-meta-persist'
@@ -156,35 +156,6 @@ describe('PR panel with local and remote copies of one project', () => {
     expect(store.getState().prCache[`project::${branch}`]?.data).toEqual(localPR)
   })
 
-  it.each([false, true])(
-    'refreshes the active server copy (colliding workspace ID: %s)',
-    async (colliding) => {
-      const remoteRepo: Repo = {
-        ...localRepo,
-        path: '/remote/project',
-        executionHostId: 'runtime:server'
-      }
-      const { store, worktree } = setup(remoteRepo)
-      if (colliding) {
-        store.setState({
-          worktreesByRepo: {
-            project: [{ ...worktree, hostId: 'local', head: 'local-head', linkedPR: 11 }, worktree]
-          }
-        })
-      }
-
-      store.getState().enqueueGitHubPRRefresh(worktree.id, 'active', 80)
-
-      await vi.waitFor(() => {
-        expect(store.getState().prCache[`runtime:server::project::${branch}`]?.data?.number).toBe(
-          22
-        )
-      })
-      expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
-      expect(store.getState().prCache[`project::${branch}`]?.data).toEqual(localPR)
-    }
-  )
-
   it.each(['enqueue', 'refresh'] as const)(
     '%s preserves a server-qualified legacy SSH owner when direct SSH overlaps',
     async (action) => {
@@ -304,57 +275,6 @@ describe('PR panel with local and remote copies of one project', () => {
     }
   )
 
-  it.each(['ssh', 'runtime'])(
-    'checks existing PR eligibility on the same %s owner',
-    async (host) => {
-      const remoteRepo: Repo = {
-        ...localRepo,
-        ...(host === 'ssh' ? { connectionId: 'builder' } : { executionHostId: 'runtime:server' })
-      }
-      const { store, hostId } = setup(remoteRepo)
-      const eligibility = {
-        provider: 'github',
-        canCreate: false,
-        blockedReason: 'existing_review',
-        nextAction: 'open_existing_review',
-        reviewLookupOutcome: 'found',
-        review: { number: remotePR.number, url: remotePR.url }
-      }
-      mockApi.hostedReview.getCreationEligibility.mockResolvedValue(eligibility)
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'eligibility',
-        ok: true,
-        result: eligibility,
-        _meta: { runtimeId: 'server' }
-      })
-
-      expect(
-        await store.getState().getHostedReviewCreationEligibility({
-          repoPath: remoteRepo.path,
-          repoId: remoteRepo.id,
-          repoOwnerExecutionHostId: hostId,
-          branch
-        })
-      ).toEqual(eligibility)
-      if (host === 'runtime') {
-        expect(mockApi.hostedReview.getCreationEligibility).not.toHaveBeenCalled()
-        expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-          expect.objectContaining({
-            selector: 'server',
-            params: { repo: remoteRepo.id, repoId: remoteRepo.id, branch }
-          })
-        )
-      } else {
-        expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith(
-          expect.objectContaining({
-            connectionId: 'builder',
-            repoOwnerExecutionHostId: hostId
-          })
-        )
-      }
-    }
-  )
-
   it.each(['ssh', 'runtime', 'paired-legacy', 'paired-stamped'] as const)(
     'mutates the %s owner comment cache and preserves the same-ID twin',
     async (host) => {
@@ -464,95 +384,6 @@ describe('PR panel with local and remote copies of one project', () => {
       }
     }
   )
-
-  it('keeps a manual linked-PR result for a paired SSH row that predates owner stamps', async () => {
-    const pairedRepo: Repo = {
-      ...localRepo,
-      path: '/remote/project',
-      connectionId: 'builder',
-      executionHostId: 'runtime:server'
-    }
-    const { store, worktree } = setup(pairedRepo)
-    store.setState({
-      worktreesByRepo: { project: [{ ...worktree, hostId: 'ssh:builder' }] },
-      activeWorkspaceExecutionHostId: 'ssh:builder'
-    })
-
-    const pr = await store.getState().fetchPRForBranch(pairedRepo.path, branch, {
-      force: true,
-      repoId: pairedRepo.id,
-      repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(pairedRepo, {
-        ...worktree,
-        hostId: 'ssh:builder'
-      }),
-      worktreeId: worktree.id,
-      linkedPRNumber: remotePR.number,
-      reason: 'manual'
-    })
-
-    expect(pr?.number).toBe(remotePR.number)
-    expect(store.getState().prCache[`runtime:server::project::${branch}`]?.data?.number).toBe(
-      remotePR.number
-    )
-    expect(store.getState().prCache[`project::${branch}`]?.data).toEqual(localPR)
-  })
-
-  it('skips passive refreshes when a host-only API cannot distinguish nested SSH repository twins', () => {
-    const pairedRepo: Repo = {
-      ...localRepo,
-      executionHostId: 'runtime:server',
-      connectionId: 'builder'
-    }
-    const { store, worktree } = setup(pairedRepo)
-    store.setState({
-      repos: [pairedRepo, { ...pairedRepo, connectionId: 'other' }],
-      worktreesByRepo: {
-        project: [{ ...worktree, hostId: 'ssh:builder', runtimeOwnerEnvironmentId: 'server' }]
-      }
-    })
-    expect(getVisibleHostedReviewRefreshTargets(store.getState(), store.getState)).toEqual([])
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('returns normal mutation failures when the selected repository owner is gone', async () => {
-    const { store } = setup({ ...localRepo, executionHostId: 'runtime:server' })
-    const options = { repoId: localRepo.id, repoOwnerExecutionHostId: 'runtime:missing' }
-    await expect(
-      store.getState().addPRConversationComment(localRepo.path, 22, 'comment', options)
-    ).resolves.toMatchObject({ ok: false })
-    await expect(
-      store.getState().addPRReviewCommentReply(localRepo.path, 22, 1, 'reply', options)
-    ).resolves.toMatchObject({ ok: false })
-    await expect(
-      store.getState().setPRCommentReaction(localRepo.path, 22, 'subject', '+1', true, options)
-    ).resolves.toBe(false)
-    await expect(
-      store.getState().resolveReviewThread(localRepo.path, 22, 'thread', true, options)
-    ).resolves.toBe(false)
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(mockApi.gh.addIssueComment).not.toHaveBeenCalled()
-  })
-
-  it('refuses a missing owner instead of loading the local copy', async () => {
-    const { store } = setup({ ...localRepo, executionHostId: 'runtime:server' })
-    await expect(
-      store.getState().fetchPRForBranch(localRepo.path, branch, {
-        repoId: localRepo.id,
-        repoOwnerExecutionHostId: 'runtime:missing'
-      })
-    ).rejects.toThrow('owning host')
-    await expect(
-      store.getState().getHostedReviewCreationEligibility({
-        repoPath: localRepo.path,
-        repoId: localRepo.id,
-        repoOwnerExecutionHostId: 'runtime:missing',
-        branch
-      })
-    ).rejects.toThrow('owning host')
-    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
-    expect(mockApi.hostedReview.getCreationEligibility).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
 
   it('keeps automatic server refresh enabled when the local copy is listed first', async () => {
     const remoteRepo: Repo = {

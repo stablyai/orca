@@ -2,7 +2,7 @@ import type { CommandHandler } from '../dispatch'
 import {
   describePtyProcessCeiling,
   type PtyProcessCeilingState
-} from '../../shared/pty-process-ceiling-state'
+} from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 

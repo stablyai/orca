@@ -175,7 +175,9 @@ type AllRouteStateKeys = {
 const focusFreeRouteStates = new WeakMap<WorktreeOperationRouteState, WorktreeOperationRouteState>()
 
 /** Neither workspace focus nor the Active Server focus can replace a file's catalog owner. Projects only route inputs: spreading the full app state per lookup dominated ownership sweeps. */
-function focusFreeRouteStateOf(state: WorktreeOperationRouteState): WorktreeOperationRouteState {
+export function focusFreeRouteStateOf(
+  state: WorktreeOperationRouteState
+): WorktreeOperationRouteState {
   let projected = focusFreeRouteStates.get(state)
   if (!projected) {
     const routeState: AllRouteStateKeys = {

@@ -33,68 +33,11 @@ import {
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
 import type { OpenFile } from '@/store/slices/editor'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
-
-function getActiveUnifiedTabId({
-  worktreeId,
-  isCurrentWorktree,
-  activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'groupsByWorktree'
-> & { worktreeId: string; isCurrentWorktree: boolean }): string | null {
-  if (!isCurrentWorktree) {
-    return null
-  }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
-  const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
-    : undefined
-  const activeUnifiedTabId = activeGroup?.activeTabId ?? null
-  return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
-}
-
-function isCurrentWorkspaceTab({
-  tab,
-  isCurrentWorktree,
-  activeTabType,
-  activeTabId,
-  activeTabIdByWorktree,
-  activeFileId,
-  activeFileIdByWorktree,
-  activeTabTypeByWorktree,
-  activeUnifiedTabId
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-> & {
-  tab: Tab & { contentType: WorkspaceTabContentType }
-  isCurrentWorktree: boolean
-  activeUnifiedTabId: string | null
-}): boolean {
-  if (!isCurrentWorktree) {
-    return false
-  }
-  if (activeUnifiedTabId) {
-    return activeUnifiedTabId === tab.id
-  }
-  const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
-  const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
-  if (storedType !== visibleType) {
-    return false
-  }
-  return visibleType === 'terminal'
-    ? (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
-    : (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
-}
+import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-current-tab'
+import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 
 export function buildSearchableWorkspaceTabEntries({
   worktrees,
@@ -119,6 +62,7 @@ export function buildSearchableWorkspaceTabEntries({
   activeFileIdByWorktree,
   activeTabTypeByWorktree,
   generatedTitlesEnabled,
+  chatNames,
   terminalLayoutsByTabId,
   paneForegroundAgentByPaneKey
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
@@ -262,6 +206,31 @@ export function buildSearchableWorkspaceTabEntries({
             sleepingAgentSessionsByPaneKey,
             paneForegroundAgentByPaneKey
           })
+        })
+        continue
+      }
+      if (tab.contentType === 'agent-session') {
+        const title = projectedStructuredChatTabName(tab, chatNames)
+        seenTabIdentities.add(tabIdentity)
+        entries.push({
+          ...baseEntry,
+          title,
+          secondaryText: '',
+          titleSearchText: title,
+          secondarySearchTexts: [],
+          typeSearchAliases: ['chat'],
+          document: buildPaletteTabDocument({
+            id: tab.id,
+            title,
+            secondaryTexts: [],
+            worktreeName,
+            branch,
+            repoName,
+            typeAliases: ['chat']
+          }),
+          agentMetadata: [],
+          // Why: a chat records its provider, as the tab strip's icon does.
+          occupantAgent: agentTypeToIconAgent(tab.agentSessionAgent)
         })
         continue
       }

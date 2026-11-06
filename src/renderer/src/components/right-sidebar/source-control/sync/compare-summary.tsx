@@ -3,7 +3,7 @@ import { ArrowUp, RefreshCw, Settings2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
 export type BranchCompareStatusHeadSnapshot = {
   baseRef: string
@@ -24,9 +24,11 @@ export function shouldRefreshBranchCompareForStatusHead(
   previous: BranchCompareStatusHeadSnapshot | null,
   current: BranchCompareStatusHeadSnapshot
 ): boolean {
+  // A first status load is not a HEAD move; the visible-entry compare already read HEAD.
   return (
     current.statusHead !== null &&
     previous !== null &&
+    previous.statusHead !== null &&
     previous.worktreeId === current.worktreeId &&
     previous.baseRef === current.baseRef &&
     previous.statusHead !== current.statusHead
@@ -37,8 +39,10 @@ export function shouldRefreshBranchCompareForRemoteStatus(
   previous: BranchCompareRemoteStatusSnapshot | null,
   current: BranchCompareRemoteStatusSnapshot
 ): boolean {
+  // A first upstream load is not a push.
   return (
     previous !== null &&
+    previous.hasUpstream !== null &&
     previous.worktreeId === current.worktreeId &&
     previous.baseRef === current.baseRef &&
     (previous.hasUpstream !== current.hasUpstream ||

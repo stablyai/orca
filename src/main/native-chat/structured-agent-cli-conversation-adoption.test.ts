@@ -2,6 +2,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
@@ -16,27 +20,30 @@ import {
 import {
   STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
   structuredAgentRuntimeRegistration
-} from '../runtime/structured-agent-runtime-registrations'
+} from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { writeOpenCodeSqliteDatabase } from '../ai-vault/session-scanner-opencode-sqlite-fixture'
+import { writeOpenCodeSqliteDatabase } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { resolveOpenCodeDatabasePath } from '../opencode/opencode-data-directory'
 import * as hostReadableTranscriptPath from './host-readable-transcript-path'
 
-vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
-  const query = await import('./transcript-opencode-sqlite-query')
-  return {
-    ...(await importOriginal<object>()),
-    readOpenCodeTranscriptPageViaWorker: async (
-      args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
-    ) => query.readOpenCodeTranscriptPage(args),
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (importOriginal) => {
+    const query = await import('./transcript-opencode-sqlite-query')
+    return {
+      ...(await importOriginal<object>()),
+      readOpenCodeTranscriptPageViaWorker: async (
+        args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
+      ) => query.readOpenCodeTranscriptPage(args),
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 
 const SESSION_ID = '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a'
 let root: string | null = null

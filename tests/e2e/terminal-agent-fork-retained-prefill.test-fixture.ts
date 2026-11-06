@@ -29,10 +29,10 @@ import type {
 } from '../../src/shared/agent-session/agent-session-host-authority'
 import type { PtyRuntimeControllerDeps } from '../../src/main/ipc/pty/runtime/controller-deps'
 import type { ShellSpawnParams } from '../../src/main/providers/local-pty/local-pty-executable-spawn'
-import { SHELL_READY_MARKER_PREFIX } from '../../src/main/shell-ready-marker-scanner'
+import { SHELL_READY_MARKER_PREFIX } from '../../src/main/pty/shell-startup/shell-ready-marker-scanner'
 import * as startupStaging from '../../src/shared/startup-command-staging'
 import { buildStartupCommandSubmission } from '../../src/shared/startup-command-submission'
-import type * as PosixProcessTable from '../../src/main/pty/posix-pty-process-table'
+import type * as PosixProcessTable from '../../src/main/pty/process-retirement/posix-pty-process-table'
 
 const physical = vi.hoisted(() => ({ spawn: vi.fn(), sweep: vi.fn() }))
 vi.mock('node-pty', () => ({ spawn: physical.spawn }))
@@ -44,14 +44,17 @@ vi.mock('../../src/main/providers/local-pty/local-pty-runtime-spawn', async () =
       spawnShellWithFallback({ ...params, ptySpawn: physical.spawn })
   }
 })
-vi.mock('../../src/main/pty-descendant-termination', () => ({
+vi.mock('../../src/main/pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: (...args: unknown[]) => physical.sweep(...args)
 }))
-vi.mock('../../src/main/pty/posix-pty-process-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof PosixProcessTable>()),
-  readPosixPtyProcessTableSync: () => '',
-  readPosixPtyProcessTable: async () => ''
-}))
+vi.mock(
+  '../../src/main/pty/process-retirement/posix-pty-process-table',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof PosixProcessTable>()),
+    readPosixPtyProcessTableSync: () => '',
+    readPosixPtyProcessTable: async () => ''
+  })
+)
 
 const previousProvider = getLocalPtyProvider()
 afterEach(() => {

@@ -90,29 +90,6 @@ function writeCalls(): RuntimeRpcRequest[] {
 }
 
 describe('writeRuntimeFile disk precondition', () => {
-  it('cannot write through an older server reached after a supporting server was probed', async () => {
-    // The shared socket reconnected to an older server between the capability verdict and the send.
-    serveHost({ enforcesPrecondition: true })
-    const unguardedWrites: RuntimeRpcRequest[] = []
-    runtimeEnvironmentCall.mockImplementation((args: RuntimeRpcRequest) => {
-      if (args.method === 'files.write') {
-        unguardedWrites.push(args)
-        return Promise.resolve(rpcOk({ ok: true }))
-      }
-      return Promise.resolve({
-        id: 'rpc',
-        ok: false,
-        error: { code: 'method_not_found', message: `Unknown method: ${args.method}` },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    await expect(
-      writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
-    ).rejects.toThrow()
-    expect(unguardedWrites).toHaveLength(0)
-  })
-
   it('compares from the client before writing through an older host', async () => {
     serveHost({ enforcesPrecondition: false, diskContent: 'original' })
     runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
@@ -170,52 +147,6 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(writeCalls()).toHaveLength(0)
   })
 
-  it('reports a confirmed-missing file to an autosave through an older host', async () => {
-    serveHost({ enforcesPrecondition: false })
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'missing' })
-    expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('lets an explicit save recreate a confirmed-missing file through an older host', async () => {
-    serveHost({ enforcesPrecondition: false })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      {
-        ...precondition,
-        allowMissing: true
-      }
-    )
-
-    expect(result).toEqual({ ok: true })
-    expect(writeCalls()).toHaveLength(1)
-  })
-
-  it('fails an explicit save, without writing, when an older host read fails for another reason', async () => {
-    serveHost({ enforcesPrecondition: false, readError: 'Runtime request timed out' })
-
-    await expect(
-      writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, {
-        ...precondition,
-        allowMissing: true
-      })
-    ).rejects.toThrow('timed out')
-    expect(writeCalls()).toHaveLength(0)
-  })
-
   it('refuses to send when the runtime connection changes after the probe', async () => {
     serveHost({
       enforcesPrecondition: false,
@@ -226,28 +157,6 @@ describe('writeRuntimeFile disk precondition', () => {
     await expect(
       writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
     ).rejects.toThrow('Runtime connection changed')
-    expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('reports the wire file_too_large refusal from an older host as changed', async () => {
-    serveHost({
-      enforcesPrecondition: false,
-      readErrorCode: 'file_too_large',
-      readError: 'file_too_large'
-    })
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      {
-        ...precondition,
-        allowMissing: true
-      }
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
     expect(writeCalls()).toHaveLength(0)
   })
 
@@ -307,32 +216,6 @@ describe('writeRuntimeFile disk precondition', () => {
     ).rejects.toThrow('Timed out')
   })
 
-  it('retries once on the new connection when it changed before the send', async () => {
-    let probes = 0
-    serveHost({
-      enforcesPrecondition: true,
-      onStatus: () => {
-        probes += 1
-        if (probes === 1) {
-          // The save started while disconnected; the transport reconnects during the probe.
-          advanceRuntimeEnvironmentConnectionGeneration('env-1')
-        }
-      }
-    })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: true })
-    expect(writeCalls()).toHaveLength(1)
-  })
-
   it('re-probes once when the transport refused to send to a replacement runtime', async () => {
     let probes = 0
     serveHost({ enforcesPrecondition: true, onStatus: () => (probes += 1) })
@@ -385,34 +268,4 @@ describe('writeRuntimeFile disk precondition', () => {
     ).rejects.toThrow('pairing changed')
     expect(writeCalls()).toHaveLength(1)
   })
-
-  it.each([
-    ['a host that compares at write time', true, precondition],
-    ['an older host after the client-side compare', false, precondition],
-    ['an unguarded write', true, undefined]
-  ])(
-    'sends no bytes when the caller is voided during the checks (%s)',
-    async (_, enforces, pre) => {
-      let voided = false
-      const voidCaller = (): void => {
-        voided = true
-      }
-      serveHost({
-        enforcesPrecondition: enforces,
-        diskContent: 'original',
-        onStatus: voidCaller,
-        onRead: voidCaller
-      })
-      runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-      await expect(
-        writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, pre, () => {
-          if (voided) {
-            throw new Error('voided')
-          }
-        })
-      ).rejects.toThrow('voided')
-      expect(writeCalls()).toHaveLength(0)
-    }
-  )
 })

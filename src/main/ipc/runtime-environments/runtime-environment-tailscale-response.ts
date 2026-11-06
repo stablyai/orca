@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 
 export function withTailscaleHintForResponse<TResult>(

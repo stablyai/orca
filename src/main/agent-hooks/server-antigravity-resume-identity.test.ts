@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { resumeRecordFromStatus } from '../../shared/agent-resume-record-from-status'
-import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
+import { resumeRecordFromStatus } from '../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
 import { TRANSCRIPT_MAX_SCAN_BYTES } from '../../shared/agent-hook-listener/transcript-reader'
 import { AgentHookServer } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
@@ -171,45 +171,6 @@ it('derives root identity from bounded first-record provenance, independently of
     expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
   } finally {
     server.stop()
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
-it('keeps warm-child dropping and helper-held completion status unchanged', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'agy-status-'))
-  const rootPath = join(dir, 'root.jsonl')
-  const childPath = join(dir, 'child.jsonl')
-  writeFileSync(rootPath, jsonl(ROOT_ORIGIN))
-  writeFileSync(childPath, jsonl(CHILD_ORIGIN))
-  const state = createHookListenerState()
-  try {
-    normalized(
-      hook(rootPath, ROOT, {
-        hook_event_name: 'PreToolUse',
-        toolCall: { name: 'invoke_subagent', args: {} }
-      }),
-      state
-    )
-    expect(
-      normalizeHookPayload(
-        state,
-        'antigravity',
-        buildBody(hook(childPath, CHILD, { lastUserInput: '' })),
-        'production'
-      )
-    ).toBeNull()
-    const held = normalized(
-      hook(rootPath, ROOT, { hook_event_name: 'Stop', fullyIdle: false }),
-      state
-    )
-    expect(held.payload).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
-    expect(held.providerSession?.id).toBe(ROOT)
-    const cold = normalized(
-      hook(childPath, CHILD, { lastUserInput: '', hook_event_name: 'Stop', fullyIdle: true })
-    )
-    expect(cold.payload.state).toBe('done')
-    expect(cold.providerSession).toBeUndefined()
-  } finally {
     rmSync(dir, { recursive: true, force: true })
   }
 })

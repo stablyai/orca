@@ -45,7 +45,7 @@ import {
   SkillsGetInstallProgressParams
 } from '../../../../shared/rpc-contract/skills-params'
 import { unavailableWhileWslDistroStopped } from '../../../skills/skill-discovery-stopped-wsl-roots'
-import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 // Use the same target resolution for discovery and delete-plan roots, including WSL.
 export function resolveDiscoveryTarget(

@@ -10,7 +10,7 @@ import {
   buildAgentSessionContinuationPrompt,
   type AgentSessionContinuationRequest
 } from '@/lib/agent-session-continuation'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionContinuationContext
