@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import type { AgentSessionStatusEvent } from '../../shared/agent-session/agent-session-wire'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export function installationActivity(surface: 'chat' | 'terminal', now: number, initial: boolean) {
   let transition!: (event: AgentPaneChange) => void

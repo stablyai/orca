@@ -56,3 +56,12 @@ export function loadGitHubLinkPreview(
 ): Promise<GitHubWorkItem | null> {
   return previews.load(githubLinkPreviewKey(repo, link), () => fetchPreview(repo, link))
 }
+
+/** Asks again even while the last answer is fresh: the pull request may have just changed. */
+export function reloadGitHubLinkPreview(
+  repo: Repo,
+  link: GitHubIssueOrPRLink
+): Promise<GitHubWorkItem | null> {
+  previews.expire(githubLinkPreviewKey(repo, link))
+  return loadGitHubLinkPreview(repo, link)
+}

@@ -11,7 +11,7 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
 } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { installation } from './install-scheduling.test-fixture'
 import type { FollowUpActivityRouter } from './activity-journal'
 import type { FollowUpEngine } from './engine'

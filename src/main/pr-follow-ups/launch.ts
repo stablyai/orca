@@ -3,7 +3,7 @@ import {
   resolveAgentLaunchModeOnHost
 } from '../agent-launch/agent-launch-mode'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch'
+import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch/agent-launch'
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
 import {
   isAgentLaunchResult,

@@ -7,7 +7,7 @@ import type { FollowUpObservation, FollowUpTarget } from '../../shared/pr-follow
 import { harness } from './engine.test-fixture'
 import { prepareFollowUpLaunch, recoverFollowUpLaunch } from './launch'
 
-vi.mock('../runtime/rpc/methods/agent-launch', () => ({ launchAgentOnHost: vi.fn() }))
+vi.mock('../runtime/rpc/methods/agent-launch/agent-launch', () => ({ launchAgentOnHost: vi.fn() }))
 
 function runtime(outcome?: AgentSessionOperationOutcome): OrcaRuntimeService {
   return {

@@ -138,7 +138,8 @@ export function useMobileSessionController() {
     presentation,
     useMobileSessionPanelRouteActions(presentation)
   )
-  return Object.assign(panelRouteActions, preferences)
+  // The one owner of opening an existing chat, so a fork's source link follows its selection rules.
+  return Object.assign(panelRouteActions, preferences, { openNativeSession })
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>

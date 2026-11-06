@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FollowUpEngine, type FollowUpReceipt } from './engine'
 import { FollowUpStore } from './store'
 import type Database from '../sqlite/sync-database'
-import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/pr-follow-ups'
+import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/automations/pr-follow-ups'
 import { harness } from './engine.test-fixture'
 
 describe('automatic failing-check follow-ups', () => {

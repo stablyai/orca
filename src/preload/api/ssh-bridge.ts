@@ -92,6 +92,13 @@ export const sshApi = {
     return () => ipcRenderer.removeListener('ssh:state-changed', listener)
   },
 
+  onTargetRemoved: (callback: (data: { targetId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { targetId: string }): void =>
+      callback(data)
+    ipcRenderer.on('ssh:target-removed', listener)
+    return () => ipcRenderer.removeListener('ssh:target-removed', listener)
+  },
+
   addPortForward: (args: {
     targetId: string
     localPort: number

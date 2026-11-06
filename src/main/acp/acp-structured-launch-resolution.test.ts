@@ -12,18 +12,18 @@ import {
   replayJournal,
   restoreJournal,
   type JournalLoad
-} from '../native-chat/agent-session-journal/journal-open'
+} from '../native-chat/agent-session-journal/replay/journal-open'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase,
   publishTestJournalEpoch,
   insertTestJournalRow,
   insertTestJournalRowJson
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/journal-outcome-write'
-import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/journal-outcome-format'
-import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
-import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/outcomes/journal-outcome-write'
+import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/outcomes/journal-outcome-format'
+import type { JournalRow } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import { createJournalReducerState } from '../native-chat/agent-session-journal/projection/journal-reducer'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createLegacyProviderTimelineIdentityScheme,
@@ -32,6 +32,7 @@ import {
 import { acpLaunchSpecFor } from './acp-launch-specs'
 
 const GROK = acpLaunchSpecFor('grok')!
+const OMP = acpLaunchSpecFor('omp')!
 const identity = {
   sessionId: 'session-alpha-1',
   workspaceId: 'workspace-1',
@@ -48,6 +49,25 @@ function grokRecord(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRe
     accountHome: { variable: 'GROK_HOME', path: '/home/user/.grok-work' },
     ...overrides
   }
+}
+
+function ompRecord(options: Record<string, string>, resumes: boolean): AgentSessionRecord {
+  return grokRecord({
+    provider: 'omp',
+    accountHome: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
+    options,
+    providerHandleChain: resumes
+      ? [
+          {
+            linkId: 'link-created',
+            origin: 'created',
+            mintedAtFence: 1,
+            observedAt: 1,
+            handle: { transport: 'acp', agent: 'omp', nativeId: 'omp-1' }
+          }
+        ]
+      : []
+  })
 }
 
 function journalWithTurns(...providerSessions: string[]): JournalLoad {
@@ -68,11 +88,15 @@ function journalWithTurns(...providerSessions: string[]): JournalLoad {
   return { state, newer: null, damage: null }
 }
 
-function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | null = () => null) {
+function resolver(
+  record: AgentSessionRecord,
+  readJournal: () => JournalLoad | null = () => null,
+  spec = GROK
+) {
   const searched: (string | null | undefined)[] = []
   return {
     searched,
-    resolve: createAcpStructuredLaunchResolver(GROK, {
+    resolve: createAcpStructuredLaunchResolver(spec, {
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       readJournal,
       resolveWorkspacePath: async () => '/repo/worktree',
@@ -237,6 +261,22 @@ describe('ACP launch resolution', () => {
       await closeTestJournalHostDatabase(root)
       rmSync(root, { recursive: true, force: true })
     }
+  })
+  it('starts a new OMP chat with its saved model on the launch line, where OMP resolves roles', async () => {
+    const start = (resumes: boolean) =>
+      resolver(
+        ompRecord({ model: '@worker_be', effort: 'medium' }, resumes),
+        () => null,
+        OMP
+      ).resolve({ identity })
+    const fresh = await start(false)
+    expect(fresh.args.slice(-2)).toEqual(['--model', '@worker_be'])
+    expect(fresh.args).not.toContain('--thinking')
+    expect(fresh.launchModel).toBe('@worker_be')
+    // A load restores the conversation's own model; the session applies the saved one instead.
+    const resumed = await start(true)
+    expect(resumed.args).not.toContain('--model')
+    expect(resumed.launchModel).toBeUndefined()
   })
 })
 

@@ -30,6 +30,7 @@ import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 import { windowBackdropActive } from '@/lib/window-backdrop'
 import { contrastRatio, over, type Rgba } from '@/lib/plugin-theme-tokens'
+import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
 
 function hexToRgb(hex: string): Rgba {
   let clean = hex.replace('#', '')
@@ -161,7 +162,6 @@ export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
   systemPrefersDark: boolean,
-  paneFontSizes: Map<number, number>,
   paneTransports: Map<number, PtyTransport>,
   effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt,
   paneMode2031: Map<number, boolean>,
@@ -211,7 +211,7 @@ export function applyTerminalAppearance(
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     // Hidden panes defer cursor blink so settings changes cannot restart their blink timer.
     setTerminalCursorBlinkOption(pane.terminal, settings.terminalCursorBlink)
-    const paneSize = paneFontSizes.get(pane.id)
+    const paneSize = getTerminalFontSizeOverride(pane.leafId)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
       fontFamily: buildFontFamily(settings.terminalFontFamily),

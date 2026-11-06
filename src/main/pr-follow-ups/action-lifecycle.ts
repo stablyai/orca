@@ -1,6 +1,6 @@
 import { followUpActivityIdentity } from './activity-journal'
 import type { FollowUpEngine } from './engine'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS } from '../../shared/agent-session/agent-session-host-authority'
 import type { FollowUpAction } from '../../shared/pr-follow-ups/contracts'
 import type { FollowUpEngineDependencies } from './engine-contract'

@@ -21,7 +21,7 @@ vi.mock('./launch', () => ({
   launchFollowUp: vi.fn(),
   recoverFollowUpLaunch: vi.fn().mockResolvedValue({ status: 'unconfirmed' })
 }))
-vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: vi.fn()
 }))
 const cleanups: (() => Promise<void>)[] = []

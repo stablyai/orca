@@ -13,13 +13,13 @@ import {
   agentJournalTurnBody,
   readAgentJournalTurn
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import { lostLiveWorkJournalBody } from '../agent-session-journal/journal-subagent-liveness'
+import type { JournalLifecycleMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
+import { lostLiveWorkJournalBody } from '../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   runningCallEnd,
   terminalAgentJournalBody
-} from '../agent-session-journal/journal-terminal-settlement'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
+} from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite

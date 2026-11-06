@@ -13,14 +13,14 @@ import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   seedTestAgentSessionRecordStore,
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const roots: string[] = []
 export const journals = createTrackedJournalOpener()

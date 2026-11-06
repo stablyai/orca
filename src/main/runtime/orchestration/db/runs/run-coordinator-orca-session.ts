@@ -1,6 +1,6 @@
 import { orcaSessionAddressSql } from '../orca-session-address-sql'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
-import type { RunRow } from '../../types'
+import type { RunRow } from '../orchestration-records'
 
 type RunCoordinatorOrcaSessionFields = Pick<
   RunRow,

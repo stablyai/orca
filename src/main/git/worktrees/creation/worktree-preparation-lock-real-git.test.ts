@@ -121,7 +121,7 @@ it('cleans only its newly registered marker when cancellation follows atomic add
   })
   await expect(
     prepareWorktreeCreateCheckout(repo, prepared, 'main', reason, { signal: controller.signal })
-  ).rejects.toThrow('canceled after atomic add')
+  ).rejects.toMatchObject({ name: 'AbortError' })
   expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
   await expect(readFile(join(prepared, '.git'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(prepared)

@@ -49,7 +49,7 @@ const { createQueuedMessageTestRig, QUEUED_RIG_CALLER } = await vi.importActual<
     }
   }>
 }>(
-  '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+  '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 )
 
 const asyncStorage = vi.hoisted(() => ({

@@ -15,7 +15,7 @@ import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { sessionCrewChanges } from '../runtime/orchestration/crew/crew-changes'
 import { installPrFollowUps } from './install'
 import { FollowUpStore } from './store'
-import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/pr-follow-ups'
+import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/automations/pr-follow-ups'
 import { launchFollowUp } from './launch'
 
 vi.mock('./launch', () => ({
