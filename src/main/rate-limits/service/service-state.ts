@@ -43,6 +43,7 @@ export abstract class RateLimitServiceState {
   protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
+  protected staleClaudeTokenRetryTimer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
   // Coalesce focus/show/restore bursts into provider-throttled retries.
   protected lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
