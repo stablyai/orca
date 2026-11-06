@@ -103,6 +103,30 @@ describe('orca serve asking the app which host to run', () => {
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
   })
 
+  it('renders the same argv as before --bind existed when --bind is omitted', () => {
+    const options = { json: true, port: '6768', pairingAddress: '10.0.0.5', mobilePairing: true }
+    const expectedOrcad = [
+      '--bind',
+      '0.0.0.0',
+      '--json',
+      '--port',
+      '6768',
+      '--pairing-address',
+      '10.0.0.5',
+      '--mobile-pairing'
+    ]
+    expect(orcadServeArgs(options)).toEqual(expectedOrcad)
+    expect(orcadServeArgs({ ...options, bind: null })).toEqual(expectedOrcad)
+    expect(serveOptionArgs({ ...options, bind: null }, '--serve-')).toEqual([
+      '--serve-json',
+      '--serve-port',
+      '6768',
+      '--serve-pairing-address',
+      '10.0.0.5',
+      '--serve-mobile-pairing'
+    ])
+  })
+
   it("hands orcad the app's browser client directory when the app has one", () => {
     expect(
       orcadServeArgs({ port: '6768' }, '/opt/Orca/resources/app.asar.unpacked/out/web')
