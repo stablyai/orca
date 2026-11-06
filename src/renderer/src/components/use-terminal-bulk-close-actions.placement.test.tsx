@@ -49,9 +49,11 @@ function mountCloseActions() {
     const openFiles = useAppStore((state) => state.openFiles)
     const state = useAppStore.getState()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the projection fields read by close hooks are needed.
-    const projection = { ...state, openFiles, activeWorktreeId: EDITOR_PLACEMENT } as Parameters<
-      typeof useTerminalEditorCloseFoundation
-    >[0]
+    const projection = {
+      ...state,
+      openFiles,
+      activeWorktreeId: EDITOR_PLACEMENT
+    } as unknown as Parameters<typeof useTerminalEditorCloseFoundation>[0]
     const foundation = useTerminalEditorCloseFoundation(projection)
     const queue = useTerminalEditorCloseQueue({ ...projection, ...foundation })
     const dialog = useTerminalEditorCloseDialogActions({ ...projection, ...foundation, ...queue })

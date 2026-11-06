@@ -94,6 +94,7 @@ const observed = new Map<Element, IntersectionObserver>()
 class ViewportIntersectionObserver implements IntersectionObserver {
   readonly root = null
   readonly rootMargin = '0px'
+  readonly scrollMargin = '0px'
   readonly thresholds = [0]
   constructor(private readonly callback: IntersectionObserverCallback) {}
   report(target: Element): void {
@@ -321,7 +322,7 @@ it('runs expanded body work only for on-screen sections, at mount and over the s
     await render(<FolderWorkspaceSourceControlPanel />)
     const atMount = bodyWork(worktrees)
     expect(atMount.upstream!.calls).toBeGreaterThan(0)
-    const intervals = []
+    const intervals: ReturnType<typeof bodyWork>[] = []
     for (let tick = 0; tick < 2; tick++) {
       for (const operation of BODY_OPERATIONS) {
         probes[operation].mockClear()

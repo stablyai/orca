@@ -64,7 +64,11 @@ export function seedEditorPlacementConsumers(
     ],
     projectGroups: [makeProjectGroup()],
     runtimeEnvironmentCatalogHydrated: true,
-    settings: { editorAutoSave: false, editorPreviewTabsEnabled: false },
+    settings: {
+      ...useAppStore.getState().settings,
+      editorAutoSave: false,
+      editorPreviewTabsEnabled: false
+    },
     openFiles: [file],
     unifiedTabsByWorktree: { [EDITOR_PLACEMENT]: placed, [EDITOR_OWNER]: owned },
     groupsByWorktree: { [EDITOR_PLACEMENT]: groups(placed), [EDITOR_OWNER]: groups(owned) },

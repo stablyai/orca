@@ -286,7 +286,7 @@ it('retires a placement intent deleted during content publication without creati
 })
 
 it('dirty SSH edit tab survives restart round trip (no drop, no duplicate on reopen)', async () => {
-  useAppStore.setState((state) => ({
+  useAppStore.setState((state): Partial<AppState> => ({
     activeWorktreeId: CHILD,
     activeWorkspaceKey: CHILD,
     activeWorkspaceExecutionHostId: 'ssh:builder',

@@ -36,9 +36,16 @@ const branch = {
   compareRef: 'HEAD',
   baseOid: 'base',
   headOid: 'head',
-  mergeBase: 'base'
+  mergeBase: 'base',
+  compareVersion: 'branch-version'
 }
-const commit = { commitOid: 'commit', parentOid: 'parent', compareRef: 'commit', baseRef: 'parent' }
+const commit = {
+  commitOid: 'commit',
+  parentOid: 'parent',
+  compareRef: 'commit',
+  baseRef: 'parent',
+  compareVersion: 'commit-version'
+}
 const section: DiffSection = {
   key: 'notes.md',
   path: 'notes.md',

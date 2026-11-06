@@ -186,12 +186,19 @@ it('bounds frame retention and shared-content reference work linearly at N and 1
         mode: 'diff'
       })
       local.push(
-        makeUnifiedTab({ id: `local-${index}`, entityId, worktreeId: GIT_KEY, contentType: 'diff' })
+        makeUnifiedTab({
+          id: `local-${index}`,
+          entityId,
+          worktreeId: GIT_KEY,
+          groupId: 'local-group',
+          contentType: 'diff'
+        })
       )
       const tab = makeUnifiedTab({
         id: `other-${index}`,
         entityId,
         worktreeId: 'folder:other',
+        groupId: 'other-group',
         contentType: 'diff'
       })
       Object.defineProperty(tab, 'entityId', {

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -179,14 +180,18 @@ it('retires only the removed host owner on authoritative purge and fences late d
   const remote = getWorktreeOperationStore('wt-removed', 'ssh:box', 'instance-1')
   writeWorktreeCommitDraft(local, 'local draft')
   writeWorktreeCommitDraft(remote, 'remote draft')
-  useAppStore.getState().purgeWorktreeTerminalState([{ id: 'wt-removed', hostId: 'ssh:box' }])
+  useAppStore
+    .getState()
+    .purgeWorktreeTerminalState([hostWorktreeTarget({ id: 'wt-removed', hostId: 'ssh:box' })])
   writeWorktreeCommitDraft(remote, 'late remote draft')
   const replacement = getWorktreeOperationStore('wt-removed', 'ssh:box', 'instance-1')
   expect(replacement).not.toBe(remote)
   expect(replacement.getState().draft).toBe('')
   expect(getWorktreeOperationStore('wt-removed', 'local', 'instance-1')).toBe(local)
   expect(local.getState().draft).toBe('local draft')
-  useAppStore.getState().purgeWorktreeTerminalState([{ id: 'wt-removed', hostId: 'local' }])
+  useAppStore
+    .getState()
+    .purgeWorktreeTerminalState([hostWorktreeTarget({ id: 'wt-removed', hostId: 'local' })])
   expect(getWorktreeOperationStore('wt-removed', 'local', 'instance-1').getState().draft).toBe('')
 })
 
