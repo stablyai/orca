@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   readZcodeV2PlanCredential,
   localZcodeCredentialHost,
+  resolveZcodeDataBaseDir,
   type ZcodeCredentialHost
 } from '../zcode/zcode-v2-plan-credentials'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
@@ -95,6 +96,12 @@ export function resolveUsageCredentials(
   } catch {
     return null
   }
+}
+
+/** The v2 credential store the reset-credit client reads its JWTs from. */
+export function zcodeCredentialStorePath(options: ZcodeUsageCredentialOptions = {}): string {
+  const host = options.credentialHost ?? localZcodeCredentialHost()
+  return join(resolveZcodeDataBaseDir(host), '.zcode', 'v2', 'credentials.json')
 }
 
 export function readZcodeUsageCredentials(

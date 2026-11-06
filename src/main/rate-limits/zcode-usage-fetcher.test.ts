@@ -120,6 +120,7 @@ describe('fetchZcodeRateLimits', () => {
     })
     expect(result.weekly?.usedPercent).toBe(44)
     expect(result.monthly?.usedPercent).toBe(3)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('uses CREDIT_LIMIT counts when the reported percentage is stale', async () => {
@@ -317,6 +318,8 @@ describe('fetchZcodeRateLimits', () => {
     expect(String(url)).toBe('https://api.z.ai/api/monitor/usage/quota/limit')
     expect(new Headers(init?.headers).get('Authorization')).toBe('orca-saved-key')
     expect(result.usageMetadata?.credentialSource).toBe('orca-plan')
+    expect(result.rateLimitResetCredits).toBeUndefined()
+    expect(fetch).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(result)).not.toContain('orca-saved-key')
   })
 

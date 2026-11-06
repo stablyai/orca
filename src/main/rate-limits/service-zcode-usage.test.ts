@@ -7,6 +7,7 @@ import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
+import type * as ZcodeUsageFetcherModule from './zcode-usage-fetcher'
 import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
 import {
   deferred,
@@ -40,9 +41,15 @@ vi.mock('./opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: vi.fn()
 }))
 
-vi.mock('./zcode-usage-fetcher', () => ({
+vi.mock('./zcode-usage-fetcher', async (importOriginal) => ({
+  ...(await importOriginal<typeof ZcodeUsageFetcherModule>()),
   fetchZcodeRateLimits: vi.fn(),
   hasZcodeCliPlanCredentials: vi.fn(() => false)
+}))
+
+vi.mock('../zcode/zcode-reset-credits', () => ({
+  fetchZcodeResetCredits: vi.fn(() => Promise.resolve(null)),
+  readZcodeResetAccountId: vi.fn(() => null)
 }))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
@@ -161,6 +168,9 @@ describe('RateLimitService zcode plan credentials', () => {
     const fixtures = join(import.meta.dirname, '..', 'zcode', 'fixtures', 'v2-upstream')
     vi.stubEnv('ZCODE_DATA_BASE_DIR', home)
     vi.stubEnv('ZCODE_CREDENTIAL_SECRET', 'synthetic-secret')
+    // A developer shell launched by ZCode desktop exports a real personal overlay; the
+    // fixture store must be read as one self-consistent account.
+    vi.stubEnv('ZCODE_PERSONAL_PROVIDER_CONFIG_FILE', '')
     try {
       cpSync(join(fixtures, 'zai'), join(home, '.zcode', 'v2'), { recursive: true })
       const selected = readZcodeUsageCredentials()

@@ -13,7 +13,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readZcodeV2PlanCredential, type ZcodeCredentialHost } from './zcode-v2-plan-credentials'
-import { readZcodeUsageCredentials } from '../rate-limits/zcode-usage-credentials'
+import {
+  readZcodeUsageCredentials,
+  zcodeCredentialStorePath
+} from '../rate-limits/zcode-usage-credentials'
 import { fetchZcodeRateLimits } from '../rate-limits/zcode-usage-fetcher'
 
 let dir: string
@@ -85,6 +88,134 @@ describe('upstream-written ZCode v2 stores', () => {
       ])
     }
   )
+
+  it('reads the active OAuth account when the personal default model is another provider', () => {
+    const v2 = join(dir, '.zcode', 'v2')
+    mkdirSync(v2, { recursive: true })
+    writeFileSync(
+      join(v2, 'provider_config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        config: {
+          providerOrder: ['openai'],
+          providerConfigRules: {
+            providerRules: [
+              {
+                providerId: 'openai',
+                templateId: 'openai',
+                providerName: 'OpenAI',
+                config: {
+                  group: 'standard-personal',
+                  access: { type: 'api-key', apiKey: 'personal-provider-key' },
+                  api: { baseUrl: 'http://127.0.0.1:8317' },
+                  personalModelIds: [],
+                  modelOrder: ['gpt-5.6-luna']
+                }
+              }
+            ]
+          },
+          modelConfigRules: {
+            providerModelRules: [
+              {
+                providerId: 'account:bigmodel-individual-coding-plan',
+                modelId: 'GLM-5.3',
+                config: { properties: { contextWindow: 131_072 } }
+              }
+            ],
+            manualProviderModelRules: []
+          }
+        }
+      })
+    )
+    writeFileSync(
+      join(v2, 'credentials.json'),
+      JSON.stringify({
+        'oauth:active_provider': 'bigmodel',
+        'oauth:bigmodel:user_info': JSON.stringify({ id: 'oauth-account', username: 'user' }),
+        'account-provider:coding-plan:account:bigmodel-individual-coding-plan:account:oauth-account:api-key':
+          'oauth-plan-key'
+      })
+    )
+
+    expect(readZcodeV2PlanCredential(host)).toMatchObject({
+      status: 'ok',
+      apiKey: 'oauth-plan-key',
+      baseUrl: 'https://open.bigmodel.cn',
+      identity: JSON.stringify(['bigmodel', 'oauth-account'])
+    })
+  })
+
+  it('does not borrow a standalone key for a different active OAuth account', () => {
+    install('bigmodel')
+    const path = join(dir, '.zcode', 'v2', 'credentials.json')
+    const credentials = JSON.parse(readFileSync(path, 'utf8'))
+    writeFileSync(
+      path,
+      JSON.stringify({
+        ...credentials,
+        'oauth:active_provider': 'bigmodel',
+        'oauth:bigmodel:user_info': JSON.stringify({ id: 'another-account' })
+      })
+    )
+
+    expect(readZcodeV2PlanCredential(host)).toEqual({ status: 'unavailable' })
+  })
+
+  it('does not combine quota and reset inventory across a CLI account switch', async () => {
+    const v2 = join(dir, '.zcode', 'v2')
+    mkdirSync(v2, { recursive: true })
+    writeFileSync(
+      join(v2, 'provider_config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        config: {
+          providerOrder: [],
+          providerConfigRules: { providerRules: [] },
+          modelConfigRules: { providerModelRules: [], manualProviderModelRules: [] },
+          defaultModelSelection: {
+            providerId: 'account:bigmodel-individual-coding-plan',
+            modelId: 'GLM-5.3'
+          }
+        }
+      })
+    )
+    const credentialsPath = join(v2, 'credentials.json')
+    const credentials = {
+      'account-provider:account:bigmodel-individual-coding-plan:identity': 'plan-account',
+      'account-provider:coding-plan:account:bigmodel-individual-coding-plan:account:plan-account:api-key':
+        'plan-key',
+      zcodejwttoken: 'jwt',
+      'oauth:bigmodel:access_token': 'maas',
+      'oauth:bigmodel:user_info': JSON.stringify({ id: 'account-a' }),
+      'oauth:active_provider': 'bigmodel'
+    }
+    writeFileSync(credentialsPath, JSON.stringify(credentials))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(quota())
+      .mockImplementationOnce(async () => {
+        writeFileSync(
+          credentialsPath,
+          JSON.stringify({
+            ...credentials,
+            'oauth:bigmodel:user_info': JSON.stringify({ id: 'account-b' })
+          })
+        )
+        return new Response(
+          JSON.stringify({
+            code: 200,
+            data: {
+              available_five_hour_resets: [{ expire_at: 2_000 }],
+              available_week_resets: []
+            }
+          })
+        )
+      })
+
+    const result = await fetchZcodeRateLimits({ credentialHost: host })
+
+    expect(result).toMatchObject({ status: 'unavailable' })
+    expect(result.rateLimitResetCredits).toBeUndefined()
+  })
 
   it('prefers migrated credentials over a stale legacy account', () => {
     legacy()
@@ -172,6 +303,18 @@ describe('upstream-written ZCode v2 stores', () => {
         env: { ...host.env, ZCODE_PERSONAL_PROVIDER_CONFIG_FILE: '~/selected.json' }
       })
     ).toMatchObject({ status: 'ok', configPath: selected })
+  })
+
+  it('resolves the reset credential store from the same custom data base as quota credentials', () => {
+    const dataBase = join(dir, 'zcode-data')
+    const customHost = {
+      ...host,
+      env: { ...host.env, ZCODE_DATA_BASE_DIR: '~/zcode-data' }
+    }
+
+    expect(zcodeCredentialStorePath({ credentialHost: customHost })).toBe(
+      join(dataBase, '.zcode', 'v2', 'credentials.json')
+    )
   })
 
   it('accepts upstream plaintext compatibility and rejects header injection without a request', async () => {
