@@ -3789,7 +3789,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Each wanted clientless host owns at most one open and one retry timer with a 60-second capped tail. Direct sessions own one idle or probe timer. Relay sessions own one idle or probe timer and send at most one idle probe per 15 seconds without authenticated frames, about four small round trips per idle foreground minute, and no demand-driven liveness traffic; foreground sequences start at most once per 10 seconds. No subprocess, wire opcode, or server-side work is introduced."
+        "evidence": "Each wanted clientless host owns at most one open and one retry timer with a 60-second capped tail. Direct sessions own one idle or probe timer. Relay sessions own one idle or probe timer and send at most one idle probe per 15 seconds without authenticated frames, about four small round trips per idle foreground minute, and no demand-driven liveness traffic; foreground sequences start at most once per 10 seconds. Each Relay idle probe costs one relay forward and one desktop status.get probe dispatch; no subprocess or wire opcode is introduced."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
