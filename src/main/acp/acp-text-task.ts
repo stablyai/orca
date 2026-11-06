@@ -10,6 +10,7 @@ import { removeAntigravitySignInSessionFiles } from '../antigravity/antigravity-
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
+import { acpLaunchSpecForAccount } from './acp-launch-command'
 import { prepareAcpLaunch } from './acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from './acp-private-temp'
 import { AcpRpcError } from './acp-errors'
@@ -114,9 +115,12 @@ export class AcpTextTasks {
       if (!invocation) {
         throw new Error('Native text task launch is unavailable')
       }
+      // A naming session would stay in the user's own agent history.
+      if (acpLaunchSpecForAccount(spec, input.accountHome).keepsEverySession) {
+        return null
+      }
       const launch = await waitForPromiseWithSignal(
         prepareAcpLaunch(
-          this.deps,
           () => resolveAcpLaunchInvocation(spec, input.accountHome, invocation),
           () => signal.throwIfAborted()
         ),

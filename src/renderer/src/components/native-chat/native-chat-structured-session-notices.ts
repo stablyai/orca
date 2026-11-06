@@ -52,7 +52,12 @@ function nativeChatLaunchNotice({
   // An argument problem already says the start failed; the generic lead would repeat it.
   const saysStartFailure =
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
-  const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
+  const details = failure?.details
+  const signInContent = nativeChatAntigravitySignInContent(
+    details?.reason,
+    agentLabel,
+    details && 'account' in details ? details.account : undefined
+  )
   return {
     content: signInContent,
     key: 'launch',

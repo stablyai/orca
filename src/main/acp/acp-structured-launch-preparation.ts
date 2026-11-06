@@ -7,9 +7,10 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
+import type { AcpLaunchSpec } from './acp-launch-specs'
 
 export function prepareAcpStructuredLaunch(
-  deps: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'resolveLaunch'>,
+  deps: Pick<AcpStructuredSessionAdapterDeps, 'resolveLaunch'>,
   acquire: Pick<StructuredAgentSessionAcquireInput, 'identity' | 'spawnToken' | 'permissionMode'>,
   closedBeforeSpawn: () => void
 ): Promise<AcpStructuredLaunch> {
@@ -19,18 +20,15 @@ export function prepareAcpStructuredLaunch(
       spawnToken: acquire.spawnToken,
       ...(acquire.permissionMode ? { permissionMode: acquire.permissionMode } : {})
     })
-  return prepareAcpLaunch(deps, resolveLaunch, closedBeforeSpawn)
+  return prepareAcpLaunch(resolveLaunch, closedBeforeSpawn)
 }
 
+/** Prepares the backend the launch resolved to, which the chat's account home pins. */
 export async function prepareAcpLaunch<
-  Launch extends { command: string; env: Record<string, string> }
->(
-  deps: Pick<AcpStructuredSessionAdapterDeps, 'spec'>,
-  resolve: () => Promise<Launch>,
-  closedBeforeSpawn: () => void
-): Promise<Launch> {
-  const { spec } = deps
+  Launch extends { command: string; env: Record<string, string>; spec: AcpLaunchSpec }
+>(resolve: () => Promise<Launch>, closedBeforeSpawn: () => void): Promise<Launch> {
   const launch = await resolve().catch(preparationFailure)
+  const { spec } = launch
   closedBeforeSpawn()
   // Only a missed lookup returns the bare command; explicit Command settings resolve or fail.
   if (spec.managedRuntime && launch.command === spec.command) {

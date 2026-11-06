@@ -60,6 +60,8 @@ export type StructuredAgentAccountHomeServices = {
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
   /** Orca's data folder on this host, where an agent's chats may keep an account of their own. */
   stateDirectory: string
+  /** The environment a chat start of `agent` on this host would launch from. */
+  hostLaunchEnvironment: (agent: string) => Promise<Record<string, string>>
 }
 
 /** What a catalog probe is built from: the same runtime resolvers its sessions launch through. */
@@ -100,6 +102,8 @@ export type StructuredAgentChatProgram = {
   resolve: StructuredAgentLaunchCheck['resolveLaunch']
   /** Whether Orca can download this program on this host when none is found. */
   installable?: () => boolean
+  /** Whether a new chat would run a compatible program the host already has instead. */
+  hostAlternative?: (env: Record<string, string>) => Promise<boolean>
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

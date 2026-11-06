@@ -36,7 +36,9 @@ export function agentSessionSignInCopyId(provider: string, account?: AgentSessio
         ? 'codexManagedNotSignedIn'
         : 'codexSystemNotSignedIn'
       : signIn?.agent === 'antigravity'
-        ? 'antigravityNotSignedIn'
+        ? account === 'system'
+          ? 'antigravitySystemNotSignedIn'
+          : 'antigravityNotSignedIn'
         : signIn?.agent === 'pi'
           ? 'interactiveAgentNotSignedIn'
           : signIn?.loginCommand.length

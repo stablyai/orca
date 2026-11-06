@@ -75,9 +75,10 @@ async function observeChatProgram(
   if (!chatProgram) {
     return 'unknown'
   }
+  let shellEnv: Record<string, string>
   try {
     const settings = runtime.requireStore().getSettings()
-    const shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+    shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const { command, env } = chatProgram.resolve(shellEnv, settings)
     if (isAbsolute(command)) {
       return 'available'
@@ -88,6 +89,9 @@ async function observeChatProgram(
     }
   } catch {
     return 'unknown'
+  }
+  if (await chatProgram.hostAlternative?.(shellEnv)) {
+    return 'available'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'
 }

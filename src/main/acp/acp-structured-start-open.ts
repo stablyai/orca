@@ -35,7 +35,8 @@ export async function openAcpStart(
       }
       const refusal = new AgentSessionAcquisitionRefusal(
         `${acpAgentName(child.spec.agent)} requires sign-in`,
-        'notSignedIn'
+        'notSignedIn',
+        failure.account
       )
       throw failure.detail ? withProviderDiagnostic(refusal, failure.detail) : refusal
     })

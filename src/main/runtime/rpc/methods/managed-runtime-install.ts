@@ -6,7 +6,7 @@ import {
   ManagedRuntimeCancelParams
 } from '../../../../shared/rpc-contract/managed-runtime-install-params'
 import { acpLaunchSpecFor } from '../../../acp/acp-launch-specs'
-import { resolveAcpLaunchCommand } from '../../../acp/acp-structured-launch-resolution'
+import { resolveAcpLaunchCommand } from '../../../acp/acp-launch-command'
 import { ManagedRuntimeInstallation } from '../../../node-runtime/managed-runtime-installation'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
