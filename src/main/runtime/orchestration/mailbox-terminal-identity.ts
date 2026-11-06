@@ -2,6 +2,7 @@ import { OrcaRuntimeWithGetPtyRecordForPaneKey } from './terminal-pane-mail-rout
 import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { agentToolsLackTerminalHandle } from '../../../shared/agent-launch/catalog/tui-agent-terminal-handle'
 
 /** Which live terminal orchestration types mail into, and the handle it is known by. */
 export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntimeWithGetPtyRecordForPaneKey {
@@ -29,15 +30,29 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
     }
   }
 
+  /** Whether the agent in this terminal runs tools without the pane's ORCA_TERMINAL_HANDLE. */
+  terminalToolsLackHandle(handle: string): boolean {
+    try {
+      const { pty } = this.getTerminalPtyForHandle(handle)
+      return agentToolsLackTerminalHandle(pty.launchAgent ?? pty.foregroundAgent)
+    } catch {
+      return false
+    }
+  }
+
   private buildOrchestrationMailboxTerminal(
     handle: string,
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationMailboxTerminal | null {
     const paneKeys = this.getMailboxPaneKeysForPty(pty)
     const { ptyId, lastAgentStatus, lastAgentStatusObservedLive } = pty
-    return paneKeys.length > 0
-      ? { ptyId, handle, paneKeys, lastAgentStatus, lastAgentStatusObservedLive }
-      : null
+    if (paneKeys.length === 0) {
+      return null
+    }
+    const terminal = { ptyId, handle, paneKeys, lastAgentStatus, lastAgentStatusObservedLive }
+    return agentToolsLackTerminalHandle(pty.launchAgent ?? pty.foregroundAgent)
+      ? { ...terminal, pointerNamesHandle: true }
+      : terminal
   }
 
   /** The handle a terminal is known by: its own, else the one its window pane issued. */

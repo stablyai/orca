@@ -261,3 +261,44 @@ describe('retiring a pty mid-delivery', () => {
     }
   })
 })
+
+describe('mailbox pointer for agents whose tools lack the terminal handle', () => {
+  function stagedPointer(terminal: typeof TERMINAL & { pointerNamesHandle?: true }): string {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'dispatch:ctx-1',
+      subject: 's'
+    })
+    const writes: string[] = []
+    const state = new OrchestrationMailboxPointerState()
+    const args = stageArgs(db, state)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial test deps, as in the other staging tests in this file; only the pointer write is read.
+    stageOrchestrationMailboxPointer({
+      ...args,
+      terminal,
+      mailboxHandle: 'dispatch:ctx-1',
+      deps: {
+        ...pointerDeps(db, (_ptyId, data) => {
+          writes.push(data)
+          return WRITE_ACCEPTED
+        }),
+        resolveSubmitTarget: () => ({ terminal, processIncarnation: 'inc-1' })
+      },
+      messages: [{ id: message.id, type: 'status', sequence: 1 }]
+    } as never)
+    db.close()
+    return writes.join('')
+  }
+
+  it('names the terminal so `check` reaches dispatch mail without ORCA_TERMINAL_HANDLE', () => {
+    expect(stagedPointer({ ...TERMINAL, pointerNamesHandle: true })).toContain(
+      'Run `orca orchestration check --terminal term-1`.'
+    )
+  })
+
+  it('keeps the bare command for agents that inherit the handle', () => {
+    expect(stagedPointer(TERMINAL)).toContain('Run `orca orchestration check`.')
+  })
+})

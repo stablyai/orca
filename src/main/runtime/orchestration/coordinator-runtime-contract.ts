@@ -43,4 +43,5 @@ export type CoordinatorRuntime = {
   } | null
   // The worker's native/WSL pane determines its packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'
+  terminalToolsLackHandle?(handle: string): boolean
 }

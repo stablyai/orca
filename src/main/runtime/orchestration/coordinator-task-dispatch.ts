@@ -106,6 +106,7 @@ export async function dispatchTaskToWorker(params: {
     ...(runtime.getTerminalOrchestrationCliCommand
       ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(targetHandle) }
       : {}),
+    checkNamesTerminal: runtime.terminalToolsLackHandle?.(targetHandle) === true,
     ...(baseDrift ? { baseDrift } : {})
   })
 

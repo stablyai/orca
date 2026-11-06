@@ -121,3 +121,14 @@ describe('how the preamble names the worker and its coordinator, by kind', () =>
     }
   })
 })
+
+describe('a worker whose tools run without ORCA_TERMINAL_HANDLE', () => {
+  it('is told to name its terminal when it checks mail', () => {
+    const fence = cliFence(buildDispatchPreamble(baseParams({ checkNamesTerminal: true })))
+    expect(fence).toContain('orca orchestration check --terminal term_worker')
+  })
+
+  it('leaves other workers without a check line until mail is waiting', () => {
+    expect(cliFence(buildDispatchPreamble(baseParams()))).not.toContain('orchestration check')
+  })
+})

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-11-06T10:22:55.166Z",
+  "platform": "darwin",
+  "command": ["aiwork", "tui", "--ignore-upgrade"],
+  "cols": 120,
+  "rows": 40,
+  "note": "AiWork TUI ask-user question box answered with Enter (first option) at 14s, DTCODER_TUI_LANG=en, Orca OSC 7501 query reply at 700ms",
+  "exitCode": 0
+}
