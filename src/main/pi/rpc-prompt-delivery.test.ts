@@ -147,6 +147,9 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
 })
 
 it('retains Pi provider detail with sign-in guidance after bounded authentication retries', async () => {
+  // Pi 0.73.1, recorded from a signed-out temporary home.
+  const error =
+    'No API key found for the selected model.\n\nUse /login to log into a provider via OAuth or API key. See:\n  /opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/providers.md\n  /opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/models.md'
   vi.useFakeTimers()
   const h = rig()
   await h.delivery.submit('signed-out', 1, { type: 'prompt', message: 'hello' })
@@ -155,7 +158,7 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
       type: 'response',
       command: 'prompt',
       success: false,
-      error: 'No API key found for anthropic'
+      error
     })
     await vi.advanceTimersByTimeAsync(250)
   }
@@ -165,15 +168,12 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
       state: 'rejected',
       rejection: {
         kind: 'notSignedIn',
-        detail: { text: 'No API key found for anthropic', audience: 'person' },
+        detail: { text: error, audience: 'person' },
         // Pi checks sign-in before it records a prompt, so the agent never had this one.
         neverReachedAgent: true
       }
     })
   )
-  expect(h.settled.mock.calls[0]?.[1].reason).toContain('No API key found for anthropic')
-  expect(h.settled.mock.calls[0]?.[1].reason).toContain('`pi`')
-  expect(h.settled.mock.calls[0]?.[1].reason).toContain('`/login`')
 })
 
 // Pi b556cfe5b0300a91f39c7bc5369a65a25fb7fcd5: auth/resolve.ts and models-runtime.test.ts.

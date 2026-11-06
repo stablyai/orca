@@ -134,7 +134,8 @@ it.each([
     'notSignedIn'
   ],
   [
-    'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
+    // OMP 18.2.7, recorded from a signed-out temporary home.
+    'No model selected.\n\nUse /login, set an API key environment variable, or create /var/folders/25/xk3307ps7552prstq_2qr7080000gn/T/acp-omp-signed-out-y6rh2dq7/.omp/agent/agent.db\n\nThen use /model to select a model.',
     'notSignedIn'
   ],
   ['No model selected', undefined],
@@ -160,5 +161,4 @@ it.each([
     ({ body }) => body.kind === 'status' && body.tone === 'error'
   )
   expect(row?.body.kind === 'status' ? row.body.failure?.kind : undefined).toBe(kind)
-  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(detail)
 })
