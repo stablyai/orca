@@ -19153,6 +19153,10 @@
           "55127a3706": "Falha no ditado: {{value0}}",
           "bb7f599ee7": "Abrir Configurações",
           "2d5b9fabf9": "Acesso ao microfone negado. Conceda acesso nas configurações do sistema e reinicie o Orca.",
+          "noModel": "Nenhum modelo de fala selecionado. Baixe um em Configurações > Voz.",
+          "disabled": "O ditado por voz está desativado. Ative-o em Configurações > Voz.",
+          "notReady": "O modelo de fala não está pronto. Baixe-o em Configurações > Voz.",
+          "unknownModel": "O modelo selecionado não está mais disponível. Escolha outro em Configurações > Voz.",
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido."
@@ -19163,7 +19167,8 @@
           "f082d0cb9d": "Processando…",
           "3de5a129e7": "Ouvindo",
           "4977162383": "Muito alto",
-          "25f2b7a6a5": "Falando"
+          "25f2b7a6a5": "Falando",
+          "loadingModel": "Carregando modelo de fala…"
         }
       },
       "link": {

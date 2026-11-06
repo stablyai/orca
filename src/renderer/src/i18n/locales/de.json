@@ -16903,6 +16903,10 @@
           "55127a3706": "Diktat fehlgeschlagen: {{value0}}",
           "bb7f599ee7": "Einstellungen öffnen",
           "2d5b9fabf9": "Mikrofonzugriff verweigert. Zugriff in den Systemeinstellungen erlauben und anschließend Orca neu starten.",
+          "noModel": "Kein Sprachmodell ausgewählt. Laden Sie eines unter Einstellungen > Spracheingabe herunter.",
+          "disabled": "Spracheingabe ist deaktiviert. Aktivieren Sie sie unter Einstellungen > Spracheingabe.",
+          "notReady": "Sprachmodell nicht bereit. Laden Sie es unter Einstellungen > Spracheingabe herunter.",
+          "unknownModel": "Das ausgewählte Modell ist nicht mehr verfügbar. Wählen Sie unter Einstellungen > Spracheingabe ein anderes aus.",
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt."
@@ -16913,7 +16917,8 @@
           "f082d0cb9d": "Wird verarbeitet…",
           "3de5a129e7": "Hört zu",
           "4977162383": "Zu laut",
-          "25f2b7a6a5": "Sprache erkannt"
+          "25f2b7a6a5": "Sprache erkannt",
+          "loadingModel": "Sprachmodell wird geladen…"
         }
       },
       "dashboard": {
