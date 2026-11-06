@@ -2073,6 +2073,7 @@
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
       "renameTerminal": "Rename Terminal",
+      "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close"
     },
@@ -4619,7 +4620,11 @@
       "notReported": "Not reported",
       "searchOptions": "Search options",
       "task": "Task",
-      "review": "Review"
+      "review": "Review",
+      "discardChangesTitle": "Discard changes?",
+      "discardChangesMessage": "Unsaved edits to this automation will be lost.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",

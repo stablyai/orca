@@ -52,6 +52,14 @@ vi.mock('./MobileNativeChatForkProvider', () => ({
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))
+const keyboard = vi.hoisted(() => ({ lift: 0 }))
+vi.mock('./use-mobile-session-keyboard-lift', () => ({
+  useMobileSessionContentKeyboardLift: () => ({
+    keyboardLift: keyboard.lift,
+    activeTerminalKeyboardLift: 0,
+    toastAnimatedStyle: {}
+  })
+}))
 const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -83,8 +91,9 @@ it('lets the split menu override sidebar width and rotation without remounting p
     const [showTerminalLayout, setShowTerminalLayout] = useState(false)
     openLayoutMenu = () => setShowTerminalLayout(true)
     const [active, setActive] = useState('b')
-    const [keyboard, setKeyboardState] = useState(0)
+    const [keyboardLift, setKeyboardState] = useState(0)
     setKeyboard = setKeyboardState
+    keyboard.lift = keyboardLift
     const controller = mountFixture<Controller>({
       ...preference,
       sessionTabs: [],
@@ -112,8 +121,6 @@ it('lets the split menu override sidebar width and rotation without remounting p
         viewportRef: { current: null },
         viewportMeasuredRef: { current: false }
       }),
-      keyboardLift: keyboard,
-      activeTerminalKeyboardLift: 0,
       terminalTextScale: 1,
       nativeChatSendError: {},
       dictation: {},
