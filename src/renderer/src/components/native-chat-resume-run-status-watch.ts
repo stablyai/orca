@@ -12,27 +12,31 @@ export function watchResumeRunStatus(
   target: RuntimeClientTarget = { kind: 'local' }
 ): () => void {
   const feed = getStructuredAgentSessionStatusFeed(target)
-  // A run's chats are fixed when it starts; progress replaces the run object, so key the ids by its start.
-  let runIds: { startedAt: number; ids: ReadonlySet<string> } | null = null
+  // A run's chats are fixed when it starts; progress replaces the run object, so key the index by its start.
+  let runIndex: { startedAt: number; byId: ReadonlyMap<string, number> } | null = null
   const notice = (change: StructuredAgentSessionStatusChange) => {
     const run = current()
     if (!run) {
       return
     }
+    let indices: number[] | undefined
     if (change !== null) {
-      if (runIds?.startedAt !== run.startedAt) {
-        runIds = {
+      if (runIndex?.startedAt !== run.startedAt) {
+        runIndex = {
           startedAt: run.startedAt,
-          ids: new Set(run.entries.map((entry) => entry.candidate.sessionId))
+          byId: new Map(run.entries.map((entry, index) => [entry.candidate.sessionId, index]))
         }
       }
-      const { ids } = runIds
-      if (![...change].some((sessionId) => ids.has(sessionId))) {
+      const { byId } = runIndex
+      indices = Array.from(change, (sessionId) => byId.get(sessionId) ?? -1).filter(
+        (index) => index >= 0
+      )
+      if (indices.length === 0) {
         return
       }
     }
     const snapshot = feed.getSnapshot()
-    const next = observeResumeRun(run, (sessionId) => snapshot.get(sessionId))
+    const next = observeResumeRun(run, (sessionId) => snapshot.get(sessionId), indices)
     if (next !== run) {
       publish(next)
     }

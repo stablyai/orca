@@ -38,6 +38,8 @@ type HostGroup = {
   members: Member[]
   /** A host tick names its sessions; this finds their tabs without walking every member. */
   membersBySession: Map<string, Member[]>
+  /** Captured but not yet projected (a throwing commit); retried on this host's next tick. */
+  owed: Set<Member>
   feed: StructuredAgentSessionStatusFeedOwner
   unsubscribe: () => void
   release?: () => void
@@ -84,8 +86,6 @@ function installStatusProjection(): () => void {
   const members = new Map<string, Member>()
   const membersByTabId = new Map<string, Member>()
   const retired = new Set<Member>()
-  // Captured but not yet projected (a throwing commit); retried on the host's next tick.
-  const owed = new Set<Member>()
   const groups = new Map<string, HostGroup>()
   const queue: (() => void)[] = []
   const ownerForTab = createTabOwnerCache()
@@ -214,7 +214,7 @@ function installStatusProjection(): () => void {
     // Mark consumed only after a normal return: a throwing commit leaves the input for the next emission to retry.
     for (const input of inputs) {
       input.member.captured = input
-      owed.delete(input.member)
+      input.member.group?.owed.delete(input.member)
     }
   }
   const activateGroups = (): void => {
@@ -250,7 +250,7 @@ function installStatusProjection(): () => void {
       // Launch ticks and full host ticks carry every member; skip the unchanged ones.
       if (!sameCapturedInput(member.captured, input)) {
         inputs.push(input)
-        owed.add(member)
+        member.group?.owed.add(member)
       }
     }
     enqueue(
@@ -274,6 +274,7 @@ function installStatusProjection(): () => void {
         const created: HostGroup = {
           members: [],
           membersBySession: new Map(),
+          owed: new Set(),
           feed,
           unsubscribe: () => {}
         }
@@ -294,7 +295,7 @@ function installStatusProjection(): () => void {
               }
             }
             // Reconcile prunes superseded members, so the debt holds only current tabs.
-            owed.forEach((member) => member.group === created && selected.add(member))
+            created.owed.forEach((member) => selected.add(member))
             capture(selected)
           })
         )
@@ -323,11 +324,11 @@ function installStatusProjection(): () => void {
     for (const group of groups.values()) {
       group.members = []
       group.membersBySession = new Map()
-    }
-    // A rebound pane gets a new member without retiring the old one; drop every superseded identity.
-    for (const member of owed) {
-      if (next.get(member.paneKey) !== member) {
-        owed.delete(member)
+      // A rebound pane gets a new member without retiring the old one; drop every superseded identity.
+      for (const member of group.owed) {
+        if (next.get(member.paneKey) !== member) {
+          group.owed.delete(member)
+        }
       }
     }
     for (const [key, member] of next) {
