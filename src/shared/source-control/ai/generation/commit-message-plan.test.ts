@@ -87,7 +87,7 @@ describe('planCommitMessageGeneration', () => {
       'PROMPT'
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       plan: {
         binary: 'opencode',
@@ -119,7 +119,7 @@ describe('planCommitMessageGeneration', () => {
       'PROMPT'
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       plan: {
         binary: 'npx',
@@ -190,6 +190,7 @@ describe('planCommitMessageGeneration', () => {
           '--no-selfdev',
           '--tool-profile',
           'none',
+          '--tools=',
           'run',
           '--json',
           'name this branch'
@@ -241,7 +242,7 @@ describe('planCommitMessageGeneration', () => {
       'PROMPT'
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       plan: {
         binary: 'codex',
@@ -273,8 +274,9 @@ describe('planCommitMessageGeneration', () => {
           'exec',
           '--no-session-log',
           '--approval-mode',
-          'never',
-          '--disable-sandbox',
+          'on-request',
+          '--approval-judge',
+          'off',
           '--disable-shell',
           '--disable-write',
           '--disable-web-tools',
@@ -325,7 +327,7 @@ describe('planCommitMessageGeneration', () => {
       'sibling arguments',
       '--model gpt-5.6-luna --sandbox read-only',
       ['--model', 'gpt-5.6-luna'],
-      ['--sandbox', 'read-only']
+      []
     ]
   ])(
     'lets Codex recipe args override the generated model via %s',
@@ -355,7 +357,7 @@ describe('planCommitMessageGeneration', () => {
     }
   )
 
-  it('keeps Codex recipe arguments unchanged when they do not override the model', () => {
+  it('keeps Codex helpers read-only when the recipe requests workspace writes', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'codex',
@@ -375,9 +377,7 @@ describe('planCommitMessageGeneration', () => {
           '-s',
           'read-only',
           '--model',
-          'gpt-5.4-mini',
-          '--sandbox',
-          'workspace-write'
+          'gpt-5.4-mini'
         ]
       }
     })

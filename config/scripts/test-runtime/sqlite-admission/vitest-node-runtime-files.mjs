@@ -93,7 +93,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
-  'src/main/pty/shell-startup/shell-startup-feature-channel.test.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
   'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
@@ -178,7 +177,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/session-window-view-save.test.ts',
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
   'src/main/runtime/agent-session/records/structured-agent-session-startup-tab-restore.test.ts',
-  'src/main/runtime/agent-session/structured-agent-session-windowless-layout-host.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',

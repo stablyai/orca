@@ -54,6 +54,7 @@ export function ChatBehaviorSetting({
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
     entries.linkPreviews,
+    entries.openedPullRequests,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -64,6 +65,7 @@ export function ChatBehaviorSetting({
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
+  const openedPullRequestsShown = settings.nativeChatOpenedPullRequests !== false
   return (
     <section id="chat-behavior" className="space-y-3">
       <SettingsSubsectionHeader title={getChatBehaviorTitle()} />
@@ -176,6 +178,22 @@ export function ChatBehaviorSetting({
                   'Toggle link previews'
                 )}
                 onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.openedPullRequests}
+              id={entries.openedPullRequests.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.openedPullRequests.title}
+                description={entries.openedPullRequests.description}
+                checked={openedPullRequestsShown}
+                ariaLabel={entries.openedPullRequests.title}
+                onChange={() =>
+                  updateSettings({ nativeChatOpenedPullRequests: !openedPullRequestsShown })
+                }
               />
             </SearchableSetting>
             <SearchableSetting
