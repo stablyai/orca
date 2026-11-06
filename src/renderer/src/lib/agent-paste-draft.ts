@@ -7,7 +7,7 @@ import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scann
 import { useAppStore } from '@/store'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import '@/components/terminal-pane/terminal-bracketed-paste'
-import '../../../shared/terminal/input/terminal-bracketed-paste-text'
+import { BRACKETED_PASTE_END } from '../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
@@ -192,13 +192,14 @@ async function sendBracketedPasteToAgent(args: {
         ptyId,
         content,
         inputKind,
-        args.claimFirstWrite
+        args.claimFirstWrite || args.beforePaste
           ? (data) => {
+              // Close an open paste after revocation, but never send more content.
+              if (data !== BRACKETED_PASTE_END && args.beforePaste && !args.beforePaste()) {
+                return false
+              }
               if (!claimed) {
-                if (
-                  (args.beforePaste && !args.beforePaste()) ||
-                  (args.claimFirstWrite && !args.claimFirstWrite())
-                ) {
+                if (args.claimFirstWrite && !args.claimFirstWrite()) {
                   return false
                 }
                 claimed = true

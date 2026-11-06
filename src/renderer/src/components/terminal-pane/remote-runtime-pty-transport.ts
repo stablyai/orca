@@ -2356,9 +2356,6 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function retireRemoteTerminalId(exitCode?: number): void {
-    if (remotePtyId) {
-      retireAgentStartupPromptForTerminal(remotePtyId)
-    }
     discardPendingInput()
     recovery.cancel()
     resetRecoveryReplacementPolicy()
@@ -2415,6 +2412,9 @@ export function createRemoteRuntimePtyTransport(
       remotePtyId ??= exitedPtyId
       const exitedIncarnationId = terminal.incarnationId ?? authoritativePtyIncarnationId
       const cause = terminal.exitCause
+      if (remotePtyId) {
+        retireAgentStartupPromptForTerminal(remotePtyId)
+      }
       retireRemoteTerminalId(cause?.kind === 'exited' ? cause.exitCode : undefined)
       if (rebindWatch && !destroyed) {
         stopWatchingHostRebind = rebindWatch.dispose
@@ -2629,6 +2629,9 @@ export function createRemoteRuntimePtyTransport(
     }
     if (isRemoteTerminalGoneMessage(message)) {
       // Why: an explicit terminal-gone response is lifecycle evidence, unlike a replaceable stale handle seen during reconnect.
+      if (remotePtyId) {
+        retireAgentStartupPromptForTerminal(remotePtyId)
+      }
       retireRemoteTerminalId()
       return
     }

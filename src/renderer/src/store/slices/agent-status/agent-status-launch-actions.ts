@@ -21,7 +21,7 @@ export function createAgentStatusLaunchActions(
   return {
     registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
       set((s) => {
-        const copiedLaunchConfig = copyLaunchConfig(launchConfig)
+        const copiedLaunchConfig = launchConfig ? copyLaunchConfig(launchConfig) : undefined
         const nextRegistryEntry: AgentLaunchConfigRegistryEntry = {
           launchConfig: copiedLaunchConfig,
           registeredAt: Date.now(),

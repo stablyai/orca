@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   failed: vi.fn()
 }))
 import { useAppStore } from '@/store'
+import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
 import { installPanePtyVisibilityBind } from '@/components/terminal-pane/pty-connection/pane-pty-visibility-bind'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '@/components/terminal-pane/remote-runtime-pty-recovery-limits'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
@@ -71,7 +72,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('recovers the consumed startup identity on remount without reporting a resumable timeout', async () => {
+it('recovers consumed startup after an unknown-liveness retirement and remount', async () => {
   const firstReady = Promise.withResolvers<boolean>()
   mocks.ready.mockReturnValueOnce(firstReady.promise).mockResolvedValue(true)
   let connected = true
@@ -134,14 +135,17 @@ it('recovers the consumed startup identity on remount without reporting a resuma
     decodeTerminalStreamJson,
     encodeTerminalStreamFrame
   } = await import('../../../shared/terminal/stream/terminal-stream-protocol')
+  let unpublished = true
   vi.stubGlobal('window', {
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
     api: {
       runtimeEnvironments: {
         call: async (args: { method: string }) => ({
+          ...(args.method === 'terminal.resolvePane' && unpublished
+            ? { ok: false, error: { code: 'terminal_not_found', message: 'terminal_not_found' } }
+            : { ok: true }),
           id: 'reply',
-          ok: true,
           result:
             args.method === 'status.get'
               ? {
@@ -187,6 +191,19 @@ it('recovers the consumed startup identity on remount without reporting a resuma
       }
     }
   })
+  const exit = vi.fn()
+  const lost = createRemoteRuntimePtyTransport('env', {
+    worktreeId: 'wt',
+    tabId: 'tab-1',
+    leafId,
+    onPtyExit: exit
+  })
+  lost.attach({ existingPtyId: ptyId, callbacks: {} })
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(ptyId, -1))
+  expect(mocks.error).not.toHaveBeenCalled()
+  expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(false)
+  lost.disconnect()
+  unpublished = false
   const replacement = createRemoteRuntimePtyTransport('env', {
     worktreeId: 'wt',
     tabId: 'tab-1',
@@ -286,4 +303,122 @@ it('workspace purge retires an obligation even when its adopted tab was never ob
   expect(mocks.write).not.toHaveBeenCalled()
   expect(mocks.error).not.toHaveBeenCalled()
   expect(mocks.failed).not.toHaveBeenCalled()
+})
+
+it('expiry during an acknowledged chunk stops content and closes bracketed paste without replay', async () => {
+  vi.useFakeTimers()
+  mocks.ready.mockResolvedValue(true)
+  const contentWrite = Promise.withResolvers<boolean>()
+  mocks.write
+    .mockResolvedValue(true)
+    .mockResolvedValueOnce(true)
+    .mockReturnValueOnce(contentWrite.promise)
+  const pending = deliver('x'.repeat(70_000))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(mocks.write.mock.calls[1]).toEqual([ptyId, 'x'.repeat(16_384), 'launch'])
+  await vi.advanceTimersByTimeAsync(
+    REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + resolveDraftPasteReadyTimeoutMs('codex')
+  )
+  expect(mocks.error).toHaveBeenCalledOnce()
+  contentWrite.resolve(true)
+  await vi.advanceTimersByTimeAsync(0)
+  await expect(pending).resolves.toBe(false)
+  expect(mocks.write.mock.calls.map((call) => call[1])).toEqual([
+    '\x1b[200~',
+    'x'.repeat(16_384),
+    '\x1b[201~'
+  ])
+  rebindPendingAgentStartupPrompt({ ...identity, ptyId, beforePaste: () => true })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(mocks.write).toHaveBeenCalledTimes(3)
+  expect(mocks.error).toHaveBeenCalledOnce()
+})
+
+it('settled Aider failure reopens the existing composer with its recoverable prompt', async () => {
+  vi.useFakeTimers()
+  const ready = Promise.withResolvers<boolean>()
+  mocks.ready.mockReturnValue(ready.promise)
+  useAppStore.setState({
+    activeModal: 'none',
+    newWorkspaceDraft: null,
+    nativeChatLaunchDraftByTabId: {},
+    seedNativeChatLaunchDraft: originalState.seedNativeChatLaunchDraft,
+    seedNativeChatLaunchPrompt: originalState.seedNativeChatLaunchPrompt,
+    markNativeChatLaunchPromptFailed: originalState.markNativeChatLaunchPromptFailed
+  })
+  const pending = deliverCreatedWebRuntimeAgentSessionPrompt(created, {
+    agent: 'aider',
+    rendererTabId: 'tab-1',
+    startupDelivery: identity,
+    promptAfterReady: 'fix the parser',
+    submitPrompt: true,
+    forcePromptPaste: true,
+    launchPty: Promise.resolve(ptyId)
+  })
+  await vi.advanceTimersByTimeAsync(
+    REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + resolveDraftPasteReadyTimeoutMs('aider')
+  )
+  expect(mocks.error).toHaveBeenCalledOnce()
+  const recovery = mocks.error.mock.calls[0]?.[1].action
+  expect(recovery.label).toBe('Reopen')
+  recovery.onClick()
+  expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
+  expect(useAppStore.getState().modalData).toMatchObject({
+    recovery: { agent: 'aider', note: 'fix the parser' }
+  })
+  expect(useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1']?.text).toBe('fix the parser')
+  ready.resolve(true)
+  await vi.advanceTimersByTimeAsync(0)
+  await expect(pending).resolves.toBe(false)
+  expect(mocks.write).not.toHaveBeenCalled()
+})
+
+it('tokenless effective configuration registration is not proof that the pending launch was replaced', async () => {
+  registerAgentStartupTerminalBinding({ ...identity, leafId, ptyId, agent: 'codex' })
+  const ready = Promise.withResolvers<boolean>()
+  mocks.ready.mockReturnValue(ready.promise)
+  const pending = deliver()
+  await vi.waitFor(() => expect(mocks.ready).toHaveBeenCalledOnce())
+  useAppStore.getState().registerAgentLaunchConfig(
+    `tab-1:${leafId}`,
+    {
+      agentCommand: 'codex',
+      agentArgs: '--model host-model',
+      agentEnv: {}
+    },
+    { tabId: 'tab-1', leafId, agentType: 'codex' }
+  )
+  ready.resolve(true)
+  await expect(pending).resolves.toBe(true)
+  expect(mocks.write).toHaveBeenCalledExactlyOnceWith(
+    ptyId,
+    '\x1b[200~ship it\rwith tests\x1b[201~',
+    'launch'
+  )
+  expect(mocks.error).not.toHaveBeenCalled()
+})
+
+it('a token-only terminal binding cannot author an empty Arguments resume override', () => {
+  const paneKey = `tab-1:${leafId}`
+  registerAgentStartupTerminalBinding({ ...identity, leafId, ptyId, agent: 'codex' })
+  useAppStore
+    .getState()
+    .setAgentStatus(
+      paneKey,
+      { state: 'working', prompt: 'ship it', agentType: 'codex' },
+      'Codex',
+      undefined,
+      { tabId: 'tab-1', worktreeId: 'wt', terminalHandle: 'pty-1' },
+      { launchToken: 'launch-1', providerSession: { key: 'session_id', id: 'session-1' } }
+    )
+  const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+  expect(entry).toBeDefined()
+  expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+    agent: 'codex',
+    providerSession: { key: 'session_id', id: 'session-1' }
+  })
+  expect(
+    useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]?.launchConfig
+  ).toBeUndefined()
+  expect(useAppStore.getState().getAgentLaunchConfigForStatusEntry(entry!)).toBeUndefined()
 })

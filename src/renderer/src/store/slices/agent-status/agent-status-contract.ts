@@ -62,7 +62,7 @@ export type AgentLaunchConfigRegistrationMetadata = {
 }
 
 export type AgentLaunchConfigRegistryEntry = {
-  launchConfig: SleepingAgentLaunchConfig
+  launchConfig?: SleepingAgentLaunchConfig
   registeredAt: number
   identity: AgentLaunchConfigRegistrationMetadata
 }

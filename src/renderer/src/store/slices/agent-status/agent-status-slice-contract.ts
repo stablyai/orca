@@ -119,7 +119,7 @@ export type AgentStatusSlice = {
 
   registerAgentLaunchConfig: (
     paneKey: string,
-    launchConfig: SleepingAgentLaunchConfig,
+    launchConfig: SleepingAgentLaunchConfig | undefined,
     metadata?: AgentLaunchConfigRegistrationMetadata
   ) => void
   getAgentLaunchConfigForStatusEntry: (

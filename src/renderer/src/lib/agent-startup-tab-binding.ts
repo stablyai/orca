@@ -1,3 +1,4 @@
+import { launchConfigsEqual } from '../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { pendingAgentStartupDeliveries } from './agent-startup-delivery-guards'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
@@ -130,21 +131,19 @@ export function registerAgentStartupTerminalBinding(args: {
   const terminalHandle = parseRemoteRuntimePtyId(args.ptyId)?.handle ?? args.ptyId
   if (
     registered?.identity.launchToken === args.launchToken &&
-    registered.identity.terminalHandle === terminalHandle
+    registered.identity.terminalHandle === terminalHandle &&
+    (args.launchConfig === undefined ||
+      launchConfigsEqual(registered.launchConfig, args.launchConfig))
   ) {
     return
   }
-  state.registerAgentLaunchConfig(
-    paneKey,
-    args.launchConfig ?? registered?.launchConfig ?? { agentArgs: '', agentEnv: {} },
-    {
-      tabId: args.tabId,
-      leafId: args.leafId,
-      launchToken: args.launchToken,
-      terminalHandle,
-      agentType: args.agent
-    }
-  )
+  state.registerAgentLaunchConfig(paneKey, args.launchConfig ?? registered?.launchConfig, {
+    tabId: args.tabId,
+    leafId: args.leafId,
+    launchToken: args.launchToken,
+    terminalHandle,
+    agentType: args.agent
+  })
 }
 
 export function scheduleStaleStartupRecheck(

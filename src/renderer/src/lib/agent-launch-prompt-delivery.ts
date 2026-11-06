@@ -6,6 +6,7 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { useAppStore } from '@/store'
+import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 /** Mirror TUI-only launch context into supported native-chat composers, using the same eligibility predicate as chat opening. */
@@ -113,13 +114,28 @@ export function deliverLaunchPromptToAgentTab(args: {
   )
 }
 
-export function notifyAgentLaunchPromptNotSent(agent: TuiAgent): void {
+export function notifyAgentLaunchPromptNotSent(agent: TuiAgent, content?: string): void {
   toast.error(
     translate(
       'agentLaunch.terminalPromptFailed',
       'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
       { value0: structuredAgentLabel(agent) }
-    )
+    ),
+    content !== undefined
+      ? {
+          action: {
+            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+            onClick: () => {
+              const state = useAppStore.getState()
+              if (state.activeModal === 'none') {
+                state.openModal('new-workspace-composer', {
+                  recovery: { agent, note: content }
+                } satisfies ComposerModalData)
+              }
+            }
+          }
+        }
+      : undefined
   )
 }
 

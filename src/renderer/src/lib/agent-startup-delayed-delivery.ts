@@ -207,7 +207,7 @@ function settleHostedPrompt(delivery: PendingHostedPrompt, failed: boolean): voi
   stopPendingAgentStartupSubscriptionIfIdle()
   if (failed) {
     settleAgentLaunchPromptFailure({ ...delivery.prompt, tabId: delivery.tabId })
-    notifyAgentLaunchPromptNotSent(delivery.prompt.agent)
+    notifyAgentLaunchPromptNotSent(delivery.prompt.agent, delivery.prompt.content)
   }
 }
 
@@ -266,7 +266,7 @@ function flushPendingAgentStartupDeliveries(): void {
         : undefined
       if (
         (queued && queued !== launchToken) ||
-        (registration && registration.identity.launchToken !== launchToken)
+        (registration?.identity.launchToken && registration.identity.launchToken !== launchToken)
       ) {
         settleHostedPrompt(delivery, false)
       }
