@@ -14,8 +14,8 @@ import type {
   AgentLaunchSettingsMutation,
   AgentLaunchSettingsSource
 } from './agent-launch-settings'
-import { composeAgentLaunchProfile } from './agent-launch-legacy-publication'
 import {
+  composeAgentLaunchProfile,
   normalizeTuiAgentArgsRecord,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -32,7 +32,7 @@ import {
   type AgentPermissionChoice
 } from '../permissions/tui-agent-permission-choice'
 import { liftAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
-import { withoutAgentPermissionGuardSkipEnv } from '../permissions/agent-permission-guard-skip'
+import { withoutPermissionGuardSkip } from '../permissions/agent-permission-guard-skip'
 import { isTuiAgent } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 
@@ -223,21 +223,18 @@ export function wholeAgentEnvironmentUpdates(
   const groups = new Map<string, Set<string>>()
   const identity = (name: string) => (platform === 'win32' ? name.toLowerCase() : name)
   const carrierEntries: [string, string][] = []
-  // Orca's guard-skip entry is hidden from the Environment field, so the edit never mentions it;
-  // diffing against it would read as a removal and write a record the user never changed.
-  const previous = withoutAgentPermissionGuardSkipEnv(
-    resolveTuiAgentLaunchEnv(agent, settings, platform, (name, value) => {
-      if (isCarrier(name)) {
-        carrierEntries.push([name, value])
-        return true
-      }
-      ordinary.set(name, value)
-      const key = identity(name)
-      groups.set(key, (groups.get(key) ?? new Set<string>()).add(name))
+  // The field never shows Orca's guard-skip entry; diffing against it would read as a removal.
+  const shown = withoutPermissionGuardSkip(settings)
+  const previous = resolveTuiAgentLaunchEnv(agent, shown, platform, (name, value) => {
+    if (isCarrier(name)) {
+      carrierEntries.push([name, value])
       return true
-    }),
-    platform
-  )
+    }
+    ordinary.set(name, value)
+    const key = identity(name)
+    groups.set(key, (groups.get(key) ?? new Set<string>()).add(name))
+    return true
+  })
   const carrier: AgentLaunchSettingsSource = {
     agentPermissionDefault: settings.agentPermissionDefault,
     agentPermissionOverrides: settings.agentPermissionOverrides?.[agent]

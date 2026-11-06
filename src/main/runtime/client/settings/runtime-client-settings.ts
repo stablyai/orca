@@ -31,7 +31,7 @@ import {
   type AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import { legacyLaunchTextUpdates } from '../../../../shared/agent-launch/choices/agent-launch-permission-updates'
-import { composeAgentLaunchProfile } from '../../../../shared/agent-launch/choices/agent-launch-legacy-publication'
+import { composeAgentLaunchProfile } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-launch-settings-rollback'
 import type {
   RuntimeClientSettings,

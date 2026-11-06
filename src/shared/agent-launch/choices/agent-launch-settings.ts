@@ -13,8 +13,8 @@ import {
   buildAgentAvailabilitySettingsUpdate,
   normalizeDisabledTuiAgents
 } from '../catalog/tui-agent-selection'
-import { composeAgentLaunchProfile } from './agent-launch-legacy-publication'
 import {
+  composeAgentLaunchProfile,
   normalizeTuiAgentArgsRecord,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -25,8 +25,7 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import {
   agentSupportsPermissionGuardSkip,
-  applyAgentPermissionGuardSkip,
-  normalizeAgentPermissionGuardSkip
+  applyAgentPermissionGuardSkip
 } from '../permissions/agent-permission-guard-skip'
 import { liftAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
 import {
@@ -81,8 +80,7 @@ export type AgentLaunchSettings = {
     overrides: Partial<Record<TuiAgent, AgentPermissionChoice>>
     userArgs: Partial<Record<TuiAgent, string>>
   }
-  /** Agents opted in to dropping Claude Code's built-in refusals under Full access. Always sent by
-   *  hosts that have the opt-in, so its absence is what hides the control on older ones. */
+  /** Sent by every host that has the opt-in, so its absence hides the control on older ones. */
   agentPermissionGuardSkip?: Partial<Record<TuiAgent, true>>
 }
 
@@ -113,7 +111,6 @@ export type AgentLaunchSettingsMutation =
   | { type: 'launch-choices'; agent: TuiAgent; patch?: AgentChoicePatch; userArgs?: string }
   | { type: 'environment-set'; agent: TuiAgent; name: string; value: string }
   | { type: 'environment-remove'; agent: TuiAgent; name: string }
-  /** Claude-family only, and inert unless that agent's permission resolves to Full access. */
   | { type: 'permission-guard-skip'; agent: TuiAgent; enabled: boolean }
 
 export function projectAgentLaunchSettings(
@@ -161,9 +158,7 @@ export function projectAgentLaunchSettings(
       : {}),
     ...(hasTypedAgentPermission(settings)
       ? {
-          agentPermissionGuardSkip: normalizeAgentPermissionGuardSkip(
-            settings.agentPermissionGuardSkip
-          ),
+          agentPermissionGuardSkip: { ...settings.agentPermissionGuardSkip },
           agentPermission: {
             default: settings.agentPermissionDefault ?? 'own',
             overrides: { ...settings.agentPermissionOverrides },

@@ -25,56 +25,53 @@ export function AgentPermissionMenuOptions({
   followAll: string
   ownLabel: string
 }) {
-  const guardSkip = permission.guardSkip
   return (
-    <>
-      <DropdownMenuRadioGroup
-        value={
-          rawValue ? `raw:${rawValue}` : permission.source === 'all' ? 'default' : permission.choice
-        }
-      >
-        {showInherited ? (
-          <>
-            <DropdownMenuRadioItem
-              value="default"
-              disabled={disabled}
-              onSelect={() => permission.onSelect('default')}
-            >
-              <span className="flex min-w-0 items-center gap-1.5 py-0.5">
-                <span className="shrink-0">{followAll} ·</span>
-                <AgentPermissionChoiceName
-                  choice={permission.defaultChoice}
-                  ownLabel={ownLabel}
-                  truncate
-                />
-              </span>
-            </DropdownMenuRadioItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        {rawValue ? (
-          <DropdownMenuRadioItem value={`raw:${rawValue}`}>
-            <AgentPermissionChoiceName choice="own" ownLabel={rawValue} truncate />
+    <DropdownMenuRadioGroup
+      value={
+        rawValue ? `raw:${rawValue}` : permission.source === 'all' ? 'default' : permission.choice
+      }
+    >
+      {showInherited ? (
+        <>
+          <DropdownMenuRadioItem
+            value="default"
+            disabled={disabled}
+            onSelect={() => permission.onSelect('default')}
+          >
+            <span className="flex min-w-0 items-center gap-1.5 py-0.5">
+              <span className="shrink-0">{followAll} ·</span>
+              <AgentPermissionChoiceName
+                choice={permission.defaultChoice}
+                ownLabel={ownLabel}
+                truncate
+              />
+            </span>
           </DropdownMenuRadioItem>
-        ) : null}
-        <AgentPermissionChoiceItems
-          choices={permission.choices}
-          agent={agentId}
-          ownLabel={ownLabel}
-          chatOwnSupported={permission.chatOwnSupported === true}
-          disabled={disabled}
-          onSelect={permission.onSelect}
-        />
-      </DropdownMenuRadioGroup>
-      {guardSkip ? (
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
+      {rawValue ? (
+        <DropdownMenuRadioItem value={`raw:${rawValue}`}>
+          <AgentPermissionChoiceName choice="own" ownLabel={rawValue} truncate />
+        </DropdownMenuRadioItem>
+      ) : null}
+      <AgentPermissionChoiceItems
+        choices={permission.choices}
+        agent={agentId}
+        ownLabel={ownLabel}
+        chatOwnSupported={permission.chatOwnSupported === true}
+        disabled={disabled}
+        onSelect={permission.onSelect}
+      />
+      {permission.guardSkip ? (
         <>
           <DropdownMenuSeparator />
           <DropdownMenuCheckboxItem
-            checked={guardSkip.enabled}
+            checked={permission.guardSkip.enabled}
             disabled={disabled}
             // Keep the menu open: this refines the choice above rather than replacing it.
             onSelect={(event) => event.preventDefault()}
-            onCheckedChange={(checked) => guardSkip.onChange(checked === true)}
+            onCheckedChange={(checked) => permission.guardSkip?.onChange(checked === true)}
           >
             <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
               <span>
@@ -93,6 +90,6 @@ export function AgentPermissionMenuOptions({
           </DropdownMenuCheckboxItem>
         </>
       ) : null}
-    </>
+    </DropdownMenuRadioGroup>
   )
 }

@@ -22,7 +22,7 @@ import {
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import {
   agentSupportsPermissionGuardSkip,
-  withoutAgentPermissionGuardSkipEnv
+  withoutPermissionGuardSkip
 } from '../../../../../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
@@ -188,8 +188,7 @@ export function AgentLaunchSettingsCatalog({
       onSelect: (choice) => save({ type: 'permission', agent, choice }),
       flag: agentPermissionArgs(agent, resolved.choice),
       argsSetPermission: agentArgsSetPermission(agent, typed?.userArgs[agent]),
-      // Offered only where it does something: hosts send the record once they have the opt-in, and
-      // Claude Code reads the variable only in the mode Full access puts it in.
+      // Claude Code reads the variable only in the bypass mode Full access starts it in.
       ...(guardSkip && resolved.choice === 'full-access' && agentSupportsPermissionGuardSkip(agent)
         ? {
             guardSkip: {
@@ -253,10 +252,9 @@ export function AgentLaunchSettingsCatalog({
     envOverride: !local
       ? {}
       : typed
-        ? // Environment edits write back what this field shows, so Orca's guard-skip entry stays
-          // out of it: its one control is the permission menu's opt-in.
-          withoutAgentPermissionGuardSkipEnv(
-            resolveTuiAgentLaunchEnv(agent.id, local.settings, window.api.platform.get().platform),
+        ? resolveTuiAgentLaunchEnv(
+            agent.id,
+            withoutPermissionGuardSkip(local.settings),
             window.api.platform.get().platform
           )
         : resolveTuiAgentLaunchEnv(agent.id, { agentDefaultEnv: local.settings.agentDefaultEnv }),

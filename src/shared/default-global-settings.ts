@@ -252,8 +252,6 @@ export function buildDefaultSettings(args: {
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
     agentPermissionOverrides: {},
-    // Skipping Claude Code's built-in refusals is opt-in per agent; no default ever sets one.
-    agentPermissionGuardSkip: {},
     agentStatusHooksEnabled: true,
     claudeSubagentNavigationEnabled: true,
     agentWorkspaceTrustEnabled: true,

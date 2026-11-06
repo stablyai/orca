@@ -16,7 +16,6 @@ import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/term
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { normalizeAgentPermissionGuardSkip } from '../../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import {
   expandWorkspaceDirHome,
   stripRetiredGlobalSettings
@@ -167,10 +166,6 @@ export function normalizeLoadedGlobalSettings(
     disabledTuiAgents: migratedDisabledTuiAgents,
     ...migratedAgentYoloDefaults,
     ...migratedAgentPermission,
-    // Never inferred from a stored environment: only an explicit opt-in writes this.
-    agentPermissionGuardSkip: normalizeAgentPermissionGuardSkip(
-      parsed.settings?.agentPermissionGuardSkip
-    ),
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {

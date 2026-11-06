@@ -39,7 +39,6 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { hasTypedAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
-import { normalizeAgentPermissionGuardSkip } from '../../../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
@@ -276,10 +275,6 @@ export function mergeSettings(
         }
       : {}),
     agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
-    // A browser-saved value is as untrusted as a disk one, so only an explicit opt-in survives.
-    agentPermissionGuardSkip: normalizeAgentPermissionGuardSkip(
-      updates.agentPermissionGuardSkip ?? base.agentPermissionGuardSkip
-    ),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

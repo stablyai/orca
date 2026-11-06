@@ -25,8 +25,7 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
   protected structuredAgentLaunchEnv(
     agent: StructuredAgentId,
-    // Why the whole launch profile: narrowing to agentDefaultEnv hid the stored permission, so a
-    // chat launch dropped the env Orca adds for Full access.
+    // Narrowing to agentDefaultEnv hid the stored permission, dropping the env Orca adds for Full access.
     settings: AgentLaunchProfileSettings
   ) {
     return {
