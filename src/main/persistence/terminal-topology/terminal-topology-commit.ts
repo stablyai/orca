@@ -23,7 +23,7 @@ import { startSpan } from '../../observability/tracer'
 import {
   terminalSurfaceCloseMutation,
   type TerminalSurfaceCloseCommit
-} from '../../runtime/terminal-surface-close'
+} from '../../runtime/terminal/surface/terminal-surface-close'
 import type {
   DurableProfileStateMutation,
   StoreRuntimeState

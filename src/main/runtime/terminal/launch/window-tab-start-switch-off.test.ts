@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { setupLayoutOwnerRuntime, WORKTREE_ID } from '../../orca-runtime-layout-owner-start-fixture'
+import {
+  setupLayoutOwnerRuntime,
+  WORKTREE_ID
+} from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
 
 // Why: pinned off, so a run with ORCA_LAYOUT_OWNER=main still checks the switch-off refusal.
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))

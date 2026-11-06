@@ -1,13 +1,14 @@
 // #23428: a floating serve- PTY whose cwd is inside a folder workspace must stay floating.
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { createFolderWorkspaceRuntimeStore, makeFolderProjectGroup, makeFolderWorkspace, store } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const HOME_FOLDER = '/tmp/platform'
 
@@ -64,7 +65,7 @@ describe('PTY inventory refresh keeps recorded floating ownership', () => {
     await runtime.listTerminals(`id:${folderWorkspaceKey}`)
     const listed = await runtime.listTerminals()
 
-    const terminal = listed.terminals.find((entry) => entry.ptyId?.startsWith('serve-'))
+    const terminal = listed.terminals.find((entry) => entry.ptyId?.includes('@@serve-'))
     expect(terminal?.worktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(terminal?.worktreeId).not.toBe(folderWorkspaceKey)
     const floating = await runtime.listMobileSessionTabs(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)

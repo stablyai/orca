@@ -4,9 +4,10 @@ import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bi
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import { DISCONNECTED_PTY_RECORD_MAX } from '../../orca-runtime-postlude'
+} from '../records/runtime-terminal-state-records'
+
 import { questionAnswerWaitPrefix } from '../../orchestration/question-answer-delivery'
+const DISCONNECTED_PTY_RECORD_MAX = 128
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
@@ -128,8 +129,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.liveProgramStatusFacetPtyIds.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)

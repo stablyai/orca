@@ -20,7 +20,7 @@ import * as profile from '../../src/shared/agent-launch/choices/agent-launch-pro
 import * as composition from '../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
-import { RuntimeClientSettingsController } from '../../src/main/runtime/runtime-client-settings'
+import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
 import { mutateHostAgentLaunchSettings } from '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { structuredLaunchSeedOptions } from '../../src/shared/native-chat/input/native-chat-session-option-defaults'

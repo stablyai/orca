@@ -186,7 +186,7 @@ jobs:
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
         if: steps.freshness.outputs.should_build == 'true'
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -329,6 +329,18 @@ jobs:
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
           repositories: orca-daily
+
+      # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+      - name: Gate the update manifest on the minimum macOS
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          gh release upload "$TAG" dist/*-mac.yml --repo "$DAILY_REPO" --clobber
 
       # Verify latest-mac.yml before exposing its release to prevent picker downloads returning 404.
       - name: Verify update manifest published

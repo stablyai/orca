@@ -196,7 +196,8 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       response,
       context.json,
       ['unlinked'],
-      () => `Stopped ${params.selector} and unlinked it from this machine.`
+      () =>
+        `Stopped ${params.selector}, unlinked it from this machine and disconnected its SSH host.`
     )
   },
   'environment forget': async (context) => {
@@ -217,7 +218,7 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       context.json,
       ['forgotten'],
       () =>
-        `Unlinked ${params.selector} from this machine. Its host was not contacted, so orcad may still be running there.`
+        `Unlinked ${params.selector} from this machine and disconnected its SSH host. The host was not contacted, so orcad may still be running there; connect the host to set its server up again.`
     )
   },
   'environment cancel-stop': async (context) => {

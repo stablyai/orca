@@ -1,3 +1,4 @@
+import type { CodexAccountUsageRead } from '../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
@@ -156,6 +157,18 @@ export type StructuredAgentSessionOptionsReportedEvent =
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionOptionsReportedEvent
+  | StructuredAgentSessionRetiringEvent
+
+/** A logical failure stops input immediately; only a later ended event proves writer death. */
+export type StructuredAgentSessionRetiringEvent = {
+  type: 'retiring'
+  sessionId: string
+  reason: string
+  failure: SubmissionRejectionFact
+  fence: number
+  acquisitionGeneration: string
+  observedAt: number
+}
 
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 
@@ -180,6 +193,7 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */

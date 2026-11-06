@@ -3,7 +3,7 @@ import type {
   HeadlessSeedMetadata,
   ProviderTerminalBufferWait,
   RuntimeHeadlessTerminal
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
 import { OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged } from '../layout/terminal-view-presence'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
@@ -11,9 +11,9 @@ import {
   applyRestoredTerminalTailSeed,
   buildRestoredTerminalTailSeed,
   restoredTerminalTailSeedAllowed
-} from '../../terminal-tail-restore-seed'
+} from './tail/terminal-tail-restore-seed'
 
-import { hookLeadTurnState } from '../../tui-idle-hook-lane'
+import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server'
 
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {

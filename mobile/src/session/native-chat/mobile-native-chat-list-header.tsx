@@ -57,12 +57,9 @@ export function mobileNativeChatListHeader(
             <Pressable
               accessibilityRole="button"
               onPress={loadEarlier}
-              style={({ pressed }) => [
-                styles.loadEarlierRetry,
-                pressed && styles.loadEarlierRetryPressed
-              ]}
+              style={({ pressed }) => [styles.retryPill, pressed && styles.retryPillPressed]}
             >
-              <Text style={styles.loadEarlierRetryLabel}>{LOAD_EARLIER_RETRY}</Text>
+              <Text style={styles.retryPillLabel}>{LOAD_EARLIER_RETRY}</Text>
             </Pressable>
           </View>
         </FadeIn>

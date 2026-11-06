@@ -2612,6 +2612,8 @@
         "loadGitHubWorkFailed": "GitHub の作業項目を読み込めませんでした。",
         "gitlabViewIssues": "Issue",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "全員",
+        "gitlabInvolvementReviewing": "レビュー担当",
         "gitlabViewTodos": "自分の ToDo",
         "startWorkspaceFromMr": "MR {{number}} からワークスペースを開始",
         "startWorkspaceFromIssue": "Issue {{number}} からワークスペースを開始",
@@ -16468,6 +16470,8 @@
               "25349b66fc": "新規 Markdown ファイル",
               "784812ca24": "アクティブなワークスペースでブラウザタブを開きます。",
               "892bfa9339": "新規ブラウザタブ",
+              "splitChatRight": "右の分割チャット",
+              "splitChatDown": "チャットを下に分割",
               "verbs": {
                 "newBrowser": "新規ブラウザ",
                 "newBrowserTab": "新規ブラウザタブ",
@@ -16481,6 +16485,10 @@
                 "newTerminal": "新規ターミナル",
                 "newTerminalTab": "新規ターミナルタブ",
                 "newShell": "新規シェル",
+                "splitChatRight": "チャットを右に分割",
+                "splitChatDown": "チャットを分割する",
+                "chatPaneRight": "チャットペイン右",
+                "chatPaneBelow": "下のチャットペイン",
                 "terminalTab": "ターミナルタブ",
                 "createWorktree": "ワークツリーを作成する",
                 "addWorktree": "ワークツリーを追加",
@@ -16490,18 +16498,8 @@
                 "removeWorktree": "ワークツリーを削除する",
                 "trashWorktree": "ワークツリーをゴミ箱へ移動",
                 "addQuickCommand": "クイックコマンドを追加",
-                "newQuickCommand": "新規クイックコマンド",
-                "splitChatRight": "チャットを右に分割",
-                "newChatRight": "右に新しいチャット",
-                "chatPaneRight": "チャットペイン右",
-                "splitChatDown": "チャットを分割する",
-                "newChatBelow": "下に新しいチャット",
-                "chatPaneBelow": "下のチャットペイン"
-              },
-              "splitChatRight": "右の分割チャット",
-              "splitChatRightDescription": "右側の分割ペインで新しいチャットを開きます。",
-              "splitChatDown": "チャットを下に分割",
-              "splitChatDownDescription": "下の分割ペインで新しいチャットを開きます。"
+                "newQuickCommand": "新規クイックコマンド"
+              }
             }
           },
           "palette": {
@@ -18650,6 +18648,9 @@
       "composer": {
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "previewQueue": "キューに入れる",
+        "previewSteer": "今すぐ送信",
+        "previewSteerQueued": "次を今すぐ送信",
         "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
@@ -19941,7 +19942,10 @@
       "workerAutoClose": {
         "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
-        "keepOpen": "開いたままにする"
+        "keepOpen": "開いたままにする",
+        "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "temporaryBadge": "一時的"
       }
     },
     "wslHostMark": {

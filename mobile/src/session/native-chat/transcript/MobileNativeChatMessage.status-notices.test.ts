@@ -11,7 +11,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeNames
+  type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
 
 vi.mock('react-native', async () => {
@@ -104,7 +104,7 @@ describe('MobileNativeChatMessage status notices', () => {
       observedAt: 2,
       body
     })!
-  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeNames) => {
+  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeView) => {
     act(() => {
       renderer = create(
         createElement(
@@ -147,12 +147,13 @@ describe('MobileNativeChatMessage status notices', () => {
         }
         const text = renderNotice(body, { hostName: null, agentName: 'OpenCode' })
         const tree = renderer!
-        // An old host's stored advice gives way to desktop's sentence from the fact.
-        expect(text.props.children).toEqual(
-          hasReset
-            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
-            : 'OpenCode hit its usage limit.'
-        )
+        // An old host's stored advice gives way to the headline from the fact; the reset sits below it.
+        expect(text.props.children).toBe('OpenCode hit its usage limit.')
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .some((node) => /^Resets at \S/u.test(String(node.props.children)))
+        ).toBe(hasReset)
         expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
         expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
           colors.statusAmber
@@ -171,6 +172,40 @@ describe('MobileNativeChatMessage status notices', () => {
       } finally {
         now.mockRestore()
       }
+    }
+  )
+
+  it.each([
+    ['Claude', 'system', 'claude auth login'],
+    ['Claude', 'managed', 'claude auth login'],
+    ['Codex', 'system', 'codex login --device-auth'],
+    ['Codex', 'managed', null],
+    ['Grok', undefined, 'grok login --device-auth'],
+    ['Antigravity', undefined, null]
+  ] as const)(
+    'offers %s (%s account) sign-in in a host terminal',
+    (agentName, account, command) => {
+      const onRunInTerminal = vi.fn()
+      renderNotice(
+        {
+          kind: 'status',
+          tone: 'error',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('notSignedIn', account ? { account } : {}),
+            { surface: 'row', agentName }
+          )
+        },
+        { hostName: null, agentName, onRunInTerminal }
+      )
+      const signIn = renderer!.root.findAll(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityHint !== undefined
+      )
+      if (command === null) {
+        expect(signIn).toHaveLength(0)
+        return
+      }
+      act(() => signIn[0]!.props.onPress())
+      expect(onRunInTerminal).toHaveBeenCalledWith(command)
     }
   )
 

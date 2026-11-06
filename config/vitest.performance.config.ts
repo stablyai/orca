@@ -6,7 +6,6 @@ import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-
 
 const contracts = [
   'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts',
-  'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/hook-status-resume-sleep-ordering.test.ts',
   'src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts',
@@ -22,8 +21,8 @@ const contracts = [
   'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts',
   'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts',
   'src/renderer/src/store/store-identity-churn-probe.test.ts',
-  'config/scripts/app-store-performance-plugin.test.mjs',
-  'config/scripts/quadratic-buffer-concat-plugin.test.mjs',
+  'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
+  'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]

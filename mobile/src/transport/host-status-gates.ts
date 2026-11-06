@@ -18,6 +18,8 @@ export type HostStatusGates = {
   statusPending: boolean
   // Distinguish readable old-host status from no usable answer; only the former may justify a terminal compatibility wall.
   statusReadable: boolean
+  /** The host's store identity, which cross-store parent records name; absent when unknown. */
+  hostInstallationId?: string
 }
 
 // statusPending is not stored: pending-ness belongs to the live connection, not to the answer.
@@ -63,7 +65,10 @@ export function hostStatusGatesFromStatus(
       protocolVersion: status.protocolVersion,
       minCompatibleMobileVersion: status.minCompatibleMobileVersion
     },
-    statusReadable: true
+    statusReadable: true,
+    ...(status.hostDescriptor?.installationId
+      ? { hostInstallationId: status.hostDescriptor.installationId }
+      : {})
   }
 }
 
@@ -83,9 +88,13 @@ export function useHostStatusGates(args: {
   // Keep proven capabilities across drops while marking them unverified until the reconnect read settles.
   const [unverified, setUnverified] = useState(false)
 
+  // Mark during render; only a settled read clears it, and no read runs while disconnected.
+  if ((connState !== 'connected' || !client) && !unverified) {
+    setUnverified(true)
+  }
+
   useEffect(() => {
     if (connState !== 'connected' || !client) {
-      setUnverified(true)
       return
     }
     return startHostStatusRead(client, hostId, (gates) => {
@@ -118,7 +127,8 @@ export function useHostStatusGates(args: {
     compatVerdict: proven.compatVerdict,
     hostProtocolWindow: proven.hostProtocolWindow,
     statusReadable: proven.statusReadable,
-    statusPending: connState === 'connected' && unverified
+    statusPending: connState === 'connected' && unverified,
+    ...(proven.hostInstallationId ? { hostInstallationId: proven.hostInstallationId } : {})
   }
 }
 

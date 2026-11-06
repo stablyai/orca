@@ -9,7 +9,7 @@ import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
 import type * as LinearCurrentIssueContext from '../../linear/issue-context/current'
-import type { ResolvedWorktree } from '../../runtime/runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../runtime/workspaces/catalog/runtime-worktree-path-identity'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
@@ -22,7 +22,7 @@ vi.mock('../../linear/issue-context/current', async (importOriginal) => ({
 }))
 
 import { materializeWorktreePushTargetRemote } from '../../ipc/worktree-remote'
-import { RuntimeLinearTeamWriteCommands } from '../../runtime/runtime-linear-team-write-commands'
+import { RuntimeLinearTeamWriteCommands } from '../../runtime/integrations/linear/runtime-linear-team-write-commands'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const MOVING_WT = 'repo-1::/ws/repo-1/wt'

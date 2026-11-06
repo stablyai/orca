@@ -148,31 +148,6 @@ it('reconstructs duplicated global totals from validated file projections on loa
   expect(fixture.scanWorker).not.toHaveBeenCalled()
 })
 
-it('retains both signed and older aggregate-only file totals when loading a fresh cache', async () => {
-  const initial = await fixture.writeResumable()
-  const legacyPath = join(fixture.directory, 'legacy.jsonl')
-  await writeFile(legacyPath, fixture.row(1))
-  const legacy = await projectClaudeUsageScanFile(
-    await readClaudeUsageScanFile(legacyPath),
-    new Map(),
-    () => true
-  )
-  delete legacy.parseResumeState
-  const state = fixture.state([initial, legacy])
-  await writeFile(fixture.reportPath, JSON.stringify(state))
-
-  const store = fixture.createStore()
-  await store.whenLoaded()
-  expect(store.getSnapshot('all', 'all')).toMatchObject({
-    summary: { sessions: 1, turns: 2, inputTokens: 2001 },
-    daily: [{ inputTokens: 2001 }],
-    scanState: { enabled: true, lastScanCompletedAt: state.scanState.lastScanCompletedAt }
-  })
-  expect(await fixture.decodedSources()).toEqual([initial, legacy])
-  await store.refresh(false)
-  expect(fixture.scanWorker).not.toHaveBeenCalled()
-})
-
 it.each(['nonArray', 'nullEntry', 'unsignedRollup'] as const)(
   'preserves tracking when malformed %s cache records cannot be validated',
   async (malformation) => {

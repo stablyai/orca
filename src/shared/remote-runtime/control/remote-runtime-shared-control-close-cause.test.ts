@@ -70,3 +70,20 @@ it('reports an unexpected binary frame as a protocol error, not a transport fail
   })
   connection.close()
 })
+
+it('retires a socket that opens but never becomes ready and reconnects with backoff', async () => {
+  const server = await createServer({ suppressReadyFrameCount: 1 })
+  const closes: SharedControlSocketCloseRecord[] = []
+  const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+    readyDeadlineMs: 100,
+    onSocketClosed: (record) => closes.push(record)
+  })
+
+  await expect(connection.request('worktree.ps', undefined, 2000)).rejects.toThrow(
+    'did not finish connecting'
+  )
+  expect(closes).toMatchObject([{ cause: 'ready_timeout', state: 'awaiting_ready' }])
+  await vi.waitFor(() => expect(connection.isReady()).toBe(true))
+  expect(server.connectionCount()).toBe(2)
+  connection.close()
+})
