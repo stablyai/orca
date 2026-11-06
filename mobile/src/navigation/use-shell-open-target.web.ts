@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigationContainerRef, usePathname, useRouter } from 'expo-router'
 // Expo Router's own stack router, the one Navigator falls back to; not re-exported from the package root.
 import { StackRouter } from 'expo-router/build/layouts/StackClient'
+// The store router.push resolves hrefs through; reading it keeps one resolver for both open paths.
+import { store } from 'expo-router/build/global-state/router-store'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-init-route'
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
@@ -9,10 +11,7 @@ import { usePageBridgeClient } from '../transport/client-context.web'
 import { createRefusalReporter, handOffRoute, servedHere } from './route-handoff.web'
 
 type StackRouterFactory = typeof StackRouter
-type StackParams = Record<string, string | string[]>
-type StackRoute = { name: string; params: StackParams }
-
-const DYNAMIC_SEGMENT = /^\[(\.\.\.)?(.+)\]$/
+type StackRoute = { name: string; params?: object }
 
 function openTargetOf(route: BridgeInitRoute | null | undefined): string {
   return route?.params?.[BRIDGE_OPEN_ROUTE_PARAM] ?? ''
@@ -24,73 +23,38 @@ function isThisHost(client: BridgeRpcClient, target: string): boolean {
   return host !== undefined && target.startsWith(`${host}/`)
 }
 
-function matchSegments(
-  pattern: readonly string[],
-  segments: readonly string[]
-): StackParams | null {
-  const params: StackParams = {}
-  for (const [index, part] of pattern.entries()) {
-    const dynamic = DYNAMIC_SEGMENT.exec(part)
-    if (dynamic?.[1] !== undefined) {
-      const rest = segments.slice(index)
-      if (rest.length === 0 || index !== pattern.length - 1) {
-        return null
-      }
-      params[dynamic[2]] = rest
-      return params
-    }
-    const value = segments[index]
-    if (value === undefined || value === '' || (dynamic === null && value !== part)) {
-      return null
-    }
-    if (dynamic !== null) {
-      params[dynamic[2]] = value
-    }
-  }
-  return pattern.length === segments.length ? params : null
+function opensInDocument(client: BridgeRpcClient, target: string): boolean {
+  return isThisHost(client, target) && servedHere(client, target)
 }
 
-// A malformed escape names no screen; it must not throw inside the navigator's render.
-function decodedPathSegments(pathname: string): string[] | null {
+// Resolve through Expo's own linking, as router.push would, and take the route at this stack's level.
+// A target Expo cannot read (a malformed escape) opens nothing rather than throwing inside the navigator's render.
+function stackRouteForHref(href: string, routeNames: readonly string[]): StackRoute | null {
+  let state
   try {
-    return pathname.split('/').map(decodeURIComponent)
+    state = store.getStateForHref(href)
   } catch {
     return null
   }
-}
-
-// Resolve an /h/ href to this stack's screen: static segments beat dynamic ones and a catch-all comes last, as Expo ranks them.
-export function stackRouteForHref(href: string, routeNames: readonly string[]): StackRoute | null {
-  const url = new URL(href, 'orca-page://document')
-  const segments = decodedPathSegments(url.pathname)?.slice(2)
-  if (segments === undefined) {
-    return null
-  }
-  let best: (StackRoute & { rank: number }) | null = null
-  for (const name of routeNames) {
-    const pattern = name
-      .split('/')
-      .filter((part, index, all) => part !== 'index' || index < all.length - 1)
-    const params = matchSegments(pattern, segments)
-    if (params === null) {
-      continue
+  while (state?.routes !== undefined) {
+    const route: (StackRoute & { state?: typeof state }) | undefined = state.routes.at(-1)
+    if (route === undefined) {
+      return null
     }
-    const rank =
-      pattern.filter((part) => !DYNAMIC_SEGMENT.test(part)).length -
-      (pattern.some((part) => part.startsWith('[...')) ? pattern.length : 0)
-    if (best === null || rank > best.rank) {
-      best = { name, params, rank }
+    if (routeNames.includes(route.name)) {
+      return { name: route.name, params: route.params }
     }
+    state = route.state
   }
-  if (best === null) {
-    return null
-  }
-  return { name: best.name, params: { ...Object.fromEntries(url.searchParams), ...best.params } }
+  return null
 }
 
 // Open the first init's target as part of the stack's initial state, so its chunk loads with the document like a fresh one and the cover drops on its paint.
-// Pure on purpose: React can discard a suspended first render and hydrate again, and each pass must splice the same way.
-function shellOpenStackRouter(opensHere: (target: string) => boolean): StackRouterFactory {
+// Reads the target the URL was built from, and is pure so React can discard a suspended first render and hydrate again the same way.
+function shellOpenStackRouter(
+  opensHere: (target: string) => boolean,
+  onSpliced: (target: string) => void
+): StackRouterFactory {
   return (options) => {
     const router = StackRouter(options)
     return {
@@ -106,9 +70,10 @@ function shellOpenStackRouter(opensHere: (target: string) => boolean): StackRout
           opensHere(target)
             ? stackRouteForHref(target, config.routeNames)
             : null
-        if (only === undefined || opened === null) {
+        if (only === undefined || opened === null || typeof target !== 'string') {
           return router.getRehydratedState(partial, config)
         }
+        onSpliced(target)
         delete params[BRIDGE_OPEN_ROUTE_PARAM]
         return router.getRehydratedState(
           { stale: true, index: 1, routes: [{ name: only.name, params }, opened] },
@@ -116,6 +81,14 @@ function shellOpenStackRouter(opensHere: (target: string) => boolean): StackRout
         )
       }
     }
+  }
+}
+
+function pathnameOf(href: string): string {
+  try {
+    return decodeURIComponent(new URL(href, 'orca-page://document').pathname)
+  } catch {
+    return href
   }
 }
 
@@ -127,15 +100,20 @@ export function useShellOpenTarget(): StackRouterFactory {
   const navigation = useNavigationContainerRef()
   const pathname = useRef('')
   pathname.current = usePathname()
-  const [opened] = useState(() => {
-    const target = openTargetOf(client.getShellSession()?.route)
-    return target !== '' && isThisHost(client, target) && servedHere(client, target) ? target : null
-  })
-  const [stackRouter] = useState(() => shellOpenStackRouter((target) => target === opened))
+  // What the router put in the stack, so a later init only opens a different target.
+  const spliced = useRef<string | null>(null)
+  const [stackRouter] = useState(() =>
+    shellOpenStackRouter(
+      (target) => opensInDocument(client, target),
+      (target) => {
+        spliced.current = target
+      }
+    )
+  )
 
   useEffect(() => {
     const report = createRefusalReporter()
-    let applied = opened
+    let applied = spliced.current
     let stopWaiting: (() => void) | null = null
     const open = (target: string): void => {
       if (!isThisHost(client, target)) {
@@ -147,8 +125,7 @@ export function useShellOpenTarget(): StackRouterFactory {
         return
       }
       // Already on top: a second copy would only stack the same screen under itself.
-      const path = new URL(target, 'orca-page://document').pathname
-      if (decodedPathSegments(path)?.join('/') === pathname.current) {
+      if (pathnameOf(target) === pathname.current) {
         return
       }
       // A route update can land before the root navigator is ready; Expo Router refuses to route until then.
@@ -182,7 +159,7 @@ export function useShellOpenTarget(): StackRouterFactory {
       unsubscribe()
       stopWaiting?.()
     }
-  }, [client, navigation, opened, router])
+  }, [client, navigation, router])
 
   return stackRouter
 }
