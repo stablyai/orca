@@ -15,6 +15,8 @@ import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { useSessionTitleCard } from './use-session-title-card'
 import { useDetailCardScope } from '../components/use-detail-card-scope'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { useReleasedSideInset } from '../layout/released-side-inset'
+import { sideStripPadding } from './session-side-strip-inset'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -23,6 +25,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   const server = useContext(WorkspaceServerContext)
   const layout = useResponsiveLayout()
   const sideRail = useShellSideRail()
+  const releasedStrip = useReleasedSideInset()
   const hasTabs = controller.visibleTabs.length > 0
   const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
   const titleVisible =
@@ -58,7 +61,9 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
-        <MobileWorkerAutoCloseStrip controller={controller} />
+        <View style={sideStripPadding(releasedStrip)}>
+          <MobileWorkerAutoCloseStrip controller={controller} />
+        </View>
         <MobileSessionContentRow controller={controller} />
       </View>
       <AnchoredDetailCardLayer
