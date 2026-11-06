@@ -109,7 +109,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
               {
                 surface: 'terminal',
                 viewKey: `terminal:${ptyId}`,
-                agent: runtime.getPaneAgentForTelemetry(ptyId)
+                agent: runtime.getPaneTerminalAgent(ptyId)
               }
             ),
           rendererMountRequestedBeforePty,

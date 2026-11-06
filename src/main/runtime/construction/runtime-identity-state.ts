@@ -279,7 +279,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     null
 
   /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
-  protected getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
+  getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
   }
@@ -287,11 +287,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {
     const agent = this.getPaneTerminalAgent(ptyId)
     return isTuiAgent(agent) ? agent : null
-  }
-
-  /** Usage counts include agents the user typed into a shell, not only ones Orca launched. */
-  getPaneAgentForTelemetry(ptyId: string | null | undefined): TuiAgent | null {
-    return this.getPaneAgentForTuiIdle(ptyId)
   }
 
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()

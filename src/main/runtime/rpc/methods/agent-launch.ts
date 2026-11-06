@@ -62,11 +62,6 @@ type HostLaunchContext = RpcContext & {
   agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
 }
 
-/** A phone's own label names the desktop surface it mirrors; the host knows the caller is the phone. */
-function withCallerLaunchSource<P extends AgentLaunchParams>(params: P, context: RpcContext): P {
-  return context.clientKind === 'mobile' ? { ...params, launchSource: 'mobile' } : params
-}
-
 async function runAgentLaunch(
   { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
   context: HostLaunchContext,
@@ -277,7 +272,7 @@ export const AGENT_LAUNCH_METHODS = [
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
       try {
-        return await runReplaySafeAgentLaunch(withCallerLaunchSource(params, context), context)
+        return await runReplaySafeAgentLaunch(params, context)
       } catch (error) {
         // Nested failures cannot authorize another workspace, regardless of their message or code.
         if (error instanceof AgentLaunchExecutionError) {
@@ -318,11 +313,10 @@ export async function launchAgentOnHost(
     throw new Error('agent_launch_unsupported')
   }
   assertAgentLaunchTargetAuthorized(params.target, host)
-  const attributed = withCallerLaunchSource(params, host)
   if (!operationId) {
-    return runLegacyAgentLaunch(attributed, host)
+    return runLegacyAgentLaunch(params, host)
   }
-  return runReplaySafeAgentLaunch({ ...attributed, operationId }, host).catch((error: unknown) => {
+  return runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {
     // Preserve the original error contract for callers of the optional-identity method.
     if (error instanceof AgentLaunchExecutionError) {
       throw error.cause instanceof AgentLaunchTabClosedError
