@@ -72,6 +72,8 @@ type ReaderScrollCallbacks = {
   onTakeScroll?: () => void
   onLeaveEnd: () => void
   onScrollGesture: (gesture: ReaderGesture) => void
+  /** A press or key on the content (opening a row, say): the view becomes the reader's again. */
+  onReaderAct?: () => void
 }
 
 export type NativeChatReaderScrollInputHandlers = Pick<
@@ -81,6 +83,7 @@ export type NativeChatReaderScrollInputHandlers = Pick<
 
 /** Invalidate pending navigation on input, and detach only when the transcript can move away. */
 export function nativeChatReaderScrollInputHandlers({
+  onReaderAct,
   onReaderScroll,
   onLeaveEnd,
   onScrollGesture
@@ -110,6 +113,7 @@ export function nativeChatReaderScrollInputHandlers({
       report({ kind: 'touch-drag' }, event)
     },
     onKeyDown: (event) => {
+      onReaderAct?.()
       if (!READER_SCROLL_KEYS.has(event.key) || isEditableTarget(event.target)) {
         return
       }
@@ -133,6 +137,7 @@ export function nativeChatReaderScrollInputHandlers({
           onReaderScroll()
         }
       }
+      onReaderAct?.()
       report({ kind: 'content-press' }, event)
     }
   }
@@ -149,7 +154,8 @@ export function useNativeChatReaderScrollInput(
     onReaderScroll: onScrollInput,
     onTakeScroll,
     onLeaveEnd,
-    onScrollGesture
+    onScrollGesture,
+    onReaderAct
   }: ReaderScrollCallbacks
 ): {
   scrollerProps: NativeChatReaderScrollInputHandlers
@@ -166,11 +172,12 @@ export function useNativeChatReaderScrollInput(
   const scrollerProps = useMemo(
     () =>
       nativeChatReaderScrollInputHandlers({
+        onReaderAct,
         onReaderScroll,
         onLeaveEnd,
         onScrollGesture
       }),
-    [onScrollGesture, onLeaveEnd, onReaderScroll]
+    [onReaderAct, onScrollGesture, onLeaveEnd, onReaderScroll]
   )
   const forwardedGesture = useCallback(
     (gesture: ReaderGesture) => {

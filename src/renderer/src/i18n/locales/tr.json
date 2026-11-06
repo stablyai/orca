@@ -3108,6 +3108,8 @@
         "loadGitHubWorkFailed": "GitHub işleri yüklenemedi.",
         "gitlabViewIssues": "Sorunlar",
         "gitlabViewMrs": "MR'ler",
+        "gitlabInvolvementEveryone": "Herkes",
+        "gitlabInvolvementReviewing": "İncelemelerim",
         "gitlabViewTodos": "Yapılacaklarım",
         "startWorkspaceFromMr": "MR {{number}} üzerinden çalışma alanı başlat",
         "startWorkspaceFromIssue": "Sorun {{number}} üzerinden çalışma alanı başlat",
@@ -11894,7 +11896,7 @@
             "terminalRun": "Terminallerinizde komut çalıştırma (SSH dahil)"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir ve başka programlar çalıştırabilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayımcının kodunu Orca içinde çalıştırır. Orca neye erişebildiğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
@@ -19349,6 +19351,9 @@
       "composer": {
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
+        "previewQueue": "Sıraya al",
+        "previewSteer": "Yönlendir",
+        "previewSteerQueued": "Sıradakini yönlendir",
         "alternateQueueHint": "Sıraya almak için {{shortcut}}",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",

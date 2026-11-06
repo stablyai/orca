@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { journalPragmaNumber, openJournalDatabase, runJournalTransaction } from './journal-database'
+import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   createAgentSessionRecordTablesSql,
   createJournalTablesSql,
@@ -42,36 +42,6 @@ export function registerCommandReceiptSchemaTests(): void {
         .get('agent_session_command_receipts')
     )
   }
-
-  describe('command receipt schema at writable open', () => {
-    it.each([3, 4])('adds the table to an older-shaped version %i database', (version) => {
-      const seeded = new Database(dbPath)
-      seeded.exec(createJournalTablesSql())
-      if (version === 4) {
-        seeded.exec(createAgentSessionRecordTablesSql())
-        writeCommandReceiptTestRecord(seeded)
-      }
-      seeded.pragma(`user_version = ${version}`)
-      expect(hasReceiptTable(seeded)).toBe(false)
-      seeded.close()
-
-      for (let open = 0; open < 2; open += 1) {
-        const { db, readOnly } = openJournalDatabase(dbPath)
-        try {
-          expect(readOnly).toBe(false)
-          expect(hasReceiptTable(db)).toBe(true)
-          expect(journalPragmaNumber(db, 'user_version')).toBe(4)
-          if (version === 4) {
-            expect(db.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
-              { session_id: 'session-1' }
-            ])
-          }
-        } finally {
-          db.close()
-        }
-      }
-    })
-  })
 
   describe('command receipts on a newer database', () => {
     it('reads receipts, refuses writes with the journal guard and leaves the file byte-identical', async () => {

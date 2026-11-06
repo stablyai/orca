@@ -244,7 +244,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         const pipelineCheck = details.pipeline
           ? gitLabPipelineToPRCheck(
               details.pipeline,
-              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline'),
+              details.headSha
             )
           : null
         setChecks(result, pipelineCheck)
