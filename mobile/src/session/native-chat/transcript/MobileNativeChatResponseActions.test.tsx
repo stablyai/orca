@@ -14,7 +14,7 @@ vi.mock('react-native', () => ({
   View: 'View',
   StyleSheet: { create: (styles: unknown) => styles }
 }))
-vi.mock('lucide-react-native', () => ({ GitBranch: 'GitBranch' }))
+vi.mock('lucide-react-native', () => ({ GitFork: 'GitFork' }))
 vi.mock('../../../components/MobileSourceCopyButton', () => ({
   MobileSourceCopyButton: 'CopyButton'
 }))

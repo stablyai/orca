@@ -1,4 +1,4 @@
-import { GitBranch } from 'lucide-react'
+import { GitFork } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
@@ -32,7 +32,7 @@ export function NativeChatForkAction({
             }
           }}
         >
-          <GitBranch className="size-3.5" />
+          <GitFork className="size-3.5" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
