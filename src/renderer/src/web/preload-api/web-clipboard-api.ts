@@ -9,7 +9,6 @@ import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-sessi
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
-  CLIPBOARD_IMAGE_MAX_PIXELS,
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
   assertClipboardImageByteLengthWithinLimit,
@@ -26,8 +25,6 @@ import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'
 export const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 
 export const MAX_CLIPBOARD_IMAGE_SOURCE_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
-
-export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
 
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 
