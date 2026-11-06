@@ -20,6 +20,7 @@ import { callRuntimeRpc } from './runtime-rpc-client'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import { MAX_FILE_RANGE_READ_BYTES } from '../../../shared/file-range-read'
 import type { RuntimeFileReadArgs } from './runtime-file-client-types'
+import { remoteFilePath, remoteFileRequest } from '../../../shared/remote-file-locator'
 
 // Why: under files.readChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
 const PAGED_READ_CHUNK_BYTES = 384 * 1024
@@ -119,7 +120,7 @@ export async function readRemoteBinaryFile(
   address: RuntimeRemoteFileAddress,
   options: { pageOversized: boolean }
 ): Promise<RuntimeFilePreviewResult> {
-  return previewableBinaryMimeType(address.relativePath)
+  return previewableBinaryMimeType(remoteFilePath(address))
     ? readRemoteFilePreview(address, options)
     : { content: '', isBinary: true }
 }
@@ -158,15 +159,11 @@ export async function readRemoteFilePreview(
 ): Promise<RuntimeFilePreviewResult> {
   const remote = pinRemoteFileAddress(address)
   try {
-    return await callRuntimeRpc<RuntimeFilePreviewResult>(
-      remote.target,
-      'files.readPreview',
-      { worktree: remote.worktree, relativePath: remote.relativePath },
-      {
-        timeoutMs: 15_000,
-        expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
-      }
-    )
+    const { method, params } = remoteFileRequest(remote.worktree, remote, 'preview')
+    return await callRuntimeRpc<RuntimeFilePreviewResult>(remote.target, method, params, {
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
+    })
   } catch (error) {
     if (
       !options.pageOversized ||
@@ -179,7 +176,7 @@ export async function readRemoteFilePreview(
     if (paged.kind !== 'ok') {
       throw error
     }
-    return pagedFilePreviewResult(remote.relativePath, paged.bytes)
+    return pagedFilePreviewResult(remoteFilePath(remote), paged.bytes)
   }
 }
 

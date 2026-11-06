@@ -7,15 +7,15 @@ import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
+import { remoteFileRequest, type RemoteFileLocator } from '../../../shared/remote-file-locator'
 
 /** A file on a paired runtime, addressed the way its host's `files.*` methods expect. */
 export type RuntimeRemoteFileAddress = {
   target: Extract<RuntimeClientTarget, { kind: 'environment' }>
   worktree: string
-  relativePath: string
   /** Pins a multi-call read to one pairing, so a re-pair cannot switch hosts mid-read. */
   expectedEnvironmentPairingRevision?: number
-}
+} & RemoteFileLocator
 
 /** The paired-runtime address for a read, or null when this client reads the file itself. */
 export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAddress | null {
@@ -27,14 +27,14 @@ export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAdd
   if (!args.worktreeId) {
     throw new Error('Remote file has no owning runtime worktree')
   }
+  const worktree = toRuntimeWorktreeSelector(args.worktreeId)
+  if (args.terminalArtifactGrantId) {
+    return { target, worktree, grantId: args.terminalArtifactGrantId, absolutePath: args.filePath }
+  }
   if (!canReadRelativeRuntimeFile(args.relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
-  return {
-    target,
-    worktree: toRuntimeWorktreeSelector(args.worktreeId),
-    relativePath: args.relativePath
-  }
+  return { target, worktree, relativePath: args.relativePath }
 }
 
 export type RuntimeFileSnapshot = {
@@ -47,15 +47,11 @@ export type RuntimeFileSnapshot = {
 export function statRemoteRuntimeFile(
   remote: RuntimeRemoteFileAddress
 ): Promise<RuntimeFileSnapshot> {
-  return callRuntimeRpc<RuntimeFileSnapshot>(
-    remote.target,
-    'files.stat',
-    { worktree: remote.worktree, relativePath: remote.relativePath },
-    {
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
-    }
-  )
+  const { method, params } = remoteFileRequest(remote.worktree, remote, 'stat')
+  return callRuntimeRpc<RuntimeFileSnapshot>(remote.target, method, params, {
+    timeoutMs: 15_000,
+    expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
+  })
 }
 
 export function readRemoteRuntimeFileChunk(
@@ -63,10 +59,11 @@ export function readRemoteRuntimeFileChunk(
   offset: number,
   length: number
 ): Promise<RuntimeFileReadChunkResult> {
+  const { method, params } = remoteFileRequest(remote.worktree, remote, 'readChunk')
   return callRuntimeRpc<RuntimeFileReadChunkResult>(
     remote.target,
-    'files.readChunk',
-    { worktree: remote.worktree, relativePath: remote.relativePath, offset, length },
+    method,
+    { ...params, offset, length },
     {
       timeoutMs: 60_000,
       expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision

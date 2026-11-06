@@ -1042,6 +1042,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
+  'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
   'files.watch': FileWatch,
   'files.write': FileWrite,

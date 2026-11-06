@@ -249,8 +249,8 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
-        // Why: a bytes custom editor pages a binary file on the same route; a grant has no ranged reads.
-        const byteSource = result.isBinary && !readArgs.terminalArtifactGrantId ? readArgs : null
+        // Why: a bytes custom editor pages a binary file on the same route, a granted one through its grant.
+        const byteSource = result.isBinary ? readArgs : null
         const loaded = byteSource ? { ...result, byteSource } : result
         setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: loaded } : prev))
         stampCleanTabDiskBaseline(id, result)

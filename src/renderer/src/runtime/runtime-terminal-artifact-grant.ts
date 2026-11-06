@@ -9,15 +9,10 @@ import {
 } from '../../../shared/runtime-file-contracts'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
-
-// Why: the host refuses a grant whose file changed, expired, or belongs to an earlier connection.
-const RENEWABLE_GRANT_ERRORS = new Set([
-  'terminal_file_grant_stale',
-  'terminal_file_grant_expired',
-  'terminal_file_grant_mismatch'
-])
+import { isRenewableTerminalFileGrantRefusal } from '../../../shared/terminal-file-grant-refusal'
 
 export type TerminalArtifactGrantTarget = {
   target: RuntimeClientTarget & { kind: 'environment' }
@@ -38,7 +33,10 @@ export function pinTerminalArtifactGrantTarget<T extends TerminalArtifactGrantTa
 }
 
 export function isRenewableGrantError(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && RENEWABLE_GRANT_ERRORS.has(error.message)
+  // Why IPC: a media preview's host calls run in main, which relays the host's refusal.
+  return isRenewableTerminalFileGrantRefusal(
+    error instanceof RuntimeRpcCallError ? error.message : readIpcErrorMessage(error)
+  )
 }
 
 export type RenewedTerminalArtifactGrant = {

@@ -6,7 +6,12 @@ import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
 import { isDocumentPreview, type FilePreview } from '../../shared/file-preview-kind'
 import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
-import { statRemotePreviewFile, type RemotePreviewFileSnapshot } from './remote-file-preview-reader'
+import {
+  renewRemotePreviewGrant,
+  statRemotePreviewFile,
+  type GrantedRemoteFilePreviewAddress,
+  type RemotePreviewFileSnapshot
+} from './remote-file-preview-reader'
 
 export type LocalPreviewTarget = {
   filePath: string
@@ -24,6 +29,8 @@ export type PreviewGrant = {
   key: string
   // Why: a seek or prefetch burst opens several ranges at once; one stat answers all of them.
   stat?: { at: number; snapshot: Promise<RemotePreviewFileSnapshot> }
+  // Why: likewise one renewal answers a burst that found a granted file's grant lapsed.
+  renewal?: Promise<RemoteFilePreviewAddress>
 }
 export type PreviewUrl = {
   content: string
@@ -146,4 +153,33 @@ export function previewGrantForSender(
       : ''
   const grant = grants.get(token)
   return grant && grant.senderId === senderId ? { token, grant } : null
+}
+
+/** The preview's address under a fresh grant, shared by every request that found the old one lapsed. */
+export function renewedRemoteTarget(
+  grant: PreviewGrant,
+  lapsed: GrantedRemoteFilePreviewAddress
+): Promise<RemoteFilePreviewAddress> {
+  const current = 'remote' in grant.target ? grant.target.remote : null
+  if (current && current.grantId !== lapsed.grantId) {
+    return Promise.resolve(current)
+  }
+  if (!grant.renewal) {
+    const renewal: Promise<RemoteFilePreviewAddress> = renewRemotePreviewGrant(
+      lapsed,
+      new AbortController().signal
+    )
+      .then((remote) => {
+        grant.target = { remote }
+        grant.stat = undefined
+        return remote
+      })
+      .finally(() => {
+        if (grant.renewal === renewal) {
+          grant.renewal = undefined
+        }
+      })
+    grant.renewal = renewal
+  }
+  return grant.renewal
 }
