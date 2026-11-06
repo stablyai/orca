@@ -96,9 +96,7 @@ export class RpcSessionLivenessWatchdog {
     if (this.identity !== identity || this.probeId !== id) {
       return
     }
-    this.missedProbes = 0
-    this.probeId = null
-    this.armIdle(identity)
+    this.settleProbe(identity)
   }
 
   // A decisive probe ends the session on its first miss when suspension may have killed the link.
@@ -179,6 +177,12 @@ export class RpcSessionLivenessWatchdog {
     this.lastDecisiveProbeAt = null
   }
 
+  private settleProbe(identity: RpcSessionIdentity): void {
+    this.missedProbes = 0
+    this.probeId = null
+    this.armIdle(identity)
+  }
+
   private armIdle(identity: RpcSessionIdentity, delayMs = this.idleProbeMs): void {
     this.clearActiveTimer()
     if (delayMs === null) {
@@ -243,9 +247,7 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     if (decisiveTimeoutMs === null && this.options.isLinkBusy?.(this.lastInboundAt > sentAt)) {
-      this.probeId = null
-      this.missedProbes = 0
-      this.armIdle(identity)
+      this.settleProbe(identity)
       return
     }
     this.missedProbes += 1
