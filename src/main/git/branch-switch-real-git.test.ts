@@ -100,6 +100,26 @@ describe('switchBranchGuarded', () => {
         'Commit, stash or clean the changes inside submodule lib before switching branches.'
       )
       expect(await currentBranch()).toBe('main')
+
+      // A submodule merely at another commit has nothing a switch could lose.
+      const submodule = join(directory, 'lib')
+      await runProcess({ program: 'git', args: ['checkout', '--', 'lib.txt'], cwd: submodule })
+      await runProcess({
+        program: 'git',
+        args: [
+          '-c',
+          'user.name=A',
+          '-c',
+          'user.email=a@a.test',
+          'commit',
+          '--allow-empty',
+          '-qm',
+          'moved'
+        ],
+        cwd: submodule
+      })
+      await switchBranchGuarded(directory, 'feature', {}, deps())
+      expect(await currentBranch()).toBe('feature')
     } finally {
       await rm(library, { recursive: true, force: true })
     }

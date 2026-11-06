@@ -209,7 +209,14 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       ptys: () => this.ptysById.values(),
       paneOf: (pty) => this.paneOfPty(pty),
       terminalHandlesOf: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
-      syncedTabIds: () => this.tabs.keys(),
+      hasSyncedTab: (tabId) => this.tabs.has(tabId),
+      savedTabIds: (workspaceIds) => {
+        const store = this.store
+        return (store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
+          const tabsByWorktree = store?.getWorkspaceSession?.(hostId)?.tabsByWorktree ?? {}
+          return [...workspaceIds].flatMap((id) => (tabsByWorktree[id] ?? []).map((tab) => tab.id))
+        })
+      },
       // Read at switch time: the host installs this callback after this field initializes.
       probeProcess: (paneKey) => this.checkHookAgentPresenceFn?.(paneKey) ?? Promise.resolve(null),
       notifyBranchChanged: (repoId) => this.notifyBranchRenamed(repoId)

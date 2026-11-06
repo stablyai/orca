@@ -27,7 +27,7 @@ function blocker(rows: Row[], verdict: 'live' | 'exited' | null = null) {
     checkoutPath: '/work/app',
     readRows: () => rows,
     pathOfWorktree: (id) => paths[id],
-    hasLiveTerminal: () => true,
+    buildTerminalLiveness: () => () => true,
     probeProcess: async () => verdict,
     now: () => NOW
   })

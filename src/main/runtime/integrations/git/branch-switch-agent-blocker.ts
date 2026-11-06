@@ -5,7 +5,7 @@ import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentati
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 
-type AgentRow = Pick<
+export type AgentSwitchRow = Pick<
   AgentStatusIpcPayload,
   | 'paneKey'
   | 'tabId'
@@ -22,18 +22,20 @@ type AgentRow = Pick<
   | 'structuredHost'
 >
 
+type TerminalRef = Pick<AgentSwitchRow, 'paneKey' | 'tabId' | 'terminalHandle'>
+
 type BlockerArgs = {
   checkoutPath: string
-  readRows: () => readonly AgentRow[]
+  readRows: () => readonly AgentSwitchRow[]
   pathOfWorktree: (worktreeId: string) => string | undefined
-  /** Whether a terminal row's pane or tab still has a connected terminal on this host. */
-  hasLiveTerminal: (row: Pick<AgentRow, 'paneKey' | 'tabId' | 'terminalHandle'>) => boolean
+  /** Built once per switch from this checkout's candidates: is a terminal row's terminal still live? */
+  buildTerminalLiveness: (candidates: readonly AgentSwitchRow[]) => (row: TerminalRef) => boolean
   probeProcess: (paneKey: string) => Promise<AgentProcessVerdict | null>
   now?: () => number
 }
 
 /** A busy agent of this host whose workspace is the checkout or a folder inside it. */
-function isBusyInCheckout(row: AgentRow, args: BlockerArgs): boolean {
+function isBusyInCheckout(row: AgentSwitchRow, args: BlockerArgs): boolean {
   if (row.state === 'done' || row.restoredUnconfirmed === true || row.providerSessionOnly) {
     return false
   }
@@ -42,14 +44,10 @@ function isBusyInCheckout(row: AgentRow, args: BlockerArgs): boolean {
     return false
   }
   const path = row.worktreeId ? args.pathOfWorktree(row.worktreeId) : undefined
-  if (path === undefined || !isPathInsideOrEqual(args.checkoutPath, path)) {
-    return false
-  }
-  // Like the sidebar: a closed terminal's row no longer describes a running agent.
-  return row.structuredHost !== undefined || row.tabId === undefined || args.hasLiveTerminal(row)
+  return path !== undefined && isPathInsideOrEqual(args.checkoutPath, path)
 }
 
-function isRecent(row: AgentRow, now: number): boolean {
+function isRecent(row: AgentSwitchRow, now: number): boolean {
   return isFreshNonDoneAgentStatus(
     {
       state: row.state,
@@ -62,7 +60,7 @@ function isRecent(row: AgentRow, now: number): boolean {
   )
 }
 
-function blockerMessage(row: AgentRow, onlyProcessIsLive: boolean): string {
+function blockerMessage(row: AgentSwitchRow, onlyProcessIsLive: boolean): string {
   const agent = formatAgentTypeLabel(row.agentType)
   if (onlyProcessIsLive) {
     return `${agent} last reported work in this workspace and is still running. Stop or exit it, then switch branches.`
@@ -79,18 +77,30 @@ function blockerMessage(row: AgentRow, onlyProcessIsLive: boolean): string {
 /**
  * Switching files under a busy agent breaks its work. A busy row blocks while its evidence is
  * recent, or while Orca verifies that exact agent process is still running (a long silent tool).
- * A verified exit, or a newer row that is no longer busy here, releases it.
+ * A verified exit, or a newer row that is no longer busy here, releases it. Only this checkout's
+ * rows reach liveness and probes, and each collection is walked at most once per switch.
  */
 export async function findAgentSwitchBlocker(args: BlockerArgs): Promise<string | null> {
   const now = args.now ?? Date.now
-  for (const row of args.readRows().filter((candidate) => isBusyInCheckout(candidate, args))) {
-    const verdict = await args.probeProcess(row.paneKey).catch(() => null)
-    if (verdict === 'exited') {
-      continue
-    }
-    // The probe is async; only the pane's latest row decides, judged again in full.
-    const latest = args.readRows().find((candidate) => candidate.paneKey === row.paneKey)
-    if (!latest || !isBusyInCheckout(latest, args)) {
+  const candidates = args.readRows().filter((row) => isBusyInCheckout(row, args))
+  if (candidates.length === 0) {
+    return null
+  }
+  const isLive = args.buildTerminalLiveness(candidates)
+  // Like the sidebar: a closed terminal's row no longer describes a running agent.
+  const admitted = (row: AgentSwitchRow): boolean =>
+    isBusyInCheckout(row, args) &&
+    (row.structuredHost !== undefined || row.tabId === undefined || isLive(row))
+  const probed = candidates.filter(admitted)
+  const verdicts = await Promise.all(
+    probed.map((row) => args.probeProcess(row.paneKey).catch(() => null))
+  )
+  // The probes are async; only each pane's latest row decides, judged again in full.
+  const latestByPane = new Map(args.readRows().map((row) => [row.paneKey, row]))
+  for (const [index, row] of probed.entries()) {
+    const verdict = verdicts[index]
+    const latest = latestByPane.get(row.paneKey)
+    if (verdict === 'exited' || !latest || !admitted(latest)) {
       continue
     }
     const recent = isRecent(latest, now())

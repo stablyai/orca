@@ -2,6 +2,7 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 import { gitEnvWithoutYesNoPrompt } from './command-runner/git-no-prompt-env'
+import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 /** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
@@ -10,9 +11,6 @@ export function assertValidBranchName(branch: string): void {
     throw new Error('invalid_branch_name')
   }
 }
-
-/** Git for Windows reports a file another program holds open this way, then still exits 0. */
-const UNLINK_FAILURE = /unable to unlink (?:old )?'([^']+)'/g
 
 /** Leave conflicting changes to Git; trailing -- disambiguates the branch from pathspecs. */
 export async function checkoutBranch(

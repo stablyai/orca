@@ -6,6 +6,8 @@ import { isGitWorktreeMutationInFlight } from './command-runner/git-worktree-mut
 import { resolveGitDir } from './source-control/resolve-git-dir'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from './runner'
+import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
+import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
 
 /** A switch Orca refused before touching the checkout; the message is shown to the user as-is. */
 export class BranchSwitchRefusedError extends Error {
@@ -15,11 +17,32 @@ export class BranchSwitchRefusedError extends Error {
   }
 }
 
-/** The switch landed, but files another program held open kept their old content. */
-export class BranchSwitchFilesLeftBehindError extends Error {
+/** The switch landed, but git reported a problem (files left behind, a failed hook); shown as-is. */
+export class BranchSwitchLandedWithWarningError extends Error {
   constructor(message: string) {
     super(message)
-    this.name = 'BranchSwitchFilesLeftBehindError'
+    this.name = 'BranchSwitchLandedWithWarningError'
+  }
+}
+
+function filesLeftBehindMessage(branch: string, skippedPaths: readonly string[]): string {
+  const files = skippedPaths.length === 1 ? '1 file' : `${skippedPaths.length} files`
+  const pronoun = skippedPaths.length === 1 ? 'it' : 'them'
+  return `Switched to ${branch}, but ${files} kept the old branch's content because another program has ${pronoun} open (${skippedPaths[0]}). Close that program, then discard the changes Orca shows for ${pronoun} to finish the switch.`
+}
+
+async function readCurrentBranch(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return stdout.trim() || null
+  } catch {
+    return null
   }
 }
 
@@ -94,8 +117,9 @@ async function firstHiddenSubmoduleEdit(
     }
   )
   for (const line of stdout.split('\n')) {
-    // `1 XY S<c><m><u> …`: m/u mean tracked or untracked edits inside; a commit mismatch alone
-    // is left alone, since checkout never touches a submodule's working tree.
+    // `1 XY S<c><m><u> …`: m means tracked edits inside (untracked ones are not listed here and a
+    // switch cannot lose them); a commit mismatch alone is left alone, since checkout never
+    // touches a submodule's working tree.
     const fields = line.split(' ')
     const sub = fields[2] ?? ''
     if (
@@ -179,13 +203,30 @@ export async function switchBranchGuarded(
     if (previousBranch === null) {
       return { branch, previousBranch }
     }
-    const { skippedPaths } = await deps.checkout()
+    let skippedPaths: string[]
+    try {
+      ;({ skippedPaths } = await deps.checkout())
+    } catch (error) {
+      // Git can exit non-zero after HEAD already moved (a file it could not replace, a failing
+      // post-checkout hook); that switch landed and must be recorded.
+      if ((await readCurrentBranch(worktreePath, options)) !== branch) {
+        throw error
+      }
+      deps.onSwitched?.()
+      const stderr = readGitCommandFailureStderr(error) ?? ''
+      const failed = parseCheckoutSkippedPaths(stderr)
+      const detail = (
+        stderr.trim() || (error instanceof Error ? error.message : String(error))
+      ).split('\n')[0]
+      throw new BranchSwitchLandedWithWarningError(
+        failed.length > 0
+          ? filesLeftBehindMessage(branch, failed)
+          : `Switched to ${branch}, but git reported an error: ${detail}`
+      )
+    }
     deps.onSwitched?.()
     if (skippedPaths.length > 0) {
-      const files = skippedPaths.length === 1 ? '1 file' : `${skippedPaths.length} files`
-      throw new BranchSwitchFilesLeftBehindError(
-        `Switched to ${branch}, but ${files} kept the old branch's content because another program has ${skippedPaths.length === 1 ? 'it' : 'them'} open (${skippedPaths[0]}). Close that program, then discard the changes Orca shows for ${skippedPaths.length === 1 ? 'it' : 'them'} to finish the switch.`
-      )
+      throw new BranchSwitchLandedWithWarningError(filesLeftBehindMessage(branch, skippedPaths))
     }
     return { branch, previousBranch }
   })

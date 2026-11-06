@@ -111,7 +111,12 @@ export function useMobileSourceControlRunners(params: Params) {
         const text = translate('sourceControl.runners.actionFailed', 'Source control action failed')
         setActionError(err instanceof Error ? err.message : text)
         if (options?.refreshOnError) {
-          await loadStatus({ preserveReadyOnFailure: true, force: true })
+          // Keep the reason visible: a successful reload clears the action error by default.
+          await loadStatus({
+            preserveReadyOnFailure: true,
+            force: true,
+            clearActionErrorOnSuccess: false
+          })
         }
         return false
       } finally {

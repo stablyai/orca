@@ -1,4 +1,3 @@
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -10,36 +9,76 @@ import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import { findAgentSwitchBlocker } from './branch-switch-agent-blocker'
+import { findAgentSwitchBlocker, type AgentSwitchRow } from './branch-switch-agent-blocker'
+import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type { RuntimeGitCommandHost } from './runtime-git-command-target'
 
-type ConnectedPty = { ptyId: string; connected: boolean }
+type ConnectedPty = { ptyId: string; worktreeId: string; connected: boolean }
 
 export type BranchSwitchHostSources<P extends ConnectedPty> = {
   getStore: () => RuntimeStore | null
-  readAgentRows: () => readonly AgentStatusIpcPayload[]
+  readAgentRows: () => readonly AgentSwitchRow[]
   ptys: () => Iterable<P>
   paneOf: (pty: P) => { tabId: string | null; paneKey: string | null }
   terminalHandlesOf: (ptyId: string) => readonly string[]
-  syncedTabIds: () => Iterable<string>
+  hasSyncedTab: (tabId: string) => boolean
+  /** Tab ids saved in these workspaces' sessions on any host. */
+  savedTabIds: (workspaceIds: ReadonlySet<string>) => Iterable<string>
   probeProcess: (paneKey: string) => Promise<AgentProcessVerdict | null>
   notifyBranchChanged: (repoId: string) => void
 }
 
-/** Tabs the sidebar roster admits without a live terminal: saved in a workspace session or synced here. */
-function listedTabIds(
-  sources: Pick<BranchSwitchHostSources<ConnectedPty>, 'syncedTabIds' | 'getStore'>
-): Set<string> {
-  const ids = new Set(sources.syncedTabIds())
+/** A worktree or folder workspace's directory, without scanning the catalog. */
+function workspacePath(store: RuntimeStore | null, workspaceId: string): string | undefined {
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    return store?.getFolderWorkspace?.(scope.folderWorkspaceId)?.folderPath
+  }
+  // A worktree id spells its checkout path.
+  return splitWorktreeIdForFilesystem(scope?.type === 'worktree' ? scope.worktreeId : workspaceId)
+    ?.worktreePath
+}
+
+/**
+ * The sidebar roster's admission, built once per switch from this checkout only: a tab saved in
+ * the candidates' workspace sessions or synced here, or a connected terminal of this checkout
+ * matched by pane, tab or handle.
+ */
+function buildTerminalLiveness<P extends ConnectedPty>(
+  sources: BranchSwitchHostSources<P>,
+  checkoutPath: string,
+  candidates: readonly AgentSwitchRow[]
+): (row: Pick<AgentSwitchRow, 'paneKey' | 'tabId' | 'terminalHandle'>) => boolean {
   const store = sources.getStore()
-  for (const hostId of store?.getWorkspaceSessionHostIds?.() ?? []) {
-    for (const tabs of Object.values(store?.getWorkspaceSession?.(hostId)?.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        ids.add(tab.id)
-      }
+  const paneKeys = new Set<string>()
+  const tabIds = new Set<string>()
+  const handles = new Set<string>()
+  for (const pty of sources.ptys()) {
+    const path = pty.connected ? workspacePath(store, pty.worktreeId) : undefined
+    if (path === undefined || !isPathInsideOrEqual(checkoutPath, path)) {
+      continue
+    }
+    const pane = sources.paneOf(pty)
+    if (pane.paneKey) {
+      paneKeys.add(pane.paneKey)
+    }
+    if (pane.tabId) {
+      tabIds.add(pane.tabId)
+    }
+    for (const handle of sources.terminalHandlesOf(pty.ptyId)) {
+      handles.add(handle)
     }
   }
-  return ids
+  const workspaceIds = new Set(
+    candidates.flatMap((row) => (row.worktreeId ? [row.worktreeId] : []))
+  )
+  for (const tabId of sources.savedTabIds(workspaceIds)) {
+    tabIds.add(tabId)
+  }
+  return (row) =>
+    paneKeys.has(row.paneKey) ||
+    (row.tabId !== undefined && (tabIds.has(row.tabId) || sources.hasSyncedTab(row.tabId))) ||
+    (row.terminalHandle !== undefined && handles.has(row.terminalHandle))
 }
 
 /** Host side of an in-app branch switch: the agent refusal and what a landed switch records. */
@@ -49,41 +88,12 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
   return {
     getAgentSwitchBlocker: async (checkoutPath) => {
       const store = sources.getStore()
-      // Built at most once per switch, and only if an agent in this checkout needs it.
-      let tabIds: Set<string> | null = null
       return findAgentSwitchBlocker({
         checkoutPath,
         readRows: sources.readAgentRows,
-        pathOfWorktree: (worktreeId) => {
-          const scope = parseWorkspaceKey(worktreeId)
-          return scope?.type === 'folder'
-            ? store?.getFolderWorkspace?.(scope.folderWorkspaceId)?.folderPath
-            : // A worktree id spells its checkout path, so no catalog scan is needed per switch.
-              splitWorktreeIdForFilesystem(
-                scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-              )?.worktreePath
-        },
-        // Same admission as the sidebar roster: a listed tab, or a connected terminal by pane, tab or handle.
-        hasLiveTerminal: (row) => {
-          if (row.tabId !== undefined && (tabIds ??= listedTabIds(sources)).has(row.tabId)) {
-            return true
-          }
-          for (const pty of sources.ptys()) {
-            if (!pty.connected) {
-              continue
-            }
-            const pane = sources.paneOf(pty)
-            if (
-              pane.paneKey === row.paneKey ||
-              (row.tabId !== undefined && pane.tabId === row.tabId) ||
-              (row.terminalHandle !== undefined &&
-                sources.terminalHandlesOf(pty.ptyId).includes(row.terminalHandle))
-            ) {
-              return true
-            }
-          }
-          return false
-        },
+        pathOfWorktree: (workspaceId) => workspacePath(store, workspaceId),
+        buildTerminalLiveness: (candidates) =>
+          buildTerminalLiveness(sources, checkoutPath, candidates),
         probeProcess: sources.probeProcess
       })
     },
