@@ -17,11 +17,13 @@ export abstract class RuntimeProvisionedWorkspaceAdoption extends OrcaRuntimeWit
     }
     // Parent and note-task inference resolve before adoption, as a create resolves them before checkout.
     const lineageResolution =
-      request.parentWorkspace || request.comment
+      request.parentWorkspace || request.crossStoreParent || request.comment
         ? await this.resolveLineageForWorktreeCreate(
             {
               parentWorkspace: request.parentWorkspace,
               ...(request.parentWorkspace ? { parentWorkspaceOrigin: 'manual' as const } : {}),
+              crossStoreParent: request.crossStoreParent,
+              crossStoreParentInferredFrom: request.crossStoreParentInferredFrom,
               comment: request.comment
             },
             await this.resolveRepoSelector(repoSelector)
@@ -42,10 +44,10 @@ export abstract class RuntimeProvisionedWorkspaceAdoption extends OrcaRuntimeWit
     if (!lineageResolution) {
       return adopted
     }
-    const { lineage, workspaceLineage, warnings } = this.recordCreatedWorktreeLineage(
+    const { warnings, ...recorded } = this.recordCreatedWorktreeLineage(
       adopted.worktree,
       lineageResolution
     )
-    return { ...adopted, lineage, workspaceLineage, ...(warnings.length > 0 ? { warnings } : {}) }
+    return { ...adopted, ...recorded, ...(warnings.length > 0 ? { warnings } : {}) }
   }
 }

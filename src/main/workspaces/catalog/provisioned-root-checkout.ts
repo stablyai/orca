@@ -3,6 +3,10 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { AutomationWorkspaceProvenance, GitWorktreeInfo } from '../../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -46,6 +50,8 @@ export type ProvisionedRootRequest = Pick<
 > & {
   /** The composer's parent, resolved like a create's (`folder:<id>` or `worktree:<id>`). */
   parentWorkspace?: string
+  crossStoreParent?: CrossStoreParentRef
+  crossStoreParentInferredFrom?: CrossStoreInferredSource
   expectedRefHead?: string
   automationProvenance?: AutomationWorkspaceProvenance
 }
