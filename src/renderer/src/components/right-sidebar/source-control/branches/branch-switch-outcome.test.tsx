@@ -29,7 +29,7 @@ it('keeps a landed warning over an older Fetch failure, across navigation, until
     const record = useBranchSwitchOutcome(setErrors, sequences)
     const { runRemoteAction } = useSourceControlRemoteActionRunner({
       activeRepoTarget: { kind: 'local' },
-      activeWorktree: undefined,
+      activeWorktree: null,
       activeWorktreeId: active,
       branchName: 'main',
       effectiveBaseRef: null,

@@ -12,23 +12,26 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('./branch-picker-rows', async (original) => {
   const actual = await original<typeof Rows>()
   class ObservedIndex extends Map<string, BranchWorkspace> {
-    override *keys() {
+    override *keys(): MapIterator<string> {
       for (const key of super.keys()) {
         counts.iterations++
         yield key
       }
+      return undefined
     }
-    override *values() {
+    override *values(): MapIterator<BranchWorkspace> {
       for (const value of super.values()) {
         counts.iterations++
         yield value
       }
+      return undefined
     }
-    override *entries() {
+    override *entries(): MapIterator<[string, BranchWorkspace]> {
       for (const entry of super.entries()) {
         counts.iterations++
         yield entry
       }
+      return undefined
     }
     override [Symbol.iterator]() {
       return this.entries()
@@ -98,6 +101,7 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
   vi.clearAllMocks()
   counts.renders = counts.builds = counts.iterations = 0
   let workspaceVisits = 0
+  let branchVisits = 0
   const makeWorkspaces = () =>
     new Map(
       Array.from({ length: size }, (_, n): [string, BranchWorkspace] => [
@@ -125,7 +129,15 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     .mockResolvedValueOnce({
       current: 'branch-0',
       branches,
-      worktreePaths: Object.fromEntries(branches.map((name, n) => [name, `/workspace/${n}`]))
+      worktreePaths: new Proxy(
+        Object.fromEntries(branches.map((name, n) => [name, `/workspace/${n}`])),
+        {
+          get(target, key) {
+            branchVisits++
+            return Reflect.get(target, key)
+          }
+        }
+      )
     })
   const props: BranchPickerProps = {
     branch: 'branch-0',
@@ -150,6 +162,7 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     await act(async () => click('[data-open]'))
     expect(counts.builds).toBe(1)
     expect(workspaceVisits).toBe(size)
+    expect(branchVisits).toBe(size)
     // The open window shows 50 local matches, regardless of catalog size.
     expect(container.querySelectorAll('[data-row]')).toHaveLength(50)
     expect(container.textContent).toContain('Keep typing')
@@ -163,6 +176,7 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     await act(async () => root.render(<BranchPicker {...props} workspaces={next} />))
     expect(counts.builds).toBe(2)
     expect(workspaceVisits).toBe(size * 2)
+    expect(branchVisits).toBe(size * 2)
     counts.renders = 0
     await act(async () => root.render(<BranchPicker {...props} workspaces={next} />))
     expect(counts.renders).toBe(0)
@@ -207,10 +221,12 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     )
     expect(container.textContent).not.toContain('origin/stale')
     expect(counts.iterations).toBe(0)
+    expect(branchVisits).toBe(size * 2)
     await act(async () => click('[data-close]'))
     await act(async () => root.render(<BranchPicker {...props} workspaces={makeWorkspaces()} />))
     expect(counts.builds).toBe(2)
     expect(workspaceVisits).toBe(size * 2)
+    expect(branchVisits).toBe(size * 2)
   } finally {
     await act(async () => root.unmount())
     vi.useRealTimers()
