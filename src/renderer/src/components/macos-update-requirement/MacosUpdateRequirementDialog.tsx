@@ -60,7 +60,7 @@ export function MacosUpdateRequirementDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle size="display" className="pr-6 text-balance">
+          <DialogTitle size="display" className="mr-6">
             {translate('macosUpdateRequirement.title', 'Orca updates now need macOS {{macos}}', {
               macos
             })}
