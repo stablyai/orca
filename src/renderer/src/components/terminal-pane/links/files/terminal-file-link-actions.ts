@@ -2,13 +2,13 @@ import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/browser/navigation/http-link-destinations'
+import { openDetectedFilePath } from './terminal-file-open-routing'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
   shouldOpenTerminalFileWithSystemDefault,
   terminalLinkWslDistro
 } from '../../host-files/terminal-file-path-mapping'
-import { openDetectedFilePath } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
 import {

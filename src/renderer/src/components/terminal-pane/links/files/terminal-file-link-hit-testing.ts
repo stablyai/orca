@@ -6,8 +6,8 @@ import {
 import type { IBufferLine } from '@xterm/xterm'
 import { findTerminalFileLinksAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { terminalLogicalLinkHasOscLink } from '../../../../../../shared/terminal/links/terminal-osc-link-cells'
-import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import type { TerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
 import {

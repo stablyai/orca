@@ -23,8 +23,8 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
 }))
 
 import { buildFileLinkActions } from './terminal-file-link-actions'
-import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import { createNativeChatFileLinkExistence } from '../../../native-chat/native-chat-file-link-existence'
 import { extractTerminalFileLinks } from '../../../../../../shared/terminal/links/terminal-links'
 
