@@ -47,6 +47,17 @@ function lockEntrySource(
             : lockEntry.source.kind === 'marketplace'
               ? pluginSourceLabel(lockEntry.source.plugin)
               : `bundled:${lockEntry.source.bundleId}`,
+      ...(lockEntry.source.kind === 'git'
+        ? { url: lockEntry.source.url }
+        : lockEntry.source.kind === 'marketplace'
+          ? {
+              url: lockEntry.source.plugin.url,
+              ...(lockEntry.source.plugin.path ? { path: lockEntry.source.plugin.path } : {}),
+              ...(lockEntry.authorRepository
+                ? { authorRepository: lockEntry.authorRepository }
+                : {})
+            }
+          : {}),
       resolvedCommit: lockEntry.resolvedCommit,
       contentHash: lockEntry.contentHash,
       ...(lockEntry.source.kind === 'marketplace'
