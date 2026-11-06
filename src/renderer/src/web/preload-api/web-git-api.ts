@@ -10,6 +10,7 @@ import {
   resolveRuntimeFilePath,
   resolveRuntimeWorktreeByPath
 } from './web-runtime-worktree-catalog'
+import { resolveWorktreeForParentAction } from './web-git-submodule-guard'
 
 export const webGitStatusAbortControllers = new Map<string, AbortController>()
 
@@ -38,13 +39,6 @@ export async function callAbortableRuntimeStatus<TResult>(
     if (webGitStatusAbortControllers.get(requestToken) === controller) {
       webGitStatusAbortControllers.delete(requestToken)
     }
-  }
-}
-
-// The runtime route cannot target a submodule yet; running on the parent repository would be wrong.
-function refuseSubmoduleAction(submodulePath: string | undefined): void {
-  if (submodulePath !== undefined) {
-    throw new Error('Submodule actions are not available on this host yet')
   }
 }
 
@@ -165,8 +159,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     // Submodule repositories are served by this machine's main process only.
     submoduleRepos: async () => [],
     fetch: async ({ worktreePath, pushTarget, submodulePath }) => {
-      refuseSubmoduleAction(submodulePath)
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      const worktree = await resolveWorktreeForParentAction(worktreePath, submodulePath)
       await callRuntimeResult('git.fetch', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
@@ -184,8 +177,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       )
     },
     push: async ({ worktreePath, publish, pushTarget, submodulePath }) => {
-      refuseSubmoduleAction(submodulePath)
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      const worktree = await resolveWorktreeForParentAction(worktreePath, submodulePath)
       await callRuntimeResult('git.push', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         publish,
@@ -193,8 +185,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     },
     pull: async ({ worktreePath, pushTarget, submodulePath }) => {
-      refuseSubmoduleAction(submodulePath)
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      const worktree = await resolveWorktreeForParentAction(worktreePath, submodulePath)
       await callRuntimeResult('git.pull', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
