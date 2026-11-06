@@ -21123,6 +21123,27 @@
       "loading": "Submodul-Änderungen werden geladen…",
       "empty": "Keine Änderungen im Submodul",
       "loadFailed": "Submodul-Änderungen konnten nicht geladen werden"
+    },
+    "branchPicker": {
+      "switch": "Branch wechseln: {{branch}}",
+      "search": "Branches suchen",
+      "more": "Weiter tippen, um mehr Branches zu finden.",
+      "recover": "Zu {{branch}} wechseln",
+      "create": "Branch {{name}} aus {{branch}} erstellen",
+      "open": "Arbeitsbereich öffnen",
+      "occupied": "Ausgecheckt in {{path}}",
+      "remote": "remote",
+      "statusFailed": "Orca konnte die Änderungen in diesem Checkout nicht lesen. Aktualisiere die Quellcodeverwaltung, bevor du wechselst.",
+      "statusUnknown": "Lies die Änderungen in diesem Checkout, bevor du wechselst.",
+      "conflict": "Schließe den {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
+      "dirty_one": "Committe oder verwirf {{count}} geänderte Datei, bevor du den Branch wechselst.",
+      "dirty_other": "Committe oder verwirf {{count}} geänderte Dateien, bevor du den Branch wechselst.",
+      "agentHint": "Ein Agent hat hier zuletzt Arbeit gemeldet. Orca prüft beim Wechseln, ob er noch arbeitet.",
+      "listFailed": "Orca konnte die lokalen Branches nicht auflisten. Öffne die Auswahl erneut.",
+      "discoveryFailed": "Orca konnte keine Remote-Branches finden. Du kannst trotzdem zu lokalen Branches wechseln oder einen Branch erstellen.",
+      "switchFailed": "Orca konnte den Branch nicht wechseln. Versuche es erneut.",
+      "thisComputer": "diesem Computer",
+      "updateHost": "Aktualisiere Orca auf {{host}}, um von hier aus Branches zu wechseln."
     }
   },
   "agentsSidebarIntro": {
