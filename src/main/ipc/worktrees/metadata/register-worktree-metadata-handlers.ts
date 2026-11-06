@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { stripOrcaProvenanceMetaUpdates } from '../../../worktree-removal-safety'
+import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { notifyWorktreesChanged } from '../../worktree-remote'
 import { parseWorktreeId } from '../../worktree-logic'
@@ -12,7 +12,7 @@ import {
 } from '../../../persistence/worktree-sort-order-write'
 import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
-import { isRemovedFolderWorkspaceInstance } from '../../../folder-workspace-meta-presence'
+import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -88,7 +88,9 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     await runtime.hydrateInferredWorktreeLineage()
     return {
       lineage: store.getAllWorktreeLineage(),
-      workspaceLineage: store.getAllWorkspaceLineage()
+      workspaceLineage: store.getAllWorkspaceLineage(),
+      crossStoreLineage: store.getAllCrossStoreWorkspaceLineage(),
+      installationId: await runtime.readStoreInstallationId()
     }
   })
 

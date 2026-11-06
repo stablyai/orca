@@ -1,5 +1,5 @@
 // SIGKILL skips durable shutdown and instance-lock release; preserve owners that outlast the stop wait.
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,

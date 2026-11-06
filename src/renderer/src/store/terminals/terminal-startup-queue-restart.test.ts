@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
 

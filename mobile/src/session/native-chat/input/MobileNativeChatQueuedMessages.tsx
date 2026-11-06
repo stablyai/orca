@@ -11,7 +11,7 @@ import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
-import type { MobileQueuedMessageInlineEditor } from '../../use-mobile-structured-queued-edit'
+import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
 import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
@@ -189,7 +189,7 @@ export function MobileNativeChatQueuedMessages({
         {expanded ? (
           <MobileQueuedMessageScrollList
             messageIds={cards.map((card) => card.messageId)}
-            newestIsPersons={!cards.at(-1)?.attribution}
+            newestIsPersons={!cards.at(-1)?.from}
             inlineEditorActive={editor !== undefined}
           >
             {(reveal, drag) => {

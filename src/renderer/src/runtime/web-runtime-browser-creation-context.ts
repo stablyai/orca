@@ -1,5 +1,5 @@
 import { subscribeLinkOpenRequests } from '../lib/link-open-request'
-import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
+import type { BrowserClientHostPlacementPreference } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
 import { createBrowserUuid } from '../lib/browser-uuid'
@@ -23,7 +23,7 @@ import {
   type StagedWebRuntimeBrowserTab
 } from './web-runtime-browser-tab-staging'
 import { throwIfE2eWebRuntimeBrowserCapabilityUnavailable } from './web-runtime-browser-creation-e2e-fault'
-import { expectsBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
+import { expectsBrowserClientHosting } from '../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,

@@ -1,4 +1,4 @@
-import { pruneGroupLayoutLeaves } from '../workspace-session-terminal-tab-close'
+import { pruneGroupLayoutLeaves } from '../workspace-session/workspace-session-terminal-tab-close'
 import { filterRecord } from './stored-record-fields'
 import type { CommandOf, LayoutCommandResult } from './workspace-layout-command-types'
 import type { WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'

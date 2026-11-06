@@ -32,14 +32,14 @@ import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
-import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
+import type * as SidebarFeedbackDialogModule from './sidebar-feedback/SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
 const loadSidebarFeedbackDialog = (): Promise<typeof SidebarFeedbackDialogModule> =>
-  import('./SidebarFeedbackDialog')
+  import('./sidebar-feedback/SidebarFeedbackDialog')
 
 const SidebarFeedbackDialog = lazyWithRetry(
   () => loadSidebarFeedbackDialog().then((module) => ({ default: module.SidebarFeedbackDialog })),

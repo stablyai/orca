@@ -10,6 +10,7 @@ type RuntimeFileCommandName =
   | 'resolveTerminalPath'
   | 'readTerminalArtifactFile'
   | 'readTerminalArtifactPreview'
+  | 'readTerminalArtifactChunk'
   | 'writeTerminalArtifactFile'
   | 'revokeTerminalFileGrantsForClient'
   | 'readFileExplorerDir'
@@ -20,6 +21,7 @@ type RuntimeFileCommandName =
   | 'readDocPreviewFile'
   | 'readDocPreviewChunk'
   | 'writeFileExplorerFile'
+  | 'formatFileExplorerText'
   | 'writeFileExplorerFileBase64'
   | 'writeFileExplorerFileBase64Chunk'
   | 'createFileExplorerFile'
@@ -53,6 +55,7 @@ export function installRuntimeFileCommandSurface(
     resolveTerminalPath: commands.resolveTerminalPath.bind(commands),
     readTerminalArtifactFile: commands.readTerminalArtifactFile.bind(commands),
     readTerminalArtifactPreview: commands.readTerminalArtifactPreview.bind(commands),
+    readTerminalArtifactChunk: commands.readTerminalArtifactChunk.bind(commands),
     writeTerminalArtifactFile: commands.writeTerminalArtifactFile.bind(commands),
     revokeTerminalFileGrantsForClient: commands.revokeTerminalFileGrantsForClient.bind(commands),
     readFileExplorerDir: commands.readFileExplorerDir.bind(commands),
@@ -63,6 +66,7 @@ export function installRuntimeFileCommandSurface(
     readDocPreviewFile: commands.readDocPreviewFile.bind(commands),
     readDocPreviewChunk: commands.readDocPreviewChunk.bind(commands),
     writeFileExplorerFile: commands.writeFileExplorerFile.bind(commands),
+    formatFileExplorerText: commands.formatFileExplorerText.bind(commands),
     writeFileExplorerFileBase64: commands.writeFileExplorerFileBase64.bind(commands),
     writeFileExplorerFileBase64Chunk: commands.writeFileExplorerFileBase64Chunk.bind(commands),
     createFileExplorerFile: commands.createFileExplorerFile.bind(commands),

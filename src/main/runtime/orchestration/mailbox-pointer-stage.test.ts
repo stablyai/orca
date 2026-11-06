@@ -7,7 +7,7 @@ import {
   WRITE_ACCEPTED,
   writeRefused,
   type WriteSettlement
-} from '../../../shared/pty-write-settlement'
+} from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 const TERMINAL = {
   ptyId: 'pty-1',

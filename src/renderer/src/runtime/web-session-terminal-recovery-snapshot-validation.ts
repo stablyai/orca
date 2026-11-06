@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 
 // Wire-compat Rule 3: receive-side validation pins only recovery/mirror coordinates. Keep label enums open and additive fields at every depth untouched.
 const identity = z.string().regex(/\S/)

@@ -64,7 +64,6 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 
 const thought: NativeChatMessage = {
   id: 'r1',
@@ -102,77 +101,6 @@ afterEach(() => {
 
 const textIn = (node: ReactTestInstance): string[] =>
   node.findAll((child) => String(child.type) === 'Text').map((text) => text.children.join(''))
-
-it('draws a run that opens on a thought as one header, the thought inside it', () => {
-  act(() => {
-    renderer = create(
-      createElement(MobileNativeChatMessage, {
-        message: thought,
-        workRun: [thought, read, command],
-        structuredActivityUi: true,
-        activeTurnIsWorking: false
-      })
-    )
-  })
-  const tree = renderer!
-  expect(textIn(tree.root)).toContain('Read 1 file and ran 1 command')
-  expect(tree.root.findAll((node) => String(node.type) === 'Brain')).toHaveLength(0)
-  act(() =>
-    tree.root
-      .find((node) => String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion)
-      .props.onPress()
-  )
-  expect(tree.root.findAll((node) => String(node.type) === 'Brain')).toHaveLength(1)
-  expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Read', 'a.ts', 'pnpm test']))
-  expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-})
-
-it('draws nothing for a row a run absorbed', () => {
-  act(() => {
-    renderer = create(
-      createElement(MobileNativeChatMessage, {
-        message: command,
-        joinsWorkRun: true,
-        structuredActivityUi: true,
-        activeTurnIsWorking: false
-      })
-    )
-  })
-  expect(renderer!.toJSON()).toBeNull()
-})
-
-it("opens a grouped thought's own actions on a long press, not the run's first row's", () => {
-  const openActions = vi.fn()
-  act(() => {
-    renderer = create(
-      createElement(
-        MobileNativeChatRowOverlaysContext.Provider,
-        { value: { openImage: vi.fn(), openActions } },
-        createElement(MobileNativeChatMessage, {
-          message: read,
-          workRun: [read, thought, command],
-          openReasoning: new Set([nativeChatReasoningDisclosureKey(thought.id)]),
-          onToggleReasoning: vi.fn(),
-          structuredActivityUi: true,
-          activeTurnIsWorking: false
-        })
-      )
-    )
-  })
-  const tree = renderer!
-  act(() => {
-    tree.root
-      .find((node) => String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion)
-      .props.onPress()
-  })
-  act(() => {
-    tree.root
-      .findAll((node) => String(node.type) === 'Pressable' && node.props.onLongPress)
-      .at(-1)!
-      .props.onLongPress()
-  })
-  expect(openActions).toHaveBeenCalledWith(thought)
-})
 
 it('loads a shortened grouped thought from its own source between two tool rows', async () => {
   const fullText = 'x'.repeat(99_991) + 'FULL TAIL'

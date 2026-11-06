@@ -11,9 +11,9 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   getGitHubWorkItemWorkspaceSeed,
-  getGitLabWorkItemWorkspaceSeed,
-  getTaskPageRepoSourceContext
+  getGitLabWorkItemWorkspaceSeed
 } from './task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
 type TaskPageWorkspaceActionsInput = Pick<TaskPageSearchActionsModel, 'repos' | 'openModal'>
 
 export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActionsInput>(

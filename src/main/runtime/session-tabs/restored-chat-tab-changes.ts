@@ -5,7 +5,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { retireStructuredAgentSessionTabFrom } from '../agent-session/structured-agent-session-tab-retirement'
 import { chatTabChangesMatchingIndex } from '../agent-session/structured-agent-session-tab-index-seed'
 import { chatTabId, type ChatTabChange } from '../agent-session/agent-session-tab-layout'
-import { structuredSessionTabRetired } from '../structured-worker-custody'
+import { structuredSessionTabRetired } from '../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 
 type ChatTabOpen = Extract<ChatTabChange, { open: unknown }>['open']
 

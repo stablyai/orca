@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { haveSameDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
@@ -51,6 +51,10 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     ensureNativeDetectedAgents: (): Promise<TuiAgent[]> => {
       nativeInventoryRequested = true
       return actions.ensureDetectedAgents(undefined, true)
+    },
+    refreshNativeDetectedAgents: (): Promise<TuiAgent[]> => {
+      nativeInventoryRequested = true
+      return refreshLocalAgentInventory(set, get, lifecycle, undefined, false, {}, true)
     },
     ensureAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(worktreeId, false, true),

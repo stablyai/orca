@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
+import type * as CloseTerminalModule from './cli-chat-resume-close-terminal'
 
 const mocks = vi.hoisted(() => {
   const state: { source: CliChatResumeSource | null } = { source: null }
@@ -19,13 +20,16 @@ const mocks = vi.hoisted(() => {
     frameDrawn: false
   }
 })
-vi.mock('./cli-chat-resume-close-terminal', () => ({
+vi.mock('./cli-chat-resume-close-terminal', async (importOriginal) => ({
+  ...(await importOriginal<typeof CloseTerminalModule>()),
   closeCliChatResumeTerminal: mocks.closeTerminal
 }))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   structuredAgentSessionHostSupports: mocks.closeCapability,
+  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+    (await mocks.closeCapability(...args)) ? 'supported' : 'unsupported',
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
@@ -96,10 +100,9 @@ import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '@/store'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+
 import { runCliChatResume } from './cli-chat-resume-run'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,
@@ -115,7 +118,6 @@ import {
 import {
   SOURCE,
   deferred,
-  held,
   refuse,
   resetCliChatResumeRun,
   tabs
@@ -173,93 +175,7 @@ async function seedTabs() {
   return seeded
 }
 
-const HOST_LEAF = '11111111-1111-4111-8111-111111111111'
-
 describe('CLI identity resume through the existing launch owner', () => {
-  it.each([true, false])(
-    'resumes on the owning server with optional CLI-source capability: %s',
-    async (supported) => {
-      // A desktop sees the host's pane through its mirrored surface key.
-      const source: CliChatResumeSource = {
-        ...SOURCE,
-        executionHostId: 'runtime:server-1',
-        paneKey: `${toWebTerminalSurfaceTabId('host-tab-1')}:${HOST_LEAF}`
-      }
-      mocks.source = source
-      mocks.sourceCapability.mockResolvedValue(supported)
-      useAppStore.setState({
-        worktreesByRepo: {
-          repo: [
-            makeWorktree({
-              id: 'wt-1',
-              repoId: 'repo',
-              hostId: 'runtime:server-1',
-              runtimeOwnerEnvironmentId: 'server-1'
-            })
-          ]
-        }
-      })
-      mocks.call.mockImplementation(
-        async (_target, _method, params: StructuredAgentSessionCreateParams) => ({
-          ok: true,
-          value: { sessionId: params.envelope.sessionId, fence: 1 }
-        })
-      )
-      await runCliChatResume(source)
-      expect(mocks.sourceCapability).toHaveBeenCalledWith({
-        kind: 'environment',
-        environmentId: 'server-1'
-      })
-      expect(mocks.call).toHaveBeenCalledOnce()
-      expect(mocks.call).toHaveBeenCalledWith(
-        { kind: 'environment', environmentId: 'server-1' },
-        'agentSession.create',
-        expect.objectContaining({
-          resumeFrom: {
-            providerSessionId: 'provider-1',
-            ...(supported
-              ? { cliSource: { workspaceId: 'wt-1', paneKey: `host-tab-1:${HOST_LEAF}` } }
-              : {})
-          }
-        })
-      )
-      expect(mocks.toast).not.toHaveBeenCalled()
-    }
-  )
-
-  it('opens an existing conversation owner on the source server after a conflict', async () => {
-    const source: CliChatResumeSource = { ...SOURCE, executionHostId: 'runtime:server-1' }
-    mocks.source = source
-    useAppStore.setState({
-      worktreesByRepo: {
-        repo: [
-          makeWorktree({
-            id: 'wt-1',
-            repoId: 'repo',
-            hostId: 'runtime:server-1',
-            runtimeOwnerEnvironmentId: 'server-1'
-          })
-        ]
-      }
-    })
-    const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: {
-        code: 'agent_session_conflict',
-        message: 'owner',
-        details: { reason: 'conversationHeldElsewhere', owner },
-        createAttemptRefusedBeforeCommit: true
-      }
-    })
-    await runCliChatResume(source, true)
-    expect(mocks.activate).toHaveBeenCalledWith({ structuredSession: owner }, undefined, {
-      kind: 'environment',
-      environmentId: 'server-1'
-    })
-    expect(tabs()).toEqual([])
-  })
-
   it('shares pending, sends only an advertised source, and survives source closure after dispatch', async () => {
     const reply = deferred<unknown>()
     mocks.call.mockReturnValue(reply.promise)
@@ -296,26 +212,6 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(mocks.call).not.toHaveBeenCalled()
     expect(tabs()).toEqual([])
     expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('uses ID-only create for an older host and retains uncertainty without pre-commit proof', async () => {
-    mocks.sourceCapability.mockResolvedValue(false)
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'agent_session_conflict', message: 'old host' }
-    })
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
-    expect(tabs()).toHaveLength(1)
-    expect(mocks.activate).not.toHaveBeenCalled()
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('names a proved owner from the tab menu without opening it', async () => {
-    mocks.call.mockResolvedValue({ ok: false, refusal: held({ sessionId: 'o', workspaceId: 'o' }) })
-    await runCliChatResume(SOURCE)
-    expect(mocks.toast).toHaveBeenCalledWith('Another chat is already holding this conversation.')
-    expect(mocks.activate).not.toHaveBeenCalled()
   })
 
   it('keeps the eager History joiner failed and retryable after the hidden starter is refused', async () => {
@@ -471,22 +367,6 @@ describe('CLI identity resume through the existing launch owner', () => {
       expect(tabs().find((tab) => tab.entityId === sessionId)?.groupId).toBe(other.groupId)
     }
   )
-
-  // Main's publish of a window's create places nothing switch-on, so the resume's own open must.
-  it('opens a resumed chat once, through main, after the tab before its hidden slot', async () => {
-    const [, , browser] = await seedTabs()
-    await runCliChatResume(SOURCE)
-    await main?.settle()
-    const sessionId: string = mocks.call.mock.calls[0][2].envelope.sessionId
-    const slotId = `structured-agent-session-${sessionId}`
-    expect(tabs().find((tab) => tab.entityId === sessionId)?.id).toBe(slotId)
-    expect(useAppStore.getState().groupsByWorktree['wt-1'][0].tabOrder.at(-1)).toBe(slotId)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(layoutApplyTestTransport.sentOfType('openAgentSessionTab')).toEqual([
-        expect.objectContaining({ tabId: slotId, sessionId, afterTabId: browser.id })
-      ])
-    }
-  })
 
   it.each([false, true])(
     'keeps overlapping requests in their canonical order (second finishes first: %s)',

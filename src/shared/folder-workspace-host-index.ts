@@ -6,7 +6,7 @@ import type {
   FolderHostRepo,
   FolderHostWorkspace,
   QualifiedFolderWorkspaceResult
-} from './folder-workspace-execution-host'
+} from './folder-workspaces/folder-workspace-execution-host'
 import {
   classifyFolderScope,
   folderScopeRepo,

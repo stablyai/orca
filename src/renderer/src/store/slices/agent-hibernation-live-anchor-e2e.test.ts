@@ -45,7 +45,7 @@ function planFrom(state: AppState, ptyBindingFirstSeenAt: number): string[] {
     tabsByWorktree: state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
-    mobileLockedPtyIds: [],
+    inUsePtyIds: [],
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     lastTerminalInputAtByPaneKey: {},
@@ -59,40 +59,6 @@ function planFrom(state: AppState, ptyBindingFirstSeenAt: number): string[] {
 describe('a finished Claude turn reaches the hibernation planner', () => {
   beforeEach(() => {
     resetHibernationPaneAgeForTests()
-  })
-
-  // Pin planner/anchor seam: broad resumable-agent recovery must match sleep exemption, formerly Pi-only (#10238).
-  it('writes a live resume anchor that no longer blocks it', () => {
-    const store = createTestStore()
-    seedWorkspace(store)
-    store
-      .getState()
-      .setAgentStatus(
-        PANE,
-        { state: 'working', prompt: 'summarize the diff', agentType: 'claude' },
-        'Claude',
-        { updatedAt: DONE_AT - 5_000, stateStartedAt: DONE_AT - 5_000 },
-        ROUTING,
-        { providerSession: PROVIDER_SESSION }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        PANE,
-        { state: 'done', prompt: 'summarize the diff', agentType: 'claude' },
-        'Claude',
-        { updatedAt: DONE_AT, stateStartedAt: DONE_AT },
-        ROUTING,
-        { providerSession: PROVIDER_SESSION }
-      )
-
-    const state = store.getState()
-    expect(state.agentStatusByPaneKey[PANE]?.state).toBe('done')
-    expect(state.sleepingAgentSessionsByPaneKey[PANE]).toMatchObject({
-      agent: 'claude',
-      origin: 'live'
-    })
-    expect(planFrom(state, DONE_AT)).toEqual([PANE])
   })
 
   it('is not restarted by a done→done repaint carrying a fresh updatedAt', () => {

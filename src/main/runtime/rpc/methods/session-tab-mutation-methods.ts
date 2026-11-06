@@ -23,13 +23,16 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     params: ActivateTab,
     handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
-      const inventory = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+      const inventory = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+        includeAgentSenders: false
+      })
       const tabId = resolveChatTabActivation(inventory.tabs, params.tabId)
       if (clientKind) {
         const visible = projectSessionTabsForClient(inventory, clientKind, clientCapabilities)
         assertProjectedSessionTabVisible(visible, tabId)
       }
       const result = await runtime.activateMobileSessionTab(params.worktree, tabId, params.leafId, {
+        includeAgentSenders: clientKind !== 'mobile',
         notifyClients: params.notifyClients !== false,
         clientNavigationId: pairedDeviceId,
         ...(params.intent ? { intent: params.intent } : {}),
@@ -53,7 +56,9 @@ export const SESSION_TAB_MUTATION_METHODS = [
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
       if (clientKind) {
-        const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+        const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+          includeAgentSenders: false
+        })
         const projected = projectSessionTabsForClient(raw, clientKind, clientCapabilities)
         translated = translateProjectedSessionTabMove(raw, projected, params)
       }
@@ -175,7 +180,9 @@ async function resolveMovedPanePlacement(
   if (!clientKind || index === undefined) {
     return { targetGroupId, ...(index !== undefined ? { index } : {}) }
   }
-  const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+  const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+    includeAgentSenders: false
+  })
   try {
     // The new tab does not exist yet, so its source tab stands in for it; only the index is read.
     const translated = translateProjectedSessionTabMove(
@@ -211,7 +218,7 @@ async function assertVisibleMutationTab(
     return
   }
   const visible = projectSessionTabsForClient(
-    await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
+    await runtime.listMobileSessionTabs(worktree, pairedDeviceId, { includeAgentSenders: false }),
     clientKind,
     clientCapabilities
   )

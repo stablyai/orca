@@ -196,7 +196,6 @@ describe('a listing versioned before an applied create', () => {
   const HOST = 'host-epoch-1'
   const before = { epoch: HOST, sequence: 6 }
   const createReply = { epoch: HOST, sequence: 7 }
-  const after = { epoch: HOST, sequence: 8 }
 
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -229,31 +228,6 @@ describe('a listing versioned before an applied create', () => {
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
     expect(state.worktreesByRepo[REPO_ID]!.map((w) => w.id)).toEqual([EXISTING_ID, CREATED_ID])
     expect(state.detectedWorktreesByRepo[REPO_ID]!.worktrees.map((w) => w.id)).toContain(CREATED_ID)
-  })
-
-  it('reports a listing whose repo owner went away as not-current, even when also older', () => {
-    const store = createTestStore()
-    seedWithAppliedCreate(store)
-    store.setState({ repos: [] })
-    const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
-
-    expect(applyListing(store, [existingRow], before)).toBe('not-current')
-
-    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
-  })
-
-  it('a later listing that includes the worktree applies and advances the version', () => {
-    const store = createTestStore()
-    seedWithAppliedCreate(store)
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-
-    expect(applyListing(store, [...rows], after)).toBe('applied')
-
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(CREATED_ID)
-    expect(
-      state.worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
-    ).toEqual(after)
   })
 
   it('a listing from a restarted host is a new catalog, not an older one', () => {

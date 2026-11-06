@@ -6,7 +6,7 @@ import {
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { moveNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-move'
-import type { NativeChatComposerDraftChange } from '@/components/native-chat/native-chat-composer-draft-store'
+import type { NativeChatComposerDraftChange } from '@/components/native-chat/native-chat-composer-draft-storage'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
 import type { StructuredLaunchState } from './structured-agent-session-launch-registry'

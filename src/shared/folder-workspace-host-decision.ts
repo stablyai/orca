@@ -17,7 +17,7 @@ import type {
   FolderWorkspaceHost,
   QualifiedFolderHostState,
   QualifiedFolderWorkspaceResult
-} from './folder-workspace-execution-host'
+} from './folder-workspaces/folder-workspace-execution-host'
 
 /** Resolve legacy connectionId and unified SSH ownership in both candidate filters and the resolver; raw reads can discard SSH-only rows early.
  * Non-SSH hosts retain raw connectionId for runtime-nested targets, which require the environment to dial. */

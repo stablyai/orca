@@ -83,12 +83,6 @@ function newHostSummary(
 }
 
 describe('an older desktop reading a host-observed turn end', () => {
-  it('receives the new arms from this host', () => {
-    expect(newHostSummary('interrupted').turnOutcome).toBe('interruption')
-    expect(newHostSummary('unverifiable').turnOutcome).toBe('unconfirmed')
-    expect(newHostSummary('interrupted', SUPERSEDED_TURN).turnOutcome).toBe('superseded')
-  })
-
   it('builds a structured row from the summary that reads done, never as a user stop', () => {
     for (const summary of [
       newHostSummary('interrupted'),

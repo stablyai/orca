@@ -49,7 +49,7 @@ describe('a pinned parent with an unpinned child', () => {
     )
     return sections.map((section) => ({
       key: section.key,
-      rows: section.data.map((row) => [row.worktreeId, row.lineageDepth])
+      rows: section.data.map((item) => [item.row.worktreeId, item.view.lineageDepth])
     }))
   }
 
@@ -95,7 +95,7 @@ it('follows a pin through a child hidden by search, like desktop', () => {
   expect(
     sections.map((section) => ({
       key: section.key,
-      rows: section.data.map((row) => row.worktreeId)
+      rows: section.data.map((item) => item.row.worktreeId)
     }))
   ).toEqual([{ key: 'pinned', rows: ['root', 'leaf'] }])
 })

@@ -7,16 +7,19 @@ import {
   openAuthorityRuntime,
   reveal,
   inWorkspace
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import type { Repo } from '../../src/shared/repo-types'
-import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
-import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
+import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan'
+import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import { StructuredWorkspaceUnavailable } from '../../src/main/runtime/session-tabs/structured-workspace-authority'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Project } from '../../src/shared/project-types'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../../src/main/wsl'
+import {
+  _resetWslCachesForTests,
+  _setWslCachesForTests
+} from '../../src/main/wsl/discovery/distro-catalog'
 import { normalizeRuntimePathForComparison } from '../../src/shared/cross-platform-path'
 import * as folderHostDecision from '../../src/shared/folder-workspace-host-decision'
 

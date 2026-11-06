@@ -9,7 +9,7 @@ import {
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   seedWslLinkedWorktreeGitRoutingForTests
-} from '../wsl-linked-worktree-git-routing'
+} from './wsl-linked-worktree-git-routing'
 import { bulkPathspecCommands } from '../source-control/git-pathspec'
 import {
   commandLineLength,

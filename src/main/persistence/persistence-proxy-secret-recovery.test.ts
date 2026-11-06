@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, rmSync, mkdtempSync, writeFileSync } from 'node:
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const testState = { dir: '' }
 

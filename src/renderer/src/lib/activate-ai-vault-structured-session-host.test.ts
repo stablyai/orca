@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 const mocks = vi.hoisted(() => {
   const tabs: Record<string, Tab[]> = {}

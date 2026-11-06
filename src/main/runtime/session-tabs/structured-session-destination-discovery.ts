@@ -11,23 +11,26 @@ import {
 } from '../../../shared/execution-host'
 import { createFolderWorkspaceHostIndex } from '../../../shared/folder-workspace-host-index'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   composeWorktreeId,
   getRepoMainWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import { areWorktreePathsEqual, canonicalWorktreePath } from '../../git/worktree-path-comparison'
+import {
+  areWorktreePathsEqual,
+  canonicalWorktreePath
+} from '../../git/worktrees/catalog/worktree-path-comparison'
 import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
-import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { resolveLocalProjectRuntimesForRepos } from '../../local-project-runtime-resolution'
-import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../project-runtime-git-options'
+import { resolveLocalProjectRuntimesForRepos } from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../workspaces/execution-host/project-runtime-git-options'
 import { StructuredWorkspaceUnavailable } from './structured-workspace-authority'
 
 type Target = {

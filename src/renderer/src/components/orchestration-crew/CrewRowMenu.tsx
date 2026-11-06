@@ -43,7 +43,11 @@ export function CrewRowMenu({
         onPointerDownOutside={menu.onPointerDownOutside}
         onCloseAutoFocus={menu.onCloseAutoFocus}
       >
-        <DropdownMenuItem disabled={!canMention || !row.sendAddress} onSelect={mention}>
+        <DropdownMenuItem
+          disabled={!canMention || !row.sendAddress}
+          // Let Radix dismiss the source before the composer claims focus.
+          onSelect={() => queueMicrotask(mention)}
+        >
           {translate('components.orchestrationCrew.mentionInMessage', 'Mention in message')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={open}>

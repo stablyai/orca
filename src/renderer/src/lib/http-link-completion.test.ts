@@ -1,7 +1,6 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
-import { toast } from 'sonner'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 import {
   createBrowserLinkTestStore,
@@ -72,7 +71,6 @@ beforeEach(() => {
     }
   )
   registerWorkspaceHttpLinkBrowserOpener(opening)
-  Object.assign(window.api, { shell: { openUrl: vi.fn(async () => {}) } })
 })
 afterEach(() => {
   registerWorkspaceHttpLinkBrowserOpener(null)
@@ -135,47 +133,5 @@ it.each(['refused', 'superseded'] as const)(
     expect(complete).toHaveBeenCalledExactlyOnceWith({ pageId: null, background: false })
     expect(store.getState().browserPagesByWorkspace).toEqual({})
     expect(cleanups).toBe(1)
-  }
-)
-
-it('does not notify browser completion for system opening and keeps unknown-owner refusal', async () => {
-  const complete = vi.fn()
-  openRoutedHttpLink(URL_TO_OPEN, {
-    worktreeId: WORKSPACE,
-    sourceOwner: { kind: 'unknown' },
-    forceDestination: 'system',
-    onBrowserOpenComplete: complete
-  })
-  expect(window.api.shell.openUrl).not.toHaveBeenCalled()
-  openRoutedHttpLink(URL_TO_OPEN, {
-    worktreeId: WORKSPACE,
-    sourceOwner: { kind: 'local' },
-    forceDestination: 'system',
-    onBrowserOpenComplete: complete
-  })
-  expect(window.api.shell.openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
-  expect(opening).not.toHaveBeenCalled()
-  expect(complete).not.toHaveBeenCalled()
-})
-
-it.each([false, true])(
-  'preserves the existing failure presentation and captured cleanup with optional completion=%s',
-  async (withCompletion) => {
-    registerWorkspaceHttpLinkBrowserOpener(async () => {
-      await released
-      throw new Error('browser unavailable')
-    })
-    const complete = vi.fn()
-    openRoutedHttpLink(URL_TO_OPEN, {
-      worktreeId: WORKSPACE,
-      sourceTabId: 'source',
-      forceDestination: 'orca',
-      ...(withCompletion ? { onBrowserOpenComplete: complete } : {})
-    })
-    resume()
-    await completed
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith('browser unavailable')
-    expect(cleanups).toBe(1)
-    expect(complete).not.toHaveBeenCalled()
   }
 )

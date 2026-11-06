@@ -19,15 +19,12 @@ export function createQuestion(
   this.db.exec('BEGIN IMMEDIATE')
   try {
     this.requireRun(params.runId)
+    // A finished Dispatch still asks: its worker keeps talking to the coordinator after reporting.
     const dispatch = this.getDispatchContextById(params.dispatchId)
-    if (
-      !dispatch ||
-      dispatch.run_id !== params.runId ||
-      (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')
-    ) {
+    if (!dispatch || dispatch.run_id !== params.runId) {
       throw new OrchestrationError(
         'dispatch_inactive',
-        `Dispatch ${params.dispatchId} is not active in Run ${params.runId}.`
+        `Dispatch ${params.dispatchId} is not in Run ${params.runId}.`
       )
     }
     const message = this.insertMessage({
@@ -79,6 +76,7 @@ export function answerQuestion(
     messageId: string
     runId: string
     body: string
+    captureSender?: () => string | undefined
   } & (
     | { consumerGeneration: number }
     /** A worker answering its own helper, fenced on its Dispatch instead of the Run's consumer. */
@@ -139,6 +137,7 @@ export function answerQuestion(
       from: byDispatch !== null ? `dispatch:${byDispatch}` : `run:${params.runId}`,
       to: `dispatch:${question.dispatch_id}`,
       subject: 'Re: Question',
+      answerSenderSnapshot: params.captureSender?.(),
       body: params.body,
       threadId: question.message_id,
       runId: params.runId

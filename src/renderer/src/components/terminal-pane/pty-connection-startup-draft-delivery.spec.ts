@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { VISIBLE_PTY_SETTLE_MS } from './pty-connection-test-constants'
@@ -12,7 +12,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -58,6 +62,8 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
     it.each([10_000, 20_000])('keeps Codex draft delivery bounded after %d ms', async (waitMs) => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
         await import('@/lib/agent-startup-delayed-delivery')
 
@@ -90,7 +96,9 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       })
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
       await vi.advanceTimersByTimeAsync(VISIBLE_PTY_SETTLE_MS)
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
@@ -145,6 +153,8 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
     it('keeps startup draft ownership while deferred connect waits through setup', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
         await import('@/lib/agent-startup-delayed-delivery')
 
@@ -181,7 +191,9 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+      )
 
       const sidecarClaimed = claimStartupDelivery({
         worktreeId: 'wt-1',
@@ -215,6 +227,8 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
     it('releases startup draft delivery when disposed before deferred connect starts', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       globalThis.requestAnimationFrame = vi.fn(() => 1)
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -229,15 +243,18 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         ...mockPanePtyArgs(
           createPane(1),
           createManager(1),
-          createDeps({
-            startup: {
-              command: 'codex',
-              launchAgent: 'codex',
-              launchConfig: { agentArgs: '', agentEnv: {} },
-              launchToken: 'launch-token-1',
-              draftPrompt: 'https://github.com/stablyai/orca/issues/42'
-            }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              startup: {
+                command: 'codex',
+                launchAgent: 'codex',
+                launchConfig: { agentArgs: '', agentEnv: {} },
+                launchToken: 'launch-token-1',
+                draftPrompt: 'https://github.com/stablyai/orca/issues/42'
+              }
+            }),
+            agentTitleMocks3
+          )
         )
       )
 

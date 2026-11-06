@@ -4,8 +4,8 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
-} from '../../ipc/filesystem/filesystem-auth'
-import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
+} from '../../ipc/filesystem/access/filesystem-auth'
+import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { nativeChatScratchRootFor } from '../../native-chat/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 

@@ -7,10 +7,10 @@ import {
   reveal,
   inWorkspace,
   physicalReload
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { acquireWatcherRemovalGate } from '../../src/main/ipc/watcher-removal-gate'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
-import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { acquireWatcherRemovalGate } from '../../src/main/workspaces/removal/watcher-removal-gate'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
+import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { randomUUID } from 'node:crypto'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'

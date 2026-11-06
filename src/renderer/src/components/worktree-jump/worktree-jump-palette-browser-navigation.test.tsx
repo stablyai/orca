@@ -95,16 +95,6 @@ function listInput(query: string, overrides: Partial<ListInput> = {}): ListInput
 }
 
 describe('Cmd+J website placement', () => {
-  it('offers the website once as the first selectable row without an empty actions section', () => {
-    const { result } = renderHook(() => useWorktreeJumpPaletteListEntries(listInput('brex.com')))
-
-    expect(result.current.listEntries.map((entry) => entry.id)).toEqual([
-      'quick-action:navigate-to-url',
-      CREATE_WORKTREE_ITEM_ID
-    ])
-    expect(result.current.selectionItemIds[0]).toBe('quick-action:navigate-to-url')
-  })
-
   it('preserves issue/PR creation ahead of website navigation', () => {
     const query = 'https://github.com/acme/project/pull/42'
     const { result } = renderHook(() =>

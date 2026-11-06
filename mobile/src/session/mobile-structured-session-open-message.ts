@@ -1,4 +1,4 @@
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/open-structured-agent-session'
 import { translate } from '../i18n/mobile-i18n'
 

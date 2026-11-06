@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => {
     connect: vi.fn(),
     resolveContext: vi.fn(),
     closeTunnel: vi.fn(),
-    retire: vi.fn()
+    retire: vi.fn(),
+    releaseHost: vi.fn()
   }
 })
 
@@ -40,7 +41,8 @@ let harness: ReturnType<typeof createManagedLifecycleHarness>
 
 const policy = (isActive = false) => ({
   isActiveEnvironment: () => isActive,
-  retireLocalState: mocks.retire
+  retireLocalState: mocks.retire,
+  releaseHostTransport: mocks.releaseHost
 })
 
 beforeEach(() => {
@@ -85,6 +87,8 @@ describe('a managed server whose host is gone (P1-E)', () => {
     expect(harness.flushes).toHaveLength(1)
     expect(mocks.retire).toHaveBeenCalledWith('environment-1')
     expect(mocks.closeTunnel).toHaveBeenCalledWith('environment-1')
+    // An unserved host never stays connected, so Set location can't offer it (#37767).
+    expect(mocks.releaseHost).toHaveBeenCalledWith('ssh-1')
     expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
   })
 
@@ -96,5 +100,6 @@ describe('a managed server whose host is gone (P1-E)', () => {
     expect(getManagedOrcadFenceEnvironmentId(harness.current())).toBe('environment-1')
     expect(mocks.retire).not.toHaveBeenCalled()
     expect(mocks.closeTunnel).not.toHaveBeenCalled()
+    expect(mocks.releaseHost).not.toHaveBeenCalled()
   })
 })

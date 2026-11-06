@@ -10,8 +10,8 @@ import type {
   GetGitLabRateLimitResult,
   GitLabRateLimitSnapshot
 } from '../../../../shared/gitlab-types'
-import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
-import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
+import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 

@@ -1,5 +1,6 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
+import { createCrewHostDerivation, refreshCrewStatuses } from './crew-host-derivation'
 import { createCrewPartyRegistry } from './crew-parties'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
 import { describe, expect, it, vi } from 'vitest'
@@ -340,4 +341,45 @@ it('invalidates host membership when report import uses the transaction settleme
   expect(model.read('term_coord').sections.managing[0].task?.state).toBe('completed')
   expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(2)
   stop()
+})
+
+it('owns one immutable fleet capture shared with indexes across mutable producer updates', () => {
+  const { deps, assign, handles } = fixture()
+  const worker = assign('term_worker')
+  const now = Date.now()
+  const evidence = {
+    binding: {
+      kind: 'worker' as const,
+      dispatchId: worker.id,
+      paneKey: handles.get('term_worker')!,
+      terminalHandle: 'term_worker',
+      processIncarnation: 'process'
+    },
+    clock: { kind: 'observed' as const, at: now },
+    deliveredAt: now,
+    activity: {
+      paneKey: handles.get('term_worker')!,
+      connectionId: null,
+      state: 'waiting' as const,
+      agentType: 'codex' as const,
+      model: null,
+      worktreeId: null,
+      restoredUnconfirmed: false,
+      providerSessionOnly: false
+    }
+  }
+  deps.statuses = [evidence]
+  const host = createCrewHostDerivation(deps, now)
+  const expected = structuredClone(evidence)
+  evidence.binding.dispatchId = 'replaced'
+  evidence.clock.at = 0
+  evidence.activity.restoredUnconfirmed = true
+  expect(host.deps.statuses).toEqual([expected])
+  expect(host.statusesByPane.get(expected.activity.paneKey)).toBe(host.deps.statuses[0])
+  const refreshed = refreshCrewStatuses(host, [evidence])
+  const next = structuredClone(evidence)
+  evidence.clock.at = 1
+  evidence.binding.terminalHandle = 'term_replacement'
+  expect(refreshed.deps.statuses).toEqual([next])
+  expect(refreshed.statusesByPane.get(next.activity.paneKey)).toBe(refreshed.deps.statuses[0])
 })

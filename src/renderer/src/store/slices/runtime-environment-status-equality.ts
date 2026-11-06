@@ -1,4 +1,4 @@
-import type { RuntimeEnvironmentStatus } from './runtime-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 
 // Ignore unread checkedAt to preserve identity across probes; compare all other fields, including future ones.

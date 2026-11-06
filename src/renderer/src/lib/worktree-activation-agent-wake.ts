@@ -28,6 +28,7 @@ export function wakeWorkspaceAgents(
     gateAndReseedEmptyWorkspace(workspaceKey, {
       callerProvidesSurface: intent.callerProvidesSurface,
       seedUserDefaultSurface: intent.seedUserDefaultSurface,
+      ...(intent.initialCwd ? { initialCwd: intent.initialCwd } : {}),
       ...(intent.executionHostId ? { executionHostId: intent.executionHostId } : {})
     })
   } else {

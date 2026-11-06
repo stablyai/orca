@@ -5,6 +5,7 @@ import { defineMethod } from '../core'
 import {
   ensureStructuredHostInstalled,
   requireStructuredHost,
+  requireStructuredSessionHost,
   structuredCallerFor
 } from './structured-agent-session-gate'
 import {
@@ -74,7 +75,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     params: ContinueInterruptedParams,
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
-      const host = requireStructuredHost(ctx)
+      const host = requireStructuredSessionHost(ctx, params.sessionId)
       return host.restartResume.continueInterrupted(params.sessionId, params.turnItemId)
     }
   }),

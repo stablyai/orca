@@ -1,5 +1,5 @@
 import type { Store } from '../persistence/loading-store/store'
-import { loadHooks } from '../hooks'
+import { loadHooks } from '../workspace-hooks/hooks'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'

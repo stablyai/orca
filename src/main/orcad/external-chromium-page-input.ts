@@ -6,14 +6,16 @@ import {
   FILL_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION,
   SELECT_OPTION_TARGET_FUNCTION
-} from '../browser/browser-element-functions'
-import { typedInputSteps } from '../browser/cdp-keyboard-us-layout'
+} from '../browser/cdp/input/browser-element-functions'
+import { typedInputSteps } from '../browser/cdp/input/cdp-keyboard-us-layout'
 import {
   agentBrowserError,
   agentBrowserEvalCommand,
   type AgentBrowserStep,
   type ExternalChromiumBrowserSession
 } from './external-chromium-browser-session'
+
+export type PageInputSession = Pick<ExternalChromiumBrowserSession, 'run' | 'runSteps'>
 
 const ElementCallResult = z.object({
   result: z.object({ reached: z.boolean(), outcome: z.unknown().optional() })
@@ -73,7 +75,7 @@ function stepResult(step: AgentBrowserStep | undefined): unknown {
  * the element sits in a cross-origin frame, which page script cannot reach.
  */
 async function actOnElement(
-  session: ExternalChromiumBrowserSession,
+  session: PageInputSession,
   element: string,
   action: string,
   functionDeclaration: string,
@@ -102,7 +104,7 @@ async function actOnElement(
 }
 
 async function fill(
-  session: ExternalChromiumBrowserSession,
+  session: PageInputSession,
   element: string,
   value: string,
   action: string
@@ -117,7 +119,7 @@ function selectAllShortcut(): string {
   return process.platform === 'darwin' ? 'Meta+a' : 'Control+a'
 }
 
-async function selectAll(session: ExternalChromiumBrowserSession, element: string): Promise<void> {
+async function selectAll(session: PageInputSession, element: string): Promise<void> {
   const { reached, outcome } = await actOnElement(
     session,
     element,
@@ -135,7 +137,11 @@ async function selectAll(session: ExternalChromiumBrowserSession, element: strin
 }
 
 // The helper's `keyboard type` inserts text without key events, which key-driven editors ignore.
-async function type(session: ExternalChromiumBrowserSession, input: string): Promise<void> {
+async function type(
+  session: PageInputSession,
+  input: string,
+  recheckAfterEnter: boolean
+): Promise<void> {
   let commands: string[][] = []
   const flush = async (): Promise<void> => {
     if (commands.length === 0) {
@@ -156,7 +162,11 @@ async function type(session: ExternalChromiumBrowserSession, input: string): Pro
       // Shift is the only modifier a typed character carries; pages read it from the keydown.
       commands.push(['press', step.modifiers & 8 ? `Shift+${step.key}` : step.key])
     }
-    if (commands.length >= MAX_KEY_COMMANDS_PER_RUN) {
+    // Enter can submit and navigate, so a guarded command checks again before what follows it.
+    if (
+      commands.length >= MAX_KEY_COMMANDS_PER_RUN ||
+      (recheckAfterEnter && typeof step !== 'string' && step.key === 'Enter')
+    ) {
       await flush()
     }
   }
@@ -165,7 +175,7 @@ async function type(session: ExternalChromiumBrowserSession, input: string): Pro
 
 /** Fill, clear, select, select-all and type, acting on the element the agent named; null for other methods. */
 export async function runExternalChromiumPageInput(
-  session: ExternalChromiumBrowserSession,
+  session: PageInputSession,
   method: string,
   params: Record<string, unknown>
 ): Promise<unknown> {
@@ -193,7 +203,7 @@ export async function runExternalChromiumPageInput(
     case 'browserType': {
       const input = String(params.input ?? '')
       await assertClipboardTextWriteWithinLimitWithYield(input)
-      await type(session, input)
+      await type(session, input, typeof params.expectUrl === 'string')
       return { typed: true }
     }
     default:

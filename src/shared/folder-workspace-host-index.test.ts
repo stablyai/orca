@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { resolveQualifiedFolderWorkspaceResult } from './folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from './folder-workspaces/folder-workspace-execution-host'
 import { createFolderWorkspaceHostIndex } from './folder-workspace-host-index'
 import { collectionVisits } from './collection-visits.test-fixture'
 

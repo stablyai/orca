@@ -1,4 +1,4 @@
-// Refused spawns can last minutes (macOS 1003/process limit); spread retries over ~2min instead of the crash breaker's 750ms.
+// Refused spawns last seconds to minutes (macOS 1003 process limit, Windows sandbox CreateProcess 18); spread retries over ~2min, not the crash breaker's 750ms.
 export const RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS: readonly number[] = [
   250, 1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 60_000
 ]

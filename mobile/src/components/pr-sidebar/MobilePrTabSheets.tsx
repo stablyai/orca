@@ -14,7 +14,12 @@ import { ConfirmModal } from '../ConfirmModal'
 import { presentPrMerge } from './pr-actions-state'
 import { PrCreateSheet } from './PrCreateSheet'
 import { PrReviewersSheet } from './PrReviewersSheet'
-import { livePrDetails, readyPrData, type MobilePrTab, type PrTabSheet } from './use-mobile-pr-tab'
+import {
+  livePrDetails,
+  readyPrData,
+  type MobilePrTab,
+  type PrTabSheetRequest
+} from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
 
@@ -25,23 +30,28 @@ export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
   return (
     <>
       <KeyedBottomDrawer
-        sheet={tab.sheet}
-        sheetKey={(sheet: PrTabSheet) => sheet}
+        sheet={tab.sheetRequest}
+        // Each opened request is its own presentation, so a PR switch never refreshes one sheet into another PR's.
+        sheetKey={(request: PrTabSheetRequest) => `${request.kind}\u0000${request.id}`}
         onClose={tab.closeSheet}
         onAfterClose={tab.onSheetAfterClose}
         dismissible={!tab.creatingPr}
         dragContentToDismiss={false}
       >
-        {(sheet) => {
-          switch (sheet) {
+        {(request) => {
+          // An outgoing request whose PR departed renders nothing; it never sees the new PR's actions.
+          if (!tab.sheetInScope(request)) {
+            return null
+          }
+          switch (request.kind) {
             case 'merge':
-              return <PrMergeSheet tab={tab} />
+              return <PrMergeSheet tab={tab} request={request} />
             case 'reviewers':
-              return <PrReviewersSheet tab={tab} />
+              return <PrReviewersSheet tab={tab} request={request} />
             case 'editTitle':
-              return <PrEditTextSheet tab={tab} field="title" />
+              return <PrEditTextSheet tab={tab} request={request} field="title" />
             case 'editDescription':
-              return <PrEditTextSheet tab={tab} field="body" />
+              return <PrEditTextSheet tab={tab} request={request} field="body" />
             case 'createPr':
               return <PrCreateSheet tab={tab} />
           }
@@ -79,7 +89,7 @@ function mergeMethodCopy(
 }
 
 // Lists only the methods the repo allows, starting on its default; mobile used to merge with the default only.
-function PrMergeSheet({ tab }: { tab: MobilePrTab }) {
+function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetRequest }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const data = readyPrData(tab)
@@ -95,9 +105,13 @@ function PrMergeSheet({ tab }: { tab: MobilePrTab }) {
   const merge = presentPrMerge({ ...pr, state: tab.actions.resolveState(pr.state) }, method)
   const busy = tab.actions.isBusy({ kind: 'merge' })
   const run = async () => {
+    // A click from an outgoing presentation sends nothing.
+    if (!tab.ownsSheet(request)) {
+      return
+    }
     setSubmitted(true)
     if (await tab.actions.merge(method)) {
-      tab.closeSheetIf('merge')
+      tab.closeSheetIf(request)
     }
   }
   return (
@@ -143,7 +157,15 @@ function PrMergeSheet({ tab }: { tab: MobilePrTab }) {
   )
 }
 
-function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'body' }) {
+function PrEditTextSheet({
+  tab,
+  request,
+  field
+}: {
+  tab: MobilePrTab
+  request: PrTabSheetRequest
+  field: 'title' | 'body'
+}) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const data = readyPrData(tab)
@@ -153,8 +175,11 @@ function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'b
   const [draft, setDraft] = useState(current)
   const { textAction } = tab
   const save = async () => {
+    if (!tab.ownsSheet(request)) {
+      return
+    }
     if (await textAction.save(field, draft, current)) {
-      tab.closeSheetIf(field === 'title' ? 'editTitle' : 'editDescription')
+      tab.closeSheetIf(request)
     }
   }
   const cancel = () => {
@@ -181,7 +206,10 @@ function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'b
       <View style={sheetStyles.body}>
         <FieldTextInput
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={(value) => {
+            textAction.touch()
+            setDraft(value)
+          }}
           editable={!textAction.saving}
           autoFocus
           multiline={field === 'body'}
@@ -232,14 +260,7 @@ function PrTabConfirm({ tab, t }: { tab: MobilePrTab; t: Translate }) {
       message={copy.message}
       confirmLabel={copy.confirmLabel}
       destructive={tab.confirm === 'close'}
-      onConfirm={() => {
-        if (tab.confirm === 'unlink') {
-          void tab.unlink()
-        } else if (tab.confirm) {
-          tab.actions.updateState(tab.confirm === 'close' ? 'closed' : 'open')
-        }
-        tab.setConfirm(null)
-      }}
+      onConfirm={tab.runConfirm}
       onCancel={() => tab.setConfirm(null)}
     />
   )

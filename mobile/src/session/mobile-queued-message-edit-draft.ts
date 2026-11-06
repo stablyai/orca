@@ -5,9 +5,12 @@ import {
   mobileQueuedEditValueKey,
   sameMobileQueuedEditImage
 } from './mobile-queued-message-edit-value'
-import type {
-  MobileNativeChatDraftInputs,
-  MobileNativeChatDraftDestination
+import {
+  type MobileNativeChatDraftInputs,
+  type MobileNativeChatDraftDestination,
+  closeMobileNativeChatEditInputs,
+  readMobileNativeChatDraftInputs,
+  updateMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -16,15 +19,14 @@ import type { MobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import { pickedSkillsInText } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   queuedEditKeptImages,
-  queuedEditTextForKeptImages
+  queuedEditTextForKeptImages,
+  type QueuedMessageImageBlock
 } from '../../../src/shared/queued-message-edit'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import {
-  closeMobileNativeChatEditInputs,
-  readMobileNativeChatDraftInputs,
-  updateMobileNativeChatDraftInputs
-} from './native-chat/composer/mobile-native-chat-draft-inputs'
-import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
+  setMobileNativeChatDraftText,
+  type MobileComposerWriter
+} from './native-chat/composer/mobile-native-chat-draft-store'
 import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 
 export type MobileQueuedMessageInlineEditor = {
@@ -191,12 +193,16 @@ export function seedMobileQueuedEditInputs(
   updateMobileNativeChatDraftInputs(scopeKey, () => ({
     skills: body.skills ?? [],
     files: [],
-    images: queuedEditKeptImages(body).map(({ id, block }) => ({
-      id,
-      path: block.path ?? block.url ?? '',
-      previewUri: block.url ?? block.path ?? ''
-    }))
+    images: queuedEditKeptImages(body).map(({ id, block }) => mobileDraftImageOfBlock(id, block))
   }))
+}
+
+/** A sent image as a composer chip: the host path sends it, the URL (when any) previews it. */
+export function mobileDraftImageOfBlock(
+  id: string,
+  block: QueuedMessageImageBlock
+): MobileNativeChatDraftInputs['images'][number] {
+  return { id, path: block.path ?? block.url ?? '', previewUri: block.url ?? block.path ?? '' }
 }
 
 // A handed-back edit takes the dictation in the composer it went back to.
@@ -229,7 +235,7 @@ export type MobileStructuredQueuedEditArgs = {
   submissions?: readonly AgentJournalSubmission[]
   cards: readonly MobileQueuedMessageCard[]
   mutate: MobileStructuredAgentMutate
-  appendComposerText: ((text: string) => boolean) | undefined
+  appendComposerText: MobileComposerWriter | undefined
   onQueuedEditNotice?: (text: string) => void
   onSendError: (text: string) => void
   onActionResolved?: () => void

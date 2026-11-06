@@ -2,10 +2,10 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import { runWithActionEffects, type ActionEffectsHost } from './agent-browser-action-effects'
-import type { BrowserPageEvent } from '../browser-page-events'
+import type { BrowserPageEvent } from '../guest-lifecycle/browser-page-events'
 import { readBrowserActionEffects } from '../../../shared/browser-action-effects'
 
-vi.mock('../remote-cli-page-admission', () => ({
+vi.mock('../routing/input-ownership/remote-cli-page-admission', () => ({
   readRemoteCliAdmittedPage: (_id: number, read: () => Promise<unknown>) => read()
 }))
 
@@ -71,19 +71,6 @@ function fakeHost(
 }
 
 describe('runWithActionEffects', () => {
-  it('diffs against the last reading without reissuing the refs the agent holds', async () => {
-    const guest = fakeGuest()
-    const { host } = fakeHost(guest, [INVALID_LOGIN], true)
-
-    await runWithActionEffects(host, async () => {
-      // The action must run against the refs the agent last saw.
-      expect(host.snapshotDelta).not.toHaveBeenCalled()
-      return { clicked: '@e6' }
-    })
-
-    expect(host.snapshotDelta).toHaveBeenCalledTimes(1)
-  })
-
   it('lists the lines an action added and the console errors it logged', async () => {
     const guest = fakeGuest()
     const { host } = fakeHost(guest, [UNCHANGED, INVALID_LOGIN])

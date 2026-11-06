@@ -68,22 +68,14 @@ export const desktopStructuredSessionOpenDeps: StructuredSessionOpenAdapterDeps 
   reveal: revealStructuredSession
 }
 
-export type StructuredSessionOpenOutcome = 'activated' | 'gone' | 'host-cannot-open' | 'unavailable'
-
-export function structuredSessionOpenOutcome(
-  result: StructuredSessionOpenResult
-): StructuredSessionOpenOutcome {
-  if (result.kind === 'opened') {
-    return 'activated'
-  }
-  if (result.kind === 'failed' && result.failure.reason === 'gone') {
-    return 'gone'
-  }
-  if (result.kind === 'failed' && result.failure.reason === 'unsupported') {
-    return 'host-cannot-open'
-  }
-  return 'unavailable'
-}
+import {
+  structuredSessionOpenOutcome,
+  type StructuredSessionOpenOutcome
+} from './structured-session-open-outcome'
+export {
+  structuredSessionOpenOutcome,
+  type StructuredSessionOpenOutcome
+} from './structured-session-open-outcome'
 
 type DesktopInteractionOptions = {
   target?: RuntimeClientTarget
@@ -196,24 +188,26 @@ async function executeDesktopStructuredSession(
   locate?: StructuredSessionOpenDeps['locate'],
   current?: () => boolean
 ): Promise<StructuredSessionOpenResult> {
+  const party =
+    (method: 'orchestration.partyLocation' | 'orchestration.partyOpen') =>
+    async (address: string, messageIds: readonly string[]) => {
+      try {
+        return await withStructuredSessionRestoreTimeout(
+          callRuntimeRpc<OrchestrationPartyLocationResult>(
+            owner,
+            method,
+            { address, ...(messageIds.length ? { messageIds } : {}) },
+            { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
+          )
+        )
+      } catch (error) {
+        return structuredSessionOpenFailure(error)
+      }
+    }
   return openStructuredAgentSession(source, {
     current,
-    locate:
-      locate ??
-      (async (address, messageIds) => {
-        try {
-          return await withStructuredSessionRestoreTimeout(
-            callRuntimeRpc<OrchestrationPartyLocationResult>(
-              owner,
-              'orchestration.partyLocation',
-              { address, ...(messageIds.length ? { messageIds } : {}) },
-              { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
-            )
-          )
-        } catch (error) {
-          return structuredSessionOpenFailure(error)
-        }
-      }),
+    locate: locate ?? party('orchestration.partyLocation'),
+    ...(locate ? {} : { open: party('orchestration.partyOpen') }),
     tabs: (target) => deps.tabs(target, owner),
     activate: (tab, target) =>
       deps

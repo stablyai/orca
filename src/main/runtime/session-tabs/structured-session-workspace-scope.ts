@@ -17,7 +17,7 @@ import {
 import {
   getLocalProjectWorktreeGitOptions,
   getLocalProjectWorktreeGitOptionsForRuntime
-} from '../../project-runtime-git-options'
+} from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
@@ -25,12 +25,14 @@ import {
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from '../workspaces/catalog/worktree-launch-host-repo'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
-import type { RuntimeWorkspaceCatalog } from '../workspaces/workspace-catalog'
+import type { RuntimeWorkspaceCatalog } from '../workspaces/catalog/workspace-catalog'
 import type { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
 
 export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStructuredSessionAccountHome {
   protected abstract resolveFolderWorkspaceSelector(
@@ -82,6 +84,17 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return { ...authority, location: destination, admit }
   }
 
+  async prepareWorkspaceAttentionAcknowledgement(
+    worktreeSelector: string
+  ): Promise<NotificationAttentionAcknowledgement> {
+    const worktree = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+    const host = getStructuredAgentSessionHost()
+    const reads = host
+      ? await host.attentionReads.workspace(worktree)
+      : (await this.openAgentSessionRecordStore()).workspaceAttentionReads(worktree)
+    return { worktree, reads }
+  }
+
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     return this.structuredAgentSessionLocationForTarget(target)
@@ -91,9 +104,7 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
   protected structuredAgentSessionLocationForTarget(
     target: {
       worktree: Pick<
-        Awaited<
-          ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
-        >['worktree'],
+        Awaited<ReturnType<RuntimeWorkspaceFileTargets['resolveRuntimeFileTarget']>>['worktree'],
         'id' | 'path' | 'repoId' | 'hostId'
       >
       executionHostId: AgentSessionExecutionLocation['executionHostId']

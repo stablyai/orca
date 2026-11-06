@@ -16,7 +16,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { resolveFishBinary } from './fish-binary-requirement'
 import { stageStartupCommand } from './startup-command-staging'
 import { buildStartupCommandSubmission } from './startup-command-submission'
-import { quoteStartupArg } from './tui-agent-startup-shell'
+import { quoteStartupArg } from './agent-launch/startup/tui-agent-startup-shell'
 
 type LiveShell = { name: string; path: string; args: string[] }
 

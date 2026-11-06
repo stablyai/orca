@@ -4,7 +4,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks

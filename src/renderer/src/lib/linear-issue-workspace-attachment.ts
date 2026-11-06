@@ -1,5 +1,5 @@
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
   getLinearOrganizationUrlKeyFromIssueUrl,

@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Read completed turns from history too: batched done→working→done publications can hide the edge from state alone. */
 export function resolveLatestAgentDoneStartedAt(

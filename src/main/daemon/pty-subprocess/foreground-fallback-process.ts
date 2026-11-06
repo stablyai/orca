@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import { isTerminalScopeWrapper } from '../terminal-scopes-runtime'
+import { isTerminalScopeWrapper } from '../process-scopes/terminal-scopes-runtime'
 
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''

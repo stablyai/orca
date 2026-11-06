@@ -1,21 +1,16 @@
-import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
+import { openDetectedFilePath } from './terminal-link-handlers'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '@/runtime/runtime-compatibility-test-fixture'
-import { TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY } from '../../../../shared/runtime-file-contracts'
-import { createProviderSetup, makeBufferLine } from './terminal-link-provider-buffer-fixtures'
-import {
-  flushDoubleRaf,
-  installTerminalLinkTestEnvironment
-} from './terminal-link-handlers-test-harness'
+import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../../shared/files-runtime-capabilities'
+import { installTerminalLinkTestEnvironment } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
 const {
   storeState,
-  statMock,
   openFileMock,
   runtimeEnvironmentCallMock,
   runtimeEnvironmentTransportCallMock
@@ -38,136 +33,84 @@ vi.mock('@/lib/connection-context', () => ({
 
 installTerminalLinkTestEnvironment(doubles)
 
-const IMAGE = '/tmp/orca-preview.png'
-
-function hostGrants(readOnly?: true): void {
-  runtimeEnvironmentCallMock.mockResolvedValue({
-    id: 'rpc-1',
-    ok: true,
-    result: {
-      worktree: 'wt-1',
-      relativePath: null,
-      absolutePath: IMAGE,
-      exists: true,
-      isDirectory: false,
-      openTarget: {
-        kind: 'absolute-file',
-        provider: 'local',
-        absolutePath: IMAGE,
-        grantId: 'g-1',
-        ...(readOnly ? { readOnly } : {})
-      }
-    },
-    _meta: { runtimeId: 'remote-runtime' }
-  })
-}
-
-function provideLinks(): Promise<ILink[]> {
-  const { provider } = createProviderSetup([makeBufferLine(IMAGE)], new Map(), {
-    worktreePath: '/srv/repo',
-    startupCwd: '/srv/repo',
-    runtimeEnvironmentId: 'env-1',
-    getRuntimeTerminalHandleForPane: () => 'term-1'
-  })
-  return new Promise<ILink[]>((resolve) => {
-    provider.provideLinks(1, (links) => resolve(links ?? []))
-  })
-}
-
-describe('a paired-server terminal path outside its workspace', () => {
-  it('links a file the host grants to the terminal that printed it', async () => {
-    hostGrants()
-
-    const links = await provideLinks()
-
-    expect(links.map((link) => link.text)).toEqual([IMAGE])
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'files.resolveTerminalPath',
-        params: { worktree: 'id:wt-1', pathText: IMAGE, crossWorkspace: true, terminal: 'term-1' }
-      })
-    )
-    // Why: this computer's copy of the path says nothing about the server's.
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-  })
-
-  async function clickLink(): Promise<void> {
-    const links = await provideLinks()
-    // Why a prototype-less object: node has no MouseEvent; activation reads only these fields.
-    const click: MouseEvent = Object.assign(Object.create(null), {
-      metaKey: true,
-      ctrlKey: true,
-      button: 0,
-      preventDefault: vi.fn()
-    })
-    links[0]!.activate(click, IMAGE)
-    await flushDoubleRaf()
-  }
-
-  // Why editable: the caller may already write this file through a terminal on the host.
-  it('opens the linked file editable through its grant', async () => {
-    hostGrants()
-
-    await clickLink()
-
-    expect(statMock).not.toHaveBeenCalled()
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: IMAGE,
-        runtimeEnvironmentId: 'env-1',
-        terminalArtifactGrantId: 'g-1'
-      }),
-      { forceContentReload: true }
-    )
-    expect(openFileMock.mock.calls[0]?.[0]).not.toHaveProperty('readOnly')
-  })
-
-  it.each(['a read-only grant', 'a host that cannot renew grants'])(
-    'keeps %s read-only',
-    async (reason) => {
-      if (reason === 'a read-only grant') {
-        hostGrants(true)
-      } else {
-        hostGrants()
-        runtimeEnvironmentTransportCallMock.mockImplementation(
-          (args: RuntimeEnvironmentCallRequest) => {
-            const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
-            if (!status?.ok) {
-              return runtimeEnvironmentCallMock(args)
-            }
-            const capabilities = status.result.capabilities?.filter(
-              (capability) => capability !== TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY
-            )
-            return { ...status, result: { ...status.result, capabilities } }
-          }
-        )
-      }
-
-      await clickLink()
-
-      expect(openFileMock).toHaveBeenCalledWith(
-        expect.objectContaining({ terminalArtifactGrantId: 'g-1', readOnly: true }),
-        { forceContentReload: true }
-      )
-    }
-  )
-
-  it('shows no link for a path the host refuses, even when this computer has it', async () => {
-    runtimeEnvironmentCallMock.mockResolvedValue({
+describe('a Shift-clicked paired-server file outside its workspace', () => {
+  function shiftClickGrantedVideo(): string {
+    const video = '/tmp/teste.mp4'
+    runtimeEnvironmentCallMock.mockImplementation(async ({ method }: { method: string }) => ({
       id: 'rpc-1',
       ok: true,
-      result: {
-        worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: IMAGE,
-        exists: true,
-        isDirectory: true
-      },
+      result:
+        method === 'files.readTerminalArtifactChunk'
+          ? { contentBase64: 'AAEC', bytesRead: 3, eof: true }
+          : {
+              worktree: 'wt-1',
+              relativePath: null,
+              absolutePath: video,
+              exists: true,
+              isDirectory: false,
+              openTarget: {
+                kind: 'absolute-file',
+                provider: 'local',
+                absolutePath: video,
+                grantId: 'g-1'
+              }
+            },
       _meta: { runtimeId: 'remote-runtime' }
+    }))
+    Object.assign(window.api.fs, {
+      startDownloadedFile: vi.fn().mockResolvedValue({ canceled: false, transferId: 't-1' }),
+      appendDownloadedFileChunk: vi.fn().mockResolvedValue(undefined),
+      finishDownloadedFile: vi
+        .fn()
+        .mockResolvedValue({ canceled: false, destinationPath: '/Downloads/teste.mp4' }),
+      cancelDownloadedFile: vi.fn().mockResolvedValue(undefined)
     })
+    openDetectedFilePath(video, null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/repo',
+      runtimeEnvironmentId: 'env-1',
+      openWithSystemDefault: true
+    })
+    return video
+  }
 
-    expect(await provideLinks()).toEqual([])
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+  // Why: a grant's whole-file text read refuses binaries and caps size, so downloads page it instead.
+  it('downloads a granted binary in pages through its grant', async () => {
+    const video = shiftClickGrantedVideo()
+
+    await vi.waitFor(() =>
+      expect(window.api.shell.openFilePath).toHaveBeenCalledWith('/Downloads/teste.mp4', 'local')
+    )
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.readTerminalArtifactChunk',
+        params: expect.objectContaining({ grantId: 'g-1', absolutePath: video, offset: 0 })
+      })
+    )
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a granted file in Orca when its host cannot page grants', async () => {
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (!status?.ok) {
+          return runtimeEnvironmentCallMock(args)
+        }
+        const capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY
+        )
+        return { ...status, result: { ...status.result, capabilities } }
+      }
+    )
+    const video = shiftClickGrantedVideo()
+
+    await vi.waitFor(() =>
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: video, terminalArtifactGrantId: 'g-1' }),
+        { forceContentReload: true }
+      )
+    )
+    expect(window.api.fs.startDownloadedFile).not.toHaveBeenCalled()
   })
 })

@@ -1,14 +1,16 @@
 import type { MobileFileMedia } from '../files/mobile-file-media'
-import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type {
+  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus,
-  RuntimeMobileTerminalTheme as MobileTerminalTheme
+  RuntimeMobileSessionBrowserTab,
+  RuntimeMobileSessionFileTab,
+  RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTerminalClientTab,
+  RuntimeMobileSessionTerminalTab
 } from '../../../src/shared/runtime-types'
-import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
-import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status-observation'
+import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status/contracts/agent-status-observation'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
@@ -16,87 +18,95 @@ import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-
 
 export type Terminal = TerminalRecord
 
-export type MobileBrowserTab = {
-  type: 'browser'
-  id: string
-  title: string
-  browserWorkspaceId: string
-  browserPageId: string | null
-  url: string
-  loading: boolean
-  loadError?: BrowserLoadError | null
-  canGoBack: boolean
-  canGoForward: boolean
-  isActive: boolean
+export type MobileBrowserTab = Pick<
+  RuntimeMobileSessionBrowserTab,
+  | 'type'
+  | 'id'
+  | 'title'
+  | 'browserWorkspaceId'
+  | 'browserPageId'
+  | 'url'
+  | 'loading'
+  | 'loadError'
+  | 'canGoBack'
+  | 'canGoForward'
+  | 'isActive'
+>
+
+export type MobileSessionTabType = NonNullable<RuntimeMobileSessionTabsResult['activeTabType']>
+
+/** What the phone adds to a host terminal tab; a type test keeps these names off the host's tab. */
+export type MobileTerminalTabPhoneFields = {
+  // Carried across publications so chat stays open before live agent status arrives.
+  nativeChatIdentity?: MobileNativeChatIdentity
 }
 
-export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
-
+// The phone reads a subset of each host tab; fields older hosts omit are optional here.
 export type MobileSessionTab =
-  | {
-      type: 'terminal'
-      id: string
-      title: string
-      parentTabId?: string
-      leafId?: string
-      status?: 'pending-handle' | 'ready'
-      terminal: string | null
-      agentStatus?: AgentStatusEntry | null
-      // Launch identity enables chat before live agent status arrives.
-      launchAgent?: TuiAgent
-      nativeChatIdentity?: MobileNativeChatIdentity
-      /** Host-provided launch context still parked as an unsent TUI-input draft. */
-      launchDraft?: string
-      launchDraftCreatedAt?: number
-      terminalTheme?: MobileTerminalTheme
-      isActive: boolean
-    }
-  | {
-      type: 'agent-session'
-      id: string
-      title: string
-      sessionId: string
-      agent: StructuredAgentId
+  | (Pick<RuntimeMobileSessionTerminalTab, 'type' | 'id' | 'title' | 'isActive'> &
+      Partial<
+        Pick<
+          RuntimeMobileSessionTerminalTab,
+          | 'parentTabId'
+          | 'leafId'
+          | 'agentStatus'
+          | 'launchAgent'
+          | 'launchDraft'
+          | 'launchDraftCreatedAt'
+          | 'terminalTheme'
+        >
+      > & {
+        status?: RuntimeMobileSessionTerminalClientTab['status']
+        terminal: string | null
+      } & MobileTerminalTabPhoneFields)
+  | (Pick<
+      RuntimeMobileSessionAgentTab,
+      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive'
+    > & {
       chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
-      isActive: boolean
-    }
-  | {
-      type: 'markdown'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
-      isDirty: boolean
-      isActive: boolean
-      documentVersion: string
-    }
-  | {
-      type: 'file'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
+    })
+  | Pick<
+      RuntimeMobileSessionMarkdownTab,
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'filePath'
+      | 'relativePath'
+      | 'isDirty'
+      | 'isActive'
+      | 'documentVersion'
+    >
+  | (Pick<
+      RuntimeMobileSessionFileTab,
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'filePath'
+      | 'relativePath'
+      | 'mode'
+      | 'oldPath'
+      | 'isDirty'
+      | 'isActive'
+    > & {
       language?: string
-      mode?: 'edit' | 'diff'
-      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
-      oldPath?: string
-      isDirty: boolean
-      isActive: boolean
-    }
+      // The phone also opens branch and commit diffs, which the host never publishes.
+      diffSource?: RuntimeMobileSessionFileTab['diffSource'] | 'branch' | 'commit'
+    })
   | MobileBrowserTab
 
-export type SessionTabsResult = {
-  worktree: string
-  clientHostedPagesUnreconciled?: true
-  agentSessionsUnverifiable?: true
-  publicationEpoch?: string
-  snapshotVersion: number
-  tabs: MobileSessionTab[]
-  activeTabId: string | null
-  activeTabType: MobileSessionTabType | null
-  /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
-  navigationIntent?: 'follow'
-}
+export type SessionTabsResult = Pick<
+  RuntimeMobileSessionTabsResult,
+  | 'worktree'
+  | 'clientHostedPagesUnreconciled'
+  | 'agentSessionsUnverifiable'
+  | 'snapshotVersion'
+  | 'activeTabId'
+  | 'activeTabType'
+  | 'navigationIntent'
+> &
+  Partial<Pick<RuntimeMobileSessionTabsResult, 'publicationEpoch'>> & {
+    tabs: MobileSessionTab[]
+  }
 
 export type RuntimeStatusResult = {
   capabilities?: string[]

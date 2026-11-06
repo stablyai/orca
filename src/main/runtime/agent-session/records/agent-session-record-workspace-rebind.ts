@@ -1,3 +1,4 @@
+import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation,
@@ -31,3 +32,25 @@ export function rebindAgentSessionRecordWorkspace(
 /** The journal names the same workspace as its record, so both move in one commit. */
 export const REBIND_JOURNAL_WORKSPACE_SQL =
   'UPDATE journal_sessions SET workspace_id = ? WHERE session_id = ?'
+
+export async function rebindAgentSessionWorkspace(
+  transactions: AgentSessionStoreTransactions,
+  sessionId: string,
+  original: AgentSessionExecutionLocation,
+  location: AgentSessionExecutionLocation,
+  check: (record: AgentSessionRecord) => void
+): Promise<void> {
+  let changed = false
+  const receipt = transactions.receipt((draft) => {
+    changed = rebindAgentSessionRecordWorkspace(draft, sessionId, original, location, check)
+  })
+  await transactions.commitReceipt({
+    write: (db) => {
+      receipt.write(db)
+      if (changed) {
+        db.prepare(REBIND_JOURNAL_WORKSPACE_SQL).run(location.workspaceId, sessionId)
+      }
+    },
+    committed: () => receipt.committed()
+  })
+}

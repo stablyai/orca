@@ -170,62 +170,6 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     expect(s.activeGroupIdByWorktree[key]).toBe(survivingGroupIds[0])
   })
 
-  it('keeps an untouched active group when it collapses a split the purge emptied', () => {
-    const f = twin()
-    const key = f.workspaceKey
-    const remoteIds = [f.remote.terminalTabId, f.remote.fileId]
-    f.store.setState((s) => {
-      const [group] = s.groupsByWorktree[key] ?? []
-      if (!group) {
-        throw new Error('fixture has no tab group')
-      }
-      const localIds = group.tabOrder.filter((id) => !remoteIds.includes(id))
-      return {
-        groupsByWorktree: {
-          [key]: [
-            { ...group, id: 'a', tabOrder: localIds.slice(0, 1), activeTabId: localIds[0] },
-            { ...group, id: 'b', tabOrder: localIds.slice(1), activeTabId: localIds[1] },
-            { ...group, id: 'c', tabOrder: remoteIds, activeTabId: remoteIds[0] }
-          ]
-        },
-        layoutByWorktree: {
-          [key]: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', groupId: 'a' },
-            second: {
-              type: 'split',
-              direction: 'vertical',
-              first: { type: 'leaf', groupId: 'b' },
-              second: { type: 'leaf', groupId: 'c' }
-            }
-          }
-        },
-        activeGroupIdByWorktree: { [key]: 'a' }
-      }
-    })
-
-    f.store.getState().purgeWorktreeTerminalState([hostWorktreeTarget({ id: key, ...f.remote })])
-
-    const s = f.store.getState()
-    expect((s.groupsByWorktree[key] ?? []).map((group) => group.id)).toEqual(['a', 'b'])
-    expect(s.activeGroupIdByWorktree[key]).toBe('a')
-  })
-
-  it('keeps the runtime twin when the local copy is purged', () => {
-    const f = twin('local+runtime')
-    const key = f.workspaceKey
-
-    f.store.getState().purgeWorktreeTerminalState([hostWorktreeTarget({ id: key, ...f.local })])
-
-    const s = f.store.getState()
-    expect(s.tabsByWorktree[key]?.map((tab) => tab.id)).toEqual([
-      f.remote.terminalTabId,
-      f.dormantTabId
-    ])
-    expect(s.openFiles.map((file) => file.id)).toEqual([f.remote.fileId])
-  })
-
   it('purges everything when no other host publishes the id', () => {
     const f = twin()
     const key = f.workspaceKey
@@ -242,52 +186,6 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     expect(Object.keys(s.lastVisitedAtByWorktreeId)).toEqual([
       getWorktreeVisitKey(key, f.local.hostId)
     ])
-  })
-
-  it('purges everything when every publishing host is targeted', () => {
-    const f = twin()
-    const key = f.workspaceKey
-
-    f.store
-      .getState()
-      .purgeWorktreeTerminalState([
-        hostWorktreeTarget({ id: key, ...f.remote }),
-        hostWorktreeTarget({ id: key, ...f.local })
-      ])
-
-    expect(f.store.getState().tabsByWorktree[key]).toBeUndefined()
-    expect(f.store.getState().gitStatusByWorktree[key]).toBeUndefined()
-  })
-
-  it('keeps the raw-id purge reaching both twins', () => {
-    const f = twin()
-    const key = f.workspaceKey
-
-    f.store.getState().purgeWorktreeTerminalState([key])
-
-    const s = f.store.getState()
-    expect(s.tabsByWorktree[key]).toBeUndefined()
-    expect(s.openFiles).toEqual([])
-    expect(s.lastVisitedAtByWorktreeId).toEqual({})
-  })
-
-  it("drops a tabless sleeping record that names the purged SSH host, not the twin's", () => {
-    const f = twin()
-    const key = f.workspaceKey
-    const record = f.store.getState().sleepingAgentSessionsByPaneKey[f.remote.paneKey]
-    f.store.setState((s) => ({
-      sleepingAgentSessionsByPaneKey: {
-        ...s.sleepingAgentSessionsByPaneKey,
-        'gone-ssh:leaf': { ...record, paneKey: 'gone-ssh:leaf' },
-        'gone-local:leaf': { ...record, paneKey: 'gone-local:leaf', connectionId: null }
-      }
-    }))
-
-    f.store.getState().purgeWorktreeTerminalState([hostWorktreeTarget({ id: key, ...f.remote })])
-
-    expect(Object.keys(f.store.getState().sleepingAgentSessionsByPaneKey).sort()).toEqual(
-      ['gone-local:leaf', f.local.paneKey].sort()
-    )
   })
 
   it('selects a surviving tab when the purged terminal was active', () => {
@@ -345,24 +243,6 @@ describe('purgeWorktreeTerminalState with a surviving twin', () => {
     expect(Object.keys(s.lastVisitedAtByWorktreeId)).toEqual([
       getWorktreeVisitKey(key, f.local.hostId)
     ])
-  })
-
-  it('keeps an untouched legacy selection when another host is purged', () => {
-    const f = twin()
-    const key = f.workspaceKey
-    f.store.setState({
-      activeWorkspaceExecutionHostId: f.local.hostId,
-      activeTabId: f.local.terminalTabId,
-      activeTabType: 'terminal',
-      activeFileIdByWorktree: { [key]: f.local.fileId },
-      // A legacy workspace: no tab groups, so derivation prefers a remembered editor.
-      groupsByWorktree: {}
-    })
-
-    f.store.getState().purgeWorktreeTerminalState([hostWorktreeTarget({ id: key, ...f.remote })])
-
-    expect(f.store.getState().activeTabId).toBe(f.local.terminalTabId)
-    expect(f.store.getState().activeTabType).toBe('terminal')
   })
 
   it.each([

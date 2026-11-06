@@ -5,29 +5,29 @@ import {
   B,
   C,
   reveal
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
-import { acquireWatcherRemovalGate } from '../../src/main/ipc/watcher-removal-gate'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
+import { acquireWatcherRemovalGate } from '../../src/main/workspaces/removal/watcher-removal-gate'
 import { registerSessionHandlers } from '../../src/main/ipc/session'
 import * as worktreeIdentity from '../../src/shared/worktree/id'
-import * as tabMerge from '../../src/main/runtime/mobile-session-tab-merge'
+import * as tabMerge from '../../src/main/runtime/session-lifecycle/projection/mobile-session-tab-merge'
 import * as recordRows from '../../src/main/runtime/agent-session/records/agent-session-record-rows'
 import * as storeDraft from '../../src/main/runtime/agent-session/records/agent-session-store-draft'
 import * as attribution from '../../src/main/runtime/agent-session/agent-session-runtime-attribution'
 import { sessionCrewChanges } from '../../src/main/runtime/orchestration/crew/crew-changes'
 import { StructuredAgentSessionHostRuntimeState } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-runtime-state'
-import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import type { Tab } from '../../src/shared/tab-types'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import type { ProfileStateDomainReplacement } from '../../src/main/persistence/loading-store/profile-state-authority'
 import * as placement from '../../src/main/runtime/session-tabs/structured-session-placement'
-import * as tabFilter from '../../src/shared/workspace-session-tab-filter'
+import * as tabFilter from '../../src/shared/workspace-session/workspace-session-tab-filter'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
 import { collectionVisits, fieldReads } from '../../src/shared/collection-visits.test-fixture'
-import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'
 import {
   retired,
   attachWindow,

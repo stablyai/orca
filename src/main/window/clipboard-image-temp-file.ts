@@ -10,7 +10,7 @@ import {
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../shared/agent-session/agent-session-attachments'
-import { detectImageFileSignature } from '../image-file-signature'
+import { detectImageFileSignature } from '../media/image-file-signature'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {

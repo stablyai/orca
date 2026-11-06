@@ -5,12 +5,12 @@ import {
   nativeChatPromptDismissalMatches,
   nativeChatPromptOccurrenceKey,
   nativeChatPromptWaitStartedAt
-} from '../../../../shared/native-chat-prompt-dismiss-key'
+} from '../../../../shared/native-chat/input/native-chat-prompt-dismiss-key'
 import {
   nativeChatPromptDismissals as dismissals,
   type NativeChatPromptDismissal
 } from './native-chat-prompt-dismissals'
-import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 
 export type NativeChatPromptCardPresentation = {
   /** The card that owns the input region now; null leaves it to the composer. */

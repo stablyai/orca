@@ -61,13 +61,13 @@ async function setPRReadyState(
       ],
       ghOptions
     )
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

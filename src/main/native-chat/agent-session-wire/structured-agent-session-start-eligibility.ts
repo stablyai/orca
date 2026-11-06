@@ -74,10 +74,7 @@ export function structuredAgentSessionStartParams(
           )
   }
   const startupOptions = startedFor
-    ? context.sessions
-        .get(sessionId)
-        ?.journal.submissions()
-        .find((submission) => submission.clientMessageId === startedFor)?.options
+    ? context.sessions.get(sessionId)?.journal.submission(startedFor)?.options
     : undefined
   return { ok: true, params, ...(startupOptions ? { startupOptions } : {}) }
 }

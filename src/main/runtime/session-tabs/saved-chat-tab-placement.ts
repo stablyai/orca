@@ -1,7 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { filterWorkspaceSessionTabs } from '../../../shared/workspace-session-tab-filter'
-import { savedSessionId } from '../saved-structured-agent-session-restoration'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { filterWorkspaceSessionTabs } from '../../../shared/workspace-session/workspace-session-tab-filter'
+import { savedSessionId } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { structuredSessionPlacementAllowed } from './structured-session-placement'
 
 /** This machine's saved layout without the chat tabs its records place elsewhere. One pass over

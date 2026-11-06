@@ -26,7 +26,6 @@ import type {
   StructuredAgentSessionItemAppendOptions
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
-import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
 import {
   claudeMessageIdentity,
@@ -39,11 +38,14 @@ import {
   readClaudeMessageEnvelope
 } from './structured/journal/claude-structured-item-translation'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
-import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
+import {
+  createClaudeTranscriptItemReader,
+  claudeRestoredItemBody
+} from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
-import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
+import { claudeMessageWithoutSyntheticText } from './claude-internal-message-content'
+import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 
-/** An isolated projection of final source items, compared with saved historical content. */
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
   providerSessionId: string
@@ -108,20 +110,7 @@ export function createClaudeTranscriptImportPlan(input: {
         return { accepted: true } as const
       }
       turnScope = scopeOf(existing)
-      if (body.kind === 'tool-call' && existing.body.kind === 'tool-call') {
-        // A call alone cannot undo its saved result; result-only suffixes keep the call metadata.
-        body =
-          body.state === 'running'
-            ? existing.body
-            : { ...existing.body, ...body, name: existing.body.name, input: existing.body.input }
-      }
-      if (
-        body.kind === 'message' &&
-        body.role === 'reasoning' &&
-        existing.body.kind === 'message'
-      ) {
-        body = { ...existing.body, ...body }
-      }
+      body = claudeRestoredItemBody(body, existing.body)
       if (isDeepStrictEqual(existing.body, body)) {
         return { accepted: true } as const
       }
@@ -159,7 +148,14 @@ export function createClaudeTranscriptImportPlan(input: {
   return {
     restore: (row: Record<string, unknown>) => {
       input.check()
-      const frame = { ...row, session_id: row.sessionId, parent_tool_use_id: null }
+      const frame = claudeMessageWithoutSyntheticText({
+        ...row,
+        session_id: row.sessionId,
+        parent_tool_use_id: null
+      })
+      if (!frame) {
+        return
+      }
       const envelope = readClaudeMessageEnvelope(frame)
       const queued = row.type === 'attachment'
       // The tail reader keeps only rows that carry one.
@@ -195,29 +191,31 @@ export function createClaudeTranscriptImportPlan(input: {
           matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
         }
       }
-      const prompt =
-        queued ||
-        (envelope?.role === 'user' &&
-          !claudeEnvelopeStopHookFeedbackRow(envelope) &&
-          envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result'))
-      const decoded = prompt
-        ? decodeClaudeTranscriptLine(JSON.stringify(row), `${input.providerSessionId}:${uuid}`)
-        : null
-      // A stop marker restates the chat's own interrupted turn, which its turn row already reads.
-      if (prompt && (!decoded || decoded.role === 'system')) {
+      const { decoded, ignored, internalTurnStart, hasWork } = claudeTranscriptPrompt(
+        row,
+        envelope,
+        input.providerSessionId
+      )
+      if (ignored) {
         return
       }
       uuids.push(uuid)
       if (!decoded) {
-        if (envelope?.content.length && sourceObservedAt !== undefined) {
+        if (hasWork && sourceObservedAt !== undefined) {
           workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
         }
-        translator.handle({
-          type: 'message',
-          sessionId: input.sessionId,
-          message: frame,
-          ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
-        })
+        if (hasWork || envelope?.role === 'assistant') {
+          translator.handle({
+            type: 'message',
+            sessionId: input.sessionId,
+            message: frame,
+            ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
+          })
+        }
+        // A hidden physical prompt still separates turns; caller-owned results settle first.
+        if (internalTurnStart) {
+          idle()
+        }
         return
       }
       // Folded input stays in the ongoing turn; a physical opener also settles its predecessor.
@@ -257,7 +255,7 @@ export function createClaudeTranscriptImportPlan(input: {
       input.check()
       idle()
       translator.flush()
-      // A row that renders nothing (a thinking block saved without its text) adds no divider either.
+      // A row that renders nothing adds no divider either.
       const rows = [...mutations.values()]
       const batch = createHistoryCatchUpBatch()
       const firstCreated = rows.find(

@@ -3,7 +3,10 @@ import type {
   PRCheckJob,
   PRCheckRunDetails
 } from '../../../../src/shared/github/check-types'
-import { resolveStepOutcome, summarizeJobSteps } from '../../../../src/shared/pr-check-step-status'
+import {
+  resolveStepOutcome,
+  summarizeJobSteps
+} from '../../../../src/shared/source-control/checks/pr-check-step-status'
 import { translate } from '../../i18n/mobile-i18n'
 
 // Map check payload to desktop-equivalent summary/annotations/failed jobs without React/RN imports for Node tests.

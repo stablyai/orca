@@ -4,7 +4,7 @@ import {
   type JiraIssueSummaryGenerationContext,
   type JiraIssueSummaryGenerationResult
 } from '../../shared/jira/jira-issue-summary-generation'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields

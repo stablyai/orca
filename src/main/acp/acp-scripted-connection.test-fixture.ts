@@ -5,7 +5,7 @@ import {
   type ProviderSpawnAbsence
 } from '../provider-process/provider-executable-missing'
 import type { AcpAgentConnectionOptions } from './acp-agent-connection'
-import { AcpConnectionClosedError } from './acp-errors'
+import { AcpAgentExitedError, AcpConnectionClosedError } from './acp-errors'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
@@ -80,7 +80,10 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
     this.exitedWith = status
     // As the real connection: a spawn ENOENT marks the exit error with what it proved absent.
     const error = withProviderSpawnAbsence(
-      this.lostWith ?? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`),
+      this.lostWith ??
+        (this.closing
+          ? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`)
+          : new AcpAgentExitedError(this.stderr || `${this.launch.command} exited`, this.stderr)),
       this.spawnAbsence
     )
     super.close(error)

@@ -28,8 +28,13 @@ export const journalStateLayout = {
   queuedHandOffPlaces: 'map',
   normalizedHandOffs: 'set',
   queue: 'queue',
-  historyOrigin: 'scalar'
-} as const satisfies Record<keyof JournalReducerState, 'scalar' | 'items' | 'map' | 'set' | 'queue'>
+  historyOrigin: 'scalar',
+  contextBoundary: 'scalar',
+  inputs: 'prepared'
+} as const satisfies Record<
+  keyof JournalReducerState,
+  'scalar' | 'items' | 'map' | 'set' | 'queue' | 'prepared'
+>
 
 type ScalarKey = {
   [K in keyof typeof journalStateLayout]: (typeof journalStateLayout)[K] extends 'scalar' | 'queue'
@@ -55,8 +60,9 @@ export function journalStateScalars(state: JournalReducerState): string {
       latestStop: stop && { sequence: stop.sequence, event: stop.event }
     },
     queue: { revision: state.queue.revision },
-    historyOrigin: state.historyOrigin
-  } satisfies Record<ScalarKey, unknown>)
+    historyOrigin: state.historyOrigin,
+    ...(state.contextBoundary > 1 ? { contextBoundary: state.contextBoundary } : {})
+  } satisfies Record<Exclude<ScalarKey, 'contextBoundary'>, unknown> & { contextBoundary?: number })
 }
 
 export function journalStateCollections(state: JournalReducerState): Collection[] {

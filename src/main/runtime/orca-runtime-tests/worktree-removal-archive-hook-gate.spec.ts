@@ -1,29 +1,29 @@
 // Archive hook failure must preserve the checkout, Git registration, agents and ownership evidence (#19334).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  assertWorktreeCleanForRemoval,
   deleteWorktreeHistoryDirMock,
-  getEffectiveHooks,
   invalidateAuthorizedRootsCacheMock,
-  listWorktreesStrict,
-  removeWorktree,
-  removeWorktreeLinkedPathsMock,
-  runHook
-} from '../orca-runtime-test-mocks.spec'
+  removeWorktreeLinkedPathsMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_PATH,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   createStaleRuntimeWorktreeStore,
   deferred
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import {
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   asArchiveHookRefusal
 } from '../../../shared/worktree/archive-hook-removal-gate'
-import { runSerializedWorktreeRemovalAcceptance } from '../../worktree-removal-acceptance-queue'
-import { startBackgroundWorktreeRemoval } from '../../worktree-background-removal'
+import { runSerializedWorktreeRemovalAcceptance } from '../../workspaces/removal/worktree-removal-acceptance-queue'
+import { startBackgroundWorktreeRemoval } from '../../workspaces/removal/worktree-background-removal'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 
 function withArchiveHook(): void {

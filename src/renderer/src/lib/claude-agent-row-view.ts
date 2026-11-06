@@ -7,7 +7,7 @@ import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import { findActiveRuntimeTerminal } from './active-agent-note-target'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { authorityKey } from '../../../shared/host-authority'
 import type { ClaudeAgentViewResult } from '../../../shared/claude-agent-view'
 

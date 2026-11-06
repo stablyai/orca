@@ -1,10 +1,10 @@
-import type { AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 import {
   reconcileSessionSearchInService,
   searchSessionsInService,
   sessionSearchStatusInService
-} from '../ai-vault/session-scanner-service-spawn'
+} from '../ai-vault/scan-service/session-scanner-service-spawn'
 import type { SessionSearchService } from './session-search-service'
 
 /** Forward to the database-owning child; failed searches return not-ready while logging the error. */

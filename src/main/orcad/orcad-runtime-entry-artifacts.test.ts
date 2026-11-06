@@ -18,7 +18,9 @@ afterAll(() => {
 })
 
 function buildOrcadBundles(): string[] {
-  const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
+  const builder = pathToFileURL(
+    join(REPO_ROOT, 'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs')
+  ).href
   const script = `
     import { build } from 'esbuild'
     import { join } from 'node:path'
@@ -57,7 +59,9 @@ it('ships every worker and child entry orcad loads at runtime', () => {
 })
 
 it('ships every child entry build-orcad.mjs builds', async () => {
-  const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
+  const builder = pathToFileURL(
+    join(REPO_ROOT, 'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs')
+  ).href
   const entries = await import(builder)
   const shipped = new Set(orcadArtifactFilenames('linux-x64-glibc', []))
   const built = Object.values<string>(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) =>

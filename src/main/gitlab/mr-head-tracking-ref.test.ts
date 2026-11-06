@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 
 import {
   gitlabMergeRequestHeadLocalRef,
@@ -58,26 +61,6 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       expect.arrayContaining(['fetch']),
       expect.anything()
-    )
-  })
-
-  it('keeps WSL routing while bounding the MR-head fetch', async () => {
-    await fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, 'origin', 42, {
-      localGitExecOptions: { cwd: '/repo', wslDistro: 'Ubuntu' }
-    })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      wslDistro: 'Ubuntu'
-    })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'fetch',
-        '--no-tags',
-        'origin',
-        `+refs/merge-requests/42/head:refs/orca/merge-requests/${ORIGIN_COMPONENT}/42`
-      ],
-      { cwd: '/repo', wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
   })
 

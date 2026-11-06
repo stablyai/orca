@@ -1,4 +1,4 @@
-import { readTerminalSendAcknowledgment } from '../../shared/terminal-send-acknowledgment'
+import { readTerminalSendAcknowledgment } from '../../shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
 import type { OrcaRuntimeService } from './orca-runtime'
 
 /** `refused` with no `error` property: the fence passed and the host then refused the write. */

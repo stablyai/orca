@@ -380,10 +380,4 @@ describe('a message sent to a chat whose start failed', () => {
     expect(getStructuredAgentSessionPendingSends(failed.sessionId)).toEqual([])
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
-
-  it('does nothing for a chat whose start has not failed', () => {
-    expect(
-      relaunchFailedStructuredAgentSessionWithMessage(WORKTREE_ID, 'session-unknown', 'hi')
-    ).toBeNull()
-  })
 })

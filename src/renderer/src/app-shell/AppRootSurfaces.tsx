@@ -9,7 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
-import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePicker'
+import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
@@ -18,6 +18,7 @@ import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -42,20 +43,33 @@ const StatusBar = lazy(() =>
 const SetupGuideModal = lazy(() => import('../components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWallModal'))
 const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
-const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
-const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
+const AddRepoDialog = lazy(
+  () => import('../components/sidebar/project-admission/dialog/AddRepoDialog')
+)
+const NonGitFolderDialog = lazy(
+  () => import('../components/sidebar/project-admission/dialog/NonGitFolderDialog')
+)
 const AddProjectFromFolderDialog = lazy(
-  () => import('../components/sidebar/AddProjectFromFolderDialog')
+  () => import('../components/sidebar/project-admission/dialog/AddProjectFromFolderDialog')
 )
 const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
-const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
-const NodeDistMirrorDialog = lazy(() => import('../components/settings/NodeDistMirrorDialog'))
-const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
+const ProjectAddedDialog = lazy(
+  () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
 )
-const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+const NodeDistMirrorDialog = lazy(
+  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+)
+const AiVaultSessionHistoryDialog = lazy(
+  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
+)
+const NativeChatAccountUsageDialog = lazy(
+  () => import('../components/native-chat/NativeChatAccountUsageDialog')
+)
+const DeleteWorktreeDialog = lazy(
+  () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
+)
 const PreservedBranchBatchReviewModal = lazy(
-  () => import('../components/sidebar/PreservedBranchBatchReviewModal')
+  () => import('../components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal')
 )
 const DictationController = lazy(() =>
   import('../components/dictation/DictationController').then((module) => ({
@@ -63,12 +77,12 @@ const DictationController = lazy(() =>
   }))
 )
 const SshPassphraseDialog = lazy(() =>
-  import('../components/settings/SshPassphraseDialog').then((module) => ({
+  import('../components/ssh-authentication/SshPassphraseDialog').then((module) => ({
     default: module.SshPassphraseDialog
   }))
 )
 const RemoteServerUpdateDialog = lazy(
-  () => import('../components/settings/RemoteServerUpdateDialog')
+  () => import('../components/settings/runtime-environments/updates/RemoteServerUpdateDialog')
 )
 const ContextualTourOverlay = lazy(() =>
   import('../components/contextual-tours/ContextualTourOverlay').then((module) => ({
@@ -198,10 +212,15 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <ProjectAddedDialog />
           </ModalBoundary>
         ) : null}
-        {/* Root hosting prevents chat capture handlers receiving history-dialog events. */}
+        {/* Root hosting prevents chat capture handlers receiving /resume and /usage dialog events. */}
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'chat-account-usage' ? (
+          <ModalBoundary boundaryId="modal.chat-account-usage" resetKey>
+            <NativeChatAccountUsageDialog />
           </ModalBoundary>
         ) : null}
         {/* Own store, not activeModal: another modal must never evict a running move. */}
@@ -278,6 +297,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
         shouldMountUpdateCard={shouldMountUpdateCard}

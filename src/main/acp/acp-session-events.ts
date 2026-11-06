@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getCompiledSchema } from '../zod-schema-compilation'
+import { getCompiledSchema } from '../schema-validation/zod-schema-compilation'
 import {
   SessionNotificationSchema,
   type SessionNotification

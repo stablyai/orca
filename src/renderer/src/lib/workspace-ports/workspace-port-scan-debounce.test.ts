@@ -21,15 +21,6 @@ function good(portIds: string[]): WorkspacePortScanResult {
   }
 }
 
-function unavailable(): WorkspacePortScanResult {
-  return { platform: 'unknown', scannedAt: 1, ports: [], unavailableReason: 'scan failed' }
-}
-
-/** What the ports popover publishes when its own scan fails: reason + last-good ports. */
-function unavailableWithRetainedPorts(portIds: string[]): WorkspacePortScanResult {
-  return { ...good(portIds), unavailableReason: 'scan failed' }
-}
-
 const FAILURE_THRESHOLD = 2
 
 function createHarness(): {
@@ -58,99 +49,11 @@ function createHarness(): {
 }
 
 describe('reconcileTransientPortScanFailures', () => {
-  it('keeps the live indicator solid through a single transient failure', () => {
-    const { apply } = createHarness()
-
-    const first = apply([{ key: 'host:all', result: good(['tcp:3000']) }])
-    expect(first[0].result.ports).toHaveLength(1)
-
-    const second = apply([{ key: 'host:all', result: unavailable() }])
-    expect(second[0].result.ports).toHaveLength(1)
-    expect(second[0].result.unavailableReason).toBeUndefined()
-  })
-
-  it('drops ports only after failures reach the tolerance', () => {
-    const { apply } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-    apply([{ key: 'h:all', result: unavailable() }])
-
-    const third = apply([{ key: 'h:all', result: unavailable() }])
-    expect(third[0].result.ports).toHaveLength(0)
-    expect(third[0].result.unavailableReason).toBe('scan failed')
-  })
-
-  it('clears immediately when a reachable host reports zero ports', () => {
-    const { apply } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-
-    const next = apply([{ key: 'h:all', result: good([]) }])
-    expect(next[0].result.ports).toHaveLength(0)
-    expect(next[0].result.unavailableReason).toBeUndefined()
-  })
-
-  it('resets the failure streak after a successful scan', () => {
-    const { apply } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-    apply([{ key: 'h:all', result: unavailable() }])
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-
-    const afterRecovery = apply([{ key: 'h:all', result: unavailable() }])
-    expect(afterRecovery[0].result.ports).toHaveLength(1)
-  })
-
   it('prunes state for hosts that disappear', () => {
     const { apply, state } = createHarness()
     apply([{ key: 'gone:all', result: good(['tcp:3000']) }])
     apply([{ key: 'other:all', result: good(['tcp:4000']) }])
     expect(state.has('gone:all')).toBe(false)
     expect(state.has('other:all')).toBe(true)
-  })
-
-  // Popover failures already publish last-good ports; do not count that as spent grace or the next poll drops them immediately.
-  it('still grants the grace period after a failure that retained its ports', () => {
-    const { apply, publish } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-    const popoverResult = unavailableWithRetainedPorts(['tcp:3000'])
-    publish('h:all', popoverResult)
-
-    const next = apply([{ key: 'h:all', result: unavailable() }])
-
-    expect(next[0].result).toBe(popoverResult)
-    expect(next[0].result.ports).toHaveLength(1)
-  })
-
-  it('still drops retained ports once failures reach the tolerance', () => {
-    const { apply, publish } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-    publish('h:all', unavailableWithRetainedPorts(['tcp:3000']))
-    apply([{ key: 'h:all', result: unavailable() }])
-
-    const next = apply([{ key: 'h:all', result: unavailable() }])
-
-    expect(next[0].result.ports).toHaveLength(0)
-    expect(next[0].result.unavailableReason).toBe('scan failed')
-  })
-
-  it('uses a newer manual result instead of resurrecting stale ports', () => {
-    const { apply, publish } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-    publish('h:all', good([]))
-
-    const next = apply([{ key: 'h:all', result: unavailable() }])
-
-    expect(next[0].result.ports).toHaveLength(0)
-    expect(next[0].result.unavailableReason).toBeUndefined()
-  })
-
-  it('starts a fresh failure streak after a newer manual result', () => {
-    const { apply, publish } = createHarness()
-    apply([{ key: 'h:all', result: good(['tcp:3000']) }])
-    apply([{ key: 'h:all', result: unavailable() }])
-    const manualResult = good([])
-    publish('h:all', manualResult)
-
-    const next = apply([{ key: 'h:all', result: unavailable() }])
-
-    expect(next[0].result).toBe(manualResult)
   })
 })

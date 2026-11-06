@@ -1,7 +1,7 @@
 import { PLUGIN_HOOK_SPECS } from '../../../../shared/plugins/events/plugin-hook-payloads'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { pluginHookWanted, runPluginHook } from '../../../plugins/hooks/plugin-hook-dispatch'
-import type { TerminalInputSource } from '../../terminal-input-admission'
+import type { TerminalInputSource } from './terminal-input-admission'
 
 type TerminalSendAction = { text?: string; enter?: boolean; interrupt?: boolean }
 

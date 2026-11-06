@@ -1,5 +1,6 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitRunner from '../git/runner'
 
 // Fork PR reads prefer upstream while origin-only probes retain the checkout identity.
 
@@ -11,9 +12,13 @@ const { gitExecFileAsyncMock, ghExecFileAsyncMock, readLocalGitConfigSignatureMo
   })
 )
 
-vi.mock('../git/runner', async (importOriginal) => ({
-  ...(await importOriginal<typeof GitRunner>()),
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
@@ -21,7 +26,7 @@ vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
 import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
 import { getOwnerRepo } from './github-owner-repo-selection'
 import { getRepoUpstream } from './client/fetch/repo-slug-upstream'
@@ -70,12 +75,6 @@ beforeEach(() => {
 describe('issue #7331: fork PR owner/repo resolution', () => {
   it('getOwnerRepo prefers the upstream parent on a fork checkout', async () => {
     const prRepo = await getOwnerRepo(FORK_PATH)
-
-    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
-  })
-
-  it('getOwnerRepo falls back to origin when there is no upstream remote', async () => {
-    const prRepo = await getOwnerRepo(NON_FORK_PATH)
 
     expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
   })

@@ -1,6 +1,4 @@
-// Keep provably unhanded personal text as queued cards on restart/close; reject the submission
-// atomically to prevent duplicate handover. Other senders regenerate work or require explicit retry.
-
+import { journalInputOrder } from './journal-input-order'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -13,7 +11,11 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalQueueCardChange } from './journal-queue-events'
+import type { JournalReducerState } from './journal-reducer'
+import type { ResolveDispatchInput } from './journal-store-contracts'
 import type { JournalQueuePlan } from './journal-queued-messages'
+// Keep provably unhanded personal text as queued cards on restart/close; reject the submission
+// atomically to prevent duplicate handover. Other senders regenerate work or require explicit retry.
 
 type QueuedMessagePositionMove = { messageId: string; position: number }
 
@@ -23,15 +25,17 @@ export type UnsentSendHold =
   /** Restrict settlement when only part of a close completed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
-/** Keep personal text only; existing card handoffs, commands, images and nonpersonal sends retain recovery. */
+/** The body an unsent send is kept with, or null when it is rejected instead:
+ *  - a card's own hand-off: its rejection already returns the card (`queuedHandOffOutcome`);
+ *  - `/compact` and other commands: a command in flight is not resumed, the person re-runs it;
+ *  - a send not from a person: orchestration mail (the mailbox re-sends it), a dispatch preamble
+ *    or a restart continuation (their owners re-derive them), a kind this build does not know, and
+ *    a row with no source that is not a person's (it could be either). */
 export function unsentSendKeptAsCard(
   submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
   body: AgentJournalItemBody | null
 ): AgentJournalMessageItem | null {
   if (submission.queuedMessageId !== undefined || body?.kind !== 'message' || body.command) {
-    return null
-  }
-  if (!body.blocks.every((block) => block.type === 'text')) {
     return null
   }
   const { source } = submission
@@ -69,8 +73,8 @@ export async function holdUnsentSends(
   }
 ): Promise<number | null> {
   const { hold } = input
-  const unsent = journal
-    .submissions()
+  const unsent = journal.inputOrder
+    .recoverableSubmissions()
     .filter((entry) =>
       input.unrun
         ? isUnansweredHandedOverSubmission(entry) && (input.unrun === true || input.unrun(entry))
@@ -83,7 +87,7 @@ export async function holdUnsentSends(
   if (unsent.length === 0) {
     return null
   }
-  const { epoch } = journal.cursor()
+  const { epoch } = journal.physicalCursor()
   const kept = unsent.map((submission) => ({
     submission,
     body: unsentSendKeptAsCard(
@@ -174,10 +178,8 @@ function headOfQueuePositions(
   unrun: boolean
 ): { placed: Map<string, number>; moves: QueuedMessagePositionMove[] } {
   const cards = journal.queuedMessages.list()
-  const keptIds = new Set(
-    journal.submissions().flatMap((entry) => entry.keptAsQueuedMessageId ?? [])
-  )
-  const { epoch } = journal.cursor()
+  const kept = (id: string) => journal.inputOrder.keptCard(id)
+  const { epoch } = journal.physicalCursor()
   const state = journal.queuedMessages.displayState()
   const forcedBatch = batch.some(({ submission }) =>
     journal.inputOrder.forced(submission.clientMessageId)
@@ -188,9 +190,12 @@ function headOfQueuePositions(
   const explicitHeads = new Map(
     batch.flatMap(({ submission }) => {
       const id = submission.origin === 'client' ? submission.queuedMessageId : undefined
-      return id && cardsById.get(id)?.consumedAs === submission.clientMessageId
-        ? [[submission.clientMessageId, id] as const]
-        : []
+      const card = id ? journal.queuedMessages.get(id) : null
+      if (id && card?.consumedAs === submission.clientMessageId) {
+        cardsById.set(id, card)
+        return [[submission.clientMessageId, id] as const]
+      }
+      return []
     })
   )
   const explicit = new Set(explicitHeads.values())
@@ -200,7 +205,7 @@ function headOfQueuePositions(
     }
     if (
       card.state === 'waiting' &&
-      ((unrun && keptIds.has(card.messageId)) ||
+      ((unrun && kept(card.messageId)) ||
         (!forcedBatch && card.queuedAt && card.queuedAt.epoch !== epoch))
     ) {
       earlier.push(card.messageId)
@@ -219,7 +224,7 @@ function headOfQueuePositions(
   for (let i = 0; i < rest.length; i++) {
     if (
       rest[i].state === 'waiting' &&
-      keptIds.has(rest[i].messageId) &&
+      kept(rest[i].messageId) &&
       (journal.inputOrder.lineage.cards.get(rest[i].messageId)?.introduced ?? -Infinity) < firstCut
     ) {
       previousBoundary = i + 1
@@ -227,7 +232,7 @@ function headOfQueuePositions(
   }
   for (const { submission, body } of batch) {
     const id = body ? submission.clientMessageId : explicitHeads.get(submission.clientMessageId)
-    if (!id || keptIds.has(id)) {
+    if (!id || (body && kept(id))) {
       continue
     }
     if (!body && previousBoundary > 0) {
@@ -263,9 +268,49 @@ function headOfQueuePositions(
   const placed = new Map(order.map((id, index) => [id, index]))
   return {
     placed,
-    moves: cards.flatMap((card) => {
+    moves: [...cardsById.values()].flatMap((card) => {
       const position = placed.get(card.messageId)!
       return position === card.position ? [] : [{ messageId: card.messageId, position }]
+    })
+  }
+}
+
+/** Failed starts return the person's direct input in the rejection's own transaction. */
+export function keepFailedStartSends(
+  state: JournalReducerState,
+  dispatches: readonly ResolveDispatchInput[]
+): { cards: JournalQueueCardChange[]; dispatches: typeof dispatches } {
+  const cards: JournalQueueCardChange[] = []
+  let position = journalInputOrder(state).cardBounds(state).first - dispatches.length
+  return {
+    cards,
+    dispatches: dispatches.map((dispatch) => {
+      const send = state.submissions.get(dispatch.clientMessageId)
+      const body =
+        send &&
+        unsentSendKeptAsCard(
+          send,
+          state.items.get(agentJournalSubmissionKey(send.clientMessageId))?.body ?? null
+        )
+      if (
+        !body ||
+        dispatch.state !== 'rejected' ||
+        state.queue.cards.has(dispatch.clientMessageId)
+      ) {
+        return dispatch
+      }
+      cards.push({
+        messageId: dispatch.clientMessageId,
+        change: {
+          op: 'queued',
+          body,
+          position: position++,
+          queuedAt: { epoch: state.epoch, sequence: send?.acceptedSequence ?? 0 },
+          ...(send?.options ? { options: send.options } : {}),
+          returned: { reason: dispatch.reason, rejection: dispatch.rejection }
+        }
+      })
+      return { ...dispatch, keptAsQueuedMessageId: dispatch.clientMessageId }
     })
   }
 }
