@@ -7,9 +7,7 @@ import {
 
 const MSYS_BASH_IMAGE = 'bash.exe'
 
-/** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
- * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
- * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
+/** Idle needs both: no other work among the job's members, and no live shell descendant outside the job. */
 export async function isWindowsShellAloneInJob(
   shellPid: number,
   spawnedShellPath: string,
@@ -46,6 +44,9 @@ function hasDescendantOutsideJob(
   ).some((row) => !jobProcessIds.has(row.pid))
 }
 
+/** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
+ * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
+ * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
 async function isShellAloneAmongJobMembers(
   shellPid: number,
   spawnedShellPath: string,
