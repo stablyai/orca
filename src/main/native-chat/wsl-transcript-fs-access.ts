@@ -133,14 +133,16 @@ export function openTranscriptFile(
   }
   if (!isWslUncPath(path)) {
     throwIfSignalAborted(signal)
-    const pending = open(path, 'r').then((handle) => {
-      if (signal?.aborted) {
-        void handle.close().catch(() => undefined)
-        throwIfSignalAborted(signal)
-      }
-      return handle
+    const pending = open(path, 'r')
+    return waitForPromiseWithSignal(pending, signal).catch((error: unknown) => {
+      void pending
+        .then(
+          (handle) => handle.close(),
+          () => undefined
+        )
+        .catch(() => undefined)
+      throw error
     })
-    return waitForPromiseWithSignal(pending, signal)
   }
   return openAdmittedWslTranscriptFile(path, priority, signal)
 }
