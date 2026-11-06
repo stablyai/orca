@@ -1,6 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
 import { projectRelationCellText } from './ProjectCell.test-fixture'
 
@@ -12,12 +13,12 @@ vi.mock('../../../../../mobile/src/tasks/mobile-tasks-dependencies', () => ({
     data,
     renderItem
   }: {
-    data: unknown[]
+    data: { row: GitHubProjectRow }[]
     renderItem: (args: { item: unknown }) => React.ReactNode
   }) => (
     <div>
-      {data.map((item, index) => (
-        <div key={index}>{renderItem({ item })}</div>
+      {data.map((item) => (
+        <div key={item.row.id}>{renderItem({ item })}</div>
       ))}
     </div>
   ),
@@ -60,6 +61,7 @@ function phoneText(table: ReturnType<typeof projectRelationsTableFixture>): stri
     githubProjectListEntries: table.rows.map((row) => ({ type: 'row', row })),
     insets: { bottom: 0 },
     findProjectRowRepo: () => null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rendered populated-list branch reads only these fields; inert controls never invoke omitted actions.
   } as unknown as ConnectionPresentationModel
   return renderToStaticMarkup(renderMobileTasksGitHubProjectList(model, 'dark', 0)).replace(
     /<[^>]*>/g,

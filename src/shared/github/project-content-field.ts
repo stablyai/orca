@@ -52,7 +52,10 @@ export function projectContentFieldLabel(value: ProjectContentField): string {
 export function projectContentFieldSortValue(
   value: ProjectContentField | null
 ): string | number | null {
-  switch (value?.kind) {
+  if (!value) {
+    return null
+  }
+  switch (value.kind) {
     case 'parent':
       return value.parent.number
     case 'repository':
@@ -61,7 +64,5 @@ export function projectContentFieldSortValue(
       return value.progress.percentCompleted
     case 'linked':
       return value.linked.pullRequests[0]?.number ?? null
-    default:
-      return null
   }
 }
