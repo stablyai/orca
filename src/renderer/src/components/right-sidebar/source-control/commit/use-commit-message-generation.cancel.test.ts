@@ -34,14 +34,12 @@ let latest: ReturnType<typeof useSourceControlCommitMessageGeneration> | null = 
 let root: Root | null = null
 
 function Probe(): null {
-  const records = useAppStore((s) => s.commitMessageGenerationRecords)
   const state = useAppStore.getState()
   latest = useSourceControlCommitMessageGeneration({
     activeRepo: null,
     activeRepoTarget: { kind: 'local' },
     activeWorktreeId: WORKTREE_ID,
     allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
-    commitMessageGenerationRecords: records,
     openCommitGenerationDialog: () => {},
     operationStore,
     resolvedCommitMessageAi: null,

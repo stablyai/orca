@@ -8,6 +8,7 @@ import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../../../wsl-host-stopped/WslHostStoppedNotice'
+import { useSourceControlScope } from '../panel/worktree-scope'
 
 export function SourceControlContentStatus({
   unresolvedConflictCount,
@@ -60,6 +61,8 @@ export function SourceControlContentStatus({
 }): React.JSX.Element {
   // Why: a stopped host can't answer git, so its read error or "clean" result is not the workspace's.
   const stoppedWslHost = useStoppedWslHost(worktreeId)
+  // Folder sections keep to the plain message and Retry; raw Git output stays in the worktree's own panel.
+  const showRawStatusError = useSourceControlScope() === null
   return (
     <>
       {stoppedWslHost && (
@@ -121,9 +124,11 @@ export function SourceControlContentStatus({
                 )}
               </span>
             </div>
-            <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
-              {statusReadError}
-            </pre>
+            {showRawStatusError && (
+              <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
+                {statusReadError}
+              </pre>
+            )}
             <div className="flex justify-end">
               <StatusRetryButton key={worktreeId} onRetry={onRetryStatus} />
             </div>

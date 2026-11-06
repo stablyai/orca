@@ -1,4 +1,7 @@
-import { useSourceControlScope } from '../panel/worktree-scope'
+import {
+  sourceControlScopeRuntimeEnvironmentId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import { useCallback, useMemo } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { openUncommittedEntry } from './open-uncommitted-entry'
@@ -35,12 +38,7 @@ export function useSourceControlRowOpening({
   const executionHostId = scope?.executionHostId
   const placementWorkspaceId = scope?.placementWorkspaceId
   const placementId = placementWorkspaceId ?? activeWorktreeId
-  const runtimeEnvironmentId = scope
-    ? (scope.worktree.runtimeOwnerEnvironmentId ??
-      (scope.executionHostId.startsWith('runtime:')
-        ? decodeURIComponent(scope.executionHostId.slice(8))
-        : null))
-    : undefined
+  const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const createEmptySplitGroup = useAppStore((s) => s.createEmptySplitGroup)

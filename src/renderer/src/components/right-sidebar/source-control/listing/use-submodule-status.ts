@@ -3,7 +3,11 @@ import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
-import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import {
+  sourceControlConnectionId,
+  useSourceControlScope,
+  useSourceControlSectionActive
+} from '../panel/worktree-scope'
 import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-status-client'
 import {
   getSubmoduleExpansionKey,
@@ -31,6 +35,7 @@ export function useSourceControlSubmoduleStatus(
   input: UseSourceControlSubmoduleStatusInput
 ): UseSourceControlSubmoduleStatusResult {
   const scope = useSourceControlScope()
+  const sectionActive = useSourceControlSectionActive()
   const { activeWorktreeId, worktreePath, activeRepoTarget, entries } = input
   const [expandedSubmoduleKeys, setExpandedSubmoduleKeys] = useState<Set<string>>(() => new Set())
   const activeRuntimeRouteKey =
@@ -134,6 +139,9 @@ export function useSourceControlSubmoduleStatus(
 
   // Refresh expanded children when parent entries change; collapsed submodules incur no Git work.
   useEffect(() => {
+    if (!sectionActive) {
+      return
+    }
     const visibleExpandableKeys = new Set(
       entries.filter(isExpandableSubmoduleEntry).map(getSubmoduleExpansionKey)
     )
@@ -142,7 +150,7 @@ export function useSourceControlSubmoduleStatus(
         void fetchSubmoduleStatus(expansionKey)
       }
     }
-  }, [expandedSubmoduleKeys, entries, fetchSubmoduleStatus])
+  }, [expandedSubmoduleKeys, entries, fetchSubmoduleStatus, sectionActive])
 
   return { expandedSubmoduleKeys, submoduleStatusByKey, toggleSubmodule }
 }

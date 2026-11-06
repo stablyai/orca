@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { SourceControlScope } from '../panel/worktree-scope'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
@@ -15,7 +15,10 @@ import {
 } from '@/lib/passive-macos-app-data-access'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
-import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
+import {
+  getRepoWorktreePathsForSignal,
+  useGitStatusPushSignalRefresh
+} from './git-status-push-signal-refresh'
 import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
 import {
   admissionTierForGitStatusRefreshReason,
@@ -25,7 +28,6 @@ import {
   type GitStatusRefreshReason,
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export { admissionTierForGitStatusRefreshReason } from './git-status-refresh-scheduler'
 
@@ -42,10 +44,11 @@ export const SLOW_GIT_POLL_BACKOFF = {
   maxIntervalMs: 5 * 60_000
 }
 
+/** Returns a coalesced refresh that runs through this observer's scheduler, tier and apply guards. */
 export function useWorktreeGitStatusObservation(
   owner: SourceControlScope | null,
   options: { enabled?: boolean } = {}
-): void {
+): () => void {
   const enabled = options.enabled ?? true
   const activeWorktreeId = useAppStore((s) => owner?.worktreeId ?? s.activeWorktreeId)
   const selectedWorktree = useWorktreeById(owner ? null : activeWorktreeId)
@@ -113,8 +116,9 @@ export function useWorktreeGitStatusObservation(
   const activeStatusPollScope = shouldPollActiveWorktreeGitStatus
     ? `${activeExecutionHostId}\0${activeWorktreeId}\0${worktreePath}`
     : null
+  // Main binds one upstream ref (the selected worktree's); sections must not add per-tick resolutions.
   const publishUpstreamRefWatch = useGitStatusUpstreamRefWatch({
-    enabled: canFetchActiveWorktreeGitStatus,
+    enabled: canFetchActiveWorktreeGitStatus && !owner,
     executionHostId: activeExecutionHostId,
     worktreeId: activeWorktreeId,
     worktreePath
@@ -180,9 +184,11 @@ export function useWorktreeGitStatusObservation(
 
   // Preserve scheduler lifetime across harmless rerenders so in-flight/trailing/pacing state remains authoritative.
   const runFetchStatusRef = useRef(runFetchStatus)
-  runFetchStatusRef.current = runFetchStatus
   const canApplyScheduledStatusRef = useRef(canFetchActiveWorktreeGitStatus)
-  canApplyScheduledStatusRef.current = canFetchActiveWorktreeGitStatus
+  useLayoutEffect(() => {
+    runFetchStatusRef.current = runFetchStatus
+    canApplyScheduledStatusRef.current = canFetchActiveWorktreeGitStatus
+  }, [runFetchStatus, canFetchActiveWorktreeGitStatus])
   const statusRefreshGenerationRef = useRef(0)
 
   const statusSchedulerRef = useRef<GitStatusRefreshScheduler | null>(null)
@@ -291,14 +297,6 @@ export function useWorktreeGitStatusObservation(
     statusSchedulerRef.current?.signal()
   }, [])
 
-  const getRepoWorktreePathsForSignal = useCallback(
-    (repoId: string) =>
-      (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
-        (worktree) => worktree.path
-      ),
-    []
-  )
-
   useGitStatusFileWatchRefresh({
     activeConnectionId,
     activeRepoSupportsGit,
@@ -323,4 +321,8 @@ export function useWorktreeGitStatusObservation(
     fetchStatus: fetchStatusOnChangeSignal,
     getRepoWorktreePaths: getRepoWorktreePathsForSignal
   })
+
+  return useCallback(() => {
+    statusSchedulerRef.current?.refreshNow()
+  }, [])
 }

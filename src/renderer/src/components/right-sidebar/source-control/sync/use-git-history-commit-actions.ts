@@ -51,7 +51,7 @@ export function useGitHistoryCommitActions({
   const scope = useSourceControlScope()
   const executionHostId = scope?.executionHostId
   const placementWorkspaceId = scope?.placementWorkspaceId
-  const runtimeEnvironmentId = scope?.worktree.runtimeOwnerEnvironmentId
+  const runtimeEnvironmentId = scope?.runtimeOwnerEnvironmentId
   const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
 

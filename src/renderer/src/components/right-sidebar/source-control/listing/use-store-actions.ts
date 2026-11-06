@@ -1,35 +1,30 @@
 import type { AppState } from '@/store/types'
-import { useSourceControlScope } from '../panel/worktree-scope'
+import {
+  sourceControlScopeRuntimeEnvironmentId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 
-/** Read fixed-identity actions via getState; subscribe only to generation maps, keeping the return object stable between map changes. */
+/** Read fixed-identity actions via getState; key section wrappers on primitive routing so store writes never rebuild them. */
 export function useSourceControlStoreActions() {
   const scope = useSourceControlScope()
-  const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
-  const commitMessageGenerationRecords = useAppStore((s) => s.commitMessageGenerationRecords)
+  const executionHostId = scope?.executionHostId
+  const placementWorkspaceId = scope?.placementWorkspaceId
+  const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
 
   return useMemo(() => {
-    const options = {
-      placementWorkspaceId: scope?.placementWorkspaceId,
-      executionHostId: scope?.executionHostId,
-      runtimeEnvironmentId: scope
-        ? (scope.worktree.runtimeOwnerEnvironmentId ??
-          (scope.executionHostId.startsWith('runtime:')
-            ? decodeURIComponent(scope.executionHostId.slice(8))
-            : null))
-        : undefined
-    }
+    const options = { placementWorkspaceId, executionHostId, runtimeEnvironmentId }
     const state = useAppStore.getState()
     const createHostedReview: AppState['createHostedReview'] = (path, input) =>
       state.createHostedReview(path, {
         ...input,
-        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+        ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const createStackedHostedReview: AppState['createStackedHostedReview'] = (path, input) =>
       state.createStackedHostedReview(path, {
         ...input,
-        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+        ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const fetchHostedReviewForBranch: AppState['fetchHostedReviewForBranch'] = (
       path,
@@ -38,19 +33,19 @@ export function useSourceControlStoreActions() {
     ) =>
       state.fetchHostedReviewForBranch(path, branch, {
         ...options,
-        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+        ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const fetchPRForBranch: AppState['fetchPRForBranch'] = (path, branch, options) =>
       state.fetchPRForBranch(path, branch, {
         ...options,
-        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+        ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const getHostedReviewCreationEligibility: AppState['getHostedReviewCreationEligibility'] = (
       args
     ) =>
       state.getHostedReviewCreationEligibility({
         ...args,
-        ...(scope ? { repoOwnerExecutionHostId: scope.executionHostId } : {})
+        ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries) =>
       state.openAllDiffs(id, path, alternate, filter, entries, options)
@@ -61,12 +56,12 @@ export function useSourceControlStoreActions() {
     const updateRepo: AppState['updateRepo'] = (id, updates, options) =>
       state.updateRepo(id, updates, {
         ...options,
-        ...(scope ? { hostId: scope.executionHostId } : {})
+        ...(executionHostId ? { hostId: executionHostId } : {})
       })
     const updateWorktreeMeta: AppState['updateWorktreeMeta'] = (id, updates, options) =>
       state.updateWorktreeMeta(id, updates, {
         ...options,
-        ...(scope ? { executionHostId: scope.executionHostId } : {})
+        ...(executionHostId ? { executionHostId } : {})
       })
     return {
       allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
@@ -74,7 +69,6 @@ export function useSourceControlStoreActions() {
       beginGitBranchCompareRequest: state.beginGitBranchCompareRequest,
       clearDiffComments: state.clearDiffComments,
       clearDiffCommentsForFile: state.clearDiffCommentsForFile,
-      commitMessageGenerationRecords,
       createHostedReview,
       createStackedHostedReview,
       deleteDiffComment: state.deleteDiffComment,
@@ -92,7 +86,6 @@ export function useSourceControlStoreActions() {
       openModal: state.openModal,
       openSettingsPage: state.openSettingsPage,
       openSettingsTarget: state.openSettingsTarget,
-      prGenerationRecords,
       pullBranch: state.pullBranch,
       pushBranch: state.pushBranch,
       rebaseFromBase: state.rebaseFromBase,
@@ -112,7 +105,7 @@ export function useSourceControlStoreActions() {
       updateWorktreeGitIdentity: state.updateWorktreeGitIdentity,
       updateWorktreeMeta
     }
-  }, [commitMessageGenerationRecords, prGenerationRecords, scope])
+  }, [executionHostId, placementWorkspaceId, runtimeEnvironmentId])
 }
 
 export type SourceControlStoreActions = ReturnType<typeof useSourceControlStoreActions>

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
@@ -19,14 +19,22 @@ import {
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
 import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
-import { refreshGitStatusForWorktree } from './source-control/sync/git-status-refresh'
-import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
+import {
+  nextSourceControlExpansionStamp,
+  useSourceControlWatchConsumer
+} from '@/hooks/source-control-watch-consumers'
+import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 const EMPTY_ENTRIES: readonly unknown[] = []
 
+type SectionProps = {
+  owner: SourceControlScope
+  scrollRoot: Element | null
+  refreshers: Set<() => void>
+}
+
 const WorktreeSection = memo(
-  function WorktreeSection({ owner }: { owner: SourceControlScope }) {
+  function WorktreeSection({ owner, scrollRoot, refreshers }: SectionProps) {
     useUiLanguageRevision()
     const id = owner.worktreeId
     const entries = useAppStore((state) => state.gitStatusByWorktree[id] ?? EMPTY_ENTRIES)
@@ -39,17 +47,33 @@ const WorktreeSection = memo(
         !owner.repo.connectionId ||
         state.sshConnectionStates.get(owner.repo.connectionId)?.status === 'connected'
     )
-    const [expanded, setExpanded] = useState<boolean | undefined>()
-    const isExpanded = expanded ?? (statusKnown ? entries.length > 0 : true)
+    const [expansion, setExpansion] = useState<{ expanded: boolean; at: number } | undefined>()
+    const isExpanded = expansion?.expanded ?? (statusKnown ? entries.length > 0 : true)
     // Decide once at the first result; later agent edits update badges without undoing a user's collapse.
-    if (expanded === undefined && statusKnown) {
-      setExpanded(entries.length > 0)
+    if (expansion === undefined && statusKnown) {
+      setExpansion({ expanded: entries.length > 0, at: 0 })
     }
-    useWorktreeGitStatusObservation(owner, { enabled: true })
+    const refreshNow = useWorktreeGitStatusObservation(owner, { enabled: true })
+    useEffect(() => {
+      refreshers.add(refreshNow)
+      return () => {
+        refreshers.delete(refreshNow)
+      }
+    }, [refreshNow, refreshers])
+    const [sectionRef, onScreen] = useSectionOnScreen(scrollRoot)
+    const bodyShown =
+      isExpanded && connected && (statusKnown || error !== undefined || isFolderRepo(owner.repo))
+    // Compare, upstream, review and history work runs only while the body is shown and on screen.
+    const bodyActive = bodyShown && onScreen
+    // Mount on first sight, then keep the body so selection, history view and focus survive scrolling and collapse.
+    const [bodyMounted, setBodyMounted] = useState(false)
+    if (bodyActive && !bodyMounted) {
+      setBodyMounted(true)
+    }
     const host = parseExecutionHostId(owner.executionHostId)
     useSourceControlWatchConsumer(
       attachedWorktreeOwnerKey(owner),
-      isExpanded && connected && !huge && !isFolderRepo(owner.repo)
+      statusKnown && isExpanded && connected && !huge && !isFolderRepo(owner.repo)
         ? {
             worktreeId: id,
             worktreePath: owner.worktree.path,
@@ -59,16 +83,23 @@ const WorktreeSection = memo(
                 ? host.environmentId
                 : (owner.worktree.runtimeOwnerEnvironmentId ?? null)
           }
-        : null
+        : null,
+      expansion?.at ?? 0
     )
     const identity = getWorktreeGitIdentityDisplay(owner.worktree)
     return (
-      <section className="border-b border-border" data-source-control-worktree={id}>
+      <section
+        ref={sectionRef}
+        className="border-b border-border"
+        data-source-control-worktree={id}
+      >
         <div className="flex items-center gap-1 pr-1">
           <button
             type="button"
             aria-expanded={isExpanded}
-            onClick={() => setExpanded(!isExpanded)}
+            onClick={() =>
+              setExpansion({ expanded: !isExpanded, at: nextSourceControlExpansionStamp() })
+            }
             className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <ChevronRight className={`size-3 shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
@@ -127,22 +158,28 @@ const WorktreeSection = memo(
                 'Reconnect to see this worktree’s changes.'
               )}
             </div>
-          ) : error ? (
-            <div className="px-4 pb-2 text-xs text-muted-foreground">{error}</div>
-          ) : !statusKnown && !isFolderRepo(owner.repo) ? (
+          ) : !bodyShown ? (
             <div className="h-24 space-y-2 p-3" aria-busy="true">
               <div className="h-2 w-3/4 rounded bg-muted" />
               <div className="h-2 w-1/2 rounded bg-muted" />
             </div>
           ) : (
-            <SourceControlScopeProvider owner={owner}>
+            !bodyMounted && <div className="h-24" aria-hidden="true" />
+          ))}
+        {bodyMounted && (
+          // A read error renders the body's existing failure banner with Retry.
+          <div hidden={!bodyShown}>
+            <SourceControlScopeProvider owner={owner} active={bodyActive}>
               <SourceControlPanel />
             </SourceControlScopeProvider>
-          ))}
+          </div>
+        )}
       </section>
     )
   },
   (left, right) =>
+    left.scrollRoot === right.scrollRoot &&
+    left.refreshers === right.refreshers &&
     left.owner.worktree === right.owner.worktree &&
     left.owner.repo === right.owner.repo &&
     left.owner.placementWorkspaceId === right.owner.placementWorkspaceId
@@ -188,24 +225,12 @@ export default function FolderWorkspaceSourceControlPanel() {
       }),
     [resolution, repos]
   )
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null)
+  const [refreshers] = useState(() => new Set<() => void>())
+  // Each section's scheduler applies the status tier, coalescing, abort and stale-result guards.
   const refresh = () => {
-    const state = useAppStore.getState()
-    for (const owner of owners) {
-      if (isFolderRepo(owner.repo)) {
-        continue
-      }
-      const copy = resolveWorktreeGitCopyNow(owner.worktreeId, owner.executionHostId)
-      if (copy) {
-        void refreshGitStatusForWorktree({
-          target: copy.transport,
-          ownerHostId: copy.hostId,
-          worktreeId: owner.worktreeId,
-          worktreePath: owner.worktree.path,
-          connectionId: copy.connectionId,
-          pushTarget: owner.worktree.pushTarget,
-          deps: state
-        }).catch(() => {})
-      }
+    for (const refreshNow of refreshers) {
+      refreshNow()
     }
   }
   return (
@@ -256,9 +281,14 @@ export default function FolderWorkspaceSourceControlPanel() {
           </div>
         </div>
       ) : (
-        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+        <div ref={setScrollRoot} className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
           {owners.map((owner) => (
-            <WorktreeSection key={attachedWorktreeOwnerKey(owner)} owner={owner} />
+            <WorktreeSection
+              key={attachedWorktreeOwnerKey(owner)}
+              owner={owner}
+              scrollRoot={scrollRoot}
+              refreshers={refreshers}
+            />
           ))}
         </div>
       )}

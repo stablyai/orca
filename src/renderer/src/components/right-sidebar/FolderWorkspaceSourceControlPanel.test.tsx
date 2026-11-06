@@ -17,7 +17,7 @@ const probes = vi.hoisted(() => ({
   status: vi.fn(async (_request: { worktreeId: string }) => {}),
   body: vi.fn(),
   header: vi.fn(),
-  watches: 0
+  watches: new Array<string>()
 }))
 vi.mock('./source-control/sync/git-status-refresh', () => ({
   refreshGitStatusForWorktree: probes.status
@@ -55,10 +55,25 @@ vi.mock('./source-control/panel/panel', () => ({
   }
 }))
 
+// Unlike happy-dom, report every observed section as on screen.
+class OnScreenIntersectionObserver {
+  private readonly callback: IntersectionObserverCallback
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback
+  }
+  observe(target: Element): void {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the section hook reads only target and isIntersecting.
+    this.callback([{ target, isIntersecting: true } as IntersectionObserverEntry], this as never)
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
 let root: Root
 let container: HTMLDivElement
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.stubGlobal('IntersectionObserver', OnScreenIntersectionObserver)
   vi.useFakeTimers()
   useAppStore.setState(useAppStore.getInitialState(), true)
   container = document.createElement('div')
@@ -73,9 +88,10 @@ afterEach(async () => {
   container.remove()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 function Watches() {
-  probes.watches = useSourceControlWatchConsumers().length
+  probes.watches = useSourceControlWatchConsumers().map((target) => target.worktreeId)
   return null
 }
 function setup(count: number) {
@@ -147,7 +163,7 @@ it.each([3, 30])(
     // One status per visible repository is necessary for its badge; collapsed bodies do no compare work.
     expect(probes.status).toHaveBeenCalledTimes(count)
     expect(probes.body).not.toHaveBeenCalled()
-    expect(probes.watches).toBe(0)
+    expect(probes.watches).toEqual([])
     probes.header.mockClear()
     await act(async () => useAppStore.setState({ activeFileId: 'unrelated-file' }))
     expect(probes.header).not.toHaveBeenCalled()
@@ -195,17 +211,26 @@ it.each([3, 30])(
       await act(async () => toggle.click())
     }
     expect(probes.body).toHaveBeenCalledTimes(count)
-    // Required recursive watches are capped at the existing warm-workspace budget of three.
-    expect(probes.watches).toBe(3)
+    // The existing warm-workspace budget of three goes to the most recently expanded sections.
+    expect(probes.watches).toEqual(
+      [count - 1, count - 2, count - 3].map((index) => worktrees[index]!.id)
+    )
     await render(false)
     probes.status.mockClear()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120000)
     })
     expect(probes.status).not.toHaveBeenCalled()
-    expect(probes.watches).toBe(0)
+    expect(probes.watches).toEqual([])
   }
 )
+
+it('registers no recursive watch before a section knows its status', async () => {
+  setup(5)
+  useAppStore.setState({ gitStatusByWorktree: {} })
+  await render()
+  expect(probes.watches).toEqual([])
+})
 
 function ActiveStatusObserver() {
   useWorktreeGitStatusObservation(null)

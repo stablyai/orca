@@ -5,6 +5,7 @@ import type { SourceControlAi } from '../ai/use-ai'
 import { useCreatePullRequestDialogFields } from '../../hosted-review/creation/useCreatePullRequestDialogFields'
 import { useHostedReviewStackParent } from '../../hosted-review/provider-actions/useHostedReviewStackParent'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
+import { useSourceControlSectionActive } from '../panel/worktree-scope'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlPullRequestGeneration } from './use-pull-request-generation'
@@ -58,6 +59,7 @@ export function useSourceControlCreateReviewComposer({
   updatePullRequestGenerationRecord: SourceControlStoreActions['updatePullRequestGenerationRecord']
   worktreePath: string | null
 }) {
+  const sectionActive = useSourceControlSectionActive()
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
     base: prBase,
@@ -120,7 +122,7 @@ export function useSourceControlCreateReviewComposer({
     }
   })
   const stackParentReview = useHostedReviewStackParent({
-    enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
+    enabled: sectionActive && hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
     repoPath: activeRepo?.path ?? '',
     repoId: activeRepo?.id ?? null,
     base: prBase,

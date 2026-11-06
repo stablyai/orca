@@ -30,7 +30,6 @@ export function useSourceControlCommitMessageGeneration({
   activeRepoTarget,
   activeWorktreeId,
   allocateCommitMessageGenerationRequestId,
-  commitMessageGenerationRecords,
   openCommitGenerationDialog,
   operationStore,
   resolvedCommitMessageAi,
@@ -45,7 +44,6 @@ export function useSourceControlCommitMessageGeneration({
   activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   allocateCommitMessageGenerationRequestId: SourceControlStoreActions['allocateCommitMessageGenerationRequestId']
-  commitMessageGenerationRecords: SourceControlStoreActions['commitMessageGenerationRecords']
   openCommitGenerationDialog: SourceControlAi['openCommitGenerationDialog']
   operationStore: SourceControlWorktreeOperationState['operationStore']
   resolvedCommitMessageAi: SourceControlAi['resolvedCommitMessageAi']
@@ -61,10 +59,13 @@ export function useSourceControlCommitMessageGeneration({
     activeWorktreeId,
     worktreePath
   )
-  const activeCommitMessageGenerationRecord: CommitMessageGenerationRecord | null =
-    activeCommitMessageGenerationKey
-      ? (commitMessageGenerationRecords[activeCommitMessageGenerationKey] ?? null)
-      : null
+  // Select only this owner's record so another worktree's generation cannot re-render this panel.
+  const activeCommitMessageGenerationRecord: CommitMessageGenerationRecord | null = useAppStore(
+    (s) =>
+      activeCommitMessageGenerationKey
+        ? (s.commitMessageGenerationRecords[activeCommitMessageGenerationKey] ?? null)
+        : null
+  )
   const generateInFlight = useStore(operationStore, (s) => s.generateInFlight)
   const ownerGenerateError = useStore(operationStore, (s) => s.generateError)
   const isGenerating = activeCommitMessageGenerationRecord?.status === 'running' || generateInFlight

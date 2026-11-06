@@ -1,4 +1,8 @@
-import { useSourceControlScope } from '../panel/worktree-scope'
+import {
+  useSourceControlScope,
+  useSourceControlScopeOwner,
+  useSourceControlSectionActive
+} from '../panel/worktree-scope'
 import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
@@ -22,9 +26,11 @@ const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
 export function useSourceControlWorktreeContext() {
   const scope = useSourceControlScope()
+  const scopeOwner = useSourceControlScopeOwner()
+  const sectionActive = useSourceControlSectionActive()
   const selectedWorktree = useActiveWorktree()
   const selectedWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const activeWorktree = scope?.worktree ?? selectedWorktree
+  const activeWorktree = scopeOwner?.worktree ?? selectedWorktree
   const activeWorktreeId = scope?.worktreeId ?? selectedWorktreeId
   const activeWorktreeInstanceId = activeWorktree?.instanceId
   const activeGroupId = useAppStore((s) =>
@@ -33,7 +39,7 @@ export function useSourceControlWorktreeContext() {
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const selectedRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const activeRepo = scope?.repo ?? selectedRepo
+  const activeRepo = scopeOwner?.repo ?? selectedRepo
   const activeRepoId = activeRepo?.id ?? null
   const activeRepoPath = activeRepo?.path ?? null
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
@@ -82,8 +88,9 @@ export function useSourceControlWorktreeContext() {
       s.remoteOperations.findLast((operation) => operation.worktreeId === activeWorktreeId)?.kind ??
       null
   )
-  const isRemoteOperationActive = inFlightRemoteOpKind !== null
-  const isRemoteOperationInAnotherWorktree = false
+  const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
+  const isRemoteOperationInAnotherWorktree =
+    isRemoteOperationActive && inFlightRemoteOpKind === null
   const settings = useAppStore((s) => s.settings)
   const hostedReviewCacheKey =
     activeRepo && branchName
@@ -145,8 +152,8 @@ export function useSourceControlWorktreeContext() {
     activeWorktree && activeRepo
       ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), activeRepo, activeWorktree)
       : undefined
-  // Mounted hidden sidebars need tab/open polling gates to avoid work without visible consumers.
-  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+  // Mounted hidden sidebars and collapsed/off-screen sections keep their view but poll nothing.
+  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen && sectionActive
   const hasUncommittedEntries = entries.length > 0
 
   return {

@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { useEffect } from 'react'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
@@ -7,13 +9,19 @@ import {
 import type { GitStatusMetadataChangedEvent } from '../../../../../../shared/worktree/types'
 import { isGitStatusSignalForWorktree } from './git-status-signal-attribution'
 
+export function getRepoWorktreePathsForSignal(repoId: string): readonly string[] {
+  return (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
+    (worktree) => worktree.path
+  )
+}
+
 type UseGitStatusPushSignalRefreshParams = {
   activeRepoId: string | null
   activeWorktreeId: string | null
   activeWorktreePath: string | null
   enabled: boolean
   fetchStatus: () => void
-  /** Keep stable: it re-subscribes the push signals when it changes. */
+  /** Keep stable with fetchStatus: either change re-registers the observer. */
   getRepoWorktreePaths: (repoId: string) => readonly string[]
 }
 
@@ -71,11 +79,14 @@ function subscribeSignals(): () => void {
     window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, commandSignal)
   }
 }
-export function useGitStatusPushSignalRefresh(params: UseGitStatusPushSignalRefreshParams): void {
-  const latest = useRef(params)
-  latest.current = params
-  const { enabled, activeRepoId, activeWorktreeId, activeWorktreePath, getRepoWorktreePaths } =
-    params
+export function useGitStatusPushSignalRefresh({
+  enabled,
+  activeRepoId,
+  activeWorktreeId,
+  activeWorktreePath,
+  fetchStatus,
+  getRepoWorktreePaths
+}: UseGitStatusPushSignalRefreshParams): void {
   useEffect(() => {
     if (!enabled) {
       return
@@ -86,7 +97,7 @@ export function useGitStatusPushSignalRefresh(params: UseGitStatusPushSignalRefr
       activeWorktreeId,
       activeWorktreePath,
       getRepoWorktreePaths,
-      fetchStatus: () => latest.current.fetchStatus()
+      fetchStatus
     }
     observers.add(observer)
     disposeSignals ??= subscribeSignals()
@@ -97,5 +108,12 @@ export function useGitStatusPushSignalRefresh(params: UseGitStatusPushSignalRefr
         disposeSignals = null
       }
     }
-  }, [enabled, activeRepoId, activeWorktreeId, activeWorktreePath, getRepoWorktreePaths])
+  }, [
+    enabled,
+    activeRepoId,
+    activeWorktreeId,
+    activeWorktreePath,
+    fetchStatus,
+    getRepoWorktreePaths
+  ])
 }

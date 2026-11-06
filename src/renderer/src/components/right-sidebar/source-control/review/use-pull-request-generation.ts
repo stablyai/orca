@@ -39,7 +39,6 @@ export function useSourceControlPullRequestGeneration({
   allocatePullRequestGenerationRequestId,
   branchName,
   hostedReviewCreateProvider,
-  prGenerationRecords,
   refreshGitStatusAfterPullRequestGeneration,
   resolvedPrCreationDefaults,
   setPullRequestGenerationRecord,
@@ -52,7 +51,6 @@ export function useSourceControlPullRequestGeneration({
   allocatePullRequestGenerationRequestId: SourceControlStoreActions['allocatePullRequestGenerationRequestId']
   branchName: string
   hostedReviewCreateProvider: HostedReviewProvider
-  prGenerationRecords: SourceControlStoreActions['prGenerationRecords']
   refreshGitStatusAfterPullRequestGeneration: SourceControlStatusRefresh['refreshGitStatusAfterPullRequestGeneration']
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setPullRequestGenerationRecord: SourceControlStoreActions['setPullRequestGenerationRecord']
@@ -66,9 +64,12 @@ export function useSourceControlPullRequestGeneration({
     repoId: activeRepo?.id,
     branch: branchName
   })
-  const activePullRequestGenerationRecordCandidate = activePullRequestGenerationKey
-    ? (prGenerationRecords[activePullRequestGenerationKey] ?? null)
-    : null
+  // Select only this owner's record so another worktree's generation cannot re-render this panel.
+  const activePullRequestGenerationRecordCandidate = useAppStore((s) =>
+    activePullRequestGenerationKey
+      ? (s.pullRequestGenerationRecords[activePullRequestGenerationKey] ?? null)
+      : null
+  )
   const activePullRequestGenerationRecord =
     activePullRequestGenerationRecordCandidate &&
     activePullRequestGenerationRecordCandidate.context.repoId === activeRepo?.id &&
@@ -216,7 +217,8 @@ export function useSourceControlPullRequestGeneration({
     if (!activePullRequestGenerationKey) {
       return
     }
-    const record = prGenerationRecords[activePullRequestGenerationKey]
+    const record =
+      useAppStore.getState().pullRequestGenerationRecords[activePullRequestGenerationKey]
     if (!record || record.status !== 'running') {
       return
     }
@@ -246,7 +248,7 @@ export function useSourceControlPullRequestGeneration({
         }
       })
     })
-  }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  }, [activePullRequestGenerationKey, updatePullRequestGenerationRecord])
 
   const handlePullRequestGenerationSeedRestored = useCallback((): void => {
     if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {

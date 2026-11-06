@@ -9,6 +9,11 @@ import type {
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { OpenFileOptions } from '@/store/slices/editor/types/editor-files-slice'
+import {
+  sourceControlScopeRuntimeEnvironmentId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import {
   cancelSourceControlEditorRevealFrames,
   requestSourceControlEditorRevealFrame
@@ -39,6 +44,10 @@ export function useSourceControlNoteOpening({
   sourceControlRef: RefObject<HTMLDivElement | null>
 }): SourceControlNoteOpening {
   const openFile = useAppStore((s) => s.openFile)
+  const scope = useSourceControlScope()
+  const placementWorkspaceId = scope?.placementWorkspaceId
+  const executionHostId = scope?.executionHostId
+  const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
@@ -63,6 +72,18 @@ export function useSourceControlNoteOpening({
       }
       const filePath = comment.filePath
       const commentId = comment.id
+      // A folder section opens the note in its folder's active group; the file stays the child worktree's.
+      const placementGroupId = placementWorkspaceId
+        ? useAppStore.getState().activeGroupIdByWorktree[placementWorkspaceId]
+        : undefined
+      const placement: OpenFileOptions | undefined = placementWorkspaceId
+        ? {
+            placementWorkspaceId,
+            executionHostId,
+            ...(placementGroupId ? { targetGroupId: placementGroupId } : {})
+          }
+        : undefined
+      const scopedRuntime = runtimeEnvironmentId === undefined ? {} : { runtimeEnvironmentId }
       // Clear any dangling prior scroll request; only the diff branches below re-stamp it.
       cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       setScrollToDiffCommentId(null)
@@ -71,13 +92,17 @@ export function useSourceControlNoteOpening({
         const language = detectLanguage(filePath)
         setEditorViewMode(absPath, 'edit')
         setMarkdownViewMode(absPath, 'source')
-        openFile({
-          filePath: absPath,
-          relativePath: filePath,
-          worktreeId: activeWorktreeId,
-          language,
-          mode: 'edit'
-        })
+        openFile(
+          {
+            filePath: absPath,
+            relativePath: filePath,
+            worktreeId: activeWorktreeId,
+            language,
+            mode: 'edit',
+            ...scopedRuntime
+          },
+          placement
+        )
         setPendingEditorReveal(null)
         requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
           requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
@@ -115,13 +140,17 @@ export function useSourceControlNoteOpening({
       // If both diffs lost the file, open changes-mode editor fallback so DiffViewer can consume the reveal request.
       const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
-      openFile({
-        filePath: absPath,
-        relativePath: filePath,
-        worktreeId: activeWorktreeId,
-        language,
-        mode: 'edit'
-      })
+      openFile(
+        {
+          filePath: absPath,
+          relativePath: filePath,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit',
+          ...scopedRuntime
+        },
+        placement
+      )
       if (commentId) {
         setEditorViewMode(absPath, 'changes')
         setScrollToDiffCommentId(commentId)
@@ -130,6 +159,9 @@ export function useSourceControlNoteOpening({
     [
       activeWorktreeId,
       branchEntries,
+      executionHostId,
+      placementWorkspaceId,
+      runtimeEnvironmentId,
       branchSummary,
       entries,
       handleOpenDiff,

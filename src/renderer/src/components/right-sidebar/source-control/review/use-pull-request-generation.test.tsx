@@ -63,7 +63,6 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
         allocatePullRequestGenerationRequestId: () => 11,
         branchName: 'user/alt-42-fix-login',
         hostedReviewCreateProvider: 'gitlab',
-        prGenerationRecords: {},
         refreshGitStatusAfterPullRequestGeneration: vi.fn(),
         resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
         setPullRequestGenerationRecord: state.setPullRequestGenerationRecord,
