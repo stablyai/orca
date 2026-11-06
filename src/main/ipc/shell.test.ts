@@ -53,6 +53,7 @@ vi.mock('../../shared/windows-batch-spawn', () => ({
 
 import { registerShellHandlers } from './shell'
 import type { SshTarget } from '../../shared/ssh-types'
+import type { OpenInApplication } from '../../shared/ui-chrome-types'
 expect.objectContaining({
   detached: true,
   stdio: 'ignore',
@@ -94,10 +95,10 @@ function createSshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
 }
 
 describe('registerShellHandlers', () => {
-  const settings = {
-    activeRuntimeEnvironmentId: null as string | null,
-    openInApplications: [] as { id: string; label: string; command: string }[]
-  }
+  const settings: {
+    activeRuntimeEnvironmentId: string | null
+    openInApplications: OpenInApplication[]
+  } = { activeRuntimeEnvironmentId: null, openInApplications: [] }
   const sshTargets = new Map<string, SshTarget>()
   const store = {
     getSettings: () => settings,
