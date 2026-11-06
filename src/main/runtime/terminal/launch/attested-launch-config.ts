@@ -1,4 +1,5 @@
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 export type PtyLaunchFacts = Pick<
@@ -17,4 +18,11 @@ export function attestedLaunchConfig(
   return pty?.launchToken && pty.launchConfig && agent && pty.launchAgent === agent
     ? pty.launchConfig
     : undefined
+}
+
+/** What the daemon keeps of the launch main admitted, so a reattach can re-arm it. */
+export function daemonLaunchNoteOf(pty: PtyLaunchFacts): DaemonLaunchNote | null {
+  return pty.launchToken && pty.launchConfig
+    ? { launchToken: pty.launchToken, launchConfig: pty.launchConfig }
+    : null
 }

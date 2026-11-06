@@ -11,6 +11,7 @@ import { SessionProcessInspection } from './session-process-inspection'
 import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { DaemonLaunchNote } from '../protocol/daemon-launch-note-protocol'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 
@@ -27,6 +28,8 @@ export class Session extends SessionProcessInspection {
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
+  /** Main's live launch here; cleared when it retires, so a reattach re-arms only an unretired one. */
+  launchNote: DaemonLaunchNote | null = null
   readonly wslDistro: string | null
   readonly processNameIsSpawnFile: boolean
   readonly shellIsRootChild: boolean

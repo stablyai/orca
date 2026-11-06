@@ -33,6 +33,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         return
       case 'command-finished':
         this.retirePtyAgentLaunchAuthority(ptyId)
+        // Why the daemon too: it outlives main, so a reattach must not re-arm a finished launch.
+        this.ptyController?.setLaunchNote?.(ptyId, null)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode

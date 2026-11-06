@@ -3,10 +3,11 @@ import {
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
+import { OrcaRuntimeWithDaemonLaunchNote } from './daemon-launch-note'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -21,7 +22,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'
 
-export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLaunchNote {
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -53,6 +54,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       providerReattachLaunchIdentity?: {
         incarnationId: PtyIncarnationId
         launchAgent: TuiAgent
+        launchNote?: DaemonLaunchNote
       }
     },
     isWsl?: boolean
@@ -160,6 +162,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       pty.launchAgent = agentLaunchAuthority.launchAgent
       // Why: a restart that runs in main (wake, worker reopen) replays the recipe; drop it and it comes back bare.
       pty.launchConfig = agentLaunchAuthority.launchConfig ?? null
+      this.armDaemonLaunchNote(ptyId, pty)
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
@@ -173,6 +176,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     ) {
       // Why: daemon metadata owns the surviving process; its incarnation fence restores identity without minting renderer launch authority.
       pty.launchAgent = providerReattachLaunchIdentity.launchAgent
+      void this.rearmReattachedLaunch(ptyId, pty, providerReattachLaunchIdentity)
     }
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId
     if (

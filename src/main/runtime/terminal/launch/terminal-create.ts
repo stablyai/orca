@@ -246,6 +246,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             result.id,
             recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
           )
+          this.armDaemonLaunchNote(result.id, pty)
           if (!launch.adoptedStablePane) {
             this.rememberSavedTerminalLaunchResult(result.id, result)
           }

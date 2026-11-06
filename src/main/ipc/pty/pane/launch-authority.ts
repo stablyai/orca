@@ -1,3 +1,4 @@
+import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -37,8 +38,9 @@ export function admitRendererAgentLaunchAuthority(args: {
 export function admitProviderReattachLaunchIdentity(args: {
   isReattach?: boolean
   launchAgent?: unknown
+  launchNote?: DaemonLaunchNote
   incarnationId?: unknown
-}): { incarnationId: string; launchAgent: TuiAgent } | null {
+}): { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote } | null {
   if (
     !args.isReattach ||
     !isTuiAgent(args.launchAgent) ||
@@ -46,7 +48,11 @@ export function admitProviderReattachLaunchIdentity(args: {
   ) {
     return null
   }
-  return { incarnationId: args.incarnationId, launchAgent: args.launchAgent }
+  return {
+    incarnationId: args.incarnationId,
+    launchAgent: args.launchAgent,
+    ...(args.launchNote ? { launchNote: args.launchNote } : {})
+  }
 }
 
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
