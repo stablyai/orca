@@ -36,7 +36,7 @@ describe('Claude server tool translation', () => {
   it('completes the captured server tool on its original card without unsupported content', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
-    const handle = (frame: unknown) =>
+    const handle = (frame: Record<string, unknown>) =>
       translator.handle({
         type: 'message',
         sessionId: 'orca-session',

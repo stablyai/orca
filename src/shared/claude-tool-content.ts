@@ -1,3 +1,8 @@
+type ClaudeToolUseContent = Record<string, unknown> &
+  ({ type: 'tool_use' } | { id: string; name: string; input: unknown })
+type ClaudeToolResultContent = Record<string, unknown> &
+  ({ type: 'tool_result' } | { tool_use_id: string })
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -6,14 +11,14 @@ function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
-export function isClaudeToolUseContent(value: unknown): value is Record<string, unknown> {
+export function isClaudeToolUseContent(value: unknown): value is ClaudeToolUseContent {
   return (
     isRecord(value) &&
     (value.type === 'tool_use' || (hasText(value.id) && hasText(value.name) && 'input' in value))
   )
 }
 
-export function isClaudeToolResultContent(value: unknown): value is Record<string, unknown> {
+export function isClaudeToolResultContent(value: unknown): value is ClaudeToolResultContent {
   return isRecord(value) && (value.type === 'tool_result' || hasText(value.tool_use_id))
 }
 
