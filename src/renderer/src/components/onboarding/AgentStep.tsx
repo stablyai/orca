@@ -11,6 +11,14 @@ import { i18n, translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { cn } from '@/lib/utils'
+import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
+import { useAppStore } from '@/store'
+import {
+  resolveAntigravityInstallTarget,
+  type AntigravityInstallTarget
+} from './antigravity-install-target'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { AgentPickerButton, AgentSectionHeader } from './AgentPickerButton'
 import { YoloPermissionsControl } from './YoloPermissionsControl'
@@ -41,6 +49,7 @@ type AgentStepProps = {
   nativeChatProviders?: GlobalSettings['nativeChatProviders']
   yoloPermissions?: boolean
   onYoloPermissionsChange?: (enabled: boolean) => void
+  onInstallAntigravity?: (target: AntigravityInstallTarget) => void
 }
 
 export function AgentStep({
@@ -55,9 +64,20 @@ export function AgentStep({
   chatDetected = null,
   nativeChatProviders,
   yoloPermissions = true,
-  onYoloPermissionsChange
+  onYoloPermissionsChange,
+  onInstallAntigravity
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
+  const terminalTarget = useActiveSkillDiscoveryRuntimeTarget()
+  // Chat never runs in WSL, so Chat UI installs natively; Terminal follows agent detection.
+  const detectionContext = useAppStore((state) =>
+    agentSurface === 'chat' ? undefined : getLocalAgentPreflightContext(state)
+  )
+  const antigravityInstallTarget = resolveAntigravityInstallTarget(
+    getRendererAppPlatform(),
+    detectionContext,
+    terminalTarget?.kind === 'local'
+  )
   const gridFades = useScrollEdgeFades<HTMLElement>()
   const chatMode = agentSurface === 'chat'
   // Chat runs only on native installs; an agent found only in WSL opens in a terminal.
@@ -175,16 +195,28 @@ export function AgentStep({
               components={{ agent: <span className="font-medium text-foreground" /> }}
             />
           </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="shrink-0"
-            onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
-          >
-            {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
-            <ExternalLink className="size-3" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {selectedEntry.id === 'antigravity' &&
+              antigravityInstallTarget &&
+              onInstallAntigravity && (
+                <Button
+                  type="button"
+                  size="xs"
+                  onClick={() => onInstallAntigravity(antigravityInstallTarget)}
+                >
+                  {translate('components.onboarding.agyInstall.open', 'Install')}
+                </Button>
+              )}
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
+            >
+              {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
+              <ExternalLink className="size-3" />
+            </Button>
+          </div>
         </div>
       )}
       <section
