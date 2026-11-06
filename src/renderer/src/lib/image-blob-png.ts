@@ -2,6 +2,7 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../../shared/clipboard-image'
+import { svgMarkupDataUri } from '../../../shared/svg-document'
 
 export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -26,7 +27,11 @@ async function hasPngSignature(blob: Blob): Promise<boolean> {
 
 export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
   assertClipboardImageByteLengthWithinLimit(blob.size)
-  const url = URL.createObjectURL(blob)
+  // SVG HTML labels taint a canvas when loaded from a blob URL.
+  const url =
+    blob.type.split(';', 1)[0] === 'image/svg+xml'
+      ? svgMarkupDataUri(await blob.text())
+      : URL.createObjectURL(blob)
   try {
     const image = new Image()
     image.src = url
@@ -62,6 +67,8 @@ export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
       }, 'image/png')
     })
   } finally {
-    URL.revokeObjectURL(url)
+    if (url.startsWith('blob:')) {
+      URL.revokeObjectURL(url)
+    }
   }
 }

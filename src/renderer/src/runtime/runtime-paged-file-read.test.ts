@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { readRuntimeFileContent } from './runtime-file-read-client'
 import { writeRuntimeFile } from './runtime-file-mutation-client'
+import { readImageFileSource } from '@/lib/image-source-actions'
 import {
+  fsGrantRuntimeFilePreview,
   fsReadFileChunk,
   fsStat,
   installRuntimeFileClientEnvironment,
@@ -135,6 +137,29 @@ const remote = (relativePath: string) => ({
 })
 
 describe('remote reads larger than one RPC reply', () => {
+  it('exports original image bytes beyond one reply without returning a preview URL', async () => {
+    const bytes = patternedBytes(5 * MB)
+    bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
+    serveRemoteFile('image.png', { bytes })
+    fsGrantRuntimeFilePreview.mockResolvedValue({
+      mediaUrl: 'orca-media://file/image',
+      content: '',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png'
+    })
+
+    const blob = await readImageFileSource({
+      ...remote('image.png'),
+      pageOversizedBinary: true
+    })()
+
+    expect(blob.type).toBe('image/png')
+    expect(Buffer.from(await blob.arrayBuffer()).equals(bytes)).toBe(true)
+    expect(fsGrantRuntimeFilePreview).not.toHaveBeenCalled()
+    expect(methodCalls('files.readChunk').length).toBe(Math.ceil(bytes.length / (384 * 1024)))
+  })
+
   it.each([2, 5, 20])('opens a %i MB HTML file as complete editable text', async (sizeMb) => {
     const bytes = htmlBytes(sizeMb * MB)
     serveRemoteFile('report.html', { bytes })

@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/local-file-access'
-import type { ImageActionSource } from '@/components/editor/ImageActions'
+import { nativeChatImageActionSource } from './native-chat-image-actions'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
@@ -185,18 +185,9 @@ function NativeChatMarkdownImagePreview({
       {translate('components.native-chat.composer.imageUnavailable', 'Preview unavailable')}
     </span>
   )
-  const imageSource: ImageActionSource | undefined =
+  const imageSource =
     localSrc && target
-      ? {
-          path: target.absolutePath,
-          ...(runtimeContext?.target.kind === 'local' &&
-          !runtimeContext.connectionId &&
-          !runtimeContext.expectedExternalSshTargetId &&
-          (!runtimeContext.expectedExecutionHostId ||
-            runtimeContext.expectedExecutionHostId === 'local')
-            ? { localOwner: 'local' as const }
-            : {})
-        }
+      ? nativeChatImageActionSource(target.absolutePath, runtimeContext)
       : undefined
   const copyAttributes = {
     'data-native-chat-copy-image-src': copyableNativeChatImageSrc(displaySrc)

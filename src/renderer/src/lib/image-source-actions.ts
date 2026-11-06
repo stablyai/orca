@@ -36,7 +36,11 @@ export function readImageFileSource(
   mimeType = 'image/png'
 ): ReadImageSource {
   return async () => {
-    const image = await readRuntimeFileContent({ ...source, pageOversizedBinary: false })
+    const image = await readRuntimeFileContent({
+      ...source,
+      pageOversizedBinary: true,
+      preferMediaUrl: false
+    })
     if (!image.isBinary && mimeType === 'image/svg+xml') {
       return new Blob([image.content], { type: mimeType })
     }

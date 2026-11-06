@@ -133,7 +133,11 @@ function useImageActions({ src, title, imageSource }: Props) {
           'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
           'Open with default app'
         ),
-        run: () => window.api.shell.openPath(path, ownerHostId)
+        run: async () => {
+          if (!(await window.api.shell.openFilePath(path, ownerHostId))) {
+            throw new Error('Could not open image')
+          }
+        }
       })
     }
   }

@@ -2,6 +2,8 @@
 
 import { act, createElement } from 'react'
 import { fireEvent, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { getRevealInFileManagerLabel } from '@/lib/reveal-in-file-manager'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
@@ -82,6 +84,107 @@ afterEach(() => {
 })
 
 describe('NativeChatImageAttachments', () => {
+  it.each([
+    { name: 'client-local', context: runtimeContext('wt-1'), local: true },
+    {
+      name: 'paired server',
+      context: {
+        ...runtimeContext('wt-1'),
+        target: { kind: 'environment', environmentId: 'env-1' }
+      },
+      local: false
+    },
+    {
+      name: 'SSH host',
+      context: { ...runtimeContext('wt-1'), expectedExecutionHostId: 'ssh:host' },
+      local: false
+    },
+    {
+      name: 'external SSH host',
+      context: {
+        ...runtimeContext('wt-1'),
+        connectionId: 'host',
+        expectedExternalSshTargetId: 'host'
+      },
+      local: false
+    }
+  ] satisfies { name: string; context: RuntimeFileOperationArgs; local: boolean }[])(
+    'preserves $name file actions in the thumbnail and expanded preview',
+    async ({ context, local }) => {
+      const user = userEvent.setup()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['image']) })
+      )
+      const container = document.body.appendChild(document.createElement('div'))
+      const root = createRoot(container)
+      try {
+        await act(async () => {
+          root.render(
+            createElement(NativeChatImageAttachments, {
+              blocks: [{ type: 'image-ref', path: '/repo/wt-1/image.png' }],
+              runtimeContext: context
+            })
+          )
+          await flushPromises()
+        })
+        const thumbnail = within(container).getByRole('button', { name: 'View image: image.png' })
+        fireEvent.contextMenu(thumbnail)
+        const expectFileActions = () => {
+          expect(screen.getByRole('menuitem', { name: 'Copy image path' })).toBeTruthy()
+          expect(
+            screen.queryByRole('menuitem', { name: getRevealInFileManagerLabel() }) !== null
+          ).toBe(local)
+          expect(screen.queryByRole('menuitem', { name: 'Open with default app' }) !== null).toBe(
+            local
+          )
+        }
+        expectFileActions()
+        await user.keyboard('{Escape}')
+        await user.click(thumbnail)
+        const preview = screen.getByRole('dialog', { name: 'image.png' })
+        await user.click(within(preview).getByRole('button', { name: 'Image actions' }))
+        expectFileActions()
+      } finally {
+        await act(async () => root.unmount())
+        container.remove()
+      }
+    }
+  )
+
+  it.each(['data:image/png;base64,AA==', 'blob:sent-original', 'https://example.test/image.png'])(
+    'does not present a file path or OS action for displayed URL %s',
+    async (src) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['image']) })
+      )
+      const container = document.body.appendChild(document.createElement('div'))
+      const root = createRoot(container)
+      try {
+        await act(async () => {
+          root.render(
+            createElement(NativeChatImageAttachments, {
+              blocks: [{ type: 'image-ref', url: src, path: '/repo/stale.png', alt: 'Sent image' }],
+              runtimeContext: runtimeContext('wt-1')
+            })
+          )
+          await flushPromises()
+        })
+        fireEvent.contextMenu(
+          within(container).getByRole('button', { name: 'View image: Sent image' })
+        )
+        expect(screen.getByRole('menuitem', { name: 'Copy image' })).toBeTruthy()
+        expect(screen.queryByRole('menuitem', { name: 'Copy image path' })).toBeNull()
+        expect(screen.queryByRole('menuitem', { name: getRevealInFileManagerLabel() })).toBeNull()
+        expect(screen.queryByRole('menuitem', { name: 'Open with default app' })).toBeNull()
+      } finally {
+        await act(async () => root.unmount())
+        container.remove()
+      }
+    }
+  )
+
   it('reads on the selected folder owner and stops reading when that chat disappears', async () => {
     const original = useAppStore.getState()
     const fixture = nativeChatFanoutFixture(1, 1, 0)

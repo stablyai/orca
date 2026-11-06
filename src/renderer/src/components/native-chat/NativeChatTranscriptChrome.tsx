@@ -9,6 +9,9 @@ import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
+import { ImageActions } from '@/components/editor/ImageActions'
+import { resolveImageAbsolutePath } from '@/components/editor/markdown-preview-links'
+import { nativeChatImageActionSource } from './native-chat-image-actions'
 import {
   getLocalImageCacheKey,
   getLocalImageSrcCacheKey,
@@ -123,6 +126,10 @@ function TranscriptImagePreview({
   )
   const displaySrc = external && leaseActive ? source : localSrc
   const copySrc = copyableNativeChatImageSrc(displaySrc)
+  const absolutePath = !external ? resolveImageAbsolutePath(source, filePath) : null
+  const imageSource = absolutePath
+    ? nativeChatImageActionSource(absolutePath, runtimeContext)
+    : undefined
   const label = nativeChatImageLabel(block)
   const viewImageLabel = translate('components.native-chat.composer.viewAttachment', 'View image')
   const fallback = (
@@ -175,32 +182,35 @@ function TranscriptImagePreview({
   }
   return (
     <div ref={ref} className="relative size-20 shrink-0">
-      <button
-        type="button"
-        aria-label={`${viewImageLabel}: ${label}`}
-        title={label}
-        data-native-chat-copy-image-src={copySrc}
-        onClick={() => setOpen(true)}
-        className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <img
+      <ImageActions src={displaySrc} title={label} imageSource={imageSource}>
+        <button
+          type="button"
+          aria-label={`${viewImageLabel}: ${label}`}
+          title={label}
+          data-native-chat-copy-image-src={copySrc}
+          onClick={() => setOpen(true)}
+          className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <img
+            src={displaySrc}
+            alt={label}
+            loading="lazy"
+            onError={() => setThumbnailErrorSrc(displaySrc ?? null)}
+            className="size-full object-cover"
+          />
+        </button>
+        <PanZoomImageDialog
+          open={open}
+          onOpenChange={setOpen}
           src={displaySrc}
-          alt={label}
-          loading="lazy"
-          onError={() => setThumbnailErrorSrc(displaySrc ?? null)}
-          className="size-full object-cover"
+          title={label}
+          imageSource={imageSource}
+          showTitle
+          onInteractOutside={keepPreviewOpenForChatMenu}
+          data-native-chat-copy-image-src={copySrc}
+          fallback={fallback}
         />
-      </button>
-      <PanZoomImageDialog
-        open={open}
-        onOpenChange={setOpen}
-        src={displaySrc}
-        title={label}
-        showTitle
-        onInteractOutside={keepPreviewOpenForChatMenu}
-        data-native-chat-copy-image-src={copySrc}
-        fallback={fallback}
-      />
+      </ImageActions>
     </div>
   )
 }

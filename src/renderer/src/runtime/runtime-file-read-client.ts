@@ -72,6 +72,7 @@ async function readRuntimeFileContentAsStored({
   terminalArtifactGrantId,
   expectedEnvironmentPairingRevision,
   pageOversizedBinary,
+  preferMediaUrl,
   wakeWslDistro
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(target, connectionId, expectedExternalSshTargetId)
@@ -83,7 +84,9 @@ async function readRuntimeFileContentAsStored({
       ...localAccess(connectionId, access),
       ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {}),
       // A viewer reads images and PDFs by URL; baseline checks keep base64.
-      ...(pageOversizedBinary && !connectionId ? { rangePreview: true } : {})
+      ...(pageOversizedBinary && preferMediaUrl !== false && !connectionId
+        ? { rangePreview: true }
+        : {})
     })
   }
   // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
@@ -110,7 +113,8 @@ async function readRuntimeFileContentAsStored({
     relativePath: readPath
   })
   // Baseline checks discard binary content, so only readers that render bytes mint a stream.
-  const rangePreview = pageOversizedBinary ? await readRemoteRangePreview(remote) : null
+  const rangePreview =
+    pageOversizedBinary && preferMediaUrl !== false ? await readRemoteRangePreview(remote) : null
   if (rangePreview) {
     return rangePreview
   }
