@@ -167,9 +167,10 @@ export function mergeMobileSessionTabGroups(
         ...group,
         tabOrder,
         activeTabId:
-          activeParentId && tabOrder.includes(activeParentId)
-            ? activeParentId
-            : (keptActive ?? tabOrder[0] ?? null)
+          keptActive ??
+          (activeParentId && tabOrder.includes(activeParentId) ? activeParentId : null) ??
+          tabOrder[0] ??
+          null
       }
     })
     .filter((group) => group.tabOrder.length > 0)
@@ -186,12 +187,7 @@ export function keepSnapshotChatTabs(
   if (chatTabs.length === 0) {
     return [...rebuilt]
   }
-  // Snapshot-selected chat outranks a rebuilt terminal's active flag.
-  const activeChatId = chatTabs.find((tab) => tab.id === prior?.activeTabId)?.id ?? null
-  return [
-    ...rebuilt.map((tab) => (activeChatId && tab.isActive ? { ...tab, isActive: false } : tab)),
-    ...chatTabs.map((tab) => ({ ...tab, isActive: tab.id === activeChatId }))
-  ]
+  return mergeMobileSessionSnapshotTabs(rebuilt, chatTabs)
 }
 
 /** Restore chats to their prior group/preceding-tab position, falling back to the first group. */
@@ -219,7 +215,7 @@ export function appendChatTabOrder(
       const at = chatInsertIndex(target.tabOrder, priorGroup?.tabOrder ?? [], tabId)
       target.tabOrder.splice(at, 0, tabId)
     }
-    if (tabId === activeTabId) {
+    if (!target.activeTabId && tabId === activeTabId) {
       target.activeTabId = tabId
     }
   }

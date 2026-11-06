@@ -1,3 +1,4 @@
+import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
 import type {
@@ -32,66 +33,43 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     snapshot: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): RuntimeMobileSessionTabsSnapshot {
-    if (!existing) {
-      return snapshot
-    }
-    const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
-    if (preservedTabs.length === 0) {
-      return snapshot
-    }
-    const preservedActiveTab = preservedTabs.find(
-      (tab) => tab.id === existing.activeTabId && tab.isActive
-    )
-    const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
-    const normalizedPreservedTabs = preservedTabs.map((tab) =>
-      hasIncomingActiveTab && !preservedActiveTab ? { ...tab, isActive: false } : tab
-    )
-    const normalizedIncomingTabs = preservedActiveTab
-      ? snapshot.tabs.map((tab) => (tab.isActive ? { ...tab, isActive: false } : tab))
-      : snapshot.tabs
-    const tabs = mergeMobileSessionSnapshotTabs(normalizedIncomingTabs, normalizedPreservedTabs)
-    if (tabs.length === snapshot.tabs.length) {
-      return snapshot
-    }
+    const preservedTabs = existing
+      ? this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
+      : []
+    const tabs = mergeMobileSessionSnapshotTabs(snapshot.tabs, preservedTabs)
     const activeTab =
-      preservedActiveTab ??
-      normalizedIncomingTabs.find((tab) => tab.id === snapshot.activeTabId) ??
-      tabs.find((tab) => tab.id === existing.activeTabId) ??
+      tabs.find((tab) => tab.id === snapshot.activeTabId) ??
       tabs.find((tab) => tab.isActive) ??
+      tabs.find((tab) => tab.id === existing?.activeTabId) ??
       tabs[0] ??
       null
-    const browserTabIds = normalizedPreservedTabs
-      .filter((tab) => tab.type === 'browser')
-      .map((tab) => tab.id)
+    const browserTabIds = preservedTabs.filter((tab) => tab.type === 'browser').map((tab) => tab.id)
     const tabGroups = appendBrowserTabOrder(
       mergeMobileSessionTabGroups(
         snapshot.worktree,
-        snapshot.tabGroups ?? existing.tabGroups ?? [],
+        snapshot.tabGroups ?? existing?.tabGroups ?? [],
         tabs,
         activeTab?.type === 'terminal' ? activeTab : null
       ),
       browserTabIds,
       undefined,
-      collectBrowserGroupAssignment(existing.tabGroups, browserTabIds)
+      collectBrowserGroupAssignment(existing?.tabGroups, browserTabIds)
     )
-    return {
+    return normalizeMobileSessionTabSelection({
       ...snapshot,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
-        snapshot,
-        normalizedPreservedTabs
-      ),
-      snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
-      activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(snapshot, preservedTabs),
+      snapshotVersion: Math.max(snapshot.snapshotVersion, existing?.snapshotVersion ?? 0),
+      activeGroupId: snapshot.activeGroupId ?? existing?.activeGroupId ?? null,
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
       tabGroups: appendChatTabOrder(
         tabGroups,
-        existing.tabGroups ?? [],
-        normalizedPreservedTabs,
+        existing?.tabGroups ?? [],
+        preservedTabs,
         activeTab?.id ?? null
       ),
       tabs
-    }
+    })
   }
 
   // Why: omitted from the renderer's publication AND from persistence = durably closed; a create in flight is not.
@@ -210,7 +188,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     const publicationBase = rebaseToHeadless
       ? { ...existing, publicationEpoch: `headless-hydrated:${Date.now().toString(36)}` }
       : existing
-    return {
+    return normalizeMobileSessionTabSelection({
       ...existing,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Bump version or clients discard same-epoch prune frames.
@@ -230,7 +208,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
         activeTab?.id ?? null
       ),
       tabs
-    }
+    })
   }
 }
 

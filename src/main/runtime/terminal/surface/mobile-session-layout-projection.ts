@@ -1,3 +1,4 @@
+import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { createHash, randomUUID } from 'node:crypto'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
@@ -142,7 +143,12 @@ export function buildHeadlessMobileSessionTabGroups(
 ): RuntimeMobileSessionTabGroup[] {
   const arrivalOrder = collectHeadlessTopLevelTabOrder(tabs)
   // Retain stored tab positions; materializing idle surfaces can move their incoming array entries.
-  const liveTopLevelIds = new Set(arrivalOrder)
+  const liveTopLevelIds = new Set([
+    ...arrivalOrder,
+    ...(existingGroups ?? []).flatMap((group) =>
+      group.tabOrder.filter(isStructuredAgentSessionHostTabId)
+    )
+  ])
   const tabOrder: string[] = []
   const placed = new Set<string>()
   for (const group of existingGroups ?? []) {

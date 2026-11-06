@@ -1,3 +1,4 @@
+import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -152,7 +153,10 @@ export function projectStructuredSessionTab(
     if (input.eligible?.() === false) {
       throw new Error('Chat tab publication was superseded')
     }
-    const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+    const stored = runtime.storeMobileSessionSnapshot(
+      input.workspaceId,
+      normalizeMobileSessionTabSelection(snapshot)
+    )
     if (input.notify !== false) {
       emit(stored)
     }
@@ -208,7 +212,10 @@ export function projectStructuredSessionTab(
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
-  const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+  const stored = runtime.storeMobileSessionSnapshot(
+    input.workspaceId,
+    normalizeMobileSessionTabSelection(snapshot)
+  )
   if (input.notify !== false) {
     emit(stored)
   }
