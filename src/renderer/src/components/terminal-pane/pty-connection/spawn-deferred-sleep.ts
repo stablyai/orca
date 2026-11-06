@@ -10,7 +10,7 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
+import { stablePaneHasLivePty } from '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,

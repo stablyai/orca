@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { useRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type * as HttpLinkDestinations from '@/lib/http-link-destinations'
+import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-destinations'
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
 import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   appendText: vi.fn()
 }))
 
-vi.mock('@/lib/http-link-destinations', async (importOriginal) => ({
+vi.mock('@/lib/browser/navigation/http-link-destinations', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkDestinations>()),
   openRoutedHttpLink: mocks.openRoutedHttpLink
 }))

@@ -11,6 +11,7 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
 import { Keyboard, type TextInput, View } from 'react-native'
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
@@ -154,6 +155,9 @@ export function MobileNativeChatComposer({
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
+  const groupRef = useRef<View>(null)
+  const lowerRegion = useMobileNativeChatLowerRegion()
+  const menuWasShown = useRef(false)
   const [focused, setFocused] = useState(false)
   const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
   const request = sessionOptions?.controller.optionPickerRequest
@@ -285,8 +289,17 @@ export function MobileNativeChatComposer({
     }
   }
 
+  useLayoutEffect(() => {
+    lowerRegion?.layoutChanged()
+    const shown = menu.rows.length > 0
+    if (shown !== menuWasShown.current && focused) {
+      lowerRegion?.reveal(groupRef.current, shown ? 'menu' : 'edit')
+    }
+    menuWasShown.current = shown
+  })
+
   return (
-    <View>
+    <View ref={groupRef} testID="native-chat-composer-group">
       {menu.rows.length > 0 ? (
         <MobileNativeChatComposerMenu
           rows={menu.rows}

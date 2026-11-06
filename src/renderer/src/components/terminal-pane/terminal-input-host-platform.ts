@@ -4,7 +4,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
-} from '@/lib/worktree-runtime-owner'
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import type { AppState } from '@/store/types'
 import type { PtyTransport } from './pty-transport-types'

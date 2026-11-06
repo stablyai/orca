@@ -49,7 +49,7 @@ import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-sess
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 
 import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))
 afterEach(() => {

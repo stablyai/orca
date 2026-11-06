@@ -1,5 +1,5 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
 
 /** Renders a linked local HTML file in an Orca browser tab of the workspace. */

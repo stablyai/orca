@@ -29,7 +29,14 @@ export async function applyAcpMessageOptions(
   }
   for (const key of ['model', 'effort'] as const) {
     const value = options[key]
-    if (value === undefined || session.options.appliedInput.get(key) === value) {
+    if (
+      value === undefined ||
+      session.options.appliedInput.get(key) === value ||
+      (key === 'model' &&
+        (options.effort === undefined ||
+          session.options.appliedInput.get('effort') === options.effort) &&
+        session.options.matchesNativeRestoredModel(value))
+    ) {
       continue
     }
     try {

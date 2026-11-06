@@ -16,7 +16,7 @@ import {
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function ContextStat({ stat }: { stat: SourceControlBranchContextStat }): React.JSX.Element {
   // Make stats focusable so screen readers announce their base and keyboard users can open the tooltip.

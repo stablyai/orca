@@ -23,8 +23,8 @@ import { removeTabsAttention } from '../slices/workspace-attention/subject-atten
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
 import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
-import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
+import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 import { runAsAutomaticDeselection } from '../active-worktree-deselection-intent'
 

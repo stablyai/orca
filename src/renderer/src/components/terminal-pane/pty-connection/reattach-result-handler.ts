@@ -8,7 +8,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 // Inspect stale-account state only after a concrete PTY attaches.
-import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
+import { notifyCodexPaneBoundForStaleSweep } from '@/lib/agent-session/accounts/codex/codex-stale-pane-sweep'
 import { useAppStore } from '@/store'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'

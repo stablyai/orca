@@ -3,7 +3,7 @@ import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createWrappedTerminalHttpLinkProvider } from './wrapped-terminal-http-link-provider'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 
 async function terminalWithRows(rows: string[], cols: number) {
   const terminal = new Terminal({ cols, rows: rows.length + 1, allowProposedApi: true })

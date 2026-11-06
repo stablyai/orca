@@ -88,7 +88,7 @@ vi.mock('@/components/editor/model-lifetime/identity/editor-model-owner', () => 
   getEditorModelOwnerKey: () => ''
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 

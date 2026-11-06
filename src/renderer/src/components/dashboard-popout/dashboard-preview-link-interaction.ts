@@ -13,7 +13,7 @@ import {
 import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pane/terminal-mouse-buffer-position'
 import { findHttpLinkAtTerminalMouseEvent } from '@/components/terminal-pane/terminal-url-link-hit-testing'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
-import { httpLinkDirectClickDestination } from '@/lib/http-link-destinations'
+import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
