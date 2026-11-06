@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it } from 'vitest'
+import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import { defineHostQuery, useHostQuery } from './host-query'
@@ -19,19 +20,17 @@ const rowsQuery = defineHostQuery({
 
 let renderer: ReactTestRenderer | null = null
 
-// TanStack notifies observers on a zero-delay timer it schedules only after the reply's promise chain settles.
-async function step(run: () => unknown): Promise<void> {
-  await act(async () => {
-    await run()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  })
-}
-
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
 })
+
+async function step(run: () => unknown): Promise<void> {
+  await act(async () => {
+    await run()
+  })
+  await settleQueryNotifications()
+}
 
 function hostWithRows() {
   let state: ConnectionState = 'connected'

@@ -1,9 +1,11 @@
 import { createElement, useEffect } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
-import { createOrcaQueryClient } from '../query/orca-query-client'
+import {
+  documentQueryClient,
+  settleQueryNotifications
+} from '../test-support/rpc-recording/hook-mount'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 
 const focus = vi.hoisted(() => ({ current: true }))
@@ -30,9 +32,8 @@ it('refreshes the staging area when returning from review without remounting the
   const read: { loaders: ReturnType<typeof useMobileSourceControlLoaders> | null } = {
     loaders: null
   }
-  const queryClient = createOrcaQueryClient()
-  const screen = () =>
-    createElement(QueryClientProvider, { client: queryClient }, createElement(Screen))
+  const queries = documentQueryClient()
+  const screen = () => queries.wrap(createElement(Screen))
   function Screen() {
     read.loaders = useMobileSourceControlLoaders({
       hostId: 'host',
@@ -54,6 +55,7 @@ it('refreshes the staging area when returning from review without remounting the
         rpcSuccess('status', { entries: [{ path: 'app.ts', status: 'modified', area }] })
       )
     )
+    await settleQueryNotifications()
   }
   try {
     await act(async () => {

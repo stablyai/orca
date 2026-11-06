@@ -7,7 +7,7 @@ import {
   useState,
   type MutableRefObject
 } from 'react'
-import { hashKey, notifyManager, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
@@ -21,7 +21,7 @@ import {
 import type { ConnectionState } from '../transport/types'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
-import { hostQueryLiveOptions, useHostQuery } from '../query/host-query'
+import { readHostQueryLive, useHostQuery } from '../query/host-query'
 import { hostQueryKey } from '../query/host-query-key'
 import { hostScreenState } from '../query/host-query-screen-state'
 import {
@@ -29,7 +29,7 @@ import {
   readBranchCompareOutcome,
   type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
-import { gitStatusQuery, type GitStatusRead } from './mobile-git-status-query'
+import { gitStatusQuery } from './mobile-git-status-query'
 import type {
   LoadStatusOptions,
   MobileBranchCompareState,
@@ -185,38 +185,19 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
 
-  const compareWith = useEffectEvent((read: GitStatusRead | undefined) => {
-    if (read?.kind === 'ready') {
+  // Each status read that lands, and a new compare setting, refreshes the compare; a read in flight brings its own.
+  const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
+  const compareShownStatus = useEffectEvent(() => {
+    if (statusRead?.kind === 'ready' && !statusFetching && statusQuery.status === 'success') {
       void loadBranchCompare({
         preserveReadyOnFailure: true,
-        upstreamName: read.status.upstreamStatus?.upstreamName
+        upstreamName: statusRead.status.upstreamStatus?.upstreamName
       })
-    }
-  })
-  // Every status read that lands, from focus, foreground, the connected edge or an action, refreshes the compare.
-  const statusHash = hashKey(statusKey)
-  useEffect(
-    () =>
-      queryClient.getQueryCache().subscribe((event) => {
-        if (
-          event.type === 'updated' &&
-          event.action.type === 'success' &&
-          event.query.queryHash === statusHash
-        ) {
-          compareWith(event.query.state.data)
-        }
-      }),
-    [queryClient, statusHash]
-  )
-  // Rows from memory still need their compare, as does a new compare setting; a revalidation in flight brings its own.
-  const compareShownStatus = useEffectEvent(() => {
-    if (!statusQuery.isFetching) {
-      compareWith(statusQuery.data)
     }
   })
   useEffect(() => {
     compareShownStatus()
-  }, [statusHash, compareAgainstUpstream])
+  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream])
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
@@ -226,18 +207,16 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       if (!client || !statusEnabled) {
         return false
       }
-      const live = hostQueryLiveOptions(gitStatusQuery, client, hostId, target, NO_INPUT)
       try {
-        // A forced read must see what an action just wrote, so it replaces a read already out; the replaced caller gets false, never old data.
-        if (options?.force) {
-          await queryClient.cancelQueries(
-            { queryKey: live.queryKey, exact: true },
-            { silent: true }
-          )
-        }
-        const read = await queryClient.query(live)
-        // Resolve once observers hold the new status, so callers act on what the screen shows.
-        await new Promise<void>((resolve) => notifyManager.schedule(resolve))
+        // A forced read must see what an action just wrote, so it replaces a read already out.
+        const read = await readHostQueryLive(
+          queryClient,
+          gitStatusQuery,
+          { hostId, client },
+          target,
+          NO_INPUT,
+          { replace: options?.force === true }
+        )
         if (read.kind !== 'ready') {
           return false
         }
@@ -263,7 +242,6 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     ]
   )
 
-  const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
   const screenState = useMemo((): ScreenState => {
     if (statusRead?.kind === 'ready') {
       return { kind: 'ready', status: statusRead.status }

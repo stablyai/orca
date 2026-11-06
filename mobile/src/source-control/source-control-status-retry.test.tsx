@@ -7,6 +7,7 @@ import type { RpcResponse } from '../transport/types'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { createOrcaQueryClient } from '../query/orca-query-client'
+import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
 import type { MobilePrTab } from '../components/pr-sidebar/use-mobile-pr-tab'
 import type { MessageBox } from '../components/composer-input/MessageBox'
 import type { TextField } from '../components/composer-input/TextField'
@@ -560,6 +561,7 @@ it('reuses Source Control across worktrees without loading the old fallback, con
       rpcSuccess('status-w2', { entries: [], branch: 'new-branch', head: 'new-branch-head' })
     )
   )
+  await settleQueryNotifications()
   const prReads = requests.filter((r) => r.method === 'github.prForBranch')
   expect(prReads).toHaveLength(2)
   expect(prReads[1].params).toMatchObject({

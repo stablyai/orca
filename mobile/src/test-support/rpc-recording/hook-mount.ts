@@ -21,6 +21,14 @@ export function documentQueryClient() {
   }
 }
 
+// For tests outside the recorder: TanStack tells observers on a zero-delay timer it schedules once a reply's promise chain settles.
+export async function settleQueryNotifications(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
 export function hookMount(render: () => void) {
   let renderer: ReactTestRenderer | undefined
   const queries = documentQueryClient()

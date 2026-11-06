@@ -9,26 +9,32 @@ export function hostReadClient(client: RpcClient): RpcClient {
   if (existing) {
     return existing
   }
-  const view = new Proxy(client, {
-    get(target, property) {
-      if (property === 'sendRequest') {
-        const sendFailFast: RpcClient['sendRequest'] = (method, params, options) =>
-          target.sendRequest(method, params, { ...options, failWhenDisconnected: true })
-        return sendFailFast
-      }
-      const requestRoute = target.requestRoute
-      if (property === 'requestRoute' && requestRoute) {
-        const routeFailFast: typeof requestRoute = (params) => {
-          const route = requestRoute.call(target, params)
-          return { ...route, client: hostReadClient(route.client) }
-        }
-        return routeFailFast
-      }
-      const value: unknown = Reflect.get(target, property)
-      // Bind so class clients keep their private fields.
-      return typeof value === 'function' ? value.bind(target) : value
-    }
-  })
+  const requestRoute = client.requestRoute
+  // Built like routeRpcClientCalls: delegate every member, and never own the shared connection.
+  const view: RpcClient = {
+    requestRoute:
+      requestRoute &&
+      ((params) => {
+        const route = requestRoute.call(client, params)
+        return { ...route, client: hostReadClient(route.client) }
+      }),
+    sendRequest: (method, params, options) =>
+      client.sendRequest(method, params, { ...options, failWhenDisconnected: true }),
+    subscribe: (method, params, onData, options) =>
+      client.subscribe(method, params, onData, options),
+    updateTerminalSubscriptionViewport: (terminal, viewport) =>
+      client.updateTerminalSubscriptionViewport(terminal, viewport),
+    getState: () => client.getState(),
+    getReconnectAttempt: () => client.getReconnectAttempt(),
+    getLastConnectedAt: () => client.getLastConnectedAt(),
+    getLastInboundAt: client.getLastInboundAt && (() => client.getLastInboundAt?.() ?? null),
+    getGeneration: client.getGeneration && (() => client.getGeneration?.() ?? 0),
+    carriesRpcEnvelope: client.carriesRpcEnvelope && (() => client.carriesRpcEnvelope?.() ?? true),
+    onStateChange: (listener) => client.onStateChange(listener),
+    notifyForeground: (reason) => client.notifyForeground(reason),
+    probeLivenessNow: client.probeLivenessNow && (() => client.probeLivenessNow?.()),
+    close: () => {}
+  }
   readViews.set(client, view)
   return view
 }

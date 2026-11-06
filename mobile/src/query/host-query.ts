@@ -1,7 +1,22 @@
-import { queryOptions, skipToken, useQuery, type UseQueryResult } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import {
+  hashKey,
+  notifyManager,
+  queryOptions,
+  skipToken,
+  useQuery,
+  type QueryClient,
+  type UseQueryOptions,
+  type UseQueryResult
+} from '@tanstack/react-query'
 import type { RpcClient } from '../transport/rpc-client'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
-import { hostQueryKey, type HostQueryParams, type HostQueryTarget } from './host-query-key'
+import {
+  hostQueryKey,
+  type HostQueryKey,
+  type HostQueryParams,
+  type HostQueryTarget
+} from './host-query-key'
 import { hostReadClient } from './host-read-client'
 
 export type HostQuery<TInput extends HostQueryParams, TData> = {
@@ -27,8 +42,7 @@ export function defineHostQuery<TInput extends HostQueryParams, TData>(
   return query
 }
 
-// For reads outside React: queryClient.query(hostQueryOptions(...)).
-export function hostQueryOptions<TInput extends HostQueryParams, TData>(
+function hostQueryOptions<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>,
   client: RpcClient,
   hostId: string,
@@ -47,19 +61,28 @@ export function hostQueryOptions<TInput extends HostQueryParams, TData>(
   })
 }
 
-// Actions read live: no stale copy and nothing built on the cached data.
-export function hostQueryLiveOptions<TInput extends HostQueryParams, TData>(
+// An action's read: no stale copy and nothing built on the cached data; resolves once observers hold the answer.
+// `replace` cancels a read already out (its caller rejects rather than resolving with old data) instead of joining it.
+export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
   query: HostQuery<TInput, TData>,
-  client: RpcClient,
-  hostId: string,
+  host: { hostId: string; client: RpcClient },
   target: HostQueryTarget,
-  input: TInput
-) {
-  return {
+  input: TInput,
+  options: { replace: boolean }
+): Promise<TData> {
+  const { hostId, client } = host
+  if (options.replace) {
+    const queryKey = hostQueryKey(hostId, query.family, target, input)
+    await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+  }
+  const data = await queryClient.query({
     ...hostQueryOptions(query, client, hostId, target, input),
     queryFn: () => query.fetch(hostReadClient(client), target, input, undefined),
     staleTime: 0
-  }
+  })
+  await new Promise<void>((resolve) => notifyManager.schedule(resolve))
+  return data
 }
 
 export function useHostQuery<TInput extends HostQueryParams, TData>(
@@ -72,11 +95,14 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
   useHostConnectionInvalidation(hostId, enabled ? client : null)
-  return useQuery({
-    ...(client
-      ? hostQueryOptions(query, client, hostId, target, input)
-      : { queryKey: hostQueryKey(hostId, query.family, target, input) }),
-    ...(!enabled && { queryFn: skipToken }),
-    subscribed: options?.subscribed
-  })
+  // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
+  const keyHash = hashKey([target, input])
+  const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
+    if (!client) {
+      return { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
+    }
+    const fetchOptions = hostQueryOptions(query, client, hostId, target, input)
+    return enabled ? fetchOptions : { ...fetchOptions, queryFn: skipToken }
+  }, [query, client, hostId, keyHash, enabled])
+  return useQuery({ ...queryOptions, subscribed: options?.subscribed })
 }

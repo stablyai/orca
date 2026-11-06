@@ -8,6 +8,10 @@ import type { RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { createOrcaQueryClient } from '../query/orca-query-client'
+import {
+  documentQueryClient,
+  settleQueryNotifications
+} from '../test-support/rpc-recording/hook-mount'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -85,6 +89,7 @@ async function settleOldest(
   }
   const [call] = calls.splice(index, 1)
   await act(async () => call.settle(reply))
+  await settleQueryNotifications()
 }
 
 async function settleCompare(calls: PendingCall[], baseRef: string): Promise<void> {
@@ -142,9 +147,9 @@ describe('useMobileSourceControlLoaders branch compare', () => {
       })
       return null
     }
-    const queryClient = createOrcaQueryClient()
+    const queries = documentQueryClient()
     const render = (props: { identityKey: string; worktreeId: string }) =>
-      createElement(QueryClientProvider, { client: queryClient }, createElement(Harness, props))
+      queries.wrap(createElement(Harness, props))
     await act(async () => {
       renderer = create(render({ identityKey: IDENTITY, worktreeId: WORKTREE }))
     })
@@ -207,14 +212,6 @@ describe('useMobileSourceControlLoaders branch compare', () => {
   })
 })
 
-// TanStack notifies observers on a zero-delay timer it schedules only after the reply's promise chain settles.
-async function settleNotifications(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  })
-}
-
 describe('useMobileSourceControlLoaders action error', () => {
   it('leaves the action error to the reads that actions and refreshes make', async () => {
     const calls: PendingCall[] = []
@@ -242,14 +239,14 @@ describe('useMobileSourceControlLoaders action error', () => {
       )
     })
     await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleNotifications()
+    await settleQueryNotifications()
 
     // An open, foreground or reconnect read can land after an action failed; it must not wipe that error.
     await act(async () => {
       void queryClient.invalidateQueries()
     })
     await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleNotifications()
+    await settleQueryNotifications()
     expect(actionErrors).toEqual([])
     act(() => renderer?.unmount())
   })
