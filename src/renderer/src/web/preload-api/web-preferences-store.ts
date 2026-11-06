@@ -22,6 +22,7 @@ import {
   needsChatUiChoiceCarry,
   retainOriginalWebChatSetting
 } from './web-preference-normalization'
+import { runtimeReplyForLocalMerge } from './web-runtime-settings-reply-merge'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
@@ -252,8 +253,9 @@ export async function syncRuntimeBackedSettings(
           webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId = requestedEnvironment.id
           webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
         }
-        delete runtimeSettings.worktreeVisibilityDefaults
-        return settleRuntimeSettings(runtimeSettings)
+        return settleRuntimeSettings(
+          runtimeReplyForLocalMerge(getStoredSettings(), runtimeSettings)
+        )
       } catch (error) {
         if (
           visibilityDefaults ||

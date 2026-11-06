@@ -23,7 +23,27 @@ export function sourceControlVariableDescription(variable: SourceControlActionVa
     case 'baseBranch':
       return translate(
         'sourceControl.variables.baseBranch',
-        'The target branch selected in the Create PR composer.'
+        'The target branch: the one selected in the Create PR composer, or the pull request base for custom actions.'
+      )
+    case 'prUrl':
+      return translate(
+        'sourceControl.variables.prUrl',
+        'The web URL of the pull request the custom action runs on.'
+      )
+    case 'prNumber':
+      return translate(
+        'sourceControl.variables.prNumber',
+        'The number of the pull request the custom action runs on.'
+      )
+    case 'prTitle':
+      return translate(
+        'sourceControl.variables.prTitle',
+        'The title of the pull request the custom action runs on. Written by the PR author and submitted without review.'
+      )
+    case 'headBranch':
+      return translate(
+        'sourceControl.variables.headBranch',
+        'The pull request head branch. Empty when Orca does not know it yet.'
       )
     case 'currentTitle':
       return translate(

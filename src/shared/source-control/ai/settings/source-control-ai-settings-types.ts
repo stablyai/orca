@@ -1,6 +1,7 @@
 import type { CommitMessageAiModelCapability } from '../generation/commit-message-ai-types'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../generation/commit-message-agent-spec'
+import type { SourceControlCustomAction } from './source-control-custom-actions'
 import type {
   SourceControlAiActionDefaults,
   SourceControlActionLaunchPreferences,
@@ -42,6 +43,8 @@ export type SourceControlAiSettings = {
   instructionsByOperation: Partial<Record<AiTextOperation, string>>
   modelOverridesByOperation?: Partial<Record<AiTextOperation, SourceControlAiModelChoice>>
   prCreationDefaults?: SourceControlAiPrCreationDefaults
+  /** User-defined pull request actions listed beside Start/Resume workspace. */
+  customActions?: SourceControlCustomAction[]
   /** @deprecated use actions instead. Kept for automatic migration and rollback compatibility. */
   launchActionDefaults?: SourceControlAiActionDefaults
 }

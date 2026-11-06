@@ -26,6 +26,7 @@ import { GitHubWorkItemTargetContext } from '@/components/github-item-dialog/loa
 import { useGitHubWorkItemDetails } from '@/components/github-item-dialog/load-item-details/use-github-work-item-details'
 import { GHEditSection } from '../edit/section'
 import { PullRequestPageHeader } from './header'
+import { usePullRequestCustomActions } from './use-custom-actions'
 import { PullRequestPageTabs } from './tabs-shell'
 
 export default function PullRequestPage(props: PullRequestPageProps): React.JSX.Element {
@@ -204,6 +205,14 @@ function PullRequestPageItem({
             ? GitPullRequestDraft
             : GitPullRequest
       : CircleDot
+  // Why: prompts read the details-merged item so branch and title variables match what the page shows.
+  const { customActions, customActionsBusy, onRunCustomAction, onManageCustomActions } =
+    usePullRequestCustomActions({
+      workItem: displayWorkItem,
+      effectiveRepoId,
+      openWorkspaceComposer: handleUseWorkItem
+    })
+
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
@@ -272,6 +281,10 @@ function PullRequestPageItem({
         Icon={Icon}
         onOpenOrUsePR={handleOpenOrUsePR}
         onUseWorkItem={handleUseWorkItem}
+        customActions={customActions}
+        customActionsBusy={customActionsBusy}
+        onRunCustomAction={onRunCustomAction}
+        onManageCustomActions={onManageCustomActions}
       />
 
       {(canUseDetailsRepoContext || projectOrigin) && (

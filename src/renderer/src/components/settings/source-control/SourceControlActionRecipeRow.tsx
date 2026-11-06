@@ -82,7 +82,7 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   onSave: (actionId: ActionId) => void
 }
 
-function resolveAgentArgsPlaceholderAgent(
+export function resolveAgentArgsPlaceholderAgent(
   selectedAgent: TuiAgent | CustomAgentId | null | undefined,
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
 ): TuiAgent | null {
