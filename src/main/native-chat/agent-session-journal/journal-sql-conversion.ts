@@ -45,11 +45,13 @@ export function convertJournalSqlProjection(
   const exported = new JournalSqlReducer(scope, loaded.state.epoch, (id) =>
     journalInputAcceptance(db, sessionId, id)
   )
-  exported.context.bulkLoad(() => {
-    exportJournalControlState(loaded.state, exported.state, { items: true })
-    exported.flush()
-  })
-  pointUnchangedItemsAtOutcomes(scope, loaded.state.items, provenance)
+  exported.context.bulkLoad(
+    () => {
+      exportJournalControlState(loaded.state, exported.state, { items: true })
+      exported.flush()
+    },
+    (item, key) => provenance.source(item, key)
+  )
   markJournalSqlReady(db, sessionId)
   return epoch
 }
@@ -62,33 +64,4 @@ function clearJournalSqlProjection(db: Database.Database, sessionId: string): vo
     .all()) {
     db.prepare(`DELETE FROM "${String(name)}" WHERE session_id=?`).run(sessionId)
   }
-}
-
-function pointUnchangedItemsAtOutcomes(
-  scope: JournalSqlScope,
-  items: JournalSqlConversionItems,
-  provenance: JournalOutcomeItemProvenance
-): void {
-  const point = scope.db.prepare(`UPDATE journal_proj_item_versions
-    SET outcome_generation=?, outcome_seq=?, inline_json=NULL
-    WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
-  const size = scope.db.prepare(`UPDATE journal_proj_items SET byte_size=?
-    WHERE session_id=? AND generation=? AND entry_key=?`)
-  for (const row of scope.db
-    .prepare(`SELECT entry_key, incarnation FROM journal_proj_items
-    WHERE session_id=? AND generation=?`)
-    .all(...scope.prefix)) {
-    const key = String(row.entry_key)
-    const item = items.get(JSON.parse(key) as string)
-    const source = item && provenance.source(item, key)
-    if (!source) {
-      continue
-    }
-    point.run(source.generation, source.sequence, ...scope.prefix, key, row.incarnation)
-    size.run(source.bytes, ...scope.prefix, key)
-  }
-}
-
-type JournalSqlConversionItems = {
-  get: (itemId: string) => Parameters<JournalOutcomeItemProvenance['source']>[0] | undefined
 }

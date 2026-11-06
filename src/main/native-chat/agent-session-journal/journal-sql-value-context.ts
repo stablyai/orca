@@ -12,7 +12,7 @@ import {
 import { JournalSqlValueObjects } from './journal-sql-value-objects'
 import { JournalSqlValueReferences } from './journal-sql-value-references'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
-import { JournalSqlValueBulkLoad } from './journal-sql-value-bulk-load'
+import { JournalSqlValueBulkLoad, type JournalSqlSavedItems } from './journal-sql-value-bulk-load'
 import { JournalSqlValueChanges } from './journal-sql-value-changes'
 import { JournalSqlDomainTables } from './journal-sql-domain-tables'
 
@@ -48,8 +48,11 @@ export class JournalSqlValueContext {
     return journalSqlIndexScope(this)
   }
 
-  bulkLoad(write: () => void): void {
-    this.bulk = new JournalSqlValueBulkLoad(this.tables)
+  bulkLoad(write: () => void, saved?: JournalSqlSavedItems['source']): void {
+    this.bulk = new JournalSqlValueBulkLoad(
+      this.tables,
+      saved && this.items && { items: this.items, source: saved }
+    )
     try {
       write()
       this.bulk.finish()

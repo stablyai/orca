@@ -90,6 +90,27 @@ export class JournalSqlItemValues {
     }
   }
 
+  /** An item admitted unchanged from its saved outcome record keeps only a pointer to it. */
+  storeSaved(
+    location: JournalSqlValueLocation,
+    item: AgentJournalRenderItem,
+    ordinal: number,
+    source: { generation: number; sequence: number; bytes: number }
+  ): void {
+    this.scope.db
+      .prepare(`INSERT INTO journal_proj_item_versions
+      (session_id, generation, entry_key, incarnation, outcome_generation, outcome_seq)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(
+        ...this.scope.prefix,
+        location.key,
+        location.incarnation,
+        source.generation,
+        source.sequence
+      )
+    this.metadata(location, item, source.bytes, ordinal)
+  }
+
   stored(location: JournalSqlValueLocation): boolean {
     const row = this.scope.db
       .prepare(`SELECT 1 AS present FROM journal_proj_item_versions
