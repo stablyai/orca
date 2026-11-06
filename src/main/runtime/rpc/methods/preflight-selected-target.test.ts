@@ -2,16 +2,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  detectInstalledAgentsWithShellPathHydrationMock
-} from '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import { detectInstalledAgentsWithShellPathHydrationMock } from '../../orca-runtime-test-mocks/setup.spec'
 import {
   makeFolderWorkspace,
   makeFolderProjectGroup,
   makeWorktreeMeta,
   store
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { RpcDispatcher } from '../dispatcher'
 import { PREFLIGHT_METHODS } from './preflight'
 import type { Repo } from '../../../../shared/repo-types'
@@ -164,11 +163,7 @@ describe('qualified discovery at the runtime RPC boundary', () => {
           kill: () => true,
           getForegroundProcess: async () => null
         })
-        const startup = vi.fn(() => ({
-          agent: 'codex',
-          startup: { command: 'codex', env: {}, startupCommandDelivery: 'none', telemetry: {} }
-        }))
-        Object.defineProperty(runtime, 'buildStartupForAgent', { value: startup })
+        const startup = vi.spyOn(runtime, 'resolveAgentTerminalCreateOptions')
         const selected = await runtime.resolveManagedTerminalWorkspaceTarget(
           'id:folder:dup',
           'local',
@@ -187,16 +182,15 @@ describe('qualified discovery at the runtime RPC boundary', () => {
           }
         )
         expect(startup).toHaveBeenCalledWith(
-          expect.anything(),
-          'codex',
-          'Review',
-          undefined,
           expect.objectContaining({
-            launchScope: expect.objectContaining({
-              path,
-              connectionId: null,
-              folderWorkspace: expect.objectContaining({ folderPath: path })
-            })
+            path,
+            connectionId: null,
+            folderWorkspace: expect.objectContaining({ folderPath: path })
+          }),
+          expect.objectContaining({
+            startupAgent: 'codex',
+            startupPrompt: 'Review',
+            startupPromptCarry: 'force-line'
           })
         )
         expect(spawn).toHaveBeenCalledWith(

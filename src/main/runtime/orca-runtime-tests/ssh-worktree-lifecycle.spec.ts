@@ -1,15 +1,17 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
-  OrcaRuntimeService,
-  addWorktree,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock,
-  getBranchConflictKind,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import type { WorkspaceLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
@@ -17,7 +19,7 @@ import {
   createFolderWorkspaceRuntimeStore,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {

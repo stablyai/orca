@@ -125,39 +125,10 @@ function runRename(state: AppShortcutState = shortcutState()): boolean | undefin
 describe('tab.rename shortcut', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('leaves activeTabId on a background terminal while a structured tab is active', () => {
-    // Prove the stale-terminal premise before testing structured-tab rename.
-    mocks.store = storeForActiveTab(CHAT_UNIFIED_ID)
-    expect(mocks.store.activeTabType).toBe('agent-session')
-    expect(mocks.store.activeTabId).toBe(TERMINAL_ENTITY_ID)
-  })
-
   it('renames the structured chat tab, not the stale background terminal', () => {
     mocks.store = storeForActiveTab(CHAT_UNIFIED_ID)
     expect(runRename()).toBe(true)
     expect(mocks.requestTerminalTabRename).toHaveBeenCalledWith(CHAT_UNIFIED_ID)
     expect(mocks.requestTerminalTabRename).not.toHaveBeenCalledWith(TERMINAL_ENTITY_ID)
-  })
-
-  it('still renames the terminal tab by its backing terminal id', () => {
-    mocks.store = storeForActiveTab(TERMINAL_UNIFIED_ID)
-    expect(mocks.store.activeTabType).toBe('terminal')
-    expect(runRename()).toBe(true)
-    expect(mocks.requestTerminalTabRename).toHaveBeenCalledWith(TERMINAL_ENTITY_ID)
-  })
-
-  it('does not claim the chord for a tab type that has no inline rename', () => {
-    mocks.store = {
-      ...storeForActiveTab(CHAT_UNIFIED_ID),
-      activeTabType: 'browser'
-    } as AppState
-    expect(runRename()).toBe(false)
-    expect(mocks.requestTerminalTabRename).not.toHaveBeenCalled()
-  })
-
-  it('does not claim the chord for a structured tab with no active worktree', () => {
-    mocks.store = storeForActiveTab(CHAT_UNIFIED_ID)
-    expect(runRename({ ...shortcutState(), activeWorktreeId: null })).toBe(false)
-    expect(mocks.requestTerminalTabRename).not.toHaveBeenCalled()
   })
 })

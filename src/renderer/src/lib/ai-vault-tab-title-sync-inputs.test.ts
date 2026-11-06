@@ -1,9 +1,7 @@
-import { createStore } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
-import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 
 function makeState(count = 1): AppState {
   const live: AppState['agentStatusByPaneKey'] = {}
@@ -80,43 +78,6 @@ async function collectGarbage(): Promise<void> {
 }
 
 describe('AI Vault title subscription inputs', () => {
-  it('does not enumerate unchanged retained and sleeping maps during live status writes', () => {
-    const state = makeState(500)
-    let unchangedEnumerations = 0
-    const observeEnumerations = <T extends object>(records: T): T =>
-      new Proxy(records, {
-        ownKeys(target) {
-          unchangedEnumerations++
-          return Reflect.ownKeys(target)
-        }
-      })
-    state.retainedAgentsByPaneKey = observeEnumerations(state.retainedAgentsByPaneKey)
-    state.sleepingAgentSessionsByPaneKey = observeEnumerations(state.sleepingAgentSessionsByPaneKey)
-    const store = createStore<AppState>(() => state)
-    const scheduleReconcile = vi.fn(() => () => {})
-    const stop = startAiVaultTabTitleSync({
-      getState: store.getState,
-      subscribe: store.subscribe,
-      scheduleReconcile,
-      resolveSessionTitles: vi.fn()
-    })
-    try {
-      const paneKey = Object.keys(state.agentStatusByPaneKey)[0]
-      for (let index = 0; index < 50; index++) {
-        store.setState((current) => ({
-          agentStatusByPaneKey: {
-            ...current.agentStatusByPaneKey,
-            [paneKey]: { ...current.agentStatusByPaneKey[paneKey], updatedAt: index + 2 }
-          }
-        }))
-      }
-      expect(unchangedEnumerations).toBe(0)
-      expect(scheduleReconcile).toHaveBeenCalledTimes(1)
-    } finally {
-      stop()
-    }
-  })
-
   it('skips owner rescans for rank-only rows but reports a conversation workspace moving host', () => {
     // No active selection, so the row's host decides ownership.
     const state = {

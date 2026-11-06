@@ -46,6 +46,7 @@ export class TerminalRunFactsRegister {
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
+  private readonly unattributedDraftSeenAtByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
     string,
     { incarnationId: string | null; firstInputAt: number | null }
@@ -93,6 +94,7 @@ export class TerminalRunFactsRegister {
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
+      this.unattributedDraftSeenAtByPtyId.delete(commit.id)
     }
     this.runsByPtyId.set(commit.id, {
       incarnationId,
@@ -147,6 +149,18 @@ export class TerminalRunFactsRegister {
     return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
   }
 
+  /** When a composer draft no recorded input explains was first seen, e.g. one typed before an Orca
+   *  restart into a process main later attached to; null, and forgotten, while there is none. */
+  noteUnattributedDraft(ptyId: string, present: boolean, now = Date.now()): number | null {
+    if (!present) {
+      this.unattributedDraftSeenAtByPtyId.delete(ptyId)
+      return null
+    }
+    const seenAt = this.unattributedDraftSeenAtByPtyId.get(ptyId) ?? now
+    this.unattributedDraftSeenAtByPtyId.set(ptyId, seenAt)
+    return seenAt
+  }
+
   /** A run main never saw committed reads as not fresh, which keeps today's close-on-exit. */
   read(ptyId: string, incarnationId: string | null | undefined): TerminalRunFacts {
     const run = this.runsByPtyId.get(ptyId)
@@ -174,6 +188,7 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
+    this.unattributedDraftSeenAtByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
   }
 }

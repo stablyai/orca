@@ -9,13 +9,13 @@ const fakes = vi.hoisted(() => ({
   }))
 }))
 
-vi.mock('../relay-token-verifier.js', () => ({
+vi.mock('../authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => fakes.verifyRelayToken,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
 import { createRelayApp } from '../app.js'
-import { relayHostLogDigest } from '../relay-host-log-digest.js'
+import { relayHostLogDigest } from '../observability/relay-host-log-digest.js'
 
 describe('assignment rejection logging', () => {
   afterEach(() => {

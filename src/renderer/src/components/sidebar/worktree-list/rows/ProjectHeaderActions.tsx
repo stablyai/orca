@@ -9,7 +9,7 @@ export const PROJECT_HEADER_ACTIONS_CLASS_NAME = cn(
   'can-hover:pointer-events-none can-hover:opacity-0 can-hover:transition-opacity',
   'group-hover:pointer-events-auto group-hover:opacity-100',
   'has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100',
-  'has-[button[data-state=open]]:pointer-events-auto has-[button[data-state=open]]:opacity-100'
+  'has-[button[aria-expanded=true]]:pointer-events-auto has-[button[aria-expanded=true]]:opacity-100'
 )
 
 export function ProjectHeaderActions({

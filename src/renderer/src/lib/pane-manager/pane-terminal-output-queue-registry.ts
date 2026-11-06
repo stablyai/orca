@@ -30,6 +30,8 @@ export type WriteTerminalOutputOptions = {
   /** Fire delivery ACK once on parse OR discard; duplicate calls are safe, omission permanently shrinks main’s in-flight window. */
   ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
+  /** Every backlog replacement: queued bytes vanished behind the warning, leaving a gap in the pane's stream. */
+  onBacklogReplaced?: () => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
@@ -71,6 +73,7 @@ export type QueueEntry = {
   chunkIndex: number
   queuedChars: number
   onBackgroundBacklogDropped?: () => void
+  onBacklogReplaced?: () => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean

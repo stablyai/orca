@@ -11,7 +11,7 @@ import {
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from '../MobileNativeChatLongPressContent'
@@ -44,7 +44,6 @@ export function MobileNativeChatReasoningRow({
   live = false,
   expanded: transcriptExpanded = false,
   onToggle,
-  onOpenFile,
   onLongPress
 }: {
   message: Pick<NativeChatMessage, 'id' | 'state' | 'completedAt' | 'timestamp'>
@@ -54,7 +53,6 @@ export function MobileNativeChatReasoningRow({
   // Prefer transcript-held disclosure so recycling a row does not forget it.
   expanded?: boolean
   onToggle?: (key: string) => void
-  onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -87,8 +85,8 @@ export function MobileNativeChatReasoningRow({
         <MobileNativeChatReasoningBody
           positionKey={nativeChatReasoningDisclosureKey(message.id)}
           markdown={markdown}
+          streaming={live}
           fontScale={fontScale}
-          onOpenFile={onOpenFile}
           onLongPress={onLongPress}
         />
       ) : null}
@@ -100,14 +98,15 @@ export function MobileNativeChatReasoningRow({
 export function MobileNativeChatReasoningBody({
   positionKey,
   markdown,
+  streaming = false,
   fontScale,
-  onOpenFile,
   onLongPress
 }: {
   positionKey: string
   markdown: string
+  /** The turn is live, so the text may end mid-path. */
+  streaming?: boolean
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -118,11 +117,11 @@ export function MobileNativeChatReasoningBody({
       nestedScrollEnabled
     >
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>
-        <MobileMarkdown
+        <MobileNativeChatMarkdown
           content={markdown}
+          streaming={streaming}
           rangeSelectable
           textScale={CHAT_PROSE_SCALE * fontScale}
-          onOpenFile={onOpenFile}
           onLongPress={onLongPress}
         />
       </MobileNativeChatLongPressContent>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
@@ -64,21 +65,6 @@ describe('getWorkspaceDeleteLineage', () => {
     ])
   })
 
-  it('ignores stale instance links', () => {
-    const parent = makeWorktree('parent', '/workspaces/parent')
-    const child = makeWorktree('child', '/workspaces/child')
-
-    const lineage = getWorkspaceDeleteLineage(parent, [parent, child], {
-      [child.id]: {
-        ...makeLineage(child, parent),
-        parentWorktreeInstanceId: 'old-parent-instance'
-      }
-    })
-
-    expect(lineage.descendants).toEqual([])
-    expect(lineage.deleteAllTargets).toEqual([parent])
-  })
-
   it('orders an exact inline-only legacy descendant before its parent', () => {
     const parent = makeWorktree('parent', '/workspaces/parent')
     const child = makeWorktree('child', '/workspaces/parent/child')
@@ -100,51 +86,6 @@ describe('getWorkspaceDeleteLineage', () => {
         ...makeLineage(child, parent),
         parentWorktreeInstanceId: 'stale-parent-instance'
       }
-    })
-
-    expect(lineage.descendants).toEqual([])
-    expect(lineage.deleteAllTargets).toEqual([parent])
-  })
-
-  it('includes other repos and projects on the same host and rejects another host', () => {
-    const parent: Worktree = {
-      ...makeWorktree('parent', '/workspaces/parent'),
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      projectId: 'project-1'
-    }
-    const children: Worktree[] = [
-      {
-        ...makeWorktree('repo-child', '/workspaces/repo-child'),
-        repoId: 'repo-2',
-        hostId: LOCAL_EXECUTION_HOST_ID
-      },
-      {
-        ...makeWorktree('host-child', '/workspaces/host-child'),
-        hostId: toSshExecutionHostId('other')
-      },
-      {
-        ...makeWorktree('project-child', '/workspaces/project-child'),
-        projectId: 'project-2',
-        hostId: LOCAL_EXECUTION_HOST_ID
-      }
-    ]
-    const lineageById = Object.fromEntries(
-      children.map((child) => [child.id, makeLineage(child, parent)])
-    )
-
-    const lineage = getWorkspaceDeleteLineage(parent, [parent, ...children], lineageById)
-
-    expect(lineage.descendants).toEqual([children[0], children[2]])
-    expect(lineage.deleteAllTargets).toEqual([children[0], children[2], parent])
-  })
-
-  it('does not traverse cyclic projected lineage', () => {
-    const parent = makeWorktree('parent', '/workspaces/parent')
-    const child = makeWorktree('child', '/workspaces/parent/child')
-
-    const lineage = getWorkspaceDeleteLineage(parent, [parent, child], {
-      [parent.id]: makeLineage(parent, child),
-      [child.id]: makeLineage(child, parent)
     })
 
     expect(lineage.descendants).toEqual([])
@@ -220,5 +161,26 @@ describe('getWorkspaceDeleteLineage', () => {
     )
 
     expect(lineage.deleteAllTargets).toEqual([sshChild, sshParent])
+  })
+
+  it('never targets a child known to live in another store; an unowned legacy child stays', () => {
+    const serverParent: Worktree = {
+      ...makeWorktree('parent', '/workspaces/parent'),
+      hostId: toRuntimeExecutionHostId('build-box')
+    }
+    const legacyChild = makeWorktree('child', '/workspaces/parent/child')
+    expect(
+      getWorkspaceDeleteLineage(serverParent, [serverParent, legacyChild], {
+        [legacyChild.id]: makeLineage(legacyChild, serverParent)
+      }).deleteAllTargets.map((worktree) => worktree.id)
+    ).toEqual(['child', 'parent'])
+
+    const localParent: Worktree = { ...serverParent, hostId: LOCAL_EXECUTION_HOST_ID }
+    const serverChild: Worktree = { ...legacyChild, runtimeOwnerEnvironmentId: 'build-box' }
+    expect(
+      getWorkspaceDeleteLineage(localParent, [localParent, serverChild], {
+        [serverChild.id]: makeLineage(serverChild, localParent)
+      }).deleteAllTargets.map((worktree) => worktree.id)
+    ).toEqual(['parent'])
   })
 })

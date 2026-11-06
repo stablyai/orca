@@ -4,7 +4,7 @@ import {
   WORKTREE_ID_SEPARATOR
 } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { comparableWslPath, isAtOrUnder, isLinuxSpelled } from './wsl-move-comparable-path'
-import type { SessionInfo } from '../../daemon/types'
+import type { SessionInfo } from '../../daemon/protocol/daemon-session-info'
 
 export type WslMoveExitProof =
   | { verdict: 'exited' }

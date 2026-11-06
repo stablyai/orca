@@ -12,9 +12,12 @@ import { configureFederationWorkerRuntime } from '../../src/main/runtime/rpc/met
 import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-read-model'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()

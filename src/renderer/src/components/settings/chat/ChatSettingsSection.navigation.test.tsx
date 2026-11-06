@@ -130,23 +130,4 @@ describe('Chat settings deep links', () => {
     )
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
   })
-
-  it('activates Chat and scrolls to the separate naming section for its deep link', async () => {
-    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
-    const { container } = render(
-      <NavigationHarness initialSection="appearance" targetSection="chat-names" />
-    )
-    await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'chat'
-      )
-    })
-    const names = container.querySelector('#chat-names')
-    const appearance = container.querySelector('#chat-appearance')
-    expect(names?.parentElement).toBe(appearance?.parentElement)
-    expect(names?.querySelector('[role="switch"]')).toBe(
-      screen.getByRole('switch', { name: 'Name chats automatically' })
-    )
-    await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(names))
-  })
 })

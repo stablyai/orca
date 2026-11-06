@@ -33,7 +33,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession): void {
   // Abandonment discards bytes the mirror already scanned; restore its Kitty flags into xterm after grounding.
   session.writeAbandonedRestoreGap = function (): void {
-    session.resumeEscapeGap.noteGroundingWrite(session.idleCursorReset.parserEscape)
+    // The CAN-led reset moves xterm's parser off the stream.
+    session.streamPosition.invalidate({ grounded: true })
     session.writePtyOutputToXterm(
       `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)}`,
       true
@@ -184,6 +185,10 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           }
           session.hiddenRendererStateDirty = false
           session.recordRendererOrderedSeq(snapshot)
+          if (typeof snapshot.seq === 'number' && restorePtyId) {
+            // The replay, pending escape tail included, leaves xterm exactly at the snapshot's position.
+            session.streamPosition.anchor(restorePtyId, snapshot.seq)
+          }
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
           if (session.deps.isVisibleRef.current) {

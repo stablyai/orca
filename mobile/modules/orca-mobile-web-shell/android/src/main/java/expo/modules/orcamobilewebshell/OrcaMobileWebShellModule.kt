@@ -27,6 +27,16 @@ class OrcaMobileWebShellModule : Module() {
       }
     }
 
+    AsyncFunction("shareImage") { uri: String, mime: String ->
+      val activity = appContext.currentActivity ?: throw Exceptions.MissingActivity()
+      presentImageShareSheet(activity, Uri.parse(uri), mime)
+    }
+
+    AsyncFunction("saveImageToPhotos") { uri: String, mime: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      saveImageToGallery(context, Uri.parse(uri), mime)
+    }
+
     View(OrcaMobileWebShellView::class) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation")
 

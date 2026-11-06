@@ -42,7 +42,6 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
   const managerRef = useRef<PaneManager | null>(null)
-  const paneFontSizesRef = useRef<Map<number, number>>(new Map())
   const expandedPaneIdRef = useRef<number | null>(null)
   const expandedStyleSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
     new Map()
@@ -171,7 +170,6 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     onCloseTab,
     containerRef,
     managerRef,
-    paneFontSizesRef,
     expandedPaneIdRef,
     expandedStyleSnapshotRef,
     pendingPaneSizeRefreshFrameIdsRef,

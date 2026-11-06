@@ -286,7 +286,6 @@ export function prepareTerminalPaneMount(
         manager,
         currentSettings,
         refs.systemPrefersDarkRef.current,
-        deps.paneFontSizesRef.current,
         deps.paneTransportsRef.current,
         deps.effectiveMacOptionAsAltRef.current,
         deps.paneMode2031Ref.current,

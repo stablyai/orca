@@ -163,7 +163,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
   let admitted: AdmittedLaunch | null = null
   const isCancelled = (): boolean => cancelled || args.hooks.signal?.aborted === true
   let resolveDelivery: (result: StructuredPromptDeliveryResult) => void = () => undefined
-  const deliversPrompt = Boolean(plan.prompt?.trim())
+  const deliversPrompt = Boolean(plan.prompt?.trim() || plan.promptAttachments?.length)
   const promptDeliveryResult = deliversPrompt
     ? new Promise<StructuredPromptDeliveryResult>((resolve) => {
         resolveDelivery = resolve
@@ -232,7 +232,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
           args.executionHostId,
           args.declinedOpensCallerSurface
         )
-        if (plan.resumeFrom || plan.requestedSurface === 'chat' || noCli) {
+        if (plan.resumeFrom || plan.forkFrom || plan.requestedSurface === 'chat' || noCli) {
           return failBeforeSurface(
             new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported'),
             admission.reason,

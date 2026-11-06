@@ -63,6 +63,9 @@ vi.mock('@/runtime/runtime-layout-client', async (original) =>
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
+vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
+  usePublishedMachineName: () => null
+}))
 vi.mock('../components/native-chat/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
 )
@@ -104,6 +107,7 @@ const request: WorktreeCreationRequest = {
 let main: TabsDrawnFromMain
 
 beforeEach(async () => {
+  mocks.call.mockRejectedValue(new Error('Model catalog unavailable'))
   resetStructuredAgentLaunchRegistryForTests()
   seedEmptyActivatableWorktree(worktree)
   useAppStore.setState({

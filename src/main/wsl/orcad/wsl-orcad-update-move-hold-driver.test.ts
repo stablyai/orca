@@ -6,7 +6,7 @@
  * cancelled, or killed mid-run and recovered on relaunch) the same update deploys.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { fakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { setAppEnvironment } from '../../../shared/app-environment'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/wsl-host-types'

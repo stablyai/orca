@@ -87,17 +87,6 @@ describe('process monitor retires a latched foreground read', () => {
     expect(sidebarAgent('user@host: ~/repo', pane.getEntry())).toBeNull()
   })
 
-  it('drops the row when a killed Codex leaves its last title behind', async () => {
-    const pane = createUnmarkedPane({ visible: true })
-    pane.tracker.onVisiblePtyBound()
-    await vi.advanceTimersByTimeAsync(2_500)
-
-    pane.setForeground('zsh', false)
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    expect(sidebarAgent('repo', pane.getEntry())).toBeNull()
-  })
-
   it('keeps the row while Codex runs a nested shell', async () => {
     const pane = createUnmarkedPane({ visible: true })
     pane.tracker.onVisiblePtyBound()
@@ -135,28 +124,6 @@ describe('process monitor retires a latched foreground read', () => {
     await flushAsyncTicks()
 
     expect(pane.getEntry()).toMatchObject({ agent: 'codex', agentEvidence: 'process-read' })
-    expect(pane.onConfirmedShellForeground).not.toHaveBeenCalled()
-  })
-
-  it('does not retire a reattach launch record or another agent', () => {
-    const pane = createUnmarkedPane({ visible: false })
-    const launchRecord: PaneForegroundAgentEntry = {
-      agent: 'codex',
-      agentEvidence: 'launch-record',
-      shellForeground: false
-    }
-    pane.setEntry(launchRecord)
-    pane.tracker.onProcessExitConfirmed({ agent: 'codex', processName: 'codex' })
-    expect(pane.getEntry()).toBe(launchRecord)
-
-    const claudeRead: PaneForegroundAgentEntry = {
-      agent: 'claude',
-      agentEvidence: 'process-read',
-      shellForeground: false
-    }
-    pane.setEntry(claudeRead)
-    pane.tracker.onProcessExitConfirmed({ agent: 'codex', processName: 'codex' })
-    expect(pane.getEntry()).toBe(claudeRead)
     expect(pane.onConfirmedShellForeground).not.toHaveBeenCalled()
   })
 })

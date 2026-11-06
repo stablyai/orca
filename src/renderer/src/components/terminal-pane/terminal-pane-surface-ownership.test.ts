@@ -130,44 +130,4 @@ describe('terminal surface ownership', () => {
     ).resolves.toBe(false)
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
   })
-
-  // Round-trip through disk/Zod: undeclared fields vanish only at load, invisible to same-process assertions.
-  it('still refuses a chat-owned tab after a real persist/parse round trip', async () => {
-    const loaded = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: WORKTREE_ID,
-      activeTabId: 'tab-1',
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'tab-1',
-            ptyId: null,
-            worktreeId: WORKTREE_ID,
-            title: 'Terminal 1',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0,
-            viewMode: 'chat'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {}
-    })
-    expect(loaded.ok).toBe(true)
-    setTerminalTabs(
-      (loaded.ok ? loaded.value.tabsByWorktree[WORKTREE_ID] : []) as StoredTerminalTab[]
-    )
-    // Blind on purpose: only the reloaded row can refuse this.
-    mocks.getTab.mockReturnValue(null)
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'write-stalled'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-  })
 })

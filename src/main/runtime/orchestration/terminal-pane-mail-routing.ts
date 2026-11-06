@@ -2,9 +2,9 @@ import {
   ptyRecordForPaneKey,
   type TerminalIdentityReadContext
 } from '../terminal/query/terminal-identity-read-context'
-import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
+import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
 import { isClaudeManagementTitle } from '../../../shared/agent-status/title/agent-title-core'
@@ -12,14 +12,14 @@ import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from './terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { OrchestrationDb } from './db'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
+import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   structuredMailboxCustody,
   structuredSessionIdleEdgeMailboxes,

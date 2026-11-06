@@ -3,8 +3,8 @@ import {
   fakeCodex,
   THREAD_ID as CODEX_THREAD_ID
 } from '../../src/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
-import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
-import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/structured-agent-shell-environment'
+import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/agent-session/installation/structured-agent-runtime-registrations'
+import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/agent-session/environment/structured-agent-shell-environment'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -27,17 +27,17 @@ import {
   PROVIDER_SESSION_ID
 } from '../../src/main/claude/structured/claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
-import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   hostTestState,
   attachParams,
   envelope,
   CALLER
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as sessionId
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
@@ -46,7 +46,7 @@ import { acpLaunchSpecFor } from '../../src/main/acp/acp-launch-specs'
 import { openHostRig, launch } from '../../src/main/acp/acp-structured-host.test-support'
 import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.test-support'
 import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 
 import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
@@ -145,6 +145,7 @@ function permissionConsumersFor(
         enabled: true,
         optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target),
         turnId: null,
+        unloadedTurnRevisions: undefined,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,

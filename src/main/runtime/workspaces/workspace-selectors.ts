@@ -1,12 +1,9 @@
-import { detectProjectLaunchContext } from '../../preflight/workspace-agent-detection'
-import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
-
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
   type ResolvedWorktree,
   branchSelectorMatches,
   runtimePathsEqual
-} from '../runtime-worktree-path-identity'
+} from './catalog/runtime-worktree-path-identity'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -16,25 +13,17 @@ import {
   runtimeRepoSelectorHostId,
   runtimeRepoSelectorText,
   type RuntimeRepoSelector
-} from '../runtime-repo-selector'
-import type {
-  WorktreeLineageInput,
-  WorktreeLineageResolution
-} from '../runtime-worktree-lineage-resolution'
-import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
-import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
-import type { WorkspaceKey } from '../../../shared/workspace-scope'
+} from './catalog/runtime-repo-selector'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
+import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
-
-export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
+import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
+export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchContext {
   protected abstract hasFreshResolvedWorktreeCache(
     ...args: Parameters<RuntimeWorkspaceCatalog['hasFreshResolvedWorktreeCache']>
   ): ReturnType<RuntimeWorkspaceCatalog['hasFreshResolvedWorktreeCache']>
@@ -156,39 +145,6 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     throw new Error('selector_not_found')
   }
 
-  /** `childRepo` scopes the parent to the new worktree's execution host (#12757). */
-  protected resolveLineageForWorktreeCreate(
-    input?: WorktreeLineageInput,
-    childRepo?: Repo
-  ): Promise<WorktreeLineageResolution> {
-    return this.worktreeLineage.resolveCreate(
-      input,
-      childRepo ? getRepoExecutionHostId(childRepo) : undefined
-    )
-  }
-
-  protected getOrchestrationDbIfAvailable(): OrchestrationDb | null {
-    return this._orchestrationDb
-  }
-
-  getNestedWorkerMaxDepth(): number {
-    return resolveNestedWorkerMaxDepth({
-      nestedWorkerMaxDepth: this.store?.getSettings?.()?.nestedWorkerMaxDepth
-    })
-  }
-
-  hydrateInferredWorktreeLineage(): Promise<void> {
-    return this.worktreeLineage.hydrate()
-  }
-
-  listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
-    return this.worktreeLineage.listWorktreeLineage()
-  }
-
-  listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
-    return this.worktreeLineage.listWorkspaceLineage()
-  }
-
   // Reuse the selector grammar when narrowing connection scope so matching cannot diverge.
   protected selectReposBySelector(selector: string): Repo[] {
     const repos = this.store?.getRepos() ?? []
@@ -226,11 +182,6 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       throw new Error('selector_ambiguous')
     }
     throw new Error('repo_not_found')
-  }
-
-  async detectProjectLaunchContext(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return detectProjectLaunchContext(this.requireStore(), repo)
   }
 
   requireStore(): RuntimeStore {

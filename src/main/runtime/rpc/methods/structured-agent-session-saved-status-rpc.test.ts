@@ -1,12 +1,12 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   attach,
   hostTestState
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'

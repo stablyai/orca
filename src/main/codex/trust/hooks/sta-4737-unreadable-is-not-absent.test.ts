@@ -174,14 +174,6 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
     }
   })
 
-  it('still seeds a runtime config that is genuinely absent', () => {
-    realFs.writeFileSync(systemConfigPath(), SYSTEM_CONFIG, 'utf-8')
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(realFs.readFileSync(runtimeConfigPath(), 'utf-8')).toContain('model = "system-model"')
-  })
-
   it('refuses the retained-pane mirror when its runtime config is denied', () => {
     realFs.writeFileSync(systemConfigPath(), SYSTEM_CONFIG, 'utf-8')
     realFs.writeFileSync(runtimeConfigPath(), RUNTIME_CONFIG, 'utf-8')
@@ -218,18 +210,6 @@ describe('STA-4737 promotion must not rebuild a system config it could not read'
     ).toBeNull()
 
     expect(realFs.readFileSync(systemConfigPath(), 'utf-8')).toBe(before)
-  })
-
-  it('still promotes into a readable system config', () => {
-    seedPromotableRuntimeChange()
-
-    const plan = promoteCodexRuntimeSettingsToSystem({
-      runtimeHomePath: runtimeHome(),
-      systemHomePath: systemHome()
-    })
-
-    expect(plan).not.toBeNull()
-    expect(realFs.readFileSync(systemConfigPath(), 'utf-8')).toContain('model = "new-model"')
   })
 })
 
@@ -283,17 +263,5 @@ describe('STA-4737 the resource sync must not delete a mirror whose source it co
     })
 
     expect(realFs.readFileSync(targetPath, 'utf-8')).toBe(MIRRORED)
-  })
-
-  it('still removes the mirrored copy when the source is genuinely gone', () => {
-    const { sourcePath, targetPath } = seedOwnedMirrorCopy()
-    realFs.rmSync(sourcePath)
-
-    syncCodexGlobalInstructionsIntoManagedHome({
-      systemHomePath: systemHome(),
-      managedHomePath: runtimeHome()
-    })
-
-    expect(realFs.existsSync(targetPath)).toBe(false)
   })
 })

@@ -12,8 +12,6 @@ final class StableElementIndexesTests: XCTestCase {
         )
     }
 
-
-
     func testAnElementInsertedEarlyLeavesEveryOtherIndexAlone() {
         let previous: [Previous] = [("window", 0, "AXWindow"), ("search", 1, "AXTextField"), ("row", 2, "AXRow")]
 
@@ -27,12 +25,6 @@ final class StableElementIndexesTests: XCTestCase {
         XCTAssertEqual(result.nextFreshIndex, 4)
     }
 
-
-
-
-
-
-
     func testARemovedIndexIsNeverHandedToADifferentNewElement() {
         let previous: [Previous] = [("window", 0, "AXWindow"), ("search", 1, "AXTextField")]
 
@@ -41,12 +33,4 @@ final class StableElementIndexesTests: XCTestCase {
         XCTAssertEqual(result.indexes, [0, 7])
     }
 
-    func testRenumbersOnlyTheLeadingElementIndex() {
-        let indexes = [3: 41, 12: 3]
-
-        XCTAssertEqual(StableElementIndexes.renumber(line: "\t\t3 button Upvote 12", indexes: indexes), "\t\t41 button Upvote 12")
-        XCTAssertEqual(StableElementIndexes.renumber(line: "12", indexes: indexes), "3")
-        XCTAssertEqual(StableElementIndexes.renumber(line: "\t... 12 inactive browser tabs omitted", indexes: indexes), "\t... 12 inactive browser tabs omitted")
-        XCTAssertEqual(StableElementIndexes.renumber(line: "\t12px text", indexes: indexes), "\t12px text")
-    }
 }

@@ -1,0 +1,59 @@
+import { randomUUID } from 'node:crypto'
+import { describe, expect, it, vi } from 'vitest'
+import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import {
+  setupLayoutOwnerRuntime,
+  WORKTREE_ID
+} from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+
+// Paired desktops replay stable tab/leaf ids; durable closed-tab records must reject late retries.
+function pairedDesktopCreate() {
+  const fixture = setupLayoutOwnerRuntime()
+  const live: PtyProcessInfo[] = []
+  fixture.runtime.setPtyController({
+    spawn: committingSpawn(fixture.runtime, fixture.spawn),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    listProcesses: vi.fn(async () => live)
+  })
+  const pane = { tabId: randomUUID(), leafId: randomUUID() }
+  const create = (reconcileExisting: boolean) =>
+    fixture.runtime.dedupeTerminalCreate(
+      'paired-desktop',
+      `id:${WORKTREE_ID}`,
+      'mutation-x',
+      reconcileExisting,
+      (selector, preAllocatedHandle) =>
+        fixture.runtime.createTerminal(selector, {
+          ...pane,
+          ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+        })
+    )
+  return { ...fixture, live, pane, create }
+}
+
+describe('a paired desktop terminal.create replayed with its pane ids', () => {
+  it('is refused after another client closed its tab: nothing starts and no tab comes back', async () => {
+    const { runtime, spawn, session, pane, create } = pairedDesktopCreate()
+
+    await create(false)
+    expect(session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([pane.tabId])
+    expect(spawn).toHaveBeenCalledTimes(1)
+
+    await runtime.applyLayoutCommand({
+      type: 'closeTabs',
+      workspace: WORKTREE_ID,
+      tabIds: [pane.tabId],
+      recordClose: 'user'
+    })
+    expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
+
+    await expect(create(true)).rejects.toThrow('tab_not_found')
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
+  })
+})

@@ -1,12 +1,11 @@
 # Synchronous child-process launches in production src/main and src/shared, per file: uses of
 # execFileSync/spawnSync/execSync, runProcessSync and the repo sync wrappers listed in
-# config/scripts/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which
+# config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which
 # can block on a whole directory subtree).
 # Some entries run in the daemon or orcad process, or are test harnesses outside the test-path
 # conventions. This is a RATCHET: counts may only go DOWN.
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
@@ -17,12 +16,12 @@
 1 src/main/codex-accounts/runtime-home-service-wsl.ts
 1 src/main/codex-accounts/service.ts
 1 src/main/computer/macos-computer-use-permissions.ts
-2 src/main/daemon/daemon-cgroup-scope.ts
-1 src/main/daemon/daemon-process-identity-query.ts
-1 src/main/daemon/daemon-process-start-time.ts
-1 src/main/daemon/daemon-user-manager-lifetime.ts
+2 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
+1 src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
+1 src/main/daemon/endpoint/identity/daemon-process-start-time.ts
+1 src/main/daemon/process-scopes/daemon-user-manager-lifetime.ts
 1 src/main/daemon/pty-subprocess/shell-launch-plan.ts
-1 src/main/daemon/terminal-scopes.ts
+1 src/main/daemon/process-scopes/terminal-scopes.ts
 1 src/main/emulator/serve-sim-runtime-materializer.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 1 src/main/git/repo-detection-command.ts
@@ -38,7 +37,7 @@
 1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 1 src/main/pty/process-retirement/posix-pty-process-table.ts
 1 src/main/pty/shell-startup/pwsh.ts
-1 src/main/runtime/runtime-skill-install-authority.ts
+1 src/main/runtime/integrations/skill/runtime-skill-install-authority.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
 1 src/main/workspace-hooks/worktree-runner-script.ts

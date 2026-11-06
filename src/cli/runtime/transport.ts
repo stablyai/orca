@@ -10,6 +10,7 @@ import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
+import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../shared/local-runtime-rpc-limits'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
@@ -220,6 +221,13 @@ export async function sendRequest<TResult>(
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
         })}\n`
+        if (Buffer.byteLength(serialized, 'utf8') > MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES) {
+          throw new RuntimeClientError(
+            'invalid_argument',
+            `The serialized runtime request exceeds the ${MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES}-byte local transport limit. Shorten the request before retrying.`,
+            { effectsApplied: false, requestSent: false }
+          )
+        }
         if (id === requestId) {
           requestSelection?.onDispatch?.()
         }

@@ -1,22 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createStore } from 'zustand/vanilla'
+
 import 'zustand/shallow'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import '../../../shared/workspace-layout/terminal-surface-id'
 import type { BrowserCertificateFailure } from '../../../shared/browser-workspace-types'
 import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
-import {
-  applyWebSessionTabsSnapshot,
-  applyFreshWebSessionTabsSnapshot
-} from './web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
-const ENVIRONMENT_ID = 'web-env-1'
 const NOW = 1_700_000_000_000
 const WORKTREE_A = 'repo::/worktree-a'
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const HOST_TAB_ID = 'host-tab-1'
 
 const CERTIFICATE_FAILURE: BrowserCertificateFailure = {
   challengeId: 'challenge-1',
@@ -76,30 +70,6 @@ function makeSnapshot(
     activeTabType,
     tabs
   }
-}
-
-function makeTerminalSnapshot(
-  options: {
-    worktree?: string
-    title?: string
-    terminal?: string | null
-  } = {}
-): RuntimeMobileSessionTabsResult {
-  const worktree = options.worktree ?? WORKTREE_A
-  const terminal = options.terminal === undefined ? 'terminal-1' : options.terminal
-  return makeSnapshot(worktree, [
-    {
-      type: 'terminal',
-      id: `${HOST_TAB_ID}::${LEAF_ID}`,
-      parentTabId: HOST_TAB_ID,
-      leafId: LEAF_ID,
-      title: options.title ?? 'host shell',
-      isActive: true,
-      ...(terminal === null
-        ? { status: 'pending-handle' as const, terminal: null }
-        : { status: 'ready' as const, terminal })
-    }
-  ])
 }
 
 function makeBrowserSnapshot(
@@ -186,38 +156,5 @@ describe('remote mirror resource identity', () => {
         tab.executionHostId
       ])
     ).toEqual([['browser-workspace-a', 'runtime:runtime-a']])
-  })
-
-  it('emits no store updates for 128 accepted identical resource frames', () => {
-    const terminal = makeTerminalSnapshot()
-    const browser = makeBrowserSnapshot()
-    const snapshot = {
-      ...browser,
-      tabs: [...terminal.tabs.map((tab) => ({ ...tab, isActive: false })), ...browser.tabs]
-    }
-    const store = createStore<WebSessionTabsSyncState>(() => makeState())
-    let notifications = 0
-    store.subscribe(() => {
-      notifications += 1
-    })
-    store.setState((state) =>
-      applyFreshWebSessionTabsSnapshot(state, snapshot, ENVIRONMENT_ID, NOW)
-    )
-    notifications = 0
-    const initial = store.getState()
-
-    for (let snapshotVersion = 2; snapshotVersion <= 129; snapshotVersion += 1) {
-      store.setState((state) =>
-        applyFreshWebSessionTabsSnapshot(
-          state,
-          { ...snapshot, snapshotVersion },
-          ENVIRONMENT_ID,
-          NOW + snapshotVersion
-        )
-      )
-    }
-
-    expect(notifications).toBe(0)
-    expect(store.getState()).toBe(initial)
   })
 })

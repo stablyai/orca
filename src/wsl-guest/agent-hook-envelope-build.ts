@@ -42,6 +42,10 @@ export function buildRelayHookEnvelope(
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
+    // A live batch end carries the requests it resolved; replays attach retained history separately.
+    ...(event.hookEventName === 'PostToolBatch' && event.claudeSettledRequests
+      ? { claudeSettledRequests: event.claudeSettledRequests }
+      : {}),
     toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,

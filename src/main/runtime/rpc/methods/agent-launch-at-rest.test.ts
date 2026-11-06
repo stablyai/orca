@@ -5,11 +5,12 @@ import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../sha
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../core'
-import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { CodexAppServerRequestError } from '../../../codex/app-server/codex-app-server-request-error'
 import { CodexAppServerExitError } from '../../../codex/app-server/codex-app-server-exit-error'
 import { codexStartFailure } from '../../../codex/app-server/codex-startup-outcome'

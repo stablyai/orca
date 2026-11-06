@@ -1,15 +1,15 @@
-import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/structured-agent-session-handing-over'
+import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/delivery/structured-agent-session-handing-over'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { GROK_CONFIG_OPTIONS, waitFor } from './acp-structured-adapter.test-support'
 import { framesOf, hello, openAttachedHostRig, send } from './acp-structured-host.test-support'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { STOP_NOTE_CANCELLATION_REQUESTED } from '../native-chat/agent-session-wire/structured-agent-session-turn-stop-notes'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { STOP_NOTE_CANCELLATION_REQUESTED } from '../native-chat/agent-session-wire/termination/structured-agent-session-turn-stop-notes'
 
 afterEach(async () => {
   vi.useRealTimers()

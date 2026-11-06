@@ -1,5 +1,5 @@
 import { createOrdinaryCrewCommandFixture } from './crew-recipient-public-command.test-fixture'
-import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/orchestration-party'
 import { subscribeCrew } from '../../src/main/runtime/orchestration/crew/crew-stream'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
@@ -14,9 +14,12 @@ import {
 } from '../../src/main/runtime/rpc/orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 afterEach(async () => {
   const remaining = await releaseAgentSessionRecordStore()
   remaining?.journalDatabase.close()

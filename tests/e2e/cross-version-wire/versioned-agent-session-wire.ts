@@ -1,7 +1,7 @@
 import type * as ClientReducer from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type * as ClientProjection from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type * as ClientSchemas from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
-import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'
+import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/operations/structured-agent-session-mutation-plans'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -190,13 +190,13 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
       }),
     installStructuredHost: async (host) => {
       const registry =
-        await import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry')
+        await import('../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry')
       applyStructuredHost(registry as unknown as Record<string, unknown>, WORKING_TREE, host)
     },
     admitSend: async (sent) => {
       const [plans, admission] = await Promise.all([
-        import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'),
-        import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-admission')
+        import('../../../src/main/native-chat/agent-session-wire/operations/structured-agent-session-mutation-plans'),
+        import('../../../src/main/native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission')
       ])
       return admitSend(plans, admission, sent)
     }

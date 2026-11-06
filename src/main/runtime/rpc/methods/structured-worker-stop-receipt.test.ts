@@ -1,4 +1,4 @@
-import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { hostTestState } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -9,12 +9,12 @@ import { agentSessionConversationView } from '../../../../shared/agent-session/l
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../core'
 

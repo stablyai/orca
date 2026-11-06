@@ -5,7 +5,7 @@ import {
   requireStructuredCleanupHost
 } from './structured-agent-session-gate'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { noteStructuredAgentSessionClose } from './structured-agent-session-close-before-create'
 import {
   captureStructuredSessionSurface,

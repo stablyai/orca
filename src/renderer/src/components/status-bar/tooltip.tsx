@@ -8,9 +8,10 @@ import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from 
 import { translate } from '@/i18n/i18n'
 import {
   getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+  getUsageWindowSections,
+  type UsageWindowSection
+} from '../../../../shared/usage-provider-windows'
+import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
@@ -29,11 +30,7 @@ export {
 
 export { clampUsedPercent }
 
-export {
-  getProviderDisplayName,
-  getProviderUsageErrorMessage,
-  getProviderUsageStatusLabel
-} from './usage-error-copy'
+export { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
@@ -144,54 +141,29 @@ function ErrorMessage({
 export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
-  if (p.buckets?.length) {
-    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
-    return [
-      ...bucketSections,
-      // Include Cursor’s monthly plan total because pools can understate proximity to its cap.
-      ...(p.monthly
-        ? [
-            {
-              label:
-                p.provider === 'cursor'
-                  ? translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
-                  : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
-              window: p.monthly
-            }
-          ]
-        : []),
-      {
-        label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-        window: p.weekly
-      }
-    ]
+  return getUsageWindowSections(p).map((section) => ({
+    label: getWindowSectionLabel(section),
+    window: section.window
+  }))
+}
+
+function getWindowSectionLabel(section: UsageWindowSection): string {
+  switch (section.kind) {
+    case 'bucket':
+      return section.name
+    case 'session':
+      return translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
+    case 'weekly':
+      return translate('auto.components.status.bar.tooltip.252c096536', 'Weekly')
+    case 'fableWeekly':
+      return translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable')
+    case 'monthly':
+      return translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly')
+    case 'plan':
+      return translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
+    case 'mcp':
+      return translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
   }
-  const sections: { label: string; window: RateLimitWindow | null }[] = [
-    {
-      label: translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
-      window: p.session
-    },
-    {
-      label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-      window: p.weekly
-    }
-  ]
-  if (p.fableWeekly !== undefined && p.fableWeekly !== null) {
-    sections.push({
-      label: translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable'),
-      window: p.fableWeekly
-    })
-  }
-  if (p.monthly !== undefined && p.monthly !== null) {
-    sections.push({
-      label:
-        p.provider === 'zcode'
-          ? translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
-          : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
-      window: p.monthly
-    })
-  }
-  return sections
 }
 
 // Tooltips invert the theme; use background text tokens for legible primary and secondary content.

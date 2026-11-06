@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import {
-  agentPickerLaunchInputs,
+  agentPickerFreshLaunchInputs,
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
@@ -174,7 +174,14 @@ export function AgentSessionContinuationDialog({
   }, [starting])
 
   const handleStart = async (): Promise<void> => {
-    if (!request || detecting || !selectedAgent || starting || !selection.ready) {
+    if (
+      !request ||
+      detecting ||
+      !selectedAgent ||
+      starting ||
+      !selection.ready ||
+      !selection.choice
+    ) {
       return
     }
     const prompt = buildAgentSessionContinuationPrompt(request.source, contextMode)
@@ -189,7 +196,16 @@ export function AgentSessionContinuationDialog({
       groupId: request.groupId,
       initialCwd: request.initialCwd,
       launchChoice: selection.choice,
-      ...(currentPick?.draft ? agentPickerLaunchInputs(currentPick.draft, currentPick.entry) : {}),
+      ...(currentPick?.draft
+        ? agentPickerFreshLaunchInputs(
+            currentPick.draft,
+            {
+              surface: selection.choice.route === 'terminal-tui' ? 'terminal' : 'chat',
+              executionHostId: selection.choice.executionHostId
+            },
+            currentPick.entry
+          )
+        : {}),
       launchSource: request.launchSource,
       signal: abortRef.current?.signal
     })

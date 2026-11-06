@@ -16,12 +16,12 @@ import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../src/main/runtime/runtime-mobile-notification-controller'
+} from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   call,

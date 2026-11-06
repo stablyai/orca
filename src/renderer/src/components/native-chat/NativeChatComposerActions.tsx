@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
+import { ArrowUp, CircleAlert, CornerDownRight, ListEnd, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -14,8 +14,9 @@ import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers
 import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
-import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
+import type { NativeChatContextUsageSummary } from '../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
@@ -40,6 +41,9 @@ export type NativeChatComposerActionsProps = {
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
   onSend: () => void
+  /** Cmd/Ctrl is held: Send names, and a click runs, what Cmd/Ctrl+Enter would do. */
+  steerPreview?: NativeChatSteerChordPreview | null
+  onSteerPreview?: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
@@ -74,6 +78,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
+  steerPreview = null,
+  onSteerPreview,
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
@@ -245,7 +251,32 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             {translate('common.cancel', 'Cancel')}
           </Button>
         ) : null}
-        {sendHint ? (
+        {/* A draft Send can't take keeps its button and the reason it gives. */}
+        {steerPreview && !editSession && (steerPreview === 'steer-queued' || !sendDisabled) ? (
+          <Button
+            type="button"
+            data-native-chat-steer-preview={steerPreview}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              // As Send: the label can change between a double-click's presses (Steer, then Steer queued).
+              if (event.detail <= 1) {
+                onSteerPreview?.()
+              }
+            }}
+            size="pill"
+          >
+            {steerPreview === 'queue' ? (
+              <ListEnd className="size-3.5" />
+            ) : (
+              <CornerDownRight className="size-3.5" />
+            )}
+            {steerPreview === 'queue'
+              ? translate('components.native-chat.composer.previewQueue', 'Queue')
+              : steerPreview === 'steer'
+                ? translate('components.native-chat.composer.previewSteer', 'Steer')
+                : translate('components.native-chat.composer.previewSteerQueued', 'Steer queued')}
+          </Button>
+        ) : sendHint ? (
           <Tooltip>
             <TooltipTrigger asChild>
               {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}

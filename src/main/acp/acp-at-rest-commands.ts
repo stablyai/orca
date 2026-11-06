@@ -1,26 +1,29 @@
+import { observeAcpForkSupport } from './acp-fork-support'
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
-} from '../native-chat/agent-session-wire/at-rest-command-catalog'
+} from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../native-chat/native-chat-visuals-delivery'
-import type { AcpLaunchSpec } from './acp-launch-specs'
+import {
+  acpListingDependsOnRelease,
+  acpModelListingForRelease,
+  type AcpLaunchSpec
+} from './acp-launch-specs'
 import { createAcpAgentConnection } from './acp-agent-connection'
 import { acpRunFolder } from './acp-private-temp'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
-import { AcpStructuredOptions } from './acp-structured-options'
 import {
   checkAcpLaunchVersion,
   resolveAcpLaunchInvocation,
@@ -28,6 +31,7 @@ import {
 } from './acp-structured-launch-resolution'
 import {
   awaitAcpDiscovery,
+  readAcpSessionCommands,
   runAcpSessionDiscovery,
   type AcpDiscoveryConnection
 } from './acp-session-discovery'
@@ -59,8 +63,6 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
       resolveWorkspacePath: deps.resolveWorkspacePath,
       accepts: (record) =>
         record.provider === spec.agent &&
-        spec.agent === 'omp' &&
-        isLegacyAgentSessionAccountHome(record.accountHome) &&
         supportsAcpStructuredLocation(
           spec,
           record.location,
@@ -136,10 +138,21 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               ]
             }
             // A version reader owns work too; retain admission until it drains after cancellation.
-            const version = await checkAcpLaunchVersion(spec, launch, false, deps.probeVersion)
+            const version = await checkAcpLaunchVersion(
+              spec,
+              launch,
+              acpListingDependsOnRelease(spec.modelDiscovery),
+              deps.probeVersion
+            )
             check()
             if (version.status === 'tooOld') {
               throw new Error('ACP command discovery unavailable')
+            }
+            const listing = acpModelListingForRelease(spec.modelDiscovery, version.version)
+            // Releases that list without a session (OpenCode 1.x) report commands only in chats.
+            if (listing?.kind !== 'session') {
+              answer({ commands: undefined, fromAgent: false })
+              return
             }
             const location = spec.visualsSkill
               ? await awaitAcpDiscovery(
@@ -160,80 +173,41 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                   )
                 : null
             check()
-            const listing = spec.modelDiscovery
-            if (listing.kind !== 'session' || !listing.sessionFolderArgs) {
-              throw new Error('ACP disposable command session unavailable')
+            let folderArgs: string[] = []
+            if (listing.sessionFolderArgs) {
+              folder = await acpRunFolder(
+                join(deps.dataDirectory, 'acp-command-sessions', spec.agent),
+                deps.logger
+              )
+              folderArgs = listing.sessionFolderArgs(folder.path)
+              check()
             }
-            folder = await acpRunFolder(
-              join(deps.dataDirectory, 'acp-command-sessions', spec.agent),
-              deps.logger
-            )
-            check()
             const connection = (deps.connect ?? createAcpAgentConnection)({
               ...launch,
               env: { ...launch.env, ...skill?.env },
               args: [
                 ...invocation.prefixArgs,
                 ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
-                ...listing.sessionFolderArgs(folder.path)
+                ...folderArgs
               ]
             })
             owned = connection
             unclosed.add(connection)
-            const discovery = runAcpSessionDiscovery(connection, signal, async (checkSession) => {
-              const options = new AcpStructuredOptions(spec.dialect)
-              let nativeId: string | undefined
-              let provisional:
-                | {
-                    sessionId: string
-                    commands: Parameters<AcpStructuredOptions['adoptCommands']>[0]
-                  }
-                | undefined
-              let reported: () => void = () => {}
-              const ready = new Promise<void>((resolve) => {
-                reported = resolve
+            const discovery = runAcpSessionDiscovery(connection, signal, (checkSession) =>
+              readAcpSessionCommands({
+                connection,
+                dialect: spec.dialect,
+                onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
+                cwd,
+                signal,
+                check: () => {
+                  checkSession()
+                  check()
+                },
+                disposableStorage: folder !== undefined,
+                logger: deps.logger
               })
-              const unsubscribe = connection.subscribe((event) => {
-                if (
-                  signal.aborted ||
-                  event.kind !== 'known' ||
-                  event.notification.update.sessionUpdate !== 'available_commands_update'
-                ) {
-                  return
-                }
-                const { sessionId, update } = event.notification
-                if (nativeId !== undefined && sessionId !== nativeId) {
-                  return
-                }
-                provisional = { sessionId, commands: update.availableCommands }
-                if (nativeId !== undefined) {
-                  options.adoptCommands(update.availableCommands)
-                  reported()
-                }
-              })
-              try {
-                options.adoptInitialize(await awaitAcpDiscovery(connection.initialize(), signal))
-                checkSession()
-                check()
-                const started = await awaitAcpDiscovery(
-                  connection.start({ cwd, mcpServers: [] }),
-                  signal
-                )
-                checkSession()
-                check()
-                nativeId = started.sessionId
-                if (provisional?.sessionId === nativeId) {
-                  options.adoptCommands(provisional.commands)
-                  reported()
-                }
-                await awaitAcpDiscovery(ready, signal)
-                checkSession()
-                check()
-                return { commands: options.readCommands(), fromAgent: true }
-              } finally {
-                unsubscribe()
-              }
-            })
+            )
             discovery.answer.then(answer, fail)
             const evidence = await discovery.completion
             const close = evidence.result
@@ -252,7 +226,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 if (connection.rootVerdict !== 'exited' || !unclosed.delete(connection)) {
                   return
                 }
-                const cleanup = folder!.remove().finally(() => {
+                const cleanup = Promise.resolve(folder?.remove()).finally(() => {
                   retainedRelease()
                   completions.delete(cleanup)
                 })
@@ -261,7 +235,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               return
             }
             unclosed.delete(connection)
-            await folder.remove()
+            await folder?.remove()
             folder = undefined
           } finally {
             if (!owned) {
