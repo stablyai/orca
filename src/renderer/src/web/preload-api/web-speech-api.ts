@@ -12,6 +12,8 @@ import {
   PCM_BYTES_PER_SAMPLE
 } from '../../../../shared/rpc-contract/speech-params'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { errorMessage } from '../../../../shared/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE
@@ -43,11 +45,16 @@ function emit<T>(listeners: Listeners<T>, data: T): void {
 }
 
 function hostErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = errorMessage(error)
   return hostDictationErrorMessage(message) ?? message
 }
 
 function takePendingAudio(dictation: HostDictation): Float32Array {
+  const [first] = dictation.pending
+  if (dictation.pending.length === 1 && first && first.length <= MAX_CHUNK_SAMPLES) {
+    dictation.pending = []
+    return first
+  }
   const total = dictation.pending.reduce((sum, chunk) => sum + chunk.length, 0)
   const audio = new Float32Array(total)
   let offset = 0
@@ -60,10 +67,10 @@ function takePendingAudio(dictation: HostDictation): Float32Array {
 }
 
 function encodePcm16Base64(samples: Float32Array): string {
-  const pcm = new DataView(new ArrayBuffer(samples.length * PCM_BYTES_PER_SAMPLE))
+  // Int16Array is little-endian on every platform Orca runs on, as the host's readInt16LE expects.
+  const pcm = new Int16Array(samples.length)
   for (let index = 0; index < samples.length; index += 1) {
-    const sample = Math.max(-1, Math.min(1, samples[index] ?? 0))
-    pcm.setInt16(index * PCM_BYTES_PER_SAMPLE, Math.round(sample * 0x7fff), true)
+    pcm[index] = Math.round(Math.max(-1, Math.min(1, samples[index] ?? 0)) * 0x7fff)
   }
   return encodeBase64Bytes(new Uint8Array(pcm.buffer))
 }
@@ -85,6 +92,20 @@ export function createWebSpeechApi(): Pick<
   const errorListeners: Listeners<SpeechErrorEvent> = new Set()
   let active: HostDictation | null = null
 
+  const cancelOnHost = (dictation: HostDictation): Promise<unknown> =>
+    callRuntimeResult('speech.dictation.cancel', { dictationId: dictation.dictationId }).catch(
+      () => undefined
+    )
+
+  // Keep what the host already heard; this session can't be finished any more.
+  const fail = (dictation: HostDictation, error: unknown): void => {
+    const { sessionId, textSoFar } = dictation
+    if (textSoFar) {
+      emit(finalListeners, { sessionId, text: textSoFar })
+    }
+    emit(errorListeners, { sessionId, error: hostErrorMessage(error) })
+  }
+
   // One chunk in flight at a time; audio captured meanwhile rides in the next one, so slow links batch instead of queueing.
   const sendPendingAudio = async (dictation: HostDictation): Promise<void> => {
     while (dictation.pending.length > 0 && !dictation.failed) {
@@ -95,18 +116,15 @@ export function createWebSpeechApi(): Pick<
           sampleRate: dictation.sampleRate,
           seq: dictation.seq++
         })
-        if (reply?.text) {
+        // The host repeats unchanged text about once a second in case a reply was lost.
+        if (reply?.text && reply.text !== dictation.textSoFar) {
           dictation.textSoFar = reply.text
           emit(partialListeners, { sessionId: dictation.sessionId, text: reply.text })
         }
       } catch (error) {
         dictation.failed = true
         dictation.pending = []
-        // Keep what the host already heard; this session can't be finished any more.
-        if (dictation.textSoFar) {
-          emit(finalListeners, { sessionId: dictation.sessionId, text: dictation.textSoFar })
-        }
-        emit(errorListeners, { sessionId: dictation.sessionId, error: hostErrorMessage(error) })
+        fail(dictation, error)
       }
     }
     dictation.sending = null
@@ -117,7 +135,7 @@ export function createWebSpeechApi(): Pick<
     startDictation: async (_modelId, _hotwords, sessionId) => {
       const dictation: HostDictation = {
         sessionId,
-        dictationId: `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+        dictationId: `web-${createBrowserUuid()}`,
         seq: 0,
         sampleRate: 0,
         pending: [],
@@ -133,9 +151,7 @@ export function createWebSpeechApi(): Pick<
           active = null
         }
         // A start that timed out may still finish on the host and hold its one dictation slot.
-        void callRuntimeResult('speech.dictation.cancel', {
-          dictationId: dictation.dictationId
-        }).catch(() => undefined)
+        void cancelOnHost(dictation)
         throw error
       }
     },
@@ -155,13 +171,9 @@ export function createWebSpeechApi(): Pick<
           return
         }
         active = null
-        while (dictation.sending) {
-          await dictation.sending
-        }
+        await dictation.sending
         if (dictation.failed) {
-          await callRuntimeResult('speech.dictation.cancel', {
-            dictationId: dictation.dictationId
-          }).catch(() => undefined)
+          await cancelOnHost(dictation)
           return
         }
         const { text } = await callRuntimeResult<{ text: string }>(
@@ -173,10 +185,9 @@ export function createWebSpeechApi(): Pick<
           emit(finalListeners, { sessionId, text })
         }
       } catch (error) {
-        if (dictation?.textSoFar) {
-          emit(finalListeners, { sessionId, text: dictation.textSoFar })
+        if (dictation) {
+          fail(dictation, error)
         }
-        emit(errorListeners, { sessionId, error: hostErrorMessage(error) })
       } finally {
         emit(stoppedListeners, { sessionId })
       }
