@@ -65,7 +65,7 @@ describe('PTY inventory refresh keeps recorded floating ownership', () => {
     await runtime.listTerminals(`id:${folderWorkspaceKey}`)
     const listed = await runtime.listTerminals()
 
-    const terminal = listed.terminals.find((entry) => entry.ptyId?.startsWith('serve-'))
+    const terminal = listed.terminals.find((entry) => entry.ptyId?.includes('@@serve-'))
     expect(terminal?.worktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(terminal?.worktreeId).not.toBe(folderWorkspaceKey)
     const floating = await runtime.listMobileSessionTabs(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)

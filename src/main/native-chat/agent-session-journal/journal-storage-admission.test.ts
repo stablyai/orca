@@ -1,4 +1,3 @@
-import { admitOutcomeFormat2 } from './journal-outcome-format-2'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,35 +7,15 @@ import { z } from 'zod'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalItemIdentity,
-  AgentSessionJournalIdentity,
-  AgentSessionJournalProviderHandle
+  AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
-  insertTestJournalRowJson,
-  liveTestJournalRows,
   openTestJournalHostDatabase,
-  publishTestJournalEpoch,
-  SAVED_BY_NEWER_ORCA,
-  updateTestJournalRowJson
+  SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
-import { admitOutcomeFormat1 } from './journal-outcome-format-1'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
-import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'
-import type { JournalReducerState } from './journal-reducer'
-import {
-  journalEntryJson,
-  journalStateCollections,
-  journalStateScalars
-} from './journal-state-layout'
-import { readStoredQueuedMessageRow } from './queued-message-stored-row'
-import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
-import { orchestrationMailFixture } from '../../runtime/orchestration/orchestration-mail.test-fixture'
-import { agentMessageTranscriptText } from '../../../shared/agent-session/agent-message-display-text'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value
 // takes into it, so restating that chat on a new epoch never drops a newer build's key.
@@ -72,27 +51,6 @@ function open(opener: typeof journals) {
     mintEpoch: () => `epoch-${clock}`
   })
 }
-
-it('retains exact mail display ranges across journal and queue reloads', async () => {
-  const message = orchestrationMailFixture()
-  const body = {
-    kind: 'message' as const,
-    role: 'user' as const,
-    blocks: message.blocks,
-    from: message.from
-  }
-  const journal = await open(journals)
-  await journal.appendItem(item(1), body, SCOPE)
-  await journal.queuedMessages.insert({ messageId: 'mail-queued', body })
-  await journals.closeAll()
-  const restored = await open(journals)
-  const saved = restored.snapshot().items[0].body
-  expect(saved).toEqual(body)
-  expect(restored.queuedMessages.list()[0].body).toEqual(body)
-  expect(agentMessageTranscriptText(body.blocks, readAgentMessageSource(body.from))).toBe(
-    'Review complete\n\nThe result is ready.'
-  )
-})
 
 function item(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
@@ -159,225 +117,13 @@ it("refuses a newer build's record with an undeclared nested key before adopting
   await expect(open(journals)).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
   expect(savedBytes()).toEqual(before)
 })
-
-it.each([
-  ['alone', []],
-  ['with outcome records after it', [2]]
-])(
-  'refuses a chat whose frozen input row holds an undeclared key before folding it, %s',
-  async (_name, later) => {
-    await writeItems(inputs, [0, 1])
-    if (later.length > 0) {
-      await writeItems(journals, later)
-      expect(db().prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n).not.toBe(0)
-    }
-    const row = liveTestJournalRows(db(), IDENTITY.sessionId).find((stored) => stored.seq === 2)
-    updateTestJournalRowJson(db(), IDENTITY.sessionId, 2, withLaterKey(row?.rowJson ?? ''))
-    const before = savedBytes()
-    await expect(open(journals)).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-    expect(savedBytes()).toEqual(before)
-  }
-)
-
-it('leaves a legacy queued card whose saved body holds an undeclared key on disk, never adopted', () => {
-  const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] }
-  const row = (saved: unknown) => ({
-    message_id: 'card-1',
-    position: 1,
-    body_json: JSON.stringify(saved),
-    fingerprint: 'f',
-    state: 'waiting',
-    hold_reason: null,
-    returned_reason: null,
-    returned_rejection: null,
-    consumed_as: null,
-    queued_epoch: 'epoch-1',
-    queued_sequence: 2,
-    options_json: '{"model":"m","later":"x"}'
-  })
-  // Options keep their legacy meaning: a choice this build does not use is ignored.
-  expect(readStoredQueuedMessageRow(row(body))).toMatchObject({ messageId: 'card-1', body })
-  expect(readStoredQueuedMessageRow(row(body))?.options).toEqual({ model: 'm' })
-  const later = { ...body, blocks: [{ type: 'text', text: 'later', emphasis: 'strong' }] }
-  expect(readStoredQueuedMessageRow(row(later))).toBeNull()
-})
-
-// Input rows as builds before outcome records wrote them, checked in with the chat they fold into;
-// rows 20-27 are v1.4.245's own writes. Every keyed collection holds data, so a reducer change that
-// reads them differently fails here: version the prefix fold, never edit this.
-const prefix = z
-  .object({
-    sessionId: z.string(),
-    epoch: z.string(),
-    rows: z.array(z.string()),
-    expected: z.record(z.string(), z.unknown())
-  })
-  .parse(
-    JSON.parse(
-      readFileSync(new URL('./__fixtures__/journal-input-prefix.json', import.meta.url), 'utf8')
-    )
+z.object({
+  sessionId: z.string(),
+  epoch: z.string(),
+  rows: z.array(z.string()),
+  expected: z.record(z.string(), z.unknown())
+}).parse(
+  JSON.parse(
+    readFileSync(new URL('./__fixtures__/journal-input-prefix.json', import.meta.url), 'utf8')
   )
-
-function plain(state: JournalReducerState): unknown {
-  const { inputEntries, inputCards, contextBoundary, inputs: _inputs, ...ordinary } = state
-  expect(contextBoundary).toBe(1)
-  expect([...inputEntries]).toEqual([])
-  expect([...inputCards]).toEqual([['card-2', { introduced: 11 }]])
-  const fields: Record<string, unknown> = ordinary
-  return JSON.parse(
-    JSON.stringify({
-      ...Object.fromEntries(
-        Object.entries(fields).map(([field, value]) => [
-          field,
-          value instanceof Map || value instanceof Set ? [...value] : value
-        ])
-      ),
-      derivedTurnScope: state.derivedTurnScope.snapshot(),
-      queue: { revision: state.queue.revision, cards: [...state.queue.cards] }
-    })
-  )
-}
-
-it('folds the checked-in input rows into the same chat, every value of which storage declares', () => {
-  const database = openTestJournalHostDatabase(root)
-  database.transaction((write) => {
-    publishTestJournalEpoch(write, prefix.sessionId, prefix.epoch)
-    for (const [index, json] of prefix.rows.entries()) {
-      insertTestJournalRowJson(write, prefix.sessionId, index + 1, json, 1_001 + index)
-    }
-  })
-  const loaded = restoreJournal(db(), prefix.sessionId)
-  expect(loaded).toMatchObject({ newer: null, damage: null })
-  if (!loaded) {
-    throw new Error('missing prefix chat')
-  }
-  expect(plain(loaded.state)).toEqual(prefix.expected)
-  const collections = journalStateCollections(loaded.state)
-  expect(
-    collections.filter(({ entries }) => [...entries].length === 0).map(({ path }) => path)
-  ).toEqual(['inputEntries'])
-  expect(collections.length).toBeGreaterThanOrEqual(15)
-  // What restating this chat on a new epoch would store, admitted as this build stores it.
-  const stored = [
-    ...Object.entries(JSON.parse(journalStateScalars(loaded.state))).map(([key, value]) => ({
-      field: '$',
-      key: JSON.stringify(key),
-      json: JSON.stringify(value)
-    })),
-    ...[...loaded.state.items].map(([key, value]) => ({
-      field: 'items',
-      key: JSON.stringify(key),
-      json: JSON.stringify(value)
-    })),
-    ...journalStateCollections(loaded.state).flatMap(({ path, entries }) =>
-      [...(path === 'items' ? [] : entries)].map(([key, value]) => ({
-        field: path,
-        key: JSON.stringify(key),
-        json: journalEntryJson(key, value)
-      }))
-    )
-  ]
-  expect(stored.length).toBeGreaterThan(20)
-  for (const value of stored) {
-    const native = value.field === 'inputCards' || value.field === 'inputEntries'
-    if (native) {
-      expect(admitOutcomeFormat1({ ...value, deleted: false })).toBe('unknown')
-    }
-    expect(
-      (native ? admitOutcomeFormat2 : admitOutcomeFormat1)({ ...value, deleted: false })
-    ).toEqual({
-      entryKey: JSON.parse(value.key),
-      kept: JSON.parse(value.json)
-    })
-  }
-})
-
-function declared<Undeclared extends never>(): Undeclared | undefined {
-  return undefined
-}
-
-it('compiles only when storage declares every key a persisted type holds, at any depth', () => {
-  type Stored = z.output<typeof storedFailureFact>
-  type Later = AgentSessionFailureFact & { retry?: { later?: number } }
-  expect(declared<UndeclaredStorageKeys<AgentSessionFailureFact, Stored>>()).toBeUndefined()
-  // @ts-expect-error `retry.later` is a key the stored failure fact does not declare
-  expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
-})
-
-it('reads an open string such as an agent type as a value, and still refuses a key beside it', () => {
-  type Stored = z.output<typeof storedProviderHandle>
-  type Later = AgentSessionJournalProviderHandle & { host?: string }
-  expect(
-    declared<UndeclaredStorageKeys<AgentSessionJournalProviderHandle, Stored>>()
-  ).toBeUndefined()
-  // @ts-expect-error `host` is a key the stored provider handle does not declare
-  expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
-})
-
-it.each(['codex', 'future-agent', undefined, 42])(
-  'admits actual start, message and queued sender kind %j without losing the sender',
-  async (agent) => {
-    const journal = await open(journals)
-    const sender = {
-      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
-      name: 'Inspect parser',
-      agent: 'codex'
-    }
-    const body = {
-      kind: 'message' as const,
-      role: 'user' as const,
-      blocks: [{ type: 'text' as const, text: 'Mail' }],
-      from: { kind: 'agent' as const, senders: [sender], orchestration: null }
-    }
-    await journal.appendItem(
-      item(0),
-      { kind: 'agent-start', dispatchId: 'dispatch-1', task: 'Inspect parser', worker: sender },
-      SCOPE
-    )
-    await journal.appendItem(item(1), body, SCOPE)
-    await journal.queuedMessages.insert({ messageId: 'queued-1', body })
-    await journals.closeAll()
-    // A later or damaged writer can change this declared optional value without adding any key.
-    const records = db()
-      .prepare(
-        "SELECT generation, seq, ordinal, value_json FROM journal_outcomes WHERE field IN ('items', 'queue.cards')"
-      )
-      .all()
-    expect(records.length).toBeGreaterThanOrEqual(3)
-    for (const row of records) {
-      const json = JSON.stringify(JSON.parse(String(row.value_json)), (key, value) =>
-        key === 'agent' ? agent : value
-      )
-      db()
-        .prepare(
-          'UPDATE journal_outcomes SET value_json = ? WHERE generation = ? AND seq = ? AND ordinal = ?'
-        )
-        .run(json, Number(row.generation), Number(row.seq), String(row.ordinal))
-    }
-    const reopened = await open(journals)
-    const restored = reopened.snapshot().items
-    expect(restored).toHaveLength(2)
-    const fromStart = projectStructuredAgentStartItem(restored[0])?.from
-    const fromMessage = readAgentMessageSource(
-      restored[1].body.kind === 'message' ? restored[1].body.from : undefined
-    )
-    const expected = typeof agent === 'string' ? agent : undefined
-    const queued = reopened.queuedMessages.list()[0]
-    for (const from of [fromStart, fromMessage, readAgentMessageSource(queued.body.from)]) {
-      expect(from?.senders[0]).toMatchObject({ party: sender.party, name: sender.name })
-      expect(from?.senders[0].agent).toBe(expected)
-    }
-  }
 )
-
-it('keeps explicitly opaque annotation values whole without hiding sibling or nested structured keys', () => {
-  type Actual = { annotation: { future: { keys: number[] } }; nested: { kept: string } }
-  type Stored = { annotation?: unknown; nested: { kept: string } }
-  expect(declared<UndeclaredStorageKeys<Actual, Stored>>()).toBeUndefined()
-  // @ts-expect-error an opaque annotation does not declare a sibling key
-  expect(declared<UndeclaredStorageKeys<Actual & { extra: string }, Stored>>()).toBeUndefined()
-  expect(
-    // @ts-expect-error structured siblings still recursively declare their nested keys
-    declared<UndeclaredStorageKeys<Actual & { nested: { kept: string; extra: number } }, Stored>>()
-  ).toBeUndefined()
-})

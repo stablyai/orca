@@ -62,8 +62,8 @@ export type StructuredAgentSessionQueuedMessagesController = {
   editCapable: boolean
   editor: QueuedMessageInlineEditor | undefined
   edit: (messageId: string) => Promise<void>
-  /** Cmd/Ctrl+Shift+Enter: steer the head card. False when it can't steer. */
-  steerHead: () => boolean
+  /** Cmd/Ctrl+Shift+Enter: steer the head card; absent while there is no head card to steer. */
+  steerHead: (() => boolean) | undefined
   /** The agent is working, so a card's send steers into its turn. */
   isWorking: boolean
 }
@@ -208,6 +208,12 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     void steer(head.messageId)
     return true
   }, [editingMessageId, enabled, reordered.cards, steer])
+  const steerableHead = enabled ? headSteerableQueuedMessageCard(reordered.cards) : null
+  // The same checks as the press, read from rendered state, so the composer never offers a dead steer.
+  const headSteers =
+    steerableHead !== null &&
+    editingMessageId !== steerableHead.messageId &&
+    !inFlight.has(steerableHead.messageId)
 
   const resume = useCallback(
     (): Promise<boolean> =>
@@ -288,7 +294,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     edit: editing.begin,
     editCapable: editing.capable,
     editor: editing.editor,
-    steerHead,
+    steerHead: headSteers ? steerHead : undefined,
     isWorking
   }
 }
