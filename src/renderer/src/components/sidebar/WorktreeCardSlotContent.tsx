@@ -230,7 +230,7 @@ export function WorktreeCardSlotContent({
               data-worktree-card-details-row=""
             >
               {presentation.hasMetaRow ? (
-                <div className="min-w-0 flex-1 pl-2">
+                <div className="min-w-0 flex-1 pl-1">
                   <WorktreeCardMetaRow card={card} presentation={presentation} />
                 </div>
               ) : null}
