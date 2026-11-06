@@ -242,12 +242,15 @@ test.describe('terminal paste ownership', () => {
     const scriptPath = path.join(testRepoPath, `.orca-paste-blur-${runId}.mjs`)
     writeFileSync(scriptPath, pasteEchoScript(runId))
     let scriptStarted = false
+    // Why: executeJavaScript shares one global scope, so a top-level const would clash on the next case.
     const focusOutside = (tag: string): string => `
-      const el = document.createElement('${tag}');
-      el.tabIndex = -1;
-      el.dataset.e2ePasteFocus = '';
-      document.body.appendChild(el);
-      el.focus();
+      (() => {
+        const el = document.createElement('${tag}');
+        el.tabIndex = -1;
+        el.dataset.e2ePasteFocus = '';
+        document.body.appendChild(el);
+        el.focus();
+      })();
     `
     // Dictation tools and overlays move focus mid-paste; only another input may take the paste.
     const cases = [
