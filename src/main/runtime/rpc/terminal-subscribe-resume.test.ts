@@ -146,7 +146,8 @@ async function endedStream() {
   await first.receives('hello world')
   await first.stop()
   host.output('again')
-  return { host, token: first.subscribed.streamToken as string, units: 11 }
+  const token: string = first.subscribed.streamToken
+  return { host, token, units: 11 }
 }
 
 describe('terminal.subscribe resume', () => {
