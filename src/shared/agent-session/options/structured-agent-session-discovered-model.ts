@@ -10,6 +10,7 @@ export function structuredModelEfforts(
   return [...model.efforts, ...(model.chatEfforts ?? [])]
 }
 
+/** Builds the effort picker, withholding empty menus and unconfirmed model-specific choices. */
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
   agent: AgentType

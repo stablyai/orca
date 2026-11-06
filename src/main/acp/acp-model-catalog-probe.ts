@@ -191,6 +191,7 @@ export function createAcpModelCatalogProbe(
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
 
+/** Lists models from a disposable session and resolves unknown effort menus for selected targets. */
 async function readSessionModels(
   spec: AcpLaunchSpec,
   listing: AcpSessionModelDiscovery,
