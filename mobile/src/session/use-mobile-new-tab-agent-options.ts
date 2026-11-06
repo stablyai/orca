@@ -63,6 +63,10 @@ export function useMobileNewTabAgentOptions(args: {
     setLoadState(cached ? 'loaded' : 'loading')
     setOptions(cached?.options ?? [])
 
+    // Mark on send: the desktop finishes the refresh even if this sheet closes first.
+    if (refresh) {
+      refreshed.add(target)
+    }
     void (async () => {
       const inventory = await loadMobileNewTabAgentOptions({
         client,
@@ -75,15 +79,15 @@ export function useMobileNewTabAgentOptions(args: {
         return
       }
       observedTargets.add(target)
-      if (refresh) {
-        refreshed.add(target)
-      }
       setCachedNewTabAgentInventory(hostId, workspaceKey, inventory)
       setOptions(inventory.options)
       setLoadState('loaded')
     })().catch((error: unknown) => {
       if (stale) {
         return
+      }
+      if (refresh) {
+        refreshed.delete(target)
       }
       const otherRuntime = error instanceof MobileWorkspaceOnOtherRuntimeError
       if (otherRuntime) {
