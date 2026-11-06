@@ -161,8 +161,7 @@ export function deleteExpiredPRPendingHeads(db: Database.Database, now: number):
   )
 }
 
-/** Current-head rows of PRs no watch reason holds. The caller runs this only once every reason is
- *  known, follow-up registrations included: an unresolved one's PR is unknown, not absent. */
+/** Current-head rows of PRs no recent chat action holds. */
 export function deleteInactiveCurrentPRHeads(
   db: Database.Database,
   activePRKeys: ReadonlySet<string>

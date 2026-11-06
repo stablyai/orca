@@ -28,7 +28,7 @@ export type PRRefreshOutcome =
       retryDisabledUntil?: number
     }
 
-/** `watch` is host-only: a background read for a chat's CI lines or a follow-up, never sent by a client. */
+/** `watch` is host-only: a background read for a chat's CI lines, never sent by a client. */
 export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr' | 'watch'
 
 export type GitHubPRRefreshEnqueueResult =

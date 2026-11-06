@@ -9,7 +9,6 @@ import {
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { endPRWatchState, readPRPendingHeads } from './pr-check-event-tables'
 import {
-  activeSavedPRWatches,
   recordPRChatAction,
   recordPRHeadObservation,
   settlePRPendingObligations
@@ -192,44 +191,5 @@ describe('a superseded push head and startup', () => {
       }).chatIds
     ).toEqual(['chat-1'])
     expect(read(fullA, green(31001), 70)).toEqual([])
-  })
-
-  it('keeps a current head an unresolved follow-up may hold through startup', async () => {
-    recordPRChatAction(database, {
-      chatId: 'chat-1',
-      anchor: { itemId: 'orca:anchor', revision: 1 },
-      forgeHost: 'github.com',
-      owner: 'acme',
-      repo: 'repo',
-      number: 3,
-      kind: 'opened',
-      headSha: null,
-      observedAt: 0
-    })
-    read(HEAD_A, [{ ...green(31001)[0], status: 'IN_PROGRESS', conclusion: null }])
-    const seams = await import('./pr-watch-seams')
-    const registration = seams.registerPRWatch({
-      repoId: 'repo-1',
-      branch: 'feature',
-      prNumber: 3,
-      reason: 'pr-follow-ups'
-    })
-    seams.attachPRWatchSource({
-      registrationsSettled: Promise.resolve(),
-      resolveRepo: () => new Promise(() => {}),
-      pullRequestActionsFor: () => [],
-      ownerChatFor: () => null
-    })
-    // Startup, past the action window: the action no longer holds the PR, the follow-up may.
-    expect(activeSavedPRWatches(database, 30 * 24 * 60 * 60_000, 14 * 24 * 60 * 60_000).size).toBe(
-      0
-    )
-    let known = false
-    void seams.settledPRFollowUpKeys().then(() => (known = true))
-    // A full macrotask turn: every settled microtask has run, the unresolved follow-up has not.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(known).toBe(false)
-    expect(readPRPendingHeads(database.db, PR_KEY)).toHaveLength(1)
-    registration.unregister()
   })
 })

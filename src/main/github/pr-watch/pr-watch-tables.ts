@@ -170,13 +170,6 @@ export function hasPRChatActionFrom(
   )
 }
 
-export function hasPRChatActions(db: Database.Database, prKey: string): boolean {
-  return (
-    db.prepare(`SELECT 1 FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? LIMIT 1`).get(prKey) !==
-    undefined
-  )
-}
-
 export function readPRWatchChatIds(db: Database.Database): string[] {
   return textColumnValues(
     db
@@ -205,25 +198,6 @@ DELETE FROM pr_check_events WHERE id NOT IN (SELECT event_id FROM pr_event_deliv
 DELETE FROM pr_pending_heads WHERE pr_key NOT IN (SELECT ${PR_KEY_SQL} FROM pr_chat_actions);
 DELETE FROM pr_check_contexts WHERE pr_key NOT IN (SELECT ${PR_KEY_SQL} FROM pr_chat_actions);
 `)
-}
-
-/** Seam 3: each verified action on a PR, oldest first. */
-export function readPRChatActionRecords(db: Database.Database, prKey: string) {
-  return readPRChatActions(db, prKey).map(({ chatId, kind, anchor, headSha, observedAt }) => ({
-    chatId,
-    kind,
-    anchor,
-    headSha,
-    observedAt
-  }))
-}
-
-/** The newest verified pusher, else the opener, else none. */
-export function readPROwnerChat(db: Database.Database, prKey: string): string | null {
-  const actions = readPRChatActions(db, prKey)
-  const newest = (kind: PRChatActionKind) =>
-    actions.findLast((action) => action.kind === kind)?.chatId
-  return newest('pushed') ?? newest('opened') ?? null
 }
 
 /** Deletes gone chats' saved state (and anything no remaining chat owns); returns the PRs still owned. */

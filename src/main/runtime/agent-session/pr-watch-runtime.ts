@@ -1,10 +1,8 @@
 // Owns the host's CI-line watches apart from the chat host: they start once startup settles, so a
-// PR is watched (and follow-up registrations read) whether or not any chat was opened.
+// PR is watched whether or not any chat was opened.
 
-import { attachPRWatchSource } from '../../github/pr-watch/pr-watch-seams'
 import { PRWatchService } from '../../github/pr-watch/pr-watch-service'
-import { readPRChatActionRecords, readPROwnerChat } from '../../github/pr-watch/pr-watch-tables'
-import type { PRWatchServiceDeps, PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
+import type { PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -17,12 +15,11 @@ export type PRWatchRuntimeDeps = {
   hostId: string
   logger: StructuredAgentSessionLogger
   resolveWorkspace: (workspaceId: string) => Promise<PRWatchWorkspace | 'not-git' | null>
-  resolveRepo: PRWatchServiceDeps['resolveRepo']
 }
 
 let generation = 0
 let starting: Promise<void> | null = null
-let running: { service: PRWatchService; detach: () => void } | null = null
+let running: PRWatchService | null = null
 
 /** The open chat's journal, if any: the publication feed hands a new observer it at once. */
 function openChatJournal(chatId: string): AgentSessionJournal | null {
@@ -61,20 +58,10 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
           ? deps.resolveWorkspace(location.workspaceId).catch(() => null)
           : 'not-git'
       },
-      resolveRepo: deps.resolveRepo,
       openJournal: openChatJournal,
       logger: deps.logger
     })
-    const detach = attachPRWatchSource({
-      // No follow-up source registers in this build yet.
-      registrationsSettled: Promise.resolve(),
-      resolveRepo: deps.resolveRepo,
-      pullRequestActionsFor: (prKey) =>
-        journalDatabase.isClosed ? [] : readPRChatActionRecords(journalDatabase.db, prKey),
-      ownerChatFor: (prKey) =>
-        journalDatabase.isClosed ? null : readPROwnerChat(journalDatabase.db, prKey)
-    })
-    running = { service, detach }
+    running = service
     await service.start()
   })().catch((error: unknown) => {
     starting = null
@@ -86,8 +73,7 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
 /** Before the journal database closes; the next start rebuilds from the saved tables. */
 export function stopPRWatchRuntime(): void {
   generation += 1
-  running?.detach()
-  running?.service.stop()
+  running?.stop()
   running = null
   starting = null
 }
@@ -98,5 +84,5 @@ export function observePRWatchCommittedRows(
   rows: readonly JournalRow[] | undefined
 ): void {
   // Before watches start, captured obligations simply wait in their table for the first drain.
-  running?.service.observeCommittedRows(sessionId, journal, rows)
+  running?.observeCommittedRows(sessionId, journal, rows)
 }

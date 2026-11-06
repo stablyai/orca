@@ -145,21 +145,9 @@ describe('pr-refresh watch jobs', () => {
     expect(watchReads()).toBeGreaterThanOrEqual(2)
   })
 
-  it('reads a follow-up registration with no chat host, bounding only its own pages', async () => {
-    const { registerPRWatch, attachPRWatchSource } = await import('./pr-watch/pr-watch-seams')
+  it('bounds the check pages of watch reads only, never a visible read', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    registerPRWatch({ repoId: 'repo-9', branch: 'topic', prNumber: 9, reason: 'pr-follow-ups' })
-    attachPRWatchSource({
-      registrationsSettled: Promise.resolve(),
-      resolveRepo: async () => ({
-        repoId: 'repo-9',
-        repoPath: WATCHED,
-        repoKind: 'git',
-        connectionId: null
-      }),
-      pullRequestActionsFor: () => [],
-      ownerChatFor: () => null
-    })
+    await startWatch()
     reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
     await vi.advanceTimersByTimeAsync(30_000)
     const options = (repoPath: string) =>
@@ -167,32 +155,5 @@ describe('pr-refresh watch jobs', () => {
     expect(watchReads()).toBe(1)
     expect(options(WATCHED)).toMatchObject({ checkPageLimit: 10 })
     expect(options('/repo')?.checkPageLimit).toBeUndefined()
-  })
-
-  it('pins a branch registration to the PR number its first read names', async () => {
-    const seams = await import('./pr-watch/pr-watch-seams')
-    seams.registerPRWatch({
-      repoId: 'repo-7',
-      branch: 'feature',
-      prNumber: null,
-      reason: 'pr-follow-ups'
-    })
-    seams.attachPRWatchSource({
-      registrationsSettled: Promise.resolve(),
-      resolveRepo: async () => ({
-        repoId: 'repo-7',
-        repoPath: WATCHED,
-        repoKind: 'git',
-        connectionId: null
-      }),
-      pullRequestActionsFor: () => [],
-      ownerChatFor: () => null
-    })
-    await vi.advanceTimersByTimeAsync(0)
-    const cacheKey = 'pr-follow-up::watch::pr-follow-ups:local:repo-7:branch:feature'
-    const prKey = 'github.com/acme/watched#12'
-    seams.resolvePRFollowUp({ ...makeCandidate({ repoPath: WATCHED }), cacheKey }, prKey)
-    // Reusing the branch for another PR later must not swap it into #12's job.
-    expect(seams.prFollowUpCandidate(prKey)?.linkedPRNumber).toBe(12)
   })
 })

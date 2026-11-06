@@ -36,20 +36,8 @@ import { PRPendingActionResume } from './pr-pending-action-resume'
 import type { PRVerifiedAction } from './pr-pending-action-types'
 import { finishesPRActionCall, type PRPendingActionRow } from './pr-pending-actions'
 import { resolvePushRemote } from './pr-push-remote-resolution'
-import {
-  isPRFollowUpJob,
-  prFollowUpCandidate,
-  publishPRObservation,
-  resolvePRFollowUp,
-  settledPRFollowUpKeys
-} from './pr-watch-seams'
-import { hasPRChatActions, sweepGonePRWatchChats, type PRChatAction } from './pr-watch-tables'
-import {
-  prKeyOf,
-  prObservationOf,
-  prWatchCandidate,
-  type PRWatchServiceDeps
-} from './pr-watch-types'
+import { sweepGonePRWatchChats, type PRChatAction } from './pr-watch-tables'
+import { prKeyOf, prWatchCandidate, type PRWatchServiceDeps } from './pr-watch-types'
 
 const ACTION_WINDOW_MS = 14 * 24 * 60 * 60_000
 const STARTUP_SPACING_MS = 10_000
@@ -117,16 +105,10 @@ export class PRWatchService {
     for (const [prKey, watch] of this.chatWatches) {
       index = this.earlierHeads.scheduleMoved(prKey, watch.candidate, index)
     }
+    // Before any resumed action saves a head, so only heads no recent action holds retire.
+    const held = new Set(active.keys())
+    this.deps.database.transaction((db) => deleteInactiveCurrentPRHeads(db, held))
     this.resume.drain()
-    // Current heads retire only once every reason is known, follow-up registrations included, and
-    // against the reasons then: actions verified while waiting hold their heads too.
-    void settledPRFollowUpKeys().then((followUps) => {
-      if (!this.deps.database.isClosed && this.stopObserving) {
-        const recent = activeSavedPRWatches(this.deps.database, this.now(), ACTION_WINDOW_MS)
-        const held = new Set([...recent.keys(), ...this.chatWatches.keys(), ...followUps])
-        this.deps.database.transaction((db) => deleteInactiveCurrentPRHeads(db, held))
-      }
-    })
   }
 
   stop(): void {
@@ -197,13 +179,10 @@ export class PRWatchService {
     if (job.headSha) {
       return this.earlierHeads.has(job)
     }
-    if (isPRFollowUpJob(job)) {
-      return true
-    }
     const watch = this.chatWatches.get(job.prKey)
     if (watch && watch.lastActionAt + ACTION_WINDOW_MS <= this.now()) {
       this.endChatWatch(job.prKey)
-      return isPRFollowUpJob(job)
+      return false
     }
     return watch !== undefined
   }
@@ -212,19 +191,14 @@ export class PRWatchService {
    *  results (after a restart or a new action) never reports them again. */
   private endChatWatch(prKey: string): void {
     this.chatWatches.delete(prKey)
-    if (!isPRFollowUpJob({ prKey })) {
-      cancelPRWatchRead({ prKey })
-    }
+    cancelPRWatchRead({ prKey })
     this.deps.database.transaction((db) => endPRWatchState(db, prKey))
   }
 
-  /** A recent chat action, or a follow-up registration that resolved to this PR. */
+  /** The PR's chat watch while a recent action holds it. */
   private activeCandidate(prKey: string): GitHubPRRefreshCandidate | null {
     const watch = this.chatWatches.get(prKey)
-    if (watch && watch.lastActionAt + ACTION_WINDOW_MS > this.now()) {
-      return watch.candidate
-    }
-    return prFollowUpCandidate(prKey)
+    return watch && watch.lastActionAt + ACTION_WINDOW_MS > this.now() ? watch.candidate : null
   }
 
   /** One subscriber, in order: a read may verify a push before it is evaluated for lines. */
@@ -238,23 +212,13 @@ export class PRWatchService {
       return
     }
     this.resume.verifyRead(candidate, pr, outcome.fetchedAt)
-    // Resolved first, so observers of this read already find the follow-up's candidate.
-    const resolved = resolvePRFollowUp(candidate, prKey)
-    if (resolved) {
-      // One job per resolved PR serves every reason, so a chat and a follow-up never read it twice.
-      schedulePRWatchRead({ prKey }, resolved, this.now())
-    }
-    publishPRObservation(prObservationOf(pr, prKey, outcome.fetchedAt), (error) =>
-      this.deps.logger.warn('a pull request observer failed', { scope: 'pr-watch', prKey, error })
-    )
     const active = this.activeCandidate(prKey)
     if (!active) {
       return
     }
     this.sweepGoneChats(false)
     const rollup = observedPRCheckRollup(outcome)
-    // A follow-up keeps an older owner's lines coming; with no owner there is nothing to write.
-    if (rollup && (this.chatWatches.has(prKey) || hasPRChatActions(this.deps.database.db, prKey))) {
+    if (rollup) {
       this.applyHeadRead(prKey, pr.headSha, rollup, true, outcome.fetchedAt)
     }
     if (pr.state === 'merged' || pr.state === 'closed') {
