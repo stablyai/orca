@@ -11,6 +11,7 @@ import {
 type TerminalLiveInputFocusContext = {
   readonly canSend: boolean
   readonly reopenFocusedInputWhenKeyboardHidden: boolean
+  readonly hiddenKeyboardTapFocusDelayMs?: number
 }
 
 type UseTerminalLiveInputFocusOptions<T extends TerminalLiveInputFocusTarget> =
@@ -31,6 +32,7 @@ type TerminalLiveInputFocusHandlers = {
 export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget>({
   activeHandleRef,
   canSend,
+  hiddenKeyboardTapFocusDelayMs,
   inputRef,
   lifecycleIdentity,
   lifecycleKey,
@@ -39,11 +41,16 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
 }: UseTerminalLiveInputFocusOptions<T>): TerminalLiveInputFocusHandlers {
   const contextRef = useRef<TerminalLiveInputFocusContext>({
     canSend,
+    hiddenKeyboardTapFocusDelayMs,
     reopenFocusedInputWhenKeyboardHidden
   })
   useLayoutEffect(() => {
-    contextRef.current = { canSend, reopenFocusedInputWhenKeyboardHidden }
-  }, [canSend, reopenFocusedInputWhenKeyboardHidden])
+    contextRef.current = {
+      canSend,
+      hiddenKeyboardTapFocusDelayMs,
+      reopenFocusedInputWhenKeyboardHidden
+    }
+  }, [canSend, hiddenKeyboardTapFocusDelayMs, reopenFocusedInputWhenKeyboardHidden])
 
   const resetLiveInputFocus = useCallback(() => {
     clearTerminalLiveInputFocusTimer(timerRef)
@@ -71,12 +78,20 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
       if (handle !== activeHandleRef.current || !context.canSend) {
         return
       }
+      const delayMs =
+        currentSoftKeyboardHeight() <= 0
+          ? (context.hiddenKeyboardTapFocusDelayMs ?? 50)
+          : 50
       // WKWebView still owns first responder during its touchend notification.
-      scheduleTerminalLiveInputFocus(timerRef, () => {
-        if (activeHandleRef.current === handle) {
-          focusLiveInput()
-        }
-      })
+      scheduleTerminalLiveInputFocus(
+        timerRef,
+        () => {
+          if (activeHandleRef.current === handle) {
+            focusLiveInput()
+          }
+        },
+        delayMs
+      )
     },
     [activeHandleRef, focusLiveInput, timerRef]
   )
