@@ -197,3 +197,21 @@ describe('ChecksList expanded check details', () => {
     expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
   })
 })
+
+describe('ChecksList row state', () => {
+  it('names the state on the status icon instead of beside it', () => {
+    renderChecksList()
+    const row = container.querySelector('.group\\/check-row')
+    expect(row?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Failed')
+    expect(row?.textContent).toBe('verify')
+  })
+
+  it('gives a finished check without a conclusion the icon its label names', () => {
+    renderChecksList({
+      checks: [{ name: 'external', status: 'completed', conclusion: null, url: null }]
+    })
+    const icon = container.querySelector('[role="img"]')
+    expect(icon?.getAttribute('aria-label')).toBe('Neutral')
+    expect(icon?.querySelector('svg')?.getAttribute('class')).not.toContain('animate-spin')
+  })
+})
