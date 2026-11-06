@@ -223,6 +223,7 @@ export function launchAgentInNewTabWithOutcome(
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(initialCwd?.trim() ? { startupCwd: initialCwd } : {}),
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(activate === false ? { activate: false } : {}),
     pendingStartup: {
@@ -244,10 +245,6 @@ export function launchAgentInNewTabWithOutcome(
       }
     }
   })
-  if (initialCwd?.trim()) {
-    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
-    store.queueTabInitialCwd(tab.id, initialCwd)
-  }
   // Safe for native-prefill agents: delivery skips paste when their draft already arrived at launch.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
     // Native argv prefill skips the paste callback, so seed the chat composer here.

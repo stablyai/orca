@@ -65,6 +65,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     agentLaunchPane: { leafId },
     launchAgent: args.agent,
     quickCommandLabel: args.quickCommandLabel,
+    ...(args.cwd?.trim() ? { startupCwd: args.cwd } : {}),
     ...(args.activate === false ? { activate: false } : {}),
     ...(args.pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(args.viewMode ? { viewMode: args.viewMode } : {}),
@@ -78,9 +79,6 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
       }
     }
   })
-  if (args.cwd?.trim()) {
-    store.queueTabInitialCwd(tabId, args.cwd)
-  }
   rememberAgentLaunchPanePrompt(tabId, args.prompt)
   seedNativeChatAppliedSessionOptions(tabId, args.agent, args.sessionOptions)
   // An activated launch must reveal Terminal or it can remain hidden behind an editor.

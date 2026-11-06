@@ -117,7 +117,7 @@ export async function launchAgentInWebHostTab(args: {
       environmentId,
       targetGroupId: groupId,
       activate: args.activate !== false,
-      ...(!hasPrompt && args.activate === false ? { selectWorktree: false } : {}),
+      ...(args.activate === false ? { selectWorktree: false } : {}),
       ...(cwd?.trim() ? { cwd } : {}),
       ...(viewMode ? { viewMode } : {}),
       agentSessionKind: 'fresh',
