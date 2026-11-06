@@ -113,11 +113,16 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-database-schema.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-outcome-format.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
-  'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/writing/command-receipt-schema.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/database/journal-database-schema.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts':
+    'pi-branch-import',
+  'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
+    'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',

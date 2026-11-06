@@ -2,8 +2,8 @@ import { expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { sessionCrewChanges } from '../../runtime/orchestration/crew/crew-changes'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import type { HistoryReader } from './agent-session-history-page-bounds'
+import { AgentSessionSubscribers } from './publication/subscribers/structured-agent-session-subscribers'
+import type { HistoryReader } from './publication/history/agent-session-history-page-bounds'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -18,9 +18,14 @@ import {
   FORK_MARKER_ITEM_ID,
   type ForkMarker
 } from './agent-session-fork-marker'
-import { projectJournalBatch } from './agent-session-journal-batch'
-import { readAgentSessionHistory } from './agent-session-history-page'
-import { fixture, appendItems, item, body } from './agent-session-history-contract-test-fixture'
+import { projectJournalBatch } from './publication/history/agent-session-journal-batch'
+import { readAgentSessionHistory } from './publication/history/agent-session-history-page'
+import {
+  fixture,
+  appendItems,
+  item,
+  body
+} from './publication/history/testing/agent-session-history-contract-test-fixture'
 
 function marker(): ForkMarker {
   return {

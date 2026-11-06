@@ -19,15 +19,16 @@ import type {
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
-} from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type {
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
 } from '../../../../shared/agent-session/structured-agent-session-create'
-import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
-import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
+import '../../../native-chat/agent-session-wire/options/structured-agent-session-options-read'
+import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-intent'
+import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   captureStructuredAgentCliSource,

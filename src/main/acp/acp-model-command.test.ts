@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import type { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { AcpAgentError } from './acp-errors'
 import { acpLaunchSpecFor } from './acp-launch-specs'

@@ -217,6 +217,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -447,6 +448,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -672,6 +674,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {

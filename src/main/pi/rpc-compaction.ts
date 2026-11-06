@@ -7,9 +7,9 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import { PROVIDER_COMPACTING_ACTIVITY } from '../native-chat/agent-session-wire/provider-frame-activity'
+import { PROVIDER_COMPACTING_ACTIVITY } from '../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type { PiRpcContextUsage } from './rpc-context-usage'
 import type { PiRpcSession } from './rpc-session'

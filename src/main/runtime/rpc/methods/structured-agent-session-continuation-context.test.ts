@@ -1,7 +1,7 @@
 import * as fileOperations from 'node:fs/promises'
 import { readFile, rm } from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { piRpcDialogPresentation } from '../../../pi/rpc-extension-dialogs'
 import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session/agent-session-question-answer'
 import '../unused-default-rpc-methods.test-fixture'
@@ -13,14 +13,17 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  hostTestMessage,
+  HOST_TEST_SESSION as SESSION
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createRestTestRig,
-  foundRestTestChat,
-  REST_TEST_SESSION as SESSION,
-  type RestTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+  foundRestTestChat
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import type { RestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore

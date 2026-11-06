@@ -7,9 +7,9 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore

@@ -1,4 +1,4 @@
-import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -13,9 +13,12 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
 const {
@@ -49,8 +52,9 @@ const { OrcaRuntimeService } = await import('../../../orca-runtime')
 const { OrchestrationDb } = await import('../../db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
 const { structuredWorkerOwesWork } = await import('./structured-worker-custody')
+await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission')
 const { AGENT_SESSION_NOT_ATTACHED } =
-  await import('../../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission')
+  await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

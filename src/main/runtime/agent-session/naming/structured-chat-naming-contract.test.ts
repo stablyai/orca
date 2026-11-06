@@ -9,7 +9,7 @@ import { savedChatNamingCatalog } from '../../../../shared/chat-naming-catalog-w
 import type { SpawnSourceControlAgent } from '../../../text-generation/source-control-text-generation-types'
 import { createMockDiscoveryChild } from '../../../text-generation/commit-message-text-generation-test-harness'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import recordings from '../../__fixtures__/chat-naming-recorded-output.json'
 import type * as OwnedOpenCodeTask from '../../../opencode/opencode-owned-text-task'
 
@@ -31,7 +31,7 @@ vi.mock('../../../opencode/opencode-owned-text-task', async (importOriginal) => 
 vi.mock('../../../text-generation/source-control-agent-launch', () => ({
   spawnSourceControlAgent: boundary.spawn
 }))
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({ deps: { adapter: { generateText: boundary.native } } })
 }))
 vi.mock('../../../managed-data-accounts/service', () => ({

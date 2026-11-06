@@ -15,7 +15,6 @@ import {
 } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
-  type NativeChatRowTypography,
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
 } from './native-chat-row-height-estimate'
@@ -25,9 +24,7 @@ import type { NativeChatOpenedPullRequest } from '../../../../shared/native-chat
 import {
   NO_NATIVE_CHAT_SUBAGENT_CHOICES,
   NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
-  type NativeChatSubagentChoices,
-  type NativeChatSubagentRosterState,
-  type NativeChatSubagentSections
+  type NativeChatSubagentRosterState
 } from './native-chat-subagent-sections'
 import { nativeChatSubagentLiveSections } from './native-chat-subagent-live-frontier'
 import {
@@ -41,6 +38,8 @@ import {
   nativeChatAgentRowHasImages,
   nativeChatAgentRowWords
 } from './native-chat-message-row-words'
+
+import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -83,31 +82,6 @@ export type NativeChatMessageSlot = {
   estimatedHeight: number
   /** Members of an unbroken work run, with message as its head. */
   workRun?: readonly NativeChatMessage[]
-}
-
-export type NativeChatTranscriptSlotsInput = {
-  messages: readonly NativeChatMessage[]
-  unresolvedRowIds?: ReadonlySet<string>
-  typography?: NativeChatRowTypography
-  turnKeys: readonly (string | undefined)[]
-  /** The current turn owns the running clock and live rows; undefined before a turn opens. */
-  liveTurnKey: string | undefined
-  receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
-  turnStatuses: {
-    active: NativeChatTurnStatus | null
-    completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
-  }
-  turnDiffs: ReadonlyMap<string, NativeChatTurnDiff>
-  openedPullRequests?: ReadonlyMap<string, readonly NativeChatOpenedPullRequest[]>
-  /** Turns the reader opened. Everything else with a duration stays folded. */
-  expandedTurnKeys: ReadonlySet<string>
-  isWorking: boolean
-  /** Session-level lifecycle, which outlives a transcript that never said "done". */
-  lifecycleWorking: boolean
-  subagentSections?: NativeChatSubagentSections
-  subagentChoices?: NativeChatSubagentChoices
-  /** The open reasoning block the live activity line discloses: its row takes no slot meanwhile. */
-  liveReasoningId?: string | null
 }
 
 export function buildNativeChatTranscriptSlots(

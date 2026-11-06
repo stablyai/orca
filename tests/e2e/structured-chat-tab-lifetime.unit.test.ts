@@ -13,10 +13,10 @@ import {
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_SESSION
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { readPersistedTestAgentSessionStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   WORKTREE,
   directory,

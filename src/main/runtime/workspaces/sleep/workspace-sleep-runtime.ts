@@ -7,7 +7,7 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../../shared/workspace-sleep'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RemoteWorkspaceCall } from './remote-workspace-terminal-sleep'
 import {
   sleepWorkspaces,

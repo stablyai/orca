@@ -7,7 +7,7 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
-import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
