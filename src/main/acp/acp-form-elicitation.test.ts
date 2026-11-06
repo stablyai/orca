@@ -1,44 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { acpFormElicitationPresentation } from './acp-form-elicitation'
+import { recordedOmpAskForm as ask } from './acp-omp-ask-form.test-fixture'
 
 describe('OMP ask forms', () => {
-  // Verbatim `elicitation/create` from OMP 18.16.0's `ask` with three questions.
-  const ask = {
-    mode: 'form',
-    sessionId: 'session-1',
-    message: 'Answer 3 questions',
-    requestedSchema: {
-      type: 'object',
-      properties: {
-        q0: {
-          type: 'string',
-          title: 'Which database?',
-          description: 'DB',
-          oneOf: [
-            { const: 'Postgres', title: 'Postgres', description: 'relational' },
-            { const: 'SQLite', title: 'SQLite' },
-            { const: 'Mongo', title: 'Mongo' }
-          ],
-          default: 'SQLite'
-        },
-        q0__other: { type: 'string', title: 'Other (type your own)' },
-        q1: {
-          type: 'array',
-          title: 'Which features?',
-          items: {
-            anyOf: [
-              { const: 'Auth', title: 'Auth' },
-              { const: 'Billing', title: 'Billing' },
-              { const: 'Search', title: 'Search' }
-            ]
-          }
-        },
-        q1__other: { type: 'string', title: 'Other (type your own)' },
-        q2__other: { type: 'string', title: 'Other (type your own)' }
-      }
-    }
-  }
-
   it('asks every question on one card and answers in the form OMP reads', () => {
     const presentation = acpFormElicitationPresentation(ask)
     expect(presentation.body).toMatchObject({
@@ -46,8 +10,8 @@ describe('OMP ask forms', () => {
       questions: [
         {
           id: 'q1',
-          question: 'Which database?',
-          header: 'DB',
+          question: 'Answer 3 questions\n\nWhich database?\n\nDB',
+          header: 'Which database?',
           multiSelect: false,
           options: [
             { id: 'o1', label: 'Postgres', description: 'relational' },
@@ -56,8 +20,18 @@ describe('OMP ask forms', () => {
           ],
           freeTextQuestionId: 'q1'
         },
-        { id: 'q2', question: 'Which features?', multiSelect: true, freeTextQuestionId: 'q2' },
-        { id: 'q3', question: 'Other (type your own)', options: [], freeTextQuestionId: 'q3' }
+        {
+          id: 'q2',
+          question: 'Answer 3 questions\n\nWhich features?',
+          multiSelect: true,
+          freeTextQuestionId: 'q2'
+        },
+        {
+          id: 'q3',
+          question: 'Answer 3 questions\n\nOther (type your own)',
+          options: [],
+          freeTextQuestionId: 'q3'
+        }
       ]
     })
     expect(

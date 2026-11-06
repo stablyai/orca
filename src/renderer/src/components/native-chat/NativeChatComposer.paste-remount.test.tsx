@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => {
   return { state, prepare: vi.fn(), save: vi.fn(), goal: vi.fn(async () => true) }
 })
 
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
+
 vi.mock('../../store', () => {
   const state = {
     tabsByWorktree: {},
@@ -57,7 +59,7 @@ vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (import
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),

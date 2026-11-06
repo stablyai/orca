@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 type TaskPageGitHubIssueCreationInput = Pick<
   TaskPageWorkspaceActionsModel,
   | 'setTaskRefreshNonce'

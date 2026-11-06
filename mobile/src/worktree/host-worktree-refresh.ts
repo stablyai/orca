@@ -1,5 +1,7 @@
-import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
-import type { RpcClient } from '../transport/rpc-client'
+import {
+  subscribeSharedClientEvents,
+  type SharedClientEventsClient
+} from '../transport/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
 const WORKTREE_REFRESH_MS = 3000
@@ -14,7 +16,7 @@ type HostAppState = {
 }
 
 type HostWorktreeRefreshArgs = {
-  client: Pick<RpcClient, 'subscribe'>
+  client: SharedClientEventsClient
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
   /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
@@ -60,47 +62,42 @@ export function startHostWorktreeRefresh({
         // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
       }, WORKTREE_REFRESH_MS)
-  const unsubscribe = client.subscribe(
-    'runtime.clientEvents.subscribe',
-    null,
-    (payload: unknown) => {
-      if (stale || !payload || typeof payload !== 'object') {
-        return
-      }
-      const event = payload as RuntimeClientEventStreamMessage | { type: 'error' }
-      if (event.type === 'ready') {
-        // Every ready: a change between the last read and this subscription sent no notice.
-        sidebarFeed?.refresh()
-        const replayedAfterReconnect = eventStreamReady
-        eventStreamReady = true
-        if (replayedAfterReconnect) {
-          // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
-          void fetchWorktrees()
-          void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-          void syncViewSettings({ resend: true })
-        }
-        return
-      }
-      if (event.type === 'end' || event.type === 'error') {
-        eventStreamReady = false
-        return
-      }
-      if (event.type === 'sidebarInputsChanged') {
-        sidebarFeed?.changed(event)
-      } else if (event.type === 'reposChanged') {
-        // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
-        void fetchWorktrees()
-        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-      } else if (event.type === 'workspaceViewChanged') {
-        void syncViewSettings()
-      } else if (event.type === 'worktreesChanged') {
-        void fetchWorktrees()
-      } else if (event.type === 'sshStateChanged') {
-        // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
-        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-      }
+  const unsubscribe = subscribeSharedClientEvents(client, (event) => {
+    if (stale) {
+      return
     }
-  )
+    if (event.type === 'ready') {
+      // Every ready: a change between the last read and this subscription sent no notice.
+      sidebarFeed?.refresh()
+      const replayedAfterReconnect = eventStreamReady
+      eventStreamReady = true
+      if (replayedAfterReconnect) {
+        // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
+        void fetchWorktrees()
+        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+        void syncViewSettings({ resend: true })
+      }
+      return
+    }
+    if (event.type === 'end' || event.type === 'error') {
+      eventStreamReady = false
+      return
+    }
+    if (event.type === 'sidebarInputsChanged') {
+      sidebarFeed?.changed(event)
+    } else if (event.type === 'reposChanged') {
+      // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
+      void fetchWorktrees()
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    } else if (event.type === 'workspaceViewChanged') {
+      void syncViewSettings()
+    } else if (event.type === 'worktreesChanged') {
+      void fetchWorktrees()
+    } else if (event.type === 'sshStateChanged') {
+      // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    }
+  })
 
   // A row's live content (agents, terminals) may follow any install; worktree.ps carries it.
   const stopFollowingFeed = sidebarFeed?.onInstalled(

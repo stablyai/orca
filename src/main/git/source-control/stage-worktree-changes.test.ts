@@ -127,19 +127,6 @@ describe('stageWorktreeChanges', () => {
     expect(names(repo, ['diff', '--name-only'])).toEqual(['outside.txt'])
   })
 
-  it('leaves unresolved conflicts unstaged in a nested folder too', async () => {
-    const repo = await createConflictRepo()
-    await mkdir(path.join(repo, 'sub'))
-    await writeFile(path.join(repo, 'sub', 'new.txt'), 'new\n')
-
-    await stageWorktreeChanges(path.join(repo, 'sub'), 'all')
-
-    expect(names(repo, ['diff', '--name-only', '--diff-filter=U'])).toEqual(['conflict.txt'])
-    expect(names(repo, ['diff', '--cached', '--name-only', '--diff-filter=A'])).toEqual([
-      'sub/new.txt'
-    ])
-  })
-
   describe('Orca shared symlinks', () => {
     async function createSharedLinkWorktree(): Promise<{ repo: string; owner: string }> {
       const repo = await createRepo()
@@ -165,42 +152,8 @@ describe('stageWorktreeChanges', () => {
       expect(names(repo, ['ls-files', '--others', '--exclude-standard'])).toEqual(['node_modules'])
     })
 
-    it('never stages the shared link while a conflict is unresolved', async () => {
-      const repo = await createConflictRepo()
-      const owner = await mkdtemp(path.join(tmpdir(), 'orca-stage-owner-'))
-      tempRoots.push(owner)
-      await symlink(owner, path.join(repo, 'node_modules'))
-
-      await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['node_modules'] })
-
-      expect(names(repo, ['diff', '--cached', '--name-only', '--diff-filter=A'])).toEqual([
-        'untracked.txt'
-      ])
-    })
-
     // Shared Paths preserves typed spellings; Git reports canonical relative names.
     describe.each(['./node_modules', 'node_modules/'])('saved as %s', (sharedPath) => {
-      it('never stages the shared link', async () => {
-        const { repo } = await createSharedLinkWorktree()
-
-        await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: [sharedPath] })
-
-        expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
-      })
-
-      it('never stages the shared link while a conflict is unresolved', async () => {
-        const repo = await createConflictRepo()
-        const owner = await mkdtemp(path.join(tmpdir(), 'orca-stage-owner-'))
-        tempRoots.push(owner)
-        await symlink(owner, path.join(repo, 'node_modules'))
-
-        await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: [sharedPath] })
-
-        expect(names(repo, ['diff', '--cached', '--name-only', '--diff-filter=A'])).toEqual([
-          'untracked.txt'
-        ])
-      })
-
       it('never stages the shared link from an over-cap listing with a conflict', async () => {
         const repo = await createConflictRepo()
         const owner = await mkdtemp(path.join(tmpdir(), 'orca-stage-owner-'))

@@ -1,3 +1,4 @@
+import { nativeChatProseToMarkdown } from '../../../../shared/native-chat/transcript/native-chat-prose'
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
 import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -26,6 +27,7 @@ export type NativeChatRowChromeMetrics = {
   hasStatus: boolean
   hasTurnDiff: boolean
   turnDiffFileCount?: number
+  openedPullRequestCount?: number
   /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
   /** Inside a subagent's section, where assistant prose keeps its controls in flow. */
@@ -56,6 +58,8 @@ const SUBAGENT_ROW_PX = 32
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
 const TURN_DIFF_PX = 28
+/** The opened-PR card: its heading, then one row per pull request. */
+const OPENED_PULL_REQUEST_ROW_PX = 30
 const RECEIPT_PX = 56
 /** How far assistant prose's controls hang below the row (`-mb-5`) outside a section. */
 const AGENT_CONTROLS_OVERHANG_PX = 20
@@ -67,18 +71,23 @@ const ROW_MAX_PX = 1600
 
 export function estimateNativeChatTextLines(
   markdown: string,
-  charsPerLine = DEFAULT_ROW_TYPOGRAPHY.charsPerLine
+  charsPerLine = DEFAULT_ROW_TYPOGRAPHY.charsPerLine,
+  maxLines = Number.POSITIVE_INFINITY
 ): number {
   if (markdown.length === 0) {
     return 0
   }
   let lines = 0
   let lineStart = 0
-  for (let index = 0; index <= markdown.length; index += 1) {
-    if (index === markdown.length || markdown[index] === '\n') {
+  const length = Math.min(markdown.length, Math.ceil(maxLines * Math.max(1, charsPerLine)))
+  for (let index = 0; index <= length; index += 1) {
+    if (index === length || markdown.charCodeAt(index) === 10) {
       const length = index - lineStart
       lines += Math.max(PROSE_MIN_LINES, Math.ceil(length / charsPerLine))
       lineStart = index + 1
+      if (lines >= maxLines) {
+        return maxLines
+      }
     }
   }
   return lines
@@ -86,7 +95,7 @@ export function estimateNativeChatTextLines(
 
 const metricsCache = new WeakMap<
   NativeChatMessage,
-  { charsPerLine: number; metrics: NativeChatRowContentMetrics }
+  { charsPerLine: number; lineHeightPx: number; metrics: NativeChatRowContentMetrics }
 >()
 
 /** Cache per message identity so streaming rederives metrics only for changed rows. */
@@ -95,20 +104,32 @@ export function nativeChatRowContentMetrics(
   typography = DEFAULT_ROW_TYPOGRAPHY
 ): NativeChatRowContentMetrics {
   const cached = metricsCache.get(message)
-  if (cached?.charsPerLine === typography.charsPerLine) {
+  if (
+    cached?.charsPerLine === typography.charsPerLine &&
+    cached.lineHeightPx === typography.lineHeightPx
+  ) {
     return cached.metrics
   }
   const content = deriveNativeChatRowContent(message.blocks)
+  const maxLines = Math.ceil(ROW_MAX_PX / typography.lineHeightPx)
+  const markdown = nativeChatProseToMarkdown(
+    content.prose,
+    Math.max(601, Math.ceil(maxLines * Math.max(1, typography.charsPerLine)))
+  )
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
     compactAgentMessage: agentMessageIsCompact(message),
-    textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
-    userFolds: message.role === 'user' && nativeChatUserMessageFolds(content.markdown),
+    textLines: estimateNativeChatTextLines(markdown, typography.charsPerLine, maxLines),
+    userFolds: message.role === 'user' && nativeChatUserMessageFolds(markdown),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
     toolCount: content.tools.length,
     subagentGroupCount: content.subagentGroups.length
   }
-  metricsCache.set(message, { charsPerLine: typography.charsPerLine, metrics })
+  metricsCache.set(message, {
+    charsPerLine: typography.charsPerLine,
+    lineHeightPx: typography.lineHeightPx,
+    metrics
+  })
   return metrics
 }
 
@@ -187,6 +208,10 @@ export function estimateNativeChatRowHeight(
         chrome.turnDiffFileCount > NATIVE_CHAT_TURN_DIFF_FILE_LIMIT
           ? 1
           : 0))
+    partCount += 1
+  }
+  if (chrome.openedPullRequestCount) {
+    height += OPENED_PULL_REQUEST_ROW_PX * scale * (1 + chrome.openedPullRequestCount)
     partCount += 1
   }
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX

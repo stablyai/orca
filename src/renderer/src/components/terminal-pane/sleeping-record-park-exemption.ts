@@ -3,7 +3,7 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { activationTreatsNoteAsFinished } from '../../lib/sleeping-agent-pane-ownership'
+import { activationTreatsNoteAsFinished } from '../../lib/agent-session/resume/sleeping-agent-pane-ownership'
 import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()

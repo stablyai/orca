@@ -4,6 +4,8 @@ import type { ProviderProcessLaunch } from '../provider-process/provider-process
 export type AcpStructuredConnection = Pick<
   AcpAgentConnection,
   | 'initialize'
+  | 'authenticate'
+  | 'requestSessionFreeExtension'
   | 'forkSession'
   | 'start'
   | 'prompt'

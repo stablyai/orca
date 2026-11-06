@@ -1,7 +1,7 @@
 // Propose browser tab/record/page IDs to main; select only after frame draws them with window page state. Record consumers wait through afterPendingTab.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { contentTabOpenPlacement } from '../tabs/content-tab-open-placement'
 import type { BrowserSliceGet, CreateBrowserTabOptions } from './browser-slice-contract'

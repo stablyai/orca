@@ -7,7 +7,7 @@ import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
 import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { prepareLegacySharedCodexSessionResume } from '../codex/history/resume/codex-legacy-session-resume'

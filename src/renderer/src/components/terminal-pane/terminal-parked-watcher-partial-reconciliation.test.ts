@@ -33,7 +33,7 @@ vi.mock('./terminal-parked-pty-watcher', () => ({
   }
 }))
 
-vi.mock('./pty-pre-handler-buffer', () => ({
+vi.mock('./pty-transport/delivery/pty-pre-handler-buffer', () => ({
   discardPreHandlerPtyState: vi.fn()
 }))
 

@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -86,5 +86,17 @@ describe('a Claude api_retry frame', () => {
     })
     expect(row).not.toHaveProperty('providerFrame')
     expect(row.failure?.detail?.text).toContain('"attempt":3')
+  })
+
+  it('hides unmodeled system frames even when their payload names an error', async () => {
+    const unknown = {
+      type: 'system',
+      subtype: 'future_notice',
+      error: 'rate_limit',
+      session_id: 'provider-1',
+      uuid: 'future-1'
+    }
+    const rows = await statusRowsFor([unknown])
+    expect(rows).toEqual([])
   })
 })

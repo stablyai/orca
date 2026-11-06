@@ -2,7 +2,7 @@ import { currentDraftScope } from './native-chat-launch-draft-source'
 import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { captureNativeChatEditDraftDestination } from './native-chat-composer-draft-store'
-import { nativeChatPasteUnavailableNotice } from '@/lib/native-chat-paste-request'
+import { nativeChatPasteUnavailableNotice } from '@/components/native-chat/paste/native-chat-paste-request'
 
 function captureNativeChatPasteDestination(
   scope: string | undefined,

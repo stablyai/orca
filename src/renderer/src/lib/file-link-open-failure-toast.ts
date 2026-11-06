@@ -1,4 +1,4 @@
-import type { FileOpenFailure } from '@/components/terminal-pane/terminal-file-open-failure'
+import type { FileOpenFailure } from '@/components/terminal-pane/links/files/terminal-file-open-failure'
 import {
   showFileLinkNotFoundToast,
   showFileLinkUnverifiableToast

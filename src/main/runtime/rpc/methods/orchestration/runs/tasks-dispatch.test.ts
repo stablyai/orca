@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { buildInjectRejectionMessage } from '../../../../../../shared/orchestration-dispatch-refusal-contract'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()

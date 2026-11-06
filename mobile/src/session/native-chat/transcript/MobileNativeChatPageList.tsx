@@ -237,7 +237,13 @@ export function MobileNativeChatPageList({
       }
     }
   })
-  useEffect(() => () => clearTimeout(settleTimer.current), [])
+  // A hidden chat keeps its hold but loses the timer; settle it again when the chat shows.
+  useEffect(() => {
+    if (heldRef.current) {
+      settle.current()
+    }
+    return () => clearTimeout(settleTimer.current)
+  }, [])
 
   const drawAndFetch = useCallback(
     (s: Scroller) => {

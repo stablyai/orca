@@ -7,7 +7,7 @@ import type {
   ClaudeStructuredSessionEvent
 } from '../../../claude/structured/claude-structured-session-state'
 import { claudeProviderHandleLink } from '../../../claude/structured/claude-structured-owner-identity'
-import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 import {
   recordAgentSessionProviderHandle,
@@ -50,7 +50,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'options-reported') {
+  if (event.type === 'options-reported' || event.type === 'retiring') {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.

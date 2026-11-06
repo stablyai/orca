@@ -7,7 +7,7 @@ import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'

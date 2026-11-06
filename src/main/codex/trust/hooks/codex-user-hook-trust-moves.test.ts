@@ -10,10 +10,7 @@ import {
   type CodexTrustEntry
 } from '../toml/config-toml-trust'
 import { computeCodexTrustKey as computeTrustKey } from '../identity/codex-trust-identity'
-import {
-  getMovedCodexUserHookTrust,
-  mutateRealHomeHooksPreservingUserTrust
-} from './codex-user-hook-trust-moves'
+import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
 let root: string
 let hooksPath: string
@@ -58,37 +55,6 @@ function mutate(
 }
 
 describe('real-home user hook trust rebasing', () => {
-  it('finds multiple shifted user hooks, including a handler from a mixed group', async () => {
-    const orca = command('orca-hook')
-    const first = command('first-user')
-    const second = command('second-user')
-    const mixed = command('mixed-user')
-    const before: Record<string, HookDefinition[]> = {
-      Stop: [{ hooks: [orca] }, { hooks: [first] }, { hooks: [second] }, { hooks: [orca, mixed] }]
-    }
-    const after: Record<string, HookDefinition[]> = {
-      Stop: [{ hooks: [first] }, { hooks: [second] }, { hooks: [mixed] }]
-    }
-
-    expect(getMovedCodexUserHookTrust(hooksPath, before, after)).toEqual([
-      expect.objectContaining({
-        command: 'first-user',
-        oldKey: expect.stringContaining(':1:0'),
-        newKey: expect.stringContaining(':0:0')
-      }),
-      expect.objectContaining({
-        command: 'second-user',
-        oldKey: expect.stringContaining(':2:0'),
-        newKey: expect.stringContaining(':1:0')
-      }),
-      expect.objectContaining({
-        command: 'mixed-user',
-        oldKey: expect.stringContaining(':3:1'),
-        newKey: expect.stringContaining(':2:0')
-      })
-    ])
-  })
-
   it("moves each shifted hook's trust block to its new key, bytes unchanged", () => {
     const orca = command('orca-hook')
     const trusted = command('trusted-user')

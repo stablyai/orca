@@ -539,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}} が使用量の上限に達しました。",
       "reachedNamed": "{{agent}} が{{window}}の上限に達しました。",
-      "resetsAt": "{{when}} にリセットされます。",
       "theAgent": "Agent",
       "windowCredits": "追加使用量",
       "windowSession": "セッション",
       "windowWeekly": "週間",
-      "windowWeeklyModel": "モデル別の週間"
+      "windowWeeklyModel": "モデル別の週間",
+      "switchAccount": "アカウントを切り替え",
+      "autoContinueCancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+      "autoContinueCancel": "続けない",
+      "statusResetAt": "{{time}} にリセット済み",
+      "statusResetsAt": "{{time}} にリセット",
+      "statusContinuesShortly": "Orca がまもなく続けます",
+      "statusContinuesThen": "その時点で Orca が続けます",
+      "statusWontContinue": "Orca は自動的には続けません"
     },
     "useImageUpload": {
       "attachFailed": "添付に失敗しました。",
@@ -617,6 +624,8 @@
     }
   },
   "common": {
+    "details": "詳細",
+    "hideDetails": "詳細を非表示",
     "back": "戻る",
     "cancel": "キャンセル",
     "close": "閉じる",
@@ -846,6 +855,13 @@
       "openImage": "画像を開く",
       "wrapLines": "行を折り返す",
       "disableLineWrap": "行の折り返しを無効にする"
+    },
+    "markdownCallout": {
+      "note": "メモ",
+      "tip": "ヒント",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
@@ -2029,6 +2045,8 @@
       "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
       "managedAccountUnsupported": "WSL に Claude アカウントが追加されていますが、Claude チャットには Windows の Claude アカウントが必要です。",
       "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+      "modelUnavailableUpdate": "{{agent}} は {{detail}} を使用できませんでした。再起動後も維持するには {{agent}} を {{minimumVersion}} 以降に更新するか、別のモデルを選択して、もう一度送信してください。",
+      "modelNotSelected": "{{agent}} でモデルが選択されていません。モデルの選択と {{agent}} のサインインを確認して、もう一度送信してください。",
       "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
       "notDelivered": "このメッセージは配信されませんでした。",
       "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
@@ -3271,7 +3289,8 @@
       "moreFields_one": "+{{count}} フィールド",
       "moreFields_other": "+{{count}} フィールド",
       "noItems": "プロジェクトのアイテムがありません。",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "他{{count}}件"
     },
     "githubProjectPickers": {
       "add": "追加",

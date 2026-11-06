@@ -27,14 +27,8 @@ import {
   mobileNativeChatTranscriptCache
 } from './mobile-native-chat-transcript-cache'
 
-export type MobileNativeChatStatus =
-  | 'idle'
-  | 'loading'
-  | 'waiting-session'
-  // No transcript file yet: render the empty chat while keeping its read unsettled.
-  | 'awaiting-transcript'
-  | 'ready'
-  | 'error'
+import type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
+export type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]

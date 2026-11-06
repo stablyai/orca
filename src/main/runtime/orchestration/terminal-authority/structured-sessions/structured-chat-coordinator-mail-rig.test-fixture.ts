@@ -8,7 +8,7 @@ import type { AgentJournalRenderItem } from '../../../../../shared/agent-session
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import '../../../../../shared/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
-import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
@@ -17,10 +17,10 @@ import {
   makeRepo,
   testState
 } from '../../../../persistence/persistence-test-harness'
-import '../../db'
 import { OrchestrationDb } from '../../db/orchestration-db'
+
 import { RpcDispatcher } from '../../../rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import { idOf, isRecord, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import {
   ensureStructuredAgentSessionHost,
@@ -34,7 +34,7 @@ import {
   resetProviderFaults,
   type FakeConnection
 } from './structured-chat-coordinator-fake-codex-fixture'
-import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { scriptedCodexTransport } from '../../../orca-runtime-tests/scripted-codex-transport.test-fixture'
 
 export const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'

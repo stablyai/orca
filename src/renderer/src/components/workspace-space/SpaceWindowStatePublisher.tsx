@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   pickSpaceWindowState,
   spaceWindowStateChanged,

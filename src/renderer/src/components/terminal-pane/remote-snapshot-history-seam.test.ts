@@ -81,7 +81,8 @@ describe('pushed remote snapshots never splice stale history above the image', (
   })
 
   async function attach() {
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { createRemoteRuntimePtyTransport } =
+      await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',

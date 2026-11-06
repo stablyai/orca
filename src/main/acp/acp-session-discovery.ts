@@ -1,7 +1,7 @@
 import type { AcpAgentConnection } from './acp-agent-connection'
 import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
-import type { AtRestCommandScan } from '../native-chat/agent-session-wire/at-rest-command-catalog'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AtRestCommandScan } from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpStructuredOptions } from './acp-structured-options'
 
@@ -78,6 +78,7 @@ export function runAcpSessionDiscovery<T>(
 export async function readAcpSessionCommands(input: {
   connection: AcpDiscoveryConnection
   dialect: AcpDialect
+  onInitialize?: (initialized: Awaited<ReturnType<AcpDiscoveryConnection['initialize']>>) => void
   cwd: string
   signal: AbortSignal
   check: () => void
@@ -114,6 +115,7 @@ export async function readAcpSessionCommands(input: {
   })
   try {
     const initialized = await awaitAcpDiscovery(connection.initialize(), signal)
+    input.onInitialize?.(initialized)
     options.adoptInitialize(initialized)
     check()
     const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)

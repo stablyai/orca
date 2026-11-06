@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
+import type { DirectWorkItemSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { WorkspaceSetupSection } from './WorkspaceSetupSection'
 import { selectWorkspaceSetupCopy } from './workspace-setup-section-model'
 import { getDirectWorkspaceSetupLabels } from './direct-work-item-setup-copy'

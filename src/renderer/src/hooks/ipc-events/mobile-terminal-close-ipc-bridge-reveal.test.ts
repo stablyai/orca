@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import type * as HostPersistence from '@/lib/workspace-session-host-persistence'
+import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   _resetLayoutFramePositionForTests,
   beginLayoutFramePositions,
@@ -38,11 +38,16 @@ vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab:
 vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
   runSleepWorktree: vi.fn()
 }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: vi.fn() }))
-vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostPersistence>()),
-  persistWorkspaceSessionByHost: vi.fn()
+vi.mock('@/lib/workspace/persistence/workspace-session', () => ({
+  buildWorkspaceSessionPayload: vi.fn()
 }))
+vi.mock(
+  '@/lib/workspace/persistence/workspace-session-host-persistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof HostPersistence>()),
+    persistWorkspaceSessionByHost: vi.fn()
+  })
+)
 
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 

@@ -15,10 +15,14 @@ import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from '../../../../../../shared/source-control/checks/pr-check-status-label'
-import { getCheckStatusLabel as getLocalizedCheckStatusLabel } from '@/components/github/pr-check-presentation'
+import { CheckRunTime } from './check-run-time'
+import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
+import { getCheckConclusion } from '@/components/pr-check-counts'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
-import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import {
+  openAppHttpLink,
+  openAppHttpLinkFromAnchor
+} from '@/lib/browser/navigation/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
@@ -142,9 +146,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           >
             {rows.map((row) => {
               const check = row.check
-              const conclusion = check.conclusion ?? 'pending'
-              const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-              const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+              const conclusion = getCheckConclusion(check)
               const expanded = expandedCheckKeys.has(row.key)
               const openUrl = check.url
               return (
@@ -152,7 +154,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                   <div
                     ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
-                      'group/check-row flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
+                      'group/check-row @container flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
                     )}
                     onClick={() => toggleCheckExpanded(row)}
@@ -163,20 +165,12 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                         expanded && 'rotate-90'
                       )}
                     />
-                    <Icon
-                      className={cn(
-                        'size-3.5 shrink-0',
-                        color,
-                        conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-                      )}
-                    />
-                    <span className="flex-1 truncate text-[12px] text-foreground">
+                    <CheckStatusIcon check={check} />
+                    <span className="flex-1 truncate @[19rem]:min-w-9 text-[12px] text-foreground">
                       {check.name}
                     </span>
+                    <CheckRunTime check={check} />
                     <span className="flex shrink-0 items-center gap-1">
-                      <span className="text-[11px] text-muted-foreground">
-                        {getCheckStatusLabel(check)}
-                      </span>
                       {openUrl && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -251,27 +245,45 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   )
 }
 
+// The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
+function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
+  const conclusion = getCheckConclusion(check)
+  const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+  const label = getCheckStatusLabel(check)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" aria-label={label} className="flex shrink-0">
+          <Icon
+            className={cn(
+              'size-3.5',
+              CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
+              conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
+            )}
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 // The parent pipeline opens on the provider; it has no inline job log to expand.
 function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
-  const conclusion = check.conclusion ?? 'pending'
-  const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+  const conclusion = getCheckConclusion(check)
   const content = (
     <>
-      <Icon
-        className={cn(
-          'size-3.5 shrink-0',
-          CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
-          conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-        )}
-      />
-      <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-      <span className="text-[11px] text-muted-foreground">
-        {getLocalizedCheckStatusLabel(check)}
+      <CheckStatusIcon check={check} />
+      <span className="flex-1 truncate @[19rem]:min-w-9 text-[12px] text-foreground">
+        {check.name}
       </span>
+      <CheckRunTime check={check} />
       {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
     </>
   )
-  const className = 'flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
+  const className = '@container flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
   const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
   return check.url ? (
     <a
