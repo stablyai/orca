@@ -163,7 +163,8 @@ it.each([3, 30])(
     // One status per visible repository is necessary for its badge; collapsed bodies do no compare work.
     expect(probes.status).toHaveBeenCalledTimes(count)
     expect(probes.body).not.toHaveBeenCalled()
-    expect(probes.watches).toEqual([])
+    // Every mounted section watches its tree, collapsed ones included (R4).
+    expect(probes.watches).toEqual(worktrees.map((row) => row.id))
     probes.header.mockClear()
     await act(async () => useAppStore.setState({ activeFileId: 'unrelated-file' }))
     expect(probes.header).not.toHaveBeenCalled()
@@ -211,10 +212,7 @@ it.each([3, 30])(
       await act(async () => toggle.click())
     }
     expect(probes.body).toHaveBeenCalledTimes(count)
-    // The existing warm-workspace budget of three goes to the most recently expanded sections.
-    expect(probes.watches).toEqual(
-      [count - 1, count - 2, count - 3].map((index) => worktrees[index]!.id)
-    )
+    expect(probes.watches).toEqual(worktrees.map((row) => row.id))
     await render(false)
     probes.status.mockClear()
     await act(async () => {
@@ -224,13 +222,6 @@ it.each([3, 30])(
     expect(probes.watches).toEqual([])
   }
 )
-
-it('registers no recursive watch before a section knows its status', async () => {
-  setup(5)
-  useAppStore.setState({ gitStatusByWorktree: {} })
-  await render()
-  expect(probes.watches).toEqual([])
-})
 
 function ActiveStatusObserver() {
   useWorktreeGitStatusObservation(null)

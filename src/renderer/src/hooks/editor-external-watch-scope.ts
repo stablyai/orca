@@ -34,6 +34,7 @@ export function selectWatchEligibleWorkspaceIds(args: {
     const id = getWorktreeIdFromVisitKey(key)
     visitedAtById.set(id, Math.max(visitedAtById.get(id) ?? 0, visitedAt))
   }
+  // Why outside the budget: displayed Source Control sections never take a recently used workspace's slot.
   const sectionIds = new Set(args.sourceControlWorkspaceIds ?? [])
   for (const id of sectionIds) {
     ids.add(id)
@@ -45,7 +46,7 @@ export function selectWatchEligibleWorkspaceIds(args: {
   for (const id of mostRecent(
     warmCandidates,
     visitedAtById,
-    Math.max(0, WARM_RECURSIVE_WATCH_WORKSPACE_COUNT - sectionIds.size)
+    WARM_RECURSIVE_WATCH_WORKSPACE_COUNT
   )) {
     ids.add(id)
   }

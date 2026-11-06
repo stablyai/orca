@@ -19,12 +19,9 @@ import {
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
 import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
-import {
-  nextSourceControlExpansionStamp,
-  useSourceControlWatchConsumer
-} from '@/hooks/source-control-watch-consumers'
+import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
 const EMPTY_ENTRIES: readonly unknown[] = []
 
 type SectionProps = {
@@ -47,11 +44,11 @@ const WorktreeSection = memo(
         !owner.repo.connectionId ||
         state.sshConnectionStates.get(owner.repo.connectionId)?.status === 'connected'
     )
-    const [expansion, setExpansion] = useState<{ expanded: boolean; at: number } | undefined>()
-    const isExpanded = expansion?.expanded ?? (statusKnown ? entries.length > 0 : true)
+    const [expanded, setExpanded] = useState<boolean | undefined>()
+    const isExpanded = expanded ?? (statusKnown ? entries.length > 0 : true)
     // Decide once at the first result; later agent edits update badges without undoing a user's collapse.
-    if (expansion === undefined && statusKnown) {
-      setExpansion({ expanded: entries.length > 0, at: 0 })
+    if (expanded === undefined && statusKnown) {
+      setExpanded(entries.length > 0)
     }
     const refreshNow = useWorktreeGitStatusObservation(owner, { enabled: true })
     useEffect(() => {
@@ -70,21 +67,26 @@ const WorktreeSection = memo(
     if (bodyActive && !bodyMounted) {
       setBodyMounted(true)
     }
-    const host = parseExecutionHostId(owner.executionHostId)
+    const watchRuntimeEnvironmentId = useAppStore(
+      (state) =>
+        resolveWorktreeOperationRouteForHost(state, id, owner.executionHostId)
+          ?.runtimeEnvironmentId ?? null
+    )
+    // Every mounted section's badge follows file events, collapsed or off screen; huge repos keep their poll-only pause.
+    // Why no SSH without a runtime owner: local IPC has no SSH filesystem transport, so it would watch nothing.
     useSourceControlWatchConsumer(
       attachedWorktreeOwnerKey(owner),
-      statusKnown && isExpanded && connected && !huge && !isFolderRepo(owner.repo)
+      connected &&
+        !huge &&
+        !isFolderRepo(owner.repo) &&
+        (!owner.repo.connectionId || watchRuntimeEnvironmentId !== null)
         ? {
             worktreeId: id,
             worktreePath: owner.worktree.path,
             connectionId: owner.repo.connectionId ?? undefined,
-            runtimeEnvironmentId:
-              host?.kind === 'runtime'
-                ? host.environmentId
-                : (owner.worktree.runtimeOwnerEnvironmentId ?? null)
+            runtimeEnvironmentId: watchRuntimeEnvironmentId
           }
-        : null,
-      expansion?.at ?? 0
+        : null
     )
     const identity = getWorktreeGitIdentityDisplay(owner.worktree)
     return (
@@ -97,9 +99,7 @@ const WorktreeSection = memo(
           <button
             type="button"
             aria-expanded={isExpanded}
-            onClick={() =>
-              setExpansion({ expanded: !isExpanded, at: nextSourceControlExpansionStamp() })
-            }
+            onClick={() => setExpanded(!isExpanded)}
             className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <ChevronRight className={`size-3 shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
