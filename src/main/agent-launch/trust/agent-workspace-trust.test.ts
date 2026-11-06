@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,6 +35,7 @@ vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
 })
 
 import { applyAgentWorkspaceTrust, type AgentTrustLaunchContext } from './agent-workspace-trust'
+import { applyAgentWorkspaceTrustToSpawn } from './agent-workspace-trust-spawn'
 import { clearWslHomeCache, rememberWslHome } from '../../wsl/discovery/wsl-home-cache'
 import {
   AGENT_TRUST_WRITE_DEADLINE_MS,
@@ -122,6 +123,35 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it('trusts a section start outside its folder workspace and retains root trust for a start inside', async () => {
+    const workspaceRoot = join(root, 'folder')
+    const outsideCwd = join(root, 'attached-worktree')
+    const insideCwd = join(workspaceRoot, 'src')
+    mkdirSync(outsideCwd, { recursive: true })
+    mkdirSync(insideCwd, { recursive: true })
+    const config = join(root, '.claude.json')
+    writeFileSync(config, '{}')
+    for (const cwd of [outsideCwd, insideCwd]) {
+      await applyAgentWorkspaceTrustToSpawn({
+        ...local,
+        env: { CLAUDE_CONFIG_DIR: root },
+        launchAgent: 'claude',
+        worktreeId: 'folder:section-parent',
+        cwd,
+        store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+        isFreshLaunch: true,
+        settings: {},
+        spawnOptions: {}
+      })
+    }
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: {
+        [outsideCwd]: { hasTrustDialogAccepted: true },
+        [workspaceRoot]: { hasTrustDialogAccepted: true }
+      }
+    })
   })
 
   it('grants in the config file the final spawn env names', async () => {
