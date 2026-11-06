@@ -1,4 +1,5 @@
 import {
+  CLIPBOARD_IMAGE_MAX_PIXELS,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
   encodeClipboardImageWithinLimit,
@@ -63,8 +64,9 @@ export async function convertImageBlobToPng(
     await image.decode()
     const width = image.naturalWidth
     const height = image.naturalHeight
+    const pastedOverPixelCap = downscaleToFit && width * height > CLIPBOARD_IMAGE_MAX_PIXELS
     // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
-    if (await hasPngSignature(blob)) {
+    if (!pastedOverPixelCap && (await hasPngSignature(blob))) {
       assertClipboardImageDimensionsWithinLimit({ width, height })
       return blob
     }
