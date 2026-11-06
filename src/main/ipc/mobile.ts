@@ -1,3 +1,4 @@
+import { usesLegacyE2EE } from '../runtime/rpc/server/pairing/device-sighting'
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
@@ -44,7 +45,8 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
     deviceId: device.deviceId,
     name: device.name,
     createdAt: device.pairedAt,
-    lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null
+    lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null,
+    usesLegacyEncryption: usesLegacyE2EE(device)
   }
 }
 
@@ -212,7 +214,8 @@ export function registerMobileHandlers(
           deviceId: d.deviceId,
           name: d.name,
           pairedAt: d.pairedAt,
-          lastSeenAt: d.lastSeenAt
+          lastSeenAt: d.lastSeenAt,
+          usesLegacyEncryption: usesLegacyE2EE(d)
         }))
     }
   })

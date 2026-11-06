@@ -8235,7 +8235,8 @@
           "diagnosticsCopied": "Diagnostics copiés",
           "diagnosticsCopyFailed": "Échec de la copie des diagnostics",
           "5e2c7a1f84": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à l'écran de votre téléphone. Lorsque vous fermez l'application ou si vous la quittez, cela contrôle si elle reste à la taille du téléphone (afin que les outils CLI interactifs ne soient pas redistribués) ou si elle est redimensionnée sur votre bureau. Vous pouvez toujours utiliser Restaurer ou Tout restaurer sur la bannière pour la redimensionner manuellement.",
-          "codeRefreshesAutomatically": "Le code se renouvelle automatiquement. Un code copié fonctionne jusqu’à 10 minutes."
+          "codeRefreshesAutomatically": "Le code se renouvelle automatiquement. Un code copié fonctionne jusqu’à 10 minutes.",
+          "legacyEncryption": "Utilise un ancien chiffrement. Mettez à jour l’app Orca sur cet appareil."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8648,7 +8649,8 @@
           "activeLinks": "Liens actifs",
           "noActiveLinks": "Aucun lien actif.",
           "createdAt": "Créé le {{value0}}",
-          "revoke": "Révoquer"
+          "revoke": "Révoquer",
+          "legacyEncryption": "Utilisé la dernière fois avec un ancien chiffrement. Mettez à jour Orca là où ce lien est utilisé."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Annuler",

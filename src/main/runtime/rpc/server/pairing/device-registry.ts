@@ -1,4 +1,5 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
+import { withDeviceSighting, type DeviceSightingFraming } from './device-sighting'
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
@@ -246,25 +247,35 @@ export class DeviceRegistry extends DeviceRegistryStore {
     return findPrincipalDevice(this.devices, principal)
   }
 
-  updateLastSeen(deviceId: string, sourceClass?: NetworkSourceClass): void {
+  updateLastSeen(
+    deviceId: string,
+    sourceClass?: NetworkSourceClass,
+    framing?: DeviceSightingFraming
+  ): void {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
     this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
-      seen(device, seenAt, sourceClass)
+      withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
     )
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
    * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
-  updateLastSeenDeferred(deviceId: string, sourceClass?: NetworkSourceClass): void {
+  updateLastSeenDeferred(
+    deviceId: string,
+    sourceClass?: NetworkSourceClass,
+    framing?: DeviceSightingFraming
+  ): void {
     const existing = this.getDevice(deviceId)
     if (!existing || existing.lastSeenAt === 0) {
-      return existing ? this.updateLastSeen(deviceId, sourceClass) : undefined
+      return existing ? this.updateLastSeen(deviceId, sourceClass, framing) : undefined
     }
     const seenAt = Date.now()
     this.devices = this.devices.map((device) =>
-      device === existing ? seen(device, seenAt, sourceClass) : device
+      device === existing
+        ? withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
+        : device
     )
     if (this.pendingLastSeenFlush) {
       return

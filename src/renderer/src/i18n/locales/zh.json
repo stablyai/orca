@@ -7681,7 +7681,8 @@
           "diagnosticsCopied": "已复制诊断信息",
           "diagnosticsCopyFailed": "无法复制诊断信息",
           "5e2c7a1f84": "当您在手机上使用终端时，Orca 会将其缩小以适合您的手机屏幕。当您关闭应用程序或切换离开时，这可以控制它是保持手机大小（因此交互式 CLI 工具不会回流）还是将大小调整回桌面。您始终可以使用横幅上的“还原”或“全部还原”来手动调整大小。",
-          "codeRefreshesAutomatically": "配对码会自动刷新。复制的配对码最多可使用 10 分钟。"
+          "codeRefreshesAutomatically": "配对码会自动刷新。复制的配对码最多可使用 10 分钟。",
+          "legacyEncryption": "使用旧版加密。请在此设备上更新 Orca 应用。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "应用商店",
@@ -8087,7 +8088,8 @@
           "activeLinks": "有效链接",
           "noActiveLinks": "没有有效链接。",
           "createdAt": "创建于 {{value0}}",
-          "revoke": "撤销"
+          "revoke": "撤销",
+          "legacyEncryption": "上次使用的是旧版加密。请在使用此链接的设备上更新 Orca。"
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "取消",
