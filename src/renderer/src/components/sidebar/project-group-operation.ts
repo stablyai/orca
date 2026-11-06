@@ -3,7 +3,7 @@ import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-sel
 import {
   resolveIndexedRepoOwner,
   resolveQualifiedIndexedRepoOwnerForHost
-} from '@/lib/repo-owner-index'
+} from '@/lib/workspace/ownership/repo-owner-index'
 import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
 import {
   getRuntimeTargetHostId,

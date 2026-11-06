@@ -1,5 +1,5 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { Worktree } from '../../../shared/worktree/types'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import type { Worktree } from '../../../../../shared/worktree/types'
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 type DetectedWorktreeListing = { worktrees: readonly WorktreeOwnerRecord[] }

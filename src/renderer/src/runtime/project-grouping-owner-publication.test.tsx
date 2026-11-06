@@ -51,7 +51,7 @@ it.each(['single', 'startup'] as const)(
     ] = await Promise.all([
       import('../../../main/runtime/orca-runtime'),
       import('../../../main/ipc/runtime'),
-      import('../../../main/runtime/rpc/methods/mobile-project-sections')
+      import('../../../main/runtime/rpc/methods/mobile-delivery/mobile-project-sections')
     ])
     vi.useFakeTimers()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true

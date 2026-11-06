@@ -46,7 +46,7 @@ import * as persistedGroupingResidue from '../../../../main/persistence/loading-
 import * as rendererGroupingResidue from './project-grouping-preferences'
 import * as projectProjection from '../../../../shared/project-host-setup-projection'
 import { RpcDispatcher } from '../../../../main/runtime/rpc/dispatcher'
-import { REPO_METHODS } from '../../../../main/runtime/rpc/methods/repo'
+import { REPO_METHODS } from '../../../../main/runtime/rpc/methods/projects/repo'
 import { registerRepoCatalogHandlers } from '../../../../main/ipc/repos/repo-catalog-handlers'
 import {
   buildSettingsProjectList,

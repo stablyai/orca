@@ -1,3 +1,7 @@
+import {
+  findIndexedProjectGroupDisplay,
+  resolveIndexedProjectGroupOwner
+} from './worktree-runtime-owner-index'
 import { describe, expect, it } from 'vitest'
 import '../../../../../shared/constants'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
@@ -29,4 +33,17 @@ describe('runtime owner identity indexes', () => {
     expect(runtimeEnvironmentIdOrLocalUnlessTwin(second, 'worktree')).toBe('worktree-two')
     expect(runtimeEnvironmentIdOrLocalUnlessTwin(second, 'folder:folder')).toBe('folder-two')
   })
+})
+
+it('keeps first folder-group display separate from host-qualified ownership', () => {
+  const first = { id: 'twin', name: 'First', executionHostId: 'local' }
+  const remote = { id: 'twin', name: 'Remote', executionHostId: 'runtime:server' }
+  const rows = [first, remote]
+  expect(findIndexedProjectGroupDisplay(rows, 'twin')).toBe(first)
+  expect(resolveIndexedProjectGroupOwner(rows, 'twin')).toEqual({ kind: 'ambiguous' })
+  expect(resolveIndexedProjectGroupOwner(rows, 'twin', 'runtime:server')).toEqual({
+    kind: 'resolved',
+    owner: remote
+  })
+  expect(findIndexedProjectGroupDisplay([remote, first], 'twin')).toBe(remote)
 })

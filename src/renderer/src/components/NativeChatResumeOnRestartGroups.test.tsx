@@ -1,7 +1,7 @@
 import * as workspaceLookups from './native-chat-resume-workspace-lookups'
 import * as folderHostResolution from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getProjectGroupingIndexFromState } from '../store/project-host-setup-selector'
-import * as rawGroupIndex from '../lib/worktree-runtime-owner-index'
+import * as rawGroupIndex from '../lib/workspace/ownership/worktree-runtime-owner-index'
 import * as workspaceDisplay from './native-chat-resume-workspace-display'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'

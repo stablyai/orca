@@ -17,10 +17,10 @@ import {
   MobileSocketWiring,
   type MobileSocketTransport
 } from '../../runtime/rpc/mobile-socket-wiring'
-import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-ui'
-import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/runtime-client-capabilities'
-import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../runtime/rpc/methods/mobile-project-sections'
-import { STATUS_METHODS } from '../../runtime/rpc/methods/status'
+import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-state/client-ui'
+import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/client-events/runtime-client-capabilities'
+import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../runtime/rpc/methods/mobile-delivery/mobile-project-sections'
+import { STATUS_METHODS } from '../../runtime/rpc/methods/host-management/status'
 import { PAIRING_METHODS } from '../../runtime/rpc/methods/pairing'
 import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 

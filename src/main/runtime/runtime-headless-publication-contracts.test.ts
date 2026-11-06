@@ -24,7 +24,7 @@ describe.each([false, true])('layout owner on main: %s', (isMain) => {
 
 import { OrcaRuntimeService } from './orca-runtime'
 import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
-import { MOBILE_PROJECT_SECTIONS_METHODS } from './rpc/methods/mobile-project-sections'
+import { MOBILE_PROJECT_SECTIONS_METHODS } from './rpc/methods/mobile-delivery/mobile-project-sections'
 import { publishMobileProjectSections } from './sidebar-inputs/mobile-project-sections-snapshot'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 

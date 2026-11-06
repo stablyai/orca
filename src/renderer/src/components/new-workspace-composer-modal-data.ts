@@ -1,4 +1,4 @@
-import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
+import type { DirectWorkItemSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'

@@ -14,7 +14,7 @@ export type {
   SettingsConcreteSelection
 } from '../settings-project-types'
 import { buildProjectSetupRepoLookup } from '@/lib/project-setup-repo-lookup'
-import { resolveQualifiedIndexedRepoOwnerForHost } from '@/lib/repo-owner-index'
+import { resolveQualifiedIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getProjectRepoFilterHost } from '../../../../../shared/project-repo-filter-selection'
 
 import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'

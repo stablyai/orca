@@ -17,8 +17,8 @@ import {
   MobileSocketWiring,
   type MobileSocketTransport
 } from '../../../main/runtime/rpc/mobile-socket-wiring'
-import { CLIENT_UI_METHODS } from '../../../main/runtime/rpc/methods/client-ui'
-import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../../main/runtime/rpc/methods/runtime-client-capabilities'
+import { CLIENT_UI_METHODS } from '../../../main/runtime/rpc/methods/client-state/client-ui'
+import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../../main/runtime/rpc/methods/client-events/runtime-client-capabilities'
 import {
   generateKeyPair,
   deriveSharedKey,
@@ -27,7 +27,7 @@ import {
 import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
 import { mobileRuntimeClientCapabilityUpdateParams } from '../../../../mobile/src/transport/mobile-runtime-client-capabilities'
 import WebSocket, { WebSocketServer } from 'ws'
-import { STATUS_METHODS } from '../../../main/runtime/rpc/methods/status'
+import { STATUS_METHODS } from '../../../main/runtime/rpc/methods/host-management/status'
 import { installBrowserGlobals } from './web-preload-api-test-harness'
 
 vi.mock('electron', () => ({
