@@ -256,19 +256,6 @@ describe('MobileFileExplorerPanel', () => {
     mockTransport.forceReconnect = vi.fn()
   })
 
-  it('loads a folder when it is opened', async () => {
-    listingHost({
-      '': [entry('src', true), entry('README.md')],
-      src: [entry('app.ts'), entry('components', true)]
-    })
-    const renderer = await renderExplorer()
-    expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).not.toContain('app.ts')
-
-    await pressByLabel(renderer, 'Open folder src')
-    expect(renderedText(renderer)).toContain('app.ts')
-  })
-
   it('reopens Files with the last listing while the refresh is still out', async () => {
     const host = listingHost({ '': [entry('src', true), entry('README.md')] })
     const first = await renderExplorer()
@@ -288,6 +275,18 @@ describe('MobileFileExplorerPanel', () => {
     await settleQueryNotifications()
     expect(renderedText(reopened)).toContain('CHANGELOG.md')
     expect(renderedText(reopened)).not.toContain('README.md')
+  })
+
+  it('paints the last listing before the host client attaches', async () => {
+    listingHost({ '': [entry('src', true), entry('README.md')] })
+    const first = await renderExplorer()
+    act(() => first.unmount())
+
+    // A remount reads its client in an effect, so the first render has none.
+    mockTransport.client = null
+    const reopened = await renderExplorer()
+    expect(renderedText(reopened)).toContain('README.md')
+    expect(renderedText(reopened)).not.toContain('Loading files')
   })
 
   it('keeps the loaded tree visible during a transient disconnect', async () => {

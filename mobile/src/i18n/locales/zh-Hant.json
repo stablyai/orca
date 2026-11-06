@@ -1269,7 +1269,6 @@
       "connecting": "正在連線至電腦…",
       "emptyState": "找不到檔案",
       "loadFailed": "無法載入檔案",
-      "loadInterrupted": "資料夾載入中斷",
       "title": "檔案",
       "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
       "waiting": "正在等待電腦…"

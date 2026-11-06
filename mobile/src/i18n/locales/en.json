@@ -1809,7 +1809,6 @@
       "connecting": "Connecting to desktop...",
       "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load files",
-      "loadInterrupted": "Folder load interrupted",
       "closeFiles": "Close files",
       "backToSession": "Back to session",
       "title": "Files",

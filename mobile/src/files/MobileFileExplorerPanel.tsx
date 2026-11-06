@@ -128,15 +128,13 @@ export function MobileFileExplorerPanel(props: {
   )
   const folderReads = useHostQueries(fileDirectoryQuery, host, target, folders, pickFolderReads)
 
-  const folderKey = useCallback(
-    (relativePath: string) =>
-      hostQueryKey(hostId, fileDirectoryQuery.family, target, { relativePath }),
-    [hostId, target]
-  )
   const refreshDirectory = useCallback(
     (relativePath: string) =>
-      queryClient.refetchQueries({ queryKey: folderKey(relativePath), exact: true }),
-    [folderKey, queryClient]
+      queryClient.refetchQueries({
+        queryKey: hostQueryKey(hostId, fileDirectoryQuery.family, target, { relativePath }),
+        exact: true
+      }),
+    [hostId, queryClient, target]
   )
 
   const directoryCache = useMemo((): DirectoryCache => {
@@ -249,12 +247,14 @@ export function MobileFileExplorerPanel(props: {
     forceReconnect,
     reload: () => void rootQuery.refetch()
   })
-  const rootScreen = client
-    ? hostScreenState(
-        { data: rootRead, error: rootQuery.error, isFetching: rootQuery.isFetching },
-        connState
-      )
-    : 'empty-connecting'
+  // Cached rows paint before the client attaches.
+  const rootScreen =
+    client || rootRead
+      ? hostScreenState(
+          { data: rootRead, error: rootQuery.error, isFetching: rootQuery.isFetching },
+          connState
+        )
+      : 'empty-connecting'
   const treeReady = rootScreen === 'data' && (rows.length > 0 || filtering)
   const body =
     rootScreen !== 'data' && connState !== 'connected' ? (

@@ -1277,7 +1277,6 @@
       "connecting": "데스크톱에 연결 중…",
       "emptyState": "찾은 파일이 없습니다.",
       "loadFailed": "파일을 불러올 수 없습니다.",
-      "loadInterrupted": "폴더 로드가 중단되었습니다.",
       "title": "파일",
       "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
       "waiting": "데스크톱 대기 중…"

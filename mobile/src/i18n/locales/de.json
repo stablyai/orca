@@ -1273,7 +1273,6 @@
       "connecting": "Verbindung zum Desktop wird hergestellt…",
       "emptyState": "Keine Dateien gefunden",
       "loadFailed": "Dateien konnten nicht geladen werden.",
-      "loadInterrupted": "Laden des Ordners unterbrochen",
       "title": "Dateien",
       "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
       "waiting": "Warten auf den Desktop…"
