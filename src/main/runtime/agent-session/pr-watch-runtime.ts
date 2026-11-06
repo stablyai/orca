@@ -3,6 +3,7 @@
 
 import { attachPRWatchSource } from '../../github/pr-watch/pr-watch-seams'
 import { PRWatchService } from '../../github/pr-watch/pr-watch-service'
+import { readPRChatActionRecords, readPROwnerChat } from '../../github/pr-watch/pr-watch-tables'
 import type { PRWatchServiceDeps, PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
@@ -22,6 +23,8 @@ export type PRWatchRuntimeDeps = {
 let generation = 0
 let starting: Promise<void> | null = null
 let running: { service: PRWatchService; detach: () => void } | null = null
+// Chats whose journals committed before watches started; reconciled once they do.
+const seenBeforeStart = new Map<string, AgentSessionJournal>()
 
 /** The open chat's journal, if any: the publication feed hands a new observer it at once. */
 function openChatJournal(chatId: string): AgentSessionJournal | null {
@@ -63,11 +66,17 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
     })
     const detach = attachPRWatchSource({
       resolveRepo: deps.resolveRepo,
-      pullRequestActionsFor: (prKey) => service.pullRequestActionsFor(prKey),
-      ownerChatFor: (prKey) => service.ownerChatFor(prKey)
+      pullRequestActionsFor: (prKey) =>
+        journalDatabase.isClosed ? [] : readPRChatActionRecords(journalDatabase.db, prKey),
+      ownerChatFor: (prKey) =>
+        journalDatabase.isClosed ? null : readPROwnerChat(journalDatabase.db, prKey)
     })
     running = { service, detach }
     await service.start()
+    for (const [sessionId, journal] of seenBeforeStart) {
+      service.reconcileChat(sessionId, journal)
+    }
+    seenBeforeStart.clear()
   })().catch((error: unknown) => {
     starting = null
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
@@ -89,5 +98,9 @@ export function observePRWatchCommittedRows(
   journal: AgentSessionJournal,
   rows: readonly JournalRow[] | undefined
 ): void {
-  running?.service.observeCommittedRows(sessionId, journal, rows)
+  if (running) {
+    running.service.observeCommittedRows(sessionId, journal, rows)
+  } else {
+    seenBeforeStart.set(sessionId, journal)
+  }
 }

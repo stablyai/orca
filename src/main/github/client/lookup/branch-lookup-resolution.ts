@@ -9,6 +9,7 @@ import {
   getGitHubApiRepositoryForRemote,
   resolveGitHubApiRepositoryCandidates
 } from '../../github-api-repository'
+import { exactRepositoryCandidates } from '../pull-request-lookup-candidates'
 import { mapPRState } from '../../mappers'
 import { ownerRepoFromPullRequestUrl } from './../github-exec-scope'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
@@ -54,11 +55,13 @@ export async function resolvePRForBranchOutcome(input: {
     ghOptions,
     executionScope
   } = input
-  const { candidates, headRepo } = await resolveGitHubApiRepositoryCandidates(
+  const resolved = await resolveGitHubApiRepositoryCandidates(
     repoPath,
     connectionId,
     localGitOptions
   )
+  const { headRepo } = resolved
+  const candidates = exactRepositoryCandidates(resolved.candidates, options.exactRepository)
   // Without local cwd, unresolved connection-backed lookups could follow ambient GH_REPO/GH_HOST.
   if (connectionId && candidates.length === 0) {
     return { kind: 'no-pr', fetchedAt: Date.now() }
@@ -147,7 +150,8 @@ export async function resolvePRForBranchOutcome(input: {
       branchName,
       ghOptions,
       executionScope,
-      policy: implicitPRPolicy
+      policy: implicitPRPolicy,
+      checkPageLimit: options.checkPageLimit
     })
     data = branchLookup.data
     dataRepo = branchLookup.dataRepo
@@ -185,7 +189,8 @@ export async function resolvePRForBranchOutcome(input: {
             branchName: upstreamBranch.branchName,
             ghOptions,
             executionScope,
-            policy: implicitPRPolicy
+            policy: implicitPRPolicy,
+            checkPageLimit: options.checkPageLimit
           })
           data = upstreamLookup.data
           dataRepo = upstreamLookup.dataRepo

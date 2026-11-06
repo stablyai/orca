@@ -3,11 +3,7 @@ import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-reque
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
 import { schedulePRWatchRead } from '../pr-refresh-coordinator'
 import { prWatchQueueKey, type PRWatchJob } from '../pr-refresh-watch-jobs'
-import {
-  deletePRPendingHead,
-  readPRPendingHeads,
-  replacePRCheckContexts
-} from './pr-check-event-tables'
+import { deletePRPendingHead, readPRPendingHeads } from './pr-check-event-tables'
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { parsePRKey } from './pr-watch-types'
 
@@ -58,10 +54,7 @@ export class PREarlierHeadJobs {
     )
     const pr = parsePRKey(job.prKey)
     if (!head || !pr || (head.expiresAt !== null && head.expiresAt <= now())) {
-      database.transaction((db) => {
-        deletePRPendingHead(db, job.prKey, job.headSha)
-        replacePRCheckContexts(db, job.prKey, job.headSha, [])
-      })
+      database.transaction((db) => deletePRPendingHead(db, job.prKey, job.headSha))
       this.jobs.delete(prWatchQueueKey(job))
       return null
     }

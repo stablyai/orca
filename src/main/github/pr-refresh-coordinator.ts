@@ -65,19 +65,14 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
   queue.delete(prWatchQueueKey(job))
 }
 
-/** A read a paired server made for a client: it takes the queue's cooldown and reaches every observer. */
+/** A read a paired server made for a client reaches every observer. It takes no queue ownership,
+ *  so a desktop read in flight for the same checkout keeps its follow-up. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
   read: () => Promise<PRRefreshOutcome>
 ): Promise<PRRefreshOutcome> {
-  const key = refreshKey(candidate)
-  const requestSequence = events.nextSequence()
-  queue.noteRequestStarted(key, requestSequence)
   const outcome = await read()
-  if (queue.ownsRequest(key, requestSequence)) {
-    events.observe(candidate, outcome)
-    retry.noteManualGate(key, outcome)
-  }
+  events.observe(candidate, outcome)
   return outcome
 }
 

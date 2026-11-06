@@ -1,4 +1,8 @@
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
+import {
+  PROBE_COALESCE_STALE_MS,
+  runCoalescedProbe,
+  type CoalescedProbes
+} from '../../../git/remotes/coalesced-probe'
 import type { GitHubApiRepository } from '../../github-api-repository'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
@@ -40,7 +44,9 @@ function sharedRead<T>(
   read: () => Promise<T>
 ): Promise<T> {
   const unbounded = pageLimit === undefined ? undefined : probes.get(key(undefined))
-  return unbounded?.promise ?? runCoalescedProbe(probes, key(pageLimit), read)
+  return unbounded && Date.now() - unbounded.startedAt < PROBE_COALESCE_STALE_MS
+    ? unbounded.promise
+    : runCoalescedProbe(probes, key(pageLimit), read)
 }
 
 export function readSharedPullRequestSidebarQuery(

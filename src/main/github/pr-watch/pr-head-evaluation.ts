@@ -8,15 +8,43 @@ import {
   prunePRCheckContexts,
   readPRCheckContexts,
   replacePRCheckContexts,
+  retirePRWatchState,
   upsertPRPendingHead
 } from './pr-check-event-tables'
-import { insertPRChatAction, type PRChatAction } from './pr-watch-tables'
+import { insertPRChatAction, readPRChatActions, type PRChatAction } from './pr-watch-tables'
 
 /** How long a head the PR moved off keeps being read for its result. */
 export const MOVED_HEAD_TTL_MS = 2 * 60 * 60_000
 
-/** A verified action; its head is kept so a push superseded before the next read still reports. */
-export function recordPRChatAction(database: JournalHostDatabase, action: PRChatAction): void {
+/**
+ * Startup: each PR's newest action, for the PRs whose watch is still active, after retiring saved
+ * state from ownership alone (the live map is empty now and may never hold the inactive ones).
+ */
+export function activeSavedPRWatches(
+  database: JournalHostDatabase,
+  now: number,
+  windowMs: number
+): Map<string, PRChatAction> {
+  const newest = new Map<string, PRChatAction>()
+  for (const action of readPRChatActions(database.db)) {
+    newest.set(pullRequestKey(action), action)
+  }
+  for (const [prKey, action] of newest) {
+    if (action.observedAt + windowMs <= now) {
+      newest.delete(prKey)
+    }
+  }
+  database.transaction((db) => retirePRWatchState(db, now, new Set(newest.keys())))
+  return newest
+}
+
+/** A verified action; its head is kept so a push superseded before the next read still reports.
+ *  `movedAt` is set for a head the PR had already moved off when the push was verified. */
+export function recordPRChatAction(
+  database: JournalHostDatabase,
+  action: PRChatAction,
+  movedAt: number | null = null
+): void {
   database.transaction((db) => {
     insertPRChatAction(db, action)
     if (action.headSha) {
@@ -24,7 +52,7 @@ export function recordPRChatAction(database: JournalHostDatabase, action: PRChat
         prKey: pullRequestKey(action),
         headSha: action.headSha,
         now: action.observedAt,
-        movedAt: null,
+        movedAt,
         ttlMs: MOVED_HEAD_TTL_MS
       })
     }
@@ -55,13 +83,7 @@ export function recordPRHeadObservation(
       true,
       readPRCheckContexts(db, prKey, headSha)
     )
-    // A finished earlier head needs no memory; the current head keeps it to dedupe later reads.
-    replacePRCheckContexts(
-      db,
-      prKey,
-      headSha,
-      evaluation.final && !isCurrentHead ? [] : evaluation.contexts
-    )
+    replacePRCheckContexts(db, prKey, headSha, evaluation.contexts)
     if (evaluation.final) {
       deletePRPendingHead(db, prKey, headSha)
     } else if (isCurrentHead) {

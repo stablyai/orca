@@ -57,12 +57,71 @@ describe('pr-refresh watch jobs', () => {
   it('stops once the PR is merged with its checks settled', async () => {
     getPRForBranchOutcomeMock.mockImplementation(async () => ({
       kind: 'found',
-      pr: makePR({ state: 'merged', checksStatus: 'success' }),
+      pr: makePR({
+        state: 'merged',
+        checksStatus: 'success',
+        checksReadComplete: true,
+        checksFinal: true
+      }),
       fetchedAt: Date.now()
     }))
     await startWatch()
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(watchReads()).toBe(1)
+  })
+
+  it('keeps reading a merged PR whose failure sits beside a check still running', async () => {
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'found',
+      pr: makePR({
+        state: 'merged',
+        checksStatus: 'failure',
+        checksReadComplete: true,
+        checksFinal: false
+      }),
+      fetchedAt: Date.now()
+    }))
+    await startWatch()
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(watchReads()).toBeGreaterThan(1)
+  })
+
+  it('gives saturating watches and visible rows each a share of the budget', async () => {
+    const { reportVisiblePRRefreshCandidates, schedulePRWatchRead, setPRWatchJobHooks } =
+      await import('./pr-refresh-coordinator')
+    setPRWatchJobHooks({ isWatched: () => true, readHeadChecks: async () => null })
+    for (let index = 0; index < 25; index++) {
+      schedulePRWatchRead(
+        { prKey: `github.com/acme/watched#${index}` },
+        makeCandidate({ repoPath: `${WATCHED}-${index}`, cacheKey: `watch-${index}` }),
+        Date.now()
+      )
+    }
+    reportVisiblePRRefreshCandidates(
+      Array.from({ length: 25 }, (_, index) =>
+        makeCandidate({
+          repoPath: `/visible-${index}`,
+          cacheKey: `visible-${index}`,
+          worktreeId: `wt-${index}`
+        })
+      ),
+      1,
+      1
+    )
+    const counts = () => {
+      const paths = getPRForBranchOutcomeMock.mock.calls.map(([path]) => String(path))
+      return {
+        watch: paths.filter((path) => path.startsWith(WATCHED)).length,
+        visible: paths.filter((path) => path.startsWith('/visible-')).length
+      }
+    }
+    await vi.advanceTimersByTimeAsync(15 * 60_000)
+    const early = counts()
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    const late = counts()
+    // Past the first passes both kinds stay overdue; each must still get starts.
+    expect(late.watch - early.watch).toBeGreaterThanOrEqual(20)
+    expect(late.visible - early.visible).toBeGreaterThanOrEqual(20)
   })
 
   it('shares the background budget and still reads a watch while visible rows saturate it', async () => {

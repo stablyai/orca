@@ -81,16 +81,22 @@ export async function hydrateBranchLookupWithExactPR(
   ownerRepo: OwnerRepo,
   branchData: PullRequestLookupData | null,
   ghOptions: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  checkPageLimit?: number
 ): Promise<PullRequestLookupData | null> {
   if (!branchData) {
     return null
   }
   try {
-    return (
-      (await getPRByNumber(ownerRepo, branchData.number, ghOptions, executionScope, branchData)) ??
-      branchData
+    const exact = await getPRByNumber(
+      ownerRepo,
+      branchData.number,
+      ghOptions,
+      executionScope,
+      branchData,
+      { checkPageLimit }
     )
+    return exact ?? branchData
   } catch {
     return branchData
   }
@@ -103,6 +109,7 @@ export async function lookupPRByBranchName(args: {
   ghOptions: GhExecOptions
   executionScope: string
   policy?: PullRequestLookupPolicy
+  checkPageLimit?: number
 }): Promise<{
   data: PullRequestLookupData | null
   dataRepo: OwnerRepo | null
@@ -133,7 +140,8 @@ export async function lookupPRByBranchName(args: {
           candidate,
           branchData,
           args.ghOptions,
-          args.executionScope
+          args.executionScope,
+          args.checkPageLimit
         )
         if (
           data &&
@@ -161,7 +169,8 @@ export async function lookupPRByBranchName(args: {
             candidate,
             branchData,
             args.ghOptions,
-            args.executionScope
+            args.executionScope,
+            args.checkPageLimit
           )
           if (
             data &&
@@ -197,7 +206,8 @@ export async function lookupPRByBranchName(args: {
           repository,
           { ...parsedData, checksUnavailable: true },
           args.ghOptions,
-          args.executionScope
+          args.executionScope,
+          args.checkPageLimit
         )
       : {
           ...normalizePullRequestLookupData(parsedData),

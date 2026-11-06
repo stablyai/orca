@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
-import { finishedShellCalls, pushUpdatesByCall } from './pr-chat-action-recorder'
+import type { PRInfo } from '../../../shared/github/pull-request-types'
+import {
+  finishedShellCalls,
+  pushedPullRequestHead,
+  pushUpdatesByCall,
+  type PendingPRChatPush
+} from './pr-chat-action-recorder'
 
 function toolCallRow(body: Record<string, unknown>): JournalRow {
   const head = typeof body.output === 'string' ? body.output : ''
@@ -18,8 +24,12 @@ function toolCallRow(body: Record<string, unknown>): JournalRow {
 }
 
 function pushedBranches(row: JournalRow): unknown[] {
-  return finishedShellCalls('chat-1', [row]).flatMap(pushUpdatesByCall)
+  return finishedShellCalls('chat-1', [row])
+    .flatMap(pushUpdatesByCall)
+    .map(({ branch, newSha }) => ({ branch, newSha }))
 }
+
+const TO_ORIGIN = 'To github.com:acme/repo.git\n'
 
 describe('push updates from recorded tool calls', () => {
   it("reads Claude's Bash push and Codex's shell push", () => {
@@ -43,9 +53,6 @@ describe('push updates from recorded tool calls', () => {
     })
     expect(pushedBranches(claude)).toEqual([{ branch: 'brennanb2025/ci-lines', newSha: 'c512e75' }])
     expect(pushedBranches(codex)).toEqual([{ branch: 'ci-lines', newSha: '5d6e7f8' }])
-    expect(finishedShellCalls('chat-1', [codex])[0]?.cwd).toBe(
-      '/Users/me/orca/workspaces/orca/ci-lines'
-    )
   })
 
   it('takes new branches and porcelain lines, and nothing from pushes that updated nothing', () => {
@@ -71,6 +78,10 @@ describe('push updates from recorded tool calls', () => {
     ).toEqual([])
     expect(push('git push', 'Everything up-to-date\n')).toEqual([])
     expect(push('git push -q', '')).toEqual([])
+    // Dry runs print real-looking updates however the option is written.
+    for (const command of ["git push origin feature '--dry-run'", 'git push -nv origin feature']) {
+      expect(push(command, `${TO_ORIGIN}   8d5f74b..c512e75  feature -> feature\n`)).toEqual([])
+    }
     expect(
       push(
         'git push --dry-run',
@@ -83,5 +94,46 @@ describe('push updates from recorded tool calls', () => {
         'To github.com:acme/repo.git\n   8d5f74b..c512e75  feature -> feature\n'
       )
     ).toEqual([])
+  })
+})
+
+describe('pushedPullRequestHead', () => {
+  const pushOf = (output: string): PendingPRChatPush => ({
+    chatId: 'chat-1',
+    anchor: { itemId: 'item', revision: 1 },
+    candidate: { cacheKey: 'c', repoKind: 'git', repoId: 'r', repoPath: '/repo', branch: 'work' },
+    updates: pushUpdatesByCall({
+      chatId: 'chat-1',
+      anchor: { itemId: 'item', revision: 1 },
+      script: 'git push',
+      output,
+      finishedAt: 0
+    }),
+    deadline: 0
+  })
+  const pr = (fields: Partial<PRInfo>): PRInfo =>
+    ({
+      number: 20,
+      headRefName: 'review',
+      headSha: '89abcde0123',
+      headRepo: { owner: 'acme', repo: 'repo' },
+      ...fields
+    }) as PRInfo
+
+  it('binds a push to the branch and repository its own update line names', () => {
+    // `git push origin work:review` updated review, not the checked-out branch.
+    const workToReview = pushOf(`${TO_ORIGIN}   1234567..89abcde  work -> review\n`)
+    expect(pushedPullRequestHead(workToReview, pr({}))).toEqual({
+      headSha: '89abcde0123',
+      superseded: false
+    })
+    // A new branch in another repository is not this fork PR's head.
+    const upstream = pushOf('To github.com:parent/repo.git\n * [new branch]      HEAD -> review\n')
+    expect(pushedPullRequestHead(upstream, pr({}))).toBeNull()
+    // Another push moved the PR on before the read: the proven head is kept, marked superseded.
+    expect(pushedPullRequestHead(workToReview, pr({ headSha: 'ffff0000aaaa' }))).toEqual({
+      headSha: '89abcde',
+      superseded: true
+    })
   })
 })

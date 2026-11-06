@@ -2,6 +2,7 @@
 // may register and subscribe before it starts or across its restarts. None of them wakes an agent.
 
 import { cancelPRWatchRead, schedulePRWatchRead } from '../pr-refresh-coordinator'
+import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
 import { prWatchQueueKey, type PRWatchJob } from '../pr-refresh-watch-jobs'
 import {
   prWatchCandidate,
@@ -18,7 +19,16 @@ export type PRWatchSeamSource = {
   ownerChatFor: (prKey: string) => string | null
 }
 
-type FollowUp = { job: PRWatchJob; registration: PRWatchRegistration; count: number }
+type FollowUp = {
+  job: PRWatchJob
+  registration: PRWatchRegistration
+  count: number
+  candidate?: GitHubPRRefreshCandidate
+  /** Once a read names the PR, the registration rides that PR's one watch job. */
+  resolvedPRKey?: string
+}
+
+const FOLLOW_UP_CACHE_KEY = 'pr-follow-up::'
 
 const followUps = new Map<string, FollowUp>()
 const observers = new Set<(observation: PRObservation) => void>()
@@ -29,7 +39,10 @@ function scheduleFollowUp(entry: FollowUp, from: PRWatchSeamSource): void {
   void from.resolveRepo(registration.repoId, registration.connectionId ?? null).then((repo) => {
     if (repo && source === from && followUps.get(prWatchQueueKey(job)) === entry) {
       const workspace = { ...repo, checkoutPath: repo.repoPath, branch: registration.branch }
-      schedulePRWatchRead(job, prWatchCandidate(workspace, registration.prNumber), Date.now())
+      const candidate = prWatchCandidate(workspace, registration.prNumber)
+      entry.candidate = { ...candidate, cacheKey: `${FOLLOW_UP_CACHE_KEY}${prWatchQueueKey(job)}` }
+      entry.resolvedPRKey = undefined
+      schedulePRWatchRead(job, entry.candidate, Date.now())
     }
   })
 }
@@ -49,8 +62,36 @@ export function attachPRWatchSource(next: PRWatchSeamSource): () => void {
   }
 }
 
+/** A registration's own job until a read resolves it, then the resolved PR's shared job. */
 export function isPRFollowUpJob(job: PRWatchJob): boolean {
-  return followUps.has(prWatchQueueKey(job))
+  const own = followUps.get(prWatchQueueKey(job))
+  return own ? own.resolvedPRKey === undefined : prFollowUpCandidate(job.prKey) !== null
+}
+
+export function prFollowUpCandidate(prKey: string): GitHubPRRefreshCandidate | null {
+  for (const entry of followUps.values()) {
+    if (entry.resolvedPRKey === prKey && entry.candidate) {
+      return entry.candidate
+    }
+  }
+  return null
+}
+
+/** A read made for a registration named its PR: one job serves it from now on. */
+export function resolvePRFollowUp(
+  candidate: GitHubPRRefreshCandidate,
+  prKey: string
+): GitHubPRRefreshCandidate | null {
+  if (!candidate.cacheKey.startsWith(FOLLOW_UP_CACHE_KEY)) {
+    return null
+  }
+  const entry = followUps.get(candidate.cacheKey.slice(FOLLOW_UP_CACHE_KEY.length))
+  if (!entry?.candidate || entry.resolvedPRKey !== undefined) {
+    return null
+  }
+  entry.resolvedPRKey = prKey
+  cancelPRWatchRead(entry.job)
+  return entry.candidate
 }
 
 /** Keeps reading a PR for a reason other than a chat's lines, through the same budgeted queue. */

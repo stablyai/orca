@@ -50,7 +50,7 @@ export function shellCode(script: string): string {
 }
 
 /** A script split at command separators that sit outside quotes. */
-function shellSegments(script: string): string[] {
+export function shellSegments(script: string): string[] {
   const segments: string[] = []
   let current = ''
   let quote: string | null = null

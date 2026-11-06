@@ -1,3 +1,4 @@
+import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type Database from '../../sqlite/sync-database'
 
 /** Added without a user_version change, so an older build opens the journal and ignores them. */
@@ -132,6 +133,25 @@ export function readPRChatActions(db: Database.Database, prKey?: string): PRChat
   return rows.map(actionFromRow)
 }
 
+export function hasPRChatActionFrom(
+  db: Database.Database,
+  chatId: string,
+  anchorItemId: string
+): boolean {
+  return (
+    db
+      .prepare('SELECT 1 FROM pr_chat_actions WHERE chat_id = ? AND anchor_item_id = ? LIMIT 1')
+      .get(chatId, anchorItemId) !== undefined
+  )
+}
+
+export function hasPRChatActions(db: Database.Database, prKey: string): boolean {
+  return (
+    db.prepare(`SELECT 1 FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? LIMIT 1`).get(prKey) !==
+    undefined
+  )
+}
+
 export function readPRWatchChatIds(db: Database.Database): string[] {
   return (
     db
@@ -140,7 +160,8 @@ export function readPRWatchChatIds(db: Database.Database): string[] {
   ).map((row) => row.chat_id)
 }
 
-/** A gone chat takes its actions and deliveries; events no chat still holds go with them. */
+/** A gone chat takes its actions and deliveries; events, heads and context memory no remaining
+ *  chat owns go with them, so nothing survives its last owner. */
 export function deletePRWatchChats(db: Database.Database, chatIds: readonly string[]): void {
   const actions = db.prepare('DELETE FROM pr_chat_actions WHERE chat_id = ?')
   const deliveries = db.prepare('DELETE FROM pr_event_deliveries WHERE chat_id = ?')
@@ -148,5 +169,39 @@ export function deletePRWatchChats(db: Database.Database, chatIds: readonly stri
     actions.run(chatId)
     deliveries.run(chatId)
   }
-  db.exec('DELETE FROM pr_check_events WHERE id NOT IN (SELECT event_id FROM pr_event_deliveries)')
+  db.exec(`
+DELETE FROM pr_check_events WHERE id NOT IN (SELECT event_id FROM pr_event_deliveries);
+DELETE FROM pr_pending_heads WHERE pr_key NOT IN (SELECT ${PR_KEY_SQL} FROM pr_chat_actions);
+DELETE FROM pr_check_contexts WHERE pr_key NOT IN (SELECT ${PR_KEY_SQL} FROM pr_chat_actions);
+`)
+}
+
+/** Seam 3: each verified action on a PR, oldest first. */
+export function readPRChatActionRecords(db: Database.Database, prKey: string) {
+  return readPRChatActions(db, prKey).map(({ chatId, kind, anchor, headSha, observedAt }) => ({
+    chatId,
+    kind,
+    anchor,
+    headSha,
+    observedAt
+  }))
+}
+
+/** The newest verified pusher, else the opener, else none. */
+export function readPROwnerChat(db: Database.Database, prKey: string): string | null {
+  const actions = readPRChatActions(db, prKey)
+  const newest = (kind: PRChatActionKind) =>
+    actions.findLast((action) => action.kind === kind)?.chatId
+  return newest('pushed') ?? newest('opened') ?? null
+}
+
+/** Deletes gone chats' saved state (and anything no remaining chat owns); returns the PRs still owned. */
+export function sweepGonePRWatchChats(
+  database: { db: Database.Database; transaction: <T>(run: (db: Database.Database) => T) => T },
+  chatExists: (chatId: string) => boolean
+): { gone: string[]; owned: Set<string> } {
+  const gone = readPRWatchChatIds(database.db).filter((chatId) => !chatExists(chatId))
+  database.transaction((db) => deletePRWatchChats(db, gone))
+  const owned = new Set(readPRChatActions(database.db).map((action) => pullRequestKey(action)))
+  return { gone, owned }
 }

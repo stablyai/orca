@@ -109,6 +109,15 @@ export function deletePRMovedHeads(db: Database.Database, prKey: string): void {
   db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ? AND moved_at IS NOT NULL').run(prKey)
 }
 
+/** One chat's debt, by the primary key's chat prefix; unrelated chats' history costs nothing. */
+export function hasPRPendingDelivery(db: Database.Database, chatId: string): boolean {
+  return (
+    db
+      .prepare("SELECT 1 FROM pr_event_deliveries WHERE chat_id = ? AND state = 'pending' LIMIT 1")
+      .get(chatId) !== undefined
+  )
+}
+
 export function readPRPendingDeliveryChatIds(db: Database.Database): string[] {
   return (
     db
@@ -117,12 +126,13 @@ export function readPRPendingDeliveryChatIds(db: Database.Database): string[] {
   ).map((row) => row.chat_id)
 }
 
-/** Drops a head; its context memory goes with it on the next prune. */
+/** Drops a head; its context memory follows on the next prune unless it reported a line. */
 export function deletePRPendingHead(db: Database.Database, prKey: string, headSha: string): void {
   db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ? AND head_sha = ?').run(prKey, headSha)
 }
 
-/** Context memory is kept only for the PR's current head and the heads still pending. */
+/** Context memory is kept for the current head, pending heads and every head that reported a line,
+ *  so re-watching (after a restart, an end or a force-push back) never repeats one. */
 export function prunePRCheckContexts(
   db: Database.Database,
   prKey: string,
@@ -130,14 +140,31 @@ export function prunePRCheckContexts(
 ): void {
   db.prepare(
     `DELETE FROM pr_check_contexts WHERE pr_key = ? AND head_sha IS NOT ?
-      AND head_sha NOT IN (SELECT head_sha FROM pr_pending_heads WHERE pr_key = ?)`
-  ).run(prKey, currentHeadSha, prKey)
+      AND head_sha NOT IN (SELECT head_sha FROM pr_pending_heads WHERE pr_key = ?)
+      AND head_sha NOT IN (SELECT head_sha FROM pr_check_events WHERE pr_key = ?)`
+  ).run(prKey, currentHeadSha, prKey, prKey)
 }
 
-/** Ends everything kept for a PR except its actions, which live as long as their chats. */
+/** An ended watch reads no earlier heads; its context memory stays until its last action goes. */
 export function endPRWatchState(db: Database.Database, prKey: string): void {
   db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ?').run(prKey)
-  db.prepare('DELETE FROM pr_check_contexts WHERE pr_key = ?').run(prKey)
+}
+
+/** Startup: drops moved heads past their deadline and the pending heads of watches no longer active. */
+export function retirePRWatchState(
+  db: Database.Database,
+  now: number,
+  activePRKeys: ReadonlySet<string>
+): void {
+  db.prepare('DELETE FROM pr_pending_heads WHERE expires_at IS NOT NULL AND expires_at <= ?').run(
+    now
+  )
+  const inactive = (
+    db.prepare('SELECT DISTINCT pr_key FROM pr_pending_heads').all() as { pr_key: string }[]
+  ).filter((row) => !activePRKeys.has(row.pr_key))
+  for (const { pr_key: prKey } of inactive) {
+    endPRWatchState(db, prKey)
+  }
 }
 
 /** Writes the event and one pending delivery per owning chat; the caller holds the transaction. */

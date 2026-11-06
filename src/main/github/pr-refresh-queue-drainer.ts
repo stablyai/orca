@@ -18,7 +18,7 @@ import {
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
-import { agePRWatchEntries, PRWatchJobRunner } from './pr-refresh-watch-jobs'
+import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { outsideWslUserAct } from '../wsl/discovery/wsl-user-act-scope'
@@ -133,7 +133,7 @@ export class PRRefreshQueueDrainer {
   }
 
   private ordered(): PRRefreshQueueEntry[] {
-    agePRWatchEntries(this.queue.values(), Date.now())
+    this.watchJobs.age(this.queue.values(), Date.now())
     return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
   }
 
@@ -235,6 +235,7 @@ export class PRRefreshQueueDrainer {
           }
           if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
             this.pacing.noteBackgroundStart()
+            this.watchJobs.noteBudgetedStart(next)
           }
           if (usesActiveRefreshPacing(next)) {
             this.pacing.noteActiveStart(next)
@@ -250,7 +251,7 @@ export class PRRefreshQueueDrainer {
           next.candidate.linkedPRNumber ?? null,
           next.candidate.connectionId ?? null,
           next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
-          ...hostedReviewOptionArgs(next.candidate, next.reason)
+          ...hostedReviewOptionArgs(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
         )
         if (!this.queue.ownsRequest(next.key, requestSequence)) {
           this.events.broadcast(

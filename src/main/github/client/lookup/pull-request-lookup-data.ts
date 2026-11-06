@@ -1,3 +1,4 @@
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type {
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
@@ -93,6 +94,8 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   currentHeadOid?: string | null
   /** Bounds check pagination for CI-line watch reads only; absent reads every page. */
   checkPageLimit?: number
+  /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
+  exactRepository?: GitHubOwnerRepo
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

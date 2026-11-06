@@ -11,6 +11,7 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import {
   markPRDeliveryDelivered,
   readOldestPRPendingDelivery,
+  hasPRPendingDelivery,
   readPRPendingDeliveryChatIds,
   type PRPendingDelivery
 } from './pr-check-event-tables'
@@ -147,8 +148,9 @@ export class PREventDeliveryTrigger {
     }
   }
 
+  /** Streaming commits during a turn cost one set lookup and a turn check, nothing more. */
   committed(chatId: string, journal: AgentSessionJournal): void {
-    if (this.owed.has(chatId)) {
+    if (this.owed.has(chatId) && canAppendBetweenTurns(journal)) {
       this.deliver(chatId, journal)
     }
   }
@@ -161,7 +163,7 @@ export class PREventDeliveryTrigger {
     const { database } = this.deps
     void deliverPendingPullRequestEvents({ database, journal, sessionId: chatId, fence }).then(
       () => {
-        if (!readPRPendingDeliveryChatIds(database.db).includes(chatId)) {
+        if (!hasPRPendingDelivery(database.db, chatId)) {
           this.owed.delete(chatId)
         }
       },
