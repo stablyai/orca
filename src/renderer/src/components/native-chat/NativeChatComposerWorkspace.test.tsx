@@ -70,7 +70,10 @@ describe('chat composer workspace', () => {
       }
     })
     const getStatus = vi.fn().mockResolvedValue({ machineName: 'Detected laptop' })
-    window.api.runtime = { getStatus } as typeof window.api.runtime
+    Object.defineProperty(window.api, 'runtime', {
+      configurable: true,
+      value: { getStatus }
+    })
     render(<Footer />)
     const machine = await screen.findByText('Detected laptop')
     const checkout = screen.getByRole('button', { name: 'Copy my-checkout' })

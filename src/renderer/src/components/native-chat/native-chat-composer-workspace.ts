@@ -156,7 +156,7 @@ export function createNativeChatComposerWorkspaceSelector(
 type ComposerWorkspaceContext = {
   host?: ExecutionHostId
   row?: ReturnType<typeof findKnownWorktreeById>
-  repo?: Repo
+  repo?: Repo | null
   path?: string
 }
 
