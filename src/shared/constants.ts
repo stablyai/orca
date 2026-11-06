@@ -2,7 +2,7 @@ import type { GlobalSettings } from './global-settings-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
-import type { AgentActivityDisplayMode } from './ui-chrome-types'
+import type { AgentActivityDisplayMode, SubagentDisplayMode } from './ui-chrome-types'
 import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
@@ -40,10 +40,16 @@ export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
 export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+export const DEFAULT_SHOW_SUBAGENTS = true
+export const DEFAULT_SUBAGENT_DISPLAY_MODE: SubagentDisplayMode = 'flat'
 export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
+
+export function normalizeSubagentDisplayMode(value: unknown): SubagentDisplayMode {
+  return value === 'tree' || value === 'flat' ? value : DEFAULT_SUBAGENT_DISPLAY_MODE
 }
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
@@ -218,6 +224,8 @@ export function getDefaultUIState(): PersistedUIState {
     _worktreeCardModeDefaulted: true,
     showAgentModels: true,
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+    showSubagents: DEFAULT_SHOW_SUBAGENTS,
+    subagentDisplayMode: DEFAULT_SUBAGENT_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardColumnWidth: 308,

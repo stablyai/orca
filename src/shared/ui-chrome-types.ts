@@ -56,6 +56,8 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
+export type SubagentDisplayMode = 'flat' | 'tree'
+
 // Keep existing chrome imports compatible; normalizers own these value domains.
 export type { ActivityGroupBy, ThreadReadFilter } from './agents-view-thread-filters'
 

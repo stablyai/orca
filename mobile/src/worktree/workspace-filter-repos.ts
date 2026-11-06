@@ -1,5 +1,6 @@
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
+import { isFloatingRepoCandidateId, isFloatingWorktreeRow } from './floating-workspace-section'
 import { buildSectionRepoMap, type SectionRepo, type Worktree } from './workspace-list-sections'
 
 export type WorkspaceSectionRepo = {
@@ -19,12 +20,16 @@ export function buildFilterRepos(
   filterCatalogRepos: readonly SectionRepo[],
   worktrees: readonly Worktree[]
 ): WorkspaceSectionRepo[] {
+  const nonFloatingWorktrees = worktrees.filter((w) => !isFloatingWorktreeRow(w))
   const repos =
     filterCatalogRepos.length > 0
       ? filterCatalogRepos
-      : [...buildSectionRepoMap([], worktrees).values()]
+      : [...buildSectionRepoMap([], nonFloatingWorktrees).values()]
   const seen = new Set<string>()
   return repos.flatMap((repo) => {
+    if (isFloatingRepoCandidateId(repo.id)) {
+      return []
+    }
     const key = `${getRepoExecutionHostId(repo)}|${repo.id}`
     if (seen.has(key)) {
       return []

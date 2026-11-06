@@ -78,6 +78,12 @@ export const activityLayoutChoices = (t: Translate) =>
     full: t('hostScreen.workspaceOptionControls.fullList', 'Full list')
   })
 
+export const subagentDisplayChoices = (t: Translate) =>
+  workspaceOptionChoices(viewOptions.WORKSPACE_SUBAGENT_DISPLAY_CHOICES, {
+    flat: t('hostScreen.workspaceOptionControls.subagentDisplayFlat', 'Alongside agents'),
+    tree: t('hostScreen.workspaceOptionControls.subagentDisplayTree', 'Tree under parent')
+  })
+
 export const cardPropertyChoices = (t: Translate) =>
   phoneCardPropertyChoices(
     workspaceOptionChoices(viewOptions.WORKSPACE_CARD_PROPERTY_CHOICES, {

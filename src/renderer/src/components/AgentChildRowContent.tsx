@@ -16,6 +16,7 @@ type AgentChildRowContentProps = {
   tooltipSide?: StateIndicatorTooltipSide
   /** Name the whole line on hover, for surfaces that truncate it tightly. */
   lineTitle?: boolean
+  leadingIcon?: React.ReactNode
 }
 
 /** Keep sidebar-child and chat-strip state/name/detail rendering consistent. */
@@ -27,7 +28,8 @@ export const AgentChildRowContent = React.memo(function AgentChildRowContent({
   separator,
   dotTitle,
   tooltipSide,
-  lineTitle = false
+  lineTitle = false,
+  leadingIcon
 }: AgentChildRowContentProps): React.JSX.Element {
   const { lead, trail } = agentChildRowText(row, now)
   return (
@@ -38,6 +40,7 @@ export const AgentChildRowContent = React.memo(function AgentChildRowContent({
         title={dotTitle}
         tooltipSide={tooltipSide}
       />
+      {leadingIcon}
       <span
         className="min-w-0 flex-1 truncate"
         title={lineTitle ? `${lead}${trail ? `${separator}${trail}` : ''}` : undefined}

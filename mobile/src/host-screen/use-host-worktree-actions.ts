@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
-import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import {
+  floatingWorkspaceSessionPath,
+  isFloatingWorkspaceWorktreeId
+} from '../session/floating-workspace'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/host-client-hooks'
@@ -238,6 +241,21 @@ export function useHostWorktreeActions(args: {
 
   const openWorktreeSession = useCallback(
     (item: Worktree, paneKey?: string) => {
+      if (isFloatingWorkspaceWorktreeId(item.worktreeId)) {
+        const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
+        navigateFromHostList(
+          `${floatingWorkspaceSessionPath(hostId)}${pane}`,
+          Boolean(paneKey),
+          () => {
+            if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+              setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+            } else if (hostId) {
+              noteLastVisitedWorktree({ hostId, worktreeId: item.worktreeId })
+            }
+          }
+        )
+        return
+      }
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))

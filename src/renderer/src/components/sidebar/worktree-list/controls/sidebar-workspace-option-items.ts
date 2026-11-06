@@ -7,6 +7,7 @@ import {
   WORKSPACE_PROJECT_ORDER_CHOICES,
   WORKSPACE_SORT_BY_CHOICES,
   WORKSPACE_CARD_DISPLAY_CHOICES,
+  WORKSPACE_SUBAGENT_DISPLAY_CHOICES,
   type WorkspaceViewChoice
 } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { translate } from '@/i18n/i18n'
@@ -116,6 +117,13 @@ export const AGENT_ACTIVITY_DISPLAY_OPTIONS = localizeChoices<
   compact: compactLabel,
   full: () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366', 'Full list')
+})
+
+export const SUBAGENT_DISPLAY_OPTIONS = localizeChoices<
+  ChoiceId<typeof WORKSPACE_SUBAGENT_DISPLAY_CHOICES>
+>(WORKSPACE_SUBAGENT_DISPLAY_CHOICES, {
+  flat: () => translate('sidebar.cardProperties.subagentDisplay.flat', 'Alongside agents'),
+  tree: () => translate('sidebar.cardProperties.subagentDisplay.tree', 'Tree under parent')
 })
 
 export const PROPERTY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_PROPERTY_CHOICES>>(

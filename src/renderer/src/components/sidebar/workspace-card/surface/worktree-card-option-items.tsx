@@ -16,8 +16,10 @@ import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
   CARD_LAYOUT_OPTIONS,
   PROPERTY_OPTIONS,
+  SUBAGENT_DISPLAY_OPTIONS,
   getWorktreeCardDisplayOptions
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
+import { DEFAULT_SUBAGENT_DISPLAY_MODE } from '../../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 
 type CardMenuItemProps = {
@@ -58,6 +60,54 @@ function AgentModelProperty(): React.JSX.Element {
   )
 }
 
+function SubagentDisplayMenuItems(): React.JSX.Element {
+  const showSubagents = useAppStore((s) => s.showSubagents !== false)
+  const subagentDisplayMode =
+    useAppStore((s) => s.subagentDisplayMode) ?? DEFAULT_SUBAGENT_DISPLAY_MODE
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const setShowSubagents = useAppStore((s) => s.setShowSubagents)
+  const setSubagentDisplayMode = useAppStore((s) => s.setSubagentDisplayMode)
+  return (
+    <>
+      <DropdownMenuCheckboxItem
+        checked={showSubagents}
+        disabled={!persistedUIReady}
+        onCheckedChange={(checked) => setShowSubagents(checked === true)}
+        onSelect={(e) => e.preventDefault()}
+      >
+        {translate('sidebar.cardProperties.showSubagents', 'Show subagents')}
+      </DropdownMenuCheckboxItem>
+      {showSubagents ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>
+            {translate('sidebar.cardProperties.subagentDisplayLabel', 'Subagent display')}
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={subagentDisplayMode}
+            onValueChange={(value) => {
+              const next = SUBAGENT_DISPLAY_OPTIONS.find((opt) => opt.id === value)
+              if (next) {
+                setSubagentDisplayMode(next.id)
+              }
+            }}
+          >
+            {SUBAGENT_DISPLAY_OPTIONS.map((opt) => (
+              <DropdownMenuRadioItem
+                key={opt.id}
+                value={opt.id}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {opt.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </>
+      ) : null}
+    </>
+  )
+}
+
 /** "Card display": the experimental card style's property rows. */
 export function WorktreeCardDisplayMenuItem({
   preserveWorkspaceBoardOpen
@@ -91,6 +141,7 @@ export function WorktreeCardDisplayMenuItem({
           </DropdownMenuCheckboxItem>
         ))}
         <AgentModelProperty />
+        <SubagentDisplayMenuItems />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
@@ -186,6 +237,7 @@ export function WorktreeCardPropertiesMenuItem({
           </DropdownMenuCheckboxItem>
         ))}
         <AgentModelProperty />
+        <SubagentDisplayMenuItems />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>
           {translate(

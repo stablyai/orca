@@ -8,6 +8,7 @@ import { setSidebarLiveWidth } from './sidebar-live-width'
 import { SidebarSeamScrollbarStrip } from './SidebarSeamScrollbarStrip'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
+import FloatingWorkspaceSidebarSection from './FloatingWorkspaceSidebarSection'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
@@ -217,6 +218,7 @@ function Sidebar({
                     onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
                     projectsCollapseTarget={projectsCollapseTarget}
                   />
+                  <FloatingWorkspaceSidebarSection />
                   <WslMovedProjectsSection />
                 </>
               )}

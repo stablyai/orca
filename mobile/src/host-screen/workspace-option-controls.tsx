@@ -25,6 +25,7 @@ import {
 } from './workspace-option-controls-copy'
 import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
+import { SubagentOptionControls } from './workspace-subagent-option-controls'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -243,6 +244,7 @@ function propertiesPage(
       return (
         <>
           <CardPropertyRows controller={controller} choices={choices(controller, t)} />
+          <SubagentOptionControls controller={controller} />
           {withAgentLayout && (
             <>
               <SectionHeader

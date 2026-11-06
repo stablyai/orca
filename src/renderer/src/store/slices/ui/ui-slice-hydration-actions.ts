@@ -17,7 +17,8 @@ import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   normalizeWorktreeCardProperties,
-  normalizeAgentActivityDisplayMode
+  normalizeAgentActivityDisplayMode,
+  normalizeSubagentDisplayMode
 } from '../../../../../shared/constants'
 import {
   normalizeActivityGroupBy,
@@ -180,6 +181,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
           showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
+          showSubagents: ui.showSubagents !== false,
+          subagentDisplayMode: normalizeSubagentDisplayMode(ui.subagentDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
           workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),

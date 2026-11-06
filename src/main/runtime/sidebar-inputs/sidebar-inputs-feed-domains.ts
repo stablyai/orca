@@ -66,7 +66,9 @@ const SIDEBAR_VIEW_UI_FIELDS = [
   'workspaceHostScope',
   'visibleWorkspaceHostIds',
   'worktreeCardProperties',
-  'agentActivityDisplayMode'
+  'agentActivityDisplayMode',
+  'showSubagents',
+  'subagentDisplayMode'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 const DESKTOP_WRITE_DOMAINS = [...WORKTREE_METADATA_DOMAINS, 'settings', 'ui']

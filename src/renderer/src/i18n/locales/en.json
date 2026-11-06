@@ -212,7 +212,13 @@
       "showIdleChildren": "Show {{count}} idle child agents"
     },
     "cardProperties": {
-      "agentModel": "Agent model"
+      "agentModel": "Agent model",
+      "subagentDisplay": {
+        "flat": "Alongside agents",
+        "tree": "Tree under parent"
+      },
+      "showSubagents": "Show subagents",
+      "subagentDisplayLabel": "Subagent display"
     },
     "wslHostOffer": {
       "title": "Run {{distro}} as a host (recommended)",
@@ -222,6 +228,13 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "agentRow": {
+      "subagent": "Subagent"
+    },
+    "floatingSection": {
+      "header": "Floating",
+      "workspaceTitle": "Floating workspace"
     }
   },
   "app": {

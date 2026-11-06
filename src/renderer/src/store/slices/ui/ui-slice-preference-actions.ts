@@ -4,10 +4,13 @@ import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-prefer
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
+  DEFAULT_SHOW_SUBAGENTS,
   DEFAULT_STATUS_BAR_ITEMS,
+  DEFAULT_SUBAGENT_DISPLAY_MODE,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
   normalizeAgentActivityDisplayMode,
+  normalizeSubagentDisplayMode,
   normalizeWorktreeCardProperties
 } from '../../../../../shared/constants'
 import {
@@ -209,6 +212,18 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeAgentActivityDisplayMode(mode)
       window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
       set({ agentActivityDisplayMode: normalized })
+    },
+    showSubagents: DEFAULT_SHOW_SUBAGENTS,
+    setShowSubagents: (show) => {
+      const normalized = show !== false
+      window.api.ui.set({ showSubagents: normalized }).catch(console.error)
+      set({ showSubagents: normalized })
+    },
+    subagentDisplayMode: DEFAULT_SUBAGENT_DISPLAY_MODE,
+    setSubagentDisplayMode: (mode) => {
+      const normalized = normalizeSubagentDisplayMode(mode)
+      window.api.ui.set({ subagentDisplayMode: normalized }).catch(console.error)
+      set({ subagentDisplayMode: normalized })
     },
 
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
