@@ -187,4 +187,34 @@ describe('OSC 7501 program status', () => {
     )
     expect(lifecycle.agentPromptLifecycleByPtyId.get('pty-1')?.status).toBe('working')
   })
+
+  it('reports a signed-out program as blocked on sign-in instead of waiting out tui-idle (#37056)', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agy' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: committingSpawn(runtime, spawn),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'w'
+    })
+    const signIn = Buffer.from('Sign in required').toString('base64')
+    // agy 1.5.2's bytes at its "Select login method" menu.
+    runtime.onPtyData(
+      'pty-agy',
+      `\x1b]7501;state=blocked:kind=auth:app=antigravity:msg=${signIn}\x07Select login method:\r\n> 1. Google OAuth\r\n`,
+      Date.now()
+    )
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({ satisfied: false, blockedReason: 'agent-sign-in-prompt' })
+
+    runtime.onPtyData('pty-agy', '\x1b]7501;state=idle:app=antigravity\x07', Date.now())
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({ satisfied: true })
+  })
 })

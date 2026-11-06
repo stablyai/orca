@@ -35,6 +35,7 @@ export type FirstPartyAgentStatus = {
   updatedAt: number
   sessionBoundary?: boolean
   programAtRest?: boolean
+  programSignInRequired?: boolean
 } | null
 
 /** Tier 1: an idle marker the agent put in a title itself. */
@@ -189,6 +190,14 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   const blockedReason = input.readTailBlockedReason()
   if (blockedReason) {
     return { kind: 'blocked', reason: blockedReason }
+  }
+  // Why fail fast: a signed-out agent (agy's login menu) swallows any prompt sent now and
+  // stays blocked until a human signs in, so waiting out the timeout only hides why.
+  if (
+    input.firstPartyStatus?.programSignInRequired &&
+    hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)
+  ) {
+    return { kind: 'blocked', reason: 'agent-sign-in-prompt' }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {

@@ -268,14 +268,20 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       if (latestAgentStatus) {
         const ptyRecord = this.ptysById.get(ptyId)
         if (ptyRecord) {
+          const fromProgram = agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
+          // The facet rides only chunks where it changed; a repeated blocked report keeps the kind.
+          const programSignInRequired =
+            fromProgram &&
+            latestAgentStatus.state === 'blocked' &&
+            (agentStatusChunk.programStatusFacet !== undefined
+              ? agentStatusChunk.programStatusFacet?.kind === 'auth'
+              : ptyRecord.lastExplicitAgentStatus?.programSignInRequired === true)
           ptyRecord.lastExplicitAgentStatus = {
             state: latestAgentStatus.state,
             updatedAt: Date.now(),
             sessionBoundary: latestAgentStatus.sessionBoundary,
-            ...(latestAgentStatus.state === 'done' &&
-            agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
-              ? { programAtRest: true }
-              : {})
+            ...(latestAgentStatus.state === 'done' && fromProgram ? { programAtRest: true } : {}),
+            ...(programSignInRequired ? { programSignInRequired: true } : {})
           }
         }
       }

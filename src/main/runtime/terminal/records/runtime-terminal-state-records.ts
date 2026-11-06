@@ -110,6 +110,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     sessionBoundary?: boolean
     /** OSC 7501 done proves the program awaits input; hook done may occur mid-turn. */
     programAtRest?: boolean
+    /** OSC 7501 blocked on sign-in: input would go to the login menu, not the composer. */
+    programSignInRequired?: boolean
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
