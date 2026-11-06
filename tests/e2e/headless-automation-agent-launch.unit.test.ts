@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => {
     host: { journalSnapshot: vi.fn(), currentWork: vi.fn(), send: vi.fn() }
   }
 })
-vi.mock('../../src/main/runtime/rpc/methods/agent-launch', () => ({
+vi.mock('../../src/main/runtime/rpc/methods/agent-launch/agent-launch', () => ({
   launchAgentOnHost: mocks.launch
 }))
 vi.mock(
@@ -62,7 +62,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   },
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: () => true }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: () => true
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () =>

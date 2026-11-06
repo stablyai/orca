@@ -97,7 +97,7 @@ async function loadWorkingTreeBuild(): Promise<TerminalWireBuild> {
   const [codec, dispatcher, terminalMethods, client] = await Promise.all([
     import('../../../src/shared/terminal/stream/terminal-stream-protocol'),
     import('../../../src/main/runtime/rpc/dispatcher'),
-    import('../../../src/main/runtime/rpc/methods/terminal'),
+    import('../../../src/main/runtime/rpc/methods/terminal/terminal'),
     import('../../../src/renderer/src/runtime/remote-runtime-terminal-multiplexer')
   ])
   return {

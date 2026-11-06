@@ -14,10 +14,10 @@ import type {
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PaneProcessExit, PtyPaneStartup } from './pty-connection-types'
-import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
+import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport/pty-transport-types'
 import type { ReplayingPanesRef } from './replay-guard'
-import type { TerminalLinkActionRequester } from './terminal-link-action-request'
-import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
+import type { TerminalLinkActionRequester } from './links/terminal-link-action-request'
+import type { TerminalLinkRoutingPreferenceRequester } from './links/http/terminal-url-link-hit-testing'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { DetachTerminalPaneToNewTab } from './terminal-pane-tab-detach'
 

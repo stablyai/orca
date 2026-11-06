@@ -1,4 +1,4 @@
-import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/structured-agent-session-fork'
+import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourceFromEvidence

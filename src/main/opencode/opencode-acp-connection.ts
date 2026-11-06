@@ -5,7 +5,7 @@ import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { AcpAgentConnection, type AcpAgentConnectionOptions } from '../acp/acp-agent-connection'
 import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from '../acp/acp-errors'
-import type { AcpSessionStartOptions } from '../acp/acp-session-setup'
+import type { AcpSessionStarted, AcpSessionStartOptions } from '../acp/acp-session-setup'
 import type { PromptRequest } from '../acp/generated/acp-protocol.generated'
 import { readOpenCodePromptFailure } from '../foreign-sqlite-readers/foreign-sqlite-reader-spawn'
 import type { OpenCodePromptFailure } from '../foreign-sqlite-readers/opencode-prompt-failure-result'
@@ -70,8 +70,11 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
     this.dbPath = dbPath
   }
 
-  override async start(options: AcpSessionStartOptions) {
-    const started = await super.start(options)
+  override async start(
+    options: AcpSessionStartOptions,
+    received?: (started: AcpSessionStarted) => void
+  ) {
+    const started = await super.start(options, received)
     this.providerSessionId = started.sessionId
     return started
   }

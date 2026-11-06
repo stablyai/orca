@@ -18,7 +18,7 @@ import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '..
 import { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
 import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-resolved-worktree-cache'
-import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../rpc/methods/structured-agent-session-options-read'
+import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../rpc/methods/structured-sessions/catalog/structured-agent-session-options-read'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { createAgentModelCatalogService } from '../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'

@@ -16,11 +16,11 @@ import {
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedWorktreeOwnerForHost,
-  resolveQualifiedIndexedRepoOwnerForHost,
   findIndexedDetectedWorktrees,
   resolveIndexedFolderWorkspaceOwner,
   resolveIndexedProjectGroupOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { resolveQualifiedIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
 import {
   hostAuthorityFromOperationRoute,
   SELF_LOCAL_AUTHORITY,

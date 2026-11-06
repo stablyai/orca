@@ -1,4 +1,4 @@
-import { prepareForkFounding, readForkHydration } from '../agent-session-fork-founding'
+import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'

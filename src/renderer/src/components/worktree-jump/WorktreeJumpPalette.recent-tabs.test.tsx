@@ -63,7 +63,7 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
   activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
 }))
-vi.mock('@/lib/workspace-tab-palette-activation', () => ({
+vi.mock('@/lib/workspace/search/tabs/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
 }))
 

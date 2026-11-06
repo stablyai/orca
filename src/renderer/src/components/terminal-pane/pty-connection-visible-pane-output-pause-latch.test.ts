@@ -63,7 +63,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
@@ -73,7 +73,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
@@ -83,7 +83,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   })
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,

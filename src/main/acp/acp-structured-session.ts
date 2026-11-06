@@ -55,7 +55,10 @@ export function routeAcpSessionEvent(
   at: number,
   reattaching = false
 ): void {
-  if (event.kind === 'known') {
+  if (
+    event.kind === 'known' &&
+    event.notification.sessionId === session.lane.translator.providerSessionId
+  ) {
     const { update } = event.notification
     if (update.sessionUpdate === 'available_commands_update') {
       session.options.adoptCommands(update.availableCommands)

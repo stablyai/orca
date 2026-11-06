@@ -10,7 +10,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
-import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
+import { createAgentCompletionCoordinator } from '../agent-completion/agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifecycle'
 import {
   hookLaneOwnsAgentTurnEnds,

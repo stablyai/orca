@@ -5,7 +5,7 @@ import {
   clearHugeRepoWarningDismissalsForTests,
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
-} from '@/lib/source-control-huge-repo-warning-dismissals'
+} from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { resetHostedReviewLinkMutationGenerationForTests } from './worktrees'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeWorktree } from './worktrees-slice-test-fixtures'

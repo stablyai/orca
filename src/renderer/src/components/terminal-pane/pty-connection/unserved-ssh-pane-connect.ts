@@ -3,9 +3,9 @@ import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { isSshUserDisconnectedMessage } from '../../../../../shared/ssh-user-disconnect-message'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import type { PtyTransport } from '../pty-transport-types'
-import { createUnresolvedOwnerPtyTransport } from '../unresolved-owner-pty-transport'
-import { createLegacyRelayBridgeTransport } from '../legacy-relay-bridge-transport'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
+import { createUnresolvedOwnerPtyTransport } from '../pty-transport/host-ownership/unresolved-owner-pty-transport'
+import { createLegacyRelayBridgeTransport } from '../pty-transport/legacy-relay/legacy-relay-bridge-transport'
 import {
   legacyRelayBridgePtyIdForPane,
   releaseLegacyRelayBridgePaneClaim

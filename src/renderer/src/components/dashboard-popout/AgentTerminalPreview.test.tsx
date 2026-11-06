@@ -112,7 +112,7 @@ vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
 vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: {
     sendInput: (data: string) => void
     getKittyKeyboardFlags?: () => number
@@ -128,7 +128,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
     return forwarder
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => {
     const tracker = { isActive: () => false, dispose: vi.fn() }
     imeHarness.trackers.push(tracker)

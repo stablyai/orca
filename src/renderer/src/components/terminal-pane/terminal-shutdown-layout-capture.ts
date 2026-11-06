@@ -1,6 +1,6 @@
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'

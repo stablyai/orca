@@ -1,7 +1,7 @@
 import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationWorkerServer
-} from '../environment-transport'
+} from './environment-transport'
 import type { RuntimeOrchestrationEnvelope } from '../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../../workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 

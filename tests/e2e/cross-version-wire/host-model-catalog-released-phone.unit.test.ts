@@ -4,9 +4,10 @@ import { stripTypeScriptTypes } from 'node:module'
 import { beforeAll, expect, it, vi } from 'vitest'
 import {
   call,
-  hostStub,
-  STRUCTURED_CLIENT
-} from '../../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+  hostStub
+} from '../../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+
+import { STRUCTURED_CLIENT } from '../../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { createAgentModelCatalogService } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
