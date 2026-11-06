@@ -16490,7 +16490,7 @@
       "id": "codex.state-db-backfill-recovery-bounds",
       "title": "Codex state DB backfill recovery has bounded process and timer use",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "codex-runtime",
       "layer": "main-process-supervisor",
       "surfaces": [
@@ -16500,44 +16500,16 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "wsl", "paired-runtime-host"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "wsl"],
-      "coverageNotes": "A deterministic injected claimant and clock cover exits before and after the former ten-second classification boundary, exact spawn/poll/backoff counts, transient exit and spawn-error recovery, owner-lock reacquisition, WSL routing, and cleanup. Live Windows, WSL, and paired-runtime-host process evidence remains uncollected.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1614 removes mocked backfill retry/private state assertions without equivalent replacement coverage. Retained tests exercise selected real child termination and timeout boundaries; they do not establish the retired gate assertions. Any historical receipts are retired when no current passed evidence remains. Historical scope before this audit: A deterministic injected claimant and clock cover exits before and after the former ten-second classification boundary, exact spawn/poll/backoff counts, transient exit and spawn-error recovery, owner-lock reacquisition, WSL routing, and cleanup. Live Windows, WSL, and paired-runtime-host process evidence remains uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/releases/tag/v1.4.177-rc.0"],
       "invariant": "One authoritative Codex state DB backfill supervisor spawns at most five claimants regardless of process lifetime, retains at most one child and one timer, rejects later automatic restarts after claimant exhaustion, and bounds pre-claim coordinator failures to five triggers while transient claimant and owner-lock failures can recover within those budgets.",
       "oracle": "Use an injected process and clock to exit every claimant at 10,001ms without waiting. Permanent failure must give up after five spawns and exits with exactly 15 poll timers and four backoffs, no live child or pending timer, and no safety-fuse abort; repeated triggers must reuse the exhausted result with zero new lock or runner calls. Separately fail twice at 10,001ms and complete on the third claimant, recover from a first-spawn error on attempt two, reacquire after a transient owner-lock failure, and cap permanent lock-root failures at five attempts across six triggers.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts"
-      ],
-      "testFiles": ["src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts"],
-      "assertionRefs": [
-        {
-          "file": "src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts",
-          "assertions": [
-            "does not restart an exhausted supervisor when later triggers arrive",
-            "releases a completed supervisor entry",
-            "releases a failed owner-lock attempt for later arbitration",
-            "bounds permanent coordinator failures across later triggers",
-            "bounds permanent claimant exits just beyond the fast-failure window",
-            "recovers after claimant exits just beyond the old fast-failure window",
-            "recovers after a transient process spawn error",
-            "routes a WSL managed home through its distro and Linux CODEX_HOME",
-            "does not interfere with a live supervisor from another Orca instance"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-07",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/codex-state-db-backfill-recovery.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts",
-          "durationSeconds": 0.4,
-          "summary": "Twelve deterministic recovery and owner-lock tests passed, including exact permanent and transient 10,001ms exit accounting, spawn-error recovery, trigger-level exhaustion memoization, bounded coordinator failure, successful owner-lock reacquisition, and zero retained children or timers."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 2,
         "scope": "deterministic main-process supervisor and owner-lock contract"
@@ -16560,6 +16532,7 @@
         "Keep exact spawn, exit, timer, backoff, cleanup, and transient-recovery assertions green."
       ],
       "knownGaps": [
+        "Audit1614 removes mocked backfill retry/private state assertions without equivalent replacement coverage. Retained tests exercise selected real child termination and timeout boundaries; they do not establish the retired gate assertions. Any historical receipts are retired when no current passed evidence remains.",
         "Live child-process behavior is represented by an injected EventEmitter claimant.",
         "Physical Windows, WSL, SSH, and paired-runtime-host journeys were not run."
       ],
