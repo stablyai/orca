@@ -152,6 +152,32 @@ it('mobile close removes the requested folder placement and retains the child vi
   expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
 })
 
+it.each(['file', 'tab'] as const)(
+  'mobile %s-id close scopes split copies to the requested workspace',
+  async (identity) => {
+    openDiff()
+    openDiff(CHILD)
+    await main.settle()
+    const folderTab = tabs(FOLDER)[0]!
+    const childTab = tabs(CHILD)[0]!
+    const splitGroup = useAppStore
+      .getState()
+      .createEmptySplitGroup(FOLDER, folderTab.groupId, 'right')
+    expect(splitGroup).not.toBeNull()
+    openDiff(FOLDER, 'a.ts', false, splitGroup!)
+    await main.settle()
+    expect(tabs(FOLDER)).toHaveLength(2)
+    const splitTab = tabs(FOLDER)[1]!
+    const requestedId = identity === 'file' ? folderTab.entityId : folderTab.id
+    expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, requestedId)).toBe(true)
+    await main.settle()
+    expect(tabs(FOLDER).map((tab) => tab.id)).toEqual(identity === 'file' ? [] : [splitTab.id])
+    expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
+    expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
+    expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, requestedId)).toBe(false)
+  }
+)
+
 it('shares child-owned diff content across folder and child views, with independent close and reopen', async () => {
   openDiff()
   await main.settle()
