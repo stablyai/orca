@@ -8,7 +8,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { i18n, translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { cn } from '@/lib/utils'
 import type { AgentSurface } from './use-onboarding-flow-types'

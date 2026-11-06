@@ -98,15 +98,8 @@ function FileReaderDocument({
     return map
   }, [diffCommentsForFile])
 
-  const startComment = useCallback((lineNumber: number) => {
-    setActiveCommentLine(lineNumber)
-    setCommentDraft('')
-  }, [])
-
-  const cancelComment = useCallback(() => {
-    setActiveCommentLine(null)
-    setCommentDraft('')
-  }, [])
+  // The draft follows the reader to another line and survives Cancel; only a saved note clears it.
+  const cancelComment = useCallback(() => setActiveCommentLine(null), [])
 
   const submitComment = useCallback(
     (lineNumber: number) => {
@@ -135,7 +128,7 @@ function FileReaderDocument({
         activeCommentLine={activeCommentLine}
         commentDraft={commentDraft}
         commentsBusy={diffCommentActions?.busy === true}
-        onStartComment={startComment}
+        onStartComment={setActiveCommentLine}
         onCancelComment={cancelComment}
         onDraftChange={setCommentDraft}
         onSubmitComment={submitComment}
@@ -152,7 +145,6 @@ function FileReaderDocument({
       commentDraft,
       diffCommentActions,
       diffCommentsByLine,
-      startComment,
       submitComment,
       title
     ]

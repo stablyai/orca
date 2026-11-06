@@ -26,10 +26,10 @@ import { MobileNativeChatEmptyStateView } from '../MobileNativeChatEmptyStateVie
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
 import {
-  buildMobileNativeChatTransientData,
   mobileNativeChatEmptyState,
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
+import { useMobileNativeChatTransientData } from './transcript/use-mobile-native-chat-transient-data'
 import { useMobileNativeChatRowKeys } from './transcript/mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './transcript/use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTailFollow } from './transcript/use-mobile-native-chat-tail-follow'
@@ -218,15 +218,9 @@ export function MobileNativeChatView({
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
-  const { data } = useMemo(
-    () =>
-      buildMobileNativeChatTransientData({
-        folded,
-        streaming,
-        pending,
-        imagePreviewsByMessageId
-      }),
-    [folded, streaming, pending, imagePreviewsByMessageId]
+  const data = useMobileNativeChatTransientData(
+    { folded, streaming, pending, imagePreviewsByMessageId },
+    sendSurfaceId
   )
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail

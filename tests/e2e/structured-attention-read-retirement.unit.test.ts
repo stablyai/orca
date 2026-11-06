@@ -23,12 +23,13 @@ import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey
 } from '../../src/shared/agent-session/agent-session-attention'
-import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+import '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+import { SESSION } from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import {
   projectStructuredAgentSessionStatusState,
   structuredAgentSessionPaneKey
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { useAppStore } from '@/store'

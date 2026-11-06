@@ -6,7 +6,10 @@ import { translate } from '@/i18n/i18n'
 import { findRepoForGitHubOwner } from './repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../slices/hosted-review-cache-state'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
+import {
+  restoreReactionOnSubject,
+  setReactionOnSubject
+} from '@/lib/source-control/review/comments/pr-comment-reactions'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'

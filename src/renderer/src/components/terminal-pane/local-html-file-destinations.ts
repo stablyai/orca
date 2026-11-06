@@ -1,7 +1,7 @@
 import {
   httpLinkActionDestinationsFor,
   type HttpLinkActionDestinations
-} from '@/lib/http-link-destinations'
+} from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store'
 
 export function isHtmlFilePath(filePath: string): boolean {

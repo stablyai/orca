@@ -20,7 +20,7 @@ import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { AcpScriptedAgent, deferred } from '../acp/acp-scripted-agent.test-support'
 import type { RpcContext } from '../runtime/rpc/core'
 import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
-import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/antigravity-accounts'
+import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
 import type { AntigravityChatSignInStatus } from '../../shared/antigravity-account-types'
 import { ANTIGRAVITY_BROWSER_MARKER } from './antigravity-browser-helper'
 import * as browserHelper from './antigravity-browser-helper'
@@ -100,7 +100,10 @@ async function signInAgainst(
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
   vi.spyOn(browserHelper, 'antigravityBrowserHelperWorks').mockResolvedValue(true)
-  const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
+  // Short on POSIX so the private temp root stays in this folder, not /tmp/oacp-*.
+  const stateDirectory = await mkdtemp(
+    process.platform === 'win32' ? join(tmpdir(), 'orca-agy-sign-in-') : '/tmp/o'
+  )
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
   const agent = new AcpScriptedAgent()

@@ -5,7 +5,7 @@ import type {
   AgentSessionProviderHandleLink
 } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
+import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
 import {
   providerTimelineKeyPart,
   spelledProviderTimelineItemKey

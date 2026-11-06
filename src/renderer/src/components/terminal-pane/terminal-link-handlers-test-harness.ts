@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,

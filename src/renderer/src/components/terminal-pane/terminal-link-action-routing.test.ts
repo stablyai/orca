@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener
-} from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-routing'
 import {
   closeTerminalLinkActionRequest,
   requestTerminalLinkAction,

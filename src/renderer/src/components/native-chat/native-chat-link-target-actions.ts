@@ -2,8 +2,8 @@ import {
   buildHttpLinkActions,
   httpLinkActionDestinationsFor,
   type HttpLinkActionDestinations
-} from '@/lib/http-link-destinations'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-destinations'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { AppState } from '@/store/types'
 import {
   buildFileLinkActions,

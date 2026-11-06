@@ -14,7 +14,7 @@ import {
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from '../sleep/sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from '../sleep/sleep-twin-confirmation'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'

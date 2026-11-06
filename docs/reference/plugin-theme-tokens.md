@@ -43,7 +43,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--worktree-sidebar-accent-foreground` | Text on `--worktree-sidebar-accent` | no | same as `--sidebar-accent-foreground` |
 | `--worktree-sidebar-border` | Workspace sidebar borders | no | same as `--sidebar-border` |
 | `--worktree-sidebar-ring` | Focus rings in the workspace sidebar | no | same as `--sidebar-ring` |
-| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | a translucent wash of `--worktree-sidebar-foreground` |
+| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | light: `--worktree-sidebar-foreground` at 8% opacity; dark: `--worktree-sidebar-foreground` at 10% opacity |
 | `--worktree-sidebar-active-border` | Border of the current workspace row | no | a mix of `--worktree-sidebar-border` |
 | `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
 | `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |

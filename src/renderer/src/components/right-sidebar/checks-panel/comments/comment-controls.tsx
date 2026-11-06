@@ -25,10 +25,10 @@ import { isBotPRComment } from '../../../../../../shared/source-control/review-c
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
 import { normalizePRCommentAuthorLogin } from '../../../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import type { PRComment } from '../../../../../../shared/github/comment-types'
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function CopyButton({
   text,

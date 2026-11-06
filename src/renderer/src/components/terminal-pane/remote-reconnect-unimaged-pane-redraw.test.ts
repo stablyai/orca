@@ -37,7 +37,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false) }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return { ...actual, useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn }

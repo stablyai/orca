@@ -118,6 +118,213 @@ function relayWithPhone(
 }
 
 describe('MobileDesktopRelay', () => {
+  // #36923: a phone opening a workspace whose recipe VM sleeps wakes it; nothing else does.
+  it('opens a server link for the request that needs it and relays the VM waking answer', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone, replies } = relayWithPhone()
+    const resolve = vi.spyOn(hosts, 'resolve').mockImplementation(async (_id, openingMethod) => {
+      throw new RemoteRuntimeClientError(
+        openingMethod === 'worktree.activate'
+          ? 'runtime_environment_waking'
+          : 'runtime_environment_asleep',
+        'VM'
+      )
+    })
+    const listing = { id: 'list', method: 'worktree.ps' }
+    relay.forward(phone, 'env-1', listing, JSON.stringify(listing))
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+    const open = { id: 'open', method: 'worktree.activate' }
+    relay.forward(phone, 'env-1', open, JSON.stringify(open))
+    await vi.waitFor(() => expect(replies).toHaveLength(2))
+
+    expect(resolve.mock.calls.map(([, openingMethod]) => openingMethod)).toEqual([
+      'worktree.ps',
+      'worktree.activate'
+    ])
+    expect(replies.map((reply) => JSON.parse(reply).error.code)).toEqual([
+      'runtime_environment_asleep',
+      'runtime_environment_waking'
+    ])
+    expect(sockets).toHaveLength(0)
+    relay.dispose()
+  })
+
+  it('wakes the VM for a workspace open that joins a link a background request is opening', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone, replies } = relayWithPhone()
+    const resolve = vi.spyOn(hosts, 'resolve').mockImplementation(async (_id, openingMethod) => {
+      throw new RemoteRuntimeClientError(
+        openingMethod === 'worktree.activate'
+          ? 'runtime_environment_waking'
+          : 'runtime_environment_asleep',
+        'VM'
+      )
+    })
+    // The server is going or gone, so the opening link cannot carry the open.
+    hosts.serverStateForOpening = () => 'waking'
+    const listing = { id: 'list', method: 'worktree.ps' }
+    const open = { id: 'open', method: 'worktree.activate' }
+    relay.forward(phone, 'env-1', listing, JSON.stringify(listing))
+    relay.forward(phone, 'env-1', open, JSON.stringify(open))
+    await vi.waitFor(() => expect(replies).toHaveLength(2))
+
+    expect(resolve.mock.calls.map(([, openingMethod]) => openingMethod)).toEqual([
+      'worktree.ps',
+      'worktree.activate'
+    ])
+    expect(replies.map((reply) => JSON.parse(reply).error.code)).toEqual([
+      'runtime_environment_waking',
+      'runtime_environment_waking'
+    ])
+    relay.dispose()
+  })
+
+  it.each([
+    ['up', null, 1],
+    ['waking', 'runtime_environment_waking', 2],
+    ['asleep', 'runtime_environment_asleep', 2]
+  ] as const)(
+    'carries a workspace open on an open link only while its VM is up (VM %s)',
+    async (state, refusal, links) => {
+      sockets.length = 0
+      const { relay, hosts, phone, replies } = relayWithPhone()
+      const serverStateForOpening = vi.fn(() => state)
+      hosts.serverStateForOpening = serverStateForOpening
+      const resolve = vi.spyOn(hosts, 'resolve')
+      const listing = { id: 'list', method: 'worktree.ps' }
+      relay.forward(phone, 'env-1', listing, JSON.stringify(listing))
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      expect(serverStateForOpening).not.toHaveBeenCalled()
+
+      const open = { id: 'open', method: 'worktree.activate' }
+      relay.forward(phone, 'env-1', open, JSON.stringify(open))
+      expect(serverStateForOpening).toHaveBeenCalledExactlyOnceWith('env-1')
+      // A server whose VM is not up gets a fresh link, whose preparation holds the open; what the
+      // old link still carried is answered with where the VM stands.
+      expect(resolve).toHaveBeenCalledTimes(links)
+      expect(resolve.mock.calls.at(-1)?.[1]).toBe(refusal ? 'worktree.activate' : 'worktree.ps')
+      if (refusal) {
+        await vi.waitFor(() =>
+          expect(replies.map((reply) => JSON.parse(reply).error?.code)).toContain(refusal)
+        )
+      }
+      relay.dispose()
+    }
+  )
+
+  it.each([
+    ['its own wake', true],
+    ['an unrelated replacement', false]
+  ] as const)(
+    'retires a link still preparing when its server is re-paired, except by %s',
+    async (_cause, wokenByOpening) => {
+      sockets.length = 0
+      const { relay, hosts, phone, replies } = relayWithPhone()
+      const listing = { id: 'list', method: 'worktree.ps' }
+      relay.forward(phone, 'env-1', listing, JSON.stringify(listing))
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      // A paired link is retired at once.
+      relay.retireEnvironment('env-1')
+      await vi.waitFor(() => expect(replies).toHaveLength(1))
+
+      const opening = Promise.withResolvers<Awaited<ReturnType<typeof hosts.resolve>>>()
+      vi.spyOn(hosts, 'resolve').mockImplementationOnce(() => opening.promise)
+      const open = { id: 'open', method: 'worktree.activate' }
+      relay.forward(phone, 'env-1', open, JSON.stringify(open))
+      relay.retireEnvironment('env-1')
+      opening.resolve({
+        environmentId: 'env-1',
+        fence: 'f',
+        pairingRevision: 8,
+        ...(wokenByOpening ? { wokenByOpening: true as const } : {}),
+        pairing: { v: 2, endpoint: 'ws://127.0.0.1:1', deviceToken: 'desktop', publicKeyB64: 'k' }
+      })
+      if (wokenByOpening) {
+        await vi.waitFor(() =>
+          expect(sockets.at(-1)?.sent.some((frame) => frame.includes('"open"'))).toBe(true)
+        )
+        expect(replies).toHaveLength(1)
+      } else {
+        await vi.waitFor(() => expect(replies).toHaveLength(2))
+        expect(JSON.parse(replies[1]!)).toMatchObject({
+          id: 'open',
+          error: { code: 'remote_runtime_unavailable' }
+        })
+      }
+      relay.dispose()
+    }
+  )
+
+  it('refuses a link the user disconnected while it was still preparing', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone, replies } = relayWithPhone()
+    // Disconnected once while preparing, and reconnected since by the wake's own connect.
+    let disconnects = 0
+    hosts.userDisconnects = () => disconnects
+    const resolve = hosts.resolve
+    vi.spyOn(hosts, 'resolve').mockImplementationOnce(async (...args) => {
+      disconnects += 1
+      return resolve(...args)
+    })
+    const open = { id: 'open', method: 'worktree.activate' }
+    relay.forward(phone, 'env-1', open, JSON.stringify(open))
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+    expect(JSON.parse(replies[0]!)).toMatchObject({ error: { code: 'remote_runtime_unavailable' } })
+    expect(sockets).toHaveLength(0)
+    relay.dispose()
+  })
+
+  it('keeps a link preparing for a background request when the server behind it is up', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone, replies } = relayWithPhone()
+    hosts.serverStateForOpening = () => 'up'
+    const resolve = vi.spyOn(hosts, 'resolve')
+    const status = { id: 'status', method: 'worktree.ps' }
+    const open = { id: 'open', method: 'worktree.activate' }
+    relay.forward(phone, 'env-1', status, JSON.stringify(status))
+    relay.forward(phone, 'env-1', open, JSON.stringify(open))
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(2))
+    expect(resolve).toHaveBeenCalledTimes(1)
+    expect(replies).toEqual([])
+    relay.dispose()
+  })
+
+  it('lets a second workspace open join a link already waiting on the VM wake', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone } = relayWithPhone()
+    const waking = Promise.withResolvers<Awaited<ReturnType<typeof hosts.resolve>>>()
+    const resolve = vi.spyOn(hosts, 'resolve').mockImplementationOnce(() => waking.promise)
+    hosts.serverStateForOpening = () => 'waking'
+    const first = { id: 'first', method: 'worktree.activate' }
+    const second = { id: 'second', method: 'worktree.activate' }
+    relay.forward(phone, 'env-1', first, JSON.stringify(first))
+    relay.forward(phone, 'env-1', second, JSON.stringify(second))
+    expect(resolve).toHaveBeenCalledTimes(1)
+    waking.resolve({
+      environmentId: 'env-1',
+      fence: 'f',
+      pairingRevision: 8,
+      pairing: { v: 2, endpoint: 'ws://127.0.0.1:1', deviceToken: 'desktop', publicKeyB64: 'k' }
+    })
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(2))
+    relay.dispose()
+  })
+
+  // Only a preparation for an open can be waiting on a wake that re-pairs its server.
+  it('retires a link preparing for a background request at once', async () => {
+    sockets.length = 0
+    const { relay, hosts, phone, replies } = relayWithPhone()
+    vi.spyOn(hosts, 'resolve').mockImplementationOnce(() => new Promise(() => {}))
+    const listing = { id: 'list', method: 'worktree.ps' }
+    relay.forward(phone, 'env-1', listing, JSON.stringify(listing))
+    relay.retireEnvironment('env-1')
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      id: 'list',
+      error: { code: 'remote_runtime_unavailable' }
+    })
+    relay.dispose()
+  })
+
   it('refuses transient preparation failures so the phone can retry its capability probe', async () => {
     sockets.length = 0
     const prepare = vi

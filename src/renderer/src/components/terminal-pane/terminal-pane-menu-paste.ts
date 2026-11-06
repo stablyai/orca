@@ -4,6 +4,7 @@ import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
 import { getConnectionId } from '@/lib/connection-context'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { createTerminalClipboardCopiedFiles } from './terminal-clipboard-copied-files'
 import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import {
@@ -23,6 +24,7 @@ export type TerminalPaneMenuPasteContext = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   tabId: string
   worktreeId: string
+  cwd?: string
   forceBracketedMultilineTextPaste: boolean
   onPasteError: (message: string) => void
 }
@@ -106,6 +108,14 @@ export const pasteTerminalPaneMenuClipboard = async (
   const result = await pasteTerminalClipboard({
     readClipboardText: window.api.ui.readClipboardText,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+    copiedFiles: createTerminalClipboardCopiedFiles({
+      managerRef: context.managerRef,
+      paneTransportsRef: context.paneTransportsRef,
+      worktreeId,
+      tabId,
+      cwd: context.cwd,
+      pane
+    }),
     connectionId,
     runtimeEnvironmentId,
     protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({

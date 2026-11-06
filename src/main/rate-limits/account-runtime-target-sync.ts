@@ -3,10 +3,18 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './codex-rate-limit-target'
+import {
+  localAccountRuntimeTargetKey,
+  resolveLocalAccountUsageTarget
+} from '../../shared/local-account-runtime'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget'
+  | 'getState'
+  | 'refreshClaudeForTarget'
+  | 'refreshCodexForTarget'
+  | 'setAntigravityFetchTarget'
+  | 'refresh'
 >
 
 type RuntimeTarget = {
@@ -29,11 +37,17 @@ export function createAccountRuntimeTargetSettingsSync(
     const nextSettingsTargets = getSettingsTargets(settings, platform)
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
+    const usageTargetChanged =
+      localAccountRuntimeTargetKey(settingsTargets.usage) !==
+      localAccountRuntimeTargetKey(nextSettingsTargets.usage)
     settingsTargets = nextSettingsTargets
-    if (!claudePolicyChanged && !codexPolicyChanged) {
+    if (!claudePolicyChanged && !codexPolicyChanged && !usageTargetChanged) {
       return
     }
 
+    if (usageTargetChanged) {
+      rateLimits.setAntigravityFetchTarget(nextSettingsTargets.usage)
+    }
     const current = rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
@@ -44,13 +58,18 @@ export function createAccountRuntimeTargetSettingsSync(
     }
 
     await Promise.all(refreshes)
+    // Antigravity has no targeted refresh; queueing a full one beside targeted ones can drop their reruns.
+    if (usageTargetChanged) {
+      await rateLimits.refresh()
+    }
   }
 }
 
 function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform) {
   return {
     claude: getInitialClaudeRateLimitTarget(settings, platform),
-    codex: getInitialCodexRateLimitTarget(settings, platform)
+    codex: getInitialCodexRateLimitTarget(settings, platform),
+    usage: resolveLocalAccountUsageTarget(settings, platform)
   }
 }
 

@@ -1,6 +1,6 @@
 import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { isLocalCommandCaveatRow } from './claude-rewind-fork'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'

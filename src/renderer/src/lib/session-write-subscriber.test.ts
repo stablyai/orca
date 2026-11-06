@@ -3,7 +3,7 @@ import { useAppStore, type AppState } from '@/store'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from './session-write-subscriber'
+} from './workspace/persistence/session-write-subscriber'
 
 // Snapshot/restore the full singleton store so pollution cannot mask persistence-gate regressions.
 let initialState: AppState

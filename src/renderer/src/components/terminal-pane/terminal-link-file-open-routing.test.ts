@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -33,7 +33,7 @@ vi.mock('@/lib/language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))

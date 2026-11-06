@@ -6,7 +6,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { deriveRemoteRuntimeTerminalCreateHandle } from './terminal/identity/remote-runtime-terminal-create-identity'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
-import { TERMINAL_METHODS } from './rpc/methods/terminal'
+import { TERMINAL_METHODS } from './rpc/methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

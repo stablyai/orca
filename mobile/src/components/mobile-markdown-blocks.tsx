@@ -28,6 +28,7 @@ import { MobileMarkdownCallout } from './MobileMarkdownCallout'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownDetails } from './MobileMarkdownDetails'
 import { MobileMarkdownMath } from './MobileMarkdownMath'
+import { drawnBlock } from './mobile-markdown-drawn-blocks'
 import { translate } from '../i18n/mobile-i18n'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 
@@ -37,6 +38,7 @@ const MERMAID_BASE = 13
  *  exhaust native layout. */
 const MAX_NESTING = 8
 
+/** A field added here is compared in mobile-markdown-drawn-blocks' `sameContext` too. */
 export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
@@ -416,5 +418,9 @@ export function renderBlocks(
   text: ParagraphText,
   depth = 0
 ): ReactNode[] {
-  return nodes.map((node, index) => renderBlock(node, index, ctx, text, depth))
+  return nodes.map((node, index) =>
+    depth === 0
+      ? drawnBlock(node, ctx, text, () => renderBlock(node, index, ctx, text, 0))
+      : renderBlock(node, index, ctx, text, depth)
+  )
 }

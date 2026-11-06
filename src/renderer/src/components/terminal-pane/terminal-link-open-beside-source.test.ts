@@ -1,7 +1,7 @@
-import { openRoutedHttpLink } from '@/lib/http-link-destinations'
+import { openRoutedHttpLink } from '@/lib/browser/navigation/http-link-destinations'
 import * as editorRevealFlash from '@/components/tab-group/editor-reveal-flash'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -38,7 +38,7 @@ vi.mock('@/lib/language-detect', () => ({
   detectLanguage: () => 'plaintext'
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))

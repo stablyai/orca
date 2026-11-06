@@ -4,7 +4,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
 import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/terminal-input-host-platform'

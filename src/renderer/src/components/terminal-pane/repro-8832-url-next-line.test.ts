@@ -1,7 +1,7 @@
 /** HTTP hit-testing must not reuse path hard-wrap candidates that join a trailing-slash URL to a new logical line; file links retain existence checks (#8832). */
 import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
 

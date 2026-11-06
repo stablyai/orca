@@ -14,7 +14,7 @@ import type {
   CreatedHostedReview,
   HostedReviewCreatedContext
 } from './hosted-review-creation-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function useSourceControlHostedReviewCreated({
   activeRepo,
