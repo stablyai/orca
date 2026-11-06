@@ -4,7 +4,7 @@ import {
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {

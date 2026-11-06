@@ -34,12 +34,18 @@ export type AcpSessionStartOptions = NewSessionRequest & {
   authMethodId?: string
   authMethodUnavailableMessage?: string
 }
-type Request = <T>(method: string, params: unknown, schema: z.ZodType<T>) => Promise<T>
+type Request = <T>(
+  method: string,
+  params: unknown,
+  schema: z.ZodType<T>,
+  received?: (response: T) => void
+) => Promise<T>
 
 export async function setupAcpSession(
   initialized: InitializeResponse,
   options: AcpSessionStartOptions,
-  request: Request
+  request: Request,
+  received?: (started: AcpSessionStarted) => void
 ): Promise<AcpSessionStarted> {
   const setup = async (): Promise<AcpSessionStarted> => {
     const {
@@ -50,7 +56,9 @@ export async function setupAcpSession(
       ...params
     } = options
     if (sessionId === undefined) {
-      const response = await request('session/new', params, newSessionSchema)
+      const response = await request('session/new', params, newSessionSchema, (response) =>
+        received?.({ kind: 'new', sessionId: response.sessionId, response })
+      )
       return { kind: 'new', sessionId: response.sessionId, response }
     }
     const capabilities = initialized.agentCapabilities
@@ -60,14 +68,24 @@ export async function setupAcpSession(
       return {
         kind: 'load',
         sessionId,
-        response: await request('session/load', { ...params, sessionId }, loadSessionSchema)
+        response: await request(
+          'session/load',
+          { ...params, sessionId },
+          loadSessionSchema,
+          (response) => received?.({ kind: 'load', sessionId, response })
+        )
       }
     }
     if (resume) {
       return {
         kind: 'resume',
         sessionId,
-        response: await request('session/resume', { ...params, sessionId }, resumeSessionSchema)
+        response: await request(
+          'session/resume',
+          { ...params, sessionId },
+          resumeSessionSchema,
+          (response) => received?.({ kind: 'resume', sessionId, response })
+        )
       }
     }
     throw new AcpRpcError(-32601, 'ACP agent cannot load or resume this session')

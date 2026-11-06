@@ -28,7 +28,7 @@ import {
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/index'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'

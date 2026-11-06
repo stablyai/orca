@@ -1,6 +1,7 @@
 import { AntigravityChatAuthConfigError } from '../../shared/antigravity-chat-auth-config'
 import { AcpAgentError } from '../acp/acp-errors'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AntigravitySignInSentence } from './antigravity-chat-account'
 
 export const SIGN_IN_FAILED = 'Google sign-in for Antigravity failed. Start sign-in again.'

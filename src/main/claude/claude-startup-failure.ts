@@ -6,7 +6,7 @@ import {
   providerResourcePressure,
   type AgentSessionStartAnswer,
   type AgentSessionStartFailure
-} from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
+} from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 
 /** SDK runtime tags are not in its public Error declaration. */
 export function claudeStartupErrorClass(error: Error): string | undefined {

@@ -37,8 +37,12 @@ export function registerTerminalPanePasteListeners({
   shortcutPlatform: NodeJS.Platform
 }): () => void {
   const { keybindings, managerRef, paneTransportsRef, setTerminalError, worktreeId } = controller
-  const { executePanePasteText, pasteFromClipboard, resolvePaneProtectedMultilinePasteOptions } =
-    execution
+  const {
+    createPaneClipboardCopiedFiles,
+    executePanePasteText,
+    pasteFromClipboard,
+    resolvePaneProtectedMultilinePasteOptions
+  } = execution
   let suppressNextNativePaste = false
   let pasteSuppressionTimerId: number | null = null
   const shouldSuppressNativePaste = (event: KeyboardEvent): boolean => {
@@ -181,6 +185,7 @@ export function registerTerminalPanePasteListeners({
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
       runtimeEnvironmentId,
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),

@@ -35,7 +35,7 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: vi.fn(async () => null)
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

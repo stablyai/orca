@@ -1,5 +1,5 @@
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
+import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
 import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 
 /** Missing journals count as empty; read errors or damaged/newer journals cannot prove no exchange. */

@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { createRuntimeAgentProjections } from '../../src/main/runtime/construction/runtime-agent-projections'
-import { createSessionTabsStreamDelta } from '../../src/main/runtime/rpc/methods/session-tabs-sender-delta'
+import { createSessionTabsStreamDelta } from '../../src/main/runtime/rpc/methods/session-tabs/session-tabs-sender-delta'
 import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/runtime-leaf-record-projection.test-fixture'
 import type {
   RuntimeLeafRecord,

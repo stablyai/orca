@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { OrchestrationDb } from '../../orchestration/db'
+import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import '../../orchestration/db/contract-constants'
+import '../../orchestration/db/messages/mailbox-routing-page'
+import '../../orchestration/db/dispatch-row-writer'
+import '../../orchestration/db/attempt-outcome-projection'
 import {
   openTopologyStoreWithAuthority,
   emptyTerminalSessionProfile,

@@ -9,7 +9,7 @@ import type {
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/server-types'
 import type {
@@ -18,7 +18,7 @@ import type {
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
-import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
+import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
 import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
 

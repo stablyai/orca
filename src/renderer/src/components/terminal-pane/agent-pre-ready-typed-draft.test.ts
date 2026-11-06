@@ -102,7 +102,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 
 vi.mock('@/lib/agent-draft-paste-content', () => ({ sendAgentDraftPasteContent }))
 
-vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => ({
   createPasteReadinessTimeoutNotice: () => ({ onTimeout: onPasteTimeout, wasNotified: () => false })
 }))
 
@@ -127,7 +127,9 @@ vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep
+}))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()

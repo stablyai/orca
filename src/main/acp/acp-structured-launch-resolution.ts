@@ -29,7 +29,7 @@ import {
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
 import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
+import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {

@@ -1,4 +1,4 @@
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'

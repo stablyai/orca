@@ -12,11 +12,11 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'

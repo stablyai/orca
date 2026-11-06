@@ -10,7 +10,7 @@ import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { randomUUID } from 'node:crypto'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { resolveChatTabActivation } from './agent-session-tab-identity'

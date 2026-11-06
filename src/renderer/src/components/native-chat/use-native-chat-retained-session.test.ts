@@ -77,4 +77,23 @@ describe('useNativeChatRetainedSession', () => {
     expect(latest?.readPhase).toBe('loading')
     expect(latest?.messages).toEqual([])
   })
+  it.each(['loading', 'error'] as const)(
+    'releases expanded fallback rows during %s',
+    async (phase) => {
+      const rows = Array.from({ length: 800 }, (_, index) => message(`row-${index}`))
+      liveSession.mockReturnValue(session('ready', rows))
+      await render(ARGS)
+      const trimHistory = vi.fn()
+      liveSession.mockReturnValue({ ...session(phase, []), trimHistory })
+      await render(ARGS)
+      expect(latest?.messages).toHaveLength(800)
+      act(() => latest?.trimHistory?.())
+      liveSession.mockReturnValue({ ...session(phase, []), trimHistory, olderHistoryGeneration: 1 })
+      await render(ARGS)
+      expect(latest?.messages).toHaveLength(300)
+      expect(latest?.messages[0]?.id).toBe('row-500')
+      expect(latest?.messages.at(-1)?.id).toBe('row-799')
+      expect(trimHistory).toHaveBeenCalledOnce()
+    }
+  )
 })

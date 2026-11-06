@@ -2,7 +2,10 @@ import type { FileOpenFailure } from './terminal-file-open-failure'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  activateAndRevealWorkspace,
+  activateAndRevealWorktree
+} from '@/lib/workspace/activation/worktree-activation'
 import {
   resolveKnownWorktreeRootPathLink,
   terminalFileSourceHost
@@ -45,7 +48,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
   httpLinkDirectClickDestination,
   type HttpLinkDestination
-} from '@/lib/http-link-destinations'
+} from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 
 type TerminalFileOpenDeps = {

@@ -42,7 +42,7 @@ import {
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from '../../src/renderer/src/lib/session-write-subscriber'
+} from '../../src/renderer/src/lib/workspace/persistence/session-write-subscriber'
 
 type FixtureState = StoreState & Pick<AppState, 'projectHostSetups'>
 let state: FixtureState | AppState

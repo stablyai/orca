@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 
 export function usePendingNativeChatOptions(

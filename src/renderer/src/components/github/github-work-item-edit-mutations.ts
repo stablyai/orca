@@ -1,6 +1,6 @@
 import { getGitHubMutationTarget } from './github-work-item-mutation-target'
 export { getGitHubMutationTarget } from './github-work-item-mutation-target'
-import { callGitHubTargetOperation } from '@/lib/github-work-item-target-request'
+import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { gitHubSlugApiForTarget } from '@/runtime/github-slug-owner-api'

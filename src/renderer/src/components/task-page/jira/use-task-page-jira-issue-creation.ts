@@ -10,7 +10,7 @@ import { jiraGetIssue } from '@/runtime/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { defaultScopeSource } from '@/lib/default-creation-host'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationModel) {
   const {
     settings,

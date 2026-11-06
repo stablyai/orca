@@ -9,9 +9,12 @@
  */
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { OrchestrationDb } from '../../runtime/orchestration/db'
+import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import { isEquivalentPaneKey } from '../../runtime/orchestration/db/pane-key-match'
-import type { DispatchContextRow, RunRow } from '../../runtime/orchestration/types'
+import type {
+  DispatchContextRow,
+  RunRow
+} from '../../runtime/orchestration/db/orchestration-records'
 import type { LegacyRelayLivePane } from './legacy-relay-bridge-leases'
 
 const MAX_IDENTITY_LENGTH = 512

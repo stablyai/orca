@@ -34,7 +34,9 @@ const { state, markDispatchResult, launch } = vi.hoisted(() => {
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => state, subscribe: () => () => {} }
 }))
-vi.mock('@/lib/launch-agent-background-session', () => ({ launchAgentBackgroundSession: launch }))
+vi.mock('@/lib/agent-session/launch/background/launch-agent-background-session', () => ({
+  launchAgentBackgroundSession: launch
+}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 import { handleAutomationDispatchRequest } from './automation-dispatch-handler'

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
-import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
+import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/federation/orchestration-peer-capability-cache'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY

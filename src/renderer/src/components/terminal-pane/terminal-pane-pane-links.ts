@@ -1,5 +1,5 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { LinkHandlerDeps } from './terminal-link-handlers'

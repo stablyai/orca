@@ -5287,6 +5287,12 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "antigravity": {
+            "unknownAccount": "Google account",
+            "accounts": "Saved Antigravity Accounts",
+            "readAgo": "Read {{time}}",
+            "notRead": "Usage unknown: not read yet"
           }
         }
       },
@@ -8582,7 +8588,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Let coding agents control the active mobile emulator with Orca CLI commands.",
           "f2f8d97bb6": "Agent Mobile Emulator Control",
-          "143961d031": "Default Device",
           "8aec2f99a0": "Refresh emulator availability",
           "ae1612c58c": "Availability",
           "f9af91ea26": "Shows the New Mobile Emulator action and allows agents to attach to the active emulator.",
@@ -8595,9 +8600,7 @@
           "d704fb5023": "Needs setup",
           "06b06429c6": "Checking Android SDK and iOS Simulator support.",
           "6d1483d4a0": "1 emulator device detected.",
-          "0a452d4d3b": "{{value0}} emulator devices detected.",
-          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
-          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
+          "0a452d4d3b": "{{value0}} emulator devices detected."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "No interfaces found"
@@ -16311,7 +16314,6 @@
                 "06e10d7356": "Shut down emulator",
                 "e7a0d1897e": "Home",
                 "6bd8dff42a": "Rotate",
-                "3d836b879c": "Choose emulator",
                 "81b3571a07": "Connect",
                 "868c0f2938": "Working…"
               }
@@ -20648,6 +20650,13 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
+      "composerWorkspace": {
+        "copyFailed": "Failed to copy",
+        "copyIdentity": "Copy {{value0}}",
+        "folder": "Folder",
+        "mainCheckout": "Main checkout",
+        "worktree": "Worktree"
+      },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
       "fork": {
         "action": "Fork from this response",
@@ -22258,7 +22267,9 @@
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
       "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
-      "signInWith": "Signs in with {{method}} on {{host}}."
+      "signInWith": "Signs in with {{method}} on {{host}}.",
+      "lastReading": "{{reading}} · Read {{time}}",
+      "noReading": "Usage unknown: not read yet"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -23880,6 +23891,21 @@
     }
   },
   "emulator": {
+    "opening": {
+      "when": "When opening",
+      "description": "Applies to new emulator tabs on this computer. Existing workspace sessions stay connected.",
+      "lastUsed": "Last used",
+      "ask": "Ask every time",
+      "specific": "Specific device",
+      "fixed": "Default device",
+      "fixedDescription": "Choose an existing device. A missing or unavailable device prompts for another selection instead of starting a different platform.",
+      "choose": "Choose device",
+      "notFound": "Not found",
+      "missing": "The saved device is no longer on this computer. Choose another device.",
+      "unavailable": "The saved device runtime is unavailable. Choose another device or install its runtime.",
+      "askPrompt": "Choose a device to open.",
+      "firstUse": "Choose your first device. Orca will remember successful selections on this computer."
+    },
     "errors": {
       "disabled": "Mobile Emulator is disabled in Settings.",
       "notAvailable": "Mobile Emulator is not available.",
@@ -23913,6 +23939,18 @@
     },
     "settings": {
       "availabilityCheckFailed": "Could not check emulator availability."
+    },
+    "picker": {
+      "choose": "Choose emulator",
+      "search": "Search devices…",
+      "empty": "No matching devices",
+      "used": "Used devices",
+      "other": "Other devices on this computer",
+      "unavailable": "Unavailable runtimes",
+      "runtimeUnavailable": "Runtime unavailable",
+      "running": "Running",
+      "starting": "Starting",
+      "stopped": "Stopped"
     }
   },
   "ephemeralVm": {
