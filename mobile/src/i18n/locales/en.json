@@ -1400,6 +1400,10 @@
         "changedFiles_other": "{{count}} changed files",
         "partial": "Partial diff",
         "showMoreFiles": "Show {{count}} more"
+      },
+      "composer": {
+        "planMode": "Plan",
+        "exitPlanMode": "Exit plan mode"
       }
     }
   },
