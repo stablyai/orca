@@ -58,6 +58,8 @@ export type WorktreeDropCommitContext = {
     sourceGroupKey: string
     /** Host-qualified, so a folder workspace's child unnests on its own machine. */
     pickedCopies?: DraggedWorktreeCopies
+    /** Where it dropped: a folder's child dropped inside its folder's card reorders, not unnests. */
+    dropClientY?: number
   }) => void
   clearWorktreeDrag: () => void
   onMoveWorktreesToStatus: (

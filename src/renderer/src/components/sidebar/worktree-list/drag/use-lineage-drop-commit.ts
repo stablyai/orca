@@ -25,6 +25,18 @@ import { getDropFolderParentsInState } from '../../workspace-actions/parenting/u
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
 
+/** Whether a drop landed within a folder workspace's card, which holds its nested rows. */
+function isInsideFolderRow(folderIdentity: string, clientY: number | undefined): boolean {
+  if (clientY === undefined) {
+    return false
+  }
+  const row = document.querySelector<HTMLElement>(
+    `[data-worktree-lineage-drop-row][data-worktree-host-identity="${CSS.escape(folderIdentity)}"]`
+  )
+  const rect = row?.getBoundingClientRect()
+  return rect !== undefined && clientY >= rect.top && clientY <= rect.bottom
+}
+
 export function useWorktreeLineageDropCommit(args: {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
@@ -159,6 +171,7 @@ export function useWorktreeLineageDropCommit(args: {
       draggedIds: readonly string[]
       sourceGroupKey: string
       pickedCopies?: DraggedWorktreeCopies
+      dropClientY?: number
     }) => {
       const sourceGroup = worktreeDragGroups.find(
         (group) => group.key === unnestArgs.sourceGroupKey
@@ -174,7 +187,8 @@ export function useWorktreeLineageDropCommit(args: {
         worktreeMap,
         cyclicLineageIds
       })
-      // A row nested under a folder workspace unnests the same way, named by its own host.
+      // A row nested under a folder workspace unnests the same way, named by its own host, unless it
+      // was dropped back inside its folder's card: that reorders it among its siblings.
       const folderChildren = (unnestArgs.pickedCopies ?? []).filter((copy) => {
         const identity = getWorktreeHostIdentity(copy)
         const parent = parentIdentities?.get(identity)
@@ -182,7 +196,8 @@ export function useWorktreeLineageDropCommit(args: {
           !ids.includes(copy.id) &&
           sourceGroup.worktreeIds.includes(identity) &&
           parent !== undefined &&
-          parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
+          parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder' &&
+          !isInsideFolderRow(parent, unnestArgs.dropClientY)
         )
       })
       if (ids.length === 0 && folderChildren.length === 0) {
