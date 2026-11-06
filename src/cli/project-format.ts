@@ -6,6 +6,8 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../shared/project-types'
+import type { ProjectGroup } from '../shared/project-group-types'
+import type { Repo } from '../shared/repo-types'
 
 export function formatProjectList(result: { projects: Project[] }): string {
   if (result.projects.length === 0) {
@@ -77,4 +79,28 @@ function formatProjectHostSetupResultFields(
     `method: ${setup.setupMethod}`,
     `repoId: ${repoId ?? 'none'}`
   ].join('\n')
+}
+
+export type ProjectGroupListEntry = ProjectGroup & {
+  repos: { id: string; displayName: string }[]
+}
+
+export function formatProjectGroupList(result: { groups: ProjectGroupListEntry[] }): string {
+  if (result.groups.length === 0) {
+    return 'No project groups found.'
+  }
+  return result.groups
+    .map((group) => {
+      const repos = group.repos.map((repo) => repo.displayName).join(', ') || 'none'
+      return `${formatProjectGroup(group)}  order:${group.tabOrder}  projects:${repos}`
+    })
+    .join('\n')
+}
+
+export function formatProjectGroup(group: ProjectGroup): string {
+  return `${group.id}  ${group.name}  parent:${group.parentGroupId ?? 'none'}`
+}
+
+export function formatProjectGroupMembership(result: { repo: Repo }): string {
+  return `${result.repo.displayName}  repo:${result.repo.id}  group:${result.repo.projectGroupId ?? 'none'}`
 }

@@ -4,6 +4,7 @@ import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { PROJECT_GROUP_HANDLER_GROUP } from './project-group-handler-group'
 
 export type HandlerGroup = {
   name: string
@@ -74,6 +75,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
   },
+  PROJECT_GROUP_HANDLER_GROUP,
   {
     name: 'repo',
     keys: [
