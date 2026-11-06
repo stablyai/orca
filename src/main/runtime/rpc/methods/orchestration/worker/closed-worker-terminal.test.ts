@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 import { chooseWorkerFollowUpPlacement } from './worker-follow-up-choice'
 
@@ -10,7 +11,7 @@ describe('opening a terminal worker Orca closed', () => {
   const { h, panes, pair, success } = useHelperFollowUpCli()
 
   /** A finished helper whose pane recorded `conversation`, then closed by Orca. */
-  async function closedHelper(recorded = true) {
+  async function closedHelper(recorded = true, launchConfig?: SleepingAgentLaunchConfig) {
     const { helper } = await pair()
     if (recorded) {
       vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
@@ -18,6 +19,7 @@ describe('opening a terminal worker Orca closed', () => {
         agent: 'claude',
         processIncarnation: 'process:term_helper',
         providerSession: CONVERSATION,
+        ...(launchConfig ? { launchConfig } : {}),
         observedAt: 1
       })
     }
@@ -79,6 +81,17 @@ describe('opening a terminal worker Orca closed', () => {
         providerSession: CONVERSATION,
         captureHostId: 'local'
       })
+    )
+  })
+
+  // #37693, adapted from Pr1p's #37757: its pane's record closes with it, so the worker row keeps the recipe.
+  it('resumes with the launch recipe the closed worker ran with', async () => {
+    const recipe = { agentArgs: '--dangerously-skip-permissions', agentEnv: { ORCA_TEST: '1' } }
+    const { resource, resume } = await closedHelper(true, recipe)
+    await open(resource.terminal_handle)
+    expect(resume).toHaveBeenCalledWith(
+      resource.worktree_id,
+      expect.objectContaining({ launchConfig: recipe })
     )
   })
 

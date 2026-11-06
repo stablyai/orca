@@ -1,4 +1,7 @@
-import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from './agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 import type { OrchestrationFleetWorker } from './orchestration-fleet-projection'
@@ -29,6 +32,10 @@ export type ExactWorkerProviderSession = {
   wslDistro?: string
   agent: AgentType
   providerSession: AgentProviderSessionMetadata
+  /** The recipe Orca launched this worker's agent with; a reopen replays it. */
+  launchConfig?: SleepingAgentLaunchConfig
+  /** Orca's launch still owns the agent, though a daemon reattach may have cost main its recipe. */
+  orcaLaunched?: true
   observedAt: number
 }
 
