@@ -1,5 +1,4 @@
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
+import type { ManagedPane, PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

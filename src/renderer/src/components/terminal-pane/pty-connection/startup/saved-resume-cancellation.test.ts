@@ -13,8 +13,7 @@ import { bindSessionRestoredBannerAdmission } from '../notifications/session-res
 import { bindDeferredColdRestoreAndSnapshot } from '../deferred-cold-restore-and-snapshot'
 import { installSleepingRecordAccess } from './sleeping-record-access'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { makeTab } from '@/store/slices/store-session-test-harness'
-import { createStoreSessionMockApi } from '@/store/slices/store-session-test-harness'
+import { makeTab, createStoreSessionMockApi } from '@/store/slices/store-session-test-harness'
 import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
