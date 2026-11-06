@@ -108,6 +108,19 @@ export class RpcDispatcher {
     reply: (response: string) => void,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
+    return this.dispatchStreamingObjects(
+      rawRequest,
+      (response) => reply(JSON.stringify(response)),
+      options
+    )
+  }
+
+  // Transport callbacks must clone or encode synchronously before runtime-owned values change.
+  async dispatchStreamingObjects(
+    rawRequest: RpcRequest,
+    reply: (response: RpcResponse) => void,
+    options?: RpcDispatchStreamingOptions
+  ): Promise<void> {
     const meta = this.meta()
     const pendingAdmission = this.admit(
       rawRequest,
@@ -118,7 +131,7 @@ export class RpcDispatcher {
     const admission =
       pendingAdmission instanceof Promise ? await pendingAdmission : pendingAdmission
     if ('rejected' in admission) {
-      reply(JSON.stringify(admission.rejected))
+      reply(admission.rejected)
       return
     }
     const { method, request, params, caller } = admission
@@ -130,7 +143,7 @@ export class RpcDispatcher {
       try {
         await featureWait
       } catch (error) {
-        reply(JSON.stringify(mapDispatcherError(request, meta, error)))
+        reply(mapDispatcherError(request, meta, error))
         return
       }
     }
@@ -138,9 +151,9 @@ export class RpcDispatcher {
     if (!isStreamingMethod(method)) {
       try {
         const result = await this.invokeUnary({ method, request, params, caller }, options)
-        reply(JSON.stringify(successResponse(request.id, meta, result)))
+        reply(successResponse(request.id, meta, result))
       } catch (error) {
-        reply(JSON.stringify(mapDispatcherError(request, meta, error)))
+        reply(mapDispatcherError(request, meta, error))
       }
       return
     }
@@ -165,7 +178,7 @@ export class RpcDispatcher {
         request.params
       )
     } catch (error) {
-      reply(JSON.stringify(mapDispatcherError(request, meta, error)))
+      reply(mapDispatcherError(request, meta, error))
     }
   }
 

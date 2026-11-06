@@ -9,11 +9,13 @@ import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredHost as requireHost,
   requireStructuredAgentAudience,
+  requireStructuredCreateSupportAdmission,
   structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
 import type { AgentSessionAttachParams } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import type {
   AttachParams,
+  CreateSupportParams,
   CreateParams
 } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
 import {
@@ -70,6 +72,22 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
+  if ('worktree' in params && params.forkFrom) {
+    await ensureHostInstalled(ctx, params.agent)
+    return requireHost(ctx, params.agent).serializeCreateIntent(
+      callerFor(ctx).callerKey,
+      params.envelope,
+      () => resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+    )
+  }
+  return resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+}
+
+async function resolveAndCommitStructuredAgentSessionCreate(
+  params: z.infer<typeof CreateParams>,
+  ctx: RpcContext,
+  capture?: (surface: StructuredSessionSurface) => void
+) {
   // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {
@@ -92,11 +110,13 @@ export async function handleStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+        ...(params.forkFrom ? { forkFrom: params.forkFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(
+          params.forkFrom ||
           params.firstMessage ||
           ctx.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
         )
@@ -129,4 +149,28 @@ export async function handleStructuredAgentSessionCreate(
     }),
     ctx
   )
+}
+
+export async function handleStructuredAgentSessionCreateSupport(
+  params: z.infer<typeof CreateSupportParams>,
+  ctx: RpcContext
+) {
+  requireStructuredCreateSupportAdmission(ctx, params.agent)
+  const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
+    params.worktree,
+    params.agent
+  )
+  if (support.supported && params.resumeFrom) {
+    // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
+    await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+      params.agent,
+      params.resumeFrom.providerSessionId,
+      params.resumeFrom.closingPaneKeys
+    )
+  }
+  // Optional: older clients ignore it, and a client seeds its picker with what create will use.
+  const seedOptions = support.supported
+    ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
+    : undefined
+  return seedOptions ? { ...support, seedOptions } : support
 }

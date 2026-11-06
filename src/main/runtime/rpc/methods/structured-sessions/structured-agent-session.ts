@@ -21,12 +21,12 @@ import {
   requireInstalledStructuredHost as requireInstalledHost,
   requireStructuredCapability,
   requireStructuredCleanupHost,
-  requireStructuredCreateSupportAdmission,
   requireStructuredSessionHost as requireSessionHost,
   structuredCallerFor as callerFor
 } from './creation/structured-agent-session-gate'
 import {
   handleStructuredAgentSessionCreate,
+  handleStructuredAgentSessionCreateSupport,
   attachClientSuppliedLocation
 } from './creation/structured-agent-session-create-handler'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './conversation/structured-agent-session-hold'
@@ -66,6 +66,8 @@ import '../../../../../shared/rpc-contract/structured-agent-session-continue-par
 import '../../../../../shared/rpc-contract/structured-agent-session-rename-params'
 import '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import { sendStructuredAgentSessionForClient } from './conversation/structured-agent-session-send-compatibility'
+import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
+import { runConversationCommandForClient } from './conversation/structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -91,38 +93,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.conversationCommand',
     permission: 'workspace',
     params: ConversationCommandParams,
-    handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
-      await ensureHostInstalled(ctx)
-      const host = requireSessionHost(ctx, params.envelope.sessionId)
-      await host.revealSession(params.envelope.sessionId)
-      return host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
-    }
+    handler: runConversationCommandForClient
   }),
   defineMethod({
     name: 'agentSession.createSupport',
     permission: 'workspace',
     params: CreateSupportParams,
-    handler: async (params, ctx) => {
-      requireStructuredCreateSupportAdmission(ctx, params.agent)
-      const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
-        params.worktree,
-        params.agent
-      )
-      if (support.supported && params.resumeFrom) {
-        // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
-        await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
-          params.agent,
-          params.resumeFrom.providerSessionId,
-          params.resumeFrom.closingPaneKeys
-        )
-      }
-      // Optional: older clients ignore it, and a client seeds its picker with what create will use.
-      const seedOptions = support.supported
-        ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
-        : undefined
-      return seedOptions ? { ...support, seedOptions } : support
-    }
+    handler: handleStructuredAgentSessionCreateSupport
   }),
   defineMethod({
     name: 'agentSession.create',
@@ -270,7 +247,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       })
       if (stream.isClosed()) {
         dispose()
+        return
       }
+      recordMobileViewOpened(ctx, {
+        surface: 'chat',
+        viewKey: `agentSession:${params.sessionId}`,
+        agent: () => host.sessionAgent(params.sessionId)
+      })
     }
   }),
   defineMethod({

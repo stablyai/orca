@@ -12,7 +12,7 @@ import {
   type AgentSessionPublishedWork
 } from '../../observations/agent-session-published-work'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
-import type { Subscriber } from './structured-agent-session-subscribers'
+import type { Subscriber } from './agent-session-subscribe-input'
 import { isStructuredAgentSessionStopNote } from '../../operations/structured-agent-session-command-turn'
 
 /** Correct notes after stale in-flight pages; restate current work so rows retain modern-host semantics. */

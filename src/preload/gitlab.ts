@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { GitLabMRInvolvement } from '../shared/gitlab-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
 
 type GitLabRepoSelectorArgs = {
@@ -30,6 +31,7 @@ export const glApi = {
       page?: number
       perPage?: number
       query?: string
+      involvement?: GitLabMRInvolvement
     }
   ) => ipcRenderer.invoke('gitlab:listMRs', args),
 

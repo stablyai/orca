@@ -354,6 +354,26 @@ describe('buildConnectConfig', () => {
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/work_key.pub')
   })
 
+  it('applies a manual target IdentitiesOnly setting when ssh -G reports it off', () => {
+    mockReadFileSync.mockImplementation((path: unknown) => {
+      if (String(path) === '/home/user/.ssh/work_key.pub') {
+        return 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILI4wa2zRZoB26D015dsafYmu3jDCI7rh26bFXZrUiAp test-key'
+      }
+      throw new Error('unexpected read')
+    })
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'manual',
+        identitiesOnly: true,
+        identityFile: '/home/user/.ssh/work_key'
+      }),
+      makeResolved({ identitiesOnly: false })
+    )
+
+    expect(config.agent).toMatchObject({ kind: 'identity-filtered-agent' })
+    expect(config.privateKey).toBeUndefined()
+  })
+
   it('does not offer broad agent auth when IdentitiesOnly keys cannot be parsed', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
     const config = buildConnectConfig(

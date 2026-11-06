@@ -279,7 +279,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     null
 
   /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
-  protected getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
+  getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
   }

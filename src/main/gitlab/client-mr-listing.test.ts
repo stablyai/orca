@@ -66,6 +66,110 @@ describe('gitlab client — MR operations', () => {
       }))
     })
 
+    it('filters by the signed-in reviewer on the project host with the list call options', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { host: 'gitlab.example.com:8443', path: 'g/p' },
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{"id":42,"username":"me"}' })
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: '[{"iid":8,"title":"Review me","state":"opened"}]',
+        headers: { 'x-total': '1', 'x-total-pages': '1' }
+      })
+
+      const result = await listMergeRequests(
+        '/repo',
+        'opened',
+        1,
+        20,
+        undefined,
+        undefined,
+        null,
+        { wslDistro: 'Ubuntu' },
+        { involvement: 'reviewing' }
+      )
+
+      expect(result.items.map((item) => item.number)).toEqual([8])
+      const options = { cwd: '/repo', wslDistro: 'Ubuntu' }
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.example.com:8443', 'user'],
+        options
+      )
+      expect(glabApiWithHeadersMock).toHaveBeenCalledWith(
+        [
+          '--hostname',
+          'gitlab.example.com:8443',
+          'projects/g%2Fp/merge_requests?page=1&per_page=20&order_by=updated_at&sort=desc&with_merge_status_recheck=false&state=opened&reviewer_id=42'
+        ],
+        options
+      )
+    })
+
+    it.each([
+      [
+        'a signed-out lookup',
+        () => Promise.reject(new Error('401 Unauthorized')),
+        'permission_denied'
+      ],
+      [
+        'a network failure on a host whose port contains 401',
+        () =>
+          Promise.reject(
+            new Error('Get "https://gitlab.corp:4010/api/v4/user": dial tcp: connection refused')
+          ),
+        'unknown'
+      ],
+      [
+        'a lookup without a user id',
+        () => Promise.resolve({ stdout: '{"message":"ok"}' }),
+        'unknown'
+      ]
+    ])(
+      'reports an error instead of listing everyone after %s',
+      async (_label, lookup, expectedType) => {
+        glabExecFileAsyncMock.mockImplementationOnce(lookup)
+
+        const result = await listMergeRequests(
+          '/repo',
+          'opened',
+          1,
+          20,
+          undefined,
+          undefined,
+          null,
+          {},
+          { involvement: 'authored' }
+        )
+
+        expect(result.items).toEqual([])
+        expect(result.error?.type).toBe(expectedType)
+        expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+        expect(releaseMock).toHaveBeenCalled()
+      }
+    )
+
+    it.each([null, 'ssh-1'])(
+      'shows a visible error for a filtered list whose project is unresolved (connection %s)',
+      async (connectionId) => {
+        resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+
+        const result = await listMergeRequests(
+          '/repo',
+          'opened',
+          1,
+          20,
+          undefined,
+          undefined,
+          connectionId,
+          {},
+          { involvement: 'authored' }
+        )
+
+        expect(result.error?.type).toBe('unknown')
+        expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+      }
+    )
+
     it('does not run the cwd fallback for unresolved SSH repos', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,

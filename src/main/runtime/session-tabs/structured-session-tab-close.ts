@@ -241,25 +241,24 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   }
 
   /** Saves a chat's tab in a windowless host's layout, where it is listed from once read there. */
-  protected saveWindowlessAgentSessionTab(
+  protected async saveWindowlessAgentSessionTab(
     worktreeId: string,
     chat: Pick<ChatPublication, 'sessionId' | 'agent' | 'placement' | 'tabId'> & {
       eligible?: () => boolean
     }
-  ): Promise<void> {
+  ): Promise<boolean> {
     const tabId = chat.tabId ?? chatTabId(chat.sessionId)
-    return this.changeWindowlessChatTabs(
-      worktreeId,
-      [{ open: { ...chat, tabId } }],
-      () =>
+    let attempted = false
+    await this.changeWindowlessChatTabs(worktreeId, [{ open: { ...chat, tabId } }], () => {
+      const session = this.getWorkspaceSessionForWorktree(worktreeId)
+      const eligible =
+        !!session &&
         chat.eligible?.() !== false &&
-        windowlessStructuredSessionTabSaveEligible(
-          chat.sessionId,
-          tabId,
-          this.getWorkspaceSessionForWorktree(worktreeId),
-          worktreeId
-        )
-    )
+        windowlessStructuredSessionTabSaveEligible(chat.sessionId, tabId, session, worktreeId)
+      attempted ||= eligible
+      return eligible
+    })
+    return attempted
   }
 
   captureStructuredAgentSessionPresentation(sessionId: string) {

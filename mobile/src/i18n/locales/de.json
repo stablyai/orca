@@ -2041,6 +2041,8 @@
       "managedAccountEnvOverride": "Dieser Claude-Start legt eigene Variablen für die Anthropic-Anmeldung fest. Diese entfernen, um ein verwaltetes Claude-Konto zu verwenden.",
       "managedAccountUnsupported": "Auch wenn in WSL ein Claude-Konto hinzugefügt wurde, benötigen Claude-Chats ein Claude-Konto unter Windows.",
       "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
+      "modelUnavailableUpdate": "{{agent}} konnte {{detail}} nicht verwenden. {{agent}} auf {{minimumVersion}} oder neuer aktualisieren, damit es nach einem Neustart erhalten bleibt, oder ein anderes Modell auswählen und erneut senden.",
+      "modelNotSelected": "{{agent}} hat kein Modell ausgewählt. Modellauswahl und {{agent}}-Anmeldung prüfen und erneut senden.",
       "noTurnToStop": "{{agent}} hatte keinen laufenden Durchgang, der gestoppt werden konnte.",
       "notDelivered": "Diese Nachricht wurde nicht zugestellt.",
       "notDeliveredSendAgain": "Diese Nachricht wurde nicht zugestellt. Zum Fortfahren erneut senden.",

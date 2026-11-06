@@ -57,6 +57,9 @@ async function launch(
   return AGENT_LAUNCH.handler(parsed.data, rpcContext(runtime, context))
 }
 
+// Desktops pass their own launch label through; a phone's launch is attributed to the phone.
+const DESKTOP_CLIENT: Partial<RpcContext> = { ...CAPABLE_CLIENT, clientKind: 'runtime' }
+
 const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
@@ -354,7 +357,8 @@ describe('the worktree factory', () => {
         cwd: '/repo/packages/api',
         launchSource: 'source_control_recovery'
       },
-      runtime
+      runtime,
+      DESKTOP_CLIENT
     )
 
     expect(createArgs(runtime)).toMatchObject({
@@ -375,12 +379,17 @@ describe('the worktree factory', () => {
       }
     }
     const named = runtimeStub({ settings: {} })
-    await launch({ ...createWithSource, launchSource: 'onboarding' }, named)
+    await launch({ ...createWithSource, launchSource: 'onboarding' }, named, DESKTOP_CLIENT)
     expect(createArgs(named)).toMatchObject({ startupLaunchSource: 'onboarding' })
 
     const unnamed = runtimeStub({ settings: {} })
-    await launch(createWithSource, unnamed)
+    await launch(createWithSource, unnamed, DESKTOP_CLIENT)
     expect(createArgs(unnamed)).not.toHaveProperty('startupLaunchSource')
+
+    // The phone's own label names the desktop surface it mirrors, so the launch counts as the phone's.
+    const phone = runtimeStub({ settings: {} })
+    await launch({ ...createWithSource, launchSource: 'task_page' }, phone)
+    expect(createArgs(phone)).toMatchObject({ startupLaunchSource: 'mobile' })
   })
 
   it('preserves an explicit no-arguments value for an agent-first worktree create', async () => {
@@ -602,6 +611,7 @@ describe('the terminal factory', () => {
       wslUserAct: true,
       startupAgent: 'claude',
       terminalImageViewerSupported: false,
+      launchSource: 'mobile',
       viewMode: 'terminal',
       surfaceOwner: false,
       onPtySpawnDispatched: expect.any(Function)
@@ -628,6 +638,7 @@ describe('the terminal factory', () => {
       wslUserAct: true,
       startupAgent: 'gemini',
       terminalImageViewerSupported: false,
+      launchSource: 'mobile',
       viewMode: 'terminal',
       surfaceOwner: false,
       onPtySpawnDispatched: expect.any(Function)
@@ -692,7 +703,11 @@ describe('launch inputs that cross the wire', () => {
 
   it("hands the caller's launch_source to the runtime, which attributes the launch", async () => {
     const runtime = runtimeStub({ settings: {} })
-    await launch({ ...EXISTING_LAUNCH, launchSource: 'source_control_recovery' }, runtime)
+    await launch(
+      { ...EXISTING_LAUNCH, launchSource: 'source_control_recovery' },
+      runtime,
+      DESKTOP_CLIENT
+    )
 
     // Derive agent_kind/request_kind on the host; only launchSource crosses this boundary.
     expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'source_control_recovery' })
@@ -703,7 +718,8 @@ describe('launch inputs that cross the wire', () => {
     const runtime = runtimeStub({ settings: {} })
     const result = await launch(
       { ...EXISTING_LAUNCH, launchSource: 'a_surface_added_later' },
-      runtime
+      runtime,
+      DESKTOP_CLIENT
     )
 
     // Unknown attribution must not block launch; runtime records it as unknown.
@@ -713,7 +729,7 @@ describe('launch inputs that cross the wire', () => {
 
   it('names no launch source when the caller named none', async () => {
     const runtime = runtimeStub({ settings: {} })
-    await launch(EXISTING_LAUNCH, runtime)
+    await launch(EXISTING_LAUNCH, runtime, DESKTOP_CLIENT)
 
     expect(terminalOptions(runtime)).not.toHaveProperty('launchSource')
   })

@@ -9,6 +9,7 @@ export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   capabilities: {
     // A thread with legacy, unpaginated history narrows this to unsupported once it runs.
     rewind: true,
+    fork: 'checkpoint',
     compact: true,
     // A goal change at rest starts the agent first.
     threadGoal: true,
