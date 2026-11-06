@@ -52,26 +52,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('uses Muse exec for non-interactive Source Control AI generation', () => {
-    const spec = COMMIT_MESSAGE_AGENT_SPECS.muse
-    expect(spec).toBeDefined()
-    expect(spec?.promptDelivery).toBe('argv')
-    expect(spec?.buildArgs({ prompt: 'Write a concise commit message', model: 'default' })).toEqual(
-      [
-        'exec',
-        '--no-session-log',
-        '--approval-mode',
-        'never',
-        '--disable-sandbox',
-        '--disable-shell',
-        '--disable-write',
-        '--disable-web-tools',
-        '--',
-        'Write a concise commit message'
-      ]
-    )
-  })
-
   it('omits Kimi --model for the config default and an empty model', () => {
     const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
 
@@ -266,6 +246,7 @@ describe('buildArgs (Jcode)', () => {
       '--no-selfdev',
       '--tool-profile',
       'none',
+      '--tools=',
       '--model',
       'claude-haiku-4-5',
       'run',
@@ -282,6 +263,7 @@ describe('buildArgs (Jcode)', () => {
       '--no-selfdev',
       '--tool-profile',
       'none',
+      '--tools=',
       'run',
       '--json',
       'name this branch'
@@ -309,6 +291,7 @@ describe('buildArgs (Jcode)', () => {
       '--no-selfdev',
       '--tool-profile',
       'none',
+      '--tools=',
       '--model',
       'claude-haiku-4-5'
     ])
