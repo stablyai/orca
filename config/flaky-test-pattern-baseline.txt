@@ -74,7 +74,6 @@
 1 test-no-polling-loop:src/main/managed-server/install/orcad-remote-launch-file-modes.test.ts
 1 test-no-polling-loop:src/main/managed-server/install/orcad-remote-launch.test.ts
 1 test-no-polling-loop:src/main/managed-server/install/remote-node-runtime-store-lock-host-release.test.ts
-2 test-no-polling-loop:src/main/native-chat/transcript-watch-liveness.test.ts
 1 test-no-polling-loop:src/main/native-chat/transcript-watch.test.ts
 1 test-no-polling-loop:src/main/provider-process/provider-group-orphan-guard.integration.test.ts
 1 test-no-polling-loop:src/main/provider-process/provider-process-supervisor.integration.test.ts
@@ -257,12 +256,7 @@
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch-noise.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch.test.ts
 1 test-no-real-time-wait:src/main/ipc/pty/host-env/spawn-cwd-hung-folder.test.ts
-1 test-no-real-time-wait:src/main/ipc/pty/pty-launch-parity.test.ts
-3 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-preference.test.ts
 4 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
-2 test-no-real-time-wait:src/main/ipc/workspace-cleanup/workspace-cleanup-snapshot-ipc.test.ts
-2 test-no-real-time-wait:src/main/ipc/worktrees-background-removal.test.ts
-1 test-no-real-time-wait:src/main/ipc/worktrees-detected-scan-cache.test.ts
 1 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
 14 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts
 6 test-no-real-time-wait:src/main/ipc/worktrees/git/worktree-git-common-polling.test.ts
@@ -293,7 +287,6 @@
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-target-reconcile.test.ts
 1 test-no-real-time-wait:src/main/native-chat/transcript-opencode2-sqlite.test.ts
 1 test-no-real-time-wait:src/main/native-chat/transcript-watch-error.test.ts
-2 test-no-real-time-wait:src/main/native-chat/transcript-watch-liveness.test.ts
 11 test-no-real-time-wait:src/main/native-chat/transcript-watch.test.ts
 1 test-no-real-time-wait:src/main/opencode/hook-plugin-legacy-tui-ownership.test.ts
 6 test-no-real-time-wait:src/main/opencode/hook-plugin-module-contract.test.ts
@@ -678,7 +671,6 @@
 1 test-no-wall-clock:src/main/ipc/ai-vault/ai-vault.test.ts
 1 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
-1 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts
 1 test-no-wall-clock:src/main/ipc/terminal-render-desync-evidence.test.ts
 5 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
 3 test-no-wall-clock:src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts
