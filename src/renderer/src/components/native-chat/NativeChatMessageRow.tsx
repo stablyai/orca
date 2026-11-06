@@ -129,7 +129,7 @@ export const MessageRow = memo(function MessageRow(
   }
 
   const notice = isSystem ? nativeChatNoticeBlock(blocks) : undefined
-  if (notice) {
+  if (notice && run === undefined) {
     return (
       <div ref={rowRef}>
         <NativeChatNoticeRow block={notice} messageId={message.id} agentName={agentName} />
@@ -137,7 +137,7 @@ export const MessageRow = memo(function MessageRow(
     )
   }
 
-  if (providerFrame) {
+  if (providerFrame && run === undefined) {
     return (
       <div ref={rowRef}>
         <ProviderFrameRow block={providerFrame} />
