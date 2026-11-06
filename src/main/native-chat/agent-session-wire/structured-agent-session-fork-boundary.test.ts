@@ -204,12 +204,9 @@ it.each([false, true])(
         }
       }
     })
-    expect(
-      copied.some(
-        (row) =>
-          (row.forkedFrom as { messageUuid?: string } | undefined)?.messageUuid === 'wake-answer'
-      )
-    ).toBe(false)
+    // The SDK remaps uuids but records each copied row's source uuid, so the
+    // independent wake answer must not appear anywhere in the copy.
+    expect(copied.some((row) => JSON.stringify(row).includes('"wake-answer"'))).toBe(false)
     const path = join(fixture.root, 'fork.jsonl')
     await writeFile(path, `${copied.map((row) => JSON.stringify(row)).join('\n')}\n`)
     const prepared = await prepareLegacyTranscriptImport({
