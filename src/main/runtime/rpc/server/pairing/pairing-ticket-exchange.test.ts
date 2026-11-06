@@ -238,4 +238,37 @@ describe('pairing ticket exchange', () => {
     registry.retireForkedTicket(saved.deviceId)
     expect(registry.validateToken('old-token')?.deviceId).toBe('old')
   })
+
+  it('a browser key does not retire a link another client already claimed or that served for a while', () => {
+    const registry = new DeviceRegistry(dir)
+    const claimed = registry.getOrCreatePendingDevice('Runtime', 'runtime')
+    registry.updateLastSeen(claimed.deviceId)
+    registry.exchangePairingTicket(claimed.deviceId, claimed.token, REPLACEMENT)
+    const browser = registry.forkDeviceKey(
+      claimed.deviceId,
+      Buffer.alloc(32, 5).toString('base64'),
+      'Chrome'
+    )
+    registry.retireForkedTicket(browser.deviceId)
+    // The desktop that proposed first can still sign in with its own token.
+    expect(registry.validateToken(REPLACEMENT)?.deviceId).toBe(claimed.deviceId)
+    expect(registry.lookupDeviceKey(browser.deviceId).kind).toBe('found')
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(2_000_000)
+      const shared = registry.addDevice('Shared link', 'runtime')
+      registry.updateLastSeen(shared.deviceId)
+      vi.setSystemTime(2_000_000 + 10 * 60_000 + 1)
+      const late = registry.forkDeviceKey(
+        shared.deviceId,
+        Buffer.alloc(32, 6).toString('base64'),
+        'Firefox'
+      )
+      registry.retireForkedTicket(late.deviceId)
+      expect(registry.validateToken(shared.token)?.deviceId).toBe(shared.deviceId)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

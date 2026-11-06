@@ -111,7 +111,15 @@ export function planForkedTicketRetirement(
     return null
   }
   const ticket = devices.find((device) => device.deviceId === fork.forkedFrom)
-  if (ticket?.ticket !== true || ticket.token === undefined || ticket.parentDeviceId) {
+  if (
+    ticket?.ticket !== true ||
+    ticket.token === undefined ||
+    ticket.parentDeviceId ||
+    // Another client already claimed the code with its own token; that claim wins.
+    ticket.exchangeToken !== undefined ||
+    // Registered long after the first sign-in: the link may already be shared by older clients.
+    !isWithinTicketWindow(ticket, fork.pairedAt)
+  ) {
     return null
   }
   const { ticket: _ticket, exchangeToken: _exchange, ...rest } = ticket
