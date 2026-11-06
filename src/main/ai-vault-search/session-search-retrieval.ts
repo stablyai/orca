@@ -187,12 +187,16 @@ export class SessionSearchRetrieval {
   /** Bound SQL parameters independently of the configurable candidate limit. */
   private loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []
+    const { conditions: predicates, values } = scope.filter.candidate
     for (let start = 0; start < ids.length; start += SESSION_ID_BATCH) {
       const batch = ids.slice(start, start + SESSION_ID_BATCH)
-      const conditions = [`id IN (${batch.map(() => '?').join(',')})`, ...scope.filter.conditions]
+      const conditions = [`id IN (${batch.map(() => '?').join(',')})`, ...predicates]
       const sessionRows = this.db
         .prepare(`SELECT ${SESSION_COLUMN_LIST} FROM sessions WHERE ${conditions.join(' AND ')}`)
-        .all(...batch, ...scope.filter.values)
+        .all(...batch, ...values)
+        .filter((row) =>
+          scope.filter.matchesScope(typeof row.cwd_key === 'string' ? row.cwd_key : null)
+        )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The selected columns match the private sessions schema defining SessionRow.
       rows.push(...(sessionRows as SessionRow[]))
     }

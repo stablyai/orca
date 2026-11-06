@@ -78,3 +78,19 @@ it('keeps an inconclusive own spelling and reports even an empty budget-limited 
     await index.close()
   }
 })
+
+it('keeps capitalized hits when the spelling probe and OR share a crowded window', async () => {
+  const index = await openSessionSearchHarness('ss-posting-capitalized')
+  try {
+    index.db.exec('BEGIN')
+    addSyntheticSession(index.db, { id: 1, text: 'Timeout' })
+    addSyntheticSession(index.db, { id: 2, text: 'Timeout', rows: 64 })
+    addSyntheticSession(index.db, { id: 3, text: 'Timeout', role: 'tool', rows: 5000 })
+    index.db.exec('COMMIT')
+    const result = index.engine.search({ query: 'Timeout' })
+    expect(result.hits.map((hit) => hit.sessionId).sort()).toEqual(['1', '2'])
+    expect(result.truncated.candidates).toBe(false)
+  } finally {
+    await index.close()
+  }
+})
