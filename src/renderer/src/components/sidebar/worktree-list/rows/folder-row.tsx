@@ -36,6 +36,7 @@ export type FolderWorkspaceRowContext = {
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
   prCache: AppState['prCache'] | null
   hostedReviewCache: AppState['hostedReviewCache'] | null
   getCachedFolderWorkspacePathStatus: (request: {
@@ -79,6 +80,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
     folderWorkspaceId: row.folderWorkspace.id,
     workspaceLineageByChildKey: ctx.workspaceLineageByChildKey,
+    crossStoreChildren: ctx.crossStoreChildrenByFolderId.get(row.folderWorkspace.id) ?? [],
     worktreeLineageById: ctx.worktreeLineageById,
     worktreeMap: ctx.worktreeMap,
     repoMap: ctx.repoMap,
