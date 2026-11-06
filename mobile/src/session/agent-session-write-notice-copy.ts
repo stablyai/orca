@@ -18,6 +18,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneStop: () => translate('session.writeNotice.notDoneStop', "The agent wasn't stopped."),
   notDoneStopTask: () =>
     translate('session.writeNotice.notDoneStopTask', "The background task wasn't stopped."),
+  notDoneBackgroundTask: () =>
+    translate(
+      'session.writeNotice.notDoneBackgroundTask',
+      "Couldn't move the task to the background."
+    ),
   notDoneStopTasks: () =>
     translate('session.writeNotice.notDoneStopTasks', "The background tasks weren't stopped."),
   notDoneAnswer: () => translate('session.writeNotice.notDoneAnswer', 'Your answer was not sent.'),

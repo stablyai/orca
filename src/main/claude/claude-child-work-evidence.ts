@@ -6,6 +6,7 @@ import type {
 import { taskText, taskUsageTotalTokens } from './claude-background-task-frames'
 import type {
   ClaudeSession,
+  ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './structured/claude-structured-session-state'
 import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
@@ -143,4 +144,21 @@ export function drainClaudeChildWork(
     ),
     ...(message ? claudeChildOperation(message, session.translator?.childActivity, observedAt) : [])
   ]
+}
+
+/** Publish child records after the frame's journal rows and parent record. */
+export function claudeChildWorkPublisher(
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'onChildWorkEvidence' | 'now'>
+) {
+  return (
+    sessionId: string,
+    session: ClaudeSession | null | undefined = sessions.get(sessionId),
+    message: Record<string, unknown> | null = null
+  ): void => {
+    const evidence = drainClaudeChildWork(session, message, deps.now?.() ?? Date.now())
+    if (evidence.length > 0) {
+      deps.onChildWorkEvidence?.(sessionId, evidence, session?.events)
+    }
+  }
 }

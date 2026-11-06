@@ -94,6 +94,7 @@ export function runClaudeControl<T>(
 }
 
 export type ClaudeControlSurface = {
+  backgroundTasks?: (toolUseId: string, options?: ClaudeControlOptions) => Promise<boolean>
   interrupt: (
     options?: ClaudeControlOptions & { cancelQueued?: boolean }
   ) => Promise<SDKControlInterruptResponse | undefined>
@@ -124,6 +125,16 @@ type InterruptingQuery = {
 
 export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
   return {
+    ...(typeof query.backgroundTasks === 'function'
+      ? {
+          backgroundTasks: (toolUseId: string, options?: ClaudeControlOptions) =>
+            runClaudeControl(
+              'background_tasks',
+              () => query.backgroundTasks(toolUseId),
+              options?.timeoutMs
+            )
+        }
+      : {}),
     interrupt: (options) =>
       runClaudeControl(
         'interrupt',

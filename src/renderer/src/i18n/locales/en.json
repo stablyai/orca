@@ -19838,7 +19838,8 @@
         "compactAfterRetry": "Retry your earlier message, then run /compact.",
         "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
-        "pendingWork": "Wait for pending work and messages to finish before using this command."
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "notDoneBackgroundTask": "Couldn't move the task to the background."
       },
       "taskList": {
         "title": "Tasks",
@@ -20187,6 +20188,8 @@
         "stateIdleCount_other": "{{value0}} stopped",
         "stateUnverifiableCount_one": "{{value0}} with status unavailable",
         "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+        "background": "Background",
+        "backgrounding": "Backgrounding…",
         "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",

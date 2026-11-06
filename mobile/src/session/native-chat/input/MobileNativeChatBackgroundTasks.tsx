@@ -45,6 +45,7 @@ import {
 } from '../../use-mobile-background-task-stops'
 import { mobileAgentChildRowName, mobileAgentChildRowText } from '../../mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
+import { MobileNativeChatForegroundTaskAction } from './MobileNativeChatForegroundTaskAction'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 
@@ -134,6 +135,7 @@ function TaskRow({
             <Text style={styles.actionLabel}>{say('stop')}</Text>
           </Pressable>
         ) : null}
+        <MobileNativeChatForegroundTaskAction taskId={row.providerId} />
       </View>
       {row.owned.length > 0 ? (
         // Work a child owns (its shell, a nested agent) reads beneath it, not in its kind's group.

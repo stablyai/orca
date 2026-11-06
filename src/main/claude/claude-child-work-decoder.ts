@@ -158,6 +158,11 @@ export class ClaudeChildWorkDecoder {
     return pending.map((edge) => edge(observedAt))
   }
 
+  taskForToolUse(toolUseId: string): { taskId: string; backgrounded: boolean } | undefined {
+    const match = [...this.live].find(([, task]) => task.toolUseId === toolUseId)
+    return match ? { taskId: match[0], backgrounded: match[1].backgrounded } : undefined
+  }
+
   private started(id: string, message: Record<string, unknown>): void {
     const toolUseId = taskAliasId(message.tool_use_id)
     const awaitsAgents = this.agentWaits.take(toolUseId)

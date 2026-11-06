@@ -19879,7 +19879,8 @@
         "compactAfterRetry": "Повторно отправьте предыдущее сообщение, затем выполните /compact.",
         "clearAfterSending": "Предыдущее сообщение ещё отправляется. После его отправки выполните /clear.",
         "compactAfterSending": "Предыдущее сообщение ещё отправляется. После его отправки выполните /compact.",
-        "pendingWork": "Дождитесь завершения текущей работы и отправки сообщений перед выполнением этой команды."
+        "pendingWork": "Дождитесь завершения текущей работы и отправки сообщений перед выполнением этой команды.",
+        "notDoneBackgroundTask": "Не удалось перевести задачу в фон."
       },
       "taskList": {
         "title": "Задачи",
@@ -20298,7 +20299,9 @@
         "stateIdleCount_few": "Остановлено: {{value0}}",
         "stateIdleCount_many": "Остановлено: {{value0}}",
         "stateUnverifiableCount_few": "Статус недоступен: {{value0}}",
-        "stateUnverifiableCount_many": "Статус недоступен: {{value0}}"
+        "stateUnverifiableCount_many": "Статус недоступен: {{value0}}",
+        "background": "В фон",
+        "backgrounding": "В фон…"
       },
       "jumpToLatest": "К последним сообщениям",
       "find": {

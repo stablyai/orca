@@ -1,4 +1,5 @@
 import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './structured-agent-session-account-usage'
+import { STRUCTURED_AGENT_SESSION_BACKGROUND_ACTION_METHOD } from './structured-agent-session-background-action'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientRequestsCommands } from './structured-agent-session-policy'
@@ -76,6 +77,7 @@ import {
 } from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
+  STRUCTURED_AGENT_SESSION_BACKGROUND_ACTION_METHOD,
   defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',
