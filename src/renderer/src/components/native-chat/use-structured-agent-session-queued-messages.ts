@@ -63,9 +63,9 @@ export type StructuredAgentSessionQueuedMessagesController = {
   editor: QueuedMessageInlineEditor | undefined
   edit: (messageId: string) => Promise<void>
   /** Cmd/Ctrl+Shift+Enter: steer the head card. False when it can't steer. */
-  steerHead: () => boolean
+  steerHead: (() => boolean) | undefined
   /** Empty Cmd/Ctrl+Enter: steer the last card without skipping held or sending cards. */
-  steerLast: () => boolean
+  steerLast: (() => boolean) | undefined
   /** The agent is working, so a card's send steers into its turn. */
   isWorking: boolean
 }
@@ -217,6 +217,14 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [editingMessageId, enabled, steer]
   )
 
+  const canSteer = (card: QueuedMessageCard | undefined): boolean =>
+    enabled &&
+    card !== undefined &&
+    card.hold !== 'sending' &&
+    queuedMessageCardSteers(card) &&
+    editingMessageId !== card.messageId &&
+    !inFlight.has(card.messageId)
+
   const resume = useCallback(
     (): Promise<boolean> =>
       run([QUEUE_KEY], 'resume', async () => {
@@ -296,8 +304,10 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     edit: editing.begin,
     editCapable: editing.capable,
     editor: editing.editor,
-    steerHead: () => steerCard(reordered.cards[0]),
-    steerLast: () => steerCard(reordered.cards.at(-1)),
+    steerHead: canSteer(reordered.cards[0]) ? () => steerCard(reordered.cards[0]) : undefined,
+    steerLast: canSteer(reordered.cards.at(-1))
+      ? () => steerCard(reordered.cards.at(-1))
+      : undefined,
     isWorking
   }
 }

@@ -41,7 +41,7 @@ type ComposerProps = {
   cards?: AgentSessionQueuedMessage[]
   draft?: string
   hasAttachments?: boolean
-  alternateSteers?: boolean
+  chordSteersQueued?: boolean
   enabled?: boolean
   composing?: boolean
   sending?: StructuredAgentSessionPendingSend[]
@@ -54,7 +54,7 @@ function Composer({
   cards = messages,
   draft = '',
   hasAttachments = false,
-  alternateSteers = true,
+  chordSteersQueued = true,
   enabled = true,
   composing = false,
   sending
@@ -81,7 +81,7 @@ function Composer({
     activeSuggestion: 0,
     draft,
     hasAttachments,
-    alternateSteers,
+    chordSteersQueued,
     mentionFiles: { files: [], loading: false, failed: false },
     completeMention: () => {},
     isComposing: () => composing,
@@ -162,7 +162,7 @@ it('keeps the explicit Shift chord on the head and routes remote sends through t
 it.each([
   { draft: 'New text' },
   { hasAttachments: true },
-  { alternateSteers: false },
+  { chordSteersQueued: false },
   { composing: true },
   { enabled: false },
   { cards: [] },
