@@ -178,7 +178,12 @@ it.each([10, 100])(
       registerPRWatch: (watch) => {
         const registration = { prNumber: watch.prNumber, unregister: vi.fn() }
         registrations.push(registration)
-        return registration
+        class Handle {
+          unregister(): void {
+            registration.unregister()
+          }
+        }
+        return new Handle()
       },
       subscribePRObservations: (listener) => {
         observationListener = listener

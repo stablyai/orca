@@ -53,7 +53,7 @@ export function installPrFollowUps(
     }
   })
   let disposed = false
-  const registrations = new Map<string, { fingerprint: string; unregister(): void }>()
+  const registrations = new Map<string, { fingerprint: string; handle: { unregister(): void } }>()
   let workspacesByPr = new Map<string, FollowUpWorkspace[]>()
   const indexWatches = (): void => {
     workspacesByPr = new Map()
@@ -66,7 +66,7 @@ export function installPrFollowUps(
     }
   }
   const releaseWatch = (instanceId: string): void => {
-    registrations.get(instanceId)?.unregister()
+    registrations.get(instanceId)?.handle.unregister()
     registrations.delete(instanceId)
   }
   const syncWatches = (keys: readonly string[] = [...workspacesByPr.keys()]): void => {
@@ -96,7 +96,7 @@ export function installPrFollowUps(
         }
         registrations.set(workspace.instanceId, {
           fingerprint: key,
-          ...source.registerPRWatch({
+          handle: source.registerPRWatch({
             repoId,
             connectionId,
             branch,
@@ -270,7 +270,7 @@ export function installPrFollowUps(
         }
       }
       for (const registration of registrations.values()) {
-        registration.unregister()
+        registration.handle.unregister()
       }
       registrations.clear()
       chatActivity.dispose()
