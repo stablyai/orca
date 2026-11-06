@@ -176,6 +176,11 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
       expect(
         container.querySelector('[data-worktree-card-surface="true"]')?.textContent
       ).not.toContain('Orca ·')
+      const card = container.querySelector('[data-worktree-card-surface="true"]')
+      expect(card?.getAttribute('aria-label')).toBe('Orca: Audit current HEAD on m4air environment')
+      expect(
+        card?.querySelector('button[aria-label="Orca: Audit current HEAD on m4air environment"]')
+      ).not.toBeNull()
     }
   })
 

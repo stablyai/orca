@@ -99,7 +99,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const showProjectPrefix =
     Boolean(projectPrefix) &&
     projectPrefix?.toLowerCase() !== projectGroupLabel?.trim().toLowerCase()
-  const accessibleTitle = showProjectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle
+  const accessibleTitle = projectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle
 
   return (
     <ActivityThreadHoverCard
