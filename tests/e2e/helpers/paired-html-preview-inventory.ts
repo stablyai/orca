@@ -120,25 +120,34 @@ export function requireSingleDocWorkspace(
 // Read through the embedder because Playwright cannot directly enter a real webview’s separate partition.
 export async function readDocPreviewRenderedText(
   page: Page,
-  selector: string
+  selector: string,
+  entryFileName?: string
 ): Promise<string | null> {
-  return page.evaluate(async (targetSelector) => {
-    const guest = document.querySelector('webview[src^="orca-preview://"]') as {
-      executeJavaScript?: (code: string) => Promise<unknown>
-    } | null
-    if (!guest?.executeJavaScript) {
-      return null
-    }
-    try {
-      const text = await guest.executeJavaScript(
-        `document.querySelector(${JSON.stringify(targetSelector)})?.textContent ?? null`
-      )
-      return typeof text === 'string' ? text : null
-    } catch {
-      // Why: the guest rejects until it is attached and dom-ready; the caller polls.
-      return null
-    }
-  }, selector)
+  return page.evaluate(
+    async ({ targetSelector, entryFileName }) => {
+      const guestSelector = entryFileName
+        ? `webview[src^="orca-preview://"][src$=${JSON.stringify(`/${encodeURIComponent(entryFileName)}`)}]`
+        : 'webview[src^="orca-preview://"]'
+      const guest = document.querySelector(guestSelector)
+      if (
+        !guest ||
+        !('executeJavaScript' in guest) ||
+        typeof guest.executeJavaScript !== 'function'
+      ) {
+        return null
+      }
+      try {
+        const text: unknown = await guest.executeJavaScript(
+          `document.querySelector(${JSON.stringify(targetSelector)})?.textContent ?? null`
+        )
+        return typeof text === 'string' ? text : null
+      } catch {
+        // Why: the guest rejects until it is attached and dom-ready; the caller polls.
+        return null
+      }
+    },
+    { targetSelector: selector, entryFileName }
+  )
 }
 
 // Combine guest rect with webview offset for a real Chromium user-gesture click.

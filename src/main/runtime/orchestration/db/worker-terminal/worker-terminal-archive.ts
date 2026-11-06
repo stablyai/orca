@@ -234,7 +234,7 @@ export function retainWorkerTerminalResource(
   })
 }
 
-/** The execution host's half of a forwarded worker-retain. */
+/** The execution host's half of a forwarded worker-keep-open. */
 export function retainRemoteAttachmentTerminalResource(
   this: OrchestrationDb,
   dispatchId: string

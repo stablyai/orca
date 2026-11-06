@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { BrowserExtensionToolbarState } from '../../../../../shared/browser-extension-toolbar-types'
+import type { BrowserExtensionToolbarState } from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'
 
 /**
  * The extension buttons main reports for one browser page, or null when the page's session runs

@@ -12,7 +12,7 @@ import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
 import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
@@ -105,7 +105,8 @@ export function NativeChatSubagentEntries({
           </>
         )
         return (
-          <li key={agent.id}>
+          // Named so a reveal from the agents strip can bring this entry into view.
+          <li key={agent.id} data-native-chat-subagent-entry={agent.id}>
             {sectionOpen === undefined ? (
               <div className="flex items-center gap-1.5 py-0.5">{entry}</div>
             ) : (

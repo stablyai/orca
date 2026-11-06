@@ -24,6 +24,7 @@ export type PullRequestLookupData = {
   state: string
   url: string
   statusCheckRollup: unknown[]
+  checksUnavailable?: boolean
   updatedAt: string
   isDraft?: boolean
   mergeable: string
@@ -80,12 +81,13 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+  'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+  'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
+  userRefresh?: boolean
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
@@ -130,6 +132,7 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
     state: pr.merged_at ? 'MERGED' : pr.state,
     url: pr.html_url ?? pr.url ?? '',
     statusCheckRollup: [],
+    checksUnavailable: true,
     updatedAt: pr.updated_at ?? '',
     isDraft: pr.draft,
     mergeable: mapRestPRMergeable(pr),

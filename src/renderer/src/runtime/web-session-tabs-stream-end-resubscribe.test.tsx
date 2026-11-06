@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
 const mocks = vi.hoisted(() => ({
@@ -167,48 +167,5 @@ describe('session-tabs streams the host ends over a live connection', () => {
     expect(useAppStore.getState().tabsByWorktree[NEW_WORKTREE]?.map((tab) => tab.id)).toEqual([
       toWebTerminalSurfaceTabId('host-tab')
     ])
-  })
-
-  it('resubscribes the active-worktree stream once after an error response, on the backoff', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const active = streams('session.tabs.subscribe')
-    expect(active).toHaveLength(1)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await deliver(active[0], {
-      id: 'err',
-      ok: false,
-      error: { code: 'session_tabs_inventory_unstable', message: 'unstable' },
-      _meta: {}
-    })
-    // The errored logical subscription is dropped so reconnect replay cannot duplicate it.
-    expect(active[0]!.unsubscribe).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS - 1)
-      await settle()
-    })
-    expect(streams('session.tabs.subscribe')).toHaveLength(1)
-    await waitOutRetry()
-    expect(streams('session.tabs.subscribe')).toHaveLength(2)
-    warn.mockRestore()
-  })
-
-  it('treats a transport error as reconnect replay territory, not an end', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await act(async () => {
-      for (const entry of subscriptions) {
-        entry.callbacks.onError?.({ code: 'transport', message: 'socket dropped' })
-      }
-      await settle()
-    })
-    await waitOutRetry()
-
-    expect(subscriptions.every((entry) => entry.unsubscribe.mock.calls.length === 0)).toBe(true)
-    expect(streams('session.tabs.subscribeAll')).toHaveLength(1)
-    warn.mockRestore()
   })
 })

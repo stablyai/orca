@@ -25,34 +25,6 @@ function dispatchRuntime(): OrcaRuntimeService {
   return runtime
 }
 
-async function completionTicks(): Promise<number> {
-  const target = dispatchRuntime()
-  let release!: (value: { submits: number }) => void
-  let reached = false
-  Object.defineProperty(target, 'writeTerminalAgentPrompt', {
-    value: () => {
-      reached = true
-      return new Promise((resolve) => {
-        release = resolve
-      })
-    }
-  })
-  let done = false
-  void target.sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' }).then(() => {
-    done = true
-  })
-  while (!reached) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-  release({ submits: 1 })
-  let ticks = 0
-  while (!done && ticks < 50) {
-    await Promise.resolve()
-    ticks += 1
-  }
-  return ticks
-}
-
 describe('agent prompt writer: default path', () => {
   it('never enters the opt-in submit layer', async () => {
     const target = dispatchRuntime()
@@ -68,9 +40,40 @@ describe('agent prompt writer: default path', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it("settles its receipt on main's microtask schedule", async () => {
-    // Pin completion timing: adding an async layer increases this count.
-    expect(await completionTicks()).toBe(5)
+  it('settles its receipt after the write without waiting for a timer', async () => {
+    vi.useFakeTimers()
+    try {
+      const target = dispatchRuntime()
+      let started!: () => void
+      const writing = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      let release!: (value: { submits: number }) => void
+      const written = new Promise<{ submits: number }>((resolve) => {
+        release = resolve
+      })
+      Object.defineProperty(target, 'writeTerminalAgentPrompt', {
+        value: () => {
+          started()
+          return written
+        }
+      })
+      let settled = false
+      const receipt = target
+        .sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' })
+        .then((result) => {
+          settled = true
+          return result
+        })
+
+      await writing
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      release({ submits: 1 })
+      await expect(receipt).resolves.toMatchObject({ handle: HANDLE, accepted: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {

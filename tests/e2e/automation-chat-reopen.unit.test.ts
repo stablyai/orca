@@ -31,7 +31,10 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   },
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: bridge.workspace }))
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: bridge.workspace,
+  activateAndRevealFolderWorkspace: bridge.workspace
+}))
 vi.mock('sonner', () => ({ toast: { error: bridge.fallback, message: bridge.fallback } }))
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined

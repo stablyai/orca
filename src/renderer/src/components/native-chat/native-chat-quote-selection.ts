@@ -1,4 +1,4 @@
-import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
+import { markdownMathSelectionText } from '../../../../shared/markdown-math-selection'
 
 /** Only agent-reply prose marked with this attribute may be quoted. */
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const
@@ -17,7 +17,7 @@ export function readNativeChatTranscriptSelection(root: HTMLElement): string {
   ) {
     return ''
   }
-  return chatMathSelectionText(selection, transcript) ?? selection.toString()
+  return markdownMathSelectionText(selection, transcript) ?? selection.toString()
 }
 
 export function readNativeChatQuotableSelection(
@@ -33,7 +33,7 @@ export function readNativeChatQuotableSelection(
   }
   const edges = selectedTextEdges(range)
   const source = edges?.first.parentElement?.closest(QUOTE_SOURCE_SELECTOR)
-  const text = (chatMathSelectionText(selection, root) ?? selection.toString()).trim()
+  const text = (markdownMathSelectionText(selection, root) ?? selection.toString()).trim()
   if (!edges || !source || !source.contains(edges.last) || text === '') {
     return null
   }
@@ -41,7 +41,7 @@ export function readNativeChatQuotableSelection(
 }
 
 // Triple-click ranges can end outside the reply; check selected text edges instead of range endpoints.
-function selectedTextEdges(range: Range): { first: Text; last: Text } | null {
+export function selectedTextEdges(range: Range): { first: Text; last: Text } | null {
   const container = range.commonAncestorContainer
   if (container instanceof Text) {
     return { first: container, last: container }

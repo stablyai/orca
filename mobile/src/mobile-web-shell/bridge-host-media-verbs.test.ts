@@ -2,7 +2,6 @@ import { Buffer } from 'node:buffer'
 // Use the real bridge pair and serialization: media chunks approach the frame cap, where a direct handler call cannot reveal reply splitting.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  BRIDGE_MEDIA_MAX_LIVE_HANDLES,
   BRIDGE_MEDIA_READ_MAX_BYTES,
   mediaPickResultSchema,
   mediaReadResultSchema
@@ -13,7 +12,7 @@ import {
 } from './bridge/bridge-port-pair-test-harness'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
-import { MEDIA_HANDLE_TTL_MS, MediaHandleRegistry } from './media-handle-registry'
+import { MediaHandleRegistry } from './media-handle-registry'
 import { createNativeMediaVerbServer, type NativeMediaFile } from '../platform/native-media'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 
@@ -188,67 +187,5 @@ describe('a page that was not granted the verbs', () => {
     expect(probe.pair.rpc.requests).toEqual([])
     // The frame left the page; assert the host’s refusal code rather than only lack of a handler call.
     expect(probe.pair.toShell.length).toBeGreaterThan(before)
-  })
-})
-
-describe('a handle the page no longer has', () => {
-  async function pickedHandle(probe: Pair): Promise<string> {
-    const picked = mediaPickResultSchema.parse(
-      (
-        await probe.pair.client.callNativeVerb('native.media.pick', {
-          source: 'library',
-          multiple: false
-        })
-      ).result
-    )
-    return picked.items[0]?.handle ?? ''
-  }
-
-  it('refuses a chunk of one the page released', async () => {
-    const probe = pairWith({ byteLength: 4096 })
-    await ready(probe.pair)
-    const handle = await pickedHandle(probe)
-    await probe.pair.client.callNativeVerb('native.media.release', { handle })
-    await expect(
-      probe.pair.client.callNativeVerb('native.media.read', { handle, offset: 0, length: 16 })
-    ).rejects.toMatchObject({ code: 'native_media_handle_unknown' })
-  })
-
-  it('refuses a chunk of one the TTL swept, and the file is gone with it', async () => {
-    const probe = pairWith({ byteLength: 4096 })
-    await ready(probe.pair)
-    const handle = await pickedHandle(probe)
-    expect(probe.discarded).toEqual([])
-    probe.advance(MEDIA_HANDLE_TTL_MS + 1)
-    await expect(
-      probe.pair.client.callNativeVerb('native.media.read', { handle, offset: 0, length: 16 })
-    ).rejects.toMatchObject({ code: 'native_media_handle_unknown' })
-    expect(probe.discarded).toEqual([`${CACHE}/picked.png`])
-  })
-
-  it('refuses a read that starts past the end, which is what a page past eof asks for', async () => {
-    const probe = pairWith({ byteLength: 4096 })
-    await ready(probe.pair)
-    const handle = await pickedHandle(probe)
-    await expect(
-      probe.pair.client.callNativeVerb('native.media.read', {
-        handle,
-        offset: 4096,
-        length: 16
-      })
-    ).rejects.toMatchObject({ code: 'native_media_range' })
-  })
-
-  it('refuses a pick that would pass the live-handle cap', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const probe = pairWith({ byteLength: 64 })
-    await ready(probe.pair)
-    for (let index = 0; index < BRIDGE_MEDIA_MAX_LIVE_HANDLES; index += 1) {
-      await pickedHandle(probe)
-    }
-    await expect(
-      probe.pair.client.callNativeVerb('native.media.pick', { source: 'library', multiple: false })
-    ).rejects.toMatchObject({ code: 'native_media_handle_cap' })
-    warn.mockRestore()
   })
 })

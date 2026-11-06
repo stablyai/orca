@@ -24,7 +24,7 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from '../../../shared/palette-match/palette-ranking'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {
   SearchableWorkspaceTab,

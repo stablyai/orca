@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import type { InteractivePromptCard } from '../../../../../src/shared/native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../../src/shared/native-chat/input/native-chat-interactive-prompt'
 import {
   nativeChatCardDismissKey,
   nativeChatPromptDismissalMatches,
   nativeChatPromptOccurrenceKey
-} from '../../../../../src/shared/native-chat-prompt-dismiss-key'
+} from '../../../../../src/shared/native-chat/input/native-chat-prompt-dismiss-key'
 import {
   mobileNativeChatPromptDismissals as dismissals,
   type MobileNativeChatPromptDismissal

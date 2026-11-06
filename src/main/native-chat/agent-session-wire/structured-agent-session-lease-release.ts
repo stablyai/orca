@@ -5,8 +5,8 @@ import {
   isSurfaceReleasableAgentSessionRecord,
   releaseStoredAgentSessionOwnerAfterSurfaceClose
 } from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 
 export type StructuredAgentSessionLeaseStore = Pick<

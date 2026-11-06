@@ -28,8 +28,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import { closeContentTabThroughLayoutOwner } from './content-tab-close-through-layout-owner'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import type { AppState } from '../../types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
 
@@ -313,7 +313,7 @@ export function landOnEmptiedWorktree(
 /** Main opens the chat where it opens any chat this host lists: a host-kept chat comes back. */
 function reopenChatTab(worktreeId: string, sessionId: string, agent: TuiAgent): () => void {
   return () =>
-    void import('@/lib/structured-agent-session-launch-surface').then(
+    void import('@/lib/agent-session/launch/structured-agent-session-launch-surface').then(
       ({ openStructuredAgentSessionProvisionalTab }) =>
         openStructuredAgentSessionProvisionalTab({
           worktreeId,

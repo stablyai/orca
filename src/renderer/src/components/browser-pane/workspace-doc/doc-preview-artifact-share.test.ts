@@ -1,91 +1,73 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
+import { beforeEach, expect, it, vi } from 'vitest'
 import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
-import {
-  buildDocPreviewShareControl,
-  readDocPreviewArtifactRequest
-} from './doc-preview-artifact-share'
+import type { TerminalArtifactGrantTarget } from '@/runtime/runtime-terminal-artifact-grant'
+import { readDocPreviewArtifactRequest } from './doc-preview-artifact-share'
 
-const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn(), readFile: vi.fn() }))
-
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-
-const FILE_PATH = '/srv/repo/reports/latency.html'
-
-const pairedLocation: DocPreviewGrantLocation = {
-  owner: {
-    kind: 'runtime',
-    environmentId: 'server-1',
-    worktreeSelector: 'id:repo::/srv/repo',
-    worktreeRoot: '/srv/repo'
-  },
-  requestBase: '/srv/repo',
-  root: '/srv/repo/reports',
-  entryRelativePath: 'reports/latency.html'
-}
-
-const sshLocation: DocPreviewGrantLocation = {
-  owner: { kind: 'ssh', connectionId: 'ssh-1' },
-  requestBase: '/srv/repo',
-  root: '/srv/repo/reports',
-  entryRelativePath: 'reports/latency.html'
-}
+const mocks = vi.hoisted(() => ({ acquire: vi.fn(), call: vi.fn() }))
+vi.mock('@/runtime/runtime-terminal-artifact-grant', () => ({
+  acquireTerminalArtifactGrant: mocks.acquire,
+  pinTerminalArtifactGrantTarget: (target: TerminalArtifactGrantTarget) => ({
+    ...target,
+    expectedEnvironmentPairingRevision: 12
+  })
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.call }))
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  vi.stubGlobal('window', { api: { fs: { readFile: mocks.readFile } } })
+  vi.resetAllMocks()
+  mocks.call.mockResolvedValue({ content: '<h1>report</h1>', isBinary: false })
 })
 
-describe('document preview sharing', () => {
-  it('reads the page from the server its grant was minted for', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ content: '<h1>Latency</h1>', isBinary: false })
+function location(): DocPreviewGrantLocation {
+  return {
+    owner: {
+      kind: 'runtime',
+      environmentId: 'vps',
+      worktreeSelector: 'id:source',
+      worktreeRoot: '/repo',
+      fileAccess: 'terminal-artifact'
+    },
+    root: '/tmp/reports',
+    requestBase: '/tmp/reports',
+    entryRelativePath: 'report.html'
+  }
+}
 
+it.each([
+  ['/tmp/reports/report.html', '/tmp/reports/report.html'],
+  ['C:/reports/report.html', 'C:\\Reports\\report.html']
+])(
+  'prepares %s from the canonical host grant and pins its pairing',
+  async (requested, canonical) => {
+    mocks.acquire.mockResolvedValue({
+      grantId: 'host-grant',
+      absolutePath: canonical,
+      readOnly: false
+    })
     await expect(
-      readDocPreviewArtifactRequest(pairedLocation, FILE_PATH, 'key-1')
-    ).resolves.toEqual({
-      sourceKey: 'key-1',
-      content: '<h1>Latency</h1>',
+      readDocPreviewArtifactRequest(location(), requested, 'source-key')
+    ).resolves.toMatchObject({
+      content: '<h1>report</h1>',
       contentType: 'text/html',
-      fileName: 'latency.html'
+      sourceKey: 'source-key'
     })
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'server-1' },
-      'files.readPreview',
-      { worktree: 'id:repo::/srv/repo', relativePath: 'reports/latency.html' },
-      expect.anything()
+    expect(mocks.call).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'vps' },
+      'files.readTerminalArtifactPreview',
+      { worktree: 'id:source', grantId: 'host-grant', absolutePath: canonical },
+      { timeoutMs: 15_000, expectedEnvironmentPairingRevision: 12 }
     )
-    expect(mocks.readFile).not.toHaveBeenCalled()
+  }
+)
+
+it('refuses a redirected source rather than sharing a different host file', async () => {
+  mocks.acquire.mockResolvedValue({
+    grantId: 'host-grant',
+    absolutePath: '/private/secret.html',
+    readOnly: false
   })
-
-  it('keeps an SSH grant on its connection, so the read fails closed', async () => {
-    mocks.readFile.mockRejectedValue(new Error('SSH host is not served here'))
-
-    await expect(readDocPreviewArtifactRequest(sshLocation, FILE_PATH, 'key-1')).rejects.toEqual(
-      new ArtifactPublishPreparationError('unreadable')
-    )
-    expect(mocks.readFile).toHaveBeenCalledExactlyOnceWith({
-      filePath: FILE_PATH,
-      connectionId: 'ssh-1'
-    })
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('refuses binary content and unreachable servers', async () => {
-    mocks.callRuntimeRpc.mockResolvedValueOnce({ content: '', isBinary: true })
-    await expect(readDocPreviewArtifactRequest(pairedLocation, FILE_PATH, 'key-1')).rejects.toEqual(
-      new ArtifactPublishPreparationError('binary')
-    )
-
-    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('offline'))
-    await expect(readDocPreviewArtifactRequest(pairedLocation, FILE_PATH, 'key-1')).rejects.toEqual(
-      new ArtifactPublishPreparationError('unreadable')
-    )
-  })
-
-  it('offers Share only for HTML previews with a minted grant', () => {
-    expect(buildDocPreviewShareControl(FILE_PATH, pairedLocation)).toBeTypeOf('function')
-    expect(buildDocPreviewShareControl(FILE_PATH, null)).toBeUndefined()
-    expect(buildDocPreviewShareControl('/srv/repo/report.pdf', pairedLocation)).toBeUndefined()
-  })
+  await expect(
+    readDocPreviewArtifactRequest(location(), '/tmp/reports/report.html', 'source-key')
+  ).rejects.toThrow()
+  expect(mocks.call).not.toHaveBeenCalled()
 })

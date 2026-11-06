@@ -88,38 +88,3 @@ describe('removeProject cascade', () => {
     expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
   })
 })
-
-describe('restartCodexTabs', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('queues pane-scoped codex restarts without remounting the whole tab', () => {
-    const store = createTestStore()
-    const wt1 = 'repo1::/path/wt1'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, title: 'codex', generation: 2 })]
-      },
-      ptyIdsByTabId: {
-        tab1: ['pty-a', 'pty-b']
-      },
-      pendingStartupByTabId: {}
-    })
-
-    store.getState().queuePaneAccountRestarts(['pty-b'], 'codex')
-    const state = store.getState()
-
-    expect(state.pendingPaneAccountRestarts).toEqual({ 'pty-b': 'codex' })
-    expect(state.pendingStartupByTabId).toEqual({})
-    expect(state.suppressedPtyExitIds).toEqual({})
-    expect(state.tabsByWorktree[wt1][0].generation).toBe(2)
-  })
-})

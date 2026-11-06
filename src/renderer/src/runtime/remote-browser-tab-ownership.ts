@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { BrowserPage } from '../../../shared/browser-workspace-types'
 
 type RemoteBrowserTabOwnershipState = Pick<
   AppState,
@@ -9,6 +10,18 @@ export type BrowserWorkspaceRemoteOwnership =
   | { kind: 'none' }
   | { kind: 'exact'; environmentId: string }
   | { kind: 'ambiguous'; environmentIds: string[] }
+
+/** The runtime environment a page runs on, or null for this desktop's own page. */
+export function getBrowserPageRemoteOwnerEnvironmentId(
+  state: Pick<RemoteBrowserTabOwnershipState, 'remoteBrowserPageHandlesByPageId'>,
+  page: Pick<BrowserPage, 'id' | 'browserRuntimeEnvironmentId'>
+): string | null {
+  return (
+    state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId?.trim() ||
+    page.browserRuntimeEnvironmentId?.trim() ||
+    null
+  )
+}
 
 /**
  * Every runtime environment holding at least one of this browser workspace's pages. A workspace
@@ -21,9 +34,7 @@ export function getBrowserWorkspaceRemoteOwnerEnvironmentIds(
 ): string[] {
   const environmentIds = new Set<string>()
   for (const page of state.browserPagesByWorkspace[workspaceId] ?? []) {
-    const environmentId =
-      state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId?.trim() ||
-      page.browserRuntimeEnvironmentId?.trim()
+    const environmentId = getBrowserPageRemoteOwnerEnvironmentId(state, page)
     if (environmentId) {
       environmentIds.add(environmentId)
     }

@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RuntimeMobileSessionSyncKey = {
   // Reference changes signal layout/title updates without stringifying thousands of tabs.
@@ -115,6 +115,7 @@ export type MountedTerminalSurfaceCapture = {
 }
 /** Complete per-worktree inputs constrain builders at compile time rather than relying on review. */
 export type MobileSessionWorktreeInputs = {
+  hostTabIds: ReadonlyMap<string, string>
   worktreeId: string
   worktreeInstanceId: string | undefined
   terminalTabs: AppState['tabsByWorktree'][string]

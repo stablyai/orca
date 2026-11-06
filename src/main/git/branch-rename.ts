@@ -1,8 +1,11 @@
-import { isNoUpstreamError, stripCredentialsFromMessage } from '../../shared/git-remote-error'
+import {
+  isNoUpstreamError,
+  stripCredentialsFromMessage
+} from '../../shared/git/remotes/git-remote-error'
 import {
   resolveEffectiveGitUpstream,
   type GitCommandRunner
-} from '../../shared/git-effective-upstream'
+} from '../../shared/git/remotes/git-effective-upstream'
 
 export type GitExec = GitCommandRunner
 

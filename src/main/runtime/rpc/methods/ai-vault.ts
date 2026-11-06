@@ -3,7 +3,8 @@ import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
-} from '../../../../shared/ai-vault-search-contract'
+} from '../../../../shared/ai-vault/search/ai-vault-search-contract'
+import { sessionSearchTransportForClient } from '../../../../shared/ai-vault/search/ai-vault-search-transport'
 import {
   searchSessionService,
   sessionSearchServiceStatus
@@ -12,10 +13,10 @@ import { defineMethod } from '../core'
 import { conditionalAiVaultListResult } from '../../../ai-vault/session-list-fingerprint'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import { copyStructuredChatConversation } from '../../../ai-vault/structured-chat-conversation-copy'
-import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
+import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
+import { describeAiVaultScanError } from '../../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import {
   assertLegacyAiVaultResumeAllowed,
   projectStructuredAiVaultSessions,
@@ -24,7 +25,7 @@ import {
 import {
   ensureStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume
-} from '../../structured-agent-session-host-refusal'
+} from '../../agent-session/structured-agent-session-host-refusal'
 import {
   clientOpensStructuredChatFromHistory,
   supportsStructuredAgentSessions
@@ -49,11 +50,13 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultSearchRequestSchema,
     handler: (params, context) => {
-      const response = searchSessionService(params, context.clientKind ? 'relay' : 'runtime')
+      const transport = sessionSearchTransportForClient(context.clientKind)
+      const response = searchSessionService(params, transport)
       // A client that reads no structured sessions keeps the transcript hit, as before.
       return supportsStructuredAgentSessions(context)
         ? searchWithStructuredOwners(response, {
             ensureHost: () => context.runtime.ensureStructuredAgentSessionHost(),
+            transport,
             opensChat: (agent) => clientOpensStructuredChatFromHistory(context, agent)
           })
         : response
@@ -65,7 +68,7 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
-      sessionSearchServiceStatus(params, clientKind ? 'relay' : 'runtime')
+      sessionSearchServiceStatus(params, sessionSearchTransportForClient(clientKind))
   }),
   defineMethod({
     name: 'aiVault.setSearchEnabled',
@@ -84,7 +87,7 @@ export const AI_VAULT_METHODS = [
       console.warn(
         `[ai-vault-search] device ${pairedDeviceId} set indexing enabled=${params.enabled}`
       )
-      return sessionSearchServiceStatus({}, clientKind ? 'relay' : 'runtime')
+      return sessionSearchServiceStatus({}, sessionSearchTransportForClient(clientKind))
     }
   }),
   defineMethod({

@@ -1,8 +1,8 @@
 import type {
   SelectionOperation,
   SelectionOutcome
-} from '../../../shared/structured-agent-session-selection-operations'
-import type { AgentSessionWriteFailure } from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import type { AgentSessionWriteFailure } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   structuredLaunchCompatibleOptions,

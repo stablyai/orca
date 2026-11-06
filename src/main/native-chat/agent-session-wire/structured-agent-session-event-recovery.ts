@@ -1,4 +1,4 @@
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
@@ -18,7 +18,10 @@ import {
   type StructuredAgentSessionGenerationEnded
 } from './structured-agent-session-child-exit'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import { openStructuredAgentSessionProviderChild } from './structured-agent-session-provider-open'
+import {
+  openStructuredAgentSessionProviderChild,
+  type StructuredAgentSessionFailStartingChild
+} from './structured-agent-session-provider-open'
 
 export class StructuredAgentSessionEventRecovery {
   private readonly sinkFailures = new Set<string>()
@@ -35,16 +38,7 @@ export class StructuredAgentSessionEventRecovery {
       now: () => number
       runtimeState: StructuredAgentSessionHostRuntimeState
       wakeDelivery: (sessionId: string) => Promise<void>
-      stopStartingChild: (
-        sessionId: string,
-        child: StructuredAgentSessionProviderChildIdentity
-      ) => void
-      failStartingChild: (
-        sessionId: string,
-        child: StructuredAgentSessionProviderChildIdentity,
-        error: unknown,
-        openMs: number
-      ) => Promise<void>
+      failStartingChild: StructuredAgentSessionFailStartingChild
       trackOpen: <T>(open: Promise<T>) => Promise<T>
     }
   ) {}
@@ -144,6 +138,31 @@ export class StructuredAgentSessionEventRecovery {
 
   /** Settle/report exits without automatic restart; next-send delivery owns queued work and startup. */
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
+    if (event.type === 'retiring') {
+      const session = this.context.sessions.get(event.sessionId)
+      const child = session?.child
+      if (
+        session &&
+        child &&
+        child.fence === event.fence &&
+        child.generation === event.acquisitionGeneration &&
+        !child.close
+      ) {
+        const stopped = session.journal.stopMarks.personStopDecides(
+          session.journal.runningTurn()?.turnId ?? null,
+          event.observedAt
+        )
+        // Input joins the existing proof barrier; this records neither Stop nor root death.
+        child.close = {
+          cause: stopped ? 'user-stop' : 'host-stop',
+          reason: stopped ? null : event.reason,
+          ...(stopped ? {} : { failure: event.failure }),
+          recorded: Promise.resolve(null),
+          requestedAt: session.journal.cursor()
+        }
+      }
+      return
+    }
     if (event.type === 'options-reported') {
       return settleStructuredAgentSessionOptionsReported(this.context, event)
     }

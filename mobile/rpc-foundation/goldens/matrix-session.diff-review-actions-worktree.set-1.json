@@ -316,16 +316,6 @@
         "$rpc": "null"
       }
     },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "387918d6d66f": {
       "name": "worktree.set#1",
       "ordinal": 1,
@@ -484,16 +474,6 @@
         }
       }
     },
-    "63639602640e": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Failed to save review state",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "73f7bfbf2ed4": {
       "actionError": "Unknown method",
       "busyAction": {
@@ -643,16 +623,6 @@
         "$rpc": "null"
       }
     },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
     "aa4104b74da8": {
       "name": "worktree.set#1",
       "ordinal": 1,
@@ -726,26 +696,6 @@
           "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
       }
     },
     "d98361dedc14": {
@@ -1213,7 +1163,7 @@
           "sender": ["9763741966f9"],
           "payloads": ["81c9edeaad86"],
           "settlements": {
-            "mark-reviewed": "32a7c0ae7918"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "9e0132f8d584",
           "effects": []
@@ -1225,7 +1175,7 @@
           "sender": ["45f8c93797f0"],
           "payloads": ["81c9edeaad86"],
           "settlements": {
-            "mark-reviewed": "63639602640e"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "d98361dedc14",
           "effects": []
@@ -1237,7 +1187,7 @@
           "sender": ["df876725e770"],
           "payloads": ["81c9edeaad86"],
           "settlements": {
-            "mark-reviewed": "b948e8307e81"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "73f7bfbf2ed4",
           "effects": []
@@ -1249,7 +1199,7 @@
           "sender": ["aa4104b74da8"],
           "payloads": ["81c9edeaad86"],
           "settlements": {
-            "mark-reviewed": "a947768bc0ed"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "fa4af2435d85",
           "effects": []
@@ -1261,7 +1211,7 @@
           "sender": ["078c232ef420"],
           "payloads": ["81c9edeaad86"],
           "settlements": {
-            "mark-reviewed": "c7584e82c72f"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "1c6a13b5a4b5",
           "effects": []

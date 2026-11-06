@@ -14,7 +14,6 @@ import {
 import { DnrCandidatePostings } from './candidate-postings'
 import type { DnrRulesetIndex } from './ruleset-index'
 import {
-  createDnrRequestState,
   crossExtensionRank,
   emptyDnrEvaluation,
   mergeHeadersReceived,
@@ -31,8 +30,6 @@ import type { DnrRulesetSource } from './rule-types'
 
 // RulesetManager (ruleset_manager.cc) plus the per-request bookkeeping WebRequestInfo keeps
 // between stages (see request-state.ts).
-
-export { createDnrRequestState, type DnrEvaluation, type DnrRequestState }
 
 export type DnrExtensionOptions = {
   /** Install or last-update time; later installs win ties between extensions. */

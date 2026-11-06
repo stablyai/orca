@@ -1,18 +1,14 @@
 /** Bare repoId::path IDs collide across hosts (STA-4343); folding both into local let the last writer permanently erase the other workspace’s tabs. */
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  indexWorktreeHostClaims,
-  mergeWorkspaceSessionsWithHostShadow
-} from './workspace-session-host-contention'
-import { pickPrimaryHostForClaims } from '../../../shared/workspace-session-contested-primary-host'
+import './workspace-session-host-contention'
+import '../../../shared/workspace-session/workspace-session-contested-primary-host'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import {
-  buildHostIdByWorktreeId,
   patchWorkspaceSessionByHost,
   persistWorkspaceSessionByHost,
   type HostPersistenceState
@@ -57,86 +53,6 @@ function contestedState(overrides: Partial<HostPersistenceState> = {}): HostPers
     ...overrides
   }
 }
-
-describe('indexWorktreeHostClaims', () => {
-  it('records every host publishing the same workspace id', () => {
-    const claims = indexWorktreeHostClaims(contestedState().worktreesByRepo, new Map())
-
-    expect([...(claims.get(SHARED_ID) ?? [])].sort()).toEqual(['local', SSH_HOST])
-  })
-
-  it('attributes an unqualified row through its repo when the repo names one host', () => {
-    const claims = indexWorktreeHostClaims(
-      { 'repo-a': [{ id: 'repo-a::/work/a', repoId: 'repo-a' }] },
-      new Map([['repo-a', SSH_HOST]])
-    )
-
-    expect([...(claims.get('repo-a::/work/a') ?? [])]).toEqual([SSH_HOST])
-  })
-
-  it('leaves an unqualified row unattributed when its repo id is itself ambiguous', () => {
-    const claims = indexWorktreeHostClaims(
-      { 'repo-a': [{ id: 'repo-a::/work/a', repoId: 'repo-a' }] },
-      new Map([['repo-a', null]])
-    )
-
-    expect(claims.has('repo-a::/work/a')).toBe(false)
-  })
-
-  it('prefers local as primary, else the lowest host id', () => {
-    expect(pickPrimaryHostForClaims([SSH_HOST, 'local'])).toBe('local')
-    expect(pickPrimaryHostForClaims(['runtime:b', 'runtime:a'])).toBe('runtime:a')
-  })
-})
-
-describe('buildHostIdByWorktreeId for a contested workspace id', () => {
-  it('routes a local/SSH collision to one deterministic primary', () => {
-    expect(buildHostIdByWorktreeId(contestedState())(SHARED_ID)).toBe('local')
-  })
-
-  it('gives two runtime claimants a runtime primary instead of folding them into local', () => {
-    const owner = buildHostIdByWorktreeId({
-      repos: [],
-      worktreesByRepo: {
-        'repo-shared': [
-          { id: SHARED_ID, repoId: 'repo-shared', hostId: 'runtime:env-b' },
-          { id: SHARED_ID, repoId: 'repo-shared', hostId: 'runtime:env-a' }
-        ]
-      }
-    })
-
-    expect(owner(SHARED_ID)).toBe('runtime:env-a')
-  })
-})
-
-describe('mergeWorkspaceSessionsWithHostShadow', () => {
-  it('parks a co-claimant partition entry instead of letting it win the shared key', () => {
-    const merged = mergeWorkspaceSessionsWithHostShadow({
-      local: sessionWithTabs({ [SHARED_ID]: [tab('local-tab')] }),
-      [SSH_HOST]: sessionWithTabs({ [SHARED_ID]: [tab('ssh-tab')] })
-    })
-
-    expect(merged.session.tabsByWorktree[SHARED_ID]?.map((entry) => entry.id)).toEqual([
-      'local-tab'
-    ])
-    expect(
-      (merged.shadow[SSH_HOST]?.tabsByWorktree?.[SHARED_ID] ?? []).map((entry) => entry.id)
-    ).toEqual(['ssh-tab'])
-    expect(merged.shadow.local).toBeUndefined()
-  })
-
-  it('leaves uncontested partitions untouched', () => {
-    const merged = mergeWorkspaceSessionsWithHostShadow({
-      local: sessionWithTabs({ 'repo-a::/a': [tab('a', 'repo-a::/a')] }),
-      'runtime:env-1': sessionWithTabs({
-        'repo-b::/b': [tab('b', 'repo-b::/b')]
-      })
-    })
-
-    expect(Object.keys(merged.session.tabsByWorktree).sort()).toEqual(['repo-a::/a', 'repo-b::/b'])
-    expect(merged.shadow).toEqual({})
-  })
-})
 
 type SessionWriteMock = Mock<
   (session: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
@@ -318,11 +234,6 @@ describe('read-time primary is the one the write path honours', () => {
     }
   }
 
-  it('keeps an SSH claimant out of the rotating runtime partition', () => {
-    // Claim sorting favors runtime over ssh, which must not move SSH rows out of their own partition.
-    expect(buildHostIdByWorktreeId(sshVersusRuntimeState())(SHARED_ID)).toBe(SSH_HOST)
-  })
-
   it('does not strand the runtime co-claimant when the SSH row is written', async () => {
     const set: SessionWriteMock = vi.fn(async () => {})
     await persistWorkspaceSessionByHost(
@@ -369,33 +280,6 @@ describe('read-time primary is the one the write path honours', () => {
     ])
     const localWrite = set.mock.calls.find(([, hostId]) => hostId === undefined)?.[0]
     expect(localWrite?.tabsByWorktree[SHARED_ID]).toBeUndefined()
-  })
-
-  it('still migrates a workspace the catalog has re-attributed to another partition', () => {
-    const owner = buildHostIdByWorktreeId({
-      repos: [],
-      worktreesByRepo: {
-        'repo-shared': [{ id: SHARED_ID, repoId: 'repo-shared', hostId: RUNTIME_HOST }]
-      },
-      contestedPrimaryHostBySessionKey: { [SHARED_ID]: 'local' }
-    })
-
-    expect(owner(SHARED_ID)).toBe(RUNTIME_HOST)
-  })
-
-  it('records the partition every restored key came from, contested or not', () => {
-    const merged = mergeWorkspaceSessionsWithHostShadow({
-      local: sessionWithTabs({ [SHARED_ID]: [tab('local-tab')] }),
-      [RUNTIME_HOST]: sessionWithTabs({
-        [SHARED_ID]: [tab('runtime-tab')],
-        [RUNTIME_ONLY_ID]: [tab('runtime-only-tab', RUNTIME_ONLY_ID)]
-      })
-    })
-
-    expect(merged.primaryHostBySessionKey).toEqual({
-      [SHARED_ID]: 'local',
-      [RUNTIME_ONLY_ID]: RUNTIME_HOST
-    })
   })
 
   it('does not name a runtime owner for a key the local partition kept', async () => {

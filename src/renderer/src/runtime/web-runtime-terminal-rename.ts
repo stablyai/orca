@@ -1,5 +1,8 @@
-import type { TerminalTab, TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import type {
+  TerminalTab,
+  TerminalLayoutSnapshot
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import { isWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'

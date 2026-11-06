@@ -1,10 +1,10 @@
 // Group tool calls and finished thoughts into one collapsible run between prose rows; thinking before each call must not double the visible rows.
 
 import { isNativeChatAskCall } from './input/native-chat-ask-row'
-import { deriveNativeChatRowContent } from '../native-chat-row-content'
+import { deriveNativeChatRowContent } from './transcript/native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
 import { pairToolBlocks } from './tools/native-chat-tool-pairs'
-import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 /** `lead`: the agent's words with calls already folded under them, which may head a run but
  *  never join one. */

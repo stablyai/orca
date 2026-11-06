@@ -1,15 +1,15 @@
 /** Enumerate structured group recipients separately: terminal.list is a paired-client wire shape with PTY/writability assumptions. */
 
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import {
   holdStructuredWorker,
   resolveStructuredWorkerAuthority,
   structuredWorkerAgent
-} from '../structured-worker-authority'
+} from './terminal-authority/structured-sessions/structured-worker-authority'
 import {
   STRUCTURED_WORKER_INCARNATION_PREFIX,
   structuredWorkerIdentityFromRow
-} from '../structured-worker-identity'
+} from './terminal-authority/structured-sessions/structured-worker-identity'
 import type { OrchestrationDb } from './db'
 import { readStructuredSessionGateFacts } from './structured-mailbox-pointer-host'
 import type { RunningStructuredSession } from './structured-session-lineage'

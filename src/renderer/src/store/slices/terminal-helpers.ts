@@ -1,4 +1,7 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 
 export function singlePaneLayoutSnapshot(

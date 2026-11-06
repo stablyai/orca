@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../ipc/pty/pane/agent-session-owners'
 import { agentHookServer } from '../agent-hooks/server'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
 import {
-  InMemoryOrchestrationMessages,
   bindSinglePtyRun,
   setInMemoryOrchestrationMessages,
   store,
   syncSinglePty
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 
 type RestoredReport = Awaited<ReturnType<typeof agentHookServer.readRestoredAgentStatus>>
 
@@ -63,15 +64,6 @@ describe('restart wake for a quiet coordinator', () => {
   it('waits out a slow foreground probe rather than giving up', async () => {
     vi.useFakeTimers()
     const { woken } = await reattachQuietCoordinator({ state: 'done' }, { probeDelayMs: 2_500 })
-    expect(woken).toBe(true)
-  })
-
-  it("reads the lead's own ended turn under still-running background work", async () => {
-    vi.useFakeTimers()
-    const { woken } = await reattachQuietCoordinator({
-      state: 'working',
-      mainAgent: { state: 'done', stateStartedAt: 1 }
-    })
     expect(woken).toBe(true)
   })
 

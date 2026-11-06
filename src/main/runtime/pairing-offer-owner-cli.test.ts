@@ -2,10 +2,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { DeviceRegistry } from './device-registry'
+import { DeviceRegistry } from './rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { createOwnerPairingOffer, type PairingOfferServer } from './pairing-offer-requests'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 
 function serverWithRegistry(): OrcaRuntimeRpcServer {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-owner-pairing-'))

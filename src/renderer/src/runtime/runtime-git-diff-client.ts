@@ -2,7 +2,7 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
-} from '../../../shared/git-diff-compare-types'
+} from '../../../shared/git/diff/git-diff-compare-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'

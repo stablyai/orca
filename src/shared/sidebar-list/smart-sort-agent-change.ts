@@ -1,6 +1,10 @@
-import { AGENT_STATUS_STALE_AFTER_MS, type AgentStatusEntry } from '../agent-status-types'
-import { isAgentStatusFresh } from '../agent-status-freshness'
-import { agentEntryCompletionAt } from '../agent-completion-time'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
+
+import { agentEntryCompletionAt } from '../agent-status/lifecycle/agent-completion-time'
 
 /** Whether a pane's new row can move it in the Smart order, so the sort's settle window restarts. */
 export function isSmartSortRelevantAgentChange(

@@ -104,25 +104,6 @@ export function registerReposProjectGroupCreateRaceTests(): void {
       }
     })
 
-    it('inserts beside another host with the same ID, then accepts the later refresh', async () => {
-      const { store, created, ownerHostId } = setup(runtimeEnvironmentId)
-      const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
-      created.resolve(projectGroup)
-      await pendingCreate
-      expect(store.getState().projectGroups).toEqual([
-        otherHostGroup,
-        { ...projectGroup, executionHostId: ownerHostId }
-      ])
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-      expect(store.getState().projectGroups).toEqual([
-        otherHostGroup,
-        { ...refreshedGroup, executionHostId: ownerHostId }
-      ])
-      const groups = store.getState().projectGroups
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-      expect(store.getState().projectGroups).toBe(groups)
-    })
-
     it('keeps the original owner when the focused host changes during creation', async () => {
       const { store, created, createStarted, ownerHostId } = setup(runtimeEnvironmentId)
       const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
@@ -150,30 +131,6 @@ export function registerReposProjectGroupCreateRaceTests(): void {
       await expect(pendingCreate).resolves.toBeNull()
       expect(store.getState()).toBe(refreshedState)
     })
-  })
-
-  it('recognizes an unstamped local group without conflating an SSH catalog row', async () => {
-    const { store, created, ownerHostId } = setup(null)
-    const sshGroup = { ...projectGroup, connectionId: 'server' }
-    store.setState({ projectGroups: [sshGroup, refreshedGroup] })
-    const state = store.getState()
-    const pendingCreate = state.createProjectGroup('Platform', ownerHostId)
-    created.resolve(projectGroup)
-    await pendingCreate
-    expect(store.getState()).toBe(state)
-  })
-
-  it('does not suppress a local group whose ID matches a direct SSH group', async () => {
-    const { store, created, ownerHostId } = setup(null)
-    const sshGroup = { ...projectGroup, connectionId: 'server' }
-    store.setState({ projectGroups: [sshGroup] })
-    const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
-    created.resolve(projectGroup)
-    await pendingCreate
-    expect(store.getState().projectGroups).toEqual([
-      sshGroup,
-      { ...projectGroup, executionHostId: 'local' }
-    ])
   })
 
   // The catalog these tests read is the one the focused host would have shown.

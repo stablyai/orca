@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../ui/dropdown-menu'
 import type { PluginListEntry } from './plugin-list-entries'
-import { SettingsSwitch } from '../../settings/SettingsFormControls'
+import { SettingsSwitch } from '../../settings/form-controls/SettingsFormControls'
 import {
   pluginNeedsReview,
   installedPluginPresentation,

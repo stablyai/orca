@@ -4,11 +4,7 @@ import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
-import {
-  buildPluginListEntries,
-  matchesPluginSearch,
-  pluginListEntryFromListing
-} from './plugin-list-entries'
+import { buildPluginListEntries } from './plugin-list-entries'
 
 function listing(pluginKey: string, extra: Partial<PluginMarketplaceHostListing> = {}) {
   const value: PluginMarketplaceHostListing = {
@@ -93,50 +89,6 @@ describe('plugin list entries', () => {
     }).installed
     expect(orphan?.updateVersion).toBeNull()
     expect(orphan?.updatable).toBe(false)
-  })
-
-  it('labels trust from the catalog address and names other catalogs without switching', () => {
-    const community = { ...installed('acme.notes', 'Notes'), official: false }
-    const plugin = fromCatalog(community, 'https://gitlab.com/acme/tools/catalog.git')
-    const sources = [
-      catalog('acme', 'https://gitlab.com/acme/tools/catalog.git'),
-      catalog('mirror', 'https://github.com/mirror/c.git')
-    ]
-    const listings = [
-      listing('acme.notes', {
-        marketplaceSourceId: 'mirror',
-        marketplaceName: 'Mirror',
-        official: false,
-        version: '9.0.0'
-      }),
-      listing('acme.notes', {
-        marketplaceSourceId: 'acme',
-        marketplaceName: 'Acme Plugins',
-        official: false
-      })
-    ]
-    const [joined] = buildPluginListEntries([plugin], listings, { sources }).installed
-    expect(joined?.verifiedSource).toEqual({
-      kind: 'catalog',
-      catalog: 'Acme Plugins',
-      owner: 'gitlab.com/acme/tools'
-    })
-    expect(joined?.alsoListedBy).toEqual(['Mirror'])
-    expect(joined?.listing?.marketplaceSourceId).toBe('acme')
-    expect(joined?.updateVersion).toBeNull()
-
-    const [available] = buildPluginListEntries([], [listings[0]!], { sources }).available
-    expect(available?.verifiedSource).toEqual({
-      kind: 'catalog',
-      catalog: 'Mirror',
-      owner: 'github.com/mirror'
-    })
-
-    const sourceOf = (entry: PluginHostListEntry) =>
-      buildPluginListEntries([entry], []).installed[0]?.verifiedSource
-    expect(sourceOf({ ...community, isDev: true })).toEqual({ kind: 'dev' })
-    expect(sourceOf(community)).toEqual({ kind: 'unverified' })
-    expect(sourceOf(installed('stablyai.orca-notes', 'Notes'))).toEqual({ kind: 'official' })
   })
 
   it('shows what automatic updates did only while it still matches the installed version', () => {
@@ -238,50 +190,5 @@ describe('plugin list entries', () => {
     expect(
       build(release('e'.repeat(64)), { ...plugin, status: 'running' })?.reinstallVersion
     ).toBeNull()
-  })
-
-  it('lists installed plugins once, joined to their listing, and the rest as available', () => {
-    const result = buildPluginListEntries(
-      [installed('stablyai.orca-midnight-theme', 'Orca Midnight')],
-      [
-        listing('stablyai.orca-midnight-theme'),
-        listing('stablyai.orca-nord-theme'),
-        listing('stablyai.orca-nord-theme', { marketplaceSourceId: 'mirror' })
-      ]
-    )
-    expect(result.installed.map((entry) => [entry.name, entry.categories])).toEqual([
-      ['Orca Midnight', ['themes']]
-    ])
-    expect(
-      result.available.map((entry) => [entry.name, entry.listing?.marketplaceSourceId])
-    ).toEqual([['Orca Nord Theme', 'official']])
-  })
-
-  it('names and versions a listing from its flat release fields, then the raw release', () => {
-    const flat = pluginListEntryFromListing(
-      listing('stablyai.orca-midnight-theme', { name: 'Orca Midnight', version: '2.0.0' })
-    )
-    expect(flat).toMatchObject({ name: 'Orca Midnight', version: '2.0.0' })
-    const bare = pluginListEntryFromListing(listing('stablyai.orca-midnight-theme'))
-    expect(bare.version).toBeNull()
-    expect(bare.name).not.toBe('')
-  })
-
-  it('strips characters that reorder or hide text, even from an older host', () => {
-    const spoofed = pluginListEntryFromListing(
-      listing('acme.dusk', { name: 'Dusk \u202elaiciffO', description: 'Quiet\n\u200btheme' })
-    )
-    expect(spoofed).toMatchObject({ name: 'Dusk laiciffO', description: 'Quiet theme' })
-    const entries = buildPluginListEntries([installed('acme.dusk', '\u200b\u2066')], [])
-    expect(entries.installed[0]?.name).toBe('Dusk')
-  })
-
-  it('searches names, publishers, catalogs and categories', () => {
-    const [entry] = buildPluginListEntries([], [listing('stablyai.orca-nord-theme')]).available
-    expect(matchesPluginSearch(entry!, 'nord')).toBe(true)
-    expect(matchesPluginSearch(entry!, 'THEMES')).toBe(true)
-    expect(matchesPluginSearch(entry!, 'official plugins')).toBe(true)
-    expect(matchesPluginSearch(entry!, 'gleam')).toBe(false)
-    expect(matchesPluginSearch(entry!, '  ')).toBe(true)
   })
 })

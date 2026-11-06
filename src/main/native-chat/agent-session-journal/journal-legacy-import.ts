@@ -1,18 +1,16 @@
-// Build a fresh epoch: import-scoped legacy identities cannot safely share structured sequence space.
-
 import {
   adoptedTranscriptSourceObserver,
   validateAdoptedOpenCodeSource,
   type AdoptedTranscriptSource
 } from './adopted-transcript-source'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
@@ -22,17 +20,25 @@ import {
 } from '../transcript-line-decoders'
 import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
-import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
-  boundInlineText,
+  boundLegacyImportBlock,
   boundToolInput,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
+// Hydrating a journal from a bridge-era transcript.
+//
+// Ordinary messages reuse the existing per-agent transcript decoders; Pi also
+// projects its saved branch and summaries. The decoders return a render model
+// with no identity, so the import wraps them: the wrapper
+// reads an identity anchor off the SAME raw line, then delegates the content.
+//
+// Import replaces provider presentation at a context boundary. Canonical input stays in the
+// ordered log; later structured history replaces only this reconstructed presentation.
 
 export const LEGACY_IMPORT_BLOCK_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
 
@@ -47,7 +53,6 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
 const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
 // Keep only recent history in memory; the provider resumes the complete source transcript.
 const MAX_LEGACY_IMPORT_RETAINED_BYTES = 16 * 1024 * 1024
-const MAX_LEGACY_IMPORT_SUBAGENTS = 64
 
 export type LegacyImportResult =
   | {
@@ -295,31 +300,8 @@ export function legacyItemBody(
   return {
     kind: 'message',
     role: message.role,
-    blocks: limits ? message.blocks.map((block) => boundBlock(block, limits)) : message.blocks
+    blocks: limits
+      ? message.blocks.map((block) => boundLegacyImportBlock(block, limits))
+      : message.blocks
   }
-}
-
-/** Bound every bulk-bearing block, including mixed-message tool calls; the transcript retains full content. */
-function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): NativeChatBlock {
-  if (block.type === 'text') {
-    return { ...block, text: boundInlineText(block.text, limits).text }
-  }
-  if (block.type === 'tool-result') {
-    return { ...block, output: boundInlineText(block.output, limits).text }
-  }
-  if (block.type === 'tool-call') {
-    return { ...block, input: boundToolInput(block.input, limits) }
-  }
-  if (block.type === 'subagent-group') {
-    return {
-      ...block,
-      agents: block.agents.slice(0, MAX_LEGACY_IMPORT_SUBAGENTS).map((agent) => ({
-        ...agent,
-        // Digest-based roster IDs keep children with shared prefixes distinct.
-        id: boundSubagentEntryId(agent.id),
-        label: boundInlineText(agent.label, limits).text
-      }))
-    }
-  }
-  return block
 }

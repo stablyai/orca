@@ -19,7 +19,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import type { PtyTransport } from './pty-transport-types'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 

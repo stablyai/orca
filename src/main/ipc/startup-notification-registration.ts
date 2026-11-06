@@ -1,6 +1,6 @@
 import { Notification } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { activeNotifications, logNativeNotificationFailure } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { openNotificationSystemSettings } from './notification-system-settings-link'

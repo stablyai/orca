@@ -1,10 +1,10 @@
 import { dirname, basename, join, posix, win32 } from 'node:path'
-import { AgentTranscriptPollScheduler } from '../../agent-transcript-poll-scheduler'
+import { AgentTranscriptPollScheduler } from '../transcripts/agent-transcript-poll-scheduler'
 import {
   claudeRosterHasRuntimeWorkingSubagent,
   stopClaudeSubagent
 } from '../../claude-subagent-roster'
-import { stopOwingClaudeAgentTaskNotification } from '../../claude-owed-task-notifications'
+import { stopOwingClaudeAgentTaskNotification } from './claude-owed-task-notifications'
 import type { HookListenerState } from '../listener-state'
 import type { AgentHookEventPayload } from '../listener-event'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'

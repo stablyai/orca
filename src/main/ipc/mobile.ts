@@ -1,8 +1,8 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { DeviceEntry } from '../runtime/device-registry'
+import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import {
   requestMobilePairingOffer,
   requestRuntimePairingOffer
@@ -12,9 +12,12 @@ import {
   type DefaultRouteInterfaceLookup,
   type NetworkInterface
 } from '../runtime/pairing-network-interfaces'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
-import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
+import {
+  encodeMobilePairingQr,
+  type MobilePairingQrResult
+} from '../runtime/rpc/server/pairing/mobile-pairing-qr'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,

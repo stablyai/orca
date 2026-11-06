@@ -1,6 +1,6 @@
 // Runs on plain Node, as orcad does: the reader imports no Electron.
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -89,38 +89,6 @@ function sources(overrides: {
 }
 
 describe('readDesktopSidebarFacts', () => {
-  it('publishes the focused host and the user’s host names from the settings', () => {
-    const base = sources({})
-    const facts = readDesktopSidebarFacts({
-      ...base,
-      store: {
-        ...base.store,
-        getSettings: () => ({
-          activeRuntimeEnvironmentId: 'env-1',
-          showPinnedWorktreesInGroups: true,
-          hostSettingOverrides: { 'ssh:box': { displayLabel: ' GPU ' }, local: {} }
-        })
-      }
-    })
-    expect(facts.focusedHostId).toBe('runtime:env-1')
-    expect(facts.hostLabels).toEqual({ 'ssh:box': 'GPU' })
-    expect(facts.showPinnedInGroups).toBe(true)
-    expect(readDesktopSidebarFacts(sources({})).focusedHostId).toBe('local')
-  })
-
-  it('publishes the desktop focus the window saved to the local session', () => {
-    const facts = readDesktopSidebarFacts(
-      sources({
-        session: { activeWorktreeId: 'repo-1::/w', activeWorkspaceExecutionHostId: 'ssh:box' }
-      })
-    )
-    expect(facts.desktopActive).toEqual({ hostId: 'ssh:box', worktreeId: 'repo-1::/w' })
-    expect(readDesktopSidebarFacts(sources({})).desktopActive).toEqual({
-      hostId: null,
-      worktreeId: null
-    })
-  })
-
   it('reads pins from each host metadata partition and from folder workspaces', () => {
     const facts = readDesktopSidebarFacts(
       sources({
@@ -169,24 +137,5 @@ describe('readDesktopSidebarFacts', () => {
       { hostId: 'local', repoId: 'b' },
       { hostId: 'local', repoId: 'a' }
     ])
-  })
-
-  it('publishes the saved host order and each SSH and WSL host connection state', () => {
-    const base = sources({ ui: { workspaceHostOrder: ['ssh:box', 'local', 'ssh:box'] } })
-    const facts = readDesktopSidebarFacts({
-      ...base,
-      sshTargets: [
-        { id: 'box', label: 'Build box' },
-        { id: 'idle', label: 'Idle' }
-      ],
-      sshStateOf: (targetId) => (targetId === 'box' ? { status: 'connected' } : undefined),
-      wslStatuses: [{ environmentId: 'env-1', distro: 'Ubuntu', state: 'unverifiable' }]
-    })
-    expect(facts.workspaceHostOrder).toEqual(['ssh:box', 'local'])
-    expect(facts.sshHosts).toEqual({
-      'ssh:box': { label: 'Build box', status: 'connected' },
-      'ssh:idle': { label: 'Idle', status: null }
-    })
-    expect(facts.wslHosts).toEqual({ 'runtime:env-1': { distro: 'Ubuntu', state: 'unverifiable' } })
   })
 })

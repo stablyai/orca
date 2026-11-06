@@ -1,18 +1,18 @@
-import type { AgentMainAgentStatus } from '../agent-status-types'
-import type { AgentChildWorkKind } from '../agent-status-child-work'
+import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
+import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status-child-work'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
-export type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 import {
   AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
   createAgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapterOptions,
   type AgentStatusLegacyAdmissionMode
-} from '../agent-status-legacy-adapter'
-import type { AgentStatusLegacyIngressCaller } from '../agent-status-legacy-ingress-manifest'
-import type { ClaudeLaunchedBackgroundTasks } from '../claude-owed-task-notifications'
+} from '../agent-status/transport/agent-status-legacy-adapter'
+import type { AgentStatusLegacyIngressCaller } from '../agent-status/transport/agent-status-legacy-ingress-manifest'
+import type { ClaudeLaunchedBackgroundTasks } from './providers/claude-owed-task-notifications'
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
+import type { ClaudeToolRequest } from './claude-tool-request-identity'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
 import type { MuseSessionLogState } from '../muse-session-log'
@@ -24,6 +24,7 @@ import {
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
 import type { JcodeUserPromptEvidence } from '../jcode-session-files'
+import type { HookRootAttempt } from './presence/hook-process-root-evidence'
 import {
   moveOpenCodeSessionBindings,
   unbindOpenCodeSessionsOfPane,
@@ -48,6 +49,8 @@ export type HookListenerState = {
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Lead-only state published as mainAgent; retain verdict through child churn until final done. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+  /** Claude calls whose PreToolUse arrived and that have not resolved; a PermissionRequest asks about one of them. */
+  claudeOpenToolUsesByPaneKey: Map<string, ClaudeToolRequest[]>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
@@ -60,6 +63,8 @@ export type HookListenerState = {
   claudeConsumedCompactPromptIdByPaneKey: Map<string, string>
   /** Lead session_id changes retire replaced-conversation claims even without SessionStart (/clear/relaunch/resume). */
   claudeSessionOwnerByPaneKey: Map<string, string>
+  /** Execution-host evidence attempts for processes acquiring a pane, by pane and process identity. */
+  hookRootAttempts: Map<string, HookRootAttempt>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
@@ -133,12 +138,14 @@ export function createHookListenerState(
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
+    claudeOpenToolUsesByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeLaunchedBackgroundTasksByPaneKey: new Map(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
     claudeSessionOwnerByPaneKey: new Map(),
+    hookRootAttempts: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
@@ -231,6 +238,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+  state.claudeOpenToolUsesByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -248,21 +256,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
-}
-
-/** Keep claim-bearing caches aligned with clearPaneCacheState: stored rows and latches can assert state; prompt/tool/transcript caches only render it. */
-export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
-  return (
-    state.lastStatusByPaneKey.has(paneKey) ||
-    state.claudeSubagentRosterByPaneKey.has(paneKey) ||
-    state.claudeLeadStateByPaneKey.has(paneKey) ||
-    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-    state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
-    state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
-    state.claudeSessionOwnerByPaneKey.has(paneKey) ||
-    state.codexSubagentRosterByPaneKey.has(paneKey) ||
-    state.codexLeadStateByPaneKey.has(paneKey)
-  )
+  // A disposed pane's unfinished evidence and exit intent die with it.
+  deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
 }
 
 export function movePaneCacheState(
@@ -283,6 +278,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeOpenToolUsesByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
@@ -327,6 +323,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
+  state.claudeOpenToolUsesByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
@@ -344,4 +341,5 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
+  state.hookRootAttempts.clear()
 }

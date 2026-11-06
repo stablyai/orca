@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../editor'
 
 /** Model a measured 193-workspace/382-tab profile across no-op, drop, legacy restore, orphan and editor paths, exercising workspace and global maps. */

@@ -6,26 +6,27 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   computeAgentLaunchFingerprint,
   deriveAgentLaunchChildOperationId,
   type AgentLaunchFingerprintInput
-} from '../../../../shared/agent-launch-operation'
+} from '../../../../shared/agent-launch/contracts/agent-launch-operation'
 import {
   agentSessionOperationKey,
   claimAgentSessionOperation,
   isAgentSessionOperationRow,
   settleAgentSessionOperation,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
+import { terminalStartError } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import {
@@ -258,9 +259,7 @@ describe('a replay answers from the record', () => {
 
     // Changed settings must not recompute the recorded launch receipt.
     const movedSettings = runtimeStub({
-      settings: {
-        experimentalNativeChat: false
-      }
+      settings: { nativeChatProviders: { claude: false, codex: false } }
     })
     const replayed = await launch(params, movedSettings, PAIRED_CLIENT)
 
@@ -493,6 +492,39 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
 })
 
 describe('a recorded failure replays as the failure it was', () => {
+  it('replays the capacity explanation with its original failure identity without launching again', async () => {
+    const runtime = runtimeStub()
+    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(
+      terminalStartError(
+        'agent_session_exited_during_start',
+        {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        },
+        'failed-incarnation'
+      )
+    )
+    const params = createLaunch({
+      operationId: OPERATION_ID,
+      target: { kind: 'existing', worktree: 'gone' }
+    })
+    await expect(launch(params, runtime)).rejects.toThrow('agent_session_exited_during_start')
+    expect(rowFor(OPERATION_ID)?.outcome).toMatchObject({
+      status: 'failed',
+      code: 'agent_session_exited_during_start',
+      message: expect.stringContaining('Close some Git Bash terminals')
+    })
+    const replayed = runtimeStub()
+    const error = await launch(params, replayed).catch((caught: unknown) => caught)
+    expect(error).toMatchObject({
+      code: 'agent_session_exited_during_start',
+      message: expect.stringContaining('Close some Git Bash terminals')
+    })
+    expect(replayed.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
+    expect(replayed.createTerminal).not.toHaveBeenCalled()
+  })
+
   it('answers with the code the launch actually raised, not the ledger vocabulary', async () => {
     const runtime = runtimeStub()
     runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(new Error('worktree_not_found'))

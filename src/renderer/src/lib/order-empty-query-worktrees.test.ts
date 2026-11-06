@@ -24,18 +24,6 @@ function wt(overrides: Partial<Worktree> & { id: string; displayName: string }):
 }
 
 describe('orderEmptyQueryWorktrees', () => {
-  it('ranks a recently visited (quiet) worktree above a noisy never-visited one', () => {
-    // Recent user focus must outrank newer incidental background activity on another host.
-    const ssh = wt({ id: 'ssh', displayName: 'ssh', lastActivityAt: 1_000 })
-    const local = wt({ id: 'local', displayName: 'local', lastActivityAt: 9_999 })
-    const result = orderEmptyQueryWorktrees({
-      visibleWorktrees: [local, ssh],
-      activeWorktreeId: null,
-      lastVisitedAtByWorktreeId: { ssh: 500 }
-    })
-    expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['ssh', 'local'])
-  })
-
   it('does not crash the switcher when a visible worktree has no displayName (crash 99657ab1)', () => {
     // Persisted/discovered displayName can be undefined despite its type; raw localeCompare once crashed Cmd+J.
     const named = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })

@@ -1,20 +1,15 @@
 import type { TaskPageGitHubListStateModel } from './use-task-page-github-list-state'
 import { useAppStore } from '@/store/index'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import { useState, useMemo, useLayoutEffect, useCallback, useEffect } from 'react'
 import type { ItemDialogTab } from '@/components/github/github-work-item-identity'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { useShallow } from 'zustand/react/shallow'
-import {
-  selectTaskPageWorkItemsCacheEntries,
-  findTaskPageDialogWorkItem
-} from '@/components/task-page/task-page-cache-selectors'
+import { createTaskPageDialogWorkItemReader } from '@/components/task-page/task-page-dialog-work-item'
+import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
-import {
-  getTaskPageRepoCacheInput,
-  getTaskPageRepoSourceContext
-} from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
@@ -72,33 +67,37 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
   const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
-  const dialogWorkItemKey = githubTaskDrawerWorkItem
-    ? {
-        id: githubTaskDrawerWorkItem.id,
-        repoId: githubTaskDrawerWorkItem.repoId,
-        url: githubTaskDrawerWorkItem.url,
-        repoHostId: githubTaskDrawerWorkItem.repoHostId
-      }
-    : null
+  const dialogWorkItemKey = useMemo(
+    () =>
+      githubTaskDrawerWorkItem
+        ? {
+            id: githubTaskDrawerWorkItem.id,
+            repoId: githubTaskDrawerWorkItem.repoId,
+            url: githubTaskDrawerWorkItem.url,
+            repoHostId: githubTaskDrawerWorkItem.repoHostId
+          }
+        : null,
+    [githubTaskDrawerWorkItem]
+  )
   const appliedWorkItemsCacheQuery = useMemo(
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
     [appliedTaskSearch]
   )
-  const selectedWorkItemsCacheEntries = useAppStore(
-    useShallow((s) =>
-      selectTaskPageWorkItemsCacheEntries(
-        s.workItemsCache,
-        selectedRepos.map(getTaskPageRepoCacheInput),
-        githubPerRepoPageLimit,
-        appliedWorkItemsCacheQuery
-      )
+  const { selectedWorkItemsCacheEntries, sourceDisplayWorkItemsCacheEntries } =
+    useTaskPageWorkItemsCacheSelection(
+      selectedRepos,
+      githubPerRepoPageLimit,
+      appliedWorkItemsCacheQuery
     )
-  )
 
+  const drawerRepo = dialogWorkItemKey ? getWorkItemRepo(repos, dialogWorkItemKey) : undefined
+  const dialogBinding = drawerRepo && githubTaskBinding(drawerRepo)
   // Keep cache patches in the clicked conversation when origin and upstream share an issue number.
-  const cachedDialogWorkItem = useAppStore((s) =>
-    findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
+  const readDialogWorkItem = useMemo(
+    () => createTaskPageDialogWorkItemReader(dialogWorkItemKey, dialogBinding),
+    [dialogWorkItemKey, dialogBinding]
   )
+  const cachedDialogWorkItem = useAppStore((s) => readDialogWorkItem(s.workItemsCache))
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
@@ -248,41 +247,25 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
     },
     [openTaskPage, repos]
   )
-  const nextModel = model as typeof model & {
-    githubTaskDrawerWorkItem: typeof githubTaskDrawerWorkItem
-    setGithubTaskDrawerWorkItem: typeof setGithubTaskDrawerWorkItem
-    dialogInitialTab: typeof dialogInitialTab
-    setDialogInitialTab: typeof setDialogInitialTab
-    dialogWorkItemKey: typeof dialogWorkItemKey
-    appliedWorkItemsCacheQuery: typeof appliedWorkItemsCacheQuery
-    selectedWorkItemsCacheEntries: typeof selectedWorkItemsCacheEntries
-    cachedDialogWorkItem: typeof cachedDialogWorkItem
-    dialogWorkItem: typeof dialogWorkItem
-    dialogRepoPath: typeof dialogRepoPath
-    dialogSourceContext: typeof dialogSourceContext
-    gitlabDialogRepo: typeof gitlabDialogRepo
-    gitlabDialogSourceContext: typeof gitlabDialogSourceContext
-    setDialogWorkItem: typeof setDialogWorkItem
-    openGitHubDetailPage: typeof openGitHubDetailPage
-    openGitLabDetailPage: typeof openGitLabDetailPage
-  }
-  nextModel.githubTaskDrawerWorkItem = githubTaskDrawerWorkItem
-  nextModel.setGithubTaskDrawerWorkItem = setGithubTaskDrawerWorkItem
-  nextModel.dialogInitialTab = dialogInitialTab
-  nextModel.setDialogInitialTab = setDialogInitialTab
-  nextModel.dialogWorkItemKey = dialogWorkItemKey
-  nextModel.appliedWorkItemsCacheQuery = appliedWorkItemsCacheQuery
-  nextModel.selectedWorkItemsCacheEntries = selectedWorkItemsCacheEntries
-  nextModel.cachedDialogWorkItem = cachedDialogWorkItem
-  nextModel.dialogWorkItem = dialogWorkItem
-  nextModel.dialogRepoPath = dialogRepoPath
-  nextModel.dialogSourceContext = dialogSourceContext
-  nextModel.gitlabDialogRepo = gitlabDialogRepo
-  nextModel.gitlabDialogSourceContext = gitlabDialogSourceContext
-  nextModel.setDialogWorkItem = setDialogWorkItem
-  nextModel.openGitHubDetailPage = openGitHubDetailPage
-  nextModel.openGitLabDetailPage = openGitLabDetailPage
-  return nextModel
+  return Object.assign(model, {
+    githubTaskDrawerWorkItem,
+    setGithubTaskDrawerWorkItem,
+    dialogInitialTab,
+    setDialogInitialTab,
+    dialogWorkItemKey,
+    appliedWorkItemsCacheQuery,
+    selectedWorkItemsCacheEntries,
+    sourceDisplayWorkItemsCacheEntries,
+    cachedDialogWorkItem,
+    dialogWorkItem,
+    dialogRepoPath,
+    dialogSourceContext,
+    gitlabDialogRepo,
+    gitlabDialogSourceContext,
+    setDialogWorkItem,
+    openGitHubDetailPage,
+    openGitLabDetailPage
+  })
 }
 export type TaskPageGitHubDetailModel = ReturnType<
   typeof useTaskPageGitHubDetail<TaskPageGitHubListStateModel>

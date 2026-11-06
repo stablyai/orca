@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type { createChatRendererBridge } from './helpers/automation-chat-renderer-test-harness'
 import { exerciseBusyChatReuse } from './helpers/automation-chat-reuse-test-harness'
@@ -17,7 +18,7 @@ import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agen
 import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import type { AgentLaunchResult } from '../../src/shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { buildProfileStateCutoverFixture } from '../../src/main/persistence/profile-state-cutover-fixture'
 import { launchAutomationChatAgent } from '../../src/main/automations/automation-chat-agent-launch'
 
@@ -121,7 +122,7 @@ function fixture() {
   const runtime = {
     requireStore: () => ({
       getSettings: () => ({
-        experimentalNativeChat: true,
+        nativeChatProviders: EVERY_AGENT_CHAT,
         workspaceDir: '/fixture',
         nestWorkspaces: false,
         agentDefaultArgs: { claude: '--model sonnet --add-dir docs' }
@@ -195,7 +196,35 @@ describe('automations through agent.launch', () => {
       runs: []
     })
     expect(mocks.launch.mock.calls[0][0].agentArgs).toBeUndefined()
+    expect(mocks.launch.mock.calls[0][0].chatOptions).toBeUndefined()
+    expect(mocks.launch.mock.calls[0][0].sessionOptions).toBeUndefined()
   })
+  it.each([
+    [
+      { model: 'sonnet', options: { fastMode: 'true' } },
+      '--effort high',
+      { model: 'sonnet', fastMode: 'true', effort: 'high' }
+    ],
+    [{ model: null }, null, {}],
+    [{ options: { effort: 'high' } }, '--verbose', { effort: 'high' }]
+  ] as const)(
+    'forwards only complete Chat-consumed values, with no Terminal startup base',
+    async (launchPreferences, agentArgs, expected) => {
+      const { runtime } = fixture()
+      mocks.launch.mockResolvedValue(chat)
+      await launchAutomationChatAgent(runtime, {
+        automation: { ...automation, launchPreferences, agentArgs },
+        run,
+        target,
+        runs: []
+      })
+      expect(mocks.launch.mock.calls[0][0]).toMatchObject({
+        chatOptions: expected,
+        sessionOptions: {}
+      })
+      expect(mocks.launch.mock.calls[0][0].agentArgs).toBeUndefined()
+    }
+  )
   it('refuses an expired admission without minting another launch identity', async () => {
     const { runtime } = fixture()
     mocks.launch.mockRejectedValue(new Error('agent_session_operation_expired'))

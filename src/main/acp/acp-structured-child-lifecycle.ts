@@ -1,5 +1,7 @@
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  type StructuredAgentSessionAdapter,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -8,7 +10,7 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
@@ -20,6 +22,9 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { windDownAcpTurn } from './acp-structured-stop'
+import { AcpAgentExitedError } from './acp-errors'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { acpRefusedStart, acpStartFailure } from './acp-startup-outcome'
 
 /** An agent that never ran names its missing CLI or folder; any other end while starting is its exit. */
 function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionFact {
@@ -35,6 +40,8 @@ function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionF
 
 export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
+  /** Children that ended before they were ready answer for that ending, open included. */
+  readonly endings = new AgentSessionStartEndings()
   readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
   capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
@@ -182,6 +189,31 @@ export class AcpStructuredChildren {
     }
   }
 
+  /** Taken when the process exit is first seen, so a start settling meanwhile cannot miss it. A
+   *  connection Orca closed first keeps that cause; only a bare exit is the agent's own. */
+  recordExit(
+    sessionId: string,
+    generation: string,
+    connection: AcpStructuredConnection,
+    lost?: Error
+  ): void {
+    const detail =
+      connection.stderrTail() || `${this.deps.spec.agent} ACP agent ended while starting`
+    const exited = withProviderSpawnAbsence(
+      lost ?? new AcpAgentExitedError(detail, connection.stderrTail()),
+      connection.spawnAbsence
+    )
+    this.endings.record(
+      sessionId,
+      generation,
+      lost ? acpRefusedStart(exited) : acpStartFailure(exited)
+    )
+  }
+
+  private recordEnding(session: AcpStructuredChild, error: Error): void {
+    this.endings.record(session.sessionId, session.acquisitionGeneration, acpStartFailure(error))
+  }
+
   /** Close the journal on protocol loss; notify the host after process exit is proven. */
   connectionLost(session: AcpStructuredChild | null, error: Error): void {
     if (
@@ -191,6 +223,8 @@ export class AcpStructuredChildren {
     ) {
       return
     }
+    // Orca refusing what the agent wrote outranks the exit its cleanup then causes.
+    this.recordEnding(session, error)
     if (!isAcpReadySession(session)) {
       session.journalClosed = error.message || error.name
       return

@@ -13,7 +13,7 @@ import {
 } from './helpers/terminal'
 import { getActiveTabId, getWorktreeTabs } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
-import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   seededRepoPathOrSkip,
   bootstrapFirstLaunch,

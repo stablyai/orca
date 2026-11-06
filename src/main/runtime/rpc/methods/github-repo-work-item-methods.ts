@@ -1,5 +1,8 @@
 import { defineMethod } from '../core'
-import { RepoSelector } from '../../../../shared/rpc-contract/github-repo-target-params'
+import {
+  RepoSelector,
+  RepoWithGitHubAccountExpectation
+} from '../../../../shared/rpc-contract/github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -57,14 +60,26 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.listLabels',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.listRepoLabels(params.repo)
+    params: RepoWithGitHubAccountExpectation,
+    handler: async (params, { runtime }) =>
+      params.expectedGhAccount !== undefined
+        ? runtime.listRepoLabels(params.repo, params.ownerRepo, params.expectedGhAccount)
+        : runtime.listRepoLabels(
+            params.repo,
+            ...(params.ownerRepo ? ([params.ownerRepo] as const) : ([] as const))
+          )
   }),
   defineMethod({
     name: 'github.listAssignableUsers',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.listRepoAssignableUsers(params.repo)
+    params: RepoWithGitHubAccountExpectation,
+    handler: async (params, { runtime }) =>
+      params.expectedGhAccount !== undefined
+        ? runtime.listRepoAssignableUsers(params.repo, params.ownerRepo, params.expectedGhAccount)
+        : runtime.listRepoAssignableUsers(
+            params.repo,
+            ...(params.ownerRepo ? ([params.ownerRepo] as const) : ([] as const))
+          )
   }),
   defineMethod({
     name: 'github.workItem',
@@ -94,7 +109,35 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
     name: 'github.workItemDetails',
     permission: 'workspace',
     params: WorkItemDetails,
-    handler: async (params, { runtime }) =>
-      runtime.getRepoWorkItemDetails(params.repo, params.number, params.type)
+    handler: async (params, { runtime }) => {
+      if (params.expectedGhAccount !== undefined) {
+        return runtime.getRepoWorkItemDetails(
+          params.repo,
+          params.number,
+          params.type,
+          params.ownerRepo,
+          params.canonical,
+          params.expectedGhAccount
+        )
+      }
+      if (params.canonical !== undefined) {
+        return runtime.getRepoWorkItemDetails(
+          params.repo,
+          params.number,
+          params.type,
+          params.ownerRepo,
+          params.canonical
+        )
+      }
+      if (params.ownerRepo) {
+        return runtime.getRepoWorkItemDetails(
+          params.repo,
+          params.number,
+          params.type,
+          params.ownerRepo
+        )
+      }
+      return runtime.getRepoWorkItemDetails(params.repo, params.number, params.type)
+    }
   })
 ]

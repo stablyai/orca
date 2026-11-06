@@ -6,7 +6,7 @@ import {
   PAIRING_CREATE_OFFER_METHOD,
   type PairingCreateOfferParams,
   type PairingCreateOfferResult
-} from '../../shared/pairing-create-offer-contract'
+} from '../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 
 export function formatPairingOffer(offer: PairingCreateOfferResult): string {
   if (!offer.available) {

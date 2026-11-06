@@ -1,4 +1,4 @@
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   deferredStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
@@ -19,12 +19,13 @@ import type { StructuredAgentSessionConversationNaming } from './structured-agen
 export function createStructuredAgentSessionHostStatusFeed(args: {
   sessions: StructuredAgentSessionStatusFeedDeps['sessions']
   starting?: (sessionId: string) => boolean
+  readUsageLimitContinue?: StructuredAgentSessionStatusFeedDeps['readUsageLimitContinue']
   now: () => number
   currentWork: StructuredAgentSessionSubagentRowsDeps['currentWork']
   deps: () => {
     store: Pick<
       AgentSessionRecordStore,
-      'getConversation' | 'replacedRuntime' | 'listConversations'
+      'getConversation' | 'replacedRuntime' | 'listConversations' | 'isSessionTabRetired'
     >
     logger: StructuredAgentSessionLogger
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
@@ -62,10 +63,14 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
     starting: args.starting,
+    readUsageLimitContinue: args.readUsageLimitContinue,
     onPublished: args.onPublished,
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
+    // A closed chat's agent can still run (a send, a worker); its row shows while it does.
+    rowRetired: (sessionId) =>
+      !args.sessions.get(sessionId)?.child && args.deps().store.isSessionTabRetired(sessionId),
     now: args.now,
     logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),
     onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),

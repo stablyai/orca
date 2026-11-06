@@ -1,9 +1,12 @@
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AcpAuthRequiredError, AcpRpcError } from './acp-errors'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
+
+import { temporaryAcpStartupAnswer } from './acp-startup-outcome'
 
 const ACP_RESOURCE_NOT_FOUND = -32002
 export const ACP_REOPEN_FAILED = 'ACP agent could not reopen its saved session; starting a new one'
@@ -13,8 +16,14 @@ export function acpReopenTakeover(
   resume: NonNullable<AcpStructuredLaunch['resume']>,
   start: { over: boolean; now: number; warn: (fields: { scope: string; error: unknown }) => void }
 ): Pick<AgentSessionProviderHandleLink, 'supersedesKey' | 'replaces'> {
-  // A replacement session cannot resolve sign-in failure or an abandoned start.
-  if (error instanceof AcpAuthRequiredError || start.over) {
+  // A replacement session cannot resolve sign-in failure, a missed deadline or an abandoned start;
+  // its own answer would replace the failure the user must see.
+  if (
+    error instanceof AcpAuthRequiredError ||
+    temporaryAcpStartupAnswer(error) ||
+    providerRequestTimeoutOf(error) ||
+    start.over
+  ) {
     throw error
   }
   if (

@@ -1,4 +1,4 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { Cable, Loader2, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'

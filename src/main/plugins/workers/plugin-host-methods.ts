@@ -8,6 +8,11 @@ import type {
   PluginSurface
 } from '../../../shared/plugins/frames/plugin-protocol'
 import type { PluginAuditLog } from '../plugin-audit-log'
+import {
+  PluginHostCallError,
+  UNSCOPED_PLUGIN_HOST_CALL,
+  type PluginHostCallScope
+} from './plugin-host-call-scope'
 
 /**
  * Host API 1 handler bindings — the one place plugin-originated calls
@@ -29,6 +34,8 @@ export type ExecutePluginHostCallInput = {
   grantedCapabilities: readonly PluginCapabilityKind[] | null
   services: PluginHostServices | null
   audit?: Pick<PluginAuditLog, 'record'>
+  /** Re-checked right before the side effect; absent only in tests and the relay suite. */
+  scope?: PluginHostCallScope
 }
 
 export async function executePluginHostCall(
@@ -86,8 +93,11 @@ export async function executePluginHostCall(
       }
     }
   }
+  const scope = input.scope ?? UNSCOPED_PLUGIN_HOST_CALL
   try {
-    const validated = await prepared.execute({ pluginId: input.pluginId, services })
+    // The audit write awaited: approval may have been revoked meanwhile.
+    scope.assertActive()
+    const validated = await prepared.execute({ pluginId: input.pluginId, services, scope })
     if (!validated) {
       await auditMutation('error').catch(() => undefined)
       // Malformed host results must not leak unvalidated shapes through any plugin transport.
@@ -101,6 +111,15 @@ export async function executePluginHostCall(
     return { ok: true, value: validated.value }
   } catch (error) {
     await auditMutation('error').catch(() => undefined)
+    if (error instanceof PluginHostCallError) {
+      const { code, message, retryAfterMs } = error
+      return {
+        ok: false,
+        code,
+        error: message,
+        ...(retryAfterMs === undefined ? {} : { retryAfterMs })
+      }
+    }
     return {
       ok: false,
       code: 'action_failed',

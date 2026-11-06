@@ -1,10 +1,10 @@
 /** Pairing offers requested by this host's owner: the desktop's Settings and `orca pair` mint the same offers. */
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type {
   PairingCreateOfferParams,
   PairingCreateOfferResult
-} from '../../shared/pairing-create-offer-contract'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+} from '../../shared/remote-runtime/pairing/pairing-create-offer-contract'
+import { classifyRemotePairingHostname } from '../../shared/remote-runtime/pairing/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import { renderServePairingQr } from '../server/serve-pairing-output'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './network-exposure-guidance'
@@ -14,13 +14,13 @@ import {
   type DefaultRouteInterfaceLookup
 } from './pairing-network-interfaces'
 import type { RuntimeDeviceGrant } from './rpc/rpc-method-permission'
-import type { RuntimeRpcPairing } from './runtime-rpc/runtime-rpc-pairing'
+import type { RuntimeRpcPairing } from './rpc/server/runtime-rpc-pairing'
 import {
   pairingUnavailable,
   type MobilePairingOffer,
   type MobilePairingOfferAvailable,
   type PairingOfferUnavailable
-} from './runtime-rpc/runtime-rpc-pairing-types'
+} from './rpc/server/runtime-rpc-pairing-types'
 import { getWindowsDefaultRouteInterfaceNames } from './windows-default-route-interfaces'
 
 export type PairingOfferServer = Pick<

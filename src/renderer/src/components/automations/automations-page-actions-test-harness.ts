@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import {
   addRuntimeProject,
   api,
@@ -23,11 +24,13 @@ import {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY,
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { makeAutomation } from './automations-page-fixtures'
 
 export const CHAT_CAPABILITIES = [
@@ -123,7 +126,7 @@ export async function holdRuntimeSave(
   scopedList([])
   runtimeHost([], [])
   addRuntimeProject()
-  mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+  mocks.state.settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT }
   mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
   observeRuntimeIncarnation('A')
   await learnRuntimeAgents('A', initialAgents)

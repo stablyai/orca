@@ -163,6 +163,14 @@ export function _resetConptyStartupTrustForTest(): void {
   respawnCount = 0
 }
 
+type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean } }
+
+// node-pty falls back to WinPTY below Windows build 18309, which never announces an input reader.
+function runsOnWinpty(proc: pty.IPty): boolean {
+  const pane: NodePtyWindowsPane = proc
+  return pane._agent?._useConpty === false
+}
+
 function withNotice(claim: () => ConptyStartupEvents): () => ConptyStartupEvents {
   return () => {
     const events = claim()
@@ -186,7 +194,7 @@ export async function spawnConptyWithInputReader(
 }> {
   const firstSpawn = await spawn()
   const { proc: first, physicalOwner: firstOwner } = firstSpawn
-  if (announcementUntrusted) {
+  if (announcementUntrusted || runsOnWinpty(first)) {
     return { ...firstSpawn, claimStartupEvents: () => ({ data: [], exit: null }) }
   }
   const firstStartup = await decideConptyStartup(first, opts.signal, firstOwner)

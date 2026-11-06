@@ -1,4 +1,4 @@
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 

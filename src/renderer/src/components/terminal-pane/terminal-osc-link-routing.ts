@@ -1,7 +1,7 @@
-import { resolveTerminalFileLink } from '../../../../shared/terminal-links'
+import { resolveFileLinkPath } from './terminal-file-link-target'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal-osc-link-target'
+import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal/links/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
@@ -103,7 +103,12 @@ export function handleOscLink(
           column: target.target.column
         }
       : target?.kind === 'path'
-        ? resolveTerminalFileLink(target.link, cwd, deps.terminalHomePath)
+        ? resolveFileLinkPath(target.link, {
+            ...deps,
+            cwd,
+            homePath: deps.terminalHomePath,
+            homeOnHost: true
+          })
         : null
   if (!file) {
     return false

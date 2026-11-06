@@ -5,6 +5,8 @@ import {
   pluginGitCloneArgs,
   pluginGitConfigArgs,
   pluginGitFetchCommitArgs,
+  pluginGitListRefsArgs,
+  pluginGitRemoteHeadArgs,
   pluginGitTreeArgs
 } from './plugins/installation/plugin-git-arguments'
 
@@ -42,6 +44,15 @@ export function registerPluginGitDownloadBinaryCompatibilityCase(
     await expect(
       runGit([...config, ...pluginGitCloneArgs(source, 'v1', 'refused')])
     ).rejects.toThrow("transport 'file' not allowed")
+
+    // Why: the install dialog pins a version with these before anything downloads.
+    await runGit(['-C', source, ...identity, 'tag', '-a', '-m', 'release', 'v2'])
+    const refs = await runGit([...config, ...allowLocal, ...pluginGitListRefsArgs(source)])
+    expect(refs.stdout).toContain(`${commit}\trefs/tags/v1\n`)
+    expect(refs.stdout).toContain(`${commit}\trefs/tags/v2^{}\n`)
+    expect(refs.stdout).toMatch(new RegExp(`${commit}\trefs/heads/\\S+\n`))
+    const head = await runGit([...config, ...allowLocal, ...pluginGitRemoteHeadArgs(source)])
+    expect(head.stdout).toBe(`${commit}\tHEAD\n`)
 
     await runGit([...config, ...allowLocal, ...pluginGitCloneArgs(source, 'v1', 'compat-clone')])
     await runGit([...config, 'init', '--quiet', '--template=', 'compat-fetch'])

@@ -91,7 +91,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   const copyMarkdownPath = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       try {
-        await clipboard.writeText(tab.relativePath || tab.filePath)
+        await clipboard.writeText(tab.filePath || tab.relativePath)
         showToast(translate('session.useMarkdownActions.pathCopied', 'Path copied'))
       } catch {
         triggerError()

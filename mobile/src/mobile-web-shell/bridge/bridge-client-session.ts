@@ -37,6 +37,8 @@ export type BridgeShellSession = {
   // Oversize keys are withheld from storage and reject writes locally; older shells omit this additive field (ruling 33.6).
   storageOversize: readonly string[]
   ownsHostArea: boolean
+  /** The shell's proven host status at this init, unvalidated; null from shells that send none. */
+  hostStatus: unknown
 }
 
 // Normalize the wire’s absent route to one client-side shape; undefined and missing serialize identically.
@@ -60,6 +62,7 @@ export function readShellSession(
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],
-    ownsHostArea: message.ownsHostArea === true
+    ownsHostArea: message.ownsHostArea === true,
+    hostStatus: message.hostStatus ?? null
   }
 }

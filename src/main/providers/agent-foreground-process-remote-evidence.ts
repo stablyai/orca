@@ -1,5 +1,5 @@
 import { hasControllingTty } from '../../shared/posix-controlling-terminal'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import type {
   PosixFence,
   RemoteForegroundEvidence,

@@ -10,13 +10,14 @@ import {
   Send,
   Trash2
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-session-queued-cards'
+import { colors, pressedStyle } from '../theme/mobile-theme'
+import { queuedMessageCardSteers } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
+import { MobileAgentMessageSenders } from './native-chat/transcript/MobileAgentMessageSenders'
 import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -27,6 +28,8 @@ type QueuedMessageCardRowProps = {
   busy: boolean
   editBlocked: boolean
   steerHeld: boolean
+  /** Steer only into a running turn; an idle agent's card reads Send. */
+  agentWorking: boolean
   onSend: () => void
   onDelete: () => void
   onMore: () => void
@@ -47,7 +50,7 @@ export function MobileQueuedMessageCardRow({
         style={styles.divided}
         onLayout={(event) => onEditorLayout(event.nativeEvent.layout)}
       >
-        <MobileQueuedMessageComposer editor={editor} attribution={card.attribution} />
+        <MobileQueuedMessageComposer editor={editor} from={card.from} />
       </View>
     )
   }
@@ -59,6 +62,7 @@ function QueuedMessageCardContents({
   busy,
   editBlocked,
   steerHeld,
+  agentWorking,
   onSend,
   onDelete,
   onMore,
@@ -68,7 +72,7 @@ function QueuedMessageCardContents({
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
-  const steers = queuedMessageCardSteers(card)
+  const steers = agentWorking && queuedMessageCardSteers(card)
   const count = card.images?.length ?? 0
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided]}>
@@ -80,11 +84,7 @@ function QueuedMessageCardContents({
           <ListEnd size={14} color={colors.textMuted} strokeWidth={2} />
         )}
         <View style={styles.textColumn}>
-          {card.attribution ? (
-            <Text style={styles.caption} numberOfLines={1}>
-              {card.attribution}
-            </Text>
-          ) : null}
+          {card.from ? <MobileAgentMessageSenders queued from={card.from} /> : null}
           <MobileQueuedCardText
             text={card.line}
             expanded={expanded}
@@ -186,6 +186,7 @@ function QueuedMessageCardContents({
         <View style={styles.expandedBody}>
           {expanded ? (
             <Pressable
+              style={({ pressed }) => pressed && pressedStyle}
               accessibilityRole="button"
               accessibilityState={{ expanded: true }}
               accessibilityHint={t(

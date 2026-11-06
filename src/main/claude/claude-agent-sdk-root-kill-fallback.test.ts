@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 
 const ROOT_PID = 424242

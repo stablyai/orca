@@ -12,9 +12,15 @@ import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
-import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
-import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
-import { isSettledWrite, type WriteSettlement } from '../../../shared/pty-write-settlement'
+import {
+  submitOrchestrationMailboxPointer,
+  type OrchestrationMailboxPointerSubmitTarget
+} from './mailbox-pointer-submit'
+
+import {
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>
@@ -129,20 +135,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       }
       return
     }
-    if (
-      !db ||
-      shouldReleaseOrchestrationPointer(
-        db,
-        args.mailboxHandle,
-        args.messages,
-        args.deps.getMessageWaiters(args.mailboxHandle)
-      )
-    ) {
-      if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
-        args.redrive(args.mailboxHandle)
-      }
-      return
-    }
     const submitEnter = (): void =>
       submitOrchestrationMailboxPointer(
         {
@@ -150,7 +142,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           state: args.state,
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
-          getMessageWaiters: args.deps.getMessageWaiters,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,

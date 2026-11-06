@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
-import { projectRuntimePermission } from '../../../src/shared/structured-agent-session-permission-option'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
+import { projectRuntimePermission } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionModelCatalogResult
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionRewindSupport } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
-import { createCoalescingKeyedRunner } from '../../../src/shared/coalescing-keyed-runner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/agent-session/options/structured-agent-session-options-read-owner'
+import { BoundedMap } from '../../../src/shared/bounded-map'
 import type { RpcClient } from '../transport/rpc-client'
-import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
-import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
-import { cloneStructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
-import {
-  createStructuredAgentSessionOptionState,
-  applyStructuredAgentSessionOptions,
-  applyStructuredAgentSessionModelCatalog,
-  settleStructuredAgentSessionBuiltinCatalog,
-  type StructuredAgentSessionOptionState
-} from '../../../src/shared/structured-agent-session-options'
+import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
+import { createStructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-session/options/structured-agent-session-runtime-reports'
+
+// Matches the transcripts this view retains per chat.
+const MAX_RETAINED_CHAT_READERS = 32
+const UNSUPPORTED_REWIND: AgentSessionRewindSupport = { supported: false, reason: 'unsupported' }
 
 export function useMobileStructuredOptionState(args: {
   client: RpcClient | null
@@ -36,6 +32,7 @@ export function useMobileStructuredOptionState(args: {
   optionCatalog: AgentSessionOptionCatalog | null
   sessionId: string | null
   turnId: string | null
+  unloadedTurnRevisions: number | undefined
 }) {
   const {
     agent,
@@ -45,6 +42,7 @@ export function useMobileStructuredOptionState(args: {
     optionCatalog,
     sessionId,
     turnId,
+    unloadedTurnRevisions,
     client,
     optionStamp,
     sendSelection,
@@ -64,34 +62,52 @@ export function useMobileStructuredOptionState(args: {
     sessionId ? feed?.getSnapshot().get(sessionId) : undefined
   )
   const providerStarting = summary?.hostExecutionPhase === 'starting'
-  const projectPermission = <T extends { reportedPermissionMode?: string | null }>(state: T): T =>
-    projectRuntimePermission(state, summary, fence)
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
-  const [optionState, setOptionState] = useState(() =>
-    createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
+  // One view serves every chat tab, so each chat keeps its own reader and its last answer on return.
+  const [readers] = useState(
+    () =>
+      new BoundedMap<string, ReturnType<typeof createStructuredAgentSessionOptionsReadOwner>>({
+        maxEntries: MAX_RETAINED_CHAT_READERS
+      })
   )
-  const optionStateRef = useRef(optionState)
-  const activeOptionRecordRef = useRef(optionState.record)
-  const readEpoch = useRef(0)
-  const readRef = useRef<(() => void) | null>(null)
-  const reread = useCallback(() => {
-    readEpoch.current += 1
-    readRef.current?.()
-  }, [])
+  const chatKey = JSON.stringify([agent, sessionId])
+  const reader = useMemo(() => {
+    const retained = readers.get(chatKey)
+    if (retained) {
+      return retained
+    }
+    const created = createStructuredAgentSessionOptionsReadOwner(
+      createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
+    )
+    readers.set(chatKey, created)
+    return created
+  }, [readers, chatKey, agent, optionCatalog])
+  useEffect(() => () => reader.markAway(), [reader])
+  // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
+  const projectRuntimeReports = <
+    T extends { reportedPermissionMode?: string | null; reportedEffort?: string }
+  >(
+    state: T
+  ): T =>
+    projectRuntimePermission(
+      structuredAgentSessionReportsAtFence(state, reader.getSnapshot().support?.fence, fence),
+      summary,
+      fence
+    )
+  const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const {
+    optionStateRef,
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog,
+    invalidate: reread
+  } = reader
   const { controller, clientGeneration } = useMobileStructuredSelectionController({
     agent,
     client,
     sessionId,
     onRevalidate: reread
   })
-  const updateOptionState = useCallback(
-    (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
-      const next = update(optionStateRef.current)
-      optionStateRef.current = next
-      setOptionState(next)
-    },
-    []
-  )
   const contextKey = JSON.stringify([agent, sessionId, newLaunch, worktree, fence, connected])
   const contextRef = useRef({ key: contextKey, client })
   useEffect(() => {
@@ -101,157 +117,115 @@ export function useMobileStructuredOptionState(args: {
     () => contextRef.current.key === contextKey && contextRef.current.client === client,
     [contextKey, client]
   )
-  const optionIdentityRef = useRef({ agent, sessionId, client, controller })
-  useEffect(() => {
-    const previousIdentity = optionIdentityRef.current
-    const sameSession =
-      previousIdentity.agent === agent &&
-      previousIdentity.sessionId === sessionId &&
-      previousIdentity.client === client &&
-      previousIdentity.controller === controller
-    optionIdentityRef.current = { agent, sessionId, client, controller }
-    const previous = optionStateRef.current
-    const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
-    // Retain account answers across fence changes instead of reviving placeholders.
-    const kept =
-      sameSession &&
-      (previous.optionsAnswerPresent ||
-        (previous.catalogSource !== 'seed' && previous.catalogSource !== null))
+  // Projected once per accepted answer so consumers keep stable references between answers.
+  const { conversationSupport, imageSupport, threadGoalSupport, rewindSupport } = useMemo(
+    () =>
+      support && support.sessionId !== null
         ? {
-            ...previous,
-            record: cloneStructuredAgentSessionOptionRecord(previous.record),
-            pendingId: null,
-            reportedPermissionMode: undefined,
-            reportedEffort: undefined
+            conversationSupport: {
+              sessionId: support.sessionId,
+              commands: support.result.conversationCommands ?? [],
+              compactInstructions: support.result.compactInstructions === true,
+              contextUsage: support.result.contextUsage
+            },
+            imageSupport: {
+              sessionId: support.sessionId,
+              acceptsImages: support.result.acceptsImages,
+              statesPermissionMode: support.result.current?.permissionMode !== undefined
+            },
+            threadGoalSupport: {
+              sessionId: support.sessionId,
+              support: support.result.threadGoal,
+              reported: support.result.reportedThreadGoal
+            },
+            rewindSupport: {
+              sessionId: support.sessionId,
+              fence: support.fence,
+              support: support.result.rewind ?? UNSUPPORTED_REWIND,
+              contextFloor:
+                support.result.contextUsage?.contextFloor ?? support.result.threadGoal?.contextFloor
+            }
           }
-        : seeded
-    // Keep the chat’s mode visible through provider restarts.
-    const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept
-    readEpoch.current += 1
-    optionStateRef.current = next
-    activeOptionRecordRef.current = next.record
-    setOptionState(next)
-  }, [
-    agent,
-    enabled,
-    fence,
-    optionCatalog,
-    sessionId,
-    contextKey,
-    client,
-    clientGeneration,
-    controller
-  ])
-
-  const [conversationSupport, setConversationSupport] = useState<{
-    sessionId: string
-    commands: readonly AgentSessionConversationCommand[]
-    fence: number | null
-  } | null>(null)
-  const [imageSupport, setImageSupport] = useState<{
-    sessionId: string
-    acceptsImages: boolean | undefined
-    statesPermissionMode: boolean
-  } | null>(null)
-
-  const awaitingOptions =
-    conversationSupport?.sessionId === sessionId && conversationSupport.fence !== fence
-
-  const receiveCatalog = (
-    catalog: AgentSessionModelCatalogResult | null,
-    _event: 'demand' | 'progress' | 'settled'
-  ) => {
-    updateOptionState((current) =>
-      catalog && optionCatalog
-        ? applyStructuredAgentSessionModelCatalog(current, optionCatalog, catalog, {
-            newLaunch,
-            coherentCatalog
+        : {
+            conversationSupport: null,
+            imageSupport: null,
+            threadGoalSupport: null,
+            rewindSupport: null
+          },
+    [support]
+  )
+  useEffect(
+    () =>
+      reader.attach({
+        owner: [agent, sessionId, client],
+        reset: [contextKey, clientGeneration, enabled, optionCatalog],
+        sessionId,
+        fence,
+        seed: () => createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog),
+        controller,
+        eligible:
+          !!client &&
+          !!sessionId &&
+          enabled &&
+          !!optionCatalog &&
+          (!providerStarting || !newLaunch || !!sendSelection),
+        optionCatalog,
+        newLaunch,
+        coherentCatalog,
+        authority: () => client?.getGeneration?.(),
+        isCurrent: isCurrentContext,
+        request: () => {
+          if (!client || !sessionId) {
+            throw new Error('Options reader is not attached')
+          }
+          return callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', {
+            sessionId
           })
-        : settleStructuredAgentSessionBuiltinCatalog(current, false)
-    )
-    if (!coherentCatalog && catalog && catalog.origin !== 'unknown' && !catalog.listingInProgress) {
-      readRef.current?.()
-    }
-  }
+        },
+        accepted: () => {
+          if (sessionId) {
+            forgetMobileCreatedStructuredSession(sessionId)
+          }
+        }
+      }),
+    [
+      reader,
+      agent,
+      sessionId,
+      client,
+      controller,
+      contextKey,
+      clientGeneration,
+      enabled,
+      optionCatalog,
+      fence,
+      newLaunch,
+      coherentCatalog,
+      providerStarting,
+      sendSelection,
+      isCurrentContext
+    ]
+  )
+  // A turn or host status change rereads within the same lease, as on desktop; it is not a new context.
+  // So does a turn row leaving the loaded window, whose context facts only the host's answer still holds.
+  const contextRefresh = conversationSupport?.contextUsage ? (unloadedTurnRevisions ?? 0) : 0
+  const readStamp = JSON.stringify([optionStamp, turnId, contextRefresh])
+  const seenReadStamp = useRef(readStamp)
   useEffect(() => {
-    // Read each turn and after provider start; before start only a resumed chat has model evidence.
-    if (
-      !client ||
-      !sessionId ||
-      !enabled ||
-      !optionCatalog ||
-      (providerStarting && newLaunch && !sendSelection)
-    ) {
-      return
+    if (seenReadStamp.current !== readStamp) {
+      seenReadStamp.current = readStamp
+      reread()
     }
-    let stale = false
-    const run = createCoalescingKeyedRunner<void>()
-    const request = () => {
-      void run('options', 'latest', async () => {
-        if (stale || !isCurrentContext()) {
-          return
-        }
-        const record = activeOptionRecordRef.current
-        const epoch = readEpoch.current
-        const generation = client.getGeneration?.()
-        const completed = controller.captureRead()
-        const result = await callAgentSession<AgentSessionOptionsResult>(
-          client,
-          'agentSession.options',
-          { sessionId }
-        )
-        if (stale || !isCurrentContext() || activeOptionRecordRef.current !== record) {
-          return
-        }
-        // Latch for this view; a later view may run the model selected here.
-        forgetMobileCreatedStructuredSession(sessionId)
-        setImageSupport({
-          sessionId,
-          acceptsImages: result.acceptsImages,
-          statesPermissionMode: result.current?.permissionMode !== undefined
-        })
-        if (readEpoch.current !== epoch || client.getGeneration?.() !== generation) {
-          return
-        }
-        setConversationSupport({ sessionId, fence, commands: result.conversationCommands ?? [] })
-        updateOptionState((current) =>
-          applyStructuredAgentSessionOptions(current, optionCatalog, result, {
-            newLaunch,
-            coherentCatalog
-          })
-        )
-        controller.retire(completed)
-      }).catch(() => undefined)
-    }
-    readRef.current = request
-    request()
-    return () => {
-      stale = true
-      readRef.current = null
-    }
-  }, [
-    client,
-    clientGeneration,
-    newLaunch,
-    enabled,
-    optionCatalog,
-    optionStamp,
-    sendSelection,
-    controller,
-    isCurrentContext,
-    coherentCatalog,
-    providerStarting,
-    sessionId,
-    fence,
-    turnId,
-    updateOptionState
-  ])
+  }, [readStamp, reread])
 
   return {
-    projectPermission,
+    projectRuntimeReports,
     conversationSupport,
     imageSupport,
-    awaitingOptions,
+    threadGoalSupport,
+    rewindSupport,
+    /** The host's in-doubt rewind latch, from its status feed. */
+    rewindBlockedReason: summary?.rewindBlockedReason ?? undefined,
     controller,
     reread,
     receiveCatalog,

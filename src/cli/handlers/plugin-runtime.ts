@@ -7,18 +7,23 @@ import { quoteCliCommandArgument } from '../shell-command-quote'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 
-type DevLoadResult = {
+export type DevLoadResult = {
   path: string
   pluginKey: string
   added: boolean
   approval: 'content-only' | 'approve-flag' | 'already-approved'
   plugin: PluginHostListEntry | null
 }
-type LogsResult = { pluginKey: string; lines: { ts: number; level: string; line: string }[] }
+export type LogsResult = {
+  pluginKey: string
+  lines: { ts: number; level: string; line: string }[]
+  /** Absent on hosts older than the `after` cursor. */
+  cursor?: string
+}
 
 const APPROVAL_CODES = new Set(['approval_required', 'approval_stale'])
 
-function stringFlag(ctx: HandlerContext, name: string): string | undefined {
+export function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
@@ -58,7 +63,11 @@ function nextStepsOf(data: unknown): string[] {
     : []
 }
 
-function translatePluginRpcError(ctx: HandlerContext, method: string, error: unknown): unknown {
+export function translatePluginRpcError(
+  ctx: HandlerContext,
+  method: string,
+  error: unknown
+): unknown {
   if (!(error instanceof RuntimeRpcFailureError)) {
     return error
   }
@@ -81,16 +90,24 @@ function translatePluginRpcError(ctx: HandlerContext, method: string, error: unk
   return new RuntimeClientError(code, message, { ...data, command, nextSteps })
 }
 
-async function callPlugins<T>(ctx: HandlerContext, method: string, params?: unknown): Promise<T> {
+export async function callPlugins<T>(
+  ctx: HandlerContext,
+  method: string,
+  params?: unknown,
+  options?: { timeoutMs?: number }
+): Promise<T> {
   try {
-    return (await ctx.client.call<T>(method, params)).result
+    const reply = options
+      ? await ctx.client.call<T>(method, params, options)
+      : await ctx.client.call<T>(method, params)
+    return reply.result
   } catch (error) {
     throw translatePluginRpcError(ctx, method, error)
   }
 }
 
 /** Development folders are paths on the Orca host, which may not be this machine. */
-function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
+export function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
   if (process.env.ORCA_CLI_CWD) {
     throw new RuntimeClientError(
       'invalid_environment',
@@ -109,6 +126,17 @@ function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
   return resolve(ctx.cwd, value)
 }
 
+/** A `<dir|plugin-key>` argument as host params; a folder wins, since one may be named like a key. */
+export function devTargetParams(
+  ctx: HandlerContext,
+  target: string
+): { pluginKey: string } | { path: string } {
+  const localFolder = !ctx.client.isRemote && existsSync(resolve(ctx.cwd, target))
+  return !localFolder && !isAbsolute(target) && isQualifiedPluginKey(target)
+    ? { pluginKey: target }
+    : { path: resolveHostPluginPath(ctx, target) }
+}
+
 function formatPluginRow(plugin: PluginHostListEntry): string {
   const tags = [plugin.execution, plugin.isDev ? 'dev' : null, plugin.official ? 'official' : null]
   return `${plugin.pluginKey} ${plugin.version}  ${plugin.status}  ${tags.filter(Boolean).join(', ')}${plugin.error ? `\n  ${plugin.error}` : ''}`
@@ -124,7 +152,7 @@ function formatDevLoad(result: DevLoadResult): string {
   return [
     `${result.added ? 'Loaded' : 'Reloaded'} ${result.pluginKey} from ${result.path} (${how}).`,
     result.plugin ? formatPluginRow(result.plugin) : '',
-    'Orca reloads it when its files change; `orca plugin logs` shows what it printed.'
+    'Orca reloads it (and restarts its worker) when its files change; `orca plugin logs` shows what it printed.'
   ]
     .filter(Boolean)
     .join('\n')
@@ -135,10 +163,31 @@ async function devLoad(ctx: HandlerContext, path: string): Promise<void> {
     path,
     approvalFingerprint: stringFlag(ctx, 'approve')
   })
-  printPluginResult(ctx, result, formatDevLoad(result))
+  const typeFiles = await refreshDevTypes(ctx, path)
+  printPluginResult(
+    ctx,
+    { ...result, typeFiles },
+    [formatDevLoad(result), ...typeFiles.map((file) => `Refreshed ${file}`)].join('\n')
+  )
 }
 
-function requirePluginKey(ctx: HandlerContext): string {
+/** Why best effort and local only: typings help the editor; a remote host's folder is not here. */
+export async function refreshDevTypes(ctx: HandlerContext, path: string): Promise<string[]> {
+  if (ctx.client.isRemote) {
+    return []
+  }
+  // Lazy: the manifest schema it parses with is heavy for every other runtime command.
+  const types = await import('../plugin-authoring/plugin-type-files.js')
+  if (!(await types.pluginFolderWantsTypes(path))) {
+    return []
+  }
+  return types
+    .writePluginTypeFiles(path)
+    .then((files) => files.filter((file) => file.endsWith('.d.ts')))
+    .catch(() => [])
+}
+
+export function requirePluginKey(ctx: HandlerContext): string {
   const key = stringFlag(ctx, 'plugin')
   if (!key || !isQualifiedPluginKey(key)) {
     throw new RuntimeClientError(
@@ -161,6 +210,22 @@ async function setEnabled(ctx: HandlerContext, enabled: boolean): Promise<void> 
     ctx,
     { pluginKey, enabled, plugin },
     plugin ? formatPluginRow(plugin) : `${pluginKey} ${enabled ? 'enabled' : 'disabled'}`
+  )
+}
+
+async function setSystemEnabled(ctx: HandlerContext, enabled: boolean): Promise<void> {
+  const result = await callPlugins<{ enabled: boolean; plugins: PluginHostListEntry[] }>(
+    ctx,
+    'plugins.setSystemEnabled',
+    { enabled }
+  )
+  const rows = result.plugins.map(formatPluginRow)
+  printPluginResult(
+    ctx,
+    result,
+    enabled
+      ? ['Plugins are on. Only plugins approved earlier run.', ...rows].join('\n')
+      : 'Plugins are off. No plugin runs; installs and approvals are kept.'
   )
 }
 
@@ -187,8 +252,22 @@ export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
             .join('\n')
     )
   },
+  'plugin restart': async (ctx) => {
+    const result = await callPlugins<{ pluginKey: string; plugin: PluginHostListEntry | null }>(
+      ctx,
+      'plugins.restart',
+      { pluginKey: requirePluginKey(ctx) }
+    )
+    printPluginResult(
+      ctx,
+      result,
+      `Stopped ${result.pluginKey}'s worker; its next command or event starts the current code.`
+    )
+  },
   'plugin enable': (ctx) => setEnabled(ctx, true),
   'plugin disable': (ctx) => setEnabled(ctx, false),
+  'plugin system on': (ctx) => setSystemEnabled(ctx, true),
+  'plugin system off': (ctx) => setSystemEnabled(ctx, false),
   'plugin dev load': (ctx) =>
     devLoad(ctx, resolveHostPluginPath(ctx, requirePluginPathArg(ctx, 'dir'))),
   'plugin dev reload': async (ctx) => {
@@ -200,14 +279,22 @@ export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
     const plugins = await callPlugins<PluginHostListEntry[]>(ctx, 'plugins.refresh')
     printPluginResult(ctx, { plugins }, `Reloaded ${plugins.length} plugin(s).`)
   },
+  'plugin dev inspect': async (ctx) => {
+    const result = await callPlugins<{ pluginKey: string; opened: number }>(
+      ctx,
+      'plugins.devInspect',
+      { pluginKey: requirePluginKey(ctx) }
+    )
+    printPluginResult(
+      ctx,
+      result,
+      result.opened === 0
+        ? `${result.pluginKey} has no open panel or editor; open one in Orca, then run this again.`
+        : `Opened DevTools for ${result.opened} ${result.pluginKey} frame(s).`
+    )
+  },
   'plugin dev unload': async (ctx) => {
-    const target = requirePluginPathArg(ctx, 'target')
-    // Why the folder check first: a folder may be named like a plugin key.
-    const localFolder = !ctx.client.isRemote && existsSync(resolve(ctx.cwd, target))
-    const params =
-      !localFolder && !isAbsolute(target) && isQualifiedPluginKey(target)
-        ? { pluginKey: target }
-        : { path: resolveHostPluginPath(ctx, target) }
+    const params = devTargetParams(ctx, requirePluginPathArg(ctx, 'target'))
     const result = await callPlugins<{ path: string; pluginKey: string | null }>(
       ctx,
       'plugins.devUnload',

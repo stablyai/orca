@@ -1,3 +1,4 @@
+// @protected-copy: update signature and publisher warnings.
 import { getUpdateInstallBlockGuidance } from './update-install-block-guidance'
 import type { UpdateStatus } from '../../../../../shared/update-status-types'
 import type { UpdateErrorCardModel } from '../../UpdateErrorCardContent'

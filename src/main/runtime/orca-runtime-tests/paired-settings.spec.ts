@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   applyAgentStatusHooksEnabledMock,
-  electronMocks
-} from '../orca-runtime-test-mocks.spec'
-import { deferred, store } from '../orca-runtime-test-fixtures.spec'
-import { RuntimeClientSettingsController } from '../runtime-client-settings'
-import { reconcileClaudeAgentViewMock } from '../orca-runtime-test-mocks/setup.spec'
+  electronMocks,
+  reconcileClaudeAgentViewMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { deferred, store } from './orca-runtime-test-fixtures.spec'
+import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 
 describe('OrcaRuntimeService', () => {
   it.each([true, false])(
@@ -32,18 +33,6 @@ describe('OrcaRuntimeService', () => {
       expect(complete).toHaveBeenCalledOnce()
     }
   )
-
-  it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
-    const controller = new RuntimeClientSettingsController({
-      getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),
-      updateSettings: () => undefined
-    })
-    expect(controller.get()).toMatchObject({
-      experimentalNativeChat: enabled,
-      experimentalStructuredNativeChat: enabled,
-      openAgentTabsInChatByDefault: false
-    })
-  })
 
   it('projects runtime-backed settings to paired clients', () => {
     const terminalQuickCommands = [

@@ -1,7 +1,14 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
+import { ChevronLeft, GitCommitHorizontal } from 'lucide-react-native'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { colors, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { translate } from '../i18n/mobile-i18n'
@@ -10,22 +17,20 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { connectionRetryAction } from '../transport/connection-retry-action'
-import { gitCommitCompareRead } from './mobile-git-read-operations'
-import type { MobileGitChangedFile } from './git-compare-reply-schema'
+import { resolveMobileBranchBaseRefs } from './mobile-branch-base-ref'
 import {
+  appendMobileGitHistoryPage,
+  buildMobileCommitsListItems,
+  buildMobileCommitsView,
   fetchMobileGitHistory,
-  mapMobileCommitRows,
-  type MobileCommitRow
+  type MobileCommitsListItem,
+  type MobileGitHistoryPages
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
-import type { MobileGitHistoryResult } from './git-history-reply-schema'
+import type { MobileGitHistoryItem } from './git-history-reply-schema'
+import { BranchBaseRow, CommitsSectionHeader, renderCommitRow } from './MobileCommitListRows'
 
-type CommitFilesState = {
-  files?: MobileGitChangedFile[]
-  error?: string
-}
-
-type Props = {
+export type MobileGitHistoryListProps = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -33,7 +38,24 @@ type Props = {
   hostId: string
   bottomInset: number
   refreshNonce?: number
+  // Changes when the branch head or its upstream counts move, from either tab or the desktop.
+  refreshKey?: string
+  branchName?: string
+  busyAction?: string | null
+  actionError?: string | null
+  // The branch's remote step (Push, Force Push, Publish Branch or Sync) from the shared decision.
+  pushLabel?: string
+  pushDisabled?: boolean
+  pushBusy?: boolean
+  // Both reload the list once they settle.
+  onPush?: () => Promise<unknown>
+  onUpdateBranch?: (baseRef: string) => Promise<unknown>
+  // Set when shown as a pushed page, which draws its own back bar.
+  onBack?: () => void
+  onOpenCommit?: (commit: MobileGitHistoryItem) => void
 }
+
+type Loaded = { pages: MobileGitHistoryPages; baseRef: string | null; nowMs: number }
 
 // Memoize the hidden, mounted history list so commit-message keystrokes do not reconcile its FlatList.
 export const MobileGitHistoryList = memo(function MobileGitHistoryList({
@@ -42,47 +64,70 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   worktreeId,
   hostId,
   bottomInset,
-  refreshNonce = 0
-}: Props) {
+  refreshNonce = 0,
+  refreshKey = '',
+  branchName,
+  busyAction = null,
+  actionError = null,
+  pushLabel,
+  pushDisabled = false,
+  pushBusy = false,
+  onPush,
+  onUpdateBranch,
+  onBack,
+  onOpenCommit
+}: MobileGitHistoryListProps) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const forceReconnect = useForceReconnect()
-  // Keep the fetched page, not formatted rows, so relative times follow a language switch.
-  const [rows, setRows] = useState<{ result: MobileGitHistoryResult; nowMs: number } | null>(null)
-  const commitRows = useMemo(
-    () => (rows ? mapMobileCommitRows(rows.result, rows.nowMs) : null),
-    [rows, t]
-  )
+  // Keep fetched pages, not formatted rows, so relative times follow a language switch.
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [filesById, setFilesById] = useState<Record<string, CommitFilesState>>({})
-  const [filesReloadNonce, setFilesReloadNonce] = useState(0)
+  // A pushed page covers the hub's Refresh, and desktop-side commits move no status key, so the list pulls itself.
+  const [pulling, setPulling] = useState(false)
+  const [moreState, setMoreState] = useState<'idle' | 'loading' | 'error'>('idle')
+  // Action failures render in Changes too; show them here only for actions started here.
+  const [ranHere, setRanHere] = useState(false)
+  const generation = useRef(0)
+  // Paging waits for a first-page reload: its skip would count pages that reload is replacing.
+  const reloadingFirstPage = useRef(false)
 
-  // Clear on host/worktree switches even offline; retained segments must never show another tree’s history.
-  useEffect(() => {
-    setRows(null)
-    setError(null)
-    setExpanded(null)
-    setFilesById({})
-  }, [hostId, worktreeId])
+  const items = useMemo(
+    () =>
+      loaded
+        ? buildMobileCommitsListItems(buildMobileCommitsView(loaded.pages, loaded.nowMs))
+        : null,
+    [loaded, t]
+  )
 
   useEffect(() => {
-    let active = true
     if (!client || connState !== 'connected' || !worktreeId) {
-      // Keep loaded rows and expansion state visible through disconnection.
+      // Keep loaded rows visible through disconnection.
       return
     }
-    // Clear error precedence for retries, retaining rows until fresh history arrives.
-    setError(null)
+    const current = ++generation.current
+    reloadingFirstPage.current = true
     void (async () => {
       try {
-        const result = await fetchMobileGitHistory(client, worktreeId)
-        if (active) {
-          setRows({ result, nowMs: Date.now() })
+        // The base PRs and rebases target; without one the host lists HEAD's whole history.
+        // A failed lookup is a load failure; only a repo with no base gets HEAD's whole history.
+        const baseRef = await (
+          await resolveMobileBranchBaseRefs(client, worktreeId)
+        ).readEffectiveBaseRef()
+        const result = await fetchMobileGitHistory(client, worktreeId, { baseRef, skip: 0 })
+        if (generation.current === current) {
+          reloadingFirstPage.current = false
+          setPulling(false)
+          // Rows stay up through a refetch; only fresh history clears an earlier failure.
+          setError(null)
+          setMoreState('idle')
+          setLoaded({ pages: appendMobileGitHistoryPage(null, result), baseRef, nowMs: Date.now() })
         }
       } catch (err) {
-        if (active) {
+        if (generation.current === current) {
+          reloadingFirstPage.current = false
+          setPulling(false)
           setError(
             err instanceof Error
               ? err.message
@@ -91,10 +136,51 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         }
       }
     })()
+    // A disconnect or reload retires this load and any page in flight, so a late failure cannot hide kept rows.
     return () => {
-      active = false
+      generation.current += 1
+      reloadingFirstPage.current = false
+      setMoreState((prev) => (prev === 'loading' ? 'idle' : prev))
     }
-  }, [client, connState, reloadNonce, refreshNonce, worktreeId])
+  }, [client, connState, reloadNonce, refreshKey, refreshNonce, worktreeId])
+
+  // Scrolling pages on its own; after a failed page only the footer's Retry asks again.
+  const loadMore = useCallback(
+    (retry = false) => {
+      if (
+        !client ||
+        connState !== 'connected' ||
+        !loaded?.pages.hasMore ||
+        moreState === 'loading' ||
+        (moreState === 'error' && !retry) ||
+        reloadingFirstPage.current
+      ) {
+        return
+      }
+      const current = generation.current
+      setMoreState('loading')
+      fetchMobileGitHistory(client, worktreeId, {
+        baseRef: loaded.baseRef,
+        skip: loaded.pages.nextSkip
+      }).then(
+        (result) => {
+          if (generation.current !== current) {
+            return
+          }
+          setMoreState('idle')
+          setLoaded((prev) =>
+            prev ? { ...prev, pages: appendMobileGitHistoryPage(prev.pages, result) } : prev
+          )
+        },
+        () => {
+          if (generation.current === current) {
+            setMoreState('error')
+          }
+        }
+      )
+    },
+    [client, connState, loaded, moreState, worktreeId]
+  )
 
   // Fetching cannot revive a parked reconnect loop; force reconnect and let connState reload.
   const retryAction = connectionRetryAction({
@@ -111,223 +197,177 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           retryAction()
         }
 
-  const toggleCommit = useCallback((row: MobileCommitRow) => {
-    setExpanded((current) => (current === row.id ? null : row.id))
+  const runHere = useCallback((action: () => Promise<unknown>) => {
+    setRanHere(true)
+    void action().finally(() => setReloadNonce((n) => n + 1))
   }, [])
 
-  // Load in an effect so expansion during an outage retries on reconnect rather than caching the outage.
-  useEffect(() => {
-    if (!expanded || !client || connState !== 'connected') {
-      return
-    }
-    const commitId = expanded
-    let stale = false
-    setFilesById((prev) => ({ ...prev, [commitId]: { files: prev[commitId]?.files } }))
-    void gitCommitCompareRead
-      .request(client, { worktree: `id:${worktreeId}`, commitId })
-      .then((reply) => {
-        const compared = gitCommitCompareRead.interpret(reply)
-        if (!stale) {
-          setFilesById((prev) => ({ ...prev, [commitId]: { files: compared.entries } }))
-        }
-      })
-      .catch((err) => {
-        if (!stale) {
-          setFilesById((prev) => ({
-            ...prev,
-            [commitId]: {
-              files: prev[commitId]?.files,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : translate(
-                      'sourceControl.gitHistoryList.loadFilesFailed',
-                      'Unable to load commit files'
-                    )
-            }
-          }))
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [client, connState, expanded, filesReloadNonce, hostId, refreshNonce, worktreeId])
-
-  const connected = client !== null && connState === 'connected'
-
-  const renderCommit = useCallback(
-    ({ item }: { item: MobileCommitRow }) => {
-      const filesState = filesById[item.id]
-      const files = filesState?.files
-      const isOpen = expanded === item.id
-      return (
-        <View style={styles.commit}>
-          <Pressable
-            style={({ pressed }) => [styles.commitHeader, pressed && styles.commitHeaderPressed]}
-            onPress={() => toggleCommit(item)}
-          >
-            {isOpen ? (
-              <ChevronDown size={14} color={colors.textMuted} />
-            ) : (
-              <ChevronRight size={14} color={colors.textMuted} />
-            )}
-            <View style={styles.commitMain}>
-              <Text style={styles.commitSubject} numberOfLines={1}>
-                {item.subject}
-              </Text>
-              <Text style={styles.commitMeta} numberOfLines={1}>
-                {item.shortId} · {item.author} · {item.relativeTime}
-              </Text>
-            </View>
-          </Pressable>
-          {isOpen ? (
-            <View style={styles.files}>
-              {filesState?.error ? (
-                <View>
-                  <Text style={styles.empty}>{filesState.error}</Text>
-                  {connected || retryAction ? (
-                    <Pressable
-                      style={styles.retryButton}
-                      accessibilityLabel={t(
-                        'sourceControl.gitHistoryList.retryFiles',
-                        'Retry commit files'
-                      )}
-                      onPress={() => {
-                        if (connState !== 'connected') {
-                          retryAction?.()
-                        } else {
-                          setFilesReloadNonce((value) => value + 1)
-                        }
-                      }}
-                    >
-                      <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-              {files === undefined && !filesState?.error ? (
-                connected ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : (
-                  <Text style={styles.empty}>
-                    {t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')}
-                  </Text>
-                )
-              ) : null}
-              {files !== undefined ? (
-                files.length === 0 ? (
-                  <Text style={styles.empty}>
-                    {t('sourceControl.gitHistoryList.noFileChanges', 'No file changes')}
-                  </Text>
-                ) : (
-                  files.map((file) => (
-                    <View key={file.path} style={styles.fileRow}>
-                      <Text style={styles.filePath} numberOfLines={1}>
-                        {file.path}
-                      </Text>
-                      <Text style={styles.fileStat}>
-                        {file.added ? <Text style={styles.add}>+{file.added} </Text> : null}
-                        {file.removed ? <Text style={styles.del}>-{file.removed}</Text> : null}
-                      </Text>
-                    </View>
-                  ))
-                )
-              ) : null}
-            </View>
-          ) : null}
-        </View>
-      )
+  const openCommit = useCallback(
+    (id: string) => {
+      const item = loaded?.pages.items.find((candidate) => candidate.id === id)
+      if (item) {
+        onOpenCommit?.(item)
+      }
     },
-    [colorScheme, connected, connState, expanded, filesById, retryAction, toggleCommit, t]
+    [loaded, onOpenCommit]
   )
 
-  const view = resolveMobileHistoryScreenView({ connected, rows: commitRows, error })
+  const connected = client !== null && connState === 'connected'
+  const busy = busyAction !== null
+  const baseRef = loaded?.baseRef ?? null
 
-  if (view.kind === 'error' || view.kind === 'waiting') {
-    return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {view.kind === 'waiting'
-            ? t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')
-            : view.message}
-        </Text>
-        {retry ? (
-          <Pressable
-            style={styles.retryButton}
-            onPress={retry}
-            accessibilityLabel={t('common.retry', 'Retry')}
-          >
-            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    )
-  }
-  if (view.kind === 'loading') {
-    return (
-      <View style={styles.state}>
-        <ActivityIndicator color={colors.textSecondary} />
-      </View>
-    )
-  }
-  if (view.kind === 'empty') {
-    return (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {t('sourceControl.gitHistoryList.noCommits', 'No commits.')}
-        </Text>
-      </View>
-    )
-  }
-  return (
-    <FlatList
-      data={view.rows}
-      extraData={colorScheme}
-      renderItem={renderCommit}
-      keyExtractor={(row) => row.id}
-      contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
+  const renderItem = useCallback(
+    ({ item }: { item: MobileCommitsListItem }) => {
+      if (item.kind === 'section') {
+        return (
+          <CommitsSectionHeader
+            title={item.title}
+            push={
+              item.push && onPush && pushLabel
+                ? {
+                    label: pushLabel,
+                    busy: pushBusy,
+                    disabled: pushDisabled || !connected,
+                    onPress: () => runHere(onPush)
+                  }
+                : null
+            }
+          />
+        )
+      }
+      if (item.kind === 'base') {
+        return (
+          <BranchBaseRow
+            item={item}
+            update={
+              item.behind > 0 && item.canUpdateFromBase && onUpdateBranch && baseRef
+                ? {
+                    busy: busyAction === 'rebase',
+                    disabled: busy || !connected,
+                    onPress: () => runHere(() => onUpdateBranch(baseRef))
+                  }
+                : null
+            }
+          />
+        )
+      }
+      return renderCommitRow(item, openCommit)
+    },
+    // colorScheme: rows read themed styles at render.
+    [
+      baseRef,
+      busy,
+      busyAction,
+      colorScheme,
+      connected,
+      onPush,
+      onUpdateBranch,
+      openCommit,
+      pushBusy,
+      pushDisabled,
+      pushLabel,
+      runHere
+    ]
+  )
+
+  const header = onBack ? (
+    <NavBar
+      leading={
+        <NavBarButton
+          icon={ChevronLeft}
+          onPress={onBack}
+          accessibilityLabel={t('sourceControl.commits.back', 'Back to source control')}
+        />
+      }
+      title={t('sourceControl.commits.title', 'Commits')}
+      subtitle={branchName}
     />
+  ) : null
+
+  const view = resolveMobileHistoryScreenView({ connected, rows: items, error })
+  let body
+  if (view.kind === 'waiting') {
+    body = <MobileOfflineState onReconnect={retry} bottomInset={bottomInset} />
+  } else if (view.kind === 'error') {
+    body = <MobileLoadErrorState error={view.message} onRetry={retry} bottomInset={bottomInset} />
+  } else if (view.kind === 'loading') {
+    body = (
+      <MobileStateView
+        loading
+        title={t('sourceControl.gitHistoryList.loading', 'Loading commits…')}
+        bottomInset={bottomInset}
+      />
+    )
+  } else if (view.kind === 'empty') {
+    body = (
+      <MobileStateView
+        icon={GitCommitHorizontal}
+        title={t('sourceControl.gitHistoryList.noCommits', 'No commits.')}
+        bottomInset={bottomInset}
+      />
+    )
+  } else {
+    body = (
+      <FlatList
+        data={view.rows}
+        extraData={colorScheme}
+        renderItem={renderItem}
+        keyExtractor={(row) => row.key}
+        onEndReached={() => loadMore()}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            // A pull that a disconnect retired settles with the reconnect load; offline it shows nothing.
+            refreshing={pulling && connected}
+            onRefresh={() => {
+              if (connected) {
+                setPulling(true)
+                setReloadNonce((n) => n + 1)
+              }
+            }}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
+          />
+        }
+        ListHeaderComponent={
+          ranHere && actionError ? <Text style={styles.actionError}>{actionError}</Text> : null
+        }
+        ListFooterComponent={
+          moreState === 'loading' ? (
+            <ActivityIndicator style={styles.footer} size="small" color={colors.textSecondary} />
+          ) : moreState === 'error' ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => loadMore(true)}
+              style={({ pressed }) => [styles.footer, pressed && pressedStyle]}
+            >
+              <Text style={styles.footerText}>
+                {t('sourceControl.commits.loadMoreFailed', 'Couldn’t load more commits. Retry')}
+              </Text>
+            </Pressable>
+          ) : null
+        }
+        contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
+      />
+    )
+  }
+
+  return (
+    <View style={styles.screen}>
+      {header}
+      {body}
+    </View>
   )
 })
 
 const styles = themedStyleSheet(() => ({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  stateText: { color: colors.textMuted, fontSize: typography.bodySize },
-  retryButton: {
-    marginTop: spacing.md,
+  screen: { flex: 1 },
+  actionError: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
+    paddingTop: spacing.sm
   },
-  retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  commitHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
-  },
-  commitHeaderPressed: { backgroundColor: colors.bgRaised },
-  commitMain: { flex: 1, minWidth: 0 },
-  commitSubject: { color: colors.textPrimary, fontSize: typography.bodySize },
-  commitMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    marginTop: 2
-  },
-  files: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 4 },
-  fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  filePath: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
-  add: { color: colors.gitDecorationAdded },
-  del: { color: colors.gitDecorationDeleted },
-  empty: { color: colors.textMuted, fontSize: typography.metaSize }
+  footer: { paddingVertical: spacing.lg, alignItems: 'center' },
+  footerText: { color: colors.textSecondary, fontSize: typography.metaSize }
 }))

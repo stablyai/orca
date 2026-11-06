@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'

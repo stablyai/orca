@@ -18,6 +18,12 @@ export const toolStyles = themedStyleSheet(() => ({
   run: {
     marginTop: spacing.xs
   },
+  viewedImages: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

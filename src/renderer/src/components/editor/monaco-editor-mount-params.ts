@@ -2,9 +2,9 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { editor, IRange } from 'monaco-editor'
 import type { useContextualCopySetup } from './useContextualCopySetup'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
-import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
-import type { MonacoMarkdownSelectionAnnotationTarget } from './monaco-markdown-selection-annotation'
-import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
+import type { MarkdownDocLinkDecorationController } from './markdown-source-tools/monaco/monaco-markdown-doc-link-decorations'
+import type { MonacoMarkdownSelectionAnnotationTarget } from './markdown-source-tools/monaco/monaco-markdown-selection-annotation'
+import type { MarkdownCommentPopoverState } from './markdown-source-tools/monaco/use-monaco-markdown-annotations'
 
 export type MonacoEditorPropsRef = MutableRefObject<{
   relativePath: string

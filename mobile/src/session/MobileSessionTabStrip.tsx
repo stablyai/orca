@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { View, Text, ScrollView, Pressable } from 'react-native'
-import { File, FileText, Globe, Plus, SquareTerminal, Columns2 } from 'lucide-react-native'
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
+import { File, FileText, Globe, Plus, SquareTerminal } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -12,10 +12,9 @@ import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
-import { colors } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import {
   resolveTabStripEdgeHint,
   resolveTabStripHiddenTabs,
@@ -50,7 +49,6 @@ export function MobileSessionTabStrip({
     connState,
     createTabBusy,
     handleOpenNewTab,
-    handleOpenQuickCommands,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -59,9 +57,6 @@ export function MobileSessionTabStrip({
     setRenameTarget,
     activeHandleRef,
     visibleTabs,
-    canSplitTerminals,
-    terminalSplitActive,
-    setShowTerminalLayout,
     terminals
   } = controller
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
@@ -198,10 +193,11 @@ export function MobileSessionTabStrip({
             return (
               <Pressable
                 key={tab.id}
-                style={[
+                style={({ pressed }) => [
                   styles.tab,
                   index === 0 && !inTopBar && styles.tabFirst,
-                  tab.id === activeSessionTabId && styles.tabActive
+                  tab.id === activeSessionTabId && styles.tabActive,
+                  pressed && styles.tabPressed
                 ]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
@@ -279,28 +275,25 @@ export function MobileSessionTabStrip({
           </View>
         ) : null}
       </View>
-      {!actionsCollapsed && (canSplitTerminals || terminalSplitActive) && (
-        <MobileSessionHeaderIconButton
-          active={terminalSplitActive}
-          accessibilityLabel={t('session.tabStrip.terminalLayout', 'Terminal layout')}
-          icon={Columns2}
-          onPress={() => setShowTerminalLayout(true)}
-        />
-      )}
+      {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
-        <>
-          <MobileSessionHeaderIconButton
+        <View style={newTabStyles.slot}>
+          <NavBarButton
             disabled={createTabBusy || connState !== 'connected'}
             onPress={handleOpenNewTab}
             accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
             icon={Plus}
           />
-          <QuickCommandsTabButton
-            disabled={createTabBusy || connState !== 'connected'}
-            onPress={handleOpenQuickCommands}
-          />
-        </>
+        </View>
       ) : null}
     </View>
   )
 }
+
+// The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
+const newTabStyles = StyleSheet.create({
+  slot: {
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md
+  }
+})

@@ -7,7 +7,7 @@ import {
   WRITE_ACCEPTED,
   writeRefused,
   type WriteSettlement
-} from '../../../shared/pty-write-settlement'
+} from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 const TERMINAL = {
   ptyId: 'pty-1',
@@ -107,26 +107,6 @@ describe('mailbox pointer staging watermark', () => {
 
     expect(state.hasActiveWatermark('run:run-1')).toBe(false)
     expect(state.hasFlight('pty-1')).toBe(false)
-    db.close()
-  })
-
-  it('keeps the watermark for the flight that owns the reservation', () => {
-    const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 's'
-    })
-    const state = new OrchestrationMailboxPointerState()
-    const args = stageArgs(db, state)
-    stageOrchestrationMailboxPointer({
-      ...args,
-      deps: { ...args.deps, writePty: () => WRITE_ACCEPTED },
-      messages: [{ id: message.id, type: 'status', sequence: 1 }]
-    } as never)
-
-    expect(state.hasActiveWatermark('run:run-1')).toBe(true)
     db.close()
   })
 

@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { RuntimeClientCapabilities } from '../runtime-client-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
@@ -37,7 +38,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({
-      experimentalNativeChat: options.structuredChat === true
+      nativeChatProviders: options.structuredChat === true ? EVERY_AGENT_CHAT : {}
     }),
     restoreStructuredAgentSessionTabs: restore,
     listMobileSessionTabs,

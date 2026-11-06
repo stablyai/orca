@@ -4,9 +4,13 @@ import type { MemorySnapshot } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { mergeSnapshotAndSessions } from './mergeSnapshotAndSessions'
-import type { DaemonSession, RuntimeHostResourceSample } from './resource-usage-merge-types'
-import type { ResourceSessionBindingInputs } from './resource-session-bindings'
-import { countUnboundDaemonSessions } from './resource-session-bindings'
+import type { RuntimeHostResourceSample } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+
+import {
+  type ResourceSessionBindingInputs,
+  countUnboundDaemonSessions
+} from './resource-session-bindings'
 import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines

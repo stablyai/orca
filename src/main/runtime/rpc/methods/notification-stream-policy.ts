@@ -1,4 +1,4 @@
-import type { MobileNotificationEvent } from '../../runtime-mobile-notification-controller'
+import type { MobileNotificationEvent } from '../../push/notifications/runtime-mobile-notification-controller'
 
 export function createNotificationStreamFilter(includeDesktopSuppressed = false) {
   return (event: MobileNotificationEvent): boolean =>

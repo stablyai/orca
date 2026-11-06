@@ -56,7 +56,8 @@ function describeStop(stop: WorkerTurnStop, task: string, dispatchId: string): s
     what,
     stop.reason === 'exited'
       ? 'The Dispatch is still open. Stop the worker, then retry it or tell the user.'
-      : `The Dispatch is still open. Answer it with \`orca orchestration send --to dispatch:${dispatchId}\`, retry it, or stop the worker.`,
+      : // The reader runs its own CLI build, so name the subcommand, never an executable.
+        `The Dispatch is still open. Answer it with your Orca CLI's \`orchestration send --to dispatch:${dispatchId} --subject "<topic>" --body "<guidance>"\`, retry it, or stop the worker.`,
     ...(output
       ? [
           'Last output:',
@@ -65,7 +66,7 @@ function describeStop(stop: WorkerTurnStop, task: string, dispatchId: string): s
             : output
         ]
       : []),
-    `Full output: orca orchestration worker-read --dispatch ${dispatchId}`
+    `Full output: orchestration worker-read --dispatch ${dispatchId}`
   ].join('\n')
 }
 
