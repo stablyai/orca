@@ -283,7 +283,7 @@ export function useOnboardingFlowActions({
 
   const dismissOnboarding = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button'): Promise<boolean> => {
-      if (nextInFlightRef.current || busyLabel) {
+      if (busyLabel) {
         return false
       }
       setError(null)

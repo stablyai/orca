@@ -258,6 +258,8 @@ describe('onboarding completion destination', () => {
     expect(onOnboardingChange).not.toHaveBeenCalled()
     expect(openModal).not.toHaveBeenCalled()
     expect(launch).not.toHaveBeenCalled()
+    await act(() => result.current.setUpLater())
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex' }))
   })
 
   it('keeps onboarding open when completion cannot be saved', async () => {
@@ -269,6 +271,7 @@ describe('onboarding completion destination', () => {
     expect(launch).not.toHaveBeenCalled()
     expect(track).not.toHaveBeenCalledWith('onboarding_completed', expect.anything())
     await act(() => result.current.next())
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex' }))
   })
   it('keeps the captured target and owner through saving, dispatching once after unmount', async () => {
     const { result, persistCurrentStep } = renderActions(true)
