@@ -47,13 +47,21 @@ export class KeybindingService {
         'search'
       ]
     ] as const) {
-      if (!seed?.isPending()) {
+      if (!seed) {
         continue
       }
+      const pending = seed.isPending()
       try {
         // Seed already read the file; reuse its snapshot for the lazy cache.
-        this.snapshot = seedLegacyKeybindings(this.configPath, this.platform, bindings).snapshot
-        seed.markSeeded()
+        this.snapshot = seedLegacyKeybindings(
+          this.configPath,
+          this.platform,
+          pending ? bindings : {},
+          name
+        ).snapshot
+        if (pending) {
+          seed.markSeeded()
+        }
       } catch (error) {
         console.error(`Failed to seed legacy ${name} keybindings:`, error)
       }

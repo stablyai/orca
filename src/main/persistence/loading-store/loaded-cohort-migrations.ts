@@ -15,6 +15,13 @@ export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
   migrateKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    // Secondary profiles start with only the install's telemetry consent, before their first load.
+    const telemetryOnly =
+      Object.keys(state).length === 1 &&
+      isRecord(state.settings) &&
+      Object.keys(state.settings).length === 1 &&
+      isRecord(state.settings.telemetry)
+    const existingProfile = fileExistedOnLoad && !telemetryOnly
     for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
       const existing = state.settings?.[key]
       if (existing === 'pending' || existing === 'done') {
@@ -26,7 +33,7 @@ export class LoadedCohortMigrationOperations {
         ...state,
         settings: {
           ...state.settings,
-          [key]: fileExistedOnLoad ? 'pending' : 'done'
+          [key]: existingProfile ? 'pending' : 'done'
         }
       }
     }

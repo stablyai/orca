@@ -39,7 +39,7 @@ describe('KeybindingService cohort seeding', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  it('pins old search/clear bindings once and keeps a later reset across launches', () => {
+  it('keeps a search reset when another unmigrated profile opens the shared file', () => {
     const cohort = makeCohort(true)
     const options = {
       homePath: home,
@@ -54,12 +54,60 @@ describe('KeybindingService cohort seeding', () => {
     expect(cohort.seeded()).toBe(true)
 
     service.setActionBindings('worktree.palette', null)
-    const reopened = new KeybindingService(options)
+    const otherProfile = makeCohort(true)
+    const reopened = new KeybindingService({
+      ...options,
+      searchKeybindingSeed: otherProfile.controller
+    })
     const cmdK = { key: 'k', code: 'KeyK', meta: true, control: false, alt: false, shift: false }
     expect(
       keybindingMatchesAction('worktree.palette', cmdK, 'darwin', reopened.getOverrides())
     ).toBe(true)
     expect(reopened.getOverrides()).toEqual({ 'terminal.clear': ['Mod+K'] })
+    expect(otherProfile.seeded()).toBe(true)
+  })
+
+  it('keeps current defaults when a fresh profile opens before an unmigrated profile', () => {
+    new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      legacyTabSwitchSeed: makeCohort(false).controller,
+      searchKeybindingSeed: makeCohort(false).controller
+    })
+    const existing = new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      legacyTabSwitchSeed: makeCohort(true).controller,
+      searchKeybindingSeed: makeCohort(true).controller
+    })
+    expect(existing.getOverrides()).toEqual({})
+  })
+
+  it('keeps tab-switch resets across profiles and scopes migration completion to the platform', () => {
+    const options = { homePath: home, platform: 'linux' as const }
+    const linux = new KeybindingService({
+      ...options,
+      legacyTabSwitchSeed: makeCohort(true).controller,
+      searchKeybindingSeed: makeCohort(true).controller
+    })
+    linux.setActionBindings('tab.nextAllTypes', [])
+    linux.setActionBindings('tab.nextSameType', null)
+    const reopened = new KeybindingService({
+      ...options,
+      legacyTabSwitchSeed: makeCohort(true).controller
+    })
+    expect(
+      getEffectiveKeybindingsForAction('tab.nextSameType', 'linux', reopened.getOverrides())
+    ).toEqual(['Mod+Alt+BracketRight'])
+    const mac = new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      searchKeybindingSeed: makeCohort(true).controller
+    })
+    expect(mac.getOverrides()).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
   })
 
   it('preserves common, disabled and other-platform choices when upgrading search', () => {

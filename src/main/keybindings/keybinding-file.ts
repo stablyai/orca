@@ -108,11 +108,26 @@ export function migrateLegacyKeybindings(
 export function seedLegacyKeybindings(
   path: string,
   platform: NodeJS.Platform,
-  legacyBindings: Readonly<Partial<Record<KeybindingActionId, string[]>>>
+  legacyBindings: Readonly<Partial<Record<KeybindingActionId, string[]>>>,
+  migration: 'tab-switch' | 'search'
 ): { seeded: boolean; snapshot: KeybindingFileSnapshot } {
   const keybindingPlatform = getKeybindingPlatform(platform)
+  const readResult = readJsonDocument(path)
+  if (!readResult.document) {
+    throw new Error(readResult.error ?? 'Could not read keybindings file.')
+  }
+  const migrations = isJsonObject(readResult.document.migrations)
+    ? readResult.document.migrations
+    : {}
+  const platformMigrations = isJsonObject(migrations[keybindingPlatform])
+    ? migrations[keybindingPlatform]
+    : {}
   const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
   const current = readKeybindingFile(path, platform)
+  // Profiles share this file; a later profile must not undo another profile's reset.
+  if (platformMigrations[migration] === true) {
+    return { seeded: false, snapshot: current }
+  }
   const activePlatformOverrides = current.platformOverrides[keybindingPlatform] ?? {}
   // New defaults can hide valid pre-swap overrides as conflicts; inspect raw common/platform sections.
   const toSeed = actionIds.filter(
@@ -120,10 +135,6 @@ export function seedLegacyKeybindings(
       !Object.hasOwn(current.commonOverrides, actionId) &&
       !Object.hasOwn(activePlatformOverrides, actionId)
   )
-  if (toSeed.length === 0) {
-    return { seeded: false, snapshot: current }
-  }
-
   // Write valid pins, then throw on dropped pins so a fixed build can retry the pending cohort.
   const pins: (readonly [KeybindingActionId, string[]])[] = []
   const failedActionIds: KeybindingActionId[] = []
@@ -136,12 +147,23 @@ export function seedLegacyKeybindings(
     pins.push([actionId, normalized])
   }
   const snapshot =
-    pins.length > 0
-      ? writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
-          for (const [actionId, normalized] of pins) {
-            activePlatform[actionId] = normalized
+    pins.length > 0 || failedActionIds.length === 0
+      ? writeActivePlatformSection(
+          path,
+          platform,
+          current.commonOverrides,
+          (activePlatform, document) => {
+            for (const [actionId, normalized] of pins) {
+              activePlatform[actionId] = normalized
+            }
+            if (failedActionIds.length === 0) {
+              document.migrations = {
+                ...migrations,
+                [keybindingPlatform]: { ...platformMigrations, [migration]: true }
+              }
+            }
           }
-        })
+        )
       : current
   if (failedActionIds.length > 0) {
     throw new Error(`Could not normalize legacy binding for "${failedActionIds.join('", "')}".`)
@@ -154,7 +176,7 @@ function writeActivePlatformSection(
   path: string,
   platform: NodeJS.Platform,
   fallbackCommonOverrides: KeybindingOverrides,
-  mutateActivePlatform: (activePlatform: JsonObject) => void
+  mutateActivePlatform: (activePlatform: JsonObject, document: JsonObject) => void
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
@@ -175,7 +197,7 @@ function writeActivePlatformSection(
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
-  mutateActivePlatform(activePlatform)
+  mutateActivePlatform(activePlatform, document)
 
   document.version = FILE_VERSION
   document.keybindings = common
