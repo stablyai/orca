@@ -112,12 +112,12 @@ export function resolvePrompt(
   return state.lastPromptByPaneKey.get(paneKey) ?? ''
 }
 
-/** Missing updates inherit tool context; explicit unnamed updates clear it so approvals cannot reuse a previous question tool. */
+/** Missing updates inherit tool context; providers can clear unnamed updates to avoid reusing a previous question tool. */
 export function resolveToolState(
   state: HookListenerState,
   paneKey: string,
   update: ToolSnapshot,
-  options: { resetOnNewTurn: boolean }
+  options: { resetOnNewTurn: boolean; clearUnnamedToolUpdate?: boolean }
 ): ToolSnapshot {
   if (options.resetOnNewTurn) {
     state.lastToolByPaneKey.delete(paneKey)
@@ -126,7 +126,10 @@ export function resolveToolState(
   // Extractor metadata distinguishes absent updates from explicitly unpreviewable input.
   const clearsUnpreviewableInput =
     update.hasToolInputField === true && update.toolInput === undefined
-  const clearsUnidentifiedTool = update.hasToolUpdate === true && update.toolName === undefined
+  const clearsUnidentifiedTool =
+    update.hasToolUpdate === true &&
+    update.toolName === undefined &&
+    (update.hasToolInputField === true || options.clearUnnamedToolUpdate === true)
   const toolName = clearsUnidentifiedTool ? undefined : (update.toolName ?? previous.toolName)
   const toolInput =
     clearsUnidentifiedTool ||
