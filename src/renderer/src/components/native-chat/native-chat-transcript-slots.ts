@@ -1,13 +1,8 @@
 // Count only rendered rows: virtualized entries reserve height even when React would render null.
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatTurnBarRows } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnFold,
@@ -309,34 +304,4 @@ export function nativeChatSlotIndexOf(
       (slot.message.id === messageId ||
         slot.workRun?.some((member) => member.id === messageId) === true)
   )
-}
-
-/** Place queued and unjournaled not-sent messages after live activity, outside its turn. */
-export function splitNativeChatSlotsWaitingBehindLiveTurn(
-  slots: readonly NativeChatTranscriptSlot[],
-  journalItems: readonly AgentJournalRenderItem[] | undefined,
-  stopping = false,
-  journalSubmissions?: readonly AgentJournalSubmission[],
-  host: Parameters<typeof nativeChatMessagesWaitingBehindLiveTurn>[4] = {}
-): { slots: NativeChatTranscriptSlot[]; waitingSlots: NativeChatTranscriptSlot[] } {
-  const waiting = nativeChatMessagesWaitingBehindLiveTurn(
-    slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
-    journalItems,
-    stopping,
-    journalSubmissions,
-    host
-  )
-  const isWaiting = (slot: NativeChatTranscriptSlot): boolean =>
-    slot.kind === 'message' &&
-    (waiting.has(slot.message.id) ||
-      (slot.message.unsent === true && slot.message.journalPosition === undefined))
-  const waitingSlots: NativeChatTranscriptSlot[] = []
-  const transcriptSlots = slots.filter((slot) => {
-    if (isWaiting(slot)) {
-      waitingSlots.push(slot)
-      return false
-    }
-    return true
-  })
-  return { slots: transcriptSlots, waitingSlots }
 }

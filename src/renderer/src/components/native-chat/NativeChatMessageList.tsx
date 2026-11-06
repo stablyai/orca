@@ -33,7 +33,7 @@ import {
 import { useNativeChatTranscriptRowContext } from './use-native-chat-transcript-row-context'
 import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import { splitNativeChatSlotsWaitingBehindLiveTurn } from './native-chat-transcript-slots'
+import { splitNativeChatSlotsWaitingBehindLiveTurn } from './native-chat-slots-waiting-behind-live-turn'
 import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
