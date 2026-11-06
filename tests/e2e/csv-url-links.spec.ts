@@ -67,19 +67,23 @@ test('CSV links navigate from small and paged previews without replacing the ren
   electronApp
 }, testInfo) => {
   test.setTimeout(90_000)
-  const url = 'https://example.com/?from=csv#demo'
   const smallName = 'csv-links.csv'
   const largeName = 'csv-links-large.csv'
-  const content = `name,url,notes\nExample,${url},javascript:alert(1)\n`
-  writeFileSync(path.join(seededRepoPath, smallName), content)
+  const smallUrl = 'https://example.com/?from=small-csv#demo'
+  const largeUrl = 'https://example.com/?from=large-csv#demo'
+  const content = (url: string) => `name,url,notes\nExample,${url},javascript:alert(1)\n`
+  writeFileSync(path.join(seededRepoPath, smallName), content(smallUrl))
   writeFileSync(
     path.join(seededRepoPath, largeName),
-    content + `Record,${url},${'x'.repeat(200)}\n`.repeat(6000)
+    content(largeUrl) + `Record,${largeUrl},${'x'.repeat(200)}\n`.repeat(6000)
   )
   await orcaPage.evaluate(async () => {
     await window.__store?.getState().updateSettings({ openLinksInApp: true })
   })
-  for (const name of [smallName, largeName]) {
+  for (const [name, url] of [
+    [smallName, smallUrl],
+    [largeName, largeUrl]
+  ]) {
     await orcaPage.evaluate(
       ({ name, filePath }) => {
         const state = window.__store?.getState()
