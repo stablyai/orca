@@ -1,7 +1,4 @@
-import {
-  prepareWorktreeCreationHooks,
-  setupCreateArgs
-} from '@/lib/workspace/creation/worktree-creation-hook-preparation'
+import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
 import {
   activateAndRevealWorktree,
