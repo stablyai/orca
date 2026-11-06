@@ -478,3 +478,24 @@ describe('a switch away from the login System default holds', () => {
     expect(await movable('acct-a', HOST, hostFolders())).toEqual([ptyId(1)])
   })
 })
+
+describe('a pane the auth proxy has moved', () => {
+  beforeEach(() => {
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true
+    })
+  })
+
+  it('follows the assigned account instead of the transcript folder', async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: FOLDER_A }])
+    const host: ClaudeHostFolders = {
+      accounts: [],
+      paneAssignments: [{ ptyId: ptyId(1), accountId: 'acct-b' }]
+    }
+
+    expect(await movable('acct-b', HOST, host, 'acct-c')).toEqual([ptyId(1)])
+    expect(await movable('acct-a', HOST, host, 'acct-c')).toEqual([])
+    expect(await movable('acct-b', HOST, host, 'acct-b')).toEqual([])
+  })
+})

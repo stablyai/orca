@@ -20,6 +20,22 @@ function method(name: string) {
 }
 
 describe('account RPC methods', () => {
+  it('sets the Claude session-mover policy on the server that owns the accounts', async () => {
+    const state = { accounts: [], activeAccountId: null, sessionMover: 'move' }
+    const setClaudeSessionMover = vi.fn().mockReturnValue(state)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls setClaudeSessionMover.
+    const runtime = { setClaudeSessionMover } as unknown as OrcaRuntimeService
+    const set = method('accounts.setClaudeSessionMover')
+    if (isStreamingMethod(set)) {
+      throw new Error('accounts.setClaudeSessionMover must be a request method')
+    }
+
+    expect(set.permission).toBe('accounts-admin')
+    expect(() => set.params?.parse({ setting: 'sometimes' })).toThrow()
+    await expect(set.handler({ setting: 'move' }, { runtime })).resolves.toEqual(state)
+    expect(setClaudeSessionMover).toHaveBeenCalledWith('move')
+  })
+
   it.each([
     {
       methodName: 'accounts.addCodexFromHome',
@@ -39,6 +55,71 @@ describe('account RPC methods', () => {
     await addMethod.handler(testCase.params, { runtime })
 
     expect(add).toHaveBeenCalledWith(testCase.expectedSource, testCase.expectedOptions)
+  })
+
+  it('sets the Claude auth proxy on the server that owns the accounts', async () => {
+    const state = { accounts: [], activeAccountId: null, authProxy: 'off' as const }
+    const setClaudeAuthProxy = vi.fn().mockReturnValue(state)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls setClaudeAuthProxy.
+    const runtime = { setClaudeAuthProxy } as unknown as OrcaRuntimeService
+    const set = method('accounts.setClaudeAuthProxy')
+    if (isStreamingMethod(set)) {
+      throw new Error('accounts.setClaudeAuthProxy must be a request method')
+    }
+
+    expect(set.permission).toBe('accounts-admin')
+    expect(() => set.params?.parse({ enabled: 'yes' })).toThrow()
+    await expect(set.handler({ enabled: false }, { runtime })).resolves.toEqual(state)
+    expect(setClaudeAuthProxy).toHaveBeenCalledWith(false)
+  })
+
+  it('reads the Claude auth proxy status without changing the setting', async () => {
+    const status = {
+      listening: true,
+      host: '127.0.0.1',
+      port: 9,
+      slots: [{ slot: 'abc', accountId: 'account-a' }],
+      requestsLastHour: [{ accountId: 'account-a', count: 2 }],
+      unknownSlotRequests: 1,
+      lastError: null
+    }
+    const claudeAuthProxyStatus = vi.fn().mockReturnValue(status)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls claudeAuthProxyStatus.
+    const runtime = { claudeAuthProxyStatus } as unknown as OrcaRuntimeService
+    const read = method('accounts.claudeAuthProxyStatus')
+    if (isStreamingMethod(read)) {
+      throw new Error('accounts.claudeAuthProxyStatus must be a request method')
+    }
+
+    expect(read.permission).toBe('accounts-admin')
+    expect(() => read.params?.parse({ enabled: true })).toThrow()
+    await expect(read.handler({}, { runtime })).resolves.toEqual(status)
+    expect(claudeAuthProxyStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('assigns a pane on the execution host, including one without account services', async () => {
+    const assigned = { assigned: true }
+    const assignClaudePane = vi.fn().mockReturnValue(assigned)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls assignClaudePane.
+    const runtime = { assignClaudePane } as unknown as OrcaRuntimeService
+    const assign = method('accounts.assignClaudePane')
+    if (isStreamingMethod(assign)) {
+      throw new Error('accounts.assignClaudePane must be a request method')
+    }
+
+    expect(assign.permission).toBe('accounts-admin')
+    expect(() => assign.params?.parse({ ptyId: '', accountId: 'a' })).toThrow()
+    await expect(
+      assign.handler(
+        { ptyId: 'pty-1', accountId: 'account-b', configDir: '/home/u/.claude-b' },
+        { runtime }
+      )
+    ).resolves.toEqual(assigned)
+    expect(assignClaudePane).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      accountId: 'account-b',
+      configDir: '/home/u/.claude-b'
+    })
   })
 
   it.each([

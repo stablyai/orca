@@ -385,6 +385,12 @@ On a headless host running Orca (`orca serve` or the desktop app), add managed C
 orca account list
 orca account add                 # Claude by default
 orca account add --agent codex
+orca account auto-switch --agent claude --on      # switch Claude accounts before a usage limit
+orca account auto-switch --agent claude --on --environment <server>
+orca account auth-proxy --agent claude --on       # bill a running session through a local auth proxy
+orca account auth-proxy --agent claude --status
+orca account session-mover --agent claude --ask   # ask before moving a running Claude session
+orca account session-mover --agent claude --move
 ```
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.

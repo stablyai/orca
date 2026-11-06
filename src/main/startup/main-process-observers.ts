@@ -21,6 +21,7 @@ import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
+import { setClaudeSessionMoveStatsRecorder } from '../claude-accounts/claude-session-move-stats'
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -145,6 +146,7 @@ export function initializeMainProcessObservers(): void {
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
+  setClaudeSessionMoveStatsRecorder((stat) => state.stats?.recordClaudeSessionMove(stat))
   feedAgentSessionStats(state.stats, agentHookServer)
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)

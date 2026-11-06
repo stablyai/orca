@@ -1,3 +1,8 @@
+import {
+  createProviderClaudeSessionMover,
+  type ProviderClaudeSessionMoverOptions,
+  type StartedClaudeSessionMover
+} from '../../provider-claude-session-mover'
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
@@ -24,8 +29,15 @@ import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/accoun
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import { claudeBillingAccountForPaneKey } from '../../claude-accounts/claude-pane-account-registry'
+import {
+  createClaudeAccountAutoSwitch,
+  type ClaudeAutoSwitched
+} from '../../claude-accounts/claude-account-auto-switch'
+import { resolveClaudeAccountHome } from '../../claude-accounts/claude-account-home-attribution'
 
 export type ProviderAccountServices = {
+  sessionMover: StartedClaudeSessionMover | null
   rateLimits: RateLimitService
   codexRuntimeHome: CodexRuntimeHomeService
   codexAccounts: CodexAccountService
@@ -36,8 +48,10 @@ export type ProviderAccountServices = {
 export function createProviderAccountServices(
   store: Store,
   options: {
+    sessionMover?: ProviderClaudeSessionMoverOptions
     codexAccountLifecycle?: ConstructorParameters<typeof CodexAccountService>[3]
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
+    onClaudeAutoSwitched?: (switched: ClaudeAutoSwitched) => void
   }
 ): ProviderAccountServices {
   const agentView = getClaudeAgentViewService()
@@ -52,6 +66,14 @@ export function createProviderAccountServices(
   )
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  rateLimits.onStateChange(
+    createClaudeAccountAutoSwitch({
+      getSettings: () => store.getSettings(),
+      rateLimits,
+      accounts: claudeAccounts,
+      onSwitched: (switched) => options.onClaudeAutoSwitched?.(switched)
+    })
+  )
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)
@@ -112,7 +134,8 @@ export function createProviderAccountServices(
   )
   // Live statusLine usage avoids OAuth endpoint polling and its 429s.
   options.setClaudeStatusLineListener((event) => {
-    rateLimits.ingestLiveClaudeRateLimits(event)
+    const billingAccountId = event.paneKey ? claudeBillingAccountForPaneKey(event.paneKey) : null
+    rateLimits.ingestLiveClaudeRateLimits(billingAccountId ? { ...event, billingAccountId } : event)
   })
   rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()
@@ -168,6 +191,20 @@ export function createProviderAccountServices(
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
   })
+  // Why: a statusline post names its CLAUDE_CONFIG_DIR; only the account layer knows whose folder that is.
+  rateLimits.setLiveClaudeAccountResolver((configDir) =>
+    resolveClaudeAccountHome(configDir, store.getSettings().claudeManagedAccounts, (id) =>
+      claudeRuntimeAuth.router.accountHome(id)
+    )
+  )
+  rateLimits.setClaudeSystemDefaultCoverageResolver((accountId) =>
+    claudeRuntimeAuth.router.coveredBySystemDefault(accountId)
+  )
+  const sessionMover = createProviderClaudeSessionMover(
+    store,
+    { rateLimits, claudeAccounts, claudeRuntimeAuth },
+    options.sessionMover
+  )
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
     const activeIds = new Set(
@@ -188,5 +225,12 @@ export function createProviderAccountServices(
   })
   // Every host runs the poll timer; ticks fetch only while a window or remote reader watches.
   rateLimits.start({ fetchImmediately: false })
-  return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }
+  return {
+    sessionMover,
+    rateLimits,
+    codexRuntimeHome,
+    codexAccounts,
+    claudeRuntimeAuth,
+    claudeAccounts
+  }
 }
