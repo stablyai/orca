@@ -1,4 +1,5 @@
 // Use the pinned packaged build named by ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE; skip when it is unavailable.
+import { assertMacGuiLaunchAllowed } from '../../../config/scripts/macos-gui-launch-preflight.mjs'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
@@ -76,6 +77,7 @@ export async function launchPackagedPairedClient(args: {
   testInfo: TestInfo
   name?: string
 }): Promise<PackagedPairedClient> {
+  assertMacGuiLaunchAllowed()
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-packaged-client-'))
   let app: ElectronApplication | undefined
   try {
@@ -225,6 +227,7 @@ async function reserveLoopbackPort(): Promise<number> {
 
 // Spawn directly to capture readiness from process creation; Playwright can consume it before launch resolves.
 export async function launchPackagedServeHost(executablePath: string): Promise<PackagedServeHost> {
+  assertMacGuiLaunchAllowed()
   // Why /tmp on macOS: the released helper has a 103-byte Unix socket ceiling.
   const parent = process.platform === 'darwin' ? '/tmp' : os.tmpdir()
   const userDataDir = mkdtempSync(path.join(parent, 'orca-e2e-packaged-serve-'))
