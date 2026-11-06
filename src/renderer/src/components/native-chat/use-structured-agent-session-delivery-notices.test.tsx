@@ -115,7 +115,7 @@ it('keeps one usable sign-in owner as typed rejection and visible failure rows a
     submittedAt: 1,
     resolvedAt: 2
   }
-  let latest: NativeChatDeliveryNotice | undefined
+  const observed: { notice?: NativeChatDeliveryNotice } = {}
   function Chat({ typed, stated = false }: { typed: boolean; stated?: boolean }) {
     const notices = useStructuredAgentSessionDeliveryNotices({
       pending: EMPTY,
@@ -124,20 +124,22 @@ it('keeps one usable sign-in owner as typed rejection and visible failure rows a
       startFailures: stated ? [failure] : EMPTY,
       agentName: 'Pi'
     })
-    latest = notices.get(agentJournalSubmissionKey('refused'))
+    const notice = notices.get(agentJournalSubmissionKey('refused'))
+    observed.notice = notice
     return (
       <NativeChatSignInContext.Provider value={signInView}>
-        <NativeChatSignInButton failureKind={latest?.failureKind} />
+        <NativeChatSignInButton failureKind={notice?.failureKind} />
         {stated ? <NativeChatSignInButton failureKind="notSignedIn" /> : null}
       </NativeChatSignInContext.Provider>
     )
   }
   const view = render(<Chat typed={false} />)
-  const originalText = latest?.text
+  const originalText = observed.notice?.text
+  expect(originalText).toEqual(expect.any(String))
   expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
   // The typed fact adds the action while the existing host-authored sentence stays identical.
   view.rerender(<Chat typed />)
-  expect(latest?.text).toBe(originalText)
+  expect(observed.notice?.text).toBe(originalText)
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
   expect(signIn).toHaveBeenCalledOnce()
   view.rerender(<Chat typed stated />)
