@@ -20839,6 +20839,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}} içinde başlatıldı",
     "actionSaveFailed": "Bu eylem kaydedilemedi. Ayarlar bölümünden yeniden kaydetmeyi deneyin.",
     "discard": {
       "deleteUntrackedFileDescription": "Bu işlem, izlenmeyen bu dosyayı kalıcı olarak siler. Bu işlem geri alınamaz.",

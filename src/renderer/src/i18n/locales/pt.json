@@ -19,6 +19,7 @@
     "scanTooLarge": "A varredura da Abertura rápida é grande demais ({{reason}})."
   },
   "sourceControl": {
+    "sectionAgentStarted": "Iniciado em {{value0}}",
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculado"
     },

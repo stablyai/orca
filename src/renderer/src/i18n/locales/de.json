@@ -20856,6 +20856,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "In {{value0}} gestartet",
     "actionSaveFailed": "Diese Aktion konnte nicht gespeichert werden. In den Einstellungen erneut speichern.",
     "discard": {
       "deleteUntrackedFileDescription": "Diese nicht versionierte Datei wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",

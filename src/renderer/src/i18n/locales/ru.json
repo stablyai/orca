@@ -21544,6 +21544,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Запущено в {{value0}}",
     "actionSaveFailed": "Не удалось сохранить действие. Повторите сохранение в настройках.",
     "discard": {
       "deleteUntrackedFileDescription": "Этот неотслеживаемый файл будет безвозвратно удалён. Это действие нельзя отменить.",

@@ -37,11 +37,26 @@ vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
   getRuntimeGitMutationInFlight: mutationInFlight
 }))
 
+const navigate = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+  workspaceNavigationToastAction: ({
+    workspaceId,
+    executionHostId
+  }: {
+    workspaceId: string
+    executionHostId?: string
+  }) => ({
+    label: 'Go to workspace',
+    onClick: () => navigate(workspaceId, executionHostId)
+  })
+}))
 const initialState = useAppStore.getState()
 
 describe('AI operation recovery composer', () => {
   beforeEach(() => {
     vi.mocked(toast.error).mockClear()
+    vi.mocked(toast.success).mockClear()
+    navigate.mockClear()
     hostRpc.mockReset()
     mutationInFlight.mockReset().mockResolvedValue({ inFlight: false })
     detectAgents.mockReset().mockResolvedValue(['codex'])
@@ -115,7 +130,10 @@ describe('AI operation recovery composer', () => {
     useAppStore.setState({
       settings: { ...getDefaultSettings(path.resolve('tmp')), defaultTuiAgent: 'codex' },
       folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'ssh:other' })],
-      activeGroupIdByWorktree: { 'repo1::/tmp/wt': 'child-group' }
+      activeGroupIdByWorktree: { 'repo1::/tmp/wt': 'child-group' },
+      activeWorktreeId: 'folder:feature',
+      activeWorkspaceKey: 'folder:feature',
+      activeWorkspaceExecutionHostId: 'ssh:other'
     })
     await expect(
       launchSourceControlRecoveryAgentWithDefault({
@@ -128,7 +146,8 @@ describe('AI operation recovery composer', () => {
         executionHostId: 'local',
         actionId: 'fixCommitFailure',
         basePrompt: 'fix this commit',
-        getLaunchActionRecipe: () => sourceControlActionRecipeEntry({ agentId: 'codex' }),
+        getLaunchActionRecipe: () =>
+          sourceControlActionRecipeEntry({ agentId: 'codex', surface: 'chat' }),
         getStoreState: useAppStore.getState,
         copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
       })
@@ -137,10 +156,17 @@ describe('AI operation recovery composer', () => {
       expect.objectContaining({
         worktreeId: 'repo1::/tmp/wt',
         groupId: 'child-group',
+        activate: false,
+        requestedSurface: 'terminal',
         selectedExecutionHostId: 'local'
       })
     )
     expect(launchAgent.mock.calls[0]?.[0]).not.toHaveProperty('initialCwd')
+    expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
+    expect(toast.success).toHaveBeenCalledOnce()
+    expect(navigate).not.toHaveBeenCalled()
+    const action = vi.mocked(toast.success).mock.calls[0]?.[1]?.action
+    expect(action).toEqual(expect.objectContaining({ onClick: expect.any(Function) }))
   })
 
   it('claims recovery success only after the terminal and task handoff settle', async () => {

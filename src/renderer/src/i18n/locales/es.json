@@ -21655,6 +21655,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Iniciado en {{value0}}",
     "actionSaveFailed": "No se pudo guardar esta acción. Intenta guardarla de nuevo en Ajustes.",
     "discard": {
       "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",

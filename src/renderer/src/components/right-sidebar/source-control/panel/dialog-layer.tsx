@@ -212,7 +212,8 @@ export function SourceControlDialogLayer({
         onSaveAgentDefault={onSaveAgentDefault}
         onOpenSettings={onOpenSourceControlAiSettings}
         {...resolveConflictsEditor}
-        onLaunched={() =>
+        onLaunched={(backgroundWorkspaceId) =>
+          !backgroundWorkspaceId &&
           toast.success(
             translate(
               'auto.components.right.sidebar.SourceControl.e48caaf0dd',

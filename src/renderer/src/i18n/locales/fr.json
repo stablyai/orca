@@ -21205,6 +21205,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Démarré dans {{value0}}",
     "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"

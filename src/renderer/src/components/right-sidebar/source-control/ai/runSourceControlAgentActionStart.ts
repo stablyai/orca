@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store'
-import { canLaunchSourceControlSectionAgentInPlace } from './section-agent-placement'
+import {
+  canLaunchSourceControlSectionAgentInPlace,
+  showSourceControlAgentStartedIn
+} from './section-agent-placement'
 import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import {
   sourceControlActionRecipeEntry,
@@ -78,7 +81,7 @@ export type RunSourceControlAgentActionStartArgs = {
   onLaunchAccepted?: () => void
   /** Fires when a launch that already reported onLaunchAccepted failed to deliver its prompt. */
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: (backgroundWorkspaceId?: string) => void
   onClose: () => void
 }
 
@@ -155,7 +158,7 @@ export async function runSourceControlAgentActionStart({
     launchRecipe,
     selectedAgent,
     { renderedPrompt: trimmedCommandInput, settings },
-    inPlace ? { ...launchChoice, requestedSurface: 'terminal' } : launchChoice
+    placementWorkspaceId ? { ...launchChoice, requestedSurface: 'terminal' } : launchChoice
   )
   const {
     commandInput: _prompt,
@@ -224,6 +227,7 @@ export async function runSourceControlAgentActionStart({
   } else if (worktreeId) {
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
+      ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
       agent: selectedAgent,
       worktreeId: inPlace ?? worktreeId,
       groupId:
@@ -242,7 +246,7 @@ export async function runSourceControlAgentActionStart({
       launchSource
     })
     launched = Boolean(result)
-    if (result?.surface.kind === 'local-terminal') {
+    if (result?.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
       focusTerminalTabSurface(result.surface.tabId)
     }
     // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.
@@ -275,7 +279,12 @@ export async function runSourceControlAgentActionStart({
     return false
   }
 
-  onLaunched?.()
+  const backgroundWorkspaceId =
+    placementWorkspaceId && !inPlace && worktreeId ? worktreeId : undefined
+  if (backgroundWorkspaceId) {
+    showSourceControlAgentStartedIn(backgroundWorkspaceId, selectedExecutionHostId)
+  }
+  onLaunched?.(backgroundWorkspaceId)
   if (!signal?.aborted) {
     onClose()
   }

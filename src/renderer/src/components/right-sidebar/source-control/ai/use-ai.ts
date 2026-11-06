@@ -197,7 +197,8 @@ export function useSourceControlAi({
         launchSource: 'conflict_resolution',
         signal,
         onClose: () => {},
-        onLaunched: () =>
+        onLaunched: (backgroundWorkspaceId) =>
+          !backgroundWorkspaceId &&
           toast.success(
             translate(
               'auto.components.right.sidebar.SourceControl.e48caaf0dd',

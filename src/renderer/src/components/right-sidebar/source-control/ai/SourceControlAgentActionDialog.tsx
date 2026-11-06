@@ -53,7 +53,7 @@ export type SourceControlAgentActionDialogProps = {
   onLaunchAccepted?: () => void
   /** Fires when an accepted launch later failed to deliver its prompt. */
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: RunSourceControlAgentActionStartArgs['onLaunched']
   startLabel?: string
   onStart?: RunSourceControlAgentActionStartArgs['onStart']
 }

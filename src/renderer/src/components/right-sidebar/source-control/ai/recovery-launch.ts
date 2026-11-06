@@ -1,4 +1,7 @@
-import { canLaunchSourceControlSectionAgentInPlace } from './section-agent-placement'
+import {
+  canLaunchSourceControlSectionAgentInPlace,
+  showSourceControlAgentStartedIn
+} from './section-agent-placement'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
@@ -174,7 +177,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
 
   // A saved or default agent may open as a chat without its CLI.
   const opensAsChat = (agent: TuiAgent): boolean =>
-    !inPlace &&
+    !placementWorkspaceId &&
     agentChoiceMayOpenAsChat(
       useAppStore.getState(),
       agent,
@@ -212,6 +215,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   )
   const result = launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
+    ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
     agent,
     worktreeId: inPlace ?? activeWorktreeId,
     groupId:
@@ -221,7 +225,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
     prompt: commandInput,
     ...projection,
-    ...(inPlace ? { requestedSurface: 'terminal' as const } : {}),
+    ...(placementWorkspaceId ? { requestedSurface: 'terminal' as const } : {}),
     ...(executionHostId ? { selectedExecutionHostId: executionHostId } : {}),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
@@ -243,9 +247,13 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  if (result.surface.kind === 'local-terminal') {
+  if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
     focusTerminalTabSurface(result.surface.tabId)
   }
-  toast.success(copy.success)
+  if (placementWorkspaceId && !inPlace) {
+    showSourceControlAgentStartedIn(activeWorktreeId, executionHostId)
+  } else {
+    toast.success(copy.success)
+  }
   return true
 }

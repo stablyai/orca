@@ -20541,6 +20541,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "已在 {{value0}} 中啟動",
     "actionSaveFailed": "無法儲存此動作。請在「設定」中再試著儲存。",
     "discard": {
       "deleteUntrackedFileDescription": "這將永久刪除此未追蹤的檔案。此操作無法復原。",

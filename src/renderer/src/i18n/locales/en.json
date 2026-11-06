@@ -21511,6 +21511,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Started in {{value0}}",
     "actionSaveFailed": "Could not save this action. Try saving it again in Settings.",
     "discard": {
       "deleteUntrackedFileDescription": "This will permanently delete this untracked file. This cannot be undone.",

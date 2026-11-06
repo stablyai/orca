@@ -61,7 +61,7 @@ type UseSourceControlAgentActionStartArgs = {
   ) => void | Promise<void>
   onLaunchAccepted?: () => void
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: RunSourceControlAgentActionStartArgs['onLaunched']
   onClose: () => void
 }
 
