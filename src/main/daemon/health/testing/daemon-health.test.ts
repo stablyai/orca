@@ -367,8 +367,8 @@ describe('killStaleDaemon ownership decisions', () => {
     }
   })
 
-  it('removes a malformed pid record', async () => {
-    writeFileSync(getDaemonPidPath(dir), '{truncated', { mode: 0o600 })
+  it.each(['{truncated', ''])('removes a malformed pid record %j', async (record) => {
+    writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
 
     await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
       probeEndpoint: async () => 'missing'
