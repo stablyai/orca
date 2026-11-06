@@ -5,6 +5,8 @@ import {
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
 const WORKTREE_REFRESH_MS = 3000
+// Change notices arrive per agent step; read the catalog at most this often while shown, like Home.
+const CHANGE_REFRESH_MIN_INTERVAL_MS = 3000
 
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
@@ -37,14 +39,60 @@ export function startHostWorktreeRefresh({
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
+  // A buried or backgrounded page reads nothing on change notices; the foreground refresh catches up.
+  let reposOwed = false
+  let viewSettingsOwed = false
+  let lastChangeRefreshAt = 0
+  let trailingChangeRefresh: ReturnType<typeof setTimeout> | null = null
+  const hidden = (): boolean => appState.currentState !== 'active'
+
+  const readWorktrees = (options?: WorktreeRefreshOptions): void => {
+    lastChangeRefreshAt = Date.now()
+    void fetchWorktrees(options)
+  }
+  const refreshWorktreesOnChange = (): void => {
+    if (hidden() || trailingChangeRefresh) {
+      return
+    }
+    const wait = lastChangeRefreshAt + CHANGE_REFRESH_MIN_INTERVAL_MS - Date.now()
+    if (wait <= 0) {
+      readWorktrees()
+      return
+    }
+    trailingChangeRefresh = setTimeout(() => {
+      trailingChangeRefresh = null
+      refreshWorktreesOnChange()
+    }, wait)
+  }
+  const refreshReposOnChange = (): void => {
+    if (hidden()) {
+      reposOwed = true
+    } else {
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    }
+  }
+  const syncViewSettingsOnChange = (resend: boolean): void => {
+    if (hidden()) {
+      viewSettingsOwed = true
+    } else {
+      void (resend ? syncViewSettings({ resend }) : syncViewSettings())
+    }
+  }
 
   const refreshOnForeground = (): void => {
-    if (appState.currentState !== 'active') {
+    if (hidden()) {
       return
     }
     sidebarFeed?.refresh()
-    void fetchWorktrees({ allowDuringModal: true })
-    void fetchRepoMetadata({ queueIfInFlight: true })
+    readWorktrees({ allowDuringModal: true })
+    void fetchRepoMetadata(
+      reposOwed ? { force: true, queueIfInFlight: true } : { queueIfInFlight: true }
+    )
+    if (viewSettingsOwed) {
+      void syncViewSettings({ resend: true })
+    }
+    reposOwed = false
+    viewSettingsOwed = false
   }
 
   const appStateSubscription = appState.addEventListener('change', (state) => {
@@ -73,9 +121,11 @@ export function startHostWorktreeRefresh({
       eventStreamReady = true
       if (replayedAfterReconnect) {
         // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
-        void fetchWorktrees()
-        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-        void syncViewSettings({ resend: true })
+        if (!hidden()) {
+          readWorktrees()
+        }
+        refreshReposOnChange()
+        syncViewSettingsOnChange(true)
       }
       return
     }
@@ -87,15 +137,15 @@ export function startHostWorktreeRefresh({
       sidebarFeed?.changed(event)
     } else if (event.type === 'reposChanged') {
       // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
-      void fetchWorktrees()
-      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+      refreshWorktreesOnChange()
+      refreshReposOnChange()
     } else if (event.type === 'workspaceViewChanged') {
-      void syncViewSettings()
+      syncViewSettingsOnChange(false)
     } else if (event.type === 'worktreesChanged') {
-      void fetchWorktrees()
+      refreshWorktreesOnChange()
     } else if (event.type === 'sshStateChanged') {
       // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
-      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+      refreshReposOnChange()
     }
   })
 
@@ -111,6 +161,9 @@ export function startHostWorktreeRefresh({
 
   return () => {
     stale = true
+    if (trailingChangeRefresh) {
+      clearTimeout(trailingChangeRefresh)
+    }
     if (interval) {
       clearInterval(interval)
     }

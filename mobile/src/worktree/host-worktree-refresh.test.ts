@@ -175,6 +175,52 @@ describe('startHostWorktreeRefresh', () => {
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
   })
 
+  it('reads at most once per 3 s on a burst of change notices, with one trailing read', async () => {
+    // The feed turns the 3 s poll off, so only change notices read.
+    start({ refresh: vi.fn(), changed: vi.fn(), onInstalled: vi.fn(() => () => {}) })
+    fetchWorktrees.mockClear()
+
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    eventListener?.({ type: 'reposChanged' })
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads nothing on change notices while hidden and catches up once on return', async () => {
+    start()
+    fetchWorktrees.mockClear()
+    fetchRepoMetadata.mockClear()
+    syncViewSettings.mockClear()
+
+    appState.currentState = 'background'
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    eventListener?.({ type: 'reposChanged' })
+    eventListener?.({ type: 'workspaceViewChanged' })
+    eventListener?.({
+      type: 'sshStateChanged',
+      targetId: 'ssh-1',
+      state: { targetId: 'ssh-1', status: 'connected' }
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(fetchRepoMetadata).not.toHaveBeenCalled()
+    expect(syncViewSettings).not.toHaveBeenCalled()
+
+    appState.currentState = 'active'
+    appState.listener?.('active')
+    expect(fetchWorktrees).toHaveBeenCalledExactlyOnceWith({ allowDuringModal: true })
+    expect(fetchRepoMetadata).toHaveBeenCalledExactlyOnceWith({
+      force: true,
+      queueIfInFlight: true
+    })
+    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith({ resend: true })
+  })
+
   describe('with the host’s sidebar feed', () => {
     it('reads it at start, on every ready and on foreground, and never polls', async () => {
       const sidebarFeed = { refresh: vi.fn(), changed: vi.fn(), onInstalled: vi.fn(() => () => {}) }
