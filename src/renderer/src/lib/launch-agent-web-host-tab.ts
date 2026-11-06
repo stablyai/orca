@@ -202,7 +202,9 @@ export async function launchAgentInWebHostTab(args: {
               isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
             })
           } else {
-            // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
+            if (owner) {
+              throw new Error(failureMessage)
+            }
             const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
               kind: 'git-worktree',
               worktreeId
