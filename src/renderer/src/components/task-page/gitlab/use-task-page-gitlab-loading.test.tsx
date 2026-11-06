@@ -20,6 +20,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 import {
   GITLAB_TASK_FETCH_CONCURRENCY,
+  gitLabListQueryKey,
   useTaskPageGitLabLoading
 } from './use-task-page-gitlab-loading'
 
@@ -34,6 +35,14 @@ const serverRepo: Repo = {
   executionHostId: 'runtime:build-box'
 }
 const glListIssues = vi.fn()
+const LIST_STATE = {
+  gitlabItems: [],
+  gitlabError: null,
+  gitlabLoading: false,
+  displayedGitLabItems: [],
+  gitlabListQueryKey: null,
+  setGitlabListQueryKey: vi.fn()
+}
 
 beforeEach(() => {
   rpc.call.mockReset().mockResolvedValue({ items: [{ id: 'i1', updatedAt: '2026-10-01' }] })
@@ -67,7 +76,9 @@ describe('useTaskPageGitLabLoading', () => {
       gitlabView: view,
       setGitlabTodos: vi.fn(),
       setGitlabTodosLoading: vi.fn(),
-      activeGitlabFilter: 'opened'
+      activeGitlabFilter: 'opened',
+      gitlabMRInvolvement: null,
+      ...LIST_STATE
     })
     const model = {
       gitlabItems,
@@ -197,7 +208,9 @@ describe('useTaskPageGitLabLoading', () => {
         gitlabView: 'issues',
         setGitlabTodos: vi.fn(),
         setGitlabTodosLoading: vi.fn(),
-        activeGitlabFilter: 'opened'
+        activeGitlabFilter: 'opened',
+        gitlabMRInvolvement: null,
+        ...LIST_STATE
       })
     )
 
@@ -213,6 +226,57 @@ describe('useTaskPageGitLabLoading', () => {
       expect.objectContaining({ id: 'i1', repoId: 'server-repo' })
     ])
     expect(setGitlabError).not.toHaveBeenCalledWith(expect.stringContaining('Access denied'))
+  })
+
+  it("never shows the previous filter's rows while a changed filter loads", () => {
+    rpc.call.mockReturnValue(new Promise(() => {}))
+    const row: GitLabWorkItem = {
+      id: 'mr-1',
+      type: 'mr',
+      number: 1,
+      title: 'Someone else',
+      state: 'opened',
+      url: 'https://gitlab.com/group/app/-/merge_requests/1',
+      labels: [],
+      updatedAt: '2026-10-01T00:00:00Z',
+      author: null,
+      repoId: 'server-repo'
+    }
+    const everyoneKey = gitLabListQueryKey('mrs', 'opened', null, 'server-repo')
+    const initialProps: { involvement: 'authored' | null; nonce: number } = {
+      involvement: null,
+      nonce: 0
+    }
+    const { result, rerender } = renderHook(
+      ({ involvement, nonce }: { involvement: 'authored' | null; nonce: number }) =>
+        useTaskPageGitLabLoading({
+          selectedRepos: [serverRepo],
+          selectedReposKey: 'server-repo',
+          primaryRepo: serverRepo,
+          taskSource: 'gitlab',
+          setGitlabItems: vi.fn(),
+          setGitlabLoading: vi.fn(),
+          setGitlabError: vi.fn(),
+          gitlabRefreshNonce: nonce,
+          gitlabView: 'mrs',
+          setGitlabTodos: vi.fn(),
+          setGitlabTodosLoading: vi.fn(),
+          activeGitlabFilter: 'opened',
+          gitlabMRInvolvement: involvement,
+          ...LIST_STATE,
+          gitlabItems: [row],
+          displayedGitLabItems: [row],
+          gitlabListQueryKey: everyoneKey
+        }),
+      { initialProps }
+    )
+
+    rerender({ involvement: null, nonce: 1 })
+    expect(result.current.displayedGitLabItems).toEqual([row])
+
+    rerender({ involvement: 'authored', nonce: 2 })
+    expect(result.current.displayedGitLabItems).toEqual([])
+    expect(result.current.gitlabLoading).toBe(true)
   })
 
   it('shows MR rows and refresh errors without fetching the advertised probe page', async () => {
@@ -246,7 +310,9 @@ describe('useTaskPageGitLabLoading', () => {
           gitlabView: 'mrs',
           setGitlabTodos: vi.fn(),
           setGitlabTodosLoading: vi.fn(),
-          activeGitlabFilter: 'opened'
+          activeGitlabFilter: 'opened',
+          gitlabMRInvolvement: null,
+          ...LIST_STATE
         }),
       { initialProps: { refreshNonce: 0 } }
     )
@@ -302,7 +368,9 @@ describe('useTaskPageGitLabLoading', () => {
         gitlabView: 'issues',
         setGitlabTodos: vi.fn(),
         setGitlabTodosLoading: vi.fn(),
-        activeGitlabFilter: 'opened'
+        activeGitlabFilter: 'opened',
+        gitlabMRInvolvement: null,
+        ...LIST_STATE
       })
     )
   }

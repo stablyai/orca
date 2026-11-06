@@ -144,6 +144,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     if (adoptedHandle !== terminalHandle) {
       throw new Error('terminal_create_identity_conflict')
     }
+    // Same as inventory adoption: the stream carries this survivor's title and output.
+    this.mainDaemonAttachments.reconcile(session.id)
     return {
       handle: adoptedHandle,
       ptyId: session.id,

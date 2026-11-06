@@ -41,11 +41,13 @@ describe('NativeChatStructuredSessionStatus', () => {
         sessionId="session-1"
         paneKey="pane-1"
         isVisible
-        backgroundTasks={structuredSessionBackgroundTasksView(
-          { state: 'monitoring', supportsTaskStop: true, children },
-          null
-        )}
-        stopBackgroundTask={stopBackgroundTask}
+        tasks={{
+          backgroundTasks: structuredSessionBackgroundTasksView(
+            { state: 'monitoring', supportsTaskStop: true, children },
+            null
+          ),
+          stopBackgroundTask
+        }}
       />
     )
     const { rerender } = render(strip([helper({ invocationId: 'turn-1', generation: 1 })]))
