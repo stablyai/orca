@@ -16,6 +16,7 @@ export function trimTerminalLineRight(line: string): string {
   return end === line.length ? line : line.slice(0, end)
 }
 
+/** Split retained output at LF, keeping a CRLF terminator out of each complete segment. */
 export function splitRetainedTerminalTailSegments(value: string): {
   completeSegments: string[]
   partialSegment: string
