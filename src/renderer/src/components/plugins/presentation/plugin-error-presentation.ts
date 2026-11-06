@@ -42,19 +42,13 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       'The repository changed after Orca checked it. Try again.'
     )
   }
-  // Why before the git heuristic: production trust strings mention github.com, and
-  // /(git|...)/ matches the "git" substring inside "github", so reserved-identity
-  // blocks would mis-surface as a fetch failure (#12598 review).
-  if (detail.includes('reserved plugin identity')) {
-    if (detail.includes('local path')) {
-      return translate(
-        'auto.components.settings.pluginError.installReservedLocal',
-        'This plugin still uses a reserved official identity (publisher "stablyai" or an id starting with "orca-"). For local testing of a fork, change publisher and id in orca-plugin.json to your own values first.'
-      )
-    }
+  // Why: a fork of an official template keeps its reserved id/publisher, and this refusal used to
+  // fall through to a generic failure with no hint to rename (#12598). Checked before the Git
+  // heuristic because a reserved key such as `github.x` contains "git".
+  if (detail.includes('reserved for official orca plugins')) {
     return translate(
-      'auto.components.settings.pluginError.installReservedGit',
-      'This plugin uses a reserved official identity. Install it only from github.com/stablyai/..., or rename publisher/id for a third-party fork.'
+      'auto.components.settings.pluginError.installReservedIdentity',
+      'This plugin uses a name reserved for official Orca plugins, which install only from Orca’s catalog. For your own copy or fork, change "id" in orca-plugin.json so it doesn’t start with "orca-", and set "publisher" to your own name.'
     )
   }
   if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
