@@ -95,14 +95,14 @@
     "kind": "object-property:keywords",
     "text": "ghostty",
     "dynamic": false,
-    "count": 1
+    "count": 2
   },
   {
     "filePath": "src/renderer/src/components/settings/terminal/appearance/terminal-pane-appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",
     "dynamic": false,
-    "count": 1
+    "count": 2
   },
   {
     "filePath": "src/renderer/src/components/sidebar/workspace-card/metadata/worktree-card-meta-row.tsx",
