@@ -5,7 +5,7 @@ import {
   type MobileQueuedMessageCard
 } from '../../mobile-structured-queued-message-cards'
 
-import { createElement } from 'react'
+import { createElement, createRef } from 'react'
 import type * as QueuedCardRowModule from '../../MobileQueuedMessageCardRow'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
 import {
@@ -16,7 +16,10 @@ import {
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
+import {
+  MobileNativeChatQueuedMessages,
+  type MobileNativeChatQueuedMessagesHandle
+} from './MobileNativeChatQueuedMessages'
 import { useMobileQueuedMessageComposerActions } from '../../use-mobile-queued-message-composer-actions'
 import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-agent-mutation'
 import type {
@@ -218,6 +221,47 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(sender.props.accessibilityRole).toBe('button')
     await act(async () => sender.props.onPress())
     expect(open).toHaveBeenCalledWith(from, from.senders[0])
+  })
+
+  it('the empty-chord handle presses only the head card, and only where its own button would', async () => {
+    const cards = [card({ messageId: 'a' }), card({ messageId: 'b' })]
+    const steerHeadWith = async (
+      props: Partial<Parameters<typeof MobileNativeChatQueuedMessages>[0]>,
+      alternateSteers: boolean
+    ) => {
+      let settle!: (accepted: boolean) => void
+      const onSend = vi.fn(() => new Promise<boolean>((resolve) => (settle = resolve)))
+      const ref = createRef<MobileNativeChatQueuedMessagesHandle>()
+      await mount({ cards, agentWorking: true, onSend, ref, ...props })
+      let pressed = false
+      act(() => {
+        pressed = ref.current!.steerHead(alternateSteers)
+      })
+      return { pressed, onSend, again: () => ref.current!.steerHead(alternateSteers), settle }
+    }
+    const steered = await steerHeadWith({}, true)
+    expect(steered.pressed).toBe(true)
+    expect(steered.onSend).toHaveBeenCalledExactlyOnceWith('a')
+    // The head is still on its way, so a second chord is refused like a second tap.
+    expect(steered.again()).toBe(false)
+    expect(steered.onSend).toHaveBeenCalledOnce()
+    await act(async () => steered.settle(true))
+
+    // No turn running (the paused queue after Stop): the head card's own Send.
+    const idle = await steerHeadWith({ agentWorking: false }, false)
+    expect(idle.pressed).toBe(true)
+    expect(idle.onSend).toHaveBeenCalledExactlyOnceWith('a')
+    await act(async () => idle.settle(true))
+
+    for (const [props, alternateSteers] of [
+      [{}, false],
+      [{ steerHeld: true }, true],
+      [{ cards: [card({ messageId: 'a', command: true }), card({ messageId: 'b' })] }, true]
+    ] as const) {
+      const refused = await steerHeadWith(props, alternateSteers)
+      expect(refused.pressed).toBe(false)
+      expect(refused.onSend).not.toHaveBeenCalled()
+    }
   })
 
   it('runs one action per card at a time, however fast its controls are tapped', async () => {

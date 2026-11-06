@@ -25,8 +25,8 @@ const QUEUE_KEY = '\u0000queue'
 const MOVE_KEY = '\u0000move'
 
 export type MobileNativeChatQueuedMessagesHandle = {
-  /** Steers the head card as its own Steer would; false where that Steer is unavailable. */
-  steerHead: () => boolean
+  /** Runs the head card's own Steer, or with no turn running its Send; false where that press is unavailable. */
+  steerHead: (alternateSteers: boolean) => boolean
 }
 
 export type MobileNativeChatQueuedMessagesProps = {
@@ -92,9 +92,11 @@ export function MobileNativeChatQueuedMessages({
     return true
   }
   useImperativeHandle(ref, () => ({
-    steerHead: () => {
-      const head =
-        cards && agentWorking && !steerHeld ? headSteerableQueuedMessageCard(cards) : null
+    steerHead: (alternateSteers) => {
+      // Mid-turn only where the chord's other way is steer, or a second press would steer the card
+      // the first one just queued; with no turn running the card's own Send (a paused queue after Stop).
+      const steers = !steerHeld && (alternateSteers || !agentWorking)
+      const head = cards && steers ? headSteerableQueuedMessageCard(cards) : null
       return head !== null && editor?.messageId !== head.messageId && run(head.messageId, onSend)
     }
   }))

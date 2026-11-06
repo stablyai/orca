@@ -209,16 +209,17 @@ describe('mobile composer modifier submit in the paired web page', () => {
   })
 
   it.each([
-    { action: 'queue', offersChoice: true, steers: true },
-    { action: 'steer', offersChoice: true, steers: false },
-    { action: 'queue', offersChoice: false, steers: false }
+    { sendFollowUp: { action: 'queue', offersChoice: true }, alternateSteers: true },
+    { sendFollowUp: { action: 'steer', offersChoice: true }, alternateSteers: false },
+    { sendFollowUp: { action: 'queue', offersChoice: false }, alternateSteers: false },
+    { sendFollowUp: null, alternateSteers: false }
   ] as const)(
-    'steers the head card from an empty composer only where the chord means steer: %j',
-    async ({ steers, ...sendFollowUp }) => {
+    'hands an empty chord to the head card, saying whether its other way is steer: %j',
+    async ({ sendFollowUp, alternateSteers }) => {
       const steerHead = vi.fn(() => true)
       await render({ value: '', sendFollowUp, steerHead })
       expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-      expect(steerHead).toHaveBeenCalledTimes(steers ? 1 : 0)
+      expect(steerHead).toHaveBeenCalledExactlyOnceWith(alternateSteers)
       expect(onSend).not.toHaveBeenCalled()
     }
   )

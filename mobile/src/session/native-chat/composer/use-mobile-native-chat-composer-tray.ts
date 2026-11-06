@@ -22,8 +22,8 @@ import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-c
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInput | null>
-  /** Steers the head queued card through its own Steer; false where that Steer is unavailable. */
-  steerHead?: () => boolean
+  /** Runs the head queued card's own Steer or Send for an empty Cmd/Ctrl+Enter; false where it may not. */
+  steerHead?: (alternateSteers: boolean) => boolean
 }
 
 export type ComposerTrayProps = {
@@ -47,7 +47,10 @@ export function useMobileNativeChatComposerTray({
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
   const queuedRef = useRef<MobileNativeChatQueuedMessagesHandle>(null)
-  const steerHead = useCallback(() => queuedRef.current?.steerHead() ?? false, [])
+  const steerHead = useCallback(
+    (alternateSteers: boolean) => queuedRef.current?.steerHead(alternateSteers) ?? false,
+    []
+  )
   const {
     cards,
     onSend,

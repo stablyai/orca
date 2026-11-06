@@ -73,8 +73,8 @@ type Props = MobileNativeChatMicProps & {
   onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
   sendFollowUp?: NativeChatSendFollowUp | null
-  /** Steers the head queued card; Cmd/Ctrl+Enter on an empty composer uses it where its other way is steer. */
-  steerHead?: () => boolean
+  /** Cmd/Ctrl+Enter on an empty composer: steers the head queued card, or with no turn running sends it. */
+  steerHead?: (alternateSteers: boolean) => boolean
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */
@@ -312,10 +312,9 @@ export function MobileNativeChatComposer({
                 menu.pick(first)
               } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
                 void handleSend(editSession ? undefined : { alternate: true }, true)
-              } else if (followUp?.action === 'queue' && followUp.offersChoice) {
-                // Nothing of its own to steer, so the head card goes; never where the chord means queue,
-                // or a second press would steer the card the first one just queued.
-                steerHead?.()
+              } else if (!goal.holdsFollowUp) {
+                // Nothing of its own to send, so the head card goes; the queue decides whether it may.
+                steerHead?.(followUp?.action === 'queue' && followUp.offersChoice)
               }
             }}
             onFocus={() => {
