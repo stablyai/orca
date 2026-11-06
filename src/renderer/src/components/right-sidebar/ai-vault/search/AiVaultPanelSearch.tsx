@@ -155,7 +155,7 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (response?.kind === 'results' && search.hits.length === 0) {
+  if (response?.kind === 'results' && search.hits.length === 0 && !message) {
     message = translate(
       'sessionSearch.panel.noMatches',
       'No matching sessions in the indexed history. Try another query or scope.'
