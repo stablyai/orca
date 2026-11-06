@@ -1,3 +1,4 @@
+import type { AiVaultSessionTitle } from './ai-vault/contracts/ai-vault-session-title'
 import type { Tab } from './tab-types'
 import type { TerminalTab } from './workspace-layout/terminal-tab-types'
 import { isMeaningfulOpenCodeTerminalTitle } from './agent-status/title/providers/opencode-terminal-title'
@@ -8,8 +9,8 @@ export type TabNameSources = {
   quickCommandLabel?: string | null
   /** The program's own terminal title right now. */
   liveTitle: string
-  /** The agent session's own name, already checked to belong to this tab's session. */
-  sessionTitle?: string | null
+  /** The agent session's title, already checked to belong to this tab's session. */
+  sessionTitle?: Pick<AiVaultSessionTitle, 'title' | 'kind'> | null
   generatedTitle?: string | null
 }
 
@@ -18,11 +19,16 @@ export function resolveTabNameSource(
   sources: TabNameSources,
   generatedTitlesEnabled: boolean
 ): string {
+  const sessionTitle = sources.sessionTitle?.title.trim() ?? ''
+  // Why: a quick-command label only names the tab until the session has a name of its own (a rename or
+  // a provider-generated name); a first-prompt stand-in does not replace it. A typed tab name wins over both.
+  const sessionNamed = sources.sessionTitle?.kind === 'named'
   return (
     sources.customTitle?.trim() ||
-    sources.quickCommandLabel?.trim() ||
     (isMeaningfulOpenCodeTerminalTitle(sources.liveTitle) ? sources.liveTitle : '') ||
-    sources.sessionTitle?.trim() ||
+    (sessionNamed ? sessionTitle : '') ||
+    sources.quickCommandLabel?.trim() ||
+    sessionTitle ||
     (generatedTitlesEnabled ? sources.generatedTitle?.trim() : '') ||
     ''
   )
@@ -42,7 +48,7 @@ export function resolveTerminalTabTitle(
         customTitle: tab.customTitle,
         quickCommandLabel: tab.quickCommandLabel,
         liveTitle,
-        sessionTitle: tab.aiVaultTitle?.title,
+        sessionTitle: tab.aiVaultTitle,
         generatedTitle: tab.generatedTitle
       },
       generatedTitlesEnabled
@@ -66,7 +72,7 @@ export function resolveUnifiedTabLabel(
         customTitle: tab?.customLabel,
         quickCommandLabel: tab?.quickCommandLabel,
         liveTitle: liveLabel,
-        sessionTitle: tab?.aiVaultTitle?.title,
+        sessionTitle: tab?.aiVaultTitle,
         generatedTitle: tab?.generatedLabel
       },
       generatedTitlesEnabled

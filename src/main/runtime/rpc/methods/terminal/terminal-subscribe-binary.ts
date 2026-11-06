@@ -3,7 +3,10 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
+import {
+  iterateTerminalOutputFrameChunks,
+  type TerminalOutputMeta
+} from '../../terminal-output-frame-chunks'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
@@ -21,11 +24,17 @@ import type {
 } from './terminal-subscribe-types'
 import type { TerminalOutputChunk } from './terminal-stream-types'
 import { publishTerminalSubscribeBinarySnapshot } from './terminal-subscribe-binary-snapshot'
+import { sendTerminalCreditRecoverySnapshot } from './terminal-subscribe-recovery-snapshot'
 import { activateTerminalSubscribeBinaryLive } from './terminal-subscribe-binary-live'
 import { registerTerminalSubscribeBinaryControlFrames } from './terminal-subscribe-binary-control-frames'
-const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
+import {
+  createTerminalOutputCredit,
+  TERMINAL_QUERY_REPLAY_MAX_CHARS,
+  type TerminalOutputCredit
+} from './terminal-output-credit'
+import { registerTerminalStreamToken } from './terminal-stream-tokens'
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
-  const { runtime, registration, sendBinary, ptyId, clientId, isMobile } = args
+  const { runtime, registration, sendBinary, ptyId, clientId, viewerDeviceId, isMobile } = args
   if (!sendBinary) {
     throw new Error('binary_terminal_stream_required')
   }
@@ -53,13 +62,18 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   let abortRendererMountWait = (): void => {}
   let lateRendererReadyPromise: Promise<boolean> | null = null
   let outputBatcher: TerminalOutputBatcher | null = null
+  let outputCredit: TerminalOutputCredit | null = null
+  let streamToken: ReturnType<typeof registerTerminalStreamToken> | null = null
   let resolveStream = (): void => {}
   const streamClosed = new Promise<void>((resolve) => {
     resolveStream = resolve
   })
   registration.setTeardown(() => {
+    // Dispose credit first so the final flush cannot start a recovery on a closing stream.
+    outputCredit?.dispose()
     outputBatcher?.flush()
     outputBatcher?.dispose()
+    streamToken?.release()
     closed = true
     unsubscribeData()
     unsubscribeResize()
@@ -87,7 +101,22 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
       compressible: true
     })
   }
+  const sendOutputFrames = (data: string, meta?: TerminalOutputMeta): void => {
+    // Why text: phones before this release can't decode OutputSpan, so a span here is output they drop.
+    for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'text')) {
+      sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
+    }
+  }
+  // Only clients that ask get credit; others, and hosts before it, stream uncredited.
+  if (args.params.capabilities?.outputAck === 1) {
+    outputCredit = createTerminalOutputCredit({
+      send: sendOutputFrames,
+      sendRecoverySnapshot: () => sendTerminalCreditRecoverySnapshot(args, state)
+    })
+    streamToken = registerTerminalStreamToken(args.pairedDeviceId, outputCredit.acknowledge)
+  }
   outputBatcher = createTerminalOutputBatcher((data, meta) => {
+    // Metadata bypasses credit so dropped output never loses a cwd change.
     if (meta?.cwd !== undefined) {
       sendFrame(
         TerminalStreamOpcode.Metadata,
@@ -95,9 +124,10 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
         meta.seq
       )
     }
-    // Why text: phones before this release can't decode OutputSpan, so a span here is output they drop.
-    for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'text')) {
-      sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
+    if (outputCredit) {
+      outputCredit.deliver(data, meta)
+    } else {
+      sendOutputFrames(data, meta)
     }
   })
   unregisterBinaryHandler = registerTerminalSubscribeBinaryControlFrames(
@@ -165,7 +195,9 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
     ptyId,
     undefined,
-    isMobile ? clientId : undefined
+    isMobile ? clientId : undefined,
+    false,
+    viewerDeviceId
   )
   unsubscribeData = () => {
     releaseViewSubscriber()
@@ -264,10 +296,11 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     streamClosed,
     sendFrame
   }
-  await publishTerminalSubscribeBinarySnapshot(args, state)
+  await publishTerminalSubscribeBinarySnapshot(args, state, streamToken?.token ?? null)
   if (registration.released) {
     return
   }
-  activateTerminalSubscribeBinaryLive(args, state)
+  args.onEstablished?.()
+  activateTerminalSubscribeBinaryLive(args, state, outputCredit)
   await streamClosed
 }

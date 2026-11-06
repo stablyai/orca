@@ -17,13 +17,18 @@ import {
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-attention-capabilities'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import {
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
@@ -67,6 +72,16 @@ export type StructuredAgentSessionHostSupport = {
   phoneAttachments: boolean
   /** Older hosts lack Continue on an Orca-stopped turn or refuse it from a phone; the phone sends an ordinary message there. */
   continueInterrupted?: boolean
+  /** Older hosts report goals but refuse the phone's goal changes. */
+  phoneThreadGoal?: boolean
+  /** Older hosts advertise rewind but refuse it from a phone. */
+  phoneRewind?: boolean
+  /** The host continues a usage-limited chat at its reset and publishes that on the status feed. */
+  usageLimitAutoContinue: boolean
+  /** The host takes "Don't continue" from a phone. */
+  usageLimitContinueCancel: boolean
+  /** A send may name the usage-limit cut it continues. */
+  sendUsageLimitContinuation: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -103,6 +118,17 @@ export function structuredAgentSessionHostSupport(
     phoneAttachments: capabilities.includes(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY),
     continueInterrupted: capabilities.includes(
       AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
+    ),
+    phoneThreadGoal: capabilities.includes(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY),
+    phoneRewind: capabilities.includes(AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY),
+    usageLimitAutoContinue: capabilities.includes(
+      AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
+    ),
+    usageLimitContinueCancel: capabilities.includes(
+      AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY
+    ),
+    sendUsageLimitContinuation: capabilities.includes(
+      AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
     )
   }
 }

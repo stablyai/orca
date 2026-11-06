@@ -18,7 +18,10 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from '../mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
-import { UNCONFIRMED_SEND_MESSAGE } from '../use-mobile-native-chat-unconfirmed-sends'
+import {
+  UNCONFIRMED_SEND_MESSAGE,
+  UNCONFIRMED_SEND_RESTORED_MESSAGE
+} from '../use-mobile-native-chat-unconfirmed-sends'
 import type { MobileNativeChatLaunchDraftSeed } from '../composer/use-mobile-native-chat-launch-draft-seed'
 import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 
@@ -174,8 +177,16 @@ export function useMobileNativeChatMessageSend(args: {
           })
       if (outcome === 'unknown') {
         if (classification === 'chat') {
-          // Lost acknowledgement proves no failure; verify delivery by transcript rather than reporting not sent.
-          holdUnconfirmedSend(origin, text, () => onSendError(UNCONFIRMED_SEND_MESSAGE))
+          // Lost acknowledgement proves no failure; wait for the transcript, then hand back text it never showed.
+          holdUnconfirmedSend(origin, text, () => {
+            // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
+            if (!syncComposer || origin.queuedDuringWorkingEpoch !== undefined) {
+              onSendError(UNCONFIRMED_SEND_MESSAGE)
+              return
+            }
+            restoreRejectedDraft(origin, draftText)
+            onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+          })
         } else {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText, { preserveConversationCommands: true })

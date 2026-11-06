@@ -448,6 +448,32 @@ describe('browser password detector', () => {
     expect(sentOn(CHANNEL.typed)).toEqual([expect.objectContaining({ password: 'http-password' })])
   })
 
+  it('walks the whole document at most once per interval while a page keeps adding many nodes', async () => {
+    load('<div id="feed"></div>')
+    const walker = vi.spyOn(document, 'createTreeWalker')
+    const wholeDocumentWalks = (): number =>
+      walker.mock.calls.filter(([root]) => root === document).length
+    install()
+    enable()
+    expect(wholeDocumentWalks()).toBe(1)
+    const feed = el<HTMLDivElement>('#feed')
+    const addBurst = async (): Promise<void> => {
+      for (let i = 0; i < 250; i++) {
+        feed.appendChild(document.createElement('span'))
+      }
+      await vi.advanceTimersByTimeAsync(500)
+    }
+
+    for (let i = 0; i < 8; i++) {
+      await addBurst()
+    }
+    expect(wholeDocumentWalks()).toBe(1)
+
+    await addBurst()
+    await addBurst()
+    expect(wholeDocumentWalks()).toBe(2)
+  })
+
   it('discovers late nested shadow roots on interaction and observes later type changes', async () => {
     load('<div id="host"></div>')
     install()

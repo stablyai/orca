@@ -39,10 +39,11 @@ function WebRoot(): React.JSX.Element {
   const startupDecision = useMemo(() => {
     const decision = decideWebPairingStartup({
       initialPairingInput,
-      hasStoredEnvironment: readStoredWebRuntimeEnvironment() !== null
+      storedEnvironment: readStoredWebRuntimeEnvironment()
     })
     if (
       decision.kind === 'auto-save-runtime-offer' ||
+      decision.kind === 'confirm-replace-saved-server' ||
       (decision.kind === 'show-connect' && decision.initialPairingInput !== null)
     ) {
       clearPairingInputFromAddressBar()
@@ -67,8 +68,12 @@ function WebRoot(): React.JSX.Element {
     return (
       <WebConnect
         initialPairingInput={
-          startupDecision.kind === 'show-connect' ? startupDecision.initialPairingInput : null
+          startupDecision.kind === 'show-connect' ||
+          startupDecision.kind === 'confirm-replace-saved-server'
+            ? startupDecision.initialPairingInput
+            : null
         }
+        confirmReplacingSavedServer={startupDecision.kind === 'confirm-replace-saved-server'}
         onConnected={() => setHasEnvironment(true)}
       />
     )

@@ -1,4 +1,5 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../shared/files-runtime-capabilities'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
   TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
@@ -8,15 +9,10 @@ import {
 } from '../../../shared/runtime-file-contracts'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
-
-// Why: the host refuses a grant whose file changed, expired, or belongs to an earlier connection.
-const RENEWABLE_GRANT_ERRORS = new Set([
-  'terminal_file_grant_stale',
-  'terminal_file_grant_expired',
-  'terminal_file_grant_mismatch'
-])
+import { isRenewableTerminalFileGrantRefusal } from '../../../shared/terminal-file-grant-refusal'
 
 export type TerminalArtifactGrantTarget = {
   target: RuntimeClientTarget & { kind: 'environment' }
@@ -37,7 +33,10 @@ export function pinTerminalArtifactGrantTarget<T extends TerminalArtifactGrantTa
 }
 
 export function isRenewableGrantError(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && RENEWABLE_GRANT_ERRORS.has(error.message)
+  // Why IPC: a media preview's host calls run in main, which relays the host's refusal.
+  return isRenewableTerminalFileGrantRefusal(
+    error instanceof RuntimeRpcCallError ? error.message : readIpcErrorMessage(error)
+  )
 }
 
 export type RenewedTerminalArtifactGrant = {
@@ -137,6 +136,9 @@ export async function hostSavesGrantedFiles(environmentId: string): Promise<bool
   }
 }
 
+// Why: hosts cap a grant write at their mobile read budget; refuse before sending the bytes.
+export const TERMINAL_ARTIFACT_WRITE_MAX_BYTES = 512 * 1024
+
 /** Whether this host reports what a grant can serve, so a file another workspace holds may open in place; rejects when unanswered. */
 export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boolean> {
   return runtimeEnvironmentSupportsCapability(
@@ -147,8 +149,8 @@ export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boo
 }
 
 /**
- * Whether a grant can stand in for the workspace holding its file: it reads and saves only small
- * text, while the holder pages large files, stages large saves and serves bytes editors.
+ * Whether a grant can stand in for the workspace holding its file: it saves only small text in one
+ * request, while the holder stages large saves and writes bytes editors' edits.
  */
 export function grantServesInPlace(grant: { byteLength?: number; binary?: true }): boolean {
   return (
@@ -165,4 +167,17 @@ export function isSshWorkspaceGrantRefusal(error: unknown): boolean {
     error.code === 'runtime_error' &&
     error.message === SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE
   )
+}
+
+/** Older hosts read a granted file only whole and as text, so it opens in Orca instead of downloading. */
+export async function hostStreamsGrantedFiles(environmentId: string): Promise<boolean> {
+  try {
+    return await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY,
+      15_000
+    )
+  } catch {
+    return false
+  }
 }

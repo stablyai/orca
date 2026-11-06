@@ -1,5 +1,5 @@
 import type { PairingOffer } from '../pairing/mobile-relay-pairing-offer'
-import type { KnownRuntimeEnvironment } from './runtime-environments'
+import { getOrcadSshDeployment, type KnownRuntimeEnvironment } from './runtime-environments'
 
 /** Match persisted host-key identity: different saved names/endpoints can still describe one server. */
 export function findEnvironmentWithHostKey<T extends Pick<KnownRuntimeEnvironment, 'endpoints'>>(
@@ -27,4 +27,23 @@ export function savedHostKeySpelling(
     environment.endpoints.find((endpoint) => canonicalHostKeyB64(endpoint.publicKeyB64) === key)
       ?.publicKeyB64 ?? offer.publicKeyB64
   )
+}
+
+/** Another saved entry that manages the same server over SSH: one machine saved under a second alias. */
+export function findManagedSshTwin<
+  T extends Pick<KnownRuntimeEnvironment, 'id' | 'endpoints' | 'orcadDeployment'>
+>(environments: readonly T[], environment: T): T | undefined {
+  if (!getOrcadSshDeployment(environment)) {
+    return undefined
+  }
+  const others = environments.filter(
+    (other) => other.id !== environment.id && getOrcadSshDeployment(other) !== undefined
+  )
+  for (const endpoint of environment.endpoints) {
+    const twin = findEnvironmentWithHostKey(others, endpoint.publicKeyB64)
+    if (twin) {
+      return twin
+    }
+  }
+  return undefined
 }

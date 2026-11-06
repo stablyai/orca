@@ -42,7 +42,7 @@ export async function getManagedOrcadRuntimeStatus(
         recovery: transaction ? managedRecoveryStatus(transaction) : null,
         terminals: await collectManagedTerminalCensus(userDataPath, environment, record),
         migration: migrationStatus(userDataPath, environment.id),
-        deferredUpdate: currentManagedOrcadUpdateDeferral(environment.id, record.active)
+        deferredUpdate: currentManagedOrcadUpdateDeferral(environment.id, record)
       }
       return { status, record, serverTarget: context.serverTarget }
     }

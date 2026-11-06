@@ -1,7 +1,7 @@
 // With main layout ownership, emulate command replies and frames; install runtimeRpcClientWithLayoutApply/runtimeLayoutClientWithTestFrames mocks first. Inert for window-owned layouts.
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { _resetLayoutFramePositionForTests } from '@/runtime/layout-frame-position'
 import { _resetPendingTabsForTests } from '@/runtime/layout-owner-pending-tabs'

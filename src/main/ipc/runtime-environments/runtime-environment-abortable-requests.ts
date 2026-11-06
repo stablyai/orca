@@ -65,9 +65,10 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal) {
+  if (signal || prepareRequest) {
     return sendRemoteRuntimeSharedControlRequest(
       environmentId,
       connection,
@@ -75,7 +76,8 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       params,
       timeoutMs,
       envelope,
-      signal
+      signal,
+      ...(prepareRequest ? ([prepareRequest] as const) : [])
     )
   }
   return envelope

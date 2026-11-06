@@ -34,7 +34,7 @@ import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type GitHubMarkdownComposerProps = {
   value: string

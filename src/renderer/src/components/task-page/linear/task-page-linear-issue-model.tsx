@@ -1,5 +1,5 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCustomViewModel } from '../../../../../shared/linear/project-types'

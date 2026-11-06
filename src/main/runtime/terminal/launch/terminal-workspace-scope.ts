@@ -35,7 +35,7 @@ import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
+import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/worktree-id-requires-full-path-error'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [

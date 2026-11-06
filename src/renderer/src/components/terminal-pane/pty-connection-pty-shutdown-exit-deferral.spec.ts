@@ -54,7 +54,8 @@ export function registerPtyConnectionShutdownExitDeferralTests(
   it('defers all exit-side state mutation while worktree shutdown verification is pending', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+    const { settleDeferredPtyShutdownExits } =
+      await import('./pty-transport/shutdown/pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')
     fixture.transportQueue.push(transport)
     const manager = createManager(1)
@@ -92,7 +93,8 @@ export function registerPtyConnectionShutdownExitDeferralTests(
   it('keeps renderer state intact for an exit deferred through rollback', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+    const { settleDeferredPtyShutdownExits } =
+      await import('./pty-transport/shutdown/pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')
     fixture.transportQueue.push(transport)
     const manager = createManager(1)
@@ -126,7 +128,8 @@ export function registerPtyConnectionShutdownExitDeferralTests(
   it('preserves wake identifiers when exit arrives after a committed shutdown', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { markCommittedPtyShutdowns } = await import('./pty-shutdown-exit-deferral')
+    const { markCommittedPtyShutdowns } =
+      await import('./pty-transport/shutdown/pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')
     fixture.transportQueue.push(transport)
     const manager = createManager(1)

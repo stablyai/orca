@@ -1,13 +1,14 @@
-import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react'
-import { Animated, Easing, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { DetailCardFocusBoundary, DetailCardLayer, commitDetailCardExit } from './detail-card-host'
+import type { ReactNode, RefObject } from 'react'
+import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { DetailCardFocusBoundary, DetailCardLayer } from './detail-card-host'
 import type { AnchoredDetailCardState } from './use-anchored-detail-card'
+import { useDetailCardMotion } from './use-detail-card-motion'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-/** Layer coordinates: below a trigger by the card's leading and top edges, above it by its trailing and bottom edges. */
+/** Below a trigger by the card's leading/top edges, or above it by its trailing/bottom edges. */
 export type DetailCardPlacement =
   | { side: 'below'; left: number; top: number }
   | { side: 'above'; right: number; bottom: number }
@@ -39,6 +40,7 @@ export function AnchoredDetailCardLayer({
   /** Replaces the hook's layer ref, for a caller that also needs the node. */
   layerRef?: (view: View | null) => void
 }): React.JSX.Element {
+  const reducedMotion = useReducedMotionEnabled()
   return (
     <DetailCardLayer>
       <View
@@ -52,6 +54,7 @@ export function AnchoredDetailCardLayer({
           <AnchoredDetailCard
             {...card.visual}
             {...content}
+            reducedMotion={reducedMotion}
             bounds={card.bounds}
             layerHeight={card.layerHeight}
             contentRef={card.contentRef}
@@ -79,6 +82,7 @@ function AnchoredDetailCard({
   boundaryRefs,
   active,
   obscured,
+  reducedMotion,
   onSettled,
   title,
   titleTrailing,
@@ -95,38 +99,21 @@ function AnchoredDetailCard({
   boundaryRefs: RefObject<unknown[]>
   active: boolean
   obscured: boolean
+  reducedMotion: boolean | null
   onSettled: (motion: number) => void
 } & DetailCardContent): React.JSX.Element {
   useMobileColorScheme()
   // Unknown counts as reduced, so the card never slides before the setting is read.
-  const slide = useReducedMotionEnabled() === false
-  const [progress] = useState(() => new Animated.Value(0))
-  useLayoutEffect(() => {
-    let disposed = false
-    progress.stopAnimation((value) => {
-      if (disposed) {
-        return
-      }
-      if (target === 0 && value === 0) {
-        onSettled(motion)
-        return
-      }
-      Animated.timing(progress, {
-        toValue: target,
-        duration: TRANSITION_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web'
-      }).start(({ finished }) => {
-        if (!disposed && finished && target === 0) {
-          commitDetailCardExit(() => onSettled(motion))
-        }
-      })
-    })
-    return () => {
-      disposed = true
-      progress.stopAnimation()
-    }
-  }, [motion, target, progress, onSettled])
+  const slide = reducedMotion === false
+  const motionStyle = useDetailCardMotion({
+    contentRef,
+    motion,
+    target,
+    slide,
+    offset: anchor.side === 'below' ? SLIDE_FROM : -SLIDE_FROM,
+    duration: TRANSITION_MS,
+    onSettled
+  })
 
   const width = Math.max(0, Math.min(CARD_WIDTH, bounds.right - bounds.left - EDGE_INSET * 2))
   const minLeft = bounds.left + EDGE_INSET
@@ -164,19 +151,9 @@ function AnchoredDetailCard({
           {
             display: obscured ? 'none' : 'flex',
             ...placement,
-            width,
-            opacity: progress,
-            transform: slide
-              ? [
-                  {
-                    translateY: progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [anchor.side === 'below' ? SLIDE_FROM : -SLIDE_FROM, 0]
-                    })
-                  }
-                ]
-              : []
-          }
+            width
+          },
+          motionStyle
         ]}
       >
         <ScrollView contentContainerStyle={styles.content} tabIndex={active ? 0 : -1}>

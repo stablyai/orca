@@ -17,6 +17,7 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 
 export function getWorktreeRevealCollapsedGroupKeys(args: {
@@ -26,6 +27,8 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
   visibleWorktrees?: readonly Worktree[]
   filterRepoIds?: readonly string[]
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+  /** Needed only without an occurrence plan, so a parent on another machine is revealed too. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   repoMap: Map<string, Repo>
   defaultHostId: ExecutionHostId
   hostScopedGroups: boolean
@@ -53,6 +56,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       workspaceStatuses: args.workspaceStatuses,
       projectOrderBy: 'manual',
       lineageById: { ...args.worktreeLineageById },
+      lineageParentIdentities: args.lineageParentIdentities,
       worktreeMap: new Map(args.worktrees.map((row) => [row.id, row])),
       nestLineage: true,
       projectGroups: args.projectGroups,

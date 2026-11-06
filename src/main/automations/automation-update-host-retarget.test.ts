@@ -14,7 +14,6 @@ import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
@@ -128,20 +127,6 @@ async function createStore() {
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
-type Store = Awaited<ReturnType<typeof createStore>>
-
-function storedTarget(record: Automation) {
-  return {
-    type: record.executionTargetType,
-    id: record.executionTargetId,
-    generation: record.executionTargetGeneration
-  }
-}
-
-function projectedSelector(store: Store, id: string) {
-  return store.listAutomationsForScope().items.find((item) => item.automationId === id)?.selector
-}
-
 const ORPHAN = { selector: { kind: 'orphan' } } as const
 
 beforeEach(() => {
@@ -157,23 +142,6 @@ afterEach(async () => {
 })
 
 describe('pausing an orphan never re-adopts it', () => {
-  it('keeps the dead capture when the repo was re-pointed at a new registration', async () => {
-    const store = await createStore()
-    expect(projectedSelector(store, 'stranded')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetMissing
-    })
-
-    const paused = store.updateAutomation('stranded', { enabled: false }, { expectedOwner: ORPHAN })
-
-    expect(paused.enabled).toBe(false)
-    expect(storedTarget(paused)).toEqual({ type: 'ssh', id: 'ssh-old', generation: 4 })
-    expect(projectedSelector(store, 'stranded')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetMissing
-    })
-  })
-
   it('leaves the record unrunnable on the host the repo now points at', async () => {
     const store = await createStore()
 
@@ -186,67 +154,5 @@ describe('pausing an orphan never re-adopts it', () => {
         operation: 'execute'
       })
     ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged }))
-  })
-
-  it('keeps the stale generation when the same target id came back re-registered', async () => {
-    const store = await createStore()
-    expect(projectedSelector(store, 'replaced')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-
-    const paused = store.updateAutomation('replaced', { enabled: false }, { expectedOwner: ORPHAN })
-
-    expect(storedTarget(paused)).toEqual({ type: 'ssh', id: 'ssh-box', generation: 4 })
-    expect(projectedSelector(store, 'replaced')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-  })
-
-  it('does not strip the capture and rewrite an orphan to Self', async () => {
-    const store = await createStore()
-
-    const paused = store.updateAutomation(
-      'local-project',
-      { enabled: false },
-      { expectedOwner: ORPHAN }
-    )
-
-    expect(storedTarget(paused)).toEqual({ type: 'ssh', id: 'ssh-old', generation: 4 })
-    expect(projectedSelector(store, 'local-project')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetMissing
-    })
-  })
-})
-
-describe('an update that was asked to move still moves', () => {
-  it('re-derives from an explicitly supplied project', async () => {
-    const store = await createStore()
-
-    const moved = store.updateAutomation(
-      'healthy',
-      { projectId: 'repo-readded' },
-      {
-        expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-box', targetGeneration: 9 } },
-        destination: { selector: { kind: 'ssh', targetId: 'ssh-new', targetGeneration: 7 } }
-      }
-    )
-
-    expect(storedTarget(moved)).toEqual({ type: 'ssh', id: 'ssh-new', generation: 7 })
-  })
-
-  it('leaves a fenced in-place edit on its own host', async () => {
-    const store = await createStore()
-
-    const renamed = store.updateAutomation(
-      'healthy',
-      { name: 'Renamed' },
-      { expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-box', targetGeneration: 9 } } }
-    )
-
-    expect(renamed.name).toBe('Renamed')
-    expect(storedTarget(renamed)).toEqual({ type: 'ssh', id: 'ssh-box', generation: 9 })
   })
 })

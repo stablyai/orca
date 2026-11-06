@@ -229,10 +229,22 @@
       "clipboardRejected": "A área de transferência rejeitou o texto.",
       "copyFailed": "Falha ao copiar",
       "copyMessage": "Copiar mensagem",
-      "selectText": "Selecionar texto"
+      "selectText": "Selecionar texto",
+      "rewind": "Voltar até aqui"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Fechar imagem"
+      "closeImage": "Fechar imagem",
+      "imageActions": "Ações da imagem",
+      "copyImage": "Copiar imagem",
+      "saveImage": "Salvar imagem",
+      "share": "Compartilhar…",
+      "imageCopied": "Imagem copiada",
+      "imageSaved": "Imagem salva",
+      "copyFailed": "Não foi possível copiar a imagem",
+      "saveFailed": "Não foi possível salvar a imagem",
+      "shareFailed": "Não foi possível compartilhar a imagem",
+      "photosAccessDenied": "Permita que o Orca adicione fotos em Ajustes",
+      "imageTooLarge": "Esta imagem é grande demais"
     },
     "nativeChatProse": {
       "attachedImage": "Imagem anexada",
@@ -566,7 +578,6 @@
     "usageLimit": {
       "reached": "{{agent}} atingiu seu limite de uso.",
       "reachedNamed": "{{agent}} atingiu seu limite de {{window}}.",
-      "resetsAt": "Renovação do limite: {{when}}",
       "theAgent": "O agente",
       "windowCredits": "uso extra",
       "windowSession": "sessão",
@@ -606,9 +617,46 @@
       "stopped": "{{hostName}} está parado. Inicie-o no seu computador.",
       "server": "O servidor",
       "unavailable": "{{hostName}} não está disponível no seu telefone. Abra um dos projetos dele no seu computador."
+    },
+    "goal": {
+      "chip": "Objetivo",
+      "exitMode": "Sair do modo de objetivo",
+      "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",
+      "pursuing": "Buscando o objetivo",
+      "set": "Objetivo definido",
+      "paused": "Objetivo pausado",
+      "blocked": "Objetivo bloqueado",
+      "limited": "Objetivo limitado",
+      "clear": "Limpar objetivo",
+      "expand": "Mostrar objetivo completo",
+      "collapse": "Ocultar objetivo completo",
+      "attachmentsUnsupported": "Remova os anexos antes de definir um objetivo.",
+      "pause": "Pausar",
+      "resume": "Retomar"
+    },
+    "rewind": {
+      "title": "Voltar até aqui?",
+      "confirmation": "Descartar esta mensagem e tudo depois dela? A mensagem volta ao campo de texto para você editar e enviar novamente. As alterações nos arquivos em disco são mantidas.",
+      "confirm": "Voltar",
+      "unsupported": "Este chat não permite voltar a uma mensagem anterior.",
+      "historyNotPaginated": "Este chat antigo do Codex não permite voltar a uma mensagem anterior. Inicie um novo chat para usar Voltar até aqui.",
+      "busy": "Disponível quando o agente estiver ocioso e não houver nada neste chat aguardando sua resposta.",
+      "staleEpoch": "A conversa mudou. Confira as mensagens mais recentes e tente novamente.",
+      "invalidTarget": "Não é possível voltar a esta mensagem na conversa. Nada foi alterado.",
+      "historyLimit": "Esta conversa é longa demais para voltar a uma mensagem anterior. Nada foi alterado.",
+      "providerRefused": "O agente não conseguiu voltar a esta mensagem.",
+      "proofMismatch": "O histórico do agente não corresponde a este chat. Confira a conversa antes de continuar.",
+      "outcomeUnknown": "O Orca não conseguiu confirmar se a conversa voltou a uma mensagem anterior. Ele verifica antes de enviar sua próxima mensagem.",
+      "refused": "O Orca não conseguiu voltar a esta mensagem. Confira a conversa antes de continuar.",
+      "unavailable": "Aguarde o término da conexão do chat.",
+      "outcomeUnknownReturned": "O Orca não conseguiu confirmar se a conversa voltou a esta mensagem. Sua mensagem está de volta no campo de texto, e o Orca verifica a conversa antes de enviar sua próxima mensagem.",
+      "timeout": "O chat não foi atualizado depois de voltar a esta mensagem. Abra novamente para ver a versão mais recente.",
+      "pending": "Aguarde a conversa voltar à mensagem anterior."
     }
   },
   "common": {
+    "details": "Detalhes",
+    "hideDetails": "Ocultar detalhes",
     "back": "Voltar",
     "cancel": "Cancelar",
     "close": "Fechar",
@@ -809,8 +857,8 @@
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "repairHint": "Toque para parear novamente com seu desktop",
+      "sameNetworkOnlyHint": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
-      "updateDesktopHint": "Atualize o Orca no desktop e entre na sua conta para se conectar de qualquer lugar",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade"
     },
     "hostDiagnosticsLink": {
@@ -841,6 +889,13 @@
       "openImage": "Abrir imagem",
       "wrapLines": "Quebrar linhas",
       "disableLineWrap": "Desativar quebra de linha"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Dica",
+      "important": "Importante",
+      "warning": "Aviso",
+      "caution": "Cuidado"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
@@ -2052,6 +2107,8 @@
       "managedAccountEnvOverride": "Esta inicialização do Claude define suas próprias variáveis de login da Anthropic. Remova-as para usar uma conta gerenciada do Claude.",
       "managedAccountUnsupported": "Embora uma conta do Claude tenha sido adicionada no WSL, os chats do Claude precisam de uma conta do Claude no Windows.",
       "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
+      "modelUnavailableUpdate": "{{agent}} não conseguiu usar {{detail}}. Atualize o {{agent}} para {{minimumVersion}} ou posterior para mantê-lo após reiniciar, ou selecione outro modelo e envie novamente.",
+      "modelNotSelected": "{{agent}} não tem nenhum modelo selecionado. Verifique a seleção de modelo e o login do {{agent}} e envie novamente.",
       "noTurnToStop": "{{agent}} não tinha nenhuma interação em andamento para interromper.",
       "notDelivered": "Esta mensagem não foi entregue.",
       "notDeliveredSendAgain": "Esta mensagem não foi entregue. Envie-a novamente para continuar.",
@@ -3317,7 +3374,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "Nenhum item no projeto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} mais"
     },
     "githubProjectPickers": {
       "add": "Adicionar",
@@ -4017,6 +4075,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "O painel original do agente está indisponível. A saída salva permanece aqui.",
       "openAgent": "Abrir agente",
       "retryHistory": "Tentar histórico novamente",
+      "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
+      "retryFullOutput": "Tentar novamente",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Nenhuma execução correspondente no histórico carregado. Carregue mais para continuar.",
       "noMatchingRunsYet": "Ainda não há execuções correspondentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",

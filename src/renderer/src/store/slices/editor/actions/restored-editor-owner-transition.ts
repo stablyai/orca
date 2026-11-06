@@ -2,7 +2,7 @@ import type { ActiveWorktreeStateTransition } from '../../worktree-helpers'
 import type { TabGroup } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { sanitizeRecentTabIds } from '../../tab-group-state'
 import {
   nextActiveIdAfterRemoval,

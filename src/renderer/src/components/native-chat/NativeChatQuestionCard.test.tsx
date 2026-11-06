@@ -304,6 +304,34 @@ describe('NativeChatQuestionCard', () => {
     ])
   })
 
+  it('moves between questions with Left and Right from an option or step tab, stopping at the ends', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    render(indentThenFruits, vi.fn(), true, true)
+    clickOption('Spaces')
+
+    expect(pressKey({ key: 'ArrowLeft' }, document.activeElement!).defaultPrevented).toBe(false)
+    expect(cardTitle()).toBe('Do you prefer tabs or spaces?')
+    expect(pressKey({ key: 'ArrowRight' }, document.activeElement!).defaultPrevented).toBe(true)
+    expect(cardTitle()).toBe('Which fruit?')
+    expect(document.activeElement?.textContent).toContain('Apple')
+    expect(pressKey({ key: 'ArrowRight' }, document.activeElement!).defaultPrevented).toBe(false)
+    expect(cardTitle()).toBe('Which fruit?')
+
+    const cancel = container.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!
+    act(() => cancel.focus())
+    expect(pressKey({ key: 'ArrowLeft' }, cancel).defaultPrevented).toBe(false)
+    expect(cardTitle()).toBe('Which fruit?')
+
+    const stepTab = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Step 1')
+    )!
+    act(() => stepTab.focus())
+    expect(pressKey({ key: 'ArrowLeft' }, stepTab).defaultPrevented).toBe(true)
+    expect(cardTitle()).toBe('Do you prefer tabs or spaces?')
+    expect(optionPressed('Spaces')).toBe('true')
+  })
+
   it('sends nothing when the question is cancelled before the pick moves on', () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()
