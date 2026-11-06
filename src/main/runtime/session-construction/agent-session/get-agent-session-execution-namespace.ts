@@ -19,7 +19,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
 import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import {
@@ -98,7 +98,11 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     // Why the source pane: a Wake opens a new tab, so `placement` names a pane that never ran it.
     const { tabId, leafId } = request.placement ?? {}
     const sourcePaneKey =
-      request.restoreSourcePaneKey ?? (tabId && leafId ? makePaneKey(tabId, leafId) : null)
+      request.restoreSourcePaneKey ??
+      // A legacy non-UUID leaf names no saved record, so it gets the no-note rule instead of throwing.
+      (tabId && !tabId.includes(':') && leafId && isTerminalLeafId(leafId)
+        ? makePaneKey(tabId, leafId)
+        : null)
     const record = sourcePaneKey
       ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
           sourcePaneKey
