@@ -8,6 +8,7 @@ export type ServeOrcaAppArgs = {
   mobilePairing?: boolean
   grantDesktopControl?: boolean
   allowPublic?: boolean
+  refusePublic?: boolean
   recipeJson?: boolean
   projectRoot?: string | null
   /** Starts Electron serve despite a remembered macOS startup abort in this environment. */
@@ -27,6 +28,7 @@ export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-
     ...(args.mobilePairing ? [`${prefix}mobile-pairing`] : []),
     ...(args.grantDesktopControl ? [`${prefix}grant-desktop-control`] : []),
     ...(args.allowPublic ? [`${prefix}allow-public`] : []),
+    ...(args.refusePublic ? [`${prefix}refuse-public`] : []),
     ...(args.recipeJson && args.projectRoot
       ? [`${prefix}recipe-json`, `${prefix}project-root`, args.projectRoot]
       : [])

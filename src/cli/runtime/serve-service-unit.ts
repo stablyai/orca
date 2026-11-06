@@ -26,11 +26,15 @@ export type ServeServiceInput = {
   bind?: string | null
   pairingAddress?: string | null
   allowPublic?: boolean
+  refusePublic?: boolean
 }
 
 /** Service logs must never contain a live pairing offer. */
 export function serveServiceArgs(
-  input: Pick<ServeServiceInput, 'port' | 'bind' | 'pairingAddress' | 'allowPublic'>
+  input: Pick<
+    ServeServiceInput,
+    'port' | 'bind' | 'pairingAddress' | 'allowPublic' | 'refusePublic'
+  >
 ): string[] {
   return [
     'serve',
@@ -39,7 +43,8 @@ export function serveServiceArgs(
     ...(input.port ? ['--port', input.port] : []),
     ...(input.bind ? ['--bind', input.bind] : []),
     ...(input.pairingAddress ? ['--pairing-address', input.pairingAddress] : []),
-    ...(input.allowPublic ? ['--allow-public'] : [])
+    ...(input.allowPublic ? ['--allow-public'] : []),
+    ...(input.refusePublic ? ['--refuse-public'] : [])
   ]
 }
 

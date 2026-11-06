@@ -20,6 +20,9 @@ Options:
   --allow-public           Accept clients from public addresses. Without it only
                            localhost, LAN and Tailscale addresses connect, unless a
                            paired device has already connected from a public one.
+  --refuse-public          Refuse public addresses even when older pairings, a
+                           remembered public connection or --pairing-address
+                           would accept them.
   --json                   Print the one-line server readiness JSON to stdout.
   --no-pairing             Do not create a client pairing offer at startup.
   --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
@@ -59,6 +62,8 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       options.json = true
     } else if (arg === '--allow-public') {
       options.allowPublic = true
+    } else if (arg === '--refuse-public') {
+      options.refusePublic = true
     } else if (arg === '--no-pairing') {
       options.noPairing = true
     } else if (arg === '--mobile-pairing') {
@@ -104,6 +109,8 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
     noPairing: options.noPairing === true,
     mobilePairing: options.mobilePairing === true,
     grantDesktopControl: options.grantDesktopControl,
+    allowPublic: options.allowPublic,
+    refusePublic: options.refusePublic,
     recipeJson: options.recipeJson === true,
     projectRoot: options.projectRoot
   })

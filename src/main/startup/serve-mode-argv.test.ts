@@ -100,12 +100,20 @@ describe('serve-mode-argv', () => {
     ])
   })
 
-  it('carries --allow-public to both serve hosts', () => {
+  it('carries --allow-public and --refuse-public to both serve hosts', () => {
     expect(parseOrcadArgs(orcadServeArgs({ allowPublic: true })).allowPublic).toBe(true)
     expect(parseOrcadArgs(orcadServeArgs({})).allowPublic).toBeUndefined()
     expect(getServeOptions(serveOptionArgs({ allowPublic: true }, '--serve-')).allowPublic).toBe(
       true
     )
     expect(getServeOptions(serveOptionArgs({}, '--serve-')).allowPublic).toBe(false)
+    expect(parseOrcadArgs(orcadServeArgs({ refusePublic: true })).refusePublic).toBe(true)
+    expect(getServeOptions(serveOptionArgs({ refusePublic: true }, '--serve-')).refusePublic).toBe(
+      true
+    )
+    expect(() => parseOrcadArgs(['--allow-public', '--refuse-public'])).toThrow(/not both/)
+    expect(() => getServeOptions(['--serve-allow-public', '--serve-refuse-public'])).toThrow(
+      /not both/
+    )
   })
 })

@@ -15,6 +15,8 @@ export type OrcadOptions = {
   bind?: string
   /** Accept clients from public addresses, not only localhost, LAN and Tailscale. */
   allowPublic?: boolean
+  /** Refuse public addresses even when grandfathered or otherwise accepted. */
+  refusePublic?: boolean
   /** Slots have no browser client; orca serve supplies the installed app client. */
   webClientRoot?: string
 }

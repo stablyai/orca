@@ -308,6 +308,7 @@ describe('desktop startup activation', () => {
       mobilePairing: false,
       grantDesktopControl: false,
       allowPublic: false,
+      refusePublic: false,
       recipeJson: false,
       projectRoot: null
     })
@@ -349,6 +350,7 @@ describe('desktop startup activation', () => {
         mobilePairing: false,
         grantDesktopControl: false,
         allowPublic: false,
+        refusePublic: false,
         recipeJson: false,
         projectRoot: null
       })
@@ -378,6 +380,7 @@ describe('desktop startup activation', () => {
       mobilePairing: false,
       grantDesktopControl: false,
       allowPublic: false,
+      refusePublic: false,
       recipeJson: false,
       projectRoot: null
     })

@@ -11,11 +11,13 @@ import {
 
 export type ServeNetworkSourceOptions = {
   allowPublic: boolean
+  // Refuse public sources now, overriding grandfathering, remembered sightings and the pairing address.
+  refusePublic?: boolean
   pairingAddress: string | null
 }
 
 export type ServeNetworkSourcePolicy =
-  | { kind: 'local-only' }
+  | { kind: 'local-only'; forced?: true }
   | { kind: 'public-allowed'; reason: 'flag' | 'paired-public' | 'pairing-address' }
   | { kind: 'grandfathered'; devices: number }
 
@@ -26,6 +28,9 @@ export function resolveServeNetworkSourcePolicy(args: {
 }): ServeNetworkSourcePolicy {
   if (args.options.allowPublic) {
     return { kind: 'public-allowed', reason: 'flag' }
+  }
+  if (args.options.refusePublic) {
+    return { kind: 'local-only', forced: true }
   }
   if (args.record.allowPublicSources) {
     return { kind: 'public-allowed', reason: 'paired-public' }
@@ -56,9 +61,11 @@ export function describeServeNetworkSourcePolicy(
 ): string {
   switch (policy.kind) {
     case 'local-only':
-      return 'Accepting connections from localhost, LAN and Tailscale addresses; public addresses are refused (restart with --allow-public to accept them).'
+      return policy.forced
+        ? 'Accepting connections from localhost, LAN and Tailscale addresses; public addresses are refused (--refuse-public).'
+        : 'Accepting connections from localhost, LAN and Tailscale addresses; public addresses are refused (restart with --allow-public to accept them).'
     case 'grandfathered':
-      return `Accepting connections from any address: ${policy.devices} paired device(s) predate the public-address check and may rely on one. Once they are removed, public addresses are refused unless a paired device has connected from one or --allow-public is set.`
+      return `Accepting connections from any address: ${policy.devices} paired device(s) predate the public-address check and may rely on one. Once they are removed, public addresses are refused unless a paired device has connected from one or --allow-public is set; --refuse-public refuses them now.`
     case 'public-allowed':
       return policy.reason === 'flag'
         ? 'Accepting connections from any address (--allow-public).'

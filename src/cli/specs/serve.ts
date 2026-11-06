@@ -6,13 +6,14 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
+      'orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public | --refuse-public] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
     allowedFlags: [
       ...LOCAL_COMMAND_FLAGS,
       'port',
       'bind',
       'pairing-address',
       'allow-public',
+      'refuse-public',
       'mobile-pairing',
       'no-pairing',
       'grant-desktop-control',
@@ -29,7 +30,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'With --port, serve exits with an error when that port is already in use. Without it, serve uses 6768 and moves to another port when 6768 is taken.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       '--bind controls the interface the runtime listens on; it accepts a literal IP such as 127.0.0.1, a Tailscale address, or 0.0.0.0. --mobile-pairing needs no --bind or --bind 0.0.0.0.',
-      'Serve accepts clients from localhost, LAN (10/8, 172.16/12, 192.168/16, link-local, fc00::/7) and Tailscale (100.64/10, fd7a:115c:a1e0::/48) addresses. Public addresses are also accepted with --allow-public, when --pairing-address is a hostname or public IP, once a paired device has connected from one, or while devices paired before this check existed remain paired. The startup log states which applies.',
+      'Serve accepts clients from localhost, LAN (10/8, 172.16/12, 192.168/16, link-local, fc00::/7) and Tailscale (100.64/10, fd7a:115c:a1e0::/48) addresses. Public addresses are also accepted with --allow-public, when --pairing-address is a hostname or public IP, once a paired device has connected from one, or while devices paired before this check existed remain paired. Addresses inside a network prefix of one of this host interfaces (for example same-network global IPv6) count as LAN. --refuse-public refuses public addresses in every case and cannot be combined with --allow-public. The startup log states which applies.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
@@ -66,13 +67,14 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve', 'service', 'install'],
     summary: 'Run orca serve as a per-user background service that restarts itself',
     usage:
-      'orca serve service install [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public] [--command <path>] [--dry-run] [--json]',
+      'orca serve service install [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public | --refuse-public] [--command <path>] [--dry-run] [--json]',
     allowedFlags: [
       ...LOCAL_COMMAND_FLAGS,
       'port',
       'bind',
       'pairing-address',
       'allow-public',
+      'refuse-public',
       'command',
       'dry-run'
     ],

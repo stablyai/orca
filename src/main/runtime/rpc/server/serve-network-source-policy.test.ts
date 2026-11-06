@@ -61,6 +61,16 @@ describe('resolveServeNetworkSourcePolicy', () => {
     ).toEqual({ kind: 'public-allowed', reason: 'paired-public' })
   })
 
+  it('refuses public sources early with --refuse-public on a grandfathered server', () => {
+    expect(
+      resolveServeNetworkSourcePolicy({
+        options: { allowPublic: false, refusePublic: true, pairingAddress: 'vps.example.com' },
+        record: { ...record, allowPublicSources: true },
+        devices: [device('old', 900)]
+      })
+    ).toEqual({ kind: 'local-only', forced: true })
+  })
+
   it.each([
     ['100.64.1.20', 'local-only'],
     ['192.168.1.5:6768', 'local-only'],

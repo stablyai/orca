@@ -113,6 +113,7 @@ function installRuntimeRpc(
       ? {
           serveNetworkSources: {
             allowPublic: serveOptions.allowPublic,
+            refusePublic: serveOptions.refusePublic,
             pairingAddress: serveOptions.pairingAddress
           }
         }

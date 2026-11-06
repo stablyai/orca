@@ -112,6 +112,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const mobilePairing = flags.get('mobile-pairing') === true
     const grantDesktopControl = flags.get('grant-desktop-control') === true
     const allowPublic = flags.get('allow-public') === true
+    const refusePublic = flags.get('refuse-public') === true
     const recipeJson = flags.get('recipe-json') === true
     const force = flags.get('force') === true
     const supervise = flags.get('supervise') === true
@@ -125,6 +126,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       noPairing,
       mobilePairing,
       grantDesktopControl,
+      allowPublic,
+      refusePublic,
       recipeJson,
       projectRoot
     })
@@ -144,6 +147,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       recipeJson,
       projectRoot,
       ...(allowPublic ? { allowPublic: true } : {}),
+      ...(refusePublic ? { refusePublic: true } : {}),
       ...(force ? { force: true } : {}),
       ...(supervise ? { supervise: true } : {})
     })

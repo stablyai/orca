@@ -75,6 +75,7 @@ function serviceSpec(
     bind?: string | null
     pairingAddress?: string | null
     allowPublic?: boolean
+    refusePublic?: boolean
   }
 ): ServeServiceSpec {
   return renderServeService({
@@ -87,7 +88,8 @@ function serviceSpec(
     port: options.port,
     bind: resolveServeServiceBind(options.bind),
     pairingAddress: options.pairingAddress,
-    allowPublic: options.allowPublic
+    allowPublic: options.allowPublic,
+    refusePublic: options.refusePublic
   })
 }
 
@@ -120,6 +122,7 @@ export async function installServeService(
     bind?: string | null
     pairingAddress?: string | null
     allowPublic?: boolean
+    refusePublic?: boolean
     dryRun: boolean
   },
   deps: ServeServiceDeps = defaultDeps()
@@ -259,6 +262,12 @@ function optionalString(value: unknown): string | null {
 
 export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
   'serve service install': async ({ flags, json }) => {
+    if (flags.get('allow-public') === true && flags.get('refuse-public') === true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Use either --allow-public or --refuse-public, not both.'
+      )
+    }
     const result = await installServeService({
       command: optionalString(flags.get('command')),
       // Validate before launchd can loop on a bad value and trip the supervisor brake.
@@ -266,6 +275,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       bind: getOptionalServeBind(flags),
       pairingAddress: optionalString(flags.get('pairing-address')),
       allowPublic: flags.get('allow-public') === true,
+      refusePublic: flags.get('refuse-public') === true,
       dryRun: flags.get('dry-run') === true
     })
     emit(result, json, formatServeServiceInstall)

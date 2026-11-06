@@ -299,6 +299,7 @@ async function startOrcadRuntime(
     pinnedBindHost: bindHost,
     serveNetworkSources: {
       allowPublic: options.allowPublic === true,
+      refusePublic: options.refusePublic === true,
       pairingAddress: options.pairingAddress ?? null
     },
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
