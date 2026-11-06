@@ -1,3 +1,4 @@
+import { isContextualTourSplitStep } from '../../../../shared/contextual-tour-action-steps'
 export {
   getMeasurableContextualTourTarget,
   hasContextualTourTarget
@@ -48,8 +49,7 @@ export function getContextualTourStartStepIndex(
   const completedSplitIndex = tour.steps.findIndex(
     (step) =>
       isContextualTourStepApplicable(step, activeTabType) &&
-      (step.primaryAction?.kind === 'split-chat-pane' ||
-        step.primaryAction?.kind === 'split-terminal-pane') &&
+      isContextualTourSplitStep(step) &&
       isStepDone(step)
   )
   if (
@@ -74,10 +74,15 @@ export function getContextualTourStartStepIndex(
       : []
   )
   const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
-  // This tour resumes only from its matching split, resolved above; later actions do not fulfill it.
+  // Add Project exposure cannot fulfill Split; either split avoids replaying the introductory tip.
   const lastDoneIndex =
     tour.id === 'workspace-agent-sessions'
-      ? -1
+      ? tour.steps.some((step) => isContextualTourSplitStep(step) && isStepDone(step))
+        ? tour.steps.findIndex(
+            (step) =>
+              isContextualTourStepApplicable(step, activeTabType) && isContextualTourSplitStep(step)
+          )
+        : -1
       : tour.steps.findLastIndex((step) => isStepDone(step))
   for (const candidate of candidates) {
     let startIndex = Math.max(candidate, lastDoneIndex)

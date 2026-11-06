@@ -44,7 +44,7 @@ describe('agent sessions tour progress', () => {
     }
   )
 
-  it('keeps the active terminal lesson when only the chat split was completed', () => {
+  it('resumes the active terminal lesson without replaying New agents after a chat split', () => {
     expect(
       getContextualTourStartStepIndex(
         getContextualTour('workspace-agent-sessions'),
@@ -52,7 +52,7 @@ describe('agent sessions tour progress', () => {
         (step) => step.advanceOnFeatureInteraction === 'tab-splits',
         'terminal'
       )
-    ).toBe(0)
+    ).toBe(2)
   })
 
   it('waits for the matching split when later controls are absent', () => {

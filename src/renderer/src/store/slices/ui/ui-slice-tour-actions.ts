@@ -1,7 +1,8 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   hasContextualTourActionStep,
-  isContextualTourStepDone
+  isContextualTourStepDone,
+  isContextualTourSplitStep
 } from '../../../../../shared/contextual-tour-action-steps'
 import { getContextualTour, type ContextualTourId } from '../../../../../shared/contextual-tours'
 import {
@@ -48,10 +49,11 @@ export function isContextualTourStartBlockedByProgress(
   tourId: ContextualTourId
 ): boolean {
   return (
-    tourId !== 'workspace-agent-sessions' &&
     !state.contextualToursStartedThisSession.includes(tourId) &&
-    getContextualTour(tourId).steps.some((step) =>
-      isContextualTourStepDone(step, state.featureInteractions)
+    getContextualTour(tourId).steps.some(
+      (step) =>
+        isContextualTourStepDone(step, state.featureInteractions) &&
+        (tourId !== 'workspace-agent-sessions' || isContextualTourSplitStep(step))
     )
   )
 }

@@ -29,3 +29,10 @@ export function hasUndoneContextualTourAction(
         !isContextualTourStepDone(step, featureInteractions)
     )
 }
+
+export function isContextualTourSplitStep(step: ContextualTourStep): boolean {
+  return (
+    step.primaryAction?.kind === 'split-chat-pane' ||
+    step.primaryAction?.kind === 'split-terminal-pane'
+  )
+}

@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getByRole, queryByRole } from '@testing-library/dom'
 
 import { useAppStore } from '@/store'
 import { ContextualTourOverlay } from './ContextualTourOverlay'
@@ -83,6 +84,50 @@ afterEach(async () => {
   useAppStore.setState(initialState, true)
   vi.useRealTimers()
 })
+
+function AgentTourSource() {
+  useContextualTour('workspace-agent-sessions', true)
+  return <ContextualTourOverlay />
+}
+
+it.each([
+  ['terminal', 'tab-splits'],
+  ['agent-session', 'terminal-pane-split']
+] as const)(
+  'keeps a prior split closed on %s, but replays its unfinished lesson when requested',
+  async (activeTabType, priorSplit) => {
+    tourTarget('tab-create-menu', 50)
+    tourTarget('terminal-pane-split-target', 150)
+    tourTarget('chat-pane-split-target', 180)
+    tourTarget('project-add-control', 250)
+    tourTarget('workspace-create-control', 300)
+    useAppStore.setState({
+      persistedUIReady: true,
+      contextualToursAutoEligible: true,
+      contextualToursSeenIds: [],
+      contextualToursStartedThisSession: [],
+      activeContextualTourId: null,
+      activeTabType,
+      featureInteractions: { [priorSplit]: { firstInteractedAt: 1, interactionCount: 1 } },
+      activeModal: 'none',
+      contextualToursOnboardingVisible: false,
+      contextualToursBlockingSurfaceVisible: false
+    })
+    act(() => root.render(<AgentTourSource />))
+    await settle(100)
+    expect(container.querySelector('[data-contextual-tour-panel]')).toBeNull()
+    expect(useAppStore.getState().contextualToursSeenIds).not.toContain('workspace-agent-sessions')
+
+    act(() => {
+      useAppStore
+        .getState()
+        .requestContextualTour('workspace-agent-sessions', undefined, false, { force: true })
+    })
+    await settle(100)
+    expect(getByRole(container, 'button', { name: 'Split terminal' })).toBeDefined()
+    expect(queryByRole(container, 'button', { name: 'Next' })).toBeNull()
+  }
+)
 
 describe('agent sessions tour progression', () => {
   it('continues to Add Project when switching onto an already completed chat split', async () => {
