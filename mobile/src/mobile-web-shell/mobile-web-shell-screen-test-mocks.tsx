@@ -206,7 +206,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         pageReady: dependencies.pageReady,
         pageFrame: dependencies.pageFrame,
         backClaimed: dependencies.backClaimed,
-        ownsHostArea: dependencies.ownsHostArea
+        ownsHostArea: dependencies.ownsHostArea,
+        // This connection's verdict is open, so the page's desktop-bound frames pass.
+        hostStatus: { protocolVersion: 1 }
       })
     })
   }
