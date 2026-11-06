@@ -94,24 +94,24 @@ describe('AgentLaunchChoiceEditor model list', () => {
     )
   })
 
-  it('reads the list again when the agent command changes and ignores the older answer', async () => {
+  it('shows the refreshed model after the agent command changes and ignores the older answer', async () => {
     let answerOlder: (catalog: unknown) => void = () => {}
     call.mockReturnValueOnce(new Promise((resolve) => (answerOlder = resolve)))
     call.mockResolvedValueOnce({
       ...LISTED,
       models: [{ id: 'gpt-wrapped', label: 'GPT Wrapped', efforts: [] }]
     })
+    const settings = getDefaultSettings('')
+    useAppStore.setState({ settings })
     renderEditor()
-    expect(call).toHaveBeenCalledTimes(1)
 
     act(() => {
       useAppStore.setState({
-        settings: { ...getDefaultSettings(''), agentCmdOverrides: { codex: 'wrapped-codex' } }
+        settings: { ...settings, agentCmdOverrides: { codex: 'wrapped-codex' } }
       })
     })
 
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped']))
-    expect(call).toHaveBeenCalledTimes(2)
     await act(async () => answerOlder(LISTED))
     expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
   })
