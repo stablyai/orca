@@ -17,7 +17,7 @@ import {
   resolveChatTabPlacement,
   type ChatTabPlacement
 } from '../agent-session/agent-session-tab-layout'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { MainSessionTabRows } from './main-session-tab-rows'

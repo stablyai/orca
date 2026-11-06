@@ -14,9 +14,12 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 
 const { observeStructuredWorker, resolveStructuredWorkerAuthority, structuredSessionCloseSettled } =
   await import('./structured-worker-authority')
@@ -33,8 +36,12 @@ const { listAddressableStructuredWorkers } =
 const { closeStructuredAgentSessionChild } =
   await import('../../../agent-session/structured-agent-session-close')
 const { resolveGroupAddress } = await import('../../groups')
-const { createRestTestRig, foundRestTestChat, IDLE_MS, REST_TEST_SESSION, sweepTicks } =
-  await import('../../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig')
+const { createRestTestRig, foundRestTestChat, sweepTicks } =
+  await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig')
+const { STRUCTURED_AGENT_SESSION_IDLE_MS: IDLE_MS } =
+  await import('../../../../native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep')
+const { HOST_TEST_SESSION: REST_TEST_SESSION } =
+  await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data')
 
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const LOCAL = JSON.stringify({ kind: 'local', hostId: 'local' })

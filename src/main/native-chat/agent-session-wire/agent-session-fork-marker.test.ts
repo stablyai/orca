@@ -10,13 +10,18 @@ import {
   withForkMarker,
   type ForkMarker
 } from './agent-session-fork-marker'
-import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import { AgentSessionSubscribers } from './publication/subscribers/structured-agent-session-subscribers'
 import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage
-} from './agent-session-history-page'
+} from './publication/history/agent-session-history-page'
 import { remapForkChildBoundary } from './agent-session-fork-boundary-remap'
-import { fixture, appendItems, item, body } from './agent-session-history-contract-test-fixture'
+import {
+  fixture,
+  appendItems,
+  item,
+  body
+} from './publication/history/testing/agent-session-history-contract-test-fixture'
 
 function marker(): ForkMarker {
   return {

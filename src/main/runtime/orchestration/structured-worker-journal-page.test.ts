@@ -9,10 +9,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
-import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import type { AgentSessionHistoryScope } from '../../native-chat/agent-session-wire/agent-session-history-page'
-import { readStructuredAgentSessionHistoryResult } from '../../native-chat/agent-session-wire/structured-agent-session-history-result'
+import type { AgentSessionHistoryScope } from '../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import { readStructuredAgentSessionHistoryResult } from '../../native-chat/agent-session-wire/publication/history/structured-agent-session-history-result'
 import {
   readStructuredJournalPage,
   STRUCTURED_JOURNAL_PAGE_LIMIT
@@ -25,7 +25,7 @@ const host = vi.hoisted(() => {
 })
 
 // The host's read, over a real journal: only the conversation lookup is stubbed.
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
     history: async (request: AgentSessionHistoryRequest, scope?: AgentSessionHistoryScope) =>
       readStructuredAgentSessionHistoryResult({

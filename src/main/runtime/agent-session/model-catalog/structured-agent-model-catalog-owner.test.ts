@@ -6,13 +6,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as registry from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import * as registry from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as environment from '../environment/structured-agent-shell-environment'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
 import * as pi from '../../../pi/rpc-model-catalog-probe'
 import { ensureStructuredAgentModelCatalogOwner } from './structured-agent-model-catalog-wiring'
 import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const profile = vi.hoisted(() => ({ root: '' }))
 vi.mock('../../../orca-profiles/profile-storage-paths', async (importOriginal) => ({

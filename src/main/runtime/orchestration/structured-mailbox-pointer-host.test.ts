@@ -9,7 +9,7 @@ import type { AgentMessageSource } from '../../../shared/agent-session/agent-ses
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 

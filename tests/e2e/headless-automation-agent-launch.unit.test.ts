@@ -12,10 +12,10 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_LOCATION
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import type { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
@@ -38,9 +38,13 @@ const mocks = vi.hoisted(() => {
 vi.mock('../../src/main/runtime/rpc/methods/agent-launch', () => ({
   launchAgentOnHost: mocks.launch
 }))
-vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => mocks.actualHost ?? (mocks.hostAvailable ? mocks.host : null)
-}))
+vi.mock(
+  '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () =>
+      mocks.actualHost ?? (mocks.hostAvailable ? mocks.host : null)
+  })
+)
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (...args: Parameters<typeof callStructuredAgentSession>) =>
     mocks.readChat(...args)

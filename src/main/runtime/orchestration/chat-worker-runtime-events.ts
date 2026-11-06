@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithGetPtyRecordForPaneKey } from './terminal-pane-mail-routing'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
-import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
+import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { RuntimeStructuredAgentHost } from '../agent-session/installation/runtime-structured-agent-host'
 
 export abstract class RuntimeChatWorkerEvents extends RuntimeStructuredAgentHost {

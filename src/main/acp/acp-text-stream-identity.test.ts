@@ -3,7 +3,7 @@ import {
   closeProviderTimelineRigs,
   openProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { AcpStructuredLane } from './acp-structured-lane'
 import { AcpTimelineTranslator } from './acp-timeline-translator'

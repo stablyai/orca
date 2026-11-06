@@ -3,11 +3,11 @@ import { claudeStartFailure } from '../claude-startup-failure'
 import {
   startupAcquisitionRefusal,
   providerExitObserved
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 // Initialize gates host open after process publication; settings enrichment runs independently.
 
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
-import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'

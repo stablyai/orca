@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { isClaudeInjectedUserMessage } from '../../claude-internal-message-content'
 import {
   isClaudeToolUseContent,

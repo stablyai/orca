@@ -13,13 +13,14 @@ import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
 } from '../../../native-chat/agent-model-catalog/agent-project-model-override'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createRestTestRig,
-  foundRestTestChat,
-  REST_TEST_SESSION as SESSION,
-  type RestTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+  foundRestTestChat
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { RestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
