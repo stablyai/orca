@@ -73,6 +73,9 @@ export function memoryJournalInputCardFacts(): JournalInputCardFacts {
     initialized: false,
     overlayRows: [],
     pauseKey: [],
+    pauseKeyMatches(inputs) {
+      return inputs.every((value, i) => value === this.pauseKey[i])
+    },
     floor: null,
     pauses: [],
     failed: false

@@ -40,6 +40,8 @@ export type JournalInputCardFacts = {
   initialized: boolean
   overlayRows: readonly QueuedMessageRow[]
   pauseKey: readonly unknown[]
+  /** Whether pause inputs equal the stored key; memory compares the reducer's own objects. */
+  pauseKeyMatches: (inputs: readonly unknown[]) => boolean
   floor: AgentJournalCursor | null
   pauses: readonly DerivedQueuePause[]
   failed: boolean

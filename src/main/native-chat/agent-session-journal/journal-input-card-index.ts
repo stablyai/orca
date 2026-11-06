@@ -153,7 +153,7 @@ export class JournalInputCardIndex {
       this.facts.floor
     )
     const first = !this.facts.initialized
-    if (first || pauseInputs.some((value, i) => value !== this.facts.pauseKey[i])) {
+    if (first || !this.facts.pauseKeyMatches(pauseInputs)) {
       this.facts.pauseKey = pauseInputs
       this.facts.replaceClearMembers(pauseInputs[2] ? (marks.cleared?.messageIds ?? []) : [])
       this.facts.pauses = journalInputCardPauses(state.epoch, pauseInputs)

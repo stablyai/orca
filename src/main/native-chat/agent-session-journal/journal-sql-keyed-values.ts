@@ -11,7 +11,7 @@ export function journalSqlEntryKey(key: unknown): string {
 export class JournalSqlKeyedMap<K, V> implements JournalKeyedMap<K, V> {
   constructor(
     private readonly context: JournalSqlValueContext,
-    private readonly collection: string
+    readonly collection: string
   ) {
     context.collection(collection)
   }
@@ -42,6 +42,9 @@ export class JournalSqlKeyedSet<T> implements JournalKeyedSet<T> {
   constructor(context: JournalSqlValueContext, collection: string) {
     this.map = new JournalSqlKeyedMap(context, collection)
   }
+  get collection(): string {
+    return this.map.collection
+  }
   get size(): number {
     return this.map.size
   }
@@ -59,5 +62,35 @@ export class JournalSqlKeyedSet<T> implements JournalKeyedSet<T> {
   }
   clear(): void {
     this.map.clear()
+  }
+}
+
+/** Insertion order, as a Map iterates: keys are fixed at the call; entries deleted meanwhile are skipped. */
+export function* journalSqlOrderedKeys(
+  context: JournalSqlValueContext,
+  collection: string,
+  limit = -1
+): Generator<string> {
+  const { scope } = context
+  const rows = scope.db
+    .prepare(`SELECT entry_key FROM journal_proj_values
+    WHERE session_id=? AND generation=? AND collection=? ORDER BY ordinal LIMIT ?`)
+    .all(...scope.prefix, collection, limit)
+  for (const row of rows) {
+    scope.examined(row)
+    const key = String(row.entry_key)
+    if (limit === 1 || context.header(collection, key)) {
+      yield key
+    }
+  }
+}
+
+export function* journalSqlOrderedValues<V>(
+  context: JournalSqlValueContext,
+  collection: string,
+  limit = -1
+): Generator<V> {
+  for (const key of journalSqlOrderedKeys(context, collection, limit)) {
+    yield context.read<V>(collection, key)!
   }
 }
