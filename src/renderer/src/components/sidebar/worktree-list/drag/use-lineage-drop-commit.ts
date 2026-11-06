@@ -20,6 +20,7 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
+import { useFolderParentEligibility } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
 
@@ -35,6 +36,7 @@ export function useWorktreeLineageDropCommit(args: {
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  const folderParentsOf = useFolderParentEligibility()
   const cyclicLineageIds = useMemo(
     () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap),
     [worktreeLineageById, worktreeMap]
@@ -51,33 +53,46 @@ export function useWorktreeLineageDropCommit(args: {
       pickedCopies: DraggedWorktreeCopies,
       parentIdentity: string
     ): { children: Worktree[]; parent: Worktree } | null => {
-      const parent = rowsByIdentity.get(parentIdentity)
-      if (!parent || pickedCopies.length === 0) {
+      const worktreeParent = rowsByIdentity.get(parentIdentity)
+      if (pickedCopies.length === 0) {
         return null
       }
+      let parent = worktreeParent
       const children: Worktree[] = []
       for (const copy of pickedCopies) {
         const child = rowsByIdentity.get(getWorktreeHostIdentity(copy))
-        const placement = child
-          ? worktreeParentPlacementFor({
-              child,
-              worktrees,
-              lineageById: worktreeLineageById,
-              worktreeMap,
-              repoMap,
-              cyclicLineageIds,
-              parentIdentities
-            })(parent)
-          : null
-        if (!child || !placement) {
+        if (!child) {
           return null
+        }
+        if (worktreeParent) {
+          const placement = worktreeParentPlacementFor({
+            child,
+            worktrees,
+            lineageById: worktreeLineageById,
+            worktreeMap,
+            repoMap,
+            cyclicLineageIds,
+            parentIdentities
+          })(worktreeParent)
+          if (!placement) {
+            return null
+          }
+        } else {
+          // A folder workspace parent, when Set Parent would offer it to this child.
+          parent = folderParentsOf?.(child).find(
+            (folder) => getWorktreeHostIdentity(folder) === parentIdentity
+          )
+          if (!parent) {
+            return null
+          }
         }
         children.push(child)
       }
-      return { children, parent }
+      return parent ? { children, parent } : null
     },
     [
       cyclicLineageIds,
+      folderParentsOf,
       parentIdentities,
       repoMap,
       rowsByIdentity,
