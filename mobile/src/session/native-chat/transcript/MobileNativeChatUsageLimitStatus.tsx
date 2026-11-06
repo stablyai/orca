@@ -76,6 +76,7 @@ export function MobileNativeChatUsageLimitStatus({
               {' · '}
               <Text
                 accessibilityRole="button"
+                accessibilityState={{ disabled: actions.cancelling }}
                 onPress={actions.cancelling ? undefined : actions.cancel}
                 style={[styles.link, actions.cancelling && styles.disabled]}
               >

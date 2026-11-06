@@ -30,7 +30,7 @@ export type MobileNativeChatUsageLimit = {
   cancel: (() => void) | null
   cancelling: boolean
   cancelFailed: boolean
-  /** Asked once per cut, so the row draws its actions once; undefined until the host answers. */
+  /** Undefined until the host first answers for this cut; later re-asks keep the last answer. */
   canSwitchAccount: boolean | undefined
   /** Sends desktop's "Continue where you left off." for this cut. */
   continueNow: () => void
@@ -90,17 +90,18 @@ export function useMobileNativeChatUsageLimit(
   // now; the host also says no while the journal moves under its read, so ask again at each cursor.
   const asked =
     turnItemId === null ? null : JSON.stringify([turnItemId, journal.cursor?.sequence ?? null])
-  const [switchAnswer, setSwitchAnswer] = useState<{ asked: string; canSwitch: boolean } | null>(
-    null
-  )
+  const [switchAnswer, setSwitchAnswer] = useState<{
+    turnItemId: string
+    canSwitch: boolean
+  } | null>(null)
   useEffect(() => {
-    if (!live || !client || !sessionId || asked === null) {
+    if (!live || !client || !sessionId || asked === null || turnItemId === null) {
       return
     }
     let current = true
     const answer = (canSwitch: boolean): void => {
       if (current) {
-        setSwitchAnswer({ asked, canSwitch })
+        setSwitchAnswer({ turnItemId, canSwitch })
       }
     }
     callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', { sessionId }).then(
@@ -110,7 +111,7 @@ export function useMobileNativeChatUsageLimit(
     return () => {
       current = false
     }
-  }, [live, client, sessionId, asked])
+  }, [live, client, sessionId, asked, turnItemId])
   const [cancellingCut, setCancellingCut] = useState<string | null>(null)
   const [failedCut, setFailedCut] = useState<string | null>(null)
   const cancelling = cancellingCut !== null && cancellingCut === turnItemId
@@ -163,20 +164,10 @@ export function useMobileNativeChatUsageLimit(
       cancel: kind === 'scheduled' && canCancel ? cancel : null,
       cancelling,
       cancelFailed: failedCut === turnItemId && kind === 'scheduled',
+      // A re-ask at a later cursor keeps this cut's last answer, so the row never blanks out.
       canSwitchAccount:
-        switchAnswer?.asked === asked ? switchAnswer.canSwitch : live ? undefined : false,
+        switchAnswer?.turnItemId === turnItemId ? switchAnswer.canSwitch : live ? undefined : false,
       continueNow
     }
-  }, [
-    turnItemId,
-    kind,
-    canCancel,
-    cancel,
-    cancelling,
-    failedCut,
-    switchAnswer,
-    asked,
-    live,
-    continueNow
-  ])
+  }, [turnItemId, kind, canCancel, cancel, cancelling, failedCut, switchAnswer, live, continueNow])
 }
