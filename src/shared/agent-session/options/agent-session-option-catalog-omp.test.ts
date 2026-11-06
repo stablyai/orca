@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import './agent-session-option-catalog-omp'
-import './agent-session-option-launch'
 import '../../native-chat/input/native-chat-session-option-commands'
 import { parseOmpModelList } from '../../omp-model-list-probe'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
