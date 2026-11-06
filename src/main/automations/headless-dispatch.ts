@@ -29,6 +29,8 @@ export type HeadlessAutomationDispatcher = (request: {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
+  /** Called once the run's terminal opens, before its prompt is delivered. */
+  onTargetPublished?: (target: HeadlessAutomationDispatchLaunch) => void
 }) => Promise<HeadlessAutomationDispatchLaunch>
 
 export class AutomationRunLaunchError extends Error {

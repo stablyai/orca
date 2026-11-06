@@ -38,6 +38,7 @@ export async function launchHeadlessAutomationAgent(
     run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
+    onTargetPublished?: (target: HeadlessAutomationDispatchLaunch) => void
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
@@ -178,7 +179,16 @@ export async function launchHeadlessAutomationAgent(
       : null
   let result: Awaited<ReturnType<typeof executeAgentLaunch>>
   try {
-    result = await executeAgentLaunch(execution)
+    result = await executeAgentLaunch({
+      ...execution,
+      onSurfacePublished: () => {
+        const opened = launched()
+        if (opened) {
+          const { terminalHandle: _handle, ...published } = opened
+          request.onTargetPublished?.(published)
+        }
+      }
+    })
   } catch (error) {
     const opened = launched()
     // Once its terminal exists, the run keeps it so the user can open what happened.

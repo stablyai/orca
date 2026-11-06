@@ -68,7 +68,18 @@ export async function runHeadlessAutomationDispatch(
   // The agent can finish before launch returns.
   const dispatchedAt = Date.now()
   try {
-    launch = await ctx.dispatcher({ automation, run, target })
+    launch = await ctx.dispatcher({
+      automation,
+      run,
+      target,
+      // A startup dialog can hold prompt delivery, so the run links its terminal as soon as it opens.
+      onTargetPublished: (published) =>
+        void runs
+          .updateRun({ runId: run.id, status: run.status, ...launchRunTargetOf(published) })
+          .catch((error: unknown) => {
+            console.warn('[automations] failed to record the opened run terminal:', error)
+          })
+    })
   } catch (error) {
     const refusal =
       error instanceof AutomationDispatchRefusedError
@@ -83,15 +94,7 @@ export async function runHeadlessAutomationDispatch(
       ...(refusal ?? { error: describeDispatchError(error) })
     })
   }
-  const launchRunTarget = {
-    sessionKind: launch.sessionKind ?? 'terminal',
-    chatSessionId: launch.chatSessionId ?? null,
-    workspaceId: launch.workspaceId,
-    workspaceDisplayName: launch.workspaceDisplayName ?? null,
-    terminalSessionId: launch.terminalSessionId,
-    terminalPaneKey: launch.terminalPaneKey ?? null,
-    terminalPtyId: launch.terminalPtyId ?? null
-  }
+  const launchRunTarget = launchRunTargetOf(launch)
   const updated = runs.updateRun({
     runId: run.id,
     status: 'dispatched',
@@ -135,4 +138,16 @@ export async function runHeadlessAutomationDispatch(
       .catch((error) => console.error('[automations] Failed to persist run completion:', error))
   }
   return updated
+}
+
+function launchRunTargetOf(launch: HeadlessAutomationDispatchLaunch) {
+  return {
+    sessionKind: launch.sessionKind ?? 'terminal',
+    chatSessionId: launch.chatSessionId ?? null,
+    workspaceId: launch.workspaceId,
+    workspaceDisplayName: launch.workspaceDisplayName ?? null,
+    terminalSessionId: launch.terminalSessionId,
+    terminalPaneKey: launch.terminalPaneKey ?? null,
+    terminalPtyId: launch.terminalPtyId ?? null
+  }
 }

@@ -23,7 +23,53 @@ function runtimeDelivering(deliverStartupFollowup: () => Promise<boolean>) {
   }
 }
 
+function launch(
+  deliver: () => Promise<boolean>,
+  onTargetPublished?: (target: Record<string, unknown>) => void
+) {
+  return launchHeadlessAutomationAgent(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing-workspace launch reads only these runtime members.
+    runtimeDelivering(deliver) as never,
+    {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read.
+      automation: {
+        id: 'auto-1',
+        agentId: 'aider',
+        prompt: 'fix the flaky test',
+        workspaceMode: 'existing',
+        workspaceId: 'wt-1'
+      } as never,
+      run: { id: 'run-1', title: 'Nightly', scheduledFor: 1, trigger: 'scheduled' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
+      target: { ok: true, repo: { id: 'repo-1', path: '/repo', displayName: 'repo' } } as never,
+      runs: [],
+      ...(onTargetPublished ? { onTargetPublished } : {})
+    }
+  )
+}
+
 describe('headless automation agent launch', () => {
+  it('publishes the run terminal while its prompt delivery is still pending', async () => {
+    let finishDelivery: (delivered: boolean) => void = () => {}
+    const onTargetPublished = vi.fn()
+    const launched = launch(
+      () => new Promise<boolean>((resolve) => (finishDelivery = resolve)),
+      onTargetPublished
+    )
+
+    await vi.waitFor(() =>
+      expect(onTargetPublished).toHaveBeenCalledWith({
+        workspaceId: 'wt-1',
+        workspaceDisplayName: 'repo',
+        terminalSessionId: 'tab-1',
+        terminalPaneKey: 'tab-1:leaf-1',
+        terminalPtyId: 'pty-1'
+      })
+    )
+    finishDelivery(true)
+    await expect(launched).resolves.toMatchObject({ terminalHandle: 'term-1' })
+  })
+
   it.each([
     ['is refused', async () => false],
     [
@@ -33,24 +79,7 @@ describe('headless automation agent launch', () => {
       }
     ]
   ])('fails the run and keeps its terminal when prompt delivery %s', async (_, deliver) => {
-    const failure = await launchHeadlessAutomationAgent(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing-workspace launch reads only these runtime members.
-      runtimeDelivering(deliver) as never,
-      {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read.
-        automation: {
-          id: 'auto-1',
-          agentId: 'aider',
-          prompt: 'fix the flaky test',
-          workspaceMode: 'existing',
-          workspaceId: 'wt-1'
-        } as never,
-        run: { id: 'run-1', title: 'Nightly', scheduledFor: 1, trigger: 'scheduled' },
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
-        target: { ok: true, repo: { id: 'repo-1', path: '/repo', displayName: 'repo' } } as never,
-        runs: []
-      }
-    ).catch((error: unknown) => error)
+    const failure = await launch(deliver).catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(AutomationRunLaunchError)
     expect(failure).toMatchObject({
