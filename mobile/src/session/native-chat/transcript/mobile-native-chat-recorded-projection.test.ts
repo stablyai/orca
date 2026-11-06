@@ -1,15 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { projectStructuredItemToNativeChat } from '../../agent-session/view/structured-agent-session-projection'
-import { createNativeChatMerger, applyAppend } from '../native-chat-merge'
-import { decodeClaudeTranscriptLine } from '../../../main/native-chat/transcript-line-decoders-claude'
-import { readCodexThreadItem } from '../../../main/codex/structured/items/codex-thread-item-identity'
-import { codexJournalItem } from '../../../main/codex/structured/items/codex-structured-item-translation'
-import { projectMobileNativeChatMessages } from '../../../../mobile/src/session/native-chat/transcript/mobile-native-chat-projection'
+import { projectStructuredItemToNativeChat } from '@orca/test-host/shared/agent-session/view/structured-agent-session-projection'
+import {
+  createNativeChatMerger,
+  applyAppend
+} from '@orca/test-host/shared/native-chat/native-chat-merge'
+import { decodeClaudeTranscriptLine } from '@orca/test-host/main/native-chat/transcript-line-decoders-claude'
+import { readCodexThreadItem } from '@orca/test-host/main/codex/structured/items/codex-thread-item-identity'
+import { codexJournalItem } from '@orca/test-host/main/codex/structured/items/codex-structured-item-translation'
+import { projectMobileNativeChatMessages } from '@orca/test-mobile/session/native-chat/transcript/mobile-native-chat-projection'
 
 it('preserves captured agent output through legacy appends', () => {
   const claude = readFileSync(
-    new URL('../../../main/claude/__fixtures__/claude-adapter-capture-fold.jsonl', import.meta.url),
+    new URL(
+      '../../../../../src/main/claude/__fixtures__/claude-adapter-capture-fold.jsonl',
+      import.meta.url
+    ),
     'utf8'
   )
     .trim()
@@ -22,7 +28,10 @@ it('preserves captured agent output through legacy appends', () => {
       return message ? [message] : []
     })
   const codex = readFileSync(
-    new URL('../../../main/codex/__fixtures__/codex-hook-outcomes.jsonl', import.meta.url),
+    new URL(
+      '../../../../../src/main/codex/__fixtures__/codex-hook-outcomes.jsonl',
+      import.meta.url
+    ),
     'utf8'
   )
     .trim()
