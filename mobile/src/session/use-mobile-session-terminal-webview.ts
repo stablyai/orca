@@ -96,6 +96,12 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       terminalRefs.current.set(handle, ref)
     } else {
       terminalRefs.current.delete(handle)
+      queueMicrotask(() => {
+        if (!terminalRefs.current.has(handle)) {
+          webReadyHandlesRef.current.delete(handle)
+          initializedHandlesRef.current.delete(handle)
+        }
+      })
       terminalGestureInputBucketsRef.current.delete(handle)
       const queued = terminalGestureInputQueuesRef.current.get(handle)
       if (queued?.timer) {

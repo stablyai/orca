@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '@/store'
@@ -11,6 +11,8 @@ import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
+export const STRUCTURED_CHAT_HOT_RETAIN_LIMIT = 2
+
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
   agentSessionAgent: NonNullable<Tab['agentSessionAgent']>
@@ -18,6 +20,42 @@ type StructuredAgentSessionTab = Tab & {
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
+
+export function selectRetainedStructuredTabIds(args: {
+  structuredTabIds: readonly string[]
+  selectedTabIds: ReadonlySet<string>
+  recentTabIds: readonly string[]
+  hotRetainLimit?: number
+}): Set<string> {
+  const limit = args.hotRetainLimit ?? STRUCTURED_CHAT_HOT_RETAIN_LIMIT
+  const liveIds = new Set(args.structuredTabIds)
+  const retained = new Set<string>()
+  for (const id of args.selectedTabIds) {
+    if (liveIds.has(id)) {
+      retained.add(id)
+    }
+  }
+  let warmInactiveCount = 0
+  for (const id of args.recentTabIds) {
+    if (warmInactiveCount >= limit) {
+      break
+    }
+    if (liveIds.has(id) && !retained.has(id)) {
+      retained.add(id)
+      warmInactiveCount += 1
+    }
+  }
+  for (const id of args.structuredTabIds) {
+    if (warmInactiveCount >= limit) {
+      break
+    }
+    if (!retained.has(id)) {
+      retained.add(id)
+      warmInactiveCount += 1
+    }
+  }
+  return retained
+}
 
 const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOverlaySlot({
   tab,
@@ -92,24 +130,75 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
       [unifiedTabs]
     )
+    const selectedStructuredTabIds = useMemo(() => {
+      const selected = new Set<string>()
+      for (const tab of structuredTabs) {
+        if (groupActiveTabById.get(tab.groupId) === tab.id) {
+          selected.add(tab.id)
+        }
+      }
+      return selected
+    }, [groupActiveTabById, structuredTabs])
+    const [recentTabIds, setRecentTabIds] = useState<readonly string[]>([])
+    useEffect(() => {
+      if (selectedStructuredTabIds.size === 0) {
+        return
+      }
+      setRecentTabIds((previous) => {
+        const liveIds = new Set(structuredTabs.map((tab) => tab.id))
+        const next: string[] = []
+        for (const id of selectedStructuredTabIds) {
+          if (liveIds.has(id) && !next.includes(id)) {
+            next.push(id)
+          }
+        }
+        for (const id of previous) {
+          if (liveIds.has(id) && !next.includes(id)) {
+            next.push(id)
+          }
+        }
+        const trimmed = next.slice(
+          0,
+          selectedStructuredTabIds.size + STRUCTURED_CHAT_HOT_RETAIN_LIMIT
+        )
+        if (
+          trimmed.length === previous.length &&
+          trimmed.every((id, index) => id === previous[index])
+        ) {
+          return previous
+        }
+        return trimmed
+      })
+    }, [selectedStructuredTabIds, structuredTabs])
+    const retainedTabIds = useMemo(
+      () =>
+        selectRetainedStructuredTabIds({
+          structuredTabIds: structuredTabs.map((tab) => tab.id),
+          selectedTabIds: selectedStructuredTabIds,
+          recentTabIds
+        }),
+      [recentTabIds, selectedStructuredTabIds, structuredTabs]
+    )
 
     return (
       <>
-        {structuredTabs.map((tab) => (
-          <StructuredAgentSessionOverlaySlot
-            key={tab.id}
-            tab={tab}
-            groupId={tab.groupId}
-            isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
-            isFocusedGroup={Boolean(
-              isWorktreeActive &&
-              groupActiveTabById.get(tab.groupId) === tab.id &&
-              tab.groupId === activeGroupId
-            )}
-            hasSplitGroups={groups.length > 1}
-            onFocusOwningGroup={focusOwningGroup}
-          />
-        ))}
+        {structuredTabs.map((tab) =>
+          retainedTabIds.has(tab.id) ? (
+            <StructuredAgentSessionOverlaySlot
+              key={tab.id}
+              tab={tab}
+              groupId={tab.groupId}
+              isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
+              isFocusedGroup={Boolean(
+                isWorktreeActive &&
+                groupActiveTabById.get(tab.groupId) === tab.id &&
+                tab.groupId === activeGroupId
+              )}
+              hasSplitGroups={groups.length > 1}
+              onFocusOwningGroup={focusOwningGroup}
+            />
+          ) : null
+        )}
       </>
     )
   }

@@ -8,11 +8,11 @@ import type { TerminalTab } from '../../../../../../shared/workspace-layout/term
 // Hysteresis avoids quick-switch remounts; bounded hot-retain keeps recent worktrees warm. Reducing remount frequency matters more than replay size.
 export const TERMINAL_WORKTREE_COLD_PARK_DELAY_MS = 30_000
 export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 5 * 60_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 4
+export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 2
 export const TERMINAL_WORKTREE_PARK_DELAY_MS = TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
 export const TERMINAL_TAB_COLD_PARK_DELAY_MS = 30_000
 export const TERMINAL_TAB_HOT_RETAIN_MS = 5 * 60_000
-export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 6
+export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 3
 
 // Pass test overrides explicitly to shorten hysteresis without module-level environment reads.
 export type TerminalColdParkPolicyOverrides = {

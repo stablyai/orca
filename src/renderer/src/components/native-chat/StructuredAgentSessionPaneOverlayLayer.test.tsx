@@ -136,6 +136,52 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
       ])
     )
   })
+
+  it('evicts inactive structured chat surfaces beyond the warm LRU limit', () => {
+    const tabIds = ['tab-1', 'tab-2', 'tab-3', 'tab-4', 'tab-5']
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        [WORKTREE_ID]: tabIds.map((id, index) => structuredTab(id, `session-${index + 1}`, index))
+      },
+      groupsByWorktree: {
+        [WORKTREE_ID]: [
+          { id: GROUP_ID, worktreeId: WORKTREE_ID, activeTabId: 'tab-1', tabOrder: tabIds }
+        ]
+      }
+    })
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
+    )
+    // Active tab-1 + 2 warm inactive tabs = 3 mounted total; tab-4 and tab-5 stay unmounted.
+    expect(view.container.querySelectorAll('[data-chat-tab-id]')).toHaveLength(3)
+    expect(view.container.querySelector<HTMLElement>('[data-chat-tab-id="tab-4"]')).toBeNull()
+    expect(view.container.querySelector('[data-chat-tab-id="tab-5"]')).toBeNull()
+
+    for (const nextId of ['tab-2', 'tab-3', 'tab-4']) {
+      act(() => {
+        mocks.store?.setState({
+          groupsByWorktree: {
+            [WORKTREE_ID]: [
+              { id: GROUP_ID, worktreeId: WORKTREE_ID, activeTabId: nextId, tabOrder: tabIds }
+            ]
+          }
+        })
+      })
+    }
+
+    // Active tab-4 + recent tab-3 and tab-2 remain mounted; older tab-1 is cold-unmounted.
+    expect(
+      view.container.querySelector<HTMLElement>('[data-chat-tab-id="tab-4"]')?.dataset.chatVisible
+    ).toBe('true')
+    expect(
+      view.container.querySelector<HTMLElement>('[data-chat-tab-id="tab-3"]')?.dataset.chatVisible
+    ).toBe('false')
+    expect(
+      view.container.querySelector<HTMLElement>('[data-chat-tab-id="tab-2"]')?.dataset.chatVisible
+    ).toBe('false')
+    expect(view.container.querySelector('[data-chat-tab-id="tab-1"]')).toBeNull()
+    expect(mocks.unmountsByTabId.get('tab-1')).toBe(1)
+  })
 })
 
 function createState(activeTabId: string): MockAppState {

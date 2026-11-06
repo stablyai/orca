@@ -23,6 +23,7 @@ import {
   FOREGROUND_INTERACTIVE_REDRAW_CHARS,
   FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS,
   FOREGROUND_IMMEDIATE_BUDGET_CHARS,
+  FOREGROUND_UNATTENDED_IMMEDIATE_BUDGET_CHARS,
   consumeForegroundImmediateBudget
 } from './foreground-output-budgets'
 import {
@@ -231,47 +232,40 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     recordTerminalOutput(session.pane.terminal)
   }
 
-  session.consumeForegroundImmediateBudget = function (dataLength: number): boolean {
-    return consumeForegroundImmediateBudget(
-      session.foregroundImmediateBudget,
-      dataLength,
-      FOREGROUND_IMMEDIATE_BUDGET_CHARS
-    )
-  }
+  session.consumeForegroundImmediateBudget = (
+    dataLength: number,
+    capChars = FOREGROUND_IMMEDIATE_BUDGET_CHARS
+  ): boolean =>
+    consumeForegroundImmediateBudget(session.foregroundImmediateBudget, dataLength, capChars)
 
-  session.isActiveSplitPane = function (): boolean {
-    if (!session.deps.isActiveRef.current) {
-      return false
-    }
+  session.isActiveSplitPane = (): boolean => {
     const activePane = session.manager.getActivePane?.() ?? null
-    return activePane ? activePane.id === session.pane.id : true
+    return session.deps.isActiveRef.current && (!activePane || activePane.id === session.pane.id)
   }
 
-  session.isLatencySensitiveForegroundOutput = function (data: string): boolean {
+  session.isLatencySensitiveForegroundOutput = (data: string): boolean => {
     if (!session.isActiveSplitPane()) {
       // Why: many visible split panes each emit tiny TUI frames; a shared budget keeps them live without letting aggregate xterm work starve typing in the active pane.
-      if (data.includes('\x1b[')) {
-        return false
-      }
-      return consumeInactiveForegroundImmediateBudget(data.length)
-    }
-    if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-      return session.consumeForegroundImmediateBudget(data.length)
+      return data.includes('\x1b[') ? false : consumeInactiveForegroundImmediateBudget(data.length)
     }
     const recentInput =
       performance.now() - session.lastInteractiveRedrawInputAt <=
       FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS + terminalInputEchoAllowanceMs(session.inputEchoDelay)
-    if (
-      recentInput &&
-      data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
-      data.includes('\x1b[')
-    ) {
-      return session.consumeForegroundImmediateBudget(data.length)
+    if (!recentInput) {
+      return data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS
+        ? session.consumeForegroundImmediateBudget(
+            data.length,
+            FOREGROUND_UNATTENDED_IMMEDIATE_BUDGET_CHARS
+          )
+        : false
     }
-    return false
+    return data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS ||
+      (data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS && data.includes('\x1b['))
+      ? session.consumeForegroundImmediateBudget(data.length)
+      : false
   }
 
-  session.containsNonAsciiOutput = function (data: string): boolean {
+  session.containsNonAsciiOutput = (data: string): boolean => {
     for (let index = 0; index < data.length; index++) {
       if (data.charCodeAt(index) > 0x7f) {
         return true
@@ -304,13 +298,14 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       performance.now() - session.lastInteractiveRedrawInputAt <=
       FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS + terminalInputEchoAllowanceMs(session.inputEchoDelay)
     if (session.foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
-      return {
-        refresh: true,
-        inPlaceRewrite: rewriteOutputPrefersRenderRefresh
-      }
+      return { refresh: true, inPlaceRewrite: rewriteOutputPrefersRenderRefresh }
     }
-    if (rewriteOutputPrefersRenderRefresh) {
-      // Why: xterm's buffer is right but in-place redraw cells stay stale in the renderer until a repaint (resize fixes it).
+    if (
+      rewriteOutputPrefersRenderRefresh &&
+      (session.shouldApplyNativeWindowsRewriteRefresh ||
+        !session.manager.hasWebglRenderer?.(session.pane.id))
+    ) {
+      // Why: DOM-rendered and ConPTY panes can leave in-place redraw cells stale without an explicit refresh; WebGL already repaints parsed rows cleanly.
       return { refresh: true, inPlaceRewrite: true }
     }
     if (

@@ -73,5 +73,18 @@ it('retains the terminal but disables interaction on tab hiding, app backgroundi
   await act(async () => probe.leaveRoute())
   expect(terminal().props.interactionActive).toBe(false)
   expect(renderer.root.findAll((node) => String(node.type) === 'TerminalWebView')).toHaveLength(1)
+  await act(async () =>
+    renderer.update(
+      createElement(TerminalPaneView, {
+        ...props,
+        active: false,
+        visible: false,
+        retainMounted: false
+      })
+    )
+  )
+  expect(renderer.root.findAll((node) => String(node.type) === 'TerminalWebView')).toHaveLength(0)
+  await act(async () => renderer.update(createElement(TerminalPaneView, props)))
+  expect(renderer.root.findAll((node) => String(node.type) === 'TerminalWebView')).toHaveLength(1)
   await act(async () => renderer.unmount())
 })

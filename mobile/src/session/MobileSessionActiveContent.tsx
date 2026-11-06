@@ -5,6 +5,7 @@ import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
+import { useWarmTerminalHandles } from './use-warm-terminal-handles'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
@@ -81,22 +82,8 @@ export function MobileSessionActiveContent({
     copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
-    setTerminalWebViewRef,
-    handleTerminalWebReady,
     notifyTerminalFrame,
-    notifyTerminalCellBoxChange,
-    handleFileTap,
     handleNativeChatFileTap,
-    handleTerminalOpenUrl,
-    handleTerminalInput,
-    handleTerminalQueryReply,
-    handleSelectionMode,
-    handleSelectionCopy,
-    handleSelectionEvicted,
-    handleClipboardWrite,
-    handleModesChanged,
-    handleKeyboardAvoidanceMetrics,
-    handleHaptic,
     nativeChatImages,
     nativeChatStructuredComposer,
     activeMarkdownTab,
@@ -124,6 +111,20 @@ export function MobileSessionActiveContent({
     () =>
       canOpenUrlInOrca ? (url: string) => void handleCreateBrowserRef.current?.(url) : undefined,
     [canOpenUrlInOrca, handleCreateBrowserRef]
+  )
+  const warmTerminalHandles = useWarmTerminalHandles(
+    terminals,
+    visibleTerminalHandles,
+    activeHandle
+  )
+  const handleTextScaleChange = useCallback(
+    (scale: number) => {
+      // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
+      terminalTextScaleRevisionRef.current += 1
+      setTerminalTextScale(scale)
+      void saveTerminalTextScale(scale)
+    },
+    [setTerminalTextScale, terminalTextScaleRevisionRef]
   )
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
@@ -276,6 +277,7 @@ export function MobileSessionActiveContent({
             visible={
               visibleTerminalHandles?.includes(terminal.handle) ?? terminal.handle === activeHandle
             }
+            retainMounted={warmTerminalHandles.has(terminal.handle)}
             splitIndex={
               terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
                 ? visibleTerminalHandles.indexOf(terminal.handle)
@@ -307,28 +309,23 @@ export function MobileSessionActiveContent({
             }
             terminalTheme={terminal.terminalTheme}
             textScale={terminalTextScale}
-            onTextScaleChange={(scale) => {
-              // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-              terminalTextScaleRevisionRef.current += 1
-              setTerminalTextScale(scale)
-              void saveTerminalTextScale(scale)
-            }}
-            onRef={setTerminalWebViewRef}
-            onWebReady={handleTerminalWebReady}
-            onCellBoxChange={notifyTerminalCellBoxChange}
-            onSelectionMode={handleSelectionMode}
-            onSelectionCopy={handleSelectionCopy}
-            onSelectionEvicted={handleSelectionEvicted}
-            onClipboardWrite={handleClipboardWrite}
-            onModesChanged={handleModesChanged}
-            onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-            onHaptic={handleHaptic}
-            onTerminalInput={handleTerminalInput}
-            onTerminalQueryReply={handleTerminalQueryReply}
+            onTextScaleChange={handleTextScaleChange}
+            onRef={controller.setTerminalWebViewRef}
+            onWebReady={controller.handleTerminalWebReady}
+            onCellBoxChange={controller.notifyTerminalCellBoxChange}
+            onSelectionMode={controller.handleSelectionMode}
+            onSelectionCopy={controller.handleSelectionCopy}
+            onSelectionEvicted={controller.handleSelectionEvicted}
+            onClipboardWrite={controller.handleClipboardWrite}
+            onModesChanged={controller.handleModesChanged}
+            onKeyboardAvoidanceMetrics={controller.handleKeyboardAvoidanceMetrics}
+            onHaptic={controller.handleHaptic}
+            onTerminalInput={controller.handleTerminalInput}
+            onTerminalQueryReply={controller.handleTerminalQueryReply}
             onTerminalInteraction={handleTerminalInteraction}
             onTerminalTap={handleTerminalTap}
-            onFileTap={handleFileTap}
-            onOpenUrl={handleTerminalOpenUrl}
+            onFileTap={controller.handleFileTap}
+            onOpenUrl={controller.handleTerminalOpenUrl}
           />
         ))}
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
