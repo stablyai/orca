@@ -17,7 +17,7 @@ vi.mock('./gl-utils', async () => ({
 import { fetchPipelineJobs } from './pipeline-job-graph'
 
 /** Serves `/jobs` and `/bridges` 100 per page with GitLab's x-next-page header. */
-function servePipeline(jobCount: number, bridgeCount: number, failingJobPage?: number): void {
+function servePipeline(jobCount: number, bridgeCount: number): void {
   glabApiWithHeadersMock.mockImplementation(async (args: string[]) => {
     const match = /pipelines\/7\/(jobs|bridges)\?per_page=100(?:&page=(\d+))?$/.exec(
       args.at(-1) ?? ''
@@ -26,9 +26,6 @@ function servePipeline(jobCount: number, bridgeCount: number, failingJobPage?: n
       throw new Error(`unexpected endpoint ${args.at(-1)}`)
     }
     const page = Number(match[2] ?? 1)
-    if (match[1] === 'jobs' && page === failingJobPage) {
-      throw new Error('503 upstream unavailable')
-    }
     const total = match[1] === 'jobs' ? jobCount : bridgeCount
     const start = (page - 1) * 100
     const items = Array.from({ length: Math.max(0, Math.min(100, total - start)) }, (_, i) =>
@@ -65,12 +62,4 @@ describe('fetchPipelineJobs', () => {
       expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(requests)
     }
   )
-
-  it('keeps earlier pages when a later page fails', async () => {
-    servePipeline(250, 0, 2)
-
-    const rows = await fetchPipelineJobs('/repo', { host: 'gitlab.com', path: 'g/p' }, 7)
-
-    expect(rows.filter((row) => row.name.startsWith('job-'))).toHaveLength(100)
-  })
 })

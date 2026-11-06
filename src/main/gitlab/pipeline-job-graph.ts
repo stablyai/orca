@@ -1,7 +1,7 @@
 import type { GitLabPipelineJob } from '../../shared/gitlab-types'
 import { encodedProject } from './project-path-encoding'
 import { gitLabRunTimes } from './gitlab-run-times'
-import { fetchAllGitLabPages } from './gitlab-paginated-list'
+import { fetchAllGitLabPages, GitLabIncompletePaginationError } from './gitlab-paginated-list'
 import type { LocalGitExecOptions, ProjectRef } from './gl-utils'
 
 // Child CI jobs live under bridge pipelines, not the parent pipeline's jobs endpoint.
@@ -74,14 +74,16 @@ async function fetchPipelineJobList(
   projectRef: ProjectRef,
   pipelineId: number,
   connectionId: string | null | undefined,
-  localGitOptions: LocalGitExecOptions
+  localGitOptions: LocalGitExecOptions,
+  signal: AbortSignal
 ): Promise<GitLabPipelineJob[]> {
   const jobs = await fetchAllGitLabPages<GitLabRawJob>(
     repoPath,
     projectRef,
     `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs`,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    signal
   )
   return jobs.map((job) => mapPipelineJob(job, pipelineId))
 }
@@ -161,23 +163,35 @@ export async function fetchPipelineJobs(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPipelineJob[]> {
-  // A parent failure rejects the whole graph; stop bridge pages nobody will read.
-  const parentFailed = new AbortController()
+  // Once the graph has failed, stop sibling page walks nobody will read.
+  const graphFailed = new AbortController()
+  const failGraph = (error: unknown): never => {
+    graphFailed.abort()
+    throw error
+  }
+  // Bridges and children tolerate a failed first page (e.g. a forbidden child project), never a partial list.
+  const tolerateUnreadable =
+    <T>(fallback: T) =>
+    (error: unknown): T =>
+      error instanceof GitLabIncompletePaginationError ? failGraph(error) : fallback
+
   const [parentJobs, bridges] = await Promise.all([
-    fetchPipelineJobList(repoPath, projectRef, pipelineId, connectionId, localGitOptions).catch(
-      (error: unknown) => {
-        parentFailed.abort()
-        throw error
-      }
-    ),
+    fetchPipelineJobList(
+      repoPath,
+      projectRef,
+      pipelineId,
+      connectionId,
+      localGitOptions,
+      graphFailed.signal
+    ).catch(failGraph),
     fetchPipelineBridges(
       repoPath,
       projectRef,
       pipelineId,
       connectionId,
       localGitOptions,
-      parentFailed.signal
-    ).catch(() => [] as GitLabRawBridge[])
+      graphFailed.signal
+    ).catch(tolerateUnreadable([] as GitLabRawBridge[]))
   ])
 
   const bridgeRows = bridges.map((bridge) => mapBridgeAsJob(bridge, pipelineId))
@@ -204,8 +218,9 @@ export async function fetchPipelineJobs(
         target.projectRef,
         target.pipelineId,
         connectionId,
-        localGitOptions
-      ).catch(() => [] as GitLabPipelineJob[])
+        localGitOptions,
+        graphFailed.signal
+      ).catch(tolerateUnreadable([] as GitLabPipelineJob[]))
   )
 
   // Keep parent/child job order, and add bridge rollups only when no expanded job shares their name.

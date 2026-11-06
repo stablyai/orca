@@ -13,6 +13,9 @@ const PAGE_SIZE = 100
 // Bound guessed pages when a proxy strips, garbles or stalls next-page headers.
 const MAX_PROBED_PAGES = 50
 
+/** A page after the first failed, so the rows read so far are not the whole list. */
+export class GitLabIncompletePaginationError extends Error {}
+
 // Older glab lacks NDJSON output and --jq; parse each API page separately.
 export async function fetchAllGitLabPages<T>(
   repoPath: string,
@@ -40,15 +43,18 @@ export async function fetchAllGitLabPages<T>(
       pageItems = parseGlabJsonList<T>(body)
       nextPageHeader = headers['x-next-page']
     } catch (error) {
-      // A failed later page must not blank the rows a single-page fetch used to show.
+      // A prefix must not pass for the full list; callers keep what they last showed.
       if (page > 1) {
-        return items
+        throw new GitLabIncompletePaginationError(`GitLab list incomplete after page ${page - 1}`, {
+          cause: error
+        })
       }
       throw error
     }
     items.push(...pageItems)
-    // Header page numbers must advance, so following them always terminates.
-    const advertised = parseGlabPaginationHeader(nextPageHeader, page + 1)
+    // Every followed page must add rows and advance the page number, so the walk always ends.
+    const advertised =
+      pageItems.length > 0 ? parseGlabPaginationHeader(nextPageHeader, page + 1) : undefined
     if (advertised !== undefined) {
       page = advertised
     } else if (

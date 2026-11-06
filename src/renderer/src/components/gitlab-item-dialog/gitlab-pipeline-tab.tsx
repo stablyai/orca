@@ -23,7 +23,7 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
   if (item.type !== 'mr') {
     return null
   }
-  const { details, expandedJobId, jobTraceById, loading, retryingJobId } = state
+  const { details, error, expandedJobId, jobTraceById, loading, retryingJobId } = state
   const pipelineCheck = details?.pipeline
     ? gitLabPipelineToPRCheck(
         details.pipeline,
@@ -73,7 +73,7 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
                 />
               ))}
             </div>
-          ) : !pipelineCheck ? (
+          ) : !pipelineCheck && !(error && !details) ? (
             <p className="text-sm text-muted-foreground">
               {translate(
                 'auto.components.GitLabItemDialog.f11e3e7675',
