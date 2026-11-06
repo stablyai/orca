@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { checkpointJournalRig, closeCheckpointTestJournals } from './claude-checkpoint-test-support'
+import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 afterEach(closeCheckpointTestJournals)
 
 it.each([
@@ -115,3 +116,47 @@ it('counts admitted unbound content for cadence without calling it written', asy
   expect(r.journal.itemBody(key)).toMatchObject({ blocks: [{ type: 'text', text: 'PT' }] })
   r.translator.dispose()
 })
+
+it.each([100, 1000])(
+  'joins a %i-window reply only for the saves it makes, then ends with the whole text',
+  (windows) => {
+    vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
+    const saved: number[] = []
+    const checkpoints = createClaudeStreamedTextCheckpoints({
+      persist: (_identity, text) => {
+        saved.push(text.length)
+        return true
+      },
+      producer: {
+        settledLinkageFor: () => {
+          throw new Error('unscoped')
+        }
+      } as never
+    })
+    const identity = { provider: 'claude' as const, sessionId: 's', uuid: 'block:reply:0' }
+    const join = Array.prototype.join
+    let joined = 0
+    const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+      this: unknown[],
+      separator?: string
+    ) {
+      const result = join.call(this, separator)
+      if (separator === '') {
+        joined += result.length
+      }
+      return result
+    })
+    for (let window = 0; window < windows; window++) {
+      checkpoints.append(identity, 'x'.repeat(128))
+      vi.advanceTimersByTime(60)
+    }
+    checkpoints.finish({})
+    spy.mockRestore()
+    // Every joined byte reaches a save: skipped windows cost nothing.
+    expect(joined).toBe(saved.reduce((sum, length) => sum + length, 0))
+    expect(saved.at(-1)).toBe(windows * 128)
+    // One save per 400 ms of streaming plus the ending save.
+    expect(saved.length).toBeLessThanOrEqual(Math.ceil((windows * 60) / 400) + 2)
+    checkpoints.dispose()
+  }
+)

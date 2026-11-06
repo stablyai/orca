@@ -2,7 +2,10 @@ import {
   toolExecutionMetadata,
   toolWebSearchResults
 } from '../../shared/native-chat/tools/native-chat-tool-identity'
-import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalBoundedPayload,
+  AgentJournalItemBody
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
@@ -84,8 +87,13 @@ export type CodexJournalItem = {
   handled: boolean
 }
 
-function commandItem(item: CodexThreadItem): CodexJournalItem {
-  const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
+/** A prebuilt output payload replaces aggregatedOutput. */
+export function codexCommandItem(
+  item: CodexThreadItem,
+  bounded?: AgentJournalBoundedPayload
+): CodexJournalItem {
+  const text = bounded ? null : readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
+  const output = bounded ?? (text === null ? null : journalPayload(text))
   const parsed = commandActionFacts(item)
   return {
     body: {
@@ -96,7 +104,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
       input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
       state: codexItemRunState(item),
       ...toolExecutionMetadata(item),
-      ...(output === null ? {} : { output: journalPayload(output) })
+      ...(output === null ? {} : { output })
     },
     handled: true
   }
@@ -221,7 +229,7 @@ export function codexJournalItem(
     }
   }
   if (item.type === 'commandExecution') {
-    return commandItem(item)
+    return codexCommandItem(item)
   }
   if (item.type === 'fileChange') {
     return fileChangeItem(item)
@@ -284,7 +292,7 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return { body: journalReasoningBody(text), handled: true }
   }
   if (item.type === 'commandExecution') {
-    return commandItem({ ...item, aggregatedOutput: text })
+    return codexCommandItem({ ...item, aggregatedOutput: text })
   }
   if (item.type === 'fileChange') {
     const path = Array.isArray(item.changes)

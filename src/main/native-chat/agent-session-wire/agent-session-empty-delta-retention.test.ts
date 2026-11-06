@@ -38,6 +38,7 @@ describe('empty streamed deltas', () => {
       let snapshot: ReturnType<typeof streams.snapshot>
       try {
         snapshot = streams.snapshot('thread', 'item')
+        void snapshot?.text
       } finally {
         spy.mockRestore()
       }
@@ -66,7 +67,7 @@ describe('empty streamed deltas', () => {
           pending.delete(run)
         }
       },
-      emit: (key, text) => emitted.push({ key, text })
+      emit: (key, { text }) => emitted.push({ key, text })
     })
     try {
       expect(instance.append('empty', '').accepted).toBe(true)
@@ -96,7 +97,7 @@ describe('empty streamed deltas', () => {
     vi.useFakeTimers()
     let accepting = false
     const emitted: [string, string][] = []
-    const emit = vi.fn((key: string, text: string) => {
+    const emit = vi.fn((key: string, { text }: { text: string }) => {
       if (!accepting) {
         return false
       }

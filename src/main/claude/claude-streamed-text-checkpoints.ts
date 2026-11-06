@@ -67,7 +67,6 @@ export function createClaudeStreamedTextCheckpoints(
   /** Last attempted linkage, used only to skip revisions that change nothing. */
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
-  const checkpointLengths = new Map<string, number>()
   const acceptedAt = new Map<string, number>()
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
@@ -79,22 +78,13 @@ export function createClaudeStreamedTextCheckpoints(
     return agentJournalLinkageFields(deps.producer.settledLinkageFor(scope).linkage)
   }
 
-  const persist = (key: string, text: string, force: boolean): void => {
+  const persist = (key: string, text: string): void => {
     latestText.set(key, text)
-    const previous = acceptedAt.get(key)
-    if (
-      !force &&
-      previous !== undefined &&
-      performance.now() - previous < AGENT_SESSION_TEXT_CHECKPOINT_MS
-    ) {
-      return
-    }
     const identity = identities.get(key)
     if (!identity) {
       return
     }
     const options = producerOptions(key)
-    checkpointLengths.set(key, text.length)
     writtenLinkage.set(key, options)
     if (deps.persist(identity, text, options)) {
       acceptedAt.set(key, performance.now())
@@ -104,7 +94,14 @@ export function createClaudeStreamedTextCheckpoints(
   const coalescer = createAgentSessionDeltaCoalescer({
     ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    emit: (key, text) => persist(key, text, false)
+    // Gate before the coalescer joins the reply, so skipped windows cost nothing; barriers still save.
+    isDue: (key) => {
+      const previous = acceptedAt.get(key)
+      return (
+        previous === undefined || performance.now() - previous >= AGENT_SESSION_TEXT_CHECKPOINT_MS
+      )
+    },
+    emit: (key, { text }) => persist(key, text)
   })
 
   const drop = (key: string): void => {
@@ -113,7 +110,6 @@ export function createClaudeStreamedTextCheckpoints(
     scopes.delete(key)
     writtenLinkage.delete(key)
     latestText.delete(key)
-    checkpointLengths.delete(key)
     acceptedAt.delete(key)
   }
 
@@ -126,11 +122,6 @@ export function createClaudeStreamedTextCheckpoints(
     },
     flush: () => {
       coalescer.flushAll()
-      for (const [key, text] of latestText) {
-        if (checkpointLengths.get(key) !== text.length) {
-          persist(key, text, true)
-        }
-      }
     },
     reattribute: () => {
       for (const [key, identity] of identities) {
@@ -156,8 +147,8 @@ export function createClaudeStreamedTextCheckpoints(
         if (only && !only(key)) {
           continue
         }
-        coalescer.flush(key)
-        const text = latestText.get(key)
+        // The ending save carries the buffered tail; a separate running save first would repeat it.
+        const text = coalescer.snapshot(key)?.text ?? latestText.get(key)
         if (text !== undefined) {
           deps.persist(identity, text, producerOptions(key), ended)
         }
@@ -178,7 +169,6 @@ export function createClaudeStreamedTextCheckpoints(
       scopes.clear()
       writtenLinkage.clear()
       latestText.clear()
-      checkpointLengths.clear()
       acceptedAt.clear()
     }
   }

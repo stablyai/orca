@@ -61,7 +61,7 @@ export class ProviderTimelineTextStreams {
           performance.now() - acceptedAt >= AGENT_SESSION_TEXT_CHECKPOINT_MS
         )
       },
-      emit: (id, text) => this.flushOnWindow(id, text)
+      emit: (id, { text }) => this.flushOnWindow(id, text)
     })
   }
 

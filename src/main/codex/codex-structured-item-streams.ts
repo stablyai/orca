@@ -9,9 +9,10 @@ import {
 import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from './codex-structured-journal-sink'
-import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
+import { codexJournalItem } from './codex-structured-item-translation'
 import { withJournalReasoningLifecycle } from '../native-chat/agent-session-journal/journal-reasoning-row'
 import {
+  codexStreamingCheckpointItem,
   codexStructuredItemKey,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCH_BYTES,
   MAX_CODEX_ITEM_STREAM_RETAINED_BYTES,
@@ -32,6 +33,7 @@ import type {
   CodexItemStreamDeps,
   CodexItemStreamState,
   CodexPendingItemPatch,
+  CodexStreamText,
   CodexStructuredItemStreamAdmission,
   CodexStructuredItemStreams
 } from './codex-structured-item-stream-contracts'
@@ -61,7 +63,7 @@ export function createCodexStructuredItemStreams(
     checkpointLengths,
     persist: (key) => {
       const snapshot = coalescer.snapshot(key)
-      return snapshot ? persist(key, snapshot.text) : { accepted: true }
+      return snapshot ? persist(key, snapshot) : { accepted: true }
     },
     schedule: deps.schedule,
     windowMs: deps.coalesceMs,
@@ -99,8 +101,8 @@ export function createCodexStructuredItemStreams(
         break
       }
       const pending = coalescer.snapshot(oldest)
-      if (pending && pending.text.length > 0) {
-        const admission = persist(oldest, pending.text)
+      if (pending && pending.textLength > 0) {
+        const admission = persist(oldest, pending)
         if (!admission.accepted) {
           // The notification head still owns its incoming delta until capacity is admitted.
           return admission
@@ -111,12 +113,12 @@ export function createCodexStructuredItemStreams(
     return { accepted: true }
   }
 
-  const persist = (key: string, text: string): CodexStructuredItemStreamAdmission => {
+  const persist = (key: string, text: CodexStreamText): CodexStructuredItemStreamAdmission => {
     const state = states.get(key)
     if (!state) {
       return { accepted: false, reason: 'failed' }
     }
-    const translated = codexStreamingJournalItem(state.item, text)
+    const translated = codexStreamingCheckpointItem(state.item, text)
     if (translated.body) {
       const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
       const admission = appendCodexItemAndPublish(deps.sink, state.identity, body, {
@@ -128,7 +130,7 @@ export function createCodexStructuredItemStreams(
       }
       acceptedAt.set(key, performance.now())
     }
-    checkpointLengths.set(key, text.length)
+    checkpointLengths.set(key, text.textLength)
     pendingCheckpoints.delete(key)
     if (pendingCheckpoints.size === 0) {
       checkpoints.cancel()
@@ -145,9 +147,10 @@ export function createCodexStructuredItemStreams(
     schedule: deps.schedule,
     isCurrent: deps.isCurrent,
     onScheduledFailure: (admission) => checkpoints.fail(admission),
+    digests: (key) => states.get(key)?.item.type === 'commandExecution',
     shouldEmit: (key, length) => checkpoints.shouldPersist(key, length),
-    emit: (key, text) => {
-      const admission = persist(key, text)
+    emit: (key, snapshot) => {
+      const admission = persist(key, snapshot)
       return states.get(key)?.item.type === 'plan' ? admission : admission.accepted
     }
   })
@@ -278,13 +281,9 @@ export function createCodexStructuredItemStreams(
       if (typeof delta === 'string' && delta.length > 0) {
         // Save skipped full text before an incoming append evicts its buffer.
         const evicted = coalescer.evictionFor(key)
-        const buffered = evicted === undefined ? null : coalescer.snapshot(evicted)
-        if (
-          evicted !== undefined &&
-          buffered &&
-          checkpointLengths.get(evicted) !== buffered.text.length
-        ) {
-          const admission = persist(evicted, buffered.text)
+        const buffered = evicted && coalescer.snapshot(evicted)
+        if (evicted && buffered && checkpointLengths.get(evicted) !== buffered.textLength) {
+          const admission = persist(evicted, buffered)
           if (!admission.accepted) {
             return { handled: true, admission }
           }

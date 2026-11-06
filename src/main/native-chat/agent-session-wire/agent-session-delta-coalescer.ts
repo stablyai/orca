@@ -1,3 +1,5 @@
+import type { AgentJournalBoundedPayload } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { AgentSessionDeltaDigest, boundedDeltaPayload } from './agent-session-delta-digest'
 import { appendWithinUtf8ByteLimit } from './agent-session-delta-prefix'
 import type { StructuredAgentSessionSinkAdmission } from './structured-agent-session-event-sink'
 
@@ -14,14 +16,53 @@ export { AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER } from './agent-session-d
 export const AGENT_SESSION_MAX_STREAMS = 256
 
 export type AgentSessionDeltaSnapshot = {
-  text: string
+  /** Joins the retained chunks on first read. */
+  readonly text: string
+  readonly textLength: number
   observedBytes: number
   truncated: boolean
+  /** Bounded preview of the text; reads only the head when the stream keeps a digest. */
+  bounded: (headBytes: number) => AgentJournalBoundedPayload
+}
+
+type AgentSessionDeltaStream = {
+  chunks: string[]
+  retainedBytes: number
+  textLength: number
+  observedBytes: number
+  truncated: boolean
+  dirty: boolean
+  digest: AgentSessionDeltaDigest | null
+}
+
+/** Text stays as of this call; bounded() reads the stream as it is when called. */
+function snapshotOf(stream: AgentSessionDeltaStream): AgentSessionDeltaSnapshot {
+  // Appends push in place; truncation swaps the array, so the captured count fixes the text.
+  const { chunks } = stream
+  const count = chunks.length
+  let text: string | undefined
+  const snapshot = {
+    get text() {
+      text ??= (count === chunks.length ? chunks : chunks.slice(0, count)).join('')
+      return text
+    },
+    observedBytes: stream.observedBytes,
+    truncated: stream.truncated
+  }
+  // Non-enumerable, so snapshots still compare and serialize as text and byte counts.
+  return Object.defineProperties(snapshot, {
+    textLength: { value: stream.textLength },
+    bounded: {
+      value: (headBytes: number) => boundedDeltaPayload(stream.chunks, stream.digest, headBytes)
+    }
+  }) as AgentSessionDeltaSnapshot
 }
 
 export type AgentSessionDeltaCoalescerDeps = {
   /** Emit the complete snapshot, not the increment. */
-  emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
+  emit: (key: string, snapshot: AgentSessionDeltaSnapshot) => unknown
+  /** Keep a running digest so bounded() previews of this stream never join its whole text. */
+  digests?: (key: string) => boolean
   /** False skips this delivery attempt and marks it clean; emit reports sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
   /** Only timer flushes check this; a skip keeps text for a later delta or barrier. */
@@ -73,17 +114,7 @@ export function createAgentSessionDeltaCoalescer(
   const maxTotalRetainedBytes =
     deps.maxTotalRetainedBytes ?? AGENT_SESSION_STREAMED_TEXT_TOTAL_MAX_BYTES
   const maxStreams = Math.max(1, deps.maxStreams ?? AGENT_SESSION_MAX_STREAMS)
-  const streams = new Map<
-    string,
-    {
-      chunks: string[]
-      retainedBytes: number
-      textLength: number
-      observedBytes: number
-      truncated: boolean
-      dirty: boolean
-    }
-  >()
+  const streams = new Map<string, AgentSessionDeltaStream>()
   let totalRetainedBytes = 0
   let cancelTimer: (() => void) | null = null
   const evictable = new Set<string>()
@@ -97,14 +128,7 @@ export function createAgentSessionDeltaCoalescer(
       stream.dirty = false
       return { accepted: true }
     }
-    const text = stream.chunks.join('')
-    const emitted = normalizeAdmission(
-      deps.emit(key, text, {
-        text,
-        observedBytes: stream.observedBytes,
-        truncated: stream.truncated
-      })
-    )
+    const emitted = normalizeAdmission(deps.emit(key, snapshotOf(stream)))
     if (!emitted.accepted) {
       return emitted
     }
@@ -182,7 +206,8 @@ export function createAgentSessionDeltaCoalescer(
           textLength: 0,
           observedBytes: 0,
           truncated: false,
-          dirty: false
+          dirty: false,
+          digest: deps.digests?.(key) ? new AgentSessionDeltaDigest() : null
         }
         if (!deps.isProtected?.(key)) {
           evictable.add(key)
@@ -203,6 +228,11 @@ export function createAgentSessionDeltaCoalescer(
           streamLimit
         )
         totalRetainedBytes += next.retainedBytes - stream.retainedBytes
+        if (next.truncated) {
+          stream.digest?.reset(next.chunks)
+        } else {
+          stream.digest?.append(delta)
+        }
         stream.textLength = next.truncated
           ? (next.chunks[0]?.length ?? 0)
           : stream.textLength + delta.length
@@ -251,28 +281,11 @@ export function createAgentSessionDeltaCoalescer(
     },
     snapshot: (key) => {
       const stream = streams.get(key)
-      return stream
-        ? {
-            text: stream.chunks.join(''),
-            observedBytes: stream.observedBytes,
-            truncated: stream.truncated
-          }
-        : null
+      return stream ? snapshotOf(stream) : null
     },
     dirty: (select) =>
       [...streams].flatMap(([key, stream]) =>
-        stream.dirty && (select?.(key) ?? true)
-          ? [
-              {
-                key,
-                snapshot: {
-                  text: stream.chunks.join(''),
-                  observedBytes: stream.observedBytes,
-                  truncated: stream.truncated
-                }
-              }
-            ]
-          : []
+        stream.dirty && (select?.(key) ?? true) ? [{ key, snapshot: snapshotOf(stream) }] : []
       ),
     markFlushed: (key) => {
       const stream = streams.get(key)

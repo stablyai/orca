@@ -1,5 +1,8 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type {
+  AgentSessionDeltaCoalescerDeps,
+  AgentSessionDeltaSnapshot
+} from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { codexJournalItem, CodexThreadItem } from './codex-structured-item-translation'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
@@ -21,6 +24,9 @@ export type CodexItemStreamDeps = {
   isCurrent?: AgentSessionDeltaCoalescerDeps['isCurrent']
   onScheduledFailure?: AgentSessionDeltaCoalescerDeps['onScheduledFailure']
 }
+
+/** Buffered stream text; command previews read only its bounded head. */
+export type CodexStreamText = AgentSessionDeltaSnapshot
 
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity

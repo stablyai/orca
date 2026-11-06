@@ -32,7 +32,7 @@ function manualClock() {
 function coalescer(clock: ReturnType<typeof manualClock>, windowMs?: number) {
   const emitted: [string, string][] = []
   const instance = createAgentSessionDeltaCoalescer({
-    emit: (key, text) => emitted.push([key, text]),
+    emit: (key, { text }) => emitted.push([key, text]),
     schedule: clock.schedule,
     ...(windowMs === undefined ? {} : { windowMs })
   })
@@ -113,7 +113,7 @@ describe('agent-session delta coalescer', () => {
     const emitted: string[] = []
     const instance = createAgentSessionDeltaCoalescer({
       schedule: clock.schedule,
-      emit: (_key, text) => {
+      emit: (_key, { text }) => {
         if (reject) {
           return false
         }
@@ -137,7 +137,7 @@ describe('agent-session delta coalescer', () => {
     const instance = createAgentSessionDeltaCoalescer({
       maxStreams: 1,
       schedule: clock.schedule,
-      emit: (key, text) => {
+      emit: (key, { text }) => {
         if (reject) {
           return false
         }
@@ -193,7 +193,7 @@ describe('agent-session delta coalescer', () => {
     const instance = createAgentSessionDeltaCoalescer({
       maxRetainedBytes: 40,
       schedule: clock.schedule,
-      emit: (_key, _text, snapshot) => emitted.push(snapshot)
+      emit: (_key, snapshot) => emitted.push(snapshot)
     })
 
     instance.append('item-1', 'éé')
@@ -223,7 +223,7 @@ describe('agent-session delta coalescer', () => {
       maxRetainedBytes: 80,
       maxTotalRetainedBytes: 120,
       schedule: clock.schedule,
-      emit: (key, _text, snapshot) => emitted.set(key, snapshot)
+      emit: (key, snapshot) => emitted.set(key, snapshot)
     })
 
     instance.append('item-1', 'a'.repeat(80))
@@ -254,7 +254,7 @@ describe('snapshot admission before assembly', () => {
       schedule: clock.schedule,
       maxRetainedBytes: 40,
       shouldEmit,
-      emit: (key, text) => emitted.push([key, text])
+      emit: (key, { text }) => emitted.push([key, text])
     })
     instance.append('unicode', 'éé')
     instance.append('surrogate', '\ud83d')

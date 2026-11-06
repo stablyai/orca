@@ -38,9 +38,9 @@ vi.mock('../native-chat/agent-session-wire/agent-session-delta-coalescer', async
     ) => {
       const coalescer = actual.createAgentSessionDeltaCoalescer({
         ...deps,
-        emit: (key, text, snapshot) => {
-          record(text)
-          return deps.emit(key, text, snapshot)
+        emit: (key, snapshot) => {
+          record(snapshot.text)
+          return deps.emit(key, snapshot)
         }
       })
       return {

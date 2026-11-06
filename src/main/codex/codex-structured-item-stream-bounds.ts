@@ -5,6 +5,14 @@ import type {
   CodexPendingItemPatch
 } from './codex-structured-item-stream-contracts'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+import type { AgentSessionDeltaSnapshot } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import { JOURNAL_RUNNING_PREVIEW_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { codexItemRunState } from './codex-item-run-state'
+import {
+  codexCommandItem,
+  codexStreamingJournalItem,
+  type CodexJournalItem
+} from './codex-structured-item-translation'
 
 export const MAX_CODEX_ITEM_STREAM_STATES = 256
 export const MAX_CODEX_ITEM_STREAM_PENDING_PATCHES = 128
@@ -78,4 +86,14 @@ export function trimCodexPendingPatches(patches: Map<string, CodexPendingItemPat
     patches.delete(oldest)
   }
   return releasedBytes
+}
+
+/** Running command rows keep only a preview, so build it without reading all the output. */
+export function codexStreamingCheckpointItem(
+  item: CodexThreadItem,
+  stream: Pick<AgentSessionDeltaSnapshot, 'text' | 'bounded'>
+): CodexJournalItem {
+  return item.type === 'commandExecution' && codexItemRunState(item) === 'running'
+    ? codexCommandItem(item, stream.bounded(JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes))
+    : codexStreamingJournalItem(item, stream.text)
 }

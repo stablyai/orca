@@ -8,6 +8,7 @@ import {
   AGENT_SESSION_DELTA_COALESCE_MS,
   AGENT_SESSION_TEXT_CHECKPOINT_MS,
   type AgentSessionDeltaCoalescer,
+  type AgentSessionDeltaSnapshot,
   scheduleAgentSessionDeltaFlush
 } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type {
@@ -128,7 +129,10 @@ export function flushCodexItemStreamCheckpoints(
     pendingCheckpoints: Set<string>
     producers: ReadonlyMap<string, { threadId: string }>
     checkpointLengths: ReadonlyMap<string, number>
-    persist: (key: string, text: string) => CodexStructuredItemStreamAdmission
+    persist: (
+      key: string,
+      snapshot: AgentSessionDeltaSnapshot
+    ) => CodexStructuredItemStreamAdmission
     typeFor: (key: string) => string | undefined
     pendingPatches: ReadonlyMap<string, unknown>
     flushPatch: (key: string) => CodexStructuredItemStreamAdmission
@@ -154,8 +158,8 @@ export function flushCodexItemStreamCheckpoints(
       continue
     }
     const snapshot = coalescer.snapshot(key)
-    if (snapshot && checkpointLengths.get(key) !== snapshot.text.length) {
-      const admission = persist(key, snapshot.text)
+    if (snapshot && checkpointLengths.get(key) !== snapshot.textLength) {
+      const admission = persist(key, snapshot)
       if (!admission.accepted) {
         if (deps.typeFor(key) === 'plan') {
           flushed = admission
