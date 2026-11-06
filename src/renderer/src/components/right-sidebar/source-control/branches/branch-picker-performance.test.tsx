@@ -1,122 +1,218 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
-import type { RuntimeRepoSearchRefs } from '../../../../../../shared/runtime-worktree-contracts'
-import { useBranchPicker, type BranchPickerOptions } from './use-branch-picker'
+import { BranchPicker, type BranchPickerProps } from './BranchPicker'
+import type * as Rows from './branch-picker-rows'
 import type { BranchWorkspace } from './branch-picker-rows'
-import {
-  listRuntimeGitBranches,
-  searchRuntimeRemoteBranches
-} from '@/runtime/runtime-git-branch-client'
-vi.mock('@/runtime/runtime-git-branch-client', () => ({
-  listRuntimeGitBranches: vi.fn(),
-  searchRuntimeRemoteBranches: vi.fn(),
-  switchRuntimeGitBranch: vi.fn(),
-  branchSwitchExistingBranch: vi.fn()
-}))
-Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
-it.each([100, 1000])(
-  'bounds picker work for %i branches and workspaces by its open and debounce triggers',
-  async (size) => {
-    vi.useFakeTimers()
-    vi.clearAllMocks()
-    let workspaceVisits = 0
-    let branchVisits = 0
-    const makeWorkspaces = () =>
-      new Map(
-        Array.from({ length: size }, (_, n): [string, BranchWorkspace] => [
-          String(n),
-          {
-            id: String(n),
-            repoId: 'repo',
-            get path() {
-              workspaceVisits += 1
-              return `/workspace/${n}`
-            }
-          }
-        ])
-      )
-    const branches = Array.from({ length: size }, (_, n) => `branch-${n}`)
-    const worktreePaths: Record<string, string> = new Proxy(
-      {},
-      {
-        get: (_, key) => {
-          branchVisits += 1
-          return `/workspace/${String(key).slice(7)}`
-        },
-        getOwnPropertyDescriptor: () => ({ configurable: true, enumerable: true })
+const counts = vi.hoisted(() => ({ renders: 0, builds: 0, iterations: 0 }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('./branch-picker-rows', async (original) => {
+  const actual = await original<typeof Rows>()
+  class ObservedIndex extends Map<string, BranchWorkspace> {
+    override *keys() {
+      for (const key of super.keys()) {
+        counts.iterations++
+        yield key
       }
-    )
-    vi.mocked(listRuntimeGitBranches).mockResolvedValue({
-      current: 'main',
-      branches,
-      worktreePaths
-    })
-    vi.mocked(searchRuntimeRemoteBranches).mockResolvedValue({ refs: [], truncated: false })
-    const options: BranchPickerOptions = {
-      context: { target: { kind: 'local' }, worktreeId: 'repo::/repo', worktreePath: '/repo' },
-      hostId: 'local',
-      hostLabel: 'This computer',
-      repoId: 'repo',
-      workspaces: makeWorkspaces(),
-      onSwitched: vi.fn(),
-      onOpenWorkspace: vi.fn()
     }
-    let picker: ReturnType<typeof useBranchPicker> | undefined
-    function Probe({ workspaces }: { workspaces: ReadonlyMap<string, BranchWorkspace> }) {
-      picker = useBranchPicker({ ...options, workspaces })
-      return null
+    override *values() {
+      for (const value of super.values()) {
+        counts.iterations++
+        yield value
+      }
     }
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    try {
-      await act(async () => root.render(<Probe workspaces={options.workspaces} />))
-      const next = makeWorkspaces()
-      await act(async () => root.render(<Probe workspaces={next} />))
-      expect(workspaceVisits).toBe(0)
-      expect(listRuntimeGitBranches).not.toHaveBeenCalled()
-      await act(async () => picker?.setOpen(true))
-      expect(listRuntimeGitBranches).toHaveBeenCalledOnce()
-      expect(workspaceVisits).toBe(size)
-      expect(branchVisits).toBe(size)
-      await act(async () => vi.advanceTimersByTimeAsync(200))
-      expect(searchRuntimeRemoteBranches).toHaveBeenCalledTimes(1)
-      let resolveStale: ((page: RuntimeRepoSearchRefs) => void) | undefined
-      vi.mocked(searchRuntimeRemoteBranches).mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveStale = resolve
-          })
-      )
-      await act(async () => picker?.setQuery('stale'))
-      await act(async () => vi.advanceTimersByTimeAsync(200))
-      await act(async () => {
-        picker?.setQuery('f')
-        picker?.setQuery('fe')
-        picker?.setQuery('feature')
-      })
-      await act(async () => vi.advanceTimersByTimeAsync(200))
-      await act(async () =>
-        resolveStale?.({
-          refs: [],
-          refDetails: [{ refName: 'origin/stale', localBranchName: 'stale' }],
-          truncated: false
-        })
-      )
-      expect(picker?.rows.map((row) => row.target)).toEqual([{ kind: 'new', name: 'feature' }])
-      // One initial query + two completed debounce windows, regardless of B or W.
-      expect(searchRuntimeRemoteBranches).toHaveBeenCalledTimes(3)
-      expect(listRuntimeGitBranches).toHaveBeenCalledOnce()
-      expect(workspaceVisits).toBe(size)
-      expect(branchVisits).toBe(size)
-      await act(async () => picker?.setOpen(false))
-      await act(async () => root.render(<Probe workspaces={makeWorkspaces()} />))
-      expect(workspaceVisits).toBe(size)
-    } finally {
-      await act(async () => root.unmount())
-      vi.useRealTimers()
+    override *entries() {
+      for (const entry of super.entries()) {
+        counts.iterations++
+        yield entry
+      }
+    }
+    override [Symbol.iterator]() {
+      return this.entries()
+    }
+    override forEach(
+      callback: (value: BranchWorkspace, key: string, map: Map<string, BranchWorkspace>) => void
+    ) {
+      for (const [key, value] of this) {
+        callback(value, key, this)
+      }
     }
   }
-)
+  return {
+    ...actual,
+    indexBranchWorkspaces: (...args: Parameters<typeof actual.indexBranchWorkspaces>) => {
+      const index = actual.indexBranchWorkspaces(...args)
+      if (!index) {
+        return null
+      }
+      counts.builds++
+      return new ObservedIndex(index)
+    }
+  }
+})
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({
+    children,
+    onOpenChange
+  }: {
+    children: ReactNode
+    onOpenChange: (open: boolean) => void
+  }) => (
+    <>
+      <button data-open onClick={() => onOpenChange(true)}>
+        Open
+      </button>
+      <button data-close onClick={() => onOpenChange(false)}>
+        Close
+      </button>
+      {children}
+    </>
+  ),
+  PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
+}))
+vi.mock('@/components/ui/command', () => ({
+  Command: ({ children }: { children: ReactNode }) => <>{children}</>,
+  CommandList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  CommandInput: ({ onValueChange }: { onValueChange: (query: string) => void }) => (
+    <>
+      <button data-stale onClick={() => onValueChange('stale')}>
+        Stale query
+      </button>
+      <button data-query onClick={() => onValueChange('branch-9')}>
+        Type
+      </button>
+    </>
+  ),
+  CommandItem: ({ children }: { children: ReactNode }) => {
+    counts.renders++
+    return <div data-row>{children}</div>
+  }
+}))
+Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces', async (size) => {
+  vi.useFakeTimers()
+  vi.clearAllMocks()
+  counts.renders = counts.builds = counts.iterations = 0
+  let workspaceVisits = 0
+  const makeWorkspaces = () =>
+    new Map(
+      Array.from({ length: size }, (_, n): [string, BranchWorkspace] => [
+        String(n),
+        {
+          id: String(n),
+          repoId: 'repo',
+          get path() {
+            workspaceVisits++
+            return `/workspace/${n}`
+          }
+        }
+      ])
+    )
+  const branches = Array.from({ length: size }, (_, n) => `branch-${n}`)
+  vi.mocked(callRuntimeRpc)
+    .mockResolvedValue({
+      refs: [],
+      refDetails: Array.from({ length: 200 }, (_, n) => ({
+        refName: `origin/remote-${n}`,
+        localBranchName: `remote-${n}`
+      })),
+      truncated: true
+    })
+    .mockResolvedValueOnce({
+      current: 'branch-0',
+      branches,
+      worktreePaths: Object.fromEntries(branches.map((name, n) => [name, `/workspace/${n}`]))
+    })
+  const props: BranchPickerProps = {
+    branch: 'branch-0',
+    blocker: null,
+    context: { target: { kind: 'local' }, worktreeId: 'repo::/repo', worktreePath: '/repo' },
+    repoId: 'repo',
+    hostId: 'local',
+    hostLabel: 'This computer',
+    workspaces: makeWorkspaces(),
+    onOpenWorkspace: vi.fn(),
+    onSwitched: vi.fn()
+  }
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const click = (selector: string) => {
+    container.querySelector<HTMLButtonElement>(selector)?.click()
+  }
+  try {
+    await act(async () => root.render(<BranchPicker {...props} />))
+    expect(counts.builds).toBe(0)
+    expect(workspaceVisits).toBe(0)
+    await act(async () => click('[data-open]'))
+    expect(counts.builds).toBe(1)
+    expect(workspaceVisits).toBe(size)
+    // The open window shows 50 local matches, regardless of catalog size.
+    expect(container.querySelectorAll('[data-row]')).toHaveLength(50)
+    expect(container.textContent).toContain('Keep typing')
+    counts.renders = 0
+    await act(async () =>
+      root.render(<BranchPicker {...props} agentHint={<p>Unrelated update</p>} />)
+    )
+    expect(counts.renders).toBe(0)
+    expect(counts.builds).toBe(1)
+    const next = makeWorkspaces()
+    await act(async () => root.render(<BranchPicker {...props} workspaces={next} />))
+    expect(counts.builds).toBe(2)
+    expect(workspaceVisits).toBe(size * 2)
+    counts.renders = 0
+    await act(async () => root.render(<BranchPicker {...props} workspaces={next} />))
+    expect(counts.renders).toBe(0)
+    expect(counts.builds).toBe(2)
+    expect(counts.iterations).toBe(0)
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+    counts.renders = 0
+    await act(async () =>
+      root.render(<BranchPicker {...props} workspaces={next} agentHint={<p>Another update</p>} />)
+    )
+    expect(counts.renders).toBe(0)
+    let resolveStale: ((value: unknown) => void) | undefined
+    vi.mocked(callRuntimeRpc).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStale = resolve
+      })
+    )
+    await act(async () => click('[data-stale]'))
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+    counts.renders = 0
+    await act(async () => click('[data-query]'))
+    // A keystroke can replace at most the 100 visible local/remote/create rows.
+    expect(counts.renders).toBeLessThanOrEqual(100)
+    expect(container.querySelectorAll('[data-row]').length).toBeLessThanOrEqual(100)
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+    expect(counts.renders).toBeLessThanOrEqual(100)
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(4)
+    expect(container.querySelectorAll('[data-row]').length).toBeLessThanOrEqual(100)
+    // Exercise the production remote client: one remote-only bounded request per debounce.
+    expect(callRuntimeRpc).toHaveBeenLastCalledWith(props.context.target, 'repo.searchRefs', {
+      repo: 'repo',
+      query: 'branch-9',
+      namespace: 'remote',
+      limit: 50
+    })
+    await act(async () =>
+      resolveStale?.({
+        refs: ['origin/stale'],
+        refDetails: [{ refName: 'origin/stale', localBranchName: 'stale' }],
+        truncated: false
+      })
+    )
+    expect(container.textContent).not.toContain('origin/stale')
+    expect(counts.iterations).toBe(0)
+    await act(async () => click('[data-close]'))
+    await act(async () => root.render(<BranchPicker {...props} workspaces={makeWorkspaces()} />))
+    expect(counts.builds).toBe(2)
+    expect(workspaceVisits).toBe(size * 2)
+  } finally {
+    await act(async () => root.unmount())
+    vi.useRealTimers()
+  }
+})

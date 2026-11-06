@@ -7,6 +7,9 @@ import { isBranchNameValid } from '../../../../../../shared/git/branch-switch-ta
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
+export const LOCAL_BRANCH_WINDOW = 50
+export const BRANCH_PICKER_ROW_LIMIT = 100
+
 export type BranchWorkspace = { id: string; path: string; repoId: string; hostId?: ExecutionHostId }
 export type BranchPickerRow = {
   target: BranchSwitchTarget
@@ -39,40 +42,52 @@ export function indexLocalBranchRows(
   workspaces: Map<string, BranchWorkspace> | null
 ): BranchPickerRow[] {
   const normalizedCurrent = normalizeRuntimePathForComparison(currentPath)
-  return local.branches.map((name) => {
-    const path =
-      local.worktreePaths && Object.hasOwn(local.worktreePaths, name)
-        ? local.worktreePaths[name]
-        : undefined
-    const occupiedPath =
-      path && normalizeRuntimePathForComparison(path) !== normalizedCurrent ? path : undefined
-    return {
-      target: { kind: 'local', name },
-      label: name,
-      current: name === local.current,
-      committedAt:
-        local.committedAt && Object.hasOwn(local.committedAt, name)
-          ? local.committedAt[name]
-          : undefined,
-      occupiedPath,
-      workspace: occupiedPath
-        ? workspaces?.get(normalizeRuntimePathForComparison(occupiedPath))
-        : undefined
-    }
-  })
+  return local.branches
+    .map<BranchPickerRow>((name) => {
+      const path =
+        local.worktreePaths && Object.hasOwn(local.worktreePaths, name)
+          ? local.worktreePaths[name]
+          : undefined
+      const occupiedPath =
+        path && normalizeRuntimePathForComparison(path) !== normalizedCurrent ? path : undefined
+      return {
+        target: { kind: 'local', name },
+        label: name,
+        current: name === local.current,
+        committedAt:
+          local.committedAt && Object.hasOwn(local.committedAt, name)
+            ? local.committedAt[name]
+            : undefined,
+        occupiedPath,
+        workspace: occupiedPath
+          ? workspaces?.get(normalizeRuntimePathForComparison(occupiedPath))
+          : undefined
+      }
+    })
+    .sort(
+      (a, b) =>
+        Number(Boolean(b.current)) - Number(Boolean(a.current)) ||
+        (b.committedAt ?? 0) - (a.committedAt ?? 0)
+    )
 }
 export function branchPickerRows(
   localRows: BranchPickerRow[],
   localNames: Set<string>,
   remote: RuntimeRepoSearchRefs | null,
   query: string
-): BranchPickerRow[] {
+): { rows: BranchPickerRow[]; moreLocal: boolean } {
   const name = query.trim()
-  const rows = localRows.filter((row) => row.label.toLowerCase().includes(name.toLowerCase()))
+  const matches = localRows.filter(
+    (row) => row.current || row.label.toLowerCase().includes(name.toLowerCase())
+  )
+  const rows = matches.slice(0, LOCAL_BRANCH_WINDOW)
   const remoteRows = remote?.refDetails ?? []
   for (const ref of remoteRows) {
     if (ref.refName.startsWith('refs/heads/') || localNames.has(ref.localBranchName)) {
       continue
+    }
+    if (rows.length >= BRANCH_PICKER_ROW_LIMIT - 1) {
+      break
     }
     rows.push({
       target: { kind: 'remote', name: ref.refName.replace(/^refs\/remotes\//, '') },
@@ -86,5 +101,5 @@ export function branchPickerRows(
   ) {
     rows.push({ target: { kind: 'new', name }, label: name })
   }
-  return rows
+  return { rows, moreLocal: matches.length > LOCAL_BRANCH_WINDOW }
 }

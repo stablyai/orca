@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
   listRuntimeGitBranches,
@@ -32,12 +33,12 @@ export type BranchPickerOptions = {
 export function useBranchPicker(options: BranchPickerOptions) {
   const [open, updateOpen] = useState(false)
   const [openedAt, setOpenedAt] = useState(0)
-  function setOpen(next: boolean) {
+  const setOpen = useCallback((next: boolean) => {
     if (next) {
       setOpenedAt(Date.now())
     }
     updateOpen(next)
-  }
+  }, [])
   const [query, setQuery] = useState('')
   const [local, setLocal] = useState(EMPTY_LOCAL)
   const [remote, setRemote] = useState<{ query: string; page: RuntimeRepoSearchRefs } | null>(null)
@@ -70,7 +71,12 @@ export function useBranchPicker(options: BranchPickerOptions) {
       })
       .catch(() => {
         if (!stale) {
-          setError("Orca couldn't list local branches. Try reopening the picker.")
+          setError(
+            translate(
+              'sourceControl.branchPicker.listFailed',
+              "Orca couldn't list local branches. Try reopening the picker."
+            )
+          )
         }
       })
     return () => {
@@ -93,7 +99,10 @@ export function useBranchPicker(options: BranchPickerOptions) {
         .catch(() => {
           if (!stale) {
             setDiscoveryError(
-              "Orca couldn't find remote branches. You can still switch local branches or create a branch."
+              translate(
+                'sourceControl.branchPicker.discoveryFailed',
+                "Orca couldn't find remote branches. You can still switch local branches or create a branch."
+              )
             )
           }
         })
@@ -119,45 +128,55 @@ export function useBranchPicker(options: BranchPickerOptions) {
   )
   const localNames = useMemo(() => new Set(local.branches), [local])
   const currentRemote = remote?.query === query ? remote.page : null
-  const rows = useMemo(
+  const { rows, moreLocal } = useMemo(
     () => branchPickerRows(localRows, localNames, currentRemote, query),
     [localRows, localNames, currentRemote, query]
   )
-  async function select(row: BranchPickerRow) {
-    if (row.workspace) {
-      options.onOpenWorkspace(row.workspace)
-      setOpen(false)
-      return
-    }
-    if (row.current || row.occupiedPath || inFlight.current) {
-      return
-    }
-    inFlight.current = true
-    const ownGeneration = generation.current
-    setPending(true)
-    setError(null)
-    setExistingBranch(null)
-    try {
-      const result = await switchRuntimeGitBranch(context, row.target, options.hostLabel)
-      if (generation.current === ownGeneration) {
-        options.onSwitched(result.warning)
+  const { onOpenWorkspace, onSwitched, hostLabel } = options
+  const select = useCallback(
+    async (row: BranchPickerRow) => {
+      if (row.workspace) {
+        onOpenWorkspace(row.workspace)
         setOpen(false)
+        return
       }
-    } catch (failure) {
-      if (generation.current === ownGeneration) {
-        setError(
-          failure instanceof Error ? failure.message : "Orca couldn't switch branches. Try again."
-        )
-        setExistingBranch(branchSwitchExistingBranch(failure))
+      if (row.current || row.occupiedPath || inFlight.current) {
+        return
       }
-    } finally {
-      inFlight.current = false
-      if (generation.current === ownGeneration) {
-        setPending(false)
+      inFlight.current = true
+      const ownGeneration = generation.current
+      setPending(true)
+      setError(null)
+      setExistingBranch(null)
+      try {
+        const result = await switchRuntimeGitBranch(route, row.target, hostLabel)
+        onSwitched(result.warning)
+        if (generation.current === ownGeneration) {
+          setOpen(false)
+        }
+      } catch (failure) {
+        if (generation.current === ownGeneration) {
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : translate(
+                  'sourceControl.branchPicker.switchFailed',
+                  "Orca couldn't switch branches. Try again."
+                )
+          )
+          setExistingBranch(branchSwitchExistingBranch(failure))
+        }
+      } finally {
+        inFlight.current = false
+        if (generation.current === ownGeneration) {
+          setPending(false)
+        }
       }
-    }
-  }
+    },
+    [route, hostLabel, onOpenWorkspace, onSwitched, setOpen]
+  )
   return {
+    moreLocal,
     open,
     openedAt,
     setOpen,

@@ -38,3 +38,23 @@ it('uses a sentinel and reports a saturated scan even after HEAD filtering', asy
     })
   expect(await searchRemoteRefPage('/repo', '', 50)).toEqual({ refDetails: [], truncated: true })
 })
+it.each([100, 1000])(
+  'retains only the requested 50 remote rows from %i candidates',
+  async (size) => {
+    vi.mocked(gitExecFileAsync)
+      .mockResolvedValueOnce({ stdout: 'origin\n', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: Array.from(
+          { length: size },
+          (_, n) => `refs/remotes/origin/topic-${n}\0origin/topic-${n}`
+        ).join('\n'),
+        stderr: ''
+      })
+    const page = await searchRemoteRefPage('/repo', 'topic', 50)
+    expect(page.refDetails).toHaveLength(50)
+    expect(page.truncated).toBe(true)
+    // The caller needs 50 choices plus a sentinel; Git bounds candidates before returning them.
+    expect(vi.mocked(gitExecFileAsync).mock.calls[1]?.[0]).toContain('--count=204')
+    expect(gitExecFileAsync).toHaveBeenCalledTimes(2)
+  }
+)

@@ -5,6 +5,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { BranchPicker, type BranchPickerProps } from './BranchPicker'
+import { i18n } from '@/i18n/i18n'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
   listRuntimeGitBranches,
@@ -132,4 +133,77 @@ it('keeps disk blockers authoritative in the UI while agent hints stay advisory'
     { kind: 'local', name: 'hidden' },
     'This computer'
   )
+})
+
+it('delivers the original workspace outcome after the picker unmounts', async () => {
+  vi.mocked(listRuntimeGitBranches).mockResolvedValue({ current: 'main', branches: ['feature'] })
+  let finish: ((result: { ok: true; branch: string; warning: string }) => void) | undefined
+  vi.mocked(switchRuntimeGitBranch).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  const onSwitched = vi.fn()
+  await act(async () =>
+    root.render(
+      <BranchPicker
+        branch="main"
+        blocker={null}
+        context={{ target: { kind: 'local' }, worktreeId: 'original', worktreePath: '/repo' }}
+        repoId="repo"
+        hostId="local"
+        hostLabel="This computer"
+        workspaces={new Map()}
+        onOpenWorkspace={vi.fn()}
+        onSwitched={onSwitched}
+      />
+    )
+  )
+  await act(async () => container.querySelector('button')?.click())
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'feature')
+      ?.click()
+  )
+  await act(async () => root.render(<p>Another workspace</p>))
+  await act(async () => finish?.({ ok: true, branch: 'feature', warning: 'Files left behind.' }))
+  expect(onSwitched).toHaveBeenCalledWith('Files left behind.')
+})
+
+it('renders a translated local-list recovery message', async () => {
+  i18n.addResourceBundle(
+    'de',
+    'translation',
+    {
+      sourceControl: { branchPicker: { listFailed: 'Lokale Zweige konnten nicht geladen werden.' } }
+    },
+    true,
+    true
+  )
+  await i18n.changeLanguage('de')
+  vi.mocked(listRuntimeGitBranches).mockRejectedValueOnce(new Error('unreadable'))
+  try {
+    await act(async () =>
+      root.render(
+        <BranchPicker
+          branch="main"
+          blocker={null}
+          context={{ target: { kind: 'local' }, worktreeId: 'original', worktreePath: '/repo' }}
+          repoId="repo"
+          hostId="local"
+          hostLabel="This computer"
+          workspaces={new Map()}
+          onOpenWorkspace={vi.fn()}
+          onSwitched={vi.fn()}
+        />
+      )
+    )
+    await act(async () => container.querySelector('button')?.click())
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      'Lokale Zweige konnten nicht geladen werden.'
+    )
+  } finally {
+    await i18n.changeLanguage('en')
+  }
 })

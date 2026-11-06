@@ -42,7 +42,7 @@ it('offers valid creation with failed, pending, old-host or capped discovery; on
     }
   ]) {
     expect(
-      branchPickerRows(localRows, names, page, 'feat').map((row) => row.target)
+      branchPickerRows(localRows, names, page, 'feat').rows.map((row) => row.target)
     ).toContainEqual({ kind: 'new', name: 'feat' })
   }
   const exact = {
@@ -50,16 +50,19 @@ it('offers valid creation with failed, pending, old-host or capped discovery; on
     refDetails: [{ refName: 'origin/feat', localBranchName: 'feat' }],
     truncated: true
   }
-  expect(branchPickerRows(localRows, names, exact, 'feat').map((row) => row.target)).toEqual([
+  expect(branchPickerRows(localRows, names, exact, 'feat').rows.map((row) => row.target)).toEqual([
+    { kind: 'local', name: 'main' },
     { kind: 'local', name: 'feat-existing' },
     { kind: 'remote', name: 'origin/feat' }
   ])
   expect(
-    branchPickerRows(localRows, names, null, 'feat-existing').some(
+    branchPickerRows(localRows, names, null, 'feat-existing').rows.some(
       (row) => row.target.kind === 'new'
     )
   ).toBe(false)
-  expect(branchPickerRows(localRows, names, null, 'bad..name')).toEqual([])
+  expect(
+    branchPickerRows(localRows, names, null, 'bad..name').rows.map((row) => row.label)
+  ).toEqual(['main'])
 })
 it('drops tracking duplicates without confusing qualified remote refs and slash-named locals', () => {
   const page = {
@@ -72,9 +75,37 @@ it('drops tracking duplicates without confusing qualified remote refs and slash-
     ]
   }
   expect(
-    branchPickerRows([], new Set(['main', 'origin/topic']), page, '').map((row) => row.target)
+    branchPickerRows([], new Set(['main', 'origin/topic']), page, '').rows.map((row) => row.target)
   ).toEqual([
     { kind: 'remote', name: 'origin/topic' },
     { kind: 'remote', name: 'team/upstream/feature' }
   ])
+})
+
+it('maps owner-translated WSL occupancy to its workspace', () => {
+  const path = String.raw`\\wsl.localhost\Ubuntu\home\alice\feature`
+  const index = indexBranchWorkspaces(true, [{ id: 'held', repoId: 'repo', path }], 'repo', 'local')
+  expect(
+    indexLocalBranchRows(
+      { current: 'main', branches: ['feature'], worktreePaths: { feature: path } },
+      String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`,
+      index
+    )[0]?.workspace?.id
+  ).toBe('held')
+})
+it('orders the current branch before recent local commits', () => {
+  const local = indexLocalBranchRows(
+    {
+      current: 'old',
+      branches: ['old', 'new', 'middle'],
+      committedAt: { old: 1, new: 3, middle: 2 }
+    },
+    '/repo',
+    null
+  )
+  expect(
+    branchPickerRows(local, new Set(['old', 'new', 'middle']), null, '').rows.map(
+      (row) => row.label
+    )
+  ).toEqual(['old', 'new', 'middle'])
 })
