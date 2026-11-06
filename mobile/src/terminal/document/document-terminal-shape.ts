@@ -44,6 +44,7 @@ export type TerminalDocumentBuffer = {
   readonly length: number
   readonly viewportY: number
   readonly baseY: number
+  readonly cursorX?: number
   readonly cursorY: number
   readonly type: string
   getNullCell?: () => TerminalDocumentCell

@@ -3,10 +3,12 @@ import { useMemo } from 'react'
 // Wait for init’s ready after render/layout so follow-up fitting reads that init’s measured box; bound silence with a timeout.
 
 const READY_TIMEOUT_MS = 3000
+const PROMPT_BACKLOAD_TIMEOUT_MS = 250
 
 export function createTerminalWebViewReadyPromises() {
   let readyPromise: Promise<void> | null = null
   let readyResolve: (() => void) | null = null
+  let promptResolve: ((text: string) => void) | null = null
 
   // Resolve superseded waiters before rearming so rapid re-init cannot pin fit chains until their old timeout.
   function armReady() {
@@ -47,7 +49,37 @@ export function createTerminalWebViewReadyPromises() {
     })
   }
 
-  return { armReady, awaitReady, resolveReady }
+  function resolvePromptBackload(value: unknown) {
+    const resolve = promptResolve
+    promptResolve = null
+    resolve?.(typeof value === 'string' ? value : '')
+  }
+
+  function awaitPromptBackload(request: () => void): Promise<string> {
+    const prior = promptResolve
+    promptResolve = null
+    prior?.('')
+    return new Promise<string>((resolve) => {
+      let settled = false
+      const finish = (text: string) => {
+        if (!settled) {
+          settled = true
+          clearTimeout(timeout)
+          resolve(text)
+        }
+      }
+      const timeout = setTimeout(() => {
+        if (promptResolve === finish) {
+          promptResolve = null
+        }
+        finish('')
+      }, PROMPT_BACKLOAD_TIMEOUT_MS)
+      promptResolve = finish
+      request()
+    })
+  }
+
+  return { armReady, awaitPromptBackload, awaitReady, resolvePromptBackload, resolveReady }
 }
 
 export function useTerminalWebViewReadyPromises() {

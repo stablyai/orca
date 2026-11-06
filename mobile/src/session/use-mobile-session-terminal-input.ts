@@ -1,6 +1,4 @@
 import { useCallback } from 'react'
-import { translate } from '../i18n/mobile-i18n'
-import { terminalBufferClear } from '../terminal/mobile-terminal-operations'
 import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
 import {
   buildTerminalSendParams,
@@ -14,9 +12,10 @@ import {
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
 } from './mobile-session-route-helpers'
-import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
+import type { TerminalGestureInputQueue } from './mobile-session-route-types'
 import type { TerminalPointerInput } from '../terminal/terminal-webview-contract'
 import type { MobileSessionFileActionsModel } from './use-mobile-session-file-actions'
+import { createMobileTerminalClearHandler } from './use-mobile-terminal-clear-action'
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
   const {
@@ -33,12 +32,10 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalUnsubsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
+    requestTerminalPromptBackload,
     sendLiveInputClick,
-    showToast,
     hostQueryReplyInputSupportedRef,
-    hostProgramStatusSupportedRef,
-    unsubscribeTerminal,
-    subscribeToTerminal
+    hostProgramStatusSupportedRef
   } = scope
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -210,7 +207,11 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       }
       if (input?.click) {
         // A deliberate click must survive wheel limits and follow text queued for the old cursor.
-        void sendLiveInputClick(handle, bytes)
+        void sendLiveInputClick(handle, bytes).then((accepted) => {
+          if (accepted) {
+            setTimeout(() => void requestTerminalPromptBackload(handle), 40)
+          }
+        })
         return
       }
       if (!allowTerminalGestureInput(handle, sequenceCount)) {
@@ -218,7 +219,14 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       }
       enqueueTerminalGestureInput(handle, bytes, sequenceCount)
     },
-    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput, sendLiveInputClick]
+    [
+      allowTerminalGestureInput,
+      client,
+      connState,
+      enqueueTerminalGestureInput,
+      requestTerminalPromptBackload,
+      sendLiveInputClick
+    ]
   )
 
   const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
@@ -234,43 +242,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     })
   }, [])
 
-  async function handleClearTerminal(target: Terminal) {
-    if (!client) {
-      return
-    }
-    // Why: only a different client is stale; the WebView handle is rebuilt on re-render and a path cutover keeps the same host.
-    const isCurrent = () => clientRef.current === client
-    try {
-      const response = await terminalBufferClear.request(
-        client,
-        { terminal: target.handle },
-        { failWhenDisconnected: true }
-      )
-      if (!isCurrent()) {
-        return
-      }
-      if (terminalBufferClear.interpret(response) !== true) {
-        showToast(
-          translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
-          1500
-        )
-        return
-      }
-      // Why: an unsubscribed tab draws a fresh snapshot when it next subscribes; subscribing it here would leak a background stream.
-      if (terminalUnsubsRef.current.has(target.handle)) {
-        unsubscribeTerminal(target.handle)
-        subscribeToTerminal(target.handle)
-      }
-      showToast(translate('session.useTerminalInput.cleared', 'Terminal cleared'))
-    } catch {
-      if (isCurrent()) {
-        showToast(
-          translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
-          1500
-        )
-      }
-    }
-  }
+  const handleClearTerminal = createMobileTerminalClearHandler(scope)
   return {
     allowTerminalGestureInput,
     flushTerminalGestureInput,
