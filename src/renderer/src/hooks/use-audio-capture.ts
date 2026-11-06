@@ -8,10 +8,7 @@ import {
   toPublicDictationMeterState,
   type DictationMeterState
 } from '../../../shared/dictation-audio-meter'
-import {
-  useAudioCaptureStopTail,
-  type StopAudioCaptureOptions
-} from './use-audio-capture-stop-tail'
+import { useAudioCaptureStopTail, type StopCaptureOptions } from './use-audio-capture-stop-tail'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -314,7 +311,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const getCapturedChunkCount = useCallback(() => capturedChunkCountRef.current, [])
 
   const stop = useCallback(
-    (options: StopAudioCaptureOptions = {}) => {
+    (options: StopCaptureOptions = {}) => {
       startRequestRef.current += 1
       isCapturingRef.current = false
       bufferAudioRef.current = false

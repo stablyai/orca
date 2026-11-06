@@ -1,6 +1,6 @@
 import { useCallback, type MutableRefObject } from 'react'
 
-export type StopAudioCaptureOptions = {
+export type StopCaptureOptions = {
   preserveBufferedAudio?: boolean
 }
 
@@ -11,10 +11,10 @@ const STOP_TAIL_MS = 250
 export function useAudioCaptureStopTail(
   isCapturingRef: MutableRefObject<boolean>,
   startRequestRef: MutableRefObject<number>,
-  stop: (options?: StopAudioCaptureOptions) => void
-): (options?: StopAudioCaptureOptions) => Promise<void> {
+  stop: (options?: StopCaptureOptions) => void
+): (options?: StopCaptureOptions) => Promise<void> {
   return useCallback(
-    (options: StopAudioCaptureOptions = {}) => {
+    (options: StopCaptureOptions = {}) => {
       if (!isCapturingRef.current) {
         stop(options)
         return Promise.resolve()
