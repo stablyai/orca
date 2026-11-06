@@ -174,7 +174,7 @@ export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Ele
     <Tooltip>
       <TooltipTrigger asChild>
         {/* Rows narrower than this keep main's layout (name, status, link); wider ones give up the duration before the age. */}
-        <span className="hidden min-w-0 items-center text-[11px] whitespace-nowrap text-muted-foreground tabular-nums @[17rem]:flex">
+        <span className="hidden min-w-0 items-center text-[11px] whitespace-nowrap text-muted-foreground tabular-nums @[19rem]:flex">
           {facts.fixedText && (
             <span className="min-w-0 truncate">
               {facts.fixedText}
