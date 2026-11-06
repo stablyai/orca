@@ -2,7 +2,7 @@ import { ProjectGroupNameDialog } from '../../worktree-list/rows/ProjectGroupNam
 import { WorktreeParentPickerPopover } from '../parenting/WorktreeParentPickerPopover'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
-import type { useWorktreeCollectionActions } from './use-worktree-collection-actions'
+import type { useWorktreeCollectionActions } from '../../use-worktree-collection-actions'
 
 export function WorktreeContextMenuOverlays({
   model,

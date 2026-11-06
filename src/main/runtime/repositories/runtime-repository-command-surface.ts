@@ -1,7 +1,7 @@
 import type { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import type { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
-import type { RuntimeCollectionController } from './runtime-collection-controller'
+import type { RuntimeCollectionController } from '../runtime-collection-controller'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import type { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'

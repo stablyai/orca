@@ -188,6 +188,13 @@ it('composes real dispatched headers, current repo gates and folder cache refres
       activeStickyHeaderIndexRef: { current: 0 },
       activeStickyHostIndexRef: { current: null },
       measureVirtualRowElement: measure,
+      collectionHeader: {
+        collapsedGroups: header.collapsedGroups,
+        toggleGroupWithScrollAnchor: vi.fn(),
+        onRenameCollection: vi.fn(),
+        onDeleteCollection: vi.fn(),
+        onAddWorktreesToCollection: vi.fn()
+      },
       header,
       groupBy: header.groupBy,
       workspaceStatuses: header.workspaceStatuses,

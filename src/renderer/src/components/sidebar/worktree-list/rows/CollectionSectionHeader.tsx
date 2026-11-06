@@ -15,8 +15,8 @@ import type { Collection } from '../../../../../../shared/collection-types'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import { COLLECTION_GROUP_META } from '../../worktree-list-collections'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
-import { ProjectHeaderActions } from '../../ProjectHeaderActions'
-import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
+import { ProjectHeaderActions } from './ProjectHeaderActions'
+import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT

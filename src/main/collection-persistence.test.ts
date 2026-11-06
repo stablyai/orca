@@ -16,7 +16,7 @@ import {
   readDataFile as readDataFileUntyped,
   testState,
   writeDataFile
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 
 function localTarget(id: string): HostWorktreeTarget {
   return hostWorktreeTarget({ id, hostId: LOCAL_EXECUTION_HOST_ID })

@@ -1,7 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import type { Collection } from '../../shared/collection-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 // Why: nonempty names match the runtime RPC contract (requiredString) so both
 // transports reject '' instead of silently renaming to the fallback.
