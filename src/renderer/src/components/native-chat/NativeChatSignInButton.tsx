@@ -1,9 +1,17 @@
 import { Button } from '@/components/ui/button'
-import { nativeChatSignInLabel, useNativeChatSignInView } from './native-chat-sign-in'
+import {
+  isNativeChatSignInFailureKind,
+  nativeChatSignInLabel,
+  useNativeChatSignInView
+} from './native-chat-sign-in'
 
-export function NativeChatSignInButton(): React.JSX.Element | null {
+export function NativeChatSignInButton({
+  failureKind
+}: {
+  failureKind: string | undefined
+}): React.JSX.Element | null {
   const signIn = useNativeChatSignInView()
-  return signIn ? (
+  return signIn && isNativeChatSignInFailureKind(failureKind, signIn) ? (
     <Button
       type="button"
       variant="outline"

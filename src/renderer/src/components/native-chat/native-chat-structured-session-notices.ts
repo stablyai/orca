@@ -59,7 +59,7 @@ function nativeChatLaunchNotice({
     kind: 'error',
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
-      signIn && isNativeChatSignInFailureKind(failure?.details?.reason)
+      signIn && isNativeChatSignInFailureKind(failure?.details?.reason, signIn)
         ? {
             label: nativeChatSignInLabel(signIn),
             onClick: signIn.signIn,

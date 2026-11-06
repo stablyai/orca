@@ -15,11 +15,23 @@ const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'claudeAccountFolderMissing'
 ])
 
-export function isNativeChatSignInFailureKind(kind: string | undefined): boolean {
-  return kind !== undefined && SIGN_IN_FAILURE_KINDS.has(kind)
+export function isNativeChatSignInFailureKind(
+  kind: string | undefined,
+  signIn?: NativeChatSignIn | null
+): boolean {
+  // The current no-model producer names /login; recheck this if another dialect adopts the kind.
+  return (
+    kind !== undefined &&
+    (SIGN_IN_FAILURE_KINDS.has(kind) ||
+      (kind === 'modelNotSelected' && Boolean(signIn?.loginCommand)))
+  )
 }
 
-export type NativeChatSignIn = { signingIn: boolean; signIn: () => void }
+export type NativeChatSignIn = {
+  signingIn: boolean
+  signIn: () => void
+  loginCommand?: string
+}
 
 export const NativeChatSignInContext = createContext<NativeChatSignIn | null>(null)
 
@@ -150,7 +162,7 @@ export function useNativeChatSignIn(input: {
       })
   }, [command, worktreeId, groupId, environmentId])
   const terminal = useMemo(
-    () => (command && worktreeId ? { signingIn: opening, signIn } : null),
+    () => (command && worktreeId ? { signingIn: opening, signIn, loginCommand: command } : null),
     [command, worktreeId, opening, signIn]
   )
   return managed ?? terminal

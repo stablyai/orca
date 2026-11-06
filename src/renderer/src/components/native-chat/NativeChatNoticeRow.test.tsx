@@ -208,18 +208,41 @@ describe('notice rows', () => {
       {
         kind: 'status',
         tone: 'error',
-        ...agentSessionFailureWords({ kind: 'notSignedIn' }, { agentName: 'OMP', surface: 'row' })
+        ...agentSessionFailureWords(
+          { kind: 'modelNotSelected' },
+          { agentName: 'OMP', surface: 'row' }
+        )
       },
       null,
       false,
       false,
       'OMP',
       NO_OFFER,
-      authAction
+      { ...authAction, loginCommand: 'omp' }
     )
     await act(() => i18n.changeLanguage('fr'))
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(authAction.signIn).toHaveBeenCalledOnce()
+  })
+
+  it('does not offer account sign-in for a model selection failure without a terminal login', () => {
+    renderStatus(
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords(
+          { kind: 'modelNotSelected' },
+          { agentName: 'Claude', surface: 'row' }
+        )
+      },
+      null,
+      false,
+      false,
+      'Claude',
+      NO_OFFER,
+      authAction
+    )
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument()
   })
 
   it('updates a mounted auth row when the reader changes language', async () => {

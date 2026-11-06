@@ -28,7 +28,6 @@ import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedCont
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import { NativeChatDetailsDisclosure, ProviderFrameRow } from './NativeChatTranscriptChrome'
-import { isNativeChatSignInFailureKind } from './native-chat-sign-in'
 import { NativeChatSignInButton } from './NativeChatSignInButton'
 import {
   agentSessionFailureDetailText,
@@ -307,7 +306,7 @@ export function NativeChatNoticeRow({
       {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
         <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
       ) : null}
-      {isNativeChatSignInFailureKind(block.failure?.kind) ? <NativeChatSignInButton /> : null}
+      <NativeChatSignInButton failureKind={block.failure?.kind} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}
