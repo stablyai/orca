@@ -194,6 +194,14 @@ export async function activateBackendRuntime(
   profileShutdown.paneGrids = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
+  const { installFirstWorkRenameHookSubscription } =
+    await import('../agent-hooks/first-work/first-work-rename-hook-subscription')
+  const { firstWorkRenameDeps } =
+    await import('../agent-hooks/first-work/first-work-rename-runtime')
+  registerCleanup(
+    installFirstWorkRenameHookSubscription(firstWorkRenameDeps(profileStore, runtime))
+  )
+
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
     await import('../github/workspace-links/github-issue-link-title-wiring')
