@@ -35,7 +35,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
-  '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
+  '../runtime/rpc/server/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
   '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },

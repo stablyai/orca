@@ -1,19 +1,20 @@
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
 
-import { OrcaRuntimeService } from '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { committingSpawn } from '../../bind-first-pane.test-fixture'
-import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
+import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { buildRuntimeMobileAgentStatus } from '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 describe('terminal rename before renderer graph hydration', () => {

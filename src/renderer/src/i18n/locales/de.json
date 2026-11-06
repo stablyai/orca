@@ -17144,6 +17144,8 @@
               "25349b66fc": "Markdown-Datei erstellen",
               "784812ca24": "Einen Browser-Tab im aktiven Arbeitsbereich öffnen.",
               "892bfa9339": "Neuen Browser-Tab öffnen",
+              "splitChatRight": "Chat nach rechts teilen",
+              "splitChatDown": "Chat nach unten teilen",
               "verbs": {
                 "newBrowser": "Neuen Browser öffnen",
                 "newBrowserTab": "Neuen Browser-Tab öffnen",
@@ -17157,6 +17159,10 @@
                 "newTerminal": "Neues Terminal öffnen",
                 "newTerminalTab": "Neuen Terminal-Tab öffnen",
                 "newShell": "Neue Shell öffnen",
+                "splitChatRight": "Chat nach rechts teilen",
+                "splitChatDown": "Chat nach unten teilen",
+                "chatPaneRight": "Chat-Bereich rechts",
+                "chatPaneBelow": "Chat-Bereich darunter",
                 "terminalTab": "Terminal-Tab",
                 "createWorktree": "Worktree erstellen",
                 "addWorktree": "Worktree hinzufügen",
@@ -17166,18 +17172,8 @@
                 "removeWorktree": "Worktree entfernen",
                 "trashWorktree": "Worktree in den Papierkorb verschieben",
                 "addQuickCommand": "Schnellbefehl hinzufügen",
-                "newQuickCommand": "Neuen Schnellbefehl erstellen",
-                "splitChatRight": "Chat nach rechts teilen",
-                "newChatRight": "Neuen Chat rechts öffnen",
-                "chatPaneRight": "Chat-Bereich rechts",
-                "splitChatDown": "Chat nach unten teilen",
-                "newChatBelow": "Neuen Chat darunter öffnen",
-                "chatPaneBelow": "Chat-Bereich darunter"
-              },
-              "splitChatRight": "Chat nach rechts teilen",
-              "splitChatRightDescription": "Einen neuen Chat in einem geteilten Bereich auf der rechten Seite öffnen.",
-              "splitChatDown": "Chat nach unten teilen",
-              "splitChatDownDescription": "Einen neuen Chat in einem geteilten Bereich darunter öffnen."
+                "newQuickCommand": "Neuen Schnellbefehl erstellen"
+              }
             }
           },
           "palette": {

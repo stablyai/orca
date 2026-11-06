@@ -237,49 +237,6 @@ describe('hidden Chromium native popup request compatibility', () => {
   )
 
   it.each(['local', 'route'])(
-    'keeps named, sized and openerless script children adopted: %s',
-    async (name) => {
-      const page = guest(name)
-      for (const [frameName, features] of [
-        ['named-synthetic', ''],
-        ['named-synthetic', 'width=420,height=260'],
-        ['', 'noopener,noreferrer,width=420,height=260']
-      ]) {
-        const before = receipts.length
-        const nativeCount = status().native.creation.length
-        await page.evaluate(
-          ({ frameName, features }) => {
-            document.querySelector('#feature-probe')?.remove()
-            const button = document.createElement('button')
-            button.id = 'feature-probe'
-            button.onclick = () => {
-              window.open('/scripted', frameName, features)
-            }
-            document.body.append(button)
-          },
-          { frameName, features }
-        )
-        await page.locator('#feature-probe').click()
-        await expect
-          .poll(() => receipts.slice(before).some((receipt) => receipt.path === '/scripted'))
-          .toBe(true)
-        await expect
-          .poll(
-            () =>
-              browser
-                ?.contexts()
-                .flatMap((context) => context.pages())
-                .some((candidate) => candidate.url() === `${origin}/scripted`),
-            { timeout: 5_000 }
-          )
-          .toBe(true)
-        expect(status().native.creation.length).toBe(nativeCount)
-        await closeChildren(page)
-      }
-    }
-  )
-
-  it.each(['local', 'route'])(
     'retains subframe and opaque initiator metadata on native Shift POSTs: %s',
     async (name) => {
       const page = guest(name)

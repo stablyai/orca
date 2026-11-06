@@ -173,8 +173,8 @@ export async function resolveHostWorkspaceFile(
       },
       { timeoutMs: 15_000 }
     )
-  // Why the holder: a hover needs only a stat (a grant hashes the file); a download reads the holding
-  // workspace's file, which a grant can't hand to the default app; and an HTML page already previews
+  // Why the holder: a hover needs only a stat (a grant hashes the file); a download pages the holding
+  // workspace's file without a grant's per-page checks; and an HTML page already previews
   // in the clicked workspace, with its relative assets served from the holder.
   const resolved =
     !source.existenceOnly &&

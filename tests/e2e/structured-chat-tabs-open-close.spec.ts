@@ -129,7 +129,7 @@ test.describe('structured chat tabs', () => {
     await expect(tabInStrip(page, secondTab)).toHaveCount(0)
 
     // A chat the window opens from the New tab menu.
-    await page.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await page.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
     const claudeOption = page.getByRole('menuitem', {
       name: 'Claude Configure Claude',
       exact: true

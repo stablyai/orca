@@ -109,7 +109,7 @@ async function ensureTwoTerminalTabs(
 ): Promise<{ firstTabId: string; secondTabId: string }> {
   const worktreeId = (await getActiveWorktreeId(page))!
   if ((await page.locator('[data-testid="sortable-tab"]').count()) < 2) {
-    await page.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await page.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
     await page
       .getByRole('menuitem', { name: /New Terminal/i })
       .first()

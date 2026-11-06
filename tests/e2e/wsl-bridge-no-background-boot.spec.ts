@@ -145,7 +145,7 @@ async function expectNothingStartsTheStoppedDistro(
   timeline(`window done: ${background.length} spawns`)
   // The user opens the WSL workspace and a terminal in it: that act starts the distro.
   await activate(page, workspace.worktreeId)
-  await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
   await page
     .getByRole('menuitem', { name: /New Terminal/ })
     .first()

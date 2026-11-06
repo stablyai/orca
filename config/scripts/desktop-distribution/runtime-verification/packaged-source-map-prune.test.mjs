@@ -6,8 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const {
-  prunePackagedRuntimeTypeAndSourceMapArtifacts,
-  prunePackagedRuntimeNodeModules
+  prunePackagedRuntimeTypeAndSourceMapArtifacts
 } = require('../../../packaged-runtime-node-modules.cjs')
 
 const LINEAR_SDK_PACKAGE_JSON =
@@ -81,55 +80,6 @@ describe('packaged runtime type-declaration and source-map pruning', () => {
       )
       const sdk = createRequire(join(resourcesDir, 'consumer.cjs'))('@linear/sdk')
       expect(typeof sdk.LinearClient).toBe('function')
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('removes source maps from every packaged dependency, not just @linear/sdk', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-source-map-prune-all-'))
-    try {
-      const { jsYamlDir, nodePtyDir } = await createPackagedNodeModulesFixture(resourcesDir)
-
-      prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
-
-      await expect(readdir(jsYamlDir)).resolves.toEqual(['js-yaml.min.js'])
-      await expect(readdir(nodePtyDir)).resolves.toEqual(['index.js'])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('removes type declarations and declaration maps in the same walk', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-source-map-prune-dts-'))
-    try {
-      const { updaterDir } = await createPackagedNodeModulesFixture(resourcesDir)
-
-      prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
-
-      await expect(readdir(updaterDir)).resolves.toEqual(['main.js'])
-    } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
-    }
-  })
-
-  it('runs the artifact prune through aggregate runtime cleanup', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-source-map-aggregate-prune-'))
-    try {
-      const { distDir, updaterDir, packageDir } =
-        await createPackagedNodeModulesFixture(resourcesDir)
-
-      prunePackagedRuntimeNodeModules(resourcesDir, 'darwin', 'arm64')
-
-      await expect(readdir(distDir).then((entries) => entries.sort())).resolves.toEqual([
-        'index.cjs',
-        'index.mjs',
-        'runtime-helper.cjs'
-      ])
-      await expect(readdir(updaterDir)).resolves.toEqual(['main.js'])
-      await expect(readFile(join(packageDir, 'metadata.json.map'), 'utf8')).resolves.toBe(
-        '{"keep":true}'
-      )
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }

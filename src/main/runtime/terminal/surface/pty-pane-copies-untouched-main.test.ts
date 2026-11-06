@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
+import {
+  HEADLESS_LEAF_ID,
+  TEST_WORKTREE_ID
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { SURFACE_TAB_ID, surfaceRuntime } from './terminal-surface-replies.test-fixture'

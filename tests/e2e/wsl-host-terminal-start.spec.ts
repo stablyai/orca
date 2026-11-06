@@ -24,7 +24,7 @@ import {
 } from './helpers/wsl-host-fake-desktop'
 
 async function openNewTerminal(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+  await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
   await page
     .getByRole('menuitem', { name: /New Terminal/ })
     .first()

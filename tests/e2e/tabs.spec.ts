@@ -76,7 +76,7 @@ test.describe('Tabs', () => {
     const tabsBefore = await countRenderedTabs(orcaPage)
 
     // Hidden animated terminals can invalidate Playwright stability despite an enabled visible button.
-    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
     const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
     await newTerminalMenuItem.click()
     await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
@@ -118,7 +118,7 @@ test.describe('Tabs', () => {
       () => window.__store?.getState().openFiles.map((file) => file.id) ?? []
     )
 
-    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
     await newMarkdownMenuItem.click()
 

@@ -18,7 +18,7 @@ import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-s
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { registerBoundPty } from '../../bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { RpcDispatcher } from '../dispatcher'

@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from '../../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 

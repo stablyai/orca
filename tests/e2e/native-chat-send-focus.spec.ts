@@ -78,7 +78,7 @@ test.describe('native chat composer focus', () => {
         })
       )
       .toBe(true)
-    await page.getByRole('button', { name: 'New tab', exact: true }).click()
+    await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
     const menu = page.getByRole('menu', { name: 'New tab', exact: true })
     const search = menu.getByRole('combobox')
     await expect(search).toBeFocused()

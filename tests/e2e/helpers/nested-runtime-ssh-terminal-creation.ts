@@ -18,7 +18,9 @@ export async function assertPairedTerminalCreation(
     const worktreeId = state?.activeWorktreeId
     return worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id) : []
   })
-  await client.page.getByRole('button', { name: 'New tab' }).click({ force: true })
+  await client.page
+    .locator('[data-contextual-tour-target="tab-create-menu"]')
+    .click({ force: true })
   await client.page
     .getByRole('menuitem', { name: /New Terminal/i })
     .first()

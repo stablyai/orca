@@ -239,7 +239,9 @@ test.describe('paired desktop writes to a switch-on server’s workspace land in
             )
           )
         )
-        await desktop.page.getByRole('button', { name: 'New tab' }).click({ force: true })
+        await desktop.page
+          .locator('[data-contextual-tour-target="tab-create-menu"]')
+          .click({ force: true })
         await desktop.page
           .getByRole('menuitem', { name: /New Terminal/i })
           .first()

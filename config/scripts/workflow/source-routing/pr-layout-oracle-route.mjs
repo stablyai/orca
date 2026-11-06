@@ -34,7 +34,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Other layout writers the stack edits.
   'src/main/ipc/pty/ipc/leaf-move.ts',
   'src/main/persistence/closed-terminal-tab-write-fence.ts',
-  'src/main/runtime/runtime-workspace-session-controller.ts',
+  'src/main/runtime/workspaces/session-hosts/runtime-workspace-session-controller.ts',
   'src/main/runtime/terminal/surface/terminal-surface-close.ts',
   'src/main/runtime/terminal/output/terminal-derived-agent-facts.ts',
   'src/main/runtime/terminal/output/terminal-output-generation.ts',

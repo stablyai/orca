@@ -222,6 +222,8 @@ describe('parseCodexSessionFile', () => {
     )
 
     expect(session?.lastUserPrompt).toBe('Review the PR and fix real regressions')
+    // The first prompt only stands in for a name; an index thread name would replace it as 'named'.
+    expect(session?.titleKind).toBe('fallback')
   })
 
   it('does not double-count usage when token count formats switch', async () => {

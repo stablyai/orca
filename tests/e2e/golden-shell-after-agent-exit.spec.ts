@@ -36,7 +36,7 @@ test('opens a clean live shell after an agent exits', async ({ orcaPage }) => {
   await waitForTerminalOutput(orcaPage, GOLDEN_STUB_EXIT_MARKER, 15_000)
 
   const tabsBeforeShell = await orcaPage.locator('[data-testid="sortable-tab"]').count()
-  await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+  await orcaPage.locator('[data-contextual-tour-target="tab-create-menu"]').click({ force: true })
   await orcaPage
     .getByRole('menuitem', { name: /New Terminal/i })
     .first()

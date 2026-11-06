@@ -40,6 +40,8 @@ const STATIC_TITLE_COPY = {
   'view.tasks': () => translate('keybindings.title.viewTasks', 'Open Tasks'),
   'view.plugins': () => translate('keybindings.title.viewPlugins', 'Open Plugins'),
   'sidebar.left.toggle': () => translate('keybindings.title.sidebarLeftToggle', 'Toggle Sidebar'),
+  'sidebar.projects.toggleCollapse': () =>
+    translate('keybindings.title.sidebarProjectsToggleCollapse', 'Collapse / Expand All Projects'),
   'sidebar.right.toggle': () =>
     translate('keybindings.title.sidebarRightToggle', 'Toggle Right Sidebar'),
   'sidebar.explorer.toggle': () =>

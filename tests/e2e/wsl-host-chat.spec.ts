@@ -80,7 +80,7 @@ test.describe('native chat on a WSL host', () => {
         })
       expect(await askSupport()).toMatchObject({ supported: true })
 
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })
@@ -215,7 +215,7 @@ test.describe('native chat on a WSL host', () => {
       })
       await expect.poll(() => focusProject(page, projectPath), { timeout: 60_000 }).toBeTruthy()
       // The menu offers only installed agents, so the chat starts while claude is there.
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })
@@ -352,7 +352,7 @@ test.describe('native chat on a WSL host', () => {
         kind: 'git'
       })
       await expect.poll(() => focusProject(page, projectPath), { timeout: 60_000 }).toBeTruthy()
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })

@@ -252,7 +252,11 @@ import {
   FileSaveCommit
 } from './files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
-import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
+import {
+  TerminalArtifactFile,
+  TerminalArtifactFileChunk,
+  TerminalArtifactFileWrite
+} from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
   FolderWorkspacePathStatus,
@@ -782,6 +786,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
+  'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
@@ -1021,6 +1026,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.readDocPreviewChunk': DocPreviewFileReadChunk,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
+  'files.readTerminalArtifactChunk': TerminalArtifactFileChunk,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
   'files.replaceWithUpload': FileReplaceWithUpload,

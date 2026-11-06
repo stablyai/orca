@@ -129,7 +129,7 @@ test.describe('E9: background work on a stopped WSL host', () => {
       // A chat in another workspace keeps streaming while the WSL one sits stopped.
       const localWorktreeId = await addLocalWorkspace(page, localProjectPath)
       await activateLocal(page, localWorktreeId)
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })
@@ -204,7 +204,7 @@ test.describe('E9: background work on a stopped WSL host', () => {
 
       // The user opens a terminal in the WSL workspace: that act alone starts the distro, once.
       await expect.poll(() => focusProject(page, wslProjectPath), { timeout: 30_000 }).toBeTruthy()
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await page.locator('[data-contextual-tour-target="tab-create-menu"]').first().click()
       await page
         .getByRole('menuitem', { name: /New Terminal/ })
         .first()

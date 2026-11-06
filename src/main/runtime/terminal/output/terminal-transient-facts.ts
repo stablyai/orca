@@ -13,7 +13,7 @@ import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

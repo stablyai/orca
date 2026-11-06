@@ -226,11 +226,12 @@ export function openDetectedFilePath(
       return
     }
 
-    // Why: a granted file is readable only through its grant, so it opens in Orca, never as a download.
-    if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrant === null) {
-      // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
-      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
-      return
+    // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
+    if (openWithSystemDefault && !canOpenWithSystemDefault) {
+      const download = { grant: hostGrant, isCurrent: isCurrentRequest }
+      if (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, download)) {
+        return
+      }
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.

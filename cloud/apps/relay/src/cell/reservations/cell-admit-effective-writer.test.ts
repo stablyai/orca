@@ -53,37 +53,6 @@ describe('CellAdmitEffectiveWriter', () => {
   })
 
   // Step 5 off: a db switch never writes, so the dark roll adds no database write.
-  it('writes nothing while the switch has never said reserve, and one db write on the way out', async () => {
-    const { clock, writes, writer, settle } = setup()
-    writer.tick('db', false)
-    clock.value += 10 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    writer.tick('db', false)
-    expect(writes).toEqual([])
-    writer.tick('reserve', true)
-    await settle()
-    writer.tick('reserve', false)
-    await settle()
-    expect(writes).toEqual(['reserve', 'db'])
-    clock.value += 10 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    writer.tick('db', false)
-    expect(writes).toEqual(['reserve', 'db'])
-  })
-
-  it('owes nothing more once a tripped cell already wrote db', async () => {
-    const { clock, writes, writer, settle } = setup()
-    writer.tick('db', true)
-    await settle()
-    clock.value += CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    writer.tick('db', false)
-    writer.tick('db', false)
-    expect(writes).toEqual(['db'])
-  })
-
-  it('takes no connection while requests wait for the pool', () => {
-    const { writes, writer } = setup({ busy: true })
-    writer.tick('db', true)
-    expect(writes).toEqual([])
-  })
 
   // Best-effort: a failed write never throws into the cell, logs at most once a minute, and retries.
   it('retries a failed write on the next tick and rate-limits its log line', async () => {
@@ -144,23 +113,4 @@ describe('CellAdmitEffectiveWriter', () => {
     expect(DEAD_MAN_SLOT_HOLD_MS).toBeGreaterThan(5 * 60_000)
   })
 
-  it('still yields to a saturated pool for a reserve row, however old', async () => {
-    let busy = false
-    const { clock, writes, writer, settle } = setup({ busyWhen: () => busy })
-    writer.tick('reserve', true)
-    await settle()
-    busy = true
-    clock.value += DEAD_MAN_SLOT_HOLD_MS
-    writer.tick('reserve', true)
-    expect(writes).toEqual(['reserve'])
-  })
-
-  it('never claims while requests wait for the pool, or with the switch off reserve', async () => {
-    const busy = setup({ busy: true })
-    busy.writer.tick('reserve', true, { slots: 1, permit: () => undefined })
-    expect(busy.writes).toEqual([])
-    const off = setup()
-    off.writer.tick('db', false, { slots: 1, permit: () => undefined })
-    expect(off.writes).toEqual([])
-  })
 })

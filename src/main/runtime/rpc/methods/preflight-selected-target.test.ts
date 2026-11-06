@@ -2,16 +2,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  detectInstalledAgentsWithShellPathHydrationMock
-} from '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import { detectInstalledAgentsWithShellPathHydrationMock } from '../../orca-runtime-test-mocks/setup.spec'
 import {
   makeFolderWorkspace,
   makeFolderProjectGroup,
   makeWorktreeMeta,
   store
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { RpcDispatcher } from '../dispatcher'
 import { PREFLIGHT_METHODS } from './preflight'
 import type { Repo } from '../../../../shared/repo-types'

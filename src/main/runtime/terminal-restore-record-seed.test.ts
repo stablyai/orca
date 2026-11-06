@@ -4,7 +4,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import type {
   RuntimePtyTabCloseAuthority,
   HeadlessSeedMetadata,
