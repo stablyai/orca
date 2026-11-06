@@ -180,7 +180,8 @@ describe('startup exec readiness E2E routing', () => {
   it.each([
     'src/main/daemon/sessions/session-shell-ready-barrier.ts',
     'src/main/daemon/shell-readiness/post-ready-flush-gate.ts',
-    'src/main/pty/shell-startup/shell-templates.ts'
+    'src/main/pty/shell-startup/shell-templates.ts',
+    'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
   ])('routes %s', (path) => {
     expect(selectPrE2eSpecs([path])).toContain(spec)
   })

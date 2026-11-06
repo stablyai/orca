@@ -164,7 +164,8 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'src/main/daemon/shell-readiness/',
       'src/main/pty/shell-startup/shell-prompt-readiness-probe.ts',
       'src/main/pty/shell-startup/shell-startup-output-scanner.ts',
-      'src/main/pty/shell-startup/shell-templates.ts'
+      'src/main/pty/shell-startup/shell-templates.ts',
+      'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
     ]
   )
 ]
