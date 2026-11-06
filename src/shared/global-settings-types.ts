@@ -398,8 +398,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentStateRulesPath?: string | null
   /** Off ignores downloads/cache and uses bundled rules or local override; absent means on. */
   agentStateRulesLiveUpdates?: boolean
-  /** Pre-trust the worktree or folder Orca starts an agent in, so its "trust this folder?" prompt is skipped. Defaults on. */
+  /** Off: never pre-trust. On: pre-trust per each repo's decision (asked on first desktop launch). Defaults on. */
   agentWorkspaceTrustEnabled: boolean
+  /** One-shot guard: repos saved before per-repo trust decisions were pinned to pre-trust. */
+  agentWorkspaceTrustExistingReposMigrated?: boolean
   /** Why: Codex's shared server runs every tab's hooks with the first tab's env; off opts new terminals back into it. Absent reads as on. */
   codexTerminalServerIsolation?: boolean
   /** Off hides the banner on a typed `codex` that joined Codex's shared server. Absent reads as on. */

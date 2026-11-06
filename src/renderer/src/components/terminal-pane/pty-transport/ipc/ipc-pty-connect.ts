@@ -17,6 +17,7 @@ import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
+import { awaitAgentWorkspaceTrustDecision } from '../../../agent-workspace-trust/agent-workspace-trust-decision-prompt'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from '../pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -75,6 +76,20 @@ export async function connectIpcPty(
     const preSpawnBarrier = waitAtTerminalPtyPreSpawnE2EBarrier()
     if (preSpawnBarrier) {
       await preSpawnBarrier
+      if (context.isDestroyed()) {
+        return
+      }
+    }
+    // A fresh agent launch in an undecided repo waits for the user's trust answer.
+    const trustDecision =
+      admittedSessionId || (options.command ?? transportOptions.command) === undefined
+        ? null
+        : awaitAgentWorkspaceTrustDecision({
+            launchAgent: options.launchAgent ?? transportOptions.launchAgent,
+            workspaceId: transportOptions.worktreeId
+          })
+    if (trustDecision) {
+      await trustDecision
       if (context.isDestroyed()) {
         return
       }
