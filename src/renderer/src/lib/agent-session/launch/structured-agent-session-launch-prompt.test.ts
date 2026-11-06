@@ -38,6 +38,7 @@ import {
 import {
   captureNativeChatStagedInput,
   releaseNativeChatStagedFiles,
+  restoreNativeChatStagedInput,
   stageNativeChatDraftFile
 } from '@/components/native-chat/native-chat-draft-attachment-staging'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
@@ -254,6 +255,51 @@ describe('settleStructuredAgentLaunchPrompt', () => {
         ],
         skills
       }
+    })
+  })
+
+  it('uploads a reloaded launch message’s listed files under its launch, and nothing else it names', async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
+    const upload = vi.fn(async () => ({
+      uploaded: [
+        { sourcePath: '/client/paste.png', path: '/host/attachments/paste.png' },
+        { sourcePath: '/client/notes.txt', path: '/host/attachments/notes.txt' }
+      ],
+      skipped: [],
+      failed: []
+    }))
+    vi.stubGlobal('api', { fs: { uploadPathsToAgentSessionAttachments: upload } })
+    mocks.call.mockResolvedValue({
+      runtimeId: 'runtime-1',
+      capabilities: [AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY]
+    })
+    const input = {
+      text: 'fix $audit with @/client/notes.txt and @/client/other.txt',
+      attachments: [{ path: '/client/paste.png', previewUri: '' }]
+    }
+    const held = restoreNativeChatStagedInput(
+      STAGING_SCOPE,
+      ['/client/paste.png', '/client/notes.txt'],
+      input
+    )
+    const prepared = await held.prepare(input, {
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1',
+      launchOperationId: 'launch-1'
+    })
+    held.release()
+
+    expect(upload).toHaveBeenCalledExactlyOnceWith({
+      paths: ['/client/paste.png', '/client/notes.txt'],
+      environmentId: 'env-1',
+      sessionId: SESSION,
+      expectedEnvironmentPairingRevision: 7,
+      expectedEnvironmentRuntimeId: 'runtime-1',
+      launchOperationId: 'launch-1'
+    })
+    expect(prepared).toEqual({
+      text: 'fix $audit with @/host/attachments/notes.txt and @/client/other.txt',
+      attachments: [{ path: '/host/attachments/paste.png', previewUri: '' }]
     })
   })
 

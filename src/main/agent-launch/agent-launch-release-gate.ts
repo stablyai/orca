@@ -12,9 +12,12 @@ import type {
   AgentLaunchTerminalStartupParams
 } from '../../shared/rpc-contract/agent-launch-accept-params'
 import type {
+  AgentLaunchPreparedPromptParams,
   AgentLaunchReleasedInput,
   AgentLaunchTerminalAlternativeParams
 } from '../../shared/rpc-contract/agent-launch-release-params'
+import type { AgentLaunchPrompt } from '../../shared/agent-launch/contracts/agent-launch-intent'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import { agentSessionExecutionOptionsRecord } from '../../shared/agent-session/options/agent-session-execution-options'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
@@ -38,14 +41,23 @@ export function releasedTerminalChoices(input: AgentLaunchReleasedInput): Record
 
 export type AgentLaunchReleasePhase = 'preparing' | 'awaiting-release' | 'released'
 
-/** One digest per complete input, so an identical retry joins and any other input conflicts. */
+/** One digest per complete input, so an identical retry joins and any other input conflicts: a
+ *  changed image, file reference or skill conflicts as a changed choice does. */
 export function agentLaunchReleaseDigest(input: AgentLaunchReleasedInput): string {
   return canonicalAgentSessionDigest({
     method: 'agent.launchRelease',
     options: input.options,
     optionsMode: input.optionsMode,
-    selection: input.selection
+    selection: input.selection,
+    firstMessage: input.firstMessage
   })
+}
+
+/** The released body's text, as a terminal types it; images and skills ride beside it. */
+function releasedMessageText(input: AgentLaunchReleasedInput): string {
+  return (input.firstMessage?.body.blocks ?? [])
+    .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+    .join('\n')
 }
 
 export class AgentLaunchReleaseGate {
@@ -65,8 +77,10 @@ export class AgentLaunchReleaseGate {
   constructor(
     readonly terminalAlternative: AgentLaunchTerminalAlternativeParams,
     private readonly agent: string,
-    /** The launch's own held message, which a planned terminal delivers. */
-    private readonly heldText: string,
+    /** The held message prepare named; its body arrives with release. */
+    private readonly prompt: AgentLaunchPreparedPromptParams | undefined,
+    /** The chat the launch reserved, which uploads made before it exists are for. */
+    readonly sessionId: string | undefined,
     private readonly closed: AbortSignal,
     /** The workspace the launch was authorized for; a release is authorized against it again. */
     readonly target: { kind: 'existing'; worktree: string },
@@ -89,6 +103,17 @@ export class AgentLaunchReleaseGate {
   /** True while Setup runs and nothing has yet ended or answered the wait. */
   get preparing(): boolean {
     return this.currentPhase === 'preparing' && !this.installed && !this.endReason
+  }
+
+  /** True while this live launch may still take files for its input: nothing installed or ended. */
+  takesUploads(): boolean {
+    this.expireIfDue()
+    return !this.installed && !this.endReason
+  }
+
+  /** An input names exactly the message prepare did, under its id, or none when prepare named none. */
+  matchesPreparedMessage(input: AgentLaunchReleasedInput): boolean {
+    return (input.firstMessage?.clientMessageId ?? null) === (this.prompt?.clientMessageId ?? null)
   }
 
   /** Settles once the launch is ready for its input, has it, or ends; status reads wake on it. */
@@ -177,13 +202,30 @@ export class AgentLaunchReleaseGate {
     return this.installed.input
   }
 
+  /** The held message as the launch delivers it: its released text under prepare's delivery. */
+  releasedPrompt(): AgentLaunchPrompt | undefined {
+    const input = this.releasedInput()
+    return this.prompt && input.firstMessage
+      ? { text: releasedMessageText(input), delivery: this.prompt.delivery }
+      : undefined
+  }
+
+  /** The chat's opening message, complete with its files and skills, under the released selection;
+   *  a held draft founds none. */
+  releasedFirstMessage(): StructuredAgentSessionFirstMessage | undefined {
+    const input = this.releasedInput()
+    return this.prompt?.delivery === 'submit' && input.firstMessage
+      ? { ...input.firstMessage, selection: agentSessionExecutionOptionsRecord(input.selection) }
+      : undefined
+  }
+
   /** The terminal alternative with the released choices, compiled once and only when needed. A
    *  choice that contradicts the user's own command refuses in the compiler's words. */
   terminalStartup(): AgentLaunchTerminalStartupParams | undefined {
     const input = this.releasedInput()
     this.compiled ??= compileAgentLaunchTerminalAlternative({
       alternative: this.terminalAlternative,
-      heldText: this.heldText,
+      heldText: releasedMessageText(input),
       choices: releasedTerminalChoices(input),
       replaceModelSelection: input.optionsMode === 'replace-model-selection'
     })

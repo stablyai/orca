@@ -38,6 +38,9 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   /** The host's refusal behind the last failed attempt, worded beside Retry. Absent when the
    *  failure named none. */
   failure?: StructuredLaunchFailure
+  /** Shown as failed, with Retry, while its live host launch waits for files that could not be
+   *  sent; in memory only, so the saved row still reads the launch as it is. */
+  parkedFailure?: StructuredLaunchFailure
   selection: StructuredLaunchSelection
   /** A host list showed the chat, so its create reply needs no protection from older lists. */
   hostListed?: true
@@ -194,7 +197,8 @@ export function getStructuredAgentSessionLaunchLifecycle(
   }
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (state?.intent.worktreeId === worktreeId) {
-    return launchStateLifecycle(state)
+    const lifecycle = launchStateLifecycle(state)
+    return lifecycle === 'pending' && state.parkedFailure ? 'failed' : lifecycle
   }
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
@@ -224,6 +228,9 @@ export function getStructuredAgentSessionLaunchFailure(
     return null
   }
   const lifecycle = launchStateLifecycle(state)
+  if (lifecycle === 'pending' && state.parkedFailure) {
+    return state.parkedFailure
+  }
   return lifecycle === 'failed' ||
     (lifecycle === 'visibility-unknown' && !!state.intent.params.firstMessage)
     ? (state.failure ?? null)

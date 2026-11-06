@@ -1,24 +1,102 @@
-/** A host launch prepared before its workspace's Setup finished takes its first turn's final choices
- *  only once the host says Setup succeeded. Until then the chat's picker edits that first turn; the
- *  window then reads the picks in one synchronous step, saves them as submitted and sends them, so
- *  every pick made before that step governs the first turn and any later one is a next-turn choice.
- *  A lost reply sends the same saved input again; nothing is ever read twice. */
+/** A host launch prepared before its workspace's Setup finished takes its first turn's final input
+ *  only once the host says Setup succeeded. Until then the chat's picker edits that first turn and
+ *  its held message keeps its client files. The window first puts those files on the host under the
+ *  launch, then reads the picks in one synchronous step, saves them with the host-readable message
+ *  as submitted and sends them, so every pick made before that step governs the first turn and any
+ *  later one is a next-turn choice. A lost reply sends the same saved input again; nothing is ever
+ *  prepared or read twice. */
 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { restoreNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { nativeChatAttachFailedNotice } from '@/components/native-chat/native-chat-attachment-upload'
+import { translate } from '@/i18n/i18n'
+import { joinSentences } from '../../../../../shared/sentence-joining'
+import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import type {
   AgentLaunchReleaseParams,
   AgentLaunchReleaseResult
 } from '../../../../../shared/rpc-contract/agent-launch-release-params'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import { captureStructuredLaunchFirstTurn } from './structured-agent-session-launch-create-message'
 import type { HostLaunchFirstTurn } from './structured-agent-session-launch-record'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchIntentChanged,
+  publishStructuredLaunchStatus,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 
-type ReleasedInput = Omit<HostLaunchFirstTurn, 'phase'>
+type ReleasedChoices = Omit<Extract<HostLaunchFirstTurn, { phase: 'submitted' }>, 'phase'>
+type FirstMessageBody = StructuredAgentSessionFirstMessage['body']
+
+/** The held message's files could not reach the host (a source gone, a host refusing the upload):
+ *  nothing is released and nothing is given back. The input stays held and saved as it was, under
+ *  the same live launch, until `resumed` (an explicit Retry) prepares it again. */
+export class HostLaunchInputUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly resumed: Promise<void>
+  ) {
+    super(message)
+    this.name = 'HostLaunchInputUnavailableError'
+  }
+}
+
+// One waiting preparation per held launch; it ends with its launch's read.
+const parkedPreparations = new Map<string, () => void>()
+
+/** An explicit Retry of a held launch whose message's files could not reach its host: prepares
+ *  them again, under the same launch. */
+export function resumeHostLaunchPreparation(worktreeId: string, sessionId: string): boolean {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  if (state?.intent.worktreeId !== worktreeId || state.cancelled) {
+    return false
+  }
+  const resume = parkedPreparations.get(sessionId)
+  forgetHostLaunchPreparation(sessionId)
+  resume?.()
+  return resume !== undefined
+}
+
+export function forgetHostLaunchPreparation(sessionId: string): void {
+  parkedPreparations.delete(sessionId)
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  if (state?.parkedFailure) {
+    delete state.parkedFailure
+    publishStructuredLaunchStatus()
+  }
+}
+
+/** Shows the launch as not started, with the existing Retry, naming the files that were not sent. */
+function parkPreparation(
+  intent: StructuredAgentSessionLaunchIntent,
+  staged: readonly string[],
+  cause: string
+): Promise<void> {
+  const resumed = Promise.withResolvers<void>()
+  parkedPreparations.set(intent.sessionId, resumed.resolve)
+  const state = getStructuredLaunchStateBySessionId(intent.sessionId)
+  if (state?.intent === intent) {
+    const names = staged.map((path) => path.split(/[\\/]/).findLast(Boolean) ?? path)
+    state.parkedFailure = {
+      kind: 'not-started',
+      causeText: joinSentences([
+        translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',
+          "{{agent}} couldn't start.",
+          {
+            agent: structuredAgentLabel(intent.agent)
+          }
+        ),
+        nativeChatAttachFailedNotice(names, cause)
+      ])
+    }
+    publishStructuredLaunchStatus()
+  }
+  return resumed.promise
+}
 
 /** The launch this window still holds for the intent; any other has been retired or replaced, and
  *  its own cancellation check ends the read. */
@@ -33,7 +111,7 @@ function heldLaunchState(intent: StructuredAgentSessionLaunchIntent): Structured
 /** The chat's picks as its first turn would carry them. The host takes a per-message selection
  *  and explicit options, so selection is always present, empty included: its absence must never
  *  let the host bring back a remembered model or effort. */
-function readFirstTurn(state: StructuredLaunchState, freeze: boolean): ReleasedInput {
+function readFirstTurn(state: StructuredLaunchState, freeze: boolean): ReleasedChoices {
   const { options, optionsMode, selection } = captureStructuredLaunchFirstTurn(state, {
     hostTakesExplicitOptions: true,
     selection: true,
@@ -46,35 +124,96 @@ function readFirstTurn(state: StructuredLaunchState, freeze: boolean): ReleasedI
   }
 }
 
+/** Saved with the launch's own row and shown, in one write: a failed save never holds it back. */
 function saveFirstTurn(
   intent: StructuredAgentSessionLaunchIntent,
-  firstTurn: HostLaunchFirstTurn
+  firstTurn: HostLaunchFirstTurn,
+  firstMessage?: StructuredAgentSessionFirstMessage
 ): void {
   if (intent.hostLaunch) {
-    intent.hostLaunch = { ...intent.hostLaunch, firstTurn }
+    intent.hostLaunch = {
+      ...intent.hostLaunch,
+      firstTurn,
+      ...(firstMessage ? { firstMessage } : {})
+    }
   }
-  // Saved with the launch's own row and shown: a failed save never holds the launch back.
   notifyStructuredLaunchIntentChanged(intent)
 }
 
-/** Saves the choices the chat shows as the launch starts, so a reload can still finish them. */
+/** Saves the choices the chat shows as the launch starts, and the files its message still needs on
+ *  the host, so a reload can still finish them. */
 export function recordHostLaunchFirstTurnBaseline(
   intent: StructuredAgentSessionLaunchIntent
 ): void {
   const state = getStructuredLaunchStateBySessionId(intent.sessionId)
-  if (
-    intent.hostLaunch?.protocol !== 'release' ||
-    intent.hostLaunch.firstTurn ||
-    state?.intent !== intent
-  ) {
+  const hostLaunch = intent.hostLaunch
+  if (hostLaunch?.protocol !== 'release' || hostLaunch.firstTurn || state?.intent !== intent) {
     return
   }
-  saveFirstTurn(intent, { phase: 'editing', ...readFirstTurn(state, false) })
+  const staged = hostLaunch.firstMessage ? hostLaunch.stagedSources : undefined
+  saveFirstTurn(intent, {
+    phase: 'editing',
+    ...readFirstTurn(state, false),
+    ...(staged?.length ? { staged: [...staged] } : {})
+  })
 }
 
-/** Hands the host its first turn: the input already submitted, unchanged, or else the chat's picks
- *  of now. Reading, saving and sending happen in this one synchronous step. */
-export function releaseHostLaunchFirstTurn(
+/** A reloaded launch's files, held again only by the paths its record listed. */
+async function prepareSavedSources(
+  intent: StructuredAgentSessionLaunchIntent,
+  body: FirstMessageBody,
+  staged: readonly string[],
+  launchOperationId: string
+): Promise<FirstMessageBody> {
+  const input = {
+    text: body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n'),
+    attachments: body.blocks.flatMap((block) =>
+      block.type === 'image-ref' && block.path ? [{ path: block.path, previewUri: '' }] : []
+    ),
+    ...(body.skills ? { skills: body.skills } : {})
+  }
+  const held = restoreNativeChatStagedInput(`host-launch:${intent.sessionId}`, staged, input)
+  try {
+    const prepared = await held.prepare(input, {
+      sessionId: intent.sessionId,
+      runtimeEnvironmentId:
+        intent.target.kind === 'environment' ? intent.target.environmentId : null,
+      launchOperationId
+    })
+    return structuredAgentSessionSendBody(prepared.text, prepared.attachments, prepared.skills)
+  } finally {
+    held.release()
+  }
+}
+
+/** The held message as the host reads it: its client files uploaded under this launch and every
+ *  reference rewritten to the host's paths. One already host-readable is returned as it is. */
+async function hostReadableFirstMessage(
+  intent: StructuredAgentSessionLaunchIntent,
+  operationId: string
+): Promise<StructuredAgentSessionFirstMessage | undefined> {
+  const hostLaunch = intent.hostLaunch
+  const message = hostLaunch?.firstMessage
+  const firstTurn = hostLaunch?.firstTurn
+  const staged = firstTurn?.phase === 'editing' ? firstTurn.staged : undefined
+  if (!hostLaunch || !message || !staged?.length) {
+    return message
+  }
+  try {
+    const body = hostLaunch.prepareFirstMessage
+      ? await hostLaunch.prepareFirstMessage(operationId, intent.target)
+      : await prepareSavedSources(intent, message.body, staged, operationId)
+    return { clientMessageId: message.clientMessageId, body }
+  } catch (error) {
+    const cause = error instanceof Error ? error.message : String(error)
+    throw new HostLaunchInputUnavailableError(cause, parkPreparation(intent, staged, cause))
+  }
+}
+
+/** Hands the host its first turn: the input already submitted, unchanged, or else the prepared
+ *  message with the chat's picks of now. After the files are on the host, reading, saving and
+ *  sending happen in one synchronous step. */
+export async function releaseHostLaunchFirstTurn(
   intent: StructuredAgentSessionLaunchIntent,
   operationId: string
 ): Promise<AgentLaunchReleaseResult> {
@@ -84,10 +223,20 @@ export function releaseHostLaunchFirstTurn(
     throw new Error('host launch first turn unavailable')
   }
   if (firstTurn.phase !== 'submitted') {
+    heldLaunchState(intent)
+    const firstMessage = await hostReadableFirstMessage(intent, operationId)
+    // No await from here to the request: a pick processed during the upload governs this turn.
     firstTurn = { phase: 'submitted', ...readFirstTurn(heldLaunchState(intent), true) }
-    saveFirstTurn(intent, firstTurn)
+    saveFirstTurn(intent, firstTurn, firstMessage)
   }
-  const { phase: _submitted, ...input } = firstTurn
-  const params: AgentLaunchReleaseParams = { operationId, ...input }
+  const { phase: _submitted, ...choices } = firstTurn
+  const message = intent.hostLaunch?.firstMessage
+  const params: AgentLaunchReleaseParams = {
+    operationId,
+    ...choices,
+    ...(message
+      ? { firstMessage: { clientMessageId: message.clientMessageId, body: message.body } }
+      : {})
+  }
   return callRuntimeRpc<AgentLaunchReleaseResult>(intent.target, 'agent.launchRelease', params)
 }

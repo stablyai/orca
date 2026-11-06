@@ -44,7 +44,13 @@ export function hasNativeChatStagedFiles(scope: string): boolean {
   return (staged.get(scope)?.paths.size ?? 0) > 0
 }
 
-export function stageNativeChatDraftFile(scope: string, path: string): void {
+/** The input's files this window still holds as client paths: what its host must receive first. */
+export function nativeChatStagedInputPaths(scope: string, input: NativeChatStagedInput): string[] {
+  const files = staged.get(scope)
+  return files ? inputPaths(currentFiles(files), input) : []
+}
+
+function scopeFiles(scope: string): StagedFiles {
   let files = staged.get(scope)
   if (!files) {
     files = {
@@ -57,8 +63,25 @@ export function stageNativeChatDraftFile(scope: string, path: string): void {
     }
     staged.set(scope, files)
   }
+  return files
+}
+
+export function stageNativeChatDraftFile(scope: string, path: string): void {
+  const files = scopeFiles(scope)
   files.paths.add(path)
   files.draftPaths.add(path)
+}
+
+/** Holds a saved message's files again after a reload, only by the paths its record listed, under
+ *  a lease its capture releases; nothing is guessed from the message's text. */
+export function restoreNativeChatStagedInput(
+  scope: string,
+  paths: readonly string[],
+  input: NativeChatStagedInput
+): ReturnType<typeof captureNativeChatStagedInput> {
+  const files = scopeFiles(scope)
+  paths.forEach((path) => files.paths.add(path))
+  return captureNativeChatStagedInput(scope, input)
 }
 
 export function moveNativeChatStagedFiles(from: string, to: string): void {
@@ -195,9 +218,14 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
         pruneFiles(owner)
       }
     },
+    /** `launchOperationId`: the prepared launch that founds a chat not yet on its host. */
     prepare: async <T extends NativeChatStagedInput>(
       input: T,
-      session: { sessionId: string; runtimeEnvironmentId: string | null }
+      session: {
+        sessionId: string
+        runtimeEnvironmentId: string | null
+        launchOperationId?: string
+      }
     ): Promise<T> => {
       if (!files || !session.runtimeEnvironmentId) {
         return input
@@ -222,13 +250,17 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       if (!prepared.ok) {
         throw new Error(prepared.notice)
       }
+      const target = session.launchOperationId
+        ? { ...prepared.target, launchOperationId: session.launchOperationId }
+        : prepared.target
       const ownerFiles = currentFiles(files)
-      const key = JSON.stringify(prepared.target)
+      // The whole receiving identity, launch included: an upload is never reused for another.
+      const key = JSON.stringify(target)
       const uploads = ownerFiles.uploads.get(key) ?? new Map<string, Promise<string>>()
       ownerFiles.uploads.set(key, uploads)
       const missing = paths.filter((path) => !uploads.has(path))
       if (missing.length) {
-        const upload = uploadNativeChatSessionAttachmentPaths(missing, prepared.target)
+        const upload = uploadNativeChatSessionAttachmentPaths(missing, target)
         for (const source of missing) {
           const saved = upload.then((result) => {
             const uploaded = result.uploaded.find((file) => file.sourcePath === source)

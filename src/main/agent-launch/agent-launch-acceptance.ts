@@ -16,6 +16,9 @@ import type {
 } from '../../shared/rpc-contract/agent-launch-accept-params'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
 import type { AgentLaunchReleaseGate } from './agent-launch-release-gate'
+import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
+import { launchPromptCreateInputs } from './agent-launch-prompt-delivery'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 
 export type AgentLaunchAcceptance = {
   /** What the workspace's creation reported about the Setup this launch waits for. */
@@ -122,4 +125,30 @@ export function assertAcceptedTerminalAlternative(
       `${name} can't open as a chat here, so it was not started. Start it in a terminal instead.`
     )
   }
+}
+
+/** The execution once its input is installed, delivering the released message rather than any text
+ *  prepare carried: prepare names the message, release brings it. */
+export async function releasedExecution(
+  execution: AgentLaunchSurfaceExecution,
+  gate: AgentLaunchReleaseGate
+): Promise<AgentLaunchSurfaceExecution> {
+  await gate.finalInput()
+  const { prompt: _prepared, ...intent } = execution.intent
+  const prompt = gate.releasedPrompt()
+  return { ...execution, intent: prompt ? { ...intent, prompt } : intent }
+}
+
+/** The chat's opening message: a prepared launch's released one whole (images, files, skills) under
+ *  the ordinary admission, or the text an accepted or ordinary launch carries. */
+export function acceptedFirstMessageInputs(execution: AgentLaunchSurfaceExecution): {
+  firstMessage?: StructuredAgentSessionFirstMessage
+  signal?: AbortSignal
+} {
+  const { acceptance, signal } = execution
+  if (!acceptance?.release) {
+    return launchPromptCreateInputs(execution.intent, signal, acceptance?.clientMessageId)
+  }
+  const firstMessage = acceptance.release.releasedFirstMessage()
+  return firstMessage ? { firstMessage, ...(signal ? { signal } : {}) } : {}
 }

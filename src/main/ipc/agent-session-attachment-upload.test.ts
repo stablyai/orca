@@ -115,6 +115,17 @@ describe('uploadExternalPathsToAgentSessionAttachments', () => {
   it('pins every call to the pairing and every call to the server process', async () => {
     await writeFile(join(workDir, 'a.txt'), 'a')
     await uploadExternalPathsToAgentSessionAttachments(context(), [join(workDir, 'a.txt')])
+    // Only a prepared launch's upload names a launch; an ordinary one is unchanged.
+    expect(calls[0]?.params).toEqual({ sessionId: 'session-1', name: 'a.txt', byteLength: 1 })
+    calls.length = 0
+    await uploadExternalPathsToAgentSessionAttachments(
+      { ...context(), launchOperationId: 'launch-1' },
+      [join(workDir, 'a.txt')]
+    )
+    expect(calls[0]?.params).toMatchObject({
+      sessionId: 'session-1',
+      launchOperationId: 'launch-1'
+    })
     expect(calls.map((call) => call.method)).toEqual([
       'agentSessionAttachment.uploadStart',
       'agentSessionAttachment.uploadAppend',

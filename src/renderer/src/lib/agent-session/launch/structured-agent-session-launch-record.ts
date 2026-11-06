@@ -6,7 +6,10 @@ import type {
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { isAgentSessionOptions } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { SendBodyStructure } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import {
+  MAX_BLOCKS,
+  SendBodyStructure
+} from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { AgentLaunchRelease } from '../../../../../shared/rpc-contract/agent-launch-release-params'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
@@ -44,19 +47,44 @@ export function parseStructuredLaunchSurfaceAddress(
   }
 }
 
-const HostLaunchFirstTurnSchema = AgentLaunchRelease.omit({ operationId: true }).extend({
-  phase: z.enum(['editing', 'submitted'])
-})
+const FirstTurnChoices = AgentLaunchRelease.omit({ operationId: true, firstMessage: true })
+
+const HostLaunchFirstTurnSchema = z.discriminatedUnion('phase', [
+  FirstTurnChoices.extend({
+    phase: z.literal('editing'),
+    /** The held message's client files still to upload to its host, by the path the staging
+     *  owner holds them under: metadata only, never bytes or a second copy of the message. */
+    staged: z.array(z.string().min(1).max(4096)).min(1).max(MAX_BLOCKS).optional()
+  }).strict(),
+  FirstTurnChoices.extend({ phase: z.literal('submitted') }).strict()
+])
 
 /** A host launch's first turn, released to it after Setup. `editing`: the choices the chat showed
- *  when it started, which the user may still change; `submitted`: the exact input release sent,
- *  sent again unchanged and never edited. */
+ *  when it started, which the user may still change, and the files its message still needs on the
+ *  host; `submitted`: the exact input release sent, its message host-readable, sent again unchanged
+ *  and never edited. The message itself is the launch's own `firstMessage`. */
 export type HostLaunchFirstTurn = z.infer<typeof HostLaunchFirstTurnSchema>
 
-/** Unreadable is absent: nothing is guessed in its place, so that launch is never released. */
-export function parseHostLaunchFirstTurn(value: unknown): HostLaunchFirstTurn | undefined {
+/** Unreadable is absent: nothing is guessed in its place, so that launch is never released. Files
+ *  still to upload must belong to the saved message; otherwise the evidence is inconsistent. */
+export function parseHostLaunchFirstTurn(
+  value: unknown,
+  firstMessage?: StructuredAgentSessionFirstMessage
+): HostLaunchFirstTurn | undefined {
   const parsed = HostLaunchFirstTurnSchema.safeParse(value)
-  return parsed.success ? parsed.data : undefined
+  if (!parsed.success) {
+    return undefined
+  }
+  const staged = parsed.data.phase === 'editing' ? parsed.data.staged : undefined
+  return !staged || (firstMessage && staged.every((path) => messageNamesPath(firstMessage, path)))
+    ? parsed.data
+    : undefined
+}
+
+function messageNamesPath(message: StructuredAgentSessionFirstMessage, path: string): boolean {
+  return message.body.blocks.some((block) =>
+    block.type === 'text' ? block.text.includes(path) : block.path === path
+  )
 }
 
 export type StructuredAgentLaunchPersistedRecord = {

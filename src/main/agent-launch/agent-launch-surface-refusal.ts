@@ -7,3 +7,13 @@ export class AgentLaunchSurfaceUnavailableError extends OrchestrationError {
     super(AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE, message)
   }
 }
+
+export const AGENT_LAUNCH_ATTACHMENT_EXPIRED_CODE = 'agent_launch_attachment_expired'
+
+/** The chat's ordinary admission refused the opening message whole because a file it names is no
+ *  longer stored: no chat, message or claim exists. A pre-effect failure, never a terminal fallback. */
+export class AgentLaunchAttachmentExpiredError extends OrchestrationError {
+  constructor(message: string) {
+    super(AGENT_LAUNCH_ATTACHMENT_EXPIRED_CODE, message)
+  }
+}

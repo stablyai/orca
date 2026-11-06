@@ -6,6 +6,7 @@ import { basename } from 'node:path'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  agentSessionAttachmentUploadStart,
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget,
   type AgentSessionAttachmentPathUploadResult,
@@ -78,7 +79,7 @@ async function uploadAttachment(
   const { uploadId } = await callAttachmentMethod<AgentSessionAttachmentUploadStartResult>(
     context,
     'agentSessionAttachment.uploadStart',
-    { sessionId: context.sessionId, name: file.name, byteLength: file.byteLength }
+    agentSessionAttachmentUploadStart(context, file)
   )
   try {
     await writeBody((contentBase64, offset) =>

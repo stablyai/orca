@@ -80,4 +80,22 @@ describe('uploadBrowserFilesToWebAgentSessionAttachments', () => {
       'orca-browser-file:gone/old.txt'
     ])
   })
+
+  it('names the prepared launch a chat not yet on its host is uploaded under', async () => {
+    mocks.callEnvironmentEnvelope.mockImplementation(async (_env: string, method: string) =>
+      reply(method === 'agentSessionAttachment.uploadStart' ? { uploadId: 'u1' } : { path: '/p' })
+    )
+    const [token] = holdBrowserAttachmentFiles([new File(['x'], 'shot.png')])
+    await uploadBrowserFilesToWebAgentSessionAttachments({
+      ...target,
+      launchOperationId: 'launch-1',
+      paths: [token!]
+    })
+    expect(mocks.callEnvironmentEnvelope.mock.calls[0]?.[2]).toEqual({
+      sessionId: 'session-1',
+      name: 'shot.png',
+      byteLength: 1,
+      launchOperationId: 'launch-1'
+    })
+  })
 })

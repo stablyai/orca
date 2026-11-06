@@ -77,4 +77,36 @@ describe('AgentSessionAttachmentStore', () => {
     await symlink(outside, stored.path)
     await expect(store.readPreview(stored.path)).rejects.toThrow('Not an attachment image')
   })
+
+  it('takes a chat not on the host only while its launch lives, and ends with it', async () => {
+    const ended = new AbortController()
+    let live = true
+    const launch = { live: () => live, ended: ended.signal }
+    const start = () =>
+      store.startUpload({
+        callerKey: caller,
+        sessionId: 'pending',
+        name: 'a.png',
+        byteLength: 4,
+        launch
+      })
+    const chunk = Buffer.from('ab').toString('base64')
+    // The launch ends while the upload is being allocated: nothing is kept.
+    const allocating = start()
+    live = false
+    await expect(allocating).rejects.toThrow('was not started')
+    expect(await readdir(store.rootDir)).toEqual([])
+    await expect(start()).rejects.toThrow('not on this host')
+
+    live = true
+    const { uploadId } = await start()
+    await store.appendChunk({ callerKey: caller, uploadId, offset: 0, contentBase64: chunk })
+    live = false
+    ended.abort()
+    expect(store.isUploadInFlight(uploadId)).toBe(false)
+    await expect(
+      store.appendChunk({ callerKey: caller, uploadId, offset: 2, contentBase64: chunk })
+    ).rejects.toThrow('was not found')
+    await vi.waitFor(async () => expect(await readdir(store.rootDir)).toEqual([]))
+  })
 })

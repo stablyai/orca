@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_ATTACHMENT_MAX_BYTES
 } from '../agent-session/agent-session-attachments'
 import { isValidBase64 } from './clipboard-params'
+import { parseAgentSessionOperationTimestamp } from '../agent-session/agent-session-host-authority'
 import { Identifier, SessionId } from './structured-agent-session-params'
 
 const UploadId = Identifier('Invalid upload id', 128)
@@ -17,7 +18,16 @@ export const AttachmentUploadStartParams = z
       .number()
       .int()
       .nonnegative()
-      .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
+      .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large'),
+    /** The caller's live prepared launch that will found `sessionId`; only agent.launch.release.v1
+     *  clients send it, before the chat exists. Absent, the chat must already be on this host. */
+    launchOperationId: z
+      .string()
+      .refine(
+        (value) => parseAgentSessionOperationTimestamp(value) !== null,
+        'Malformed launch operation id'
+      )
+      .optional()
   })
   .strict()
 

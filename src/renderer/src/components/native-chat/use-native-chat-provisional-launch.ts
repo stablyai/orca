@@ -1,3 +1,4 @@
+import { resumeHostLaunchPreparation } from '@/lib/agent-session/launch/structured-agent-session-host-launch-release'
 import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-reload'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { getStructuredAgentSessionLaunchSelection } from '../../lib/agent-session/launch/structured-agent-session-launch-options'
@@ -114,7 +115,8 @@ export function useNativeChatProvisionalLaunch(
   const failure = useStructuredAgentSessionLaunchFailure(worktreeId ?? '', sessionId)
   const launch = useLaunchView(sessionId, worktreeId, lifecycle !== null && !retainedInput)
   const retry = useCallback(() => {
-    if (worktreeId) {
+    // A held launch whose message's files could not reach its host prepares them again, under it.
+    if (worktreeId && !resumeHostLaunchPreparation(worktreeId, sessionId)) {
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])

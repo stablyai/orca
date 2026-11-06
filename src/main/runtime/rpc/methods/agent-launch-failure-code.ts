@@ -20,7 +20,10 @@ import {
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../workspaces/creation/worktree-create-setup-choice-refusal'
-import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
+import {
+  AgentLaunchAttachmentExpiredError,
+  AgentLaunchSurfaceUnavailableError
+} from '../../../agent-launch/agent-launch-surface-refusal'
 import { AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
 import { AgentLaunchInputExpiredError } from '../../../agent-launch/agent-launch-release-gate'
 import {
@@ -80,8 +83,12 @@ export function launchFailureWithoutEffectsCode(
   if (error instanceof FolderWorkspaceCreateRefusedError) {
     return folderCreateRefusalCode(error)
   }
-  // Raised only before launch effects, including definitive existing-workspace refusals.
-  if (error instanceof AgentLaunchSurfaceUnavailableError) {
+  // Raised only before launch effects, including definitive existing-workspace refusals; a message
+  // refused whole for a missing file left no chat, message or claim.
+  if (
+    error instanceof AgentLaunchSurfaceUnavailableError ||
+    error instanceof AgentLaunchAttachmentExpiredError
+  ) {
     return agentLaunchFailureCode(error)
   }
   if (error instanceof WorktreeCreateSetupChoiceRefusedError && targetKind === 'create-worktree') {

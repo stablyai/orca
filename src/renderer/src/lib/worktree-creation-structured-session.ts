@@ -118,7 +118,9 @@ export async function launchStructuredWorktreeSession(
       agent,
       prompt,
       foreground: args.shouldActivateOnCompletion,
-      draftScope: sourceScope
+      draftScope: sourceScope,
+      attachments: promptAttachments,
+      staged: prepareInput
     }),
     route: args.agentLaunchRoute,
     ...(needsChat() ? { requestedSurface: 'chat' as const } : {}),

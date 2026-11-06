@@ -10,6 +10,7 @@ import {
   AgentLaunchStructuredSessionRefusedError,
   type AgentLaunchSurfaceFactory
 } from '../../../agent-launch/agent-launch-surface-factories'
+import { AgentLaunchAttachmentExpiredError } from '../../../agent-launch/agent-launch-surface-refusal'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
@@ -124,6 +125,12 @@ export function agentLaunchSurfaceFactory(
         // A caller-named session conflict must surface to that caller, never downgrade to terminal.
         if (requested && created.refusal.code === 'agent_session_conflict') {
           throw new AgentLaunchSessionAlreadyExistsError()
+        }
+        if (
+          created.refusal.code === 'agent_session_operation_invalid' &&
+          created.refusal.details?.reason === 'attachmentExpired'
+        ) {
+          throw new AgentLaunchAttachmentExpiredError(created.refusal.message)
         }
         throw new AgentLaunchStructuredSessionRefusedError(
           created.refusal.code,

@@ -16,6 +16,7 @@ import {
 import { remoteFileContentBudget } from './files-remote-content-budget'
 import type { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { getAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { preparedAgentLaunchUploadAuthority } from './agent-launch-upload-authority'
 
 async function requireStore(
   ctx: RpcContext
@@ -42,9 +43,16 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
     name: 'agentSessionAttachment.uploadStart',
     permission: 'workspace',
     params: AttachmentUploadStartParams,
-    handler: async (params, ctx) => {
+    handler: async ({ launchOperationId, ...params }, ctx) => {
       const { store, callerKey } = await requireStore(ctx)
-      return store.startUpload({ callerKey, ...params })
+      return store.startUpload({
+        callerKey,
+        ...params,
+        // A chat its prepared launch has yet to found takes files under that launch only.
+        ...(launchOperationId
+          ? { launch: preparedAgentLaunchUploadAuthority(ctx, launchOperationId, params.sessionId) }
+          : {})
+      })
     }
   }),
   defineMethod({

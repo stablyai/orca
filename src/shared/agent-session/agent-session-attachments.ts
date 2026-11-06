@@ -114,6 +114,21 @@ export type AgentSessionAttachmentUploadTarget = {
   sessionId: string
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId: string
+  /** The prepared launch that founds `sessionId` once released; uploads die with it. */
+  launchOperationId?: string
+}
+
+/** uploadStart's request for a target: a prepared launch's chat is named by that launch. */
+export function agentSessionAttachmentUploadStart(
+  target: Pick<AgentSessionAttachmentUploadTarget, 'sessionId' | 'launchOperationId'>,
+  file: { name: string; byteLength: number }
+): { sessionId: string; name: string; byteLength: number; launchOperationId?: string } {
+  return {
+    sessionId: target.sessionId,
+    name: file.name,
+    byteLength: file.byteLength,
+    ...(target.launchOperationId ? { launchOperationId: target.launchOperationId } : {})
+  }
 }
 
 export type AgentSessionAttachmentPathUploadResult = {

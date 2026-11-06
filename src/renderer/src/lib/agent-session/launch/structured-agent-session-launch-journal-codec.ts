@@ -27,7 +27,10 @@ export function readSavedLaunchRecord(
   const surfaceAddress = parseStructuredLaunchSurfaceAddress(
     'surfaceAddress' in value ? value.surfaceAddress : undefined
   )
-  const hostLaunchFirstTurn = parseHostLaunchFirstTurn(value.hostLaunchFirstTurn)
+  const hostLaunchFirstTurn = parseHostLaunchFirstTurn(
+    value.hostLaunchFirstTurn,
+    value.firstMessage
+  )
   const { seedOptions: _stored, surfaceAddress: _address, ...rest } = value
   return {
     ...rest,

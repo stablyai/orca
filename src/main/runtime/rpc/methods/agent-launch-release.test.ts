@@ -1,21 +1,18 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** A desktop new-workspace chat prepared before its workspace's required Setup and released with the
  * first turn's final choices: the host still owns Setup, the surface and every effect, and starts
  * nothing until the caller's own live launch is handed one immutable input. */
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createSetupRun, type SetupRun } from '../../setup/setup-run'
-import type * as StructuredCreate from './structured-agent-session-create'
+import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import type * as CloseBeforeCreate from './structured-agent-session-close-before-create'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
-import type { RpcContext } from '../core'
-import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { planLaunchAgentStartupPrompt } from '../../../../shared/agent-launch/startup/launch-agent-startup-prompt-plan'
@@ -28,11 +25,8 @@ import {
 import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   CAPABLE_CLIENT,
-  methodNamed,
   rpcContext,
-  runtimeStub,
   setAgentLaunchRecordStore,
-  type AgentLaunchRuntimeStubOptions,
   emitWorktreeRemovedForTests
 } from './agent-launch.test-fixture'
 
@@ -75,98 +69,32 @@ vi.mock('./structured-agent-session-close-before-create', async (importOriginal)
   }
 })
 
-const { AGENT_LAUNCH_ACCEPT_METHODS } = await import('./agent-launch-accept')
-const { AGENT_LAUNCH_RELEASE_METHODS } = await import('./agent-launch-release')
+const {
+  ACCEPT,
+  DESKTOP,
+  DESKTOP_KEY,
+  FIRST_MESSAGE,
+  HELD_MESSAGE,
+  MESSAGE_ID,
+  PICKED,
+  SESSION_ID,
+  hostRuntime,
+  operationId,
+  prepare,
+  prepared,
+  realChatHost,
+  release,
+  status,
+  untilAwaitingRelease
+} = await import('./agent-launch-release.test-fixture')
+type HostRuntime = ReturnType<typeof hostRuntime>
 const { activeAgentLaunchesFor } = await import('./agent-launch-in-flight')
+const { preparedAgentLaunchUploadAuthority } = await import('./agent-launch-upload-authority')
 const { noteStructuredAgentSessionClose, resetStructuredAgentSessionClosesBeforeCreateForTests } =
   await import('./structured-agent-session-close-before-create')
-const ACCEPT = methodNamed(AGENT_LAUNCH_ACCEPT_METHODS, 'agent.launchAccept')
-const STATUS = methodNamed(AGENT_LAUNCH_ACCEPT_METHODS, 'agent.launchStatus')
-const PREPARE = methodNamed(AGENT_LAUNCH_RELEASE_METHODS, 'agent.launchPrepare')
-const RELEASE = methodNamed(AGENT_LAUNCH_RELEASE_METHODS, 'agent.launchRelease')
-
-const SESSION_ID = 'claude_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
-const MESSAGE_ID = 'message-3f2504e0'
-const HELD_MESSAGE = 'fix the failing test'
-const DESKTOP: Partial<RpcContext> = {
-  clientId: 'desktop-renderer',
-  caller: DESKTOP_RPC_CALLER,
-  clientKind: 'runtime',
-  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-}
-const DESKTOP_KEY = 'trusted-local:desktop'
-const PICKED = {
-  options: { permissionMode: 'ask', model: 'opus', effort: 'high' },
-  optionsMode: 'replace-model-selection',
-  selection: { model: 'opus', effort: 'high' }
-} as const
-
 let directory: string
 let store: AgentSessionRecordStore
 const runs: SetupRun[] = []
-
-function operationId(index = 0): string {
-  return `${Date.now()}-${index.toString(16).padStart(32, '0')}`
-}
-
-function prepared(id: string, overrides: Record<string, unknown> = {}) {
-  return {
-    agent: 'claude',
-    operationId: id,
-    target: { kind: 'existing', worktree: 'id:wt-7' },
-    sessionId: SESSION_ID,
-    nativeChatDefault: true,
-    prompt: { text: HELD_MESSAGE, delivery: 'submit', clientMessageId: MESSAGE_ID },
-    terminalAlternative: { kind: 'agent', prompt: 'submit' },
-    setupReceipt: { required: false },
-    ...overrides
-  }
-}
-
-function hostRuntime(run?: SetupRun, options: AgentLaunchRuntimeStubOptions = {}) {
-  return Object.assign(runtimeStub(options), {
-    getSetupRun: vi.fn((_worktreeId: string) => run),
-    pasteStartupDraftWhenReady: vi.fn((_handle: string, _draft: unknown) => {}),
-    deliverStartupFollowup: vi.fn(async (_handle: string, _followup: unknown) => true),
-    selectCreatedMobileSessionTabForClient: vi.fn(() => true)
-  })
-}
-type HostRuntime = ReturnType<typeof hostRuntime>
-
-function prepare(runtime: HostRuntime, params: unknown) {
-  return PREPARE.handler(PREPARE.params.parse(params), rpcContext(runtime, DESKTOP))
-}
-
-function release(
-  runtime: HostRuntime,
-  id: string,
-  input: Record<string, unknown> = PICKED,
-  caller: Partial<RpcContext> = DESKTOP
-) {
-  return RELEASE.handler(
-    RELEASE.params.parse({ operationId: id, ...input }),
-    rpcContext(runtime, caller)
-  )
-}
-
-function status(runtime: HostRuntime, id: string, read: Record<string, unknown> = {}) {
-  return STATUS.handler(
-    STATUS.params.parse({ operationId: id, ...read }),
-    rpcContext(runtime, DESKTOP)
-  )
-}
-
-/** Reads as the releasing caller does until the launch says it waits for its input. */
-async function untilAwaitingRelease(runtime: HostRuntime, id: string): Promise<void> {
-  for (let read = 0; read < 100; read += 1) {
-    const answer = await status(runtime, id, { includeReleasePhase: true })
-    if (answer.state === 'awaiting-release') {
-      return
-    }
-    await new Promise((resolve) => setImmediate(resolve))
-  }
-  throw new Error('the prepared launch never became ready for its input')
-}
 
 function noEffect(runtime: HostRuntime): void {
   expect(createStructured).not.toHaveBeenCalled()
@@ -231,62 +159,37 @@ describe('a launch prepared while its workspace runs required Setup', () => {
       input: {
         options: { model: 'gpt-5.5', effort: 'high' },
         optionsMode: 'replace-model-selection',
-        selection: { model: 'gpt-5.5', effort: 'high' }
+        selection: { model: 'gpt-5.5', effort: 'high' },
+        firstMessage: FIRST_MESSAGE
       },
       firstTurn: { model: 'gpt-5.5', effort: 'high' }
     },
     // Empty is still explicit: the chat's remembered model never runs the first turn.
-    { picked: 'an empty selection', input: { options: {}, selection: {} }, firstTurn: {} }
+    {
+      picked: 'an empty selection',
+      input: { options: {}, selection: {}, firstMessage: FIRST_MESSAGE },
+      firstTurn: {}
+    }
   ])('runs the first turn on $picked through the real chat host', async ({ input, firstTurn }) => {
-    const { createRestTestRig } =
-      await import('../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig')
-    const { setStructuredAgentSessionHost } =
-      await import('../../../native-chat/agent-session-wire/structured-agent-session-registry')
-    const actual = await vi.importActual<typeof StructuredCreate>(
-      './structured-agent-session-create'
-    )
-    const rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
-    rig.clock.now = Date.now()
-    setStructuredAgentSessionHost(rig.host)
-    const sessionId = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
-    const runtime = Object.assign(hostRuntime(), {
-      resolveStructuredAgentSessionCreateIntent: vi.fn(async (args: { envelope: unknown }) => ({
-        envelope: args.envelope,
-        location: {
-          executionHostId: 'local',
-          wslDistro: null,
-          workspaceId: 'wt-7',
-          workspaceKind: 'git-worktree'
-        },
-        provider: 'codex',
-        agent: 'codex',
-        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
-        options: { model: 'gpt-5.6-sol', effort: 'medium' },
-        runtimeKind: 'native'
-      })),
-      publishStructuredAgentSessionTab: vi.fn(async () => {})
-    })
+    const host = await realChatHost()
     createStructured.mockImplementationOnce(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch hands the real create its real arguments; the mock's narrow type covers only the stubbed cases.
-      actual.createStructuredAgentSessionForWorktree as unknown as Parameters<
-        typeof createStructured.mockImplementationOnce
-      >[0]
+      host.create as unknown as Parameters<typeof createStructured.mockImplementationOnce>[0]
     )
     try {
       const id = operationId()
-      await prepare(runtime, prepared(id, { agent: 'codex', sessionId }))
-      await untilAwaitingRelease(runtime, id)
-      expect(rig.adapter.acquire).not.toHaveBeenCalled()
-      expect(rig.store.getRecord(sessionId)).toBeNull()
-      await release(runtime, id, input)
-      await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
-      const dispatched = rig.adapter.dispatch.mock.calls[0]?.[0]
+      await prepare(host.runtime, prepared(id, { agent: 'codex', sessionId: host.sessionId }))
+      await untilAwaitingRelease(host.runtime, id)
+      expect(host.rig.adapter.acquire).not.toHaveBeenCalled()
+      expect(host.rig.store.getRecord(host.sessionId)).toBeNull()
+      await release(host.runtime, id, input)
+      await vi.waitFor(() => expect(host.rig.adapter.dispatch).toHaveBeenCalledOnce())
+      const dispatched = host.rig.adapter.dispatch.mock.calls[0]?.[0]
       expect(dispatched?.clientMessageId).toBe(MESSAGE_ID)
       const { model, effort } = dispatched?.executionOptions ?? {}
       expect({ ...(model ? { model } : {}), ...(effort ? { effort } : {}) }).toEqual(firstTurn)
     } finally {
-      setStructuredAgentSessionHost(null)
-      await rig.dispose()
+      await host.dispose()
     }
   })
 })
@@ -318,6 +221,43 @@ describe('only the caller’s own live prepared launch takes an input', () => {
       deriveAgentLaunchChildOperationId(id, 'release') ?? ''
     )
     expect(child?.outcome).toEqual({ status: 'succeeded', sessionId: '' })
+  })
+
+  it('takes only the message prepare named, and conflicts on another image', async () => {
+    const runtime = hostRuntime()
+    const id = operationId()
+    await prepare(runtime, prepared(id))
+    await untilAwaitingRelease(runtime, id)
+    const { firstMessage: _message, ...withoutMessage } = PICKED
+    for (const input of [
+      withoutMessage,
+      { ...PICKED, firstMessage: { ...FIRST_MESSAGE, clientMessageId: 'message-other' } }
+    ]) {
+      await expect(release(runtime, id, input)).rejects.toThrow('agent_session_operation_invalid')
+    }
+    const withImage = (path: string) => ({
+      ...PICKED,
+      firstMessage: {
+        clientMessageId: MESSAGE_ID,
+        body: { ...FIRST_MESSAGE.body, blocks: [{ type: 'image-ref', path }] }
+      }
+    })
+    const [first, second, changed] = await Promise.allSettled([
+      release(runtime, id, withImage('/store/u1/a.png')),
+      release(runtime, id, withImage('/store/u1/a.png')),
+      release(runtime, id, withImage('/store/u2/b.png'))
+    ])
+    expect(second).toEqual(first)
+    expect(changed).toMatchObject({
+      status: 'rejected',
+      reason: { message: 'agent_session_operation_conflict' }
+    })
+    await status(runtime, id, { waitMs: 5_000 })
+    expect(createStructured).toHaveBeenCalledOnce()
+    expect(createStructured.mock.calls[0]?.[0].firstMessage).toEqual({
+      ...withImage('/store/u1/a.png').firstMessage,
+      selection: PICKED.selection
+    })
   })
 
   it('answers a release whose reply was lost with the launch’s own outcome, never a second effect', async () => {
@@ -354,6 +294,7 @@ describe('only the caller’s own live prepared launch takes an input', () => {
     await ACCEPT.handler(
       ACCEPT.params.parse({
         ...prepared(accepted),
+        prompt: { text: HELD_MESSAGE, delivery: 'submit', clientMessageId: MESSAGE_ID },
         terminalAlternative: undefined,
         setupReceipt: { required: true, runId: run.id }
       }),
@@ -465,6 +406,56 @@ describe('a prepared launch whose input never arrives', () => {
     }
   )
 
+  it.each([3, 30])(
+    'holds no upload of %i launches past their close, within the store’s own cap',
+    async (count) => {
+      const runtime = hostRuntime()
+      const context = rpcContext(runtime, DESKTOP)
+      const attachments = new AgentSessionAttachmentStore(join(directory, 'attachments'), {
+        hasSession: () => false
+      })
+      const sessions = Array.from(
+        { length: count },
+        (_, index) => `claude_9b1deb4d_3b7d_4bad_9bdd_${index.toString().padStart(12, '0')}`
+      )
+      const ids = sessions.map((_, index) => operationId(index + 1))
+      for (const [index, id] of ids.entries()) {
+        await prepare(runtime, prepared(id, { sessionId: sessions[index] }))
+        await untilAwaitingRelease(runtime, id)
+      }
+      const start = (index: number) =>
+        attachments.startUpload({
+          callerKey: DESKTOP_KEY,
+          sessionId: sessions[index] ?? '',
+          name: 'a.png',
+          byteLength: 2,
+          launch: preparedAgentLaunchUploadAuthority(
+            context,
+            ids[index] ?? '',
+            sessions[index] ?? ''
+          )
+        })
+      const started: string[] = []
+      for (let index = 0; index < Math.min(count, 8); index += 1) {
+        started.push((await start(index)).uploadId)
+      }
+      if (count > 8) {
+        await expect(start(8)).rejects.toThrow('Too many attachment uploads')
+      }
+      for (const session of sessions) {
+        noteStructuredAgentSessionClose(session, false)
+      }
+      await vi.waitFor(() =>
+        expect(started.filter((id) => attachments.isUploadInFlight(id))).toEqual([])
+      )
+      await vi.waitFor(() => expect(activeAgentLaunchesFor(context.runtime).size).toBe(0))
+      await vi.waitFor(async () =>
+        expect(await readdir(attachments.rootDir).catch(() => [])).toEqual([])
+      )
+      noEffect(runtime)
+    }
+  )
+
   it('refuses an input arriving after the horizon even when the timer has not yet run', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     const runtime = hostRuntime()
@@ -559,7 +550,11 @@ describe('the terminal alternative compiles with the released choices', () => {
       await untilAwaitingRelease(runtime, id)
       expect(runtime.createTerminal).not.toHaveBeenCalled()
       const picked = { model: d.model, effort: 'high' }
-      await release(runtime, id, { options: picked, selection: picked })
+      await release(runtime, id, {
+        options: picked,
+        selection: picked,
+        firstMessage: FIRST_MESSAGE
+      })
       await expect(status(runtime, id, { waitMs: 5_000 })).resolves.toMatchObject({
         state: 'succeeded',
         result: { outcome: { kind: 'terminal' } }
@@ -650,7 +645,11 @@ describe('the terminal alternative compiles with the released choices', () => {
       })
     )
     await untilAwaitingRelease(runtime, id)
-    await release(runtime, id, { options: { model: 'sonnet' }, selection: { model: 'sonnet' } })
+    await release(runtime, id, {
+      options: { model: 'sonnet' },
+      selection: { model: 'sonnet' },
+      firstMessage: FIRST_MESSAGE
+    })
     await expect(status(runtime, id, { waitMs: 5_000 })).resolves.toEqual({
       state: 'failed',
       code: 'agent_launch_surface_unavailable',

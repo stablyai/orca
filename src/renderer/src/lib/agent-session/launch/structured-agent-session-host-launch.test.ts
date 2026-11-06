@@ -24,7 +24,11 @@ import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
 import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
 import { requiredSetupLaunchFailureText } from '@/lib/required-setup-launch-failure'
-import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
 import type {
   AgentLaunchReleasePhaseStatusResult,
   AgentLaunchStatusResult
@@ -38,6 +42,9 @@ import { forgetStructuredSessionSelection } from '../../structured-agent-session
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
 
 const OPERATION_ID = `${Date.now()}-000000000000000000000000000000ac`
 const SESSION_ID = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
@@ -430,11 +437,12 @@ describe('a chat whose host takes its first turn after Setup', () => {
     expect(host.prepare.mock.calls[0]![0]).toMatchObject({
       operationId: OPERATION_ID,
       sessionId: SESSION_ID,
-      prompt: { text: HELD, delivery: 'submit', clientMessageId: MESSAGE_ID },
+      // The message by its id only: its body goes with release, once its files are on the host.
+      prompt: { delivery: 'submit', clientMessageId: MESSAGE_ID },
       setupReceipt: { required: true, runId: 'setup-run-1' },
       terminalAlternative: { kind: 'agent', prompt: 'none' }
     })
-    for (const absent of ['terminalStartup', 'chatOptions', 'sessionOptions']) {
+    for (const absent of ['terminalStartup', 'chatOptions', 'sessionOptions', 'prompt.text']) {
       expect(host.prepare.mock.calls[0]![0]).not.toHaveProperty(absent)
     }
     expect(host.status.mock.calls[0]![0]).toEqual({
@@ -456,9 +464,14 @@ describe('a chat whose host takes its first turn after Setup', () => {
     expect(input).toEqual({
       operationId: OPERATION_ID,
       options: expect.objectContaining({ model: 'picked-model', effort: 'high' }),
-      selection: { model: 'picked-model', effort: 'high' }
+      selection: { model: 'picked-model', effort: 'high' },
+      firstMessage: { clientMessageId: MESSAGE_ID, body: structuredAgentSessionSendBody(HELD, []) }
     })
-    const { operationId: _id, ...submitted } = input as Record<string, unknown>
+    const {
+      operationId: _id,
+      firstMessage: _message,
+      ...submitted
+    } = input as Record<string, unknown>
     expect(savedFirstTurn()).toEqual({ phase: 'submitted', ...submitted })
 
     // The picker still takes a pick, now a choice for the next turn: it changes nothing sent.
@@ -484,6 +497,170 @@ describe('a chat whose host takes its first turn after Setup', () => {
     )
     expect(sentOptions).toHaveLength(1)
     expect(windowCalls()).not.toContain('agentSession.create')
+    expect(windowCalls()).not.toContain('agentSession.send')
+  })
+
+  const IMAGE = { path: '/client/shot.png', previewUri: '' }
+  const SKILLS = [{ name: 'audit', path: '/skills/audit/SKILL.md' }]
+
+  /** A held message with a client file staged for the host, uploaded when release needs it. */
+  function startRichReleaseLaunch(
+    text: string,
+    prepareFirstMessage: NonNullable<StructuredHostLaunch['prepareFirstMessage']>
+  ) {
+    return startStructuredAgentLaunch('workspace-1', 'codex', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      prompt: text,
+      promptAttachments: [IMAGE],
+      promptSkills: SKILLS,
+      draftFromScope: SOURCE_SCOPE,
+      hostLaunch: {
+        operationId: OPERATION_ID,
+        sessionId: SESSION_ID,
+        protocol: 'release',
+        firstMessage: {
+          clientMessageId: MESSAGE_ID,
+          body: structuredAgentSessionSendBody(text, [IMAGE], SKILLS)
+        },
+        stagedSources: [IMAGE.path],
+        prepareFirstMessage,
+        accept: {
+          presentation: 'focused',
+          setupReceipt: { required: true, runId: 'setup-run-1' },
+          terminalAlternative: { kind: 'none' }
+        }
+      }
+    })
+  }
+
+  it.each([
+    ['text, an image and a skill', 'fix this $audit'],
+    ['an image alone', '']
+  ])(
+    'releases %s whole once its files are on the host, with every pick made meanwhile',
+    async (_case, text) => {
+      host.status.mockResolvedValueOnce(AWAITING).mockResolvedValueOnce(CHAT_STARTED)
+      const writes = vi.spyOn(localStorage, 'setItem')
+      const savesBeforeRelease: number[] = []
+      let saved: Record<string, unknown> | undefined
+      host.release.mockImplementation(async () => {
+        savesBeforeRelease.push(writes.mock.calls.filter(([key]) => key === SAVED).length)
+        saved = JSON.parse(localStorage.getItem(SAVED) ?? '[]')[0]
+        return { operationId: OPERATION_ID, state: 'running' }
+      })
+      mocks.call.mockResolvedValue(hostHistory())
+      const uploading = deferred<StructuredAgentSessionFirstMessage['body']>()
+      const prepareFirstMessage = vi.fn(
+        (_operationId: string, _target: RuntimeClientTarget) => uploading.promise
+      )
+      const launch = startRichReleaseLaunch(text, prepareFirstMessage)
+      void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'picked-model')
+
+      await vi.waitFor(() => expect(prepareFirstMessage).toHaveBeenCalledOnce())
+      expect(prepareFirstMessage).toHaveBeenCalledWith(OPERATION_ID, target)
+      expect(savedFirstTurn()).toMatchObject({ phase: 'editing', staged: [IMAGE.path] })
+      expect(host.release).not.toHaveBeenCalled()
+      // Picked while the upload runs: still this first turn's.
+      void holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
+      const onHost = structuredAgentSessionSendBody(
+        text,
+        [{ path: '/host/store/upload-1/shot.png', previewUri: '' }],
+        SKILLS
+      )
+      writes.mockClear()
+      uploading.resolve(onHost)
+
+      await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+      expect(host.release.mock.calls[0]![0]).toEqual({
+        operationId: OPERATION_ID,
+        options: expect.objectContaining({ model: 'picked-model', effort: 'high' }),
+        selection: { model: 'picked-model', effort: 'high' },
+        firstMessage: { clientMessageId: MESSAGE_ID, body: onHost }
+      })
+      // The host-readable message and the submitted turn are saved together, in one write.
+      expect(savesBeforeRelease).toEqual([1])
+      expect(saved?.firstMessage).toEqual({ clientMessageId: MESSAGE_ID, body: onHost })
+      expect(saved?.hostLaunchFirstTurn).toMatchObject({ phase: 'submitted' })
+      expect(saved?.hostLaunchFirstTurn).not.toHaveProperty('staged')
+
+      await expect(launch.launchResult).resolves.toMatchObject({ sessionId: SESSION_ID })
+      expect(windowCalls()).not.toContain('agentSession.create')
+      expect(windowCalls()).not.toContain('agentSession.send')
+      expect(draft(SESSION_ID)).toBe('Also run lint')
+    }
+  )
+
+  it('keeps the message held under the same launch when a file cannot reach the host, until Retry', async () => {
+    const onHost = structuredAgentSessionSendBody(
+      'fix this $audit',
+      [{ path: '/host/store/upload-1/shot.png', previewUri: '' }],
+      SKILLS
+    )
+    const prepareFirstMessage = vi
+      .fn<NonNullable<StructuredHostLaunch['prepareFirstMessage']>>()
+      .mockRejectedValueOnce(new Error('Attach the file again.'))
+      .mockResolvedValueOnce(onHost)
+    // Ready for its input; then, while parked, a read that only ends with the launch.
+    host.status
+      .mockResolvedValueOnce(AWAITING)
+      .mockReturnValueOnce(new Promise(() => undefined))
+      .mockResolvedValue(CHAT_STARTED)
+    host.release.mockResolvedValue({ operationId: OPERATION_ID, state: 'running' })
+    mocks.call.mockResolvedValue(hostHistory())
+    const launch = startRichReleaseLaunch('fix this $audit', prepareFirstMessage)
+    const view = renderHook(() => useNativeChatProvisionalLaunch('workspace-1', SESSION_ID))
+
+    await vi.waitFor(() => expect(host.status).toHaveBeenCalledTimes(2))
+    expect(host.release).not.toHaveBeenCalled()
+    // Shown as the existing not-started failure with its Retry, said once, not as a send notice.
+    view.rerender()
+    expect(view.result.current.lifecycle).toBe('failed')
+    expect(view.result.current.failure).toEqual({
+      kind: 'not-started',
+      causeText: "Codex couldn't start. Couldn't attach shot.png. Attach the file again."
+    })
+    expect(getStructuredAgentSessionSendNotice(SESSION_ID)).toBeNull()
+    const [notice] = structuredSessionNotices({
+      launch: view.result.current,
+      agentLabel: 'Codex',
+      sessionError: null,
+      composerError: null
+    })
+    expect(notice).toMatchObject({ key: 'launch', action: { label: 'Retry' } })
+    // Still editing, its client message and owed file saved; nothing went back to the composer.
+    expect(savedFirstTurn()).toMatchObject({ phase: 'editing', staged: [IMAGE.path] })
+    // Only shown as failed: the saved row still reads a live launch, which a reload reads again.
+    expect(JSON.parse(localStorage.getItem(SAVED) ?? '[]')[0]).toMatchObject({
+      lifecycle: 'pending'
+    })
+    expect(draft(SESSION_ID)).not.toContain('fix this')
+    // While parked it reads only whether the launch ended.
+    expect(host.status.mock.calls[1]![0]).toEqual({ operationId: OPERATION_ID, waitMs: 20_000 })
+
+    notice?.action?.onClick()
+    await expect(launch.launchResult).resolves.toMatchObject({ sessionId: SESSION_ID })
+    expect(prepareFirstMessage).toHaveBeenCalledTimes(2)
+    expect(host.release).toHaveBeenCalledOnce()
+    expect(host.release.mock.calls[0]![0]).toMatchObject({
+      operationId: OPERATION_ID,
+      firstMessage: { clientMessageId: MESSAGE_ID, body: onHost }
+    })
+    expect(host.prepare).toHaveBeenCalledOnce()
+  })
+
+  it('gives the held message back whole only once its parked launch ends', async () => {
+    host.status
+      .mockResolvedValueOnce(AWAITING)
+      .mockResolvedValueOnce({ state: 'failed', code: 'agent_launch_tab_closed' })
+    const launch = startRichReleaseLaunch('fix this $audit', async () => {
+      throw new Error('Attach the file again.')
+    })
+    await expect(launch.launchResult).rejects.toThrow()
+    expect(host.release).not.toHaveBeenCalled()
+    const back = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(SESSION_ID))
+    expect(back.text).toContain('fix this $audit')
+    expect(back.images.map(({ path }) => path)).toEqual([IMAGE.path])
     expect(windowCalls()).not.toContain('agentSession.send')
   })
 

@@ -16,7 +16,6 @@ import {
   ignoredStructuredLaunchInputsWarning
 } from './agent-launch-warnings'
 import {
-  launchPromptCreateInputs,
   deliverTerminalLaunchPrompt,
   HANDED_TO_TERMINAL,
   promptReceipt,
@@ -52,10 +51,11 @@ import {
 import {
   acceptedTerminalIntent,
   assertAcceptedLaunchOpen,
-  awaitAcceptedLaunchSetup
+  acceptedFirstMessageInputs,
+  awaitAcceptedLaunchSetup,
+  releasedExecution
 } from './agent-launch-acceptance'
 import { createTerminalSurface } from './agent-launch-terminal-surface'
-import { agentSessionExecutionOptionsRecord } from '../../shared/agent-session/options/agent-session-execution-options'
 
 export type { AgentLaunchExecution } from './agent-launch-execution'
 
@@ -162,15 +162,18 @@ export async function executeAgentLaunch(
             settlement
           )
 
-    // A prepared launch starts nothing on either surface until its final input arrives.
-    await acceptance?.release?.finalInput()
+    // A prepared launch starts nothing on either surface until its final input arrives; that input
+    // also brings the held message's complete body.
+    const ready = acceptance?.release
+      ? await releasedExecution(execution, acceptance.release)
+      : execution
     execution.onStage?.('surface_create')
     recoverableWorktreeId = placed.worktreeId
     assertAgentPromptRequestActive(execution.signal)
     assertAcceptedLaunchOpen(acceptance)
     let created: CreatedSurface
     try {
-      created = await createSurface(execution, placed, settled)
+      created = await createSurface(ready, placed, settled)
     } catch (error) {
       if (
         settled.mode !== 'structured' ||
@@ -183,14 +186,14 @@ export async function executeAgentLaunch(
       assertAgentPromptRequestActive(execution.signal)
       assertAcceptedLaunchOpen(acceptance)
       settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary, settlement)
-      created = await createTerminalSurface(execution, placed)
+      created = await createTerminalSurface(ready, placed)
     }
     // Create warnings are untyped strings, so startup-failure warnings may remain stale after recovery.
     const warning = combineLaunchWarnings(placed.warning, created.warning)
     const delivered =
       created.outcome.kind === 'terminal'
-        ? { ...execution, intent: acceptedTerminalIntent(intent, acceptance) }
-        : execution
+        ? { ...ready, intent: acceptedTerminalIntent(ready.intent, acceptance) }
+        : ready
     const surface = published(execution, {
       outcome: created.outcome,
       worktreeId: placed.worktreeId,
@@ -300,12 +303,7 @@ async function createSurface(
         : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
-      ...launchPromptCreateInputs(
-        intent,
-        execution.signal,
-        execution.acceptance?.clientMessageId,
-        released ? agentSessionExecutionOptionsRecord(released.selection) : undefined
-      ),
+      ...acceptedFirstMessageInputs(execution),
       ...(intent.prompt ? {} : { withoutPrompt: true as const }),
       ...(execution.acceptance ? { closed: execution.acceptance.closed } : {})
     })

@@ -12,8 +12,6 @@ import {
 } from '@/lib/pending-worktree-creation'
 import { planWorktreeHostLaunchTerminal } from '@/lib/worktree-creation-host-launch-terminal'
 import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { isWorktreeCreationSelected } from '@/lib/worktree-creation-surface'
 import { structuredLaunchOwner } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { notifyExplicitChatFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
@@ -28,7 +26,6 @@ import {
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { structuredAgentSessionHostSupports } from '@/runtime/structured-agent-session-client'
-import { hasNativeChatStagedFiles } from '@/components/native-chat/native-chat-draft-attachment-staging'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
 import {
   AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY,
@@ -37,19 +34,18 @@ import {
 import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import {
+  creationHeldMessage,
+  creationHostTarget,
+  type HostLaunchHeldMessage
+} from '@/lib/worktree-creation-host-launch-message'
+import type { captureNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import type { StructuredAgentSessionAttachment } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentLaunchSetupReceipt } from '../../../shared/rpc-contract/agent-launch-accept-params'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 type HostLaunchIdentity = NonNullable<PendingWorktreeCreation['hostLaunch']>
-
-/** The host a creation runs on, reached as its create call reaches it. */
-function creationHostTarget(request: WorktreeCreationRequest): RuntimeClientTarget | null {
-  const hostId = request.workspaceRunContext?.hostId ?? request.executionHostId
-  return hostId
-    ? (runtimeRpcTargetForAuthorityKey(hostId) ?? { kind: 'local' })
-    : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
-}
 
 /** How this creation's host takes a launch it runs after Setup: prepared and released with the first
  *  turn's final choices, accepted whole, or not at all (the shipped chat create). */
@@ -122,7 +118,9 @@ export function recordChatSetupReceipt<T extends { worktree: unknown; agentLaunc
 
 /** What accept (or prepare) carries: the held message under its own id, the creation's Setup
  *  receipt, and the terminal this creation's own path would open if the host cannot run the chat.
- *  The terminal is planned once, at the first handoff; a Retry sends the same launch. */
+ *  A prepared launch names the message and carries its complete body only at release, once its
+ *  files are on the host; accept takes text alone. The terminal is planned once, at the first
+ *  handoff; a Retry sends the same launch. */
 export function worktreeHostLaunch(args: {
   creationId: string
   identity: HostLaunchIdentity
@@ -132,6 +130,7 @@ export function worktreeHostLaunch(args: {
   prompt: string | undefined
   heldChatMessage: string | undefined
   foreground: boolean
+  message?: HostLaunchHeldMessage
 }): StructuredHostLaunch {
   const { identity } = args
   const release = identity.protocol === 'release'
@@ -154,20 +153,22 @@ export function worktreeHostLaunch(args: {
     })
   }
   const text = args.prompt?.trim() ? args.prompt : undefined
+  const held: Omit<HostLaunchHeldMessage, 'staged'> =
+    release && args.message ? args.message : { text: text ?? '', attachments: [] }
+  const body = structuredAgentSessionSendBody(held.text, held.attachments, held.skills)
+  const staged = release ? args.message?.staged : undefined
   return {
     operationId: identity.operationId,
     sessionId: identity.sessionId,
     ...(release ? { protocol: 'release' as const } : {}),
-    ...(text
-      ? {
-          firstMessage: {
-            clientMessageId: identity.clientMessageId,
-            body: structuredAgentSessionSendBody(text, [])
-          }
-        }
+    ...(body.blocks.length > 0
+      ? { firstMessage: { clientMessageId: identity.clientMessageId, body } }
+      : {}),
+    ...(staged?.paths.length
+      ? { stagedSources: staged.paths, prepareFirstMessage: staged.prepare }
       : {}),
     accept: {
-      ...(text ? { prompt: { text, clientMessageId: identity.clientMessageId } } : {}),
+      ...(text && !release ? { prompt: { text, clientMessageId: identity.clientMessageId } } : {}),
       presentation: args.foreground ? 'focused' : 'background',
       setupReceipt: identity.setupReceipt ?? { required: true, runId: null },
       ...(terminal.startup ? { terminalStartup: terminal.startup } : {}),
@@ -216,9 +217,10 @@ export function keepPendingChatAfterRefusedHandoff(
 }
 
 /** The launch a creation that chose its host's route hands that host, and where its unsent draft
- *  goes at once: its own chat, where a refused or reloaded launch still finds it. The host's launch
- *  carries text alone, so a held message with attachments, skills or staged files stays with the
- *  chat's own send and comes back to its composer whole, never founded without them. */
+ *  goes at once: its own chat, where a refused or reloaded launch still finds it. A prepared launch
+ *  takes the held message whole, its files uploaded under the launch before release. A host that
+ *  only accepts text never takes images, skills or staged files: that creation keeps the shipped
+ *  chat create, which sends them itself. */
 export function creationHostLaunchPlan(args: {
   creationId: string
   pending: PendingWorktreeCreation | undefined
@@ -228,21 +230,22 @@ export function creationHostLaunchPlan(args: {
   prompt: string | undefined
   foreground: boolean
   draftScope: string
+  attachments: StructuredAgentSessionAttachment[] | undefined
+  staged: ReturnType<typeof captureNativeChatStagedInput>
 }): { hostLaunch?: StructuredHostLaunch; draftFromScope?: string } {
   const identity = args.pending?.hostLaunch
-  if (!identity) {
+  const message = creationHeldMessage({ ...args, sourceScope: args.draftScope })
+  const rich = Boolean(
+    message?.attachments.length || message?.skills?.length || message?.staged?.paths.length
+  )
+  if (!identity || (rich && identity.protocol !== 'release')) {
     return {}
   }
-  const richInput = Boolean(
-    args.pending?.heldChatAttachments?.length ||
-    args.pending?.heldChatSkills?.length ||
-    hasNativeChatStagedFiles(args.draftScope)
-  )
   const hostLaunch = worktreeHostLaunch({
     ...args,
     identity,
-    prompt: richInput ? undefined : args.prompt,
-    heldChatMessage: richInput ? undefined : args.pending?.heldChatMessage
+    message,
+    heldChatMessage: args.pending?.heldChatMessage
   })
   return { hostLaunch, draftFromScope: args.draftScope }
 }

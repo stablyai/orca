@@ -11,11 +11,9 @@ import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { AgentStartupPlanInputs } from '../agent-launch/startup/agent-startup-plan-inputs'
 import { AgentLaunchFields, refuseSessionIdForAnotherAgent } from './agent-launch-params'
-import {
-  AgentLaunchHeldPrompt,
-  AgentLaunchSetupReceipt,
-  type AgentLaunchStatusResult
-} from './agent-launch-accept-params'
+import { AgentLaunchSetupReceipt, type AgentLaunchStatusResult } from './agent-launch-accept-params'
+import { SendBody } from './structured-agent-session-message-params'
+import { Identifier } from './structured-agent-session-identifiers'
 
 const NODE_PLATFORMS = [
   'aix',
@@ -112,7 +110,16 @@ export const AgentLaunchTerminalAlternative = z.discriminatedUnion('kind', [
 
 export type AgentLaunchTerminalAlternativeParams = z.infer<typeof AgentLaunchTerminalAlternative>
 
-/** accept's request without its final choices: those arrive with release, after Setup. */
+/** The held message's id and delivery. Its body arrives with release, once its files are on the host:
+ *  client paths staged for upload are never the body the host runs. */
+export const AgentLaunchPreparedPrompt = z.object({
+  delivery: z.enum(['submit', 'draft']),
+  clientMessageId: Identifier('Invalid client message id')
+})
+
+export type AgentLaunchPreparedPromptParams = z.infer<typeof AgentLaunchPreparedPrompt>
+
+/** accept's request without its final choices or message body: those arrive with release. */
 export const AgentLaunchPrepare = AgentLaunchFields.omit({
   reuseTerminal: true,
   sessionOptions: true,
@@ -123,7 +130,7 @@ export const AgentLaunchPrepare = AgentLaunchFields.omit({
       kind: z.literal('existing'),
       worktree: z.string().min(1, 'Missing worktree selector')
     }),
-    prompt: AgentLaunchHeldPrompt.optional(),
+    prompt: AgentLaunchPreparedPrompt.optional(),
     terminalAlternative: AgentLaunchTerminalAlternative,
     /** Required: a missing receipt is uncertainty, never proof that nothing must be waited for. */
     setupReceipt: AgentLaunchSetupReceipt
@@ -133,9 +140,10 @@ export const AgentLaunchPrepare = AgentLaunchFields.omit({
 
 export type AgentLaunchPrepareParams = z.infer<typeof AgentLaunchPrepare>
 
-/** The first turn's final choices for a prepared launch: the create options and the opening message's
- *  selection, as an ordinary send freezes them. Selection is required, even empty, so its absence can
- *  never bring back a remembered model or effort. */
+/** The first turn's final input for a prepared launch: the create options, the opening message's
+ *  selection and its complete body, as an ordinary send freezes them. Selection is required, even
+ *  empty, so its absence can never bring back a remembered model or effort. `firstMessage` is
+ *  present exactly when prepare named a message, under that id. */
 export const AgentLaunchRelease = z.object({
   operationId: z
     .string()
@@ -145,7 +153,10 @@ export const AgentLaunchRelease = z.object({
     ),
   options: z.record(z.string(), z.string()).refine(isAgentSessionOptions),
   optionsMode: z.literal('replace-model-selection').optional(),
-  selection: AgentSessionSelectionSchema
+  selection: AgentSessionSelectionSchema,
+  firstMessage: z
+    .object({ clientMessageId: Identifier('Invalid client message id'), body: SendBody })
+    .optional()
 })
 
 export type AgentLaunchReleaseParams = z.infer<typeof AgentLaunchRelease>

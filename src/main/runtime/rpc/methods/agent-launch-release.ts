@@ -59,23 +59,21 @@ function prepareAgentLaunch(
   { terminalAlternative, setupReceipt, prompt, ...params }: AgentLaunchPrepareParams,
   context: RpcContext
 ): Promise<AgentLaunchAcceptResult> {
-  const launch = {
-    ...params,
-    ...(prompt ? { prompt: { text: prompt.text, delivery: prompt.delivery } } : {})
-  }
   // Its own namespace: a prepared launch never joins or replays an accepted one under the same id.
+  // The message's identity is the launch's; its body is release's.
   const fingerprint = computeAgentLaunchFingerprint(
-    { ...launch, ...(prompt ? { prompt } : {}), terminalAlternative, setupReceipt },
+    { ...params, ...(prompt ? { prompt } : {}), terminalAlternative, setupReceipt },
     'agent.launchPrepare'
   )
-  return answerAcceptedAgentLaunch(launch, context, fingerprint, {
+  return answerAcceptedAgentLaunch(params, context, fingerprint, {
     setupReceipt,
     ...(prompt ? { clientMessageId: prompt.clientMessageId } : {}),
     release: (closed) =>
       new AgentLaunchReleaseGate(
         terminalAlternative,
         params.agent,
-        prompt?.text ?? '',
+        prompt,
+        params.sessionId,
         closed,
         params.target
       )
@@ -104,6 +102,10 @@ async function releaseAgentLaunch(
     throw new Error('agent_session_operation_conflict')
   }
   assertAgentLaunchTargetAuthorized(gate.target, context)
+  if (!gate.matchesPreparedMessage(input)) {
+    // A message prepare never named, or none for the one it did: nothing of it may run.
+    throw new Error('agent_session_operation_invalid')
+  }
   // Joined or started before any await: an identical release shares one admission, any other conflicts.
   if (gate.admission && gate.admission.digest !== digest) {
     throw new Error('agent_session_operation_conflict')

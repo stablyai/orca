@@ -20,22 +20,18 @@ function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): 
     : undefined
 }
 
-/** `clientMessageId`: the caller's own id for the message, so its chat founds that same message.
- *  `selection`: a prepared launch's released choices for that message, present even when empty so
- *  the chat never falls back to remembered ones. */
+/** `clientMessageId`: the caller's own id for the message, so its chat founds that same message. */
 export function launchPromptCreateInputs(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
   signal?: AbortSignal,
-  clientMessageId?: string,
-  selection?: Readonly<Record<string, string>>
+  clientMessageId?: string
 ): { firstMessage?: StructuredAgentSessionFirstMessage; signal?: AbortSignal } {
   const text = structuredLaunchSubmitText(intent)
   return text !== undefined
     ? {
         firstMessage: {
           clientMessageId: clientMessageId ?? createStructuredAgentSessionOperationId(randomUUID),
-          body: structuredAgentSessionSendBody(text, []),
-          ...(selection !== undefined ? { selection } : {})
+          body: structuredAgentSessionSendBody(text, [])
         },
         ...(signal ? { signal } : {})
       }

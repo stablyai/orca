@@ -40,6 +40,7 @@ import {
   setNativeChatComposerDraftStorageForTests
 } from '@/components/native-chat/native-chat-composer-draft-storage'
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import {
@@ -602,15 +603,89 @@ describe('creation chat handoff', () => {
     const prepared = accepted('agent.launchPrepare')[0]!
     expect(prepared).toMatchObject({
       sessionId: chat?.entityId,
-      prompt: { text: 'Fix the flaky test', delivery: 'submit' },
+      prompt: { delivery: 'submit', clientMessageId: expect.any(String) },
       setupReceipt: { required: true, runId: 'setup-run-1' },
       terminalAlternative: expect.objectContaining({ kind: expect.any(String) })
     })
-    for (const absent of ['terminalStartup', 'chatOptions', 'sessionOptions']) {
+    for (const absent of ['terminalStartup', 'chatOptions', 'sessionOptions', 'prompt.text']) {
       expect(prepared).not.toHaveProperty(absent)
     }
     // Nothing is released before the host reports its Setup done.
     expect(mocks.rpc).not.toContain('agent.launchRelease')
+  })
+
+  /** "fix this" with an image and a picked skill, held while the workspace is created. */
+  function holdRichMessage(): WorktreeCreationRequest {
+    const emptyRequest = { ...request, quickPrompt: '' }
+    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+      request: emptyRequest,
+      heldChatMessage: 'fix this $audit',
+      heldChatAttachments: [{ id: 'held-image', path: '/tmp/held.png' }],
+      heldChatSkills: [SKILL]
+    })
+    updateNativeChatComposerDraft(
+      pendingCreationChatDraftScopeKey('creation-1'),
+      { text: 'Unsent follow-up' },
+      'immediate'
+    )
+    useAppStore.setState({
+      createWorktree: vi.fn(async () => ({
+        worktree,
+        agentLaunchSetup: { required: true, runId: 'setup-run-1' }
+      }))
+    })
+    return emptyRequest
+  }
+  const SKILL = { name: 'audit', path: '/skills/audit/SKILL.md' }
+
+  it('hands a prepared host the held text, image and skill whole at release, sending nothing itself', async () => {
+    mocks.hostAccepts = true
+    mocks.hostReleases = true
+    const rich = holdRichMessage()
+    const released: unknown[] = []
+    mocks.hostLaunch.mockImplementation(async (method, params) => {
+      if (method === 'agent.launchRelease') {
+        released.push(params)
+      }
+      return method === 'agent.launchPrepare' || method === 'agent.launchRelease'
+        ? { state: 'running' }
+        : method === 'agent.launchStatus' && released.length === 0
+          ? { state: 'awaiting-release' }
+          : new Promise(() => {})
+    })
+
+    await executeWorktreeCreation('creation-1', rich)
+    await main.settle()
+
+    await vi.waitFor(() => expect(released).toHaveLength(1))
+    const prepared = accepted('agent.launchPrepare')[0] as { prompt: { clientMessageId: string } }
+    expect(prepared.prompt).toEqual({ delivery: 'submit', clientMessageId: expect.any(String) })
+    expect(released[0]).toMatchObject({
+      firstMessage: {
+        clientMessageId: prepared.prompt.clientMessageId,
+        body: structuredAgentSessionSendBody(
+          'fix this $audit',
+          [{ path: '/tmp/held.png', previewUri: '' }],
+          [SKILL]
+        )
+      },
+      selection: expect.any(Object)
+    })
+    expect(mocks.createSession).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toContain('agentSession.send')
+    const chat = useAppStore.getState().getActiveTab(worktree.id)
+    const kept = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(chat!.entityId))
+    expect(kept.text).toBe('Unsent follow-up')
+  })
+
+  it('never hands rich input to a host that takes text alone: the shipped chat create sends it', async () => {
+    mocks.hostAccepts = true
+    await executeWorktreeCreation('creation-1', holdRichMessage())
+    await main.settle()
+
+    await vi.waitFor(() => expect(mocks.createSession).toHaveBeenCalledOnce())
+    expect(mocks.createSession.mock.calls[0]![0].hostLaunch).toBeUndefined()
+    expect(accepted()).toEqual([])
   })
 
   it.each([
