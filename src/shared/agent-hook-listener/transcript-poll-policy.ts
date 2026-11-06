@@ -25,6 +25,35 @@ export function shouldPollHookTranscript(
   return false
 }
 
+// Muse can end without Stop; a silent session log probes its owner, then the backstop ends the poll.
+const MUSE_IDLE_PROBE_MS = 60_000
+const MUSE_IDLE_LIMIT_MS = 30 * 60_000
+
+export type TranscriptPollIdle = { mark?: number; since: number; probedAt: number }
+
+export function advanceTranscriptPollIdle(
+  state: HookListenerState,
+  source: AgentHookSource,
+  paneKey: string,
+  idle: TranscriptPollIdle | undefined,
+  now: number
+): { idle?: TranscriptPollIdle; action: 'poll' | 'probe' | 'stop' } {
+  if (source !== 'muse') {
+    return { action: 'poll' }
+  }
+  const mark = state.musePaneStateByPaneKey.get(paneKey)?.log?.cursor.offset
+  if (!idle || idle.mark !== mark) {
+    return { idle: { mark, since: now, probedAt: now }, action: 'poll' }
+  }
+  if (now - idle.since >= MUSE_IDLE_LIMIT_MS) {
+    return { idle, action: 'stop' }
+  }
+  if (now - idle.probedAt >= MUSE_IDLE_PROBE_MS) {
+    return { idle: { ...idle, probedAt: now }, action: 'probe' }
+  }
+  return { idle, action: 'poll' }
+}
+
 /** Child rollout discovery keeps its existing cadence; only a root-only pane can use one file watch. */
 export function hookTranscriptWatchPath(
   state: HookListenerState,

@@ -11,9 +11,11 @@ import type { HookListenerState } from '../shared/agent-hook-listener/listener-s
 import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 import {
+  advanceTranscriptPollIdle,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
-  transcriptPollUpdate
+  transcriptPollUpdate,
+  type TranscriptPollIdle
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
@@ -28,6 +30,7 @@ type TranscriptPoll = {
   original: AgentHookEventPayload
   env?: string
   version?: string
+  idle?: TranscriptPollIdle
 }
 
 export type AgentHookResultRetryHost = {
@@ -35,6 +38,8 @@ export type AgentHookResultRetryHost = {
   env: string
   /** Why: must be read live — a retry armed before stop() must not resurrect on a downed server. */
   isListening: () => boolean
+  /** An exited owner is republished as ended, which supersedes its transcript poll. */
+  checkAgentPresence: (paneKey: string) => Promise<void>
   applyEvent: (
     event: AgentHookEventPayload,
     source: AgentHookSource,
@@ -117,7 +122,8 @@ export class AgentHookResultRetryScheduler {
     body: unknown,
     original: AgentHookEventPayload,
     env?: string,
-    version?: string
+    version?: string,
+    idle?: TranscriptPollIdle
   ): void {
     if (source === 'claude') {
       return
@@ -137,14 +143,15 @@ export class AgentHookResultRetryScheduler {
         body,
         original,
         env,
-        version
+        version,
+        idle
       },
       hookTranscriptWatchPath(this.host.state, source, original.paneKey)
     )
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original, env, version } = poll
+    const { source, body, original, env, version, idle } = poll
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
@@ -164,9 +171,17 @@ export class AgentHookResultRetryScheduler {
     const update = transcriptPollUpdate(source, original, event)
     // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
     const next = update ? this.host.applyEvent(update, source, env, version) : original
-    if (next) {
-      this.scheduleTranscriptPoll(source, body, next, env, version)
+    if (!next) {
+      return
     }
+    const advanced = advanceTranscriptPollIdle(this.host.state, source, paneKey, idle, Date.now())
+    if (advanced.action === 'stop') {
+      return
+    }
+    if (advanced.action === 'probe') {
+      void this.host.checkAgentPresence(paneKey)
+    }
+    this.scheduleTranscriptPoll(source, body, next, env, version, advanced.idle)
   }
 
   scheduleAssistantMessageRetry(

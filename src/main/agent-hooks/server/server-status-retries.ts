@@ -8,9 +8,11 @@ import {
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
+  advanceTranscriptPollIdle,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
-  transcriptPollUpdate
+  transcriptPollUpdate,
+  type TranscriptPollIdle
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
@@ -25,6 +27,7 @@ type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: EnrichedAgentHookEventPayload
+  idle?: TranscriptPollIdle
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -106,7 +109,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
-    original: EnrichedAgentHookEventPayload
+    original: EnrichedAgentHookEventPayload,
+    idle?: TranscriptPollIdle
   ): void {
     if (source === 'claude') {
       return
@@ -121,13 +125,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
     this.transcriptPollScheduler.schedule(
       original.paneKey,
-      { source, body, original },
+      { source, body, original, idle },
       hookTranscriptWatchPath(this.state, source, original.paneKey)
     )
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original } = poll
+    const { source, body, original, idle } = poll
     // Recheck ownership at callback time; newer events supersede this payload even if children remain.
     if (
       paneKey !== original.paneKey ||
@@ -145,9 +149,18 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
     const update = transcriptPollUpdate(source, original, normalized)
     const next = update ? this.applyNormalizedStatus(update) : original
-    if (next) {
-      this.scheduleTranscriptPoll(source, body, next)
+    if (!next) {
+      return
     }
+    const advanced = advanceTranscriptPollIdle(this.state, source, paneKey, idle, Date.now())
+    if (advanced.action === 'stop') {
+      return
+    }
+    if (advanced.action === 'probe') {
+      // An exited owner is reconciled, which clears this poll.
+      void this.checkAgentPresence(paneKey)
+    }
+    this.scheduleTranscriptPoll(source, body, next, advanced.idle)
   }
 
   protected scheduleAssistantMessageRetry(
