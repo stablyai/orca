@@ -160,4 +160,22 @@ describe('mobile relay RPC session liveness', () => {
     controller.clear()
     logical.close()
   })
+
+  it('probes an idle relay and closes it when the probes go unanswered', async () => {
+    const session = await authenticateSession()
+    for (let elapsed = 0; elapsed < 30_000; elapsed += 5_000) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1]))
+      await vi.advanceTimersByTimeAsync(5_000)
+    }
+    fakes.linkOptions!.onBinary(new Uint8Array([1]))
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(sentRequests()).toEqual([
+      expect.objectContaining({ method: 'status.get', params: { probe: true } })
+    ])
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(session.getState()).toBe('disconnected')
+  })
 })

@@ -179,7 +179,7 @@ export function connectMobileRelayRpcSession(args: {
   const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
-    idleProbeMs: null,
+    idleProbeMs: 15_000,
     probeTimeoutMs: 4_000,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
