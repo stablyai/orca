@@ -17,7 +17,7 @@ export function useNativeChatReaderReturn(
   }, [scrollRef])
   const readerReturned = (geometry: ScrollGeometry, programmatic: boolean): boolean => {
     const start = input.current
-    if (!start || programmatic) {
+    if (!start) {
       return false
     }
     if (
@@ -27,7 +27,9 @@ export function useNativeChatReaderReturn(
       input.current = null
       return false
     }
-    if (geometry.scrollTop <= start.scrollTop) {
+    // Keep reader evidence in the coordinate frame produced by measurements and earlier movement.
+    input.current = geometry
+    if (programmatic || !followingRef.current || geometry.scrollTop <= start.scrollTop) {
       return false
     }
     input.current = null

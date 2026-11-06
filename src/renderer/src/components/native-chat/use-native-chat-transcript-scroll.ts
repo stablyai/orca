@@ -204,7 +204,7 @@ export function useNativeChatTranscriptScroll({
       reconcileReaderScroll(false)
       previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       syncScrollState()
-      if (followingRef.current && readerReturn.readerReturned(geometry, programmatic)) {
+      if (readerReturn.readerReturned(geometry, programmatic)) {
         onReturnToEnd?.()
       }
     },
