@@ -121,8 +121,11 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   ).current
   // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
+  // The status read the compare last ran for; Review's reads wait until Changes is back on top.
+  const comparedReadRef = useRef<string | null>(null)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
+    comparedReadRef.current = null
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
     setBranchCompareState({ kind: 'idle' })
@@ -183,7 +186,6 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   // Each status read that lands, and a new compare setting, refreshes the compare; a read in flight brings its own.
   // Review shares the status entry, so its reads wait until Changes is back on top and then compare once.
   const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
-  const comparedReadRef = useRef<string | null>(null)
   const compareShownStatus = useEffectEvent(() => {
     const read = `${statusIdentityKey}\0${statusQuery.dataUpdatedAt}\0${compareAgainstUpstream}`
     if (

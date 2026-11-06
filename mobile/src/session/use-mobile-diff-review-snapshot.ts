@@ -66,6 +66,11 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
   const builtFromRef = useRef<GitStatusRead | typeof AWAITING | undefined>(undefined)
   // Reloads after a write wait for the rebuild they cause, so the screen's buttons match the new files.
   const buildWaitersRef = useRef<(() => void)[]>([])
+  const settleWaiters = () => {
+    for (const settle of buildWaitersRef.current.splice(0)) {
+      settle()
+    }
+  }
 
   const cacheBranchCompare = useCallback<MobileBranchCompareCache>(
     async (key, read) => {
@@ -194,6 +199,8 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
               )
             : state
         )
+        // A write waits for the files it changed, not for the branch compare.
+        settleWaiters()
         const settled = await branch
         if (isCurrent()) {
           setScreenState((prev) => withMobileDiffReviewBranch(prev, settled, worktreeId))
@@ -204,9 +211,7 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
       }
     } finally {
       if (isCurrent()) {
-        for (const settle of buildWaitersRef.current.splice(0)) {
-          settle()
-        }
+        settleWaiters()
       }
     }
   })
@@ -240,7 +245,17 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
     void queryClient.refetchQueries({
       queryKey: ['orca', hostId, 'git.diff', target],
       type: 'active',
-      predicate: (query) => query.state.status === 'error'
+      // A worktree diff is re-keyed by the rebuild's status read instead.
+      predicate: (query) => {
+        const params = query.queryKey[4]
+        return (
+          query.state.status === 'error' &&
+          typeof params === 'object' &&
+          params !== null &&
+          'statusRevision' in params &&
+          params.statusRevision === null
+        )
+      }
     })
   }, [hostId, queryClient, target])
 
