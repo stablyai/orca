@@ -111,7 +111,7 @@ describe('worktree parent records', () => {
         }
       },
       workspaceLineageByChildKey: { [`worktree:${CHILD}`]: folderParent }
-    } as never)
+    })
 
     const store = await createStore()
 

@@ -30,7 +30,7 @@ import {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
-import { formatCrossStoreParentLine, printLineageSummary } from './worktree-lineage-summary'
+import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
@@ -256,11 +256,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       for (const warning of result.result.warnings ?? []) {
         console.error(`warning: ${warning.message}`)
       }
-      // The same-store lineage fields stay null for a parent on another machine.
-      const crossStoreLineage = result.result.worktree.crossStoreLineage
-      if (parentFields.crossStoreParent && crossStoreLineage) {
-        console.error(formatCrossStoreParentLine(crossStoreLineage))
-      }
+      printSetParentLine(result.result.worktree, parentFields)
     }
     printResult(result, json, formatWorktreeShow)
   },

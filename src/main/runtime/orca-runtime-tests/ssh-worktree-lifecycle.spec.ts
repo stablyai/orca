@@ -99,7 +99,9 @@ describe('OrcaRuntimeService', () => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
-      setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => lineage)
+      setFolderParentLineage: vi.fn(
+        (_target: HostWorktreeTarget, lineage: WorkspaceLineage) => lineage
+      )
     }
     computeWorktreePathMock.mockReturnValue(created.path)
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)

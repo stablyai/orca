@@ -170,6 +170,13 @@ export function recordCreatedWorktreeLineage(
   }
   if (resolution.parent.type === 'folder') {
     workspaceLineage = (target && store?.setFolderParentLineage?.(target, row)) ?? null
+    if (!workspaceLineage) {
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message:
+          'Worktree created, but its lineage is held by a workspace at the same path on another host.'
+      })
+    }
   } else if (lineage) {
     // setWorktreeLineage already wrote this row as the link's workspace projection.
     workspaceLineage = row

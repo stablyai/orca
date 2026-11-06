@@ -2,17 +2,17 @@ import type { FolderWorkspace } from '../shared/folder-workspaces/folder-workspa
 import { getFolderSourceRepos } from '../shared/folder-workspaces/folder-workspace-source-repos'
 import type { ProjectGroup } from '../shared/project-group-types'
 import type { Repo } from '../shared/repo-types'
-import { parseWorkspaceKey, type WorkspaceKey } from '../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey, type WorkspaceKey } from '../shared/workspace-scope'
 import { selectEnclosingNativeFolderWorkspace } from './agent-workspace-selector'
 import { getOptionalStringFlag } from './flags'
 import { RuntimeClientError, type RuntimeClient } from './runtime-client'
 import { getOptionalWorktreeSelector } from './selectors'
+import { selectorPurpose } from './caller-host-worktree-selection'
 
 export type FolderWorkspaceRepoChoice = {
   repo: string
   name: string
   path: string
-  command: string
 }
 
 /** The folder workspace whose terminal runs this command, from the env Orca sets on its terminals. */
@@ -43,13 +43,26 @@ export async function getOptionalParentSelector(
   try {
     return await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
   } catch (error) {
-    if (!(error instanceof RuntimeClientError) || error.code !== 'selector_not_found') {
+    // A worktree terminal's own workspace is a worktree; only other callers can mean a folder.
+    const callerWorktree = process.env.ORCA_WORKTREE_ID?.trim()
+    if (
+      !(error instanceof RuntimeClientError) ||
+      error.code !== 'selector_not_found' ||
+      (callerWorktree && !callerWorktree.startsWith('folder:'))
+    ) {
       throw error
     }
-    // The original no-match explains the miss better than a failed folder lookup would.
-    const enclosingFolder = await selectEnclosingNativeFolderWorkspace(cwd, client).catch(
-      () => undefined
-    )
+    // Several enclosing folders keep their choices; any other lookup failure keeps the original miss.
+    const enclosingFolder = await selectEnclosingNativeFolderWorkspace(
+      cwd,
+      client,
+      selectorPurpose('parent-worktree')
+    ).catch((lookupError: unknown) => {
+      if (lookupError instanceof RuntimeClientError && lookupError.code === 'selector_ambiguous') {
+        throw lookupError
+      }
+      return undefined
+    })
     if (!enclosingFolder) {
       throw error
     }
@@ -85,19 +98,23 @@ async function readFolderWorkspaceRepos(
 
 /**
  * The refusal for a create with no repo from or under a folder workspace: the folder is not a Git
- * repository, so list the repositories it holds with a ready command for each.
+ * repository, so list the repositories it holds. The user's own command keeps every flag they typed.
  */
 export async function getFolderWorkspaceMissingRepoError(
   client: RuntimeClient,
   flags: Map<string, string | boolean>
 ): Promise<RuntimeClientError | undefined> {
   const explicitParent = getOptionalStringFlag(flags, 'parent-worktree')?.replace(/^id:/, '')
+  const parsedParent = explicitParent ? parseWorkspaceKey(explicitParent) : null
+  // The terminal's folder is the parent only when the command names none.
+  const inferredFolder =
+    !explicitParent && flags.get('no-parent') !== true && !client.isRemote
+      ? getCallerFolderWorkspaceKey()
+      : undefined
   const folderKey =
-    explicitParent && parseWorkspaceKey(explicitParent)?.type === 'folder'
-      ? (explicitParent as WorkspaceKey)
-      : client.isRemote
-        ? undefined
-        : getCallerFolderWorkspaceKey()
+    parsedParent?.type === 'folder'
+      ? folderWorkspaceKey(parsedParent.folderWorkspaceId)
+      : inferredFolder
   if (!folderKey) {
     return undefined
   }
@@ -106,14 +123,10 @@ export async function getFolderWorkspaceMissingRepoError(
   if (!read) {
     return undefined
   }
-  const name = getOptionalStringFlag(flags, 'name')
-  // Quoting differs across POSIX shells, PowerShell and cmd; only echo a name none of them needs to quote.
-  const nameArg = name && /^[\w./:@-]+$/.test(name) ? name : '<name>'
   const choices: FolderWorkspaceRepoChoice[] = read.repos.map((repo) => ({
     repo: `id:${repo.id}`,
     name: repo.displayName,
-    path: repo.path,
-    command: `orca worktree create --repo id:${repo.id} --name ${nameArg}`
+    path: repo.path
   }))
   const data = { folderWorkspace: folderKey, repos: choices }
   if (choices.length === 0) {
@@ -123,16 +136,16 @@ export async function getFolderWorkspaceMissingRepoError(
       data
     )
   }
-  const width = Math.max(...choices.map((choice) => choice.command.length))
+  const width = Math.max(...choices.map((choice) => choice.repo.length))
   const lines = choices.map(
-    (choice) => `  ${choice.command.padEnd(width)}   # ${choice.name}  ${choice.path}`
+    (choice) => `  --repo ${choice.repo.padEnd(width)}   # ${choice.name}  ${choice.path}`
   )
   return new RuntimeClientError(
     'invalid_argument',
     [
-      'This folder workspace is not a Git repository. Pass --repo to choose which repository gets the worktree:',
+      'This folder workspace is not a Git repository. Add --repo to your command to choose which repository gets the worktree:',
       ...lines,
-      'The new worktree attaches to this folder workspace and shows in its Source Control.'
+      'The new worktree attaches to this folder workspace and is listed in its Attached worktrees panel.'
     ].join('\n'),
     data
   )

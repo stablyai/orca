@@ -340,6 +340,11 @@ export function recordWorkspaceLineageForCreatedWorktree(
   if (parentScope.type === 'folder') {
     const target = worktreeRowTarget(store, worktree)
     const workspaceLineage = (target && store.setFolderParentLineage(target, row)) ?? null
+    if (!workspaceLineage) {
+      console.warn(
+        `[worktree-create] ${worktree.id}'s lineage is held by a same-path workspace on another host; skipping lineage`
+      )
+    }
     return { lineage, workspaceLineage }
   }
   // A recorded worktree link already wrote this row as its workspace projection.

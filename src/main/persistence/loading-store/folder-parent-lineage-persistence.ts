@@ -44,14 +44,17 @@ export class FolderParentLineagePersistence {
  */
 export function dropInferredParentsOverFolderParents(
   worktreeLineageById: Record<string, WorktreeLineage>,
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  workspaceLineageByChildKey: Record<string, WorkspaceLineage>,
+  worktreeIds: Iterable<string> = Object.keys(worktreeLineageById)
 ): void {
-  for (const [worktreeId, lineage] of Object.entries(worktreeLineageById)) {
+  for (const worktreeId of worktreeIds) {
+    const lineage = worktreeLineageById[worktreeId]
     const row = workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    // Saved worktree rows load unvalidated; a malformed one must not fail the whole load.
     if (
-      lineage.capture.confidence === 'inferred' &&
       row?.capture.confidence === 'explicit' &&
-      parseWorkspaceKey(row.parentWorkspaceKey)?.type === 'folder'
+      parseWorkspaceKey(row.parentWorkspaceKey)?.type === 'folder' &&
+      lineage?.capture?.confidence === 'inferred'
     ) {
       delete worktreeLineageById[worktreeId]
     }

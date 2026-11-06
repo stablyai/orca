@@ -347,7 +347,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
       const output = [...errorSpy.mock.calls, ...logSpy.mock.calls].flat().join('\n')
       expect(process.exitCode).toBe(1)
       expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
-      expect(output).toContain('orca worktree create --repo id:repo-api --name fix-login')
+      expect(output).toContain('--repo id:repo-api')
       expect(output).not.toContain('id:elsewhere')
     } finally {
       process.exitCode = priorExitCode

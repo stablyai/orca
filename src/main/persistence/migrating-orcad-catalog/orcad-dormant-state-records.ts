@@ -30,6 +30,7 @@ import {
   type PreparedOrcadMigrationClientState
 } from './orcad-destination-client-state'
 import { dropInferredParentsOverFolderParents } from '../loading-store/folder-parent-lineage-persistence'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 type KeyedRow<T> = { key: string; value: T }
 type RegistryUpdate = { key: string; value: RetiredNameRegistry }
@@ -135,13 +136,22 @@ export function applyPreparedOrcadMigrationDormantState(
     state.worktreeMeta[entry.key] = entry.value
   }
   for (const entry of prepared.newWorktreeLineage) {
+    const saved = state.workspaceLineageByChildKey[worktreeWorkspaceKey(entry.key)]
+    // A worktree keeps the parent it already has here; one child has one parent.
+    if (saved && saved.parentWorkspaceKey !== worktreeWorkspaceKey(entry.value.parentWorktreeId)) {
+      continue
+    }
     state.worktreeLineageById[entry.key] = entry.value
   }
   for (const entry of prepared.newWorkspaceLineage) {
     state.workspaceLineageByChildKey[entry.key] = entry.value
   }
   // An older source can carry both parents for one worktree; keep it to one, as load does.
-  dropInferredParentsOverFolderParents(state.worktreeLineageById, state.workspaceLineageByChildKey)
+  dropInferredParentsOverFolderParents(
+    state.worktreeLineageById,
+    state.workspaceLineageByChildKey,
+    prepared.newWorktreeLineage.map((entry) => entry.key)
+  )
   for (const preset of prepared.newSparsePresets) {
     state.sparsePresetsByRepo[preset.repoId] = [
       ...(state.sparsePresetsByRepo[preset.repoId] ?? []),
