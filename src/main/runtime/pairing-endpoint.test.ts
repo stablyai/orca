@@ -9,6 +9,7 @@ import {
 } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 import { parseManualNetworkAddress } from '../../shared/network/manual-address'
+import { parseServerShareAddress } from '../../shared/network/server-share-address'
 
 describe('resolveAdvertisedPairingEndpoint', () => {
   const bound = 'ws://0.0.0.0:6768'
@@ -17,6 +18,25 @@ describe('resolveAdvertisedPairingEndpoint', () => {
     expect(resolveAdvertisedPairingEndpoint(bound, null)).toEqual({
       ok: true,
       endpoint: 'ws://127.0.0.1:6768'
+    })
+  })
+
+  it.each([
+    ['https://orca.example.com', 'wss://orca.example.com'],
+    [
+      'https://orca.example.com:8443/%6Fruntime?route=%72ed',
+      'wss://orca.example.com:8443/%6Fruntime?route=%72ed'
+    ]
+  ])('shares a pasted secure tunnel independently of the bound port: %s', (input, endpoint) => {
+    const parsed = parseServerShareAddress(input)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      throw new Error('Secure tunnel address was rejected')
+    }
+
+    expect(resolveAdvertisedPairingEndpoint('ws://0.0.0.0:7777', parsed.value)).toEqual({
+      ok: true,
+      endpoint
     })
   })
 
