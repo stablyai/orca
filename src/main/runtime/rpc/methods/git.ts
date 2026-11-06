@@ -1,3 +1,4 @@
+import { GIT_STATUS_METHODS } from './git-status-methods'
 import { GIT_COMMIT_ACTION_METHODS } from './git-commit-action-methods'
 import { defineMethod } from '../core'
 import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
@@ -19,49 +20,13 @@ import {
   GitRebaseFromBase,
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
-  GitStatusParams,
   GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
 } from '../../../../shared/rpc-contract/git-params'
 
 export const GIT_METHODS = [
-  defineMethod({
-    name: 'git.status',
-    permission: 'workspace',
-    params: GitStatusParams,
-    handler: async (params, { runtime, signal }) => {
-      const options =
-        params.includeIgnored === undefined &&
-        params.includeLineStats === undefined &&
-        params.bypassEffectiveUpstreamNegativeCache === undefined &&
-        params.reuseLineStats === undefined &&
-        params.branchLineTotalMergeBase === undefined &&
-        params.admissionTier === undefined &&
-        signal === undefined
-          ? undefined
-          : {
-              ...(params.includeIgnored === undefined
-                ? {}
-                : { includeIgnored: params.includeIgnored }),
-              ...(params.includeLineStats === undefined
-                ? {}
-                : { includeLineStats: params.includeLineStats }),
-              ...(params.bypassEffectiveUpstreamNegativeCache === true
-                ? { bypassEffectiveUpstreamNegativeCache: true }
-                : {}),
-              ...(params.reuseLineStats === true ? { reuseLineStats: true } : {}),
-              ...(params.branchLineTotalMergeBase === undefined
-                ? {}
-                : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
-              admissionTier: params.admissionTier ?? 'status',
-              ...(signal ? { signal } : {})
-            }
-      return options === undefined
-        ? runtime.getRuntimeGitStatus(params.worktree, { admissionTier: 'status' })
-        : runtime.getRuntimeGitStatus(params.worktree, options)
-    }
-  }),
+  ...GIT_STATUS_METHODS,
   defineMethod({
     name: 'git.checkIgnored',
     permission: 'workspace',
@@ -95,12 +60,6 @@ export const GIT_METHODS = [
         historyToken: params.historyToken,
         skip: params.skip
       })
-  }),
-  defineMethod({
-    name: 'git.conflictOperation',
-    permission: 'workspace',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
     name: 'git.mutationInFlight',

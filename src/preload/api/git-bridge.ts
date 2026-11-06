@@ -1,4 +1,7 @@
-import type { GitCommitActionResult } from '../../shared/git/commands/git-commit-action'
+import type {
+  GitCommitAction,
+  GitCommitActionResult
+} from '../../shared/git/commands/git-commit-action'
 import { ipcRenderer } from 'electron'
 import type {
   GitForkSyncExpectedUpstream,
@@ -157,6 +160,16 @@ export const gitApi = {
     commitId: string
     connectionId?: string
   }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:revert', args),
+  sequencerAbort: (args: {
+    worktreePath: string
+    operation: GitCommitAction
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:sequencerAbort', args),
+  sequencerContinue: (args: {
+    worktreePath: string
+    operation: GitCommitAction
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:sequencerContinue', args),
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

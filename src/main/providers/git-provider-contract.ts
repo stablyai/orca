@@ -48,6 +48,11 @@ export type IGitProvider = {
     operation: GitCommitAction,
     commitId: string
   ): Promise<GitCommitActionResult>
+  recoverSequencer(
+    worktreePath: string,
+    operation: GitCommitAction,
+    action: 'abort' | 'continue'
+  ): Promise<void>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(

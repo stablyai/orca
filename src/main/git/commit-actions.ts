@@ -1,3 +1,4 @@
+import { detectConflictOperation } from './source-control/git-conflict-operation'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -71,5 +72,27 @@ export async function applyCommit(
       outcome: 'refused',
       message: stderr.trim() || 'Git did not create a commit. Check the checkout and try again.'
     }
+  })
+}
+
+export async function recoverSequencer(
+  worktreePath: string,
+  operation: GitCommitAction,
+  action: 'abort' | 'continue',
+  options: GitRuntimeOptions = {}
+): Promise<void> {
+  if (operation !== 'cherry-pick' && operation !== 'revert') {
+    throw new Error('Expected cherry-pick or revert')
+  }
+  await withCheckoutLock(worktreePath, async () => {
+    if ((await detectConflictOperation(worktreePath, options)) !== operation) {
+      throw new Error(`There is no ${operation} in progress. Refresh Source Control and try again.`)
+    }
+    await runWithGitReadCacheInvalidation(() =>
+      gitExecFileAsync([operation, `--${action}`], {
+        ...gitOptionsForWorktree(worktreePath, options),
+        ...(action === 'continue' ? { env: { GIT_EDITOR: 'true' } } : {})
+      })
+    )
   })
 }

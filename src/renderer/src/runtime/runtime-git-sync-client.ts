@@ -1,4 +1,3 @@
-import type { GitCommitActionResult } from '../../../shared/git/commands/git-commit-action'
 import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
@@ -263,42 +262,4 @@ export async function completeRuntimeGitMerge(
     }
     throw error
   }
-}
-
-export async function cherryPickRuntimeGit(
-  context: RuntimeGitContext,
-  commitId: string
-): Promise<GitCommitActionResult> {
-  if (context.target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.cherryPick({
-      worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId,
-      commitId
-    })
-  }
-  return callRuntimeRpc(
-    context.target,
-    'git.cherryPick',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), commitId },
-    { timeoutMs: 30_000 }
-  )
-}
-
-export async function revertRuntimeGit(
-  context: RuntimeGitContext,
-  commitId: string
-): Promise<GitCommitActionResult> {
-  if (context.target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.revert({
-      worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId,
-      commitId
-    })
-  }
-  return callRuntimeRpc(
-    context.target,
-    'git.revert',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), commitId },
-    { timeoutMs: 30_000 }
-  )
 }

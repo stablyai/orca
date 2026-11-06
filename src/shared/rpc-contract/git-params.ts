@@ -82,6 +82,10 @@ export const GitCommitCompare = WorktreeSelector.extend({
     .pipe(FullGitObjectId)
 })
 
+export const GitSequencer = WorktreeSelector.extend({
+  operation: z.enum(['cherry-pick', 'revert'])
+})
+
 export const GitCommitAction = WorktreeSelector.extend({ commitId: FullGitObjectId })
 
 export const GitHistoryRefName = z

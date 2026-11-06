@@ -6,3 +6,5 @@ export type GitCommitActionResult = {
   branch?: string
   message?: string
 }
+
+export const GIT_REVERT_CONFLICT_CLIENT_CAPABILITY = 'git.conflict-operation.revert.v1' as const

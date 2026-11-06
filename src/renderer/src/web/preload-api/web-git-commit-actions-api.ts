@@ -3,8 +3,25 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
 
-export function createGitCommitActionsApi(): Pick<PreloadApi['git'], 'cherryPick' | 'revert'> {
+export function createGitCommitActionsApi(): Pick<
+  PreloadApi['git'],
+  'cherryPick' | 'revert' | 'sequencerAbort' | 'sequencerContinue'
+> {
   return {
+    sequencerContinue: async ({ worktreePath, operation }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.sequencerContinue', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        operation
+      })
+    },
+    sequencerAbort: async ({ worktreePath, operation }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.sequencerAbort', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        operation
+      })
+    },
     cherryPick: async ({ worktreePath, commitId }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.cherryPick', {

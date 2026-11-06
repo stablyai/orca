@@ -1,0 +1,40 @@
+import '../unused-default-rpc-methods.test-fixture'
+import { describe, expect, it } from 'vitest'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import { RpcDispatcher } from '../dispatcher'
+import { GIT_METHODS } from './git'
+import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
+
+// The shared status object stands for the host cache; no caller may rewrite it.
+describe('git conflict replies', () => {
+  it('projects revert independently for each caller without changing the cached status', async () => {
+    const status: GitStatusResult = { entries: [], conflictOperation: 'revert' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the two fixture methods are dispatched.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitStatus: async () => status,
+      getRuntimeGitConflictOperation: async () => 'revert'
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    for (const method of ['git.status', 'git.conflictOperation']) {
+      const replies: string[] = []
+      for (const capabilities of [[], ['git.conflict-operation.revert.v1'], []]) {
+        await dispatcher.dispatchStreaming(
+          { id: method, authToken: '', method, params: { worktree: 'id:workspace' } },
+          (reply) => replies.push(reply),
+          { clientCapabilities: capabilities }
+        )
+      }
+      expect(replies.map((reply) => JSON.parse(reply).result)).toEqual(
+        method === 'git.status'
+          ? [
+              { entries: [], conflictOperation: 'unknown' },
+              { entries: [], conflictOperation: 'revert' },
+              { entries: [], conflictOperation: 'unknown' }
+            ]
+          : ['unknown', 'revert', 'unknown']
+      )
+    }
+    expect(status).toEqual({ entries: [], conflictOperation: 'revert' })
+  })
+})

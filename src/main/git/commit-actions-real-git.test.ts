@@ -1,10 +1,11 @@
+import { detectConflictOperation } from './source-control/git-conflict-operation'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { applyCommit } from './commit-actions'
+import { applyCommit, recoverSequencer } from './commit-actions'
 import type { GitCommitAction } from '../../shared/git/commands/git-commit-action'
 
 let directory: string
@@ -74,6 +75,38 @@ describe('commit actions', () => {
       await commit('different\n', 'diverged')
       expect(await applyCommit(directory, operation, topic)).toEqual({ outcome: 'conflicted' })
       expect(await git('diff', '--name-only', '--diff-filter=U')).toBe('file.txt')
+    })
+    it(`${operation} can be aborted after a conflict, rejecting the wrong operation`, async () => {
+      await commit('different\n', 'diverged')
+      await applyCommit(directory, operation, topic)
+      expect(await detectConflictOperation(directory)).toBe(operation)
+      await expect(
+        recoverSequencer(directory, operation === 'revert' ? 'cherry-pick' : 'revert', 'abort')
+      ).rejects.toThrow('in progress')
+      await recoverSequencer(directory, operation, 'abort')
+      expect(await detectConflictOperation(directory)).toBe('unknown')
+      expect(await git('show', 'HEAD:file.txt')).toBe('different')
+      expect(await git('status', '--porcelain')).toBe('')
+    })
+    it(`${operation} continues a resolution even with a failing configured editor`, async () => {
+      await commit('different\n', 'diverged')
+      await applyCommit(directory, operation, topic)
+      await writeFile(join(directory, 'file.txt'), 'resolved\n')
+      await git('add', 'file.txt')
+      const editor = process.env.GIT_EDITOR
+      process.env.GIT_EDITOR = 'false'
+      try {
+        await recoverSequencer(directory, operation, 'continue')
+      } finally {
+        if (editor === undefined) {
+          delete process.env.GIT_EDITOR
+        } else {
+          process.env.GIT_EDITOR = editor
+        }
+      }
+      expect(await detectConflictOperation(directory)).toBe('unknown')
+      expect(await git('show', 'HEAD:file.txt')).toBe('resolved')
+      expect(await git('status', '--porcelain')).toBe('')
     })
     it(`${operation} refuses a merge commit using its actual parents`, async () => {
       await git('checkout', '-qb', 'other')

@@ -34,6 +34,8 @@ export class RuntimeGitCommands {
   readonly commitRuntimeGit: RuntimeGitSyncCommands['commitRuntimeGit']
   readonly cherryPickRuntimeGit: RuntimeGitSyncCommands['cherryPickRuntimeGit']
   readonly revertRuntimeGit: RuntimeGitSyncCommands['revertRuntimeGit']
+  readonly sequencerAbortRuntimeGit: RuntimeGitSyncCommands['sequencerAbortRuntimeGit']
+  readonly sequencerContinueRuntimeGit: RuntimeGitSyncCommands['sequencerContinueRuntimeGit']
   readonly completeRuntimeGitMerge: RuntimeGitSyncCommands['completeRuntimeGitMerge']
   readonly generateRuntimeCommitMessage: RuntimeGitGenerationCommands['generateRuntimeCommitMessage']
   readonly cancelRuntimeGenerateCommitMessage: RuntimeGitGenerationCommands['cancelRuntimeGenerateCommitMessage']
@@ -83,6 +85,8 @@ export class RuntimeGitCommands {
     this.commitRuntimeGit = sync.commitRuntimeGit.bind(sync)
     this.cherryPickRuntimeGit = sync.cherryPickRuntimeGit.bind(sync)
     this.revertRuntimeGit = sync.revertRuntimeGit.bind(sync)
+    this.sequencerAbortRuntimeGit = sync.sequencerAbortRuntimeGit.bind(sync)
+    this.sequencerContinueRuntimeGit = sync.sequencerContinueRuntimeGit.bind(sync)
     this.completeRuntimeGitMerge = sync.completeRuntimeGitMerge.bind(sync)
     this.generateRuntimeCommitMessage = generation.generateRuntimeCommitMessage.bind(generation)
     this.cancelRuntimeGenerateCommitMessage =

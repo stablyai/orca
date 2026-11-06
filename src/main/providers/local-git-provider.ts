@@ -1,4 +1,4 @@
-import { applyCommit } from '../git/commit-actions'
+import { applyCommit, recoverSequencer } from '../git/commit-actions'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
@@ -78,6 +78,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
     applyCommit: (worktreePath, operation, commitId) =>
       applyCommit(worktreePath, operation, commitId, interactive),
+    recoverSequencer: (worktreePath, operation, action) =>
+      recoverSequencer(worktreePath, operation, action, interactive),
     completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>

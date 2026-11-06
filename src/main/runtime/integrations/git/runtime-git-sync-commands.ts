@@ -150,6 +150,26 @@ export class RuntimeGitSyncCommands {
     return requireRuntimeGitProvider(target).applyCommit(target.worktree.path, operation, commitId)
   }
 
+  async sequencerAbortRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    await requireRuntimeGitProvider(target).recoverSequencer(
+      target.worktree.path,
+      operation,
+      'abort'
+    )
+    return { ok: true }
+  }
+
+  async sequencerContinueRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    await requireRuntimeGitProvider(target).recoverSequencer(
+      target.worktree.path,
+      operation,
+      'continue'
+    )
+    return { ok: true }
+  }
+
   async completeRuntimeGitMerge(
     worktreeSelector: string
   ): Promise<{ success: boolean; error?: string }> {

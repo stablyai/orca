@@ -27,6 +27,8 @@ type RuntimeGitCommandName =
   | 'commitRuntimeGit'
   | 'cherryPickRuntimeGit'
   | 'revertRuntimeGit'
+  | 'sequencerAbortRuntimeGit'
+  | 'sequencerContinueRuntimeGit'
   | 'completeRuntimeGitMerge'
   | 'generateRuntimeCommitMessage'
   | 'discoverRuntimeCommitMessageModels'
@@ -76,6 +78,8 @@ export function installRuntimeGitCommandSurface(
     commitRuntimeGit: commands.commitRuntimeGit.bind(commands),
     cherryPickRuntimeGit: commands.cherryPickRuntimeGit.bind(commands),
     revertRuntimeGit: commands.revertRuntimeGit.bind(commands),
+    sequencerAbortRuntimeGit: commands.sequencerAbortRuntimeGit.bind(commands),
+    sequencerContinueRuntimeGit: commands.sequencerContinueRuntimeGit.bind(commands),
     completeRuntimeGitMerge: commands.completeRuntimeGitMerge.bind(commands),
     generateRuntimeCommitMessage: commands.generateRuntimeCommitMessage.bind(commands),
     discoverRuntimeCommitMessageModels: commands.discoverRuntimeCommitMessageModels.bind(commands),
