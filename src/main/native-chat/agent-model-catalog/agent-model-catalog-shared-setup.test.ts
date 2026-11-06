@@ -6,11 +6,13 @@ import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
 
 const HOME = { variable: 'CODEX_HOME', path: '/account' }
+// Its picker follows a project's own settings, unlike Claude's and Codex's.
+const agent = 'pi'
 
-function chat(sessionId: string, workspaceId = 'ws'): AgentSessionRecord {
+function chat(sessionId: string, workspaceId = 'ws', provider = 'codex'): AgentSessionRecord {
   return agentSessionRecordFixture({
     sessionId,
-    provider: 'codex',
+    provider,
     accountHome: HOME,
     location: {
       executionHostId: 'local',
@@ -48,9 +50,13 @@ const listing = (id: string): AgentModelCatalogSuccess => ({
 })
 
 // Chats a and b share one workspace, so they share one request. The next folder lookup, CLI
-// resolution or project-settings check can each be held once.
-function harness() {
-  const records: Record<string, AgentSessionRecord> = { a: chat('a'), b: chat('b') }
+// resolution or project-settings check can each be held once. Claude and Codex never check a
+// project's settings, so settings stages run as Pi.
+function harness(agent = 'codex') {
+  const records: Record<string, AgentSessionRecord> = {
+    a: chat('a', 'ws', agent),
+    b: chat('b', 'ws', agent)
+  }
   const folder: {
     path: string
     gate?: PromiseWithResolvers<void>
@@ -90,8 +96,15 @@ function harness() {
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,
     recordWorkspacePath,
+    agentReadsProjectModelConfig: () => true,
     workspaceMayOverrideDefaultModel,
-    probes: { codex: Object.assign(vi.fn(), { resolve }) }
+    // Claude and Codex list through their resolved CLI; other agents through the probe itself.
+    probes: {
+      [agent]: Object.assign(
+        vi.fn((_home: unknown, options?: { signal?: AbortSignal }) => run(options?.signal)),
+        { resolve: agent === 'codex' ? resolve : undefined }
+      )
+    }
   })
   onTestFinished(() => {
     discovery.resolve(listing('late'))
@@ -147,18 +160,20 @@ it.each(
     onTestFinished(() => {
       vi.useRealTimers()
     })
-    const h = harness()
+    // Only agents whose picker follows a project's settings check them.
+    const listed = stage === 'settings' ? agent : 'codex'
+    const h = harness(listed)
     const stalled = Promise.withResolvers<void>()
     h.folder[stage] = stalled
     let settled = false
     void h.service
-      .read({ agent: 'codex', sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
+      .read({ agent: listed, sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
       .then(() => {
         settled = true
       })
     await vi.advanceTimersByTimeAsync(0)
     if (retired === 'agent') {
-      h.store.expireAgent('codex')
+      h.store.expireAgent(listed)
     } else {
       h.service.retireContext('ws')
     }
@@ -167,7 +182,7 @@ it.each(
     stalled.resolve()
     h.discovery.resolve(listing('retired'))
     await vi.advanceTimersByTimeAsync(0)
-    expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).not.toHaveProperty('models')
+    expect(h.service.snapshot({ agent: listed, sessionId: 'b' })).not.toHaveProperty('models')
   }
 )
 
@@ -362,16 +377,16 @@ it("keeps the folder's defaults when they arrive after a shorter last reader lef
   onTestFinished(() => {
     vi.useRealTimers()
   })
-  const h = harness()
+  const h = harness(agent)
   h.folder.settings = Promise.withResolvers<void>()
   const settings = h.folder.settings
   const a = h.service.read({
-    agent: 'codex',
+    agent,
     sessionId: 'a',
     waitForListing: true,
     deadline: Date.now() + 30_000
   })
-  void h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 1_000 })
+  void h.service.demand({ agent, sessionId: 'b', deadline: Date.now() + 1_000 })
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
   await vi.advanceTimersByTimeAsync(2_000)
   settings.resolve()
@@ -386,12 +401,12 @@ it("reuses a settled setup after its starting reader's deadline while its listin
   onTestFinished(() => {
     vi.useRealTimers()
   })
-  const h = harness()
-  void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 1_000 })
-  void h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 30_000 })
+  const h = harness(agent)
+  void h.service.demand({ agent, sessionId: 'a', deadline: Date.now() + 1_000 })
+  void h.service.demand({ agent, sessionId: 'b', deadline: Date.now() + 30_000 })
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
   await vi.advanceTimersByTimeAsync(2_000)
-  void h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 30_000 })
+  void h.service.demand({ agent, sessionId: 'b', deadline: Date.now() + 30_000 })
   await vi.advanceTimersByTimeAsync(0)
   expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
   expect(h.workspaceMayOverrideDefaultModel).toHaveBeenCalledOnce()
@@ -402,12 +417,12 @@ it("keeps the listing when the folder's settings stall, naming no default, withi
   onTestFinished(() => {
     vi.useRealTimers()
   })
-  const h = harness()
+  const h = harness(agent)
   h.folder.settings = Promise.withResolvers<void>()
-  void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 1_000 })
+  void h.service.demand({ agent, sessionId: 'a', deadline: Date.now() + 1_000 })
   let answer: unknown
   void h.service
-    .read({ agent: 'codex', sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
+    .read({ agent, sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
     .then((result) => {
       answer = result
     })
@@ -424,7 +439,7 @@ it("never lets a moved folder's late settings describe the folder it moved to", 
   onTestFinished(() => {
     vi.useRealTimers()
   })
-  const h = harness()
+  const h = harness(agent)
   const stalled = Promise.withResolvers<void>()
   // The old folder's settings pick their own model; the new folder's pick nothing.
   h.workspaceMayOverrideDefaultModel.mockImplementation(async (input) => {
@@ -434,17 +449,16 @@ it("never lets a moved folder's late settings describe the folder it moved to", 
     }
     return old
   })
-  void h.service.demand({ agent: 'codex', sessionId: 'b' })
+  void h.service.demand({ agent, sessionId: 'b' })
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
   h.folder.path = '/new'
   h.service.retireContext('ws')
-  const moved = h.service.read({ agent: 'codex', sessionId: 'b', waitForListing: true })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledTimes(2))
+  const moved = h.service.read({ agent, sessionId: 'b', waitForListing: true })
   h.discovery.resolve(listing('listed'))
   expect(await moved).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
   stalled.resolve()
   await vi.advanceTimersByTimeAsync(0)
-  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).toMatchObject({
+  expect(h.service.snapshot({ agent, sessionId: 'b' })).toMatchObject({
     models: [{ id: 'listed', isDefault: true }]
   })
 })

@@ -2,16 +2,11 @@ import type { Dirent } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import {
-  claudeSettingsModelOverride,
-  codexConfigModelOverride,
   ompSettingsMayPickModel,
   openCodeAgentFileMayPickModel,
   openCodeConfigMayPickModel,
-  piSettingsMayPickModel,
-  type ProjectModelOverride
+  piSettingsMayPickModel
 } from './agent-project-model-config-keys'
-
-export type { ProjectModelOverride }
 
 // Project model/effort settings invalidate the account default without resolving a replacement.
 
@@ -49,8 +44,7 @@ async function projectConfigDirectories(cwd: string): Promise<string[]> {
 
 type ProjectModelFile = {
   path: string
-  /** One parse answers both questions. */
-  override: (text: string) => ProjectModelOverride
+  mayPickModel: (text: string) => boolean
 }
 
 type ProjectModelLayers = {
@@ -61,25 +55,17 @@ type ProjectModelLayers = {
   wholeAncestry?: boolean
 }
 
-const both = (value: boolean): ProjectModelOverride => ({ model: value, effort: value })
-
 const files = (
   paths: readonly string[],
-  override: ProjectModelFile['override']
-): ProjectModelFile[] => paths.map((path) => ({ path, override }))
-
-/** Agents whose settings can't separate model from effort pick both or neither. */
-const sameForBoth =
-  (mayPickModel: (text: string) => boolean): ProjectModelFile['override'] =>
-  (text) =>
-    both(mayPickModel(text))
+  mayPickModel: (text: string) => boolean
+): ProjectModelFile[] => paths.map((path) => ({ path, mayPickModel }))
 
 // OpenCode 2.x reads every ancestor, including above the nearest .git root.
 const OPENCODE_PROJECT_MODEL_LAYERS: ProjectModelLayers = {
   wholeAncestry: true,
   files: files(
     ['opencode.json', 'opencode.jsonc', '.opencode/opencode.json', '.opencode/opencode.jsonc'],
-    sameForBoth(openCodeConfigMayPickModel)
+    openCodeConfigMayPickModel
   ),
   agentFolders: [
     { path: '.opencode/agent', recursive: true },
@@ -90,13 +76,6 @@ const OPENCODE_PROJECT_MODEL_LAYERS: ProjectModelLayers = {
 }
 
 const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
-  codex: { files: files(['.codex/config.toml'], codexConfigModelOverride) },
-  claude: {
-    files: files(
-      ['.claude/settings.json', '.claude/settings.local.json'],
-      claudeSettingsModelOverride
-    )
-  },
   opencode: OPENCODE_PROJECT_MODEL_LAYERS,
   opencode2: OPENCODE_PROJECT_MODEL_LAYERS,
   // OMP also merges other agents' project settings.
@@ -110,20 +89,16 @@ const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
           '.gemini/settings.json',
           'opencode.json'
         ],
-        sameForBoth((text) => ompSettingsMayPickModel(text, 'json'))
+        (text) => ompSettingsMayPickModel(text, 'json')
       ),
-      ...files(
-        ['.omp/config.yml', '.omp/config.yaml'],
-        sameForBoth((text) => ompSettingsMayPickModel(text, 'yaml'))
+      ...files(['.omp/config.yml', '.omp/config.yaml'], (text) =>
+        ompSettingsMayPickModel(text, 'yaml')
       ),
-      ...files(
-        ['.codex/config.toml'],
-        sameForBoth((text) => ompSettingsMayPickModel(text, 'toml'))
-      )
+      ...files(['.codex/config.toml'], (text) => ompSettingsMayPickModel(text, 'toml'))
     ]
   },
   pi: {
-    files: files(['.pi/settings.json'], sameForBoth(piSettingsMayPickModel)),
+    files: files(['.pi/settings.json'], piSettingsMayPickModel),
     codeFolders: ['.pi/extensions']
   }
 }
@@ -133,23 +108,18 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-const either = (found: ProjectModelOverride[]): ProjectModelOverride => ({
-  model: found.some((entry) => entry.model),
-  effort: found.some((entry) => entry.effort)
-})
-
-/** Unreadable files may override defaults; absent files cannot. One read answers both questions. */
+/** Unreadable files may override defaults; absent files cannot. */
 async function fileMayPickModel(
   path: string,
-  override: ProjectModelFile['override']
-): Promise<ProjectModelOverride> {
+  mayPickModel: (text: string) => boolean
+): Promise<boolean> {
   let text: string
   try {
     text = await readFile(path, 'utf8')
   } catch (error) {
-    return both(!isMissing(error))
+    return !isMissing(error)
   }
-  return override(text)
+  return mayPickModel(text)
 }
 
 // Bound reads; catalogs over the cap remain conservatively capable of overriding defaults.
@@ -168,13 +138,10 @@ async function agentFolderMayPickModel(folder: string, recursive: boolean): Prom
   }
   const found = await Promise.all(
     markdown.map((entry) =>
-      fileMayPickModel(
-        join(entry.parentPath, entry.name),
-        sameForBoth(openCodeAgentFileMayPickModel)
-      )
+      fileMayPickModel(join(entry.parentPath, entry.name), openCodeAgentFileMayPickModel)
     )
   )
-  return found.some((entry) => entry.effort)
+  return found.some(Boolean)
 }
 
 /** Non-dotfile extension content can change models arbitrarily. */
@@ -191,20 +158,20 @@ async function directoryMayOverride(
   dir: string,
   layers: ProjectModelLayers,
   accountHomePath: string | null
-): Promise<ProjectModelOverride> {
+): Promise<boolean> {
   const home = accountHomePath === null ? null : resolve(accountHomePath)
   const found = await Promise.all([
     ...layers.files
       .filter((file) => dirname(join(dir, file.path)) !== home)
-      .map((file) => fileMayPickModel(join(dir, file.path), file.override)),
-    ...(layers.agentFolders ?? []).map(async (folder) =>
-      both(await agentFolderMayPickModel(join(dir, folder.path), folder.recursive))
+      .map((file) => fileMayPickModel(join(dir, file.path), file.mayPickModel)),
+    ...(layers.agentFolders ?? []).map((folder) =>
+      agentFolderMayPickModel(join(dir, folder.path), folder.recursive)
     ),
     ...(layers.codeFolders ?? [])
       .filter((folder) => dirname(join(dir, folder)) !== home)
-      .map(async (folder) => both(await codeFolderMayPickModel(join(dir, folder))))
+      .map((folder) => codeFolderMayPickModel(join(dir, folder)))
   ])
-  return either(found)
+  return found.some(Boolean)
 }
 
 function ancestry(cwd: string): string[] {
@@ -226,19 +193,20 @@ export async function workspaceMayOverrideDefaultModel(input: {
   agent: string
   workspacePath: string
   accountHomePath: string | null
-}): Promise<ProjectModelOverride> {
+}): Promise<boolean> {
   if (!agentReadsProjectModelConfig(input.agent)) {
-    return both(false)
+    return false
   }
-  // Unknown project layers may override defaults anywhere.
+  // Unknown project layers may override defaults anywhere; Claude and Codex are never asked.
   const layers = PROJECT_MODEL_LAYERS[input.agent]
   if (!layers) {
-    return both(true)
+    return true
   }
   const dirs = layers.wholeAncestry
     ? ancestry(input.workspacePath)
     : await projectConfigDirectories(input.workspacePath)
-  return either(
-    await Promise.all(dirs.map((dir) => directoryMayOverride(dir, layers, input.accountHomePath)))
+  const results = await Promise.all(
+    dirs.map((dir) => directoryMayOverride(dir, layers, input.accountHomePath))
   )
+  return results.some(Boolean)
 }

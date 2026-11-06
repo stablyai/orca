@@ -7,7 +7,7 @@ import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/r
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
-import { withoutDefaultEfforts } from './agent-model-catalog-account-list'
+import { agentModelCatalogDefaultFollowsAccount } from './agent-model-catalog-workspace'
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
@@ -33,8 +33,6 @@ export type AgentModelCatalogBinding = {
   cwd?: string
   workspacePath?: string | null
   keepDefault: boolean
-  /** Whether the account's configured effort holds here; absent, as `keepDefault`. */
-  keepEffort?: boolean
   projecting?: Promise<void>
 }
 
@@ -169,6 +167,7 @@ export function agentModelCatalogMemoryBinding(
     base: fingerprint,
     exact: false,
     keepDefault:
+      agentModelCatalogDefaultFollowsAccount(params.agent) ||
       (!params.inSessionWorkspace && params.workspacePath === undefined) ||
       params.legacyOptionsDisplay === true ||
       deps.agentReadsProjectModelConfig?.(params.agent) === false
@@ -215,10 +214,7 @@ export function projectAgentModelCatalogSnapshot(
   const display =
     listed ?? (bound.exact && !params.verifiedOnly ? deps.store.observation(bound.base) : null)
   const verified = bound.exact && listed !== null && deps.store.verified(listed)
-  // One listing serves every folder on the account; where project settings may pick the effort,
-  // the account's configured effort is not shown (the model default follows `keepDefault`).
-  const projectDecides = independent && !(bound.keepEffort ?? bound.keepDefault)
-  const listing = display
+  const result = display
     ? agentModelCatalogResultFromEntry(
         display,
         independent &&
@@ -226,15 +222,11 @@ export function projectAgentModelCatalogSnapshot(
           // The account's list stands in for this folder's; it names no default here.
           (display !== listed || !deps.store.verified(display) || (!bound.exact && !params.legacy))
           ? false
-          : bound.keepDefault || (!independent && verified),
+          : verified || bound.keepDefault,
         deps.listingNamesConfiguredModel?.has(params.agent) === true,
         !independent || verified
       )
     : null
-  const result =
-    listing && projectDecides
-      ? { ...listing, models: withoutDefaultEfforts(listing.models) }
-      : listing
   return {
     ...(result ?? { origin: 'unknown' }),
     ...(result?.listingNamesConfiguredModel &&

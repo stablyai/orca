@@ -235,15 +235,13 @@ describe('options at rest in a repo with no config of its own', () => {
 
 describe('completed account discovery in a repo that sets its own effort', () => {
   it.each([OLDER_CLIENT, CURRENT_CLIENT])(
-    'keeps the account model and shows no account effort to $clientId',
+    "shows the account's model and effort to $clientId, as the CLI's own picker does",
     async (client) => {
       await chatAtRest({ configured: true, complete: true })
       const reply = await readOptions(client)
       expect(reply).toMatchObject({ ok: true, result: { current: { model: 'gpt-5.5' } } })
       expect(reply).toHaveProperty('result.models.0.id', 'gpt-5.5')
-      expect(reply).not.toHaveProperty('result.models.0.declaredDefaultEffort')
-      expect(reply).not.toHaveProperty('result.models.0.defaultEffort')
-      expect(reply).not.toHaveProperty('result.current.effort')
+      expect(reply).toHaveProperty('result.models.0.declaredDefaultEffort', 'medium')
       expect(rig.adapter.acquire).not.toHaveBeenCalled()
     }
   )

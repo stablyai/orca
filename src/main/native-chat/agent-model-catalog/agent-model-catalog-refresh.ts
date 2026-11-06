@@ -8,8 +8,8 @@ import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running
 import { recordCatalogKey } from './agent-model-catalog-fingerprint'
 import { newChatCatalogKey } from './agent-model-catalog-prewarm'
 import {
-  agentModelCatalogListedDefaults,
-  applyAgentModelCatalogDefaults,
+  agentModelCatalogDefaultFollowsAccount,
+  agentModelCatalogListedDefault,
   catalogFolder,
   sessionWorkspacePath
 } from './agent-model-catalog-workspace'
@@ -115,8 +115,7 @@ export function createAgentModelCatalogRefreshes(context: {
         folder,
         workspacePath,
         // A workspace that was named but cannot be inspected here may pick its own model.
-        keepDefault: workspacePath === undefined,
-        keepEffort: workspacePath === undefined
+        keepDefault: workspacePath === undefined || agentModelCatalogDefaultFollowsAccount(agent)
       }
       // Prewarm proves the selected account before command/folder resolution can finish.
       if (
@@ -130,10 +129,10 @@ export function createAgentModelCatalogRefreshes(context: {
       }
       // The folder's own settings, read alongside discovery; they only ever describe this binding.
       bound.projecting = bounded(
-        agentModelCatalogListedDefaults(deps, agent, workspacePath, probeHome)
-      ).then((keeps) => {
-        if (keeps) {
-          applyAgentModelCatalogDefaults(agent, bound, keeps)
+        agentModelCatalogListedDefault(deps, agent, workspacePath, probeHome)
+      ).then((keepDefault) => {
+        if (keepDefault !== null) {
+          bound.keepDefault = keepDefault
         }
       })
       projecting = bound.projecting

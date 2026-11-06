@@ -1,5 +1,4 @@
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import { withoutDefaultEfforts } from './agent-model-catalog-account-list'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
 import type {
   AgentModelCatalogReadParams,
@@ -21,18 +20,6 @@ export function agentModelCatalogSessionPeek(
         records: { record, scoped: onLiveAccount(deps, record), savedOnly: false }
       })
     const entry = bound ? deps.store.observation(bound.fingerprint) : null
-    if (!bound || !entry || (verifiedOnly && !deps.store.verified(entry))) {
-      return null
-    }
-    // The account's configured choice holds only where this chat's project cannot replace it.
-    return (bound.keepEffort ?? bound.keepDefault)
-      ? entry
-      : {
-          ...entry,
-          configured: null,
-          models: withoutDefaultEfforts(entry.models).map((model) =>
-            bound.keepDefault ? model : { ...model, isDefault: false }
-          )
-        }
+    return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
   }
 }

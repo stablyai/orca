@@ -101,7 +101,6 @@ function rig(worktrees: number) {
     joinResolvedWorktreeScans: vi.fn()
   }
   Object.assign(runtime, fleet)
-  const defaultCheck = vi.fn(async () => false)
   const listing = vi.fn(async () => ({
     origin: 'probe' as const,
     complete: true,
@@ -117,8 +116,7 @@ function rig(worktrees: number) {
       codex: Object.assign(listing, {
         resolve: async () => ({ identity: 'codex', run: listing })
       })
-    },
-    workspaceMayOverrideDefaultModel: defaultCheck
+    }
   })
   const requests: AgentModelCatalogReadParams[] = []
   runtime.structuredAgentModelCatalog = async () => ({
@@ -138,11 +136,7 @@ function rig(worktrees: number) {
       method.params!.parse({ agent: 'codex', worktree, waitForListing: true }),
       context
     )
-  const work = () => [
-    store.getRepos.mock.calls.length,
-    store.getWorktreeMeta.mock.calls.length,
-    defaultCheck.mock.calls.length
-  ]
+  const work = () => [store.getRepos.mock.calls.length, store.getWorktreeMeta.mock.calls.length]
   return { catalog, store, fleet, requests, open, work }
 }
 
@@ -170,8 +164,6 @@ it.each([
       }
     }
     expect(runs[1]).toEqual(runs[0])
-    // The project check runs once, for the one selected folder.
-    expect(runs[0][2]).toBe(1)
   }
 )
 
