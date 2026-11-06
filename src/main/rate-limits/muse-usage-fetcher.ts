@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
@@ -6,13 +7,14 @@ import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-reso
 import { hostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import { resolveHiddenProbeCwd } from './hidden-probe-cwd'
 import { parseMuseUsageStdout } from './muse-usage-response'
+import { readMuseVersionFile, resolveMuseInstall } from './muse-install-layout'
 
 // `muse usage --json` reads the subscription allowance without a model turn (Muse 1.4.13+).
 const MUSE_USAGE_ARGS: readonly string[] = ['usage', '--json']
 const MUSE_HELP_ARGS: readonly string[] = ['--help']
-// Warm reads take ~0.6s; leave room for a cold launcher plus the allowance request.
-const MUSE_USAGE_TIMEOUT_MS = 15_000
-const MUSE_HELP_TIMEOUT_MS = 5_000
+// The shared fetch queue waits for Muse, so cap the whole probe near 8s. Warm reads take ~1s.
+const MUSE_USAGE_TIMEOUT_MS = 6_000
+const MUSE_HELP_TIMEOUT_MS = 2_000
 const MUSE_MAX_OUTPUT_BYTES = 64 * 1024
 // The launcher must not self-update or start a device sign-in from a background poll.
 const MUSE_PROBE_ENV = {
@@ -56,6 +58,18 @@ export function museHelpListsUsageCommand(help: string): boolean {
   return commands !== undefined && /^\s+usage(?:\s{2,}|\s*$)/m.test(commands)
 }
 
+// Help-text answers for installs without `.muse-version`, keyed by launcher path, mtime and size.
+let museHelpCache: { key: string; listsUsage: boolean } | null = null
+
+async function launcherIdentity(launcherPath: string): Promise<string | null> {
+  try {
+    const info = await stat(launcherPath)
+    return `${launcherPath}\0${info.mtimeMs}\0${info.size}`
+  } catch {
+    return null
+  }
+}
+
 function showsSignedOut(output: string): boolean {
   // Muse 1.4.14 prints "not logged in: run `muse login` first".
   return /\bnot (?:logged|signed) in\b/i.test(output)
@@ -90,38 +104,66 @@ export async function fetchMuseRateLimits(
         now()
       )
     }
+    const install = await resolveMuseInstall(program)
     const spec = {
-      program,
+      program: install.program,
       env,
       cwd: (options.resolveCwd ?? resolveHiddenProbeCwd)(),
       maxOutputBytes: MUSE_MAX_OUTPUT_BYTES,
       signal: options.signal
     }
 
-    const help = await run({ ...spec, args: MUSE_HELP_ARGS, timeoutMs: MUSE_HELP_TIMEOUT_MS })
-    if (options.signal?.aborted) {
-      return cancelled()
-    }
-    if (help.code !== 0 || help.timedOut || help.signal !== null) {
-      return failure(
-        'error',
-        'usage-unavailable',
-        'Muse usage is unavailable. The Muse CLI did not answer `muse --help`.',
-        now()
-      )
-    }
-    if (!museHelpListsUsageCommand(help.stdout)) {
-      return failure(
+    const needsUpdate = (): ProviderRateLimits =>
+      failure(
         'unavailable',
         'usage-unavailable',
         'Muse usage needs a newer Muse CLI with the `muse usage` command. Update Muse to show quota.',
         now()
       )
+    if (install.kind === 'versioned') {
+      if (!install.supportsUsage) {
+        return needsUpdate()
+      }
+    } else {
+      const helpKey = await launcherIdentity(install.launcherPath)
+      let listsUsage =
+        helpKey !== null && museHelpCache?.key === helpKey ? museHelpCache.listsUsage : null
+      if (listsUsage === null) {
+        const help = await run({ ...spec, args: MUSE_HELP_ARGS, timeoutMs: MUSE_HELP_TIMEOUT_MS })
+        if (options.signal?.aborted) {
+          return cancelled()
+        }
+        if (help.code !== 0 || help.timedOut || help.signal !== null) {
+          return failure(
+            'error',
+            'usage-unavailable',
+            'Muse usage is unavailable. The Muse CLI did not answer `muse --help`.',
+            now()
+          )
+        }
+        listsUsage = museHelpListsUsageCommand(help.stdout)
+        museHelpCache = helpKey === null ? museHelpCache : { key: helpKey, listsUsage }
+      }
+      if (!listsUsage) {
+        return needsUpdate()
+      }
     }
 
     const result = await run({ ...spec, args: MUSE_USAGE_ARGS, timeoutMs: MUSE_USAGE_TIMEOUT_MS })
     if (options.signal?.aborted) {
       return cancelled()
+    }
+    // A Muse update swapped the active build mid-call; don't trust that reading.
+    if (
+      install.kind === 'versioned' &&
+      (await readMuseVersionFile(install.versionFile)) !== install.version
+    ) {
+      return failure(
+        'error',
+        'usage-unavailable',
+        'Muse usage is unavailable. Muse updated during the refresh.',
+        now()
+      )
     }
     if (result.timedOut || result.signal !== null) {
       return failure(
