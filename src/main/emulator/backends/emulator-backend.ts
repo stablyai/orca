@@ -17,6 +17,9 @@ export type EmulatorDevice = {
   detail?: string
   isAvailable: boolean
   lastUsedAt?: string
+  availabilityError?: string
+  osVersion?: string
+  apiLevel?: string
 }
 
 export type EmulatorBackendCapabilities = {

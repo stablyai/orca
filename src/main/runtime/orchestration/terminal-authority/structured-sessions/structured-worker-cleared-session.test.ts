@@ -1,4 +1,4 @@
-import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -13,9 +13,12 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
 const {
@@ -25,18 +28,19 @@ const {
   resolveStructuredWorkerIdentityForSession
 } = await import('./structured-worker-authority')
 const { structuredSessionMailTarget, structuredSessionOwnedMailboxes } =
-  await import('../../structured-session-mail-target')
-const { structuredSessionMailReach } = await import('../../structured-session-mail-address')
+  await import('../../mailbox/routing/structured-session-mail-target')
+const { structuredSessionMailReach } =
+  await import('../../mailbox/routing/structured-session-mail-address')
 const { stopStructuredWorker, readStructuredWorkerJournal, captureStructuredWorkerArchive } =
-  await import('../../../rpc/methods/orchestration-structured-worker-lifecycle')
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
 const { releaseStructuredWorkerSession } =
-  await import('../../../rpc/methods/orchestration-structured-worker-session')
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
 const { inspectWorkerTerminal } =
   await import('../../../rpc/methods/orchestration/worker/worker-observation')
 const { listAddressableStructuredWorkers } =
-  await import('../../structured-worker-group-addressing')
+  await import('../../addressing/groups/structured-worker-group-addressing')
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
-  await import('../../structured-worker-journal-page')
+  await import('../../workers/archives/structured-worker-journal-page')
 const { sealedChildEnv } =
   await import('../../../agent-session/environment/structured-session-child-env.test-support')
 const { foundAgentSessionRecord } =
@@ -46,11 +50,12 @@ const { applyAgentSessionRestartAdjudication } =
 const { openTestAgentSessionRecordStore } =
   await import('../../../agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('../../../orca-runtime')
-const { OrchestrationDb } = await import('../../db')
+const { OrchestrationDb } = await import('../../db/orchestration-db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
 const { structuredWorkerOwesWork } = await import('./structured-worker-custody')
+await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission')
 const { AGENT_SESSION_NOT_ATTACHED } =
-  await import('../../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission')
+  await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

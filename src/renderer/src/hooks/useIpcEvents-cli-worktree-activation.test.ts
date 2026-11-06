@@ -205,6 +205,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -468,6 +469,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {

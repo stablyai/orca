@@ -21,12 +21,18 @@ export function acpStopReasonFailed(stopReason: string): boolean {
 
 export type AcpTurnFailureReport = Pick<
   AcpTurnEnding,
-  'stopReason' | 'failureDetail' | 'notSignedIn' | 'usageLimit' | 'providerFailure'
+  | 'stopReason'
+  | 'failureDetail'
+  | 'notSignedIn'
+  | 'modelNotSelected'
+  | 'usageLimit'
+  | 'providerFailure'
 >
 
 export type AcpTurnFailureEvidence = {
   text: string
   notSignedIn: boolean
+  modelNotSelected?: boolean
   usageLimited: boolean
   providerFailure: boolean
   usageLimit?: AgentSessionUsageLimit
@@ -39,6 +45,7 @@ export function mergeAcpTurnFailureEvidence(
     stopReason,
     failureDetail: text,
     notSignedIn,
+    modelNotSelected,
     usageLimit,
     providerFailure
   }: AcpTurnFailureReport
@@ -49,6 +56,7 @@ export function mergeAcpTurnFailureEvidence(
       previous?.text ||
       (text === undefined ? '' : (providerDiagnostic(text, 'person')?.text ?? '')),
     notSignedIn: authenticationRequired,
+    modelNotSelected: modelNotSelected === true || previous?.modelNotSelected === true,
     usageLimited:
       !authenticationRequired && (stopReason === 'rate_limit' || previous?.usageLimited === true),
     providerFailure: providerFailure === true || previous?.providerFailure === true,
@@ -58,7 +66,12 @@ export function mergeAcpTurnFailureEvidence(
 
 /** Agents report their own refusals as errors too; only these causes make a failure the provider's. */
 export function acpProviderFailed(evidence: AcpTurnFailureEvidence): boolean {
-  return evidence.notSignedIn || evidence.usageLimited || evidence.providerFailure
+  return (
+    evidence.notSignedIn ||
+    evidence.modelNotSelected === true ||
+    evidence.usageLimited ||
+    evidence.providerFailure
+  )
 }
 
 /** Prefer provider error details over generic messages such as Internal error. */
@@ -88,12 +101,46 @@ export function acpAuthenticationRequired(dialect: AcpDialect, error: unknown): 
   )
 }
 
+/** What a failed prompt request says about its turn's ending. */
+export function acpPromptFailureEnding(
+  dialect: AcpDialect,
+  error: Error,
+  at: number
+): AcpTurnEnding {
+  const agentError = error instanceof AcpAgentError ? error : undefined
+  const failure = agentError ? dialect.promptFailure?.(agentError, at) : undefined
+  return {
+    ...failure,
+    stopReason: failure?.stopReason ?? 'error',
+    at,
+    failureDetail: agentError ? acpPromptErrorDetail(dialect, agentError) : undefined,
+    notSignedIn: acpAuthenticationRequired(dialect, error),
+    modelNotSelected: agentError ? dialect.modelCommand?.noModel(agentError) === true : false
+  }
+}
+
 export function acpSignInRequiredFailure(
   dialect: AcpDialect,
   error: AcpAgentError
 ): SubmissionRejectionFact {
   const detail = providerDiagnostic(acpPromptErrorDetail(dialect, error), 'person')
   return agentSessionFailureFact('notSignedIn', detail ? { detail } : {})
+}
+
+/** Why the agent refused a prompt, as the person is told; a missing model outranks its sign-in wording. */
+export function acpPromptRejection(
+  refusal: string,
+  signedOut: boolean,
+  noModel: SubmissionRejectionFact | undefined
+): SubmissionRejectionFact {
+  if (noModel) {
+    return noModel
+  }
+  const detail = providerDiagnostic(refusal, 'person')
+  return agentSessionFailureFact(
+    signedOut ? 'notSignedIn' : 'providerRejected',
+    detail ? { detail } : {}
+  )
 }
 
 /** Deduplicate failure rows by turn, accepting later reasons when earlier reports lacked one. */
@@ -150,6 +197,7 @@ export class AcpTurnFailures {
       written &&
       written.text === (diagnostic?.text ?? '') &&
       written.notSignedIn === authenticationRequired &&
+      written.modelNotSelected === evidence.modelNotSelected &&
       written.usageLimited === usageLimited &&
       written.usageLimit?.resetsAt === limit?.resetsAt &&
       written.usageLimit?.window === limit?.window
@@ -159,12 +207,14 @@ export class AcpTurnFailures {
     this.rows.set(turn, evidence)
     const failure = authenticationRequired
       ? agentSessionFailureFact('notSignedIn', { detail: diagnostic })
-      : usageLimited
-        ? agentSessionFailureFact('usageLimitReached', {
-            detail: diagnostic,
-            usageLimit: limit
-          })
-        : null
+      : evidence.modelNotSelected
+        ? agentSessionFailureFact('modelNotSelected')
+        : usageLimited
+          ? agentSessionFailureFact('usageLimitReached', {
+              detail: diagnostic,
+              usageLimit: limit
+            })
+          : null
     return [
       {
         type: 'item.update',

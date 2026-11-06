@@ -1160,7 +1160,9 @@
         "cb4d287238": "Servername",
         "3affe7de3a": "Eine Kopplungs-URL von einem Orca-Server einfügen, den dieser Browser erreichen kann.",
         "e3bcd082ac": "Mit Orca verbinden",
-        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen."
+        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen.",
+        "replaceSavedServer": "Dieser Link verbindet mit einem anderen Server als „{{name}}“ ({{endpoint}}). Verbinde dich nur, wenn du dem Endpunkt unten vertraust.",
+        "keepSavedServer": "Gespeicherten Server behalten"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Der Agenten-Sitzungsverlauf ist für diesen Ausführungshost nicht verfügbar.",
@@ -3034,7 +3036,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Review erforderlich",
         "7698af5263": "Eigene",
         "94f0339621": "Mir zugewiesen",
         "c2268a9982": "Alle",
@@ -15912,7 +15913,6 @@
                 "06e10d7356": "Emulator herunterfahren",
                 "e7a0d1897e": "Startbildschirm",
                 "6bd8dff42a": "Drehen",
-                "3d836b879c": "Emulator auswählen",
                 "81b3571a07": "Verbinden",
                 "868c0f2938": "In Bearbeitung…"
               }
@@ -20084,6 +20084,13 @@
         "hostUnavailable": "Der Host des Anhangs ist nicht verfügbar. Stelle die Verbindung erneut her und versuche es erneut.",
         "connectionChanged": "Die Verbindung hat sich geändert. Schließe diesen Anhang und öffne ihn erneut.",
         "readFailed": "Dieser Anhang konnte auf seinem Host nicht gelesen werden. Stelle die Verbindung erneut her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copyIdentity": "{{value0}} kopieren",
+        "folder": "Ordner",
+        "mainCheckout": "Haupt-Checkout",
+        "worktree": "Worktree"
       }
     },
     "tab": {

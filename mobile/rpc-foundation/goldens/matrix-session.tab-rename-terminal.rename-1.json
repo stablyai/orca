@@ -118,6 +118,16 @@
         }
       }
     },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
     "330257f904ce": {
       "name": "terminal.rename#1",
       "ordinal": 1,
@@ -336,6 +346,36 @@
         }
       }
     },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
     "cc17876206bc": {
       "name": "terminal.rename#1",
       "ordinal": 1,
@@ -410,6 +450,16 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
       }
     },
     "f534030ca3f7": {
@@ -527,7 +577,7 @@
           "sender": ["638bebed5ea5"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "32a7c0ae7918"
           },
           "state": "3e15def58214",
           "effects": []
@@ -539,7 +589,7 @@
           "sender": ["cc17876206bc"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "f3b516f62081"
           },
           "state": "3e15def58214",
           "effects": []
@@ -551,7 +601,7 @@
           "sender": ["5edef2bfcf88"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "b948e8307e81"
           },
           "state": "3e15def58214",
           "effects": []
@@ -563,7 +613,7 @@
           "sender": ["f534030ca3f7"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "a947768bc0ed"
           },
           "state": "3e15def58214",
           "effects": []
@@ -575,7 +625,7 @@
           "sender": ["a40fd2ac2d57"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "c7584e82c72f"
           },
           "state": "3e15def58214",
           "effects": []

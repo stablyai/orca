@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
 import { dropDerivedDeliverySchema } from './derived-delivery-test-fixture'
-import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
+import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { createRootDispatch, reattachDispatchConsumer } from '../root-dispatch-test-fixture'
 import { SCHEMA_VERSION } from '../contract-constants'
 

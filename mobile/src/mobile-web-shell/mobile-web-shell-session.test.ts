@@ -186,6 +186,19 @@ describe('recovery follows the shell view contract', () => {
       retriedOnce: false
     })
   })
+
+  it('remounts again when the render process goes after the remounted page painted', () => {
+    const recovered = run(
+      readySession().session,
+      { type: 'shell-failed', reason: 'render-process-gone' },
+      { type: 'remounted', sessionId: 'session-two' },
+      { type: 'page-ready' },
+      { type: 'page-painted' }
+    )
+    const second = run(recovered.session, { type: 'shell-failed', reason: 'render-process-gone' })
+    expect(second.effects).toEqual([{ kind: 'remount' }])
+    expect(second.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-two' })
+  })
 })
 
 describe('try again', () => {
@@ -303,7 +316,7 @@ describe('a result from a superseded flow reports into nothing', () => {
   })
 })
 
-describe('the remount budget is one per session, not one per reconnect', () => {
+describe('a reconnect does not refill the remount budget', () => {
   it('keeps the latch set when the gates restart the flow after a load failure', () => {
     const remounted = run(
       readySession().session,
