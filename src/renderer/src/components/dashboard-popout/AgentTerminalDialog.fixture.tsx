@@ -58,6 +58,27 @@ export const nativeChat = defineFixture({
     owner.getSnapshot = () => snapshot
     owner.activate = () => () => {}
   },
+  interact: (frame) =>
+    new Promise<void>((resolve, reject) => {
+      const ready = (): boolean =>
+        frame.textContent?.includes('The regression checks passed.') === true
+      if (ready()) {
+        resolve()
+        return
+      }
+      const timeout = setTimeout(() => {
+        observer.disconnect()
+        reject(new Error('Chat preview did not finish loading'))
+      }, 10_000)
+      const observer = new MutationObserver(() => {
+        if (ready()) {
+          clearTimeout(timeout)
+          observer.disconnect()
+          resolve()
+        }
+      })
+      observer.observe(frame, { childList: true, subtree: true })
+    }),
   render: () => (
     <div className="flex h-96 flex-col bg-background">
       <AgentTerminalPanel
