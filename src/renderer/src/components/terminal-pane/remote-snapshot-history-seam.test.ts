@@ -20,7 +20,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal/stream/terminal-stream-protocol'
-import { writeHeadlessTerminal } from './pty-connection-test-async'
+import { writeHeadlessTerminal } from './pty-connection/test-fixtures/pty-connection-test-async'
 import { buildFoldedImageReplayWrites } from './snapshots/terminal-snapshot-replay-paint'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
