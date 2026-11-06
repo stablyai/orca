@@ -16,7 +16,7 @@ import {
   type HistoryReader
 } from '../agent-session-wire/agent-session-history-page-bounds'
 import { CLIENT_HISTORY_READER } from '../agent-session-wire/agent-session-item-wire-form'
-import { currentJournalSqlGeneration, JournalProjectionStaleError } from './journal-sql-meta'
+import { currentJournalSqlEpoch, JournalProjectionStaleError } from './journal-sql-meta'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import { JournalSqlHistoryValues } from './journal-sql-history-values'
@@ -39,11 +39,11 @@ export function readJournalSqlHistoryPage(
 ): AgentSessionHistoryResult {
   db.exec('BEGIN')
   try {
-    const generation = currentJournalSqlGeneration(db, request.sessionId)
-    if (generation === null) {
+    const epoch = currentJournalSqlEpoch(db, request.sessionId)
+    if (epoch === null) {
       throw new JournalProjectionStaleError('chat needs conversion before reading history')
     }
-    const page = new HistoryPage(db, request.sessionId, generation, reader, work).read(request)
+    const page = new HistoryPage(db, request.sessionId, epoch, reader, work).read(request)
     db.exec('COMMIT')
     return page
   } catch (error) {

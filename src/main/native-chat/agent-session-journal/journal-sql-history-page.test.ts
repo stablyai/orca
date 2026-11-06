@@ -12,6 +12,7 @@ import {
 import { measureHistoryItem } from '../agent-session-wire/agent-session-history-page-bounds'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { convertJournalSqlProjection } from './journal-sql-conversion'
+import { JournalProjectionStaleError } from './journal-sql-meta'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
@@ -207,4 +208,13 @@ it.each([
       readAgentSessionHistory(fixture.journal, before, { snapshot })
     )
   }
+})
+
+it('answers that a chat is converting instead of serving its partly written rows', async () => {
+  await appendItems(3)
+  const db = convert()
+  db.prepare(`UPDATE journal_proj_meta SET state='converting'`).run()
+  expect(() =>
+    readJournalSqlHistoryPage(db, { sessionId: 'session-1', direction: 'tail' })
+  ).toThrow(JournalProjectionStaleError)
 })

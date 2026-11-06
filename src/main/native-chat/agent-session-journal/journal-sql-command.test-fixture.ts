@@ -4,7 +4,7 @@ import {
   createJournalTablesSql
 } from './journal-database-schema'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
-import { publishJournalSqlGeneration } from './journal-sql-meta'
+import { beginJournalSqlConversion, markJournalSqlReady } from './journal-sql-meta'
 import { publishJournalSessionEpoch } from './journal-row-table'
 import {
   advanceJournalOutcomeSource,
@@ -30,7 +30,7 @@ export function seedJournalSqlCommands(db: Database.Database) {
   publishJournalSessionEpoch(db, { sessionId: 'session', workspaceId: 'workspace' }, 'epoch')
   const source = startJournalOutcomeLog(db, 'session', 'epoch', 0, 100)
   const initial = journalSqlLifecycleRows()[0]!
-  const scope = new JournalSqlScope(db, 'session', 'projection')
+  const scope = new JournalSqlScope(db, 'session', 'epoch')
   persistJournalOutcomeTransition(
     db,
     new JournalSqlReducer(scope, 'epoch').transition(),
@@ -41,6 +41,8 @@ export function seedJournalSqlCommands(db: Database.Database) {
     (state) => journalInputOrder(state).cards.ensure(state)
   )
   advanceJournalOutcomeSource(db, 'session', 'epoch', 1)
-  publishJournalSqlGeneration(db, 'session', 'projection', 'open-token')
+  beginJournalSqlConversion(db, 'session')
+  markJournalSqlReady(db, 'session')
+  db.prepare(`UPDATE journal_proj_meta SET owner_token='open-token'`).run()
   return { source, initial }
 }

@@ -69,8 +69,8 @@ it('opens a converted chat from its projection and settles live work the last ho
   expect(db.prepare('SELECT owner_token FROM journal_proj_meta').get()?.owner_token).toBe(
     'next-handle'
   )
-  const items = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch')
-    .state.items
+  const items = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').state
+    .items
   const settled = items.get(agentJournalItemKey(roster))
   expect(settled?.recovered).toBe(true)
   expect(settled?.body).toMatchObject({

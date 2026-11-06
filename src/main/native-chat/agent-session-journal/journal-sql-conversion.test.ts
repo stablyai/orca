@@ -13,7 +13,7 @@ import { restoreJournal } from './journal-open'
 import { memoryJournalMap } from './journal-memory-collections'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
-import { currentJournalSqlGeneration } from './journal-sql-meta'
+import { currentJournalSqlEpoch } from './journal-sql-meta'
 import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
@@ -40,12 +40,12 @@ it.each([
     publishJournalOutcomeEpoch(db, 'session', 'epoch', rows).adopt()
   })
   const { db } = database
-  const generation = database.transaction((tx) => convertJournalSqlProjection(tx, 'session'))
+  const epoch = database.transaction((tx) => convertJournalSqlProjection(tx, 'session'))
 
-  expect(generation).not.toBeNull()
-  expect(currentJournalSqlGeneration(db, 'session')).toBe(generation)
+  expect(epoch).toBe('epoch')
+  expect(currentJournalSqlEpoch(db, 'session')).toBe('epoch')
   const restored = restoreJournal(db, 'session')!.state
-  const converted = new JournalSqlReducer(new JournalSqlScope(db, 'session', generation!), 'epoch')
+  const converted = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch')
     .state
   expect(journalSqlControlSnapshot(converted)).toEqual(journalSqlControlSnapshot(restored))
   for (const [key, item] of memoryJournalMap(restored.items)) {
@@ -54,12 +54,12 @@ it.each([
   const pointed = db
     .prepare(`SELECT COUNT(*) AS count FROM journal_proj_item_versions
     WHERE generation=? AND outcome_seq IS NOT NULL AND inline_json IS NULL`)
-    .get(generation)?.count
+    .get('epoch')?.count
   expect(pointed).toBeGreaterThan(0)
 })
 
 it('leaves a chat with no saved history for its first open to found', () => {
   database.transaction((db) => publishTestJournalEpoch(db, 'session', 'epoch'))
   expect(database.transaction((tx) => convertJournalSqlProjection(tx, 'session'))).toBeNull()
-  expect(currentJournalSqlGeneration(database.db, 'session')).toBeNull()
+  expect(currentJournalSqlEpoch(database.db, 'session')).toBeNull()
 })

@@ -11,7 +11,7 @@ export function journalSqlMetaSchema(): string {
   return `CREATE TABLE IF NOT EXISTS journal_proj_meta (
     session_id TEXT PRIMARY KEY,
     epoch TEXT NOT NULL,
-    generation TEXT NOT NULL,
+    state TEXT NOT NULL,
     through_seq INTEGER NOT NULL,
     owner_token TEXT NOT NULL,
     schema_version INTEGER NOT NULL,
@@ -66,14 +66,12 @@ function legacyQueueMarker(db: Database.Database, sessionId: string): string {
   return rows.length === 0 ? '' : createHash('sha256').update(JSON.stringify(rows)).digest('hex')
 }
 
-/** The ready generation whose recorded coverage equals the log's, or null when it must convert. */
-export function currentJournalSqlGeneration(
-  db: Database.Database,
-  sessionId: string
-): string | null {
+/** Projection rows are scoped by the log's own physical epoch; the scope of a ready projection
+ *  whose recorded coverage equals the log's, or null when the chat must convert first. */
+export function currentJournalSqlEpoch(db: Database.Database, sessionId: string): string | null {
   const log = readJournalLogWatermark(db, sessionId)
   const meta = db.prepare('SELECT * FROM journal_proj_meta WHERE session_id=?').get(sessionId)
-  if (!log || !meta || typeof meta.generation !== 'string') {
+  if (!log || meta?.state !== 'ready') {
     return null
   }
   const current =
@@ -83,7 +81,7 @@ export function currentJournalSqlGeneration(
     meta.through_seq === log.through &&
     meta.rows_through === log.rowsThrough &&
     meta.legacy_queue === log.legacyQueue
-  return current ? meta.generation : null
+  return current ? log.epoch : null
 }
 
 /** Every log-writing transaction records the whole watermark before it commits. */
@@ -104,18 +102,17 @@ export function recordJournalSqlWatermark(db: Database.Database, sessionId: stri
   )
 }
 
-/** Publishes a generation that covers the log as it stands in this transaction. */
-export function publishJournalSqlGeneration(
-  db: Database.Database,
-  sessionId: string,
-  generation: string,
-  ownerToken: string
-): void {
-  db.prepare(`INSERT INTO journal_proj_meta (session_id, epoch, generation, through_seq,
+/** Readers and opens refuse the chat until its conversion marks it ready again. */
+export function beginJournalSqlConversion(db: Database.Database, sessionId: string): void {
+  db.prepare(`INSERT INTO journal_proj_meta (session_id, epoch, state, through_seq,
     owner_token, schema_version, outcome_generation, rows_through, legacy_queue)
-    VALUES (?, '', ?, 0, ?, 0, NULL, 0, '')
-    ON CONFLICT(session_id) DO UPDATE SET generation=excluded.generation,
-    owner_token=excluded.owner_token`).run(sessionId, generation, ownerToken)
+    VALUES (?, '', 'converting', 0, '', 0, NULL, 0, '')
+    ON CONFLICT(session_id) DO UPDATE SET state='converting', owner_token=''`).run(sessionId)
+}
+
+/** Publishes the projection as covering the log as it stands in this transaction. */
+export function markJournalSqlReady(db: Database.Database, sessionId: string): void {
+  db.prepare(`UPDATE journal_proj_meta SET state='ready' WHERE session_id=?`).run(sessionId)
   recordJournalSqlWatermark(db, sessionId)
 }
 
@@ -126,9 +123,9 @@ export class JournalProjectionStaleError extends Error {
 
 /** An open takes the current generation for its handle; any other open's commands then refuse. */
 export function claimJournalSqlProjection(db: Database.Database, target: JournalWriterTarget) {
-  const generation = currentJournalSqlGeneration(db, target.sessionId)
+  const epoch = currentJournalSqlEpoch(db, target.sessionId)
   const changed =
-    generation === null
+    epoch !== target.epoch
       ? 0
       : db
           .prepare('UPDATE journal_proj_meta SET owner_token=? WHERE session_id=? AND epoch=?')
@@ -141,15 +138,15 @@ export function claimJournalSqlProjection(db: Database.Database, target: Journal
 /** Ownership and epoch are checked again within every command's transaction. */
 export function readJournalSqlMeta(db: Database.Database, target: JournalWriterTarget) {
   const row = db
-    .prepare(`SELECT p.generation, p.through_seq FROM journal_proj_meta p
+    .prepare(`SELECT p.epoch, p.through_seq FROM journal_proj_meta p
     JOIN journal_sessions s ON s.session_id=p.session_id AND s.epoch=p.epoch
-    WHERE p.session_id=? AND p.epoch=? AND p.owner_token=?`)
+    WHERE p.session_id=? AND p.epoch=? AND p.owner_token=? AND p.state='ready'`)
     .get(target.sessionId, target.epoch, target.ownerToken)
-  if (typeof row?.generation !== 'string' || typeof row.through_seq !== 'number') {
+  if (typeof row?.epoch !== 'string' || typeof row.through_seq !== 'number') {
     throw new AgentSessionJournalError(
       'journal_closed',
       'the chat projection is no longer owned by this handle'
     )
   }
-  return { generation: row.generation, through: row.through_seq }
+  return { scope: row.epoch, through: row.through_seq }
 }

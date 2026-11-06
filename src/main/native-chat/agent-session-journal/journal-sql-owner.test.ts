@@ -100,8 +100,7 @@ it('runs real source-worker commands in order, preserves typed receipt failures 
   await expect(owner.write(write('closed'))).rejects.toThrow('closing')
   const db = new Database(filename, { readonly: true })
   try {
-    const state = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch')
-      .state
+    const state = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').state
     expect(state.lastSequence).toBe(3)
     expect(state.items.get('orca:message')?.body).toEqual({ kind: 'status', text: 'last' })
   } finally {

@@ -54,7 +54,7 @@ it('assigns revisions after preceding successes and rolls back failed command pr
   // A logical context boundary retains the physical epoch for ownership and log lookup.
   persistJournalOutcomeTransition(
     db,
-    new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch').transition(),
+    new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').transition(),
     source,
     [{ ...initial, seq: 2 }],
     100,
@@ -100,7 +100,7 @@ it('assigns revisions after preceding successes and rolls back failed command pr
     [{ itemId, deleted: false, revision: 1, sequence: 3, sequenceIndex: 0 }],
     [{ itemId, deleted: false, revision: 2, sequence: 3, sequenceIndex: 0 }]
   ])
-  const loaded = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch')
+  const loaded = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch')
   expect(loaded.state.items.get(itemId)?.body).toEqual({
     kind: 'message',
     role: 'assistant',

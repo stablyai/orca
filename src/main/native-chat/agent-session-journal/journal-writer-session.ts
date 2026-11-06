@@ -170,7 +170,7 @@ export class JournalWriterSession {
 
   private scope(): JournalSqlScope {
     const meta = readJournalSqlMeta(this.db, this.target)
-    return new JournalSqlScope(this.db, this.target.sessionId, meta.generation)
+    return new JournalSqlScope(this.db, this.target.sessionId, meta.scope)
   }
 
   /** A reducer shell lives for one write: decoded values never outlive the rows they were read from. */
@@ -192,7 +192,7 @@ export class JournalWriterSession {
     if (through !== meta.through) {
       throw new Error('journal projection no longer covers the saved chat')
     }
-    const scope = new JournalSqlScope(db, target.sessionId, meta.generation)
+    const scope = new JournalSqlScope(db, target.sessionId, meta.scope)
     const reducer = new JournalSqlReducer(scope, target.epoch, (id) =>
       journalInputAcceptance(db, target.sessionId, id)
     )
