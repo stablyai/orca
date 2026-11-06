@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import { GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { isRuntimeEnvironmentPairingChangedError } from '@/runtime/runtime-environment-pairing-refresh'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { useTaskPageGitLabLoading } from './use-task-page-gitlab-loading'
 
@@ -76,6 +78,7 @@ function serverRepos(count: number): Repo[] {
 }
 
 beforeEach(() => {
+  replaceRuntimeEnvironmentRevisions([{ id: 'build-box', createdAt: 1 }])
   clearRuntimeCompatibilityCacheForTests()
   environmentCall.mockReset()
   Object.assign(window, { api: { runtimeEnvironments: { call: environmentCall } } })
@@ -119,7 +122,7 @@ describe('GitLab MR filter capability checks', () => {
     const { rerender, settled, setGitlabError } = renderMineOnServer(serverRepos(2))
 
     await settled()
-    expect(setGitlabError).toHaveBeenLastCalledWith(expect.not.stringContaining('newer Orca'))
+    expect(setGitlabError).toHaveBeenLastCalledWith(expect.stringContaining('Connection lost'))
     expect(callsTo('gitlab.listMRs')).toHaveLength(0)
 
     statusFails = false
@@ -132,5 +135,20 @@ describe('GitLab MR filter capability checks', () => {
         expectedEnvironmentRuntimeId: 'runtime-1'
       })
     }
+  })
+
+  it('ignores an unsupported answer from a pairing replaced while it was checked', async () => {
+    environmentCall.mockImplementation(async (request: { method: string }) => {
+      if (request.method === 'status.get') {
+        replaceRuntimeEnvironmentRevisions([{ id: 'build-box', createdAt: 2 }])
+        return statusResponse(false)
+      }
+      return { id: 'list', ok: true, result: { items: [] } }
+    })
+    const { settled, setGitlabError } = renderMineOnServer(serverRepos(1))
+
+    await settled()
+    expect(isRuntimeEnvironmentPairingChangedError(setGitlabError.mock.lastCall?.[0])).toBe(true)
+    expect(callsTo('gitlab.listMRs')).toHaveLength(0)
   })
 })

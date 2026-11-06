@@ -314,6 +314,14 @@ describe('gitlab client — MR operations', () => {
         'permission_denied'
       ],
       [
+        'a network failure on a host whose port contains 401',
+        () =>
+          Promise.reject(
+            new Error('Get "https://gitlab.corp:4010/api/v4/user": dial tcp: connection refused')
+          ),
+        'unknown'
+      ],
+      [
         'a lookup without a user id',
         () => Promise.resolve({ stdout: '{"message":"ok"}' }),
         'unknown'

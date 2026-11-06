@@ -7,7 +7,12 @@ import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
+import {
+  captureRuntimeEnvironmentRequestRevision,
+  getRuntimeEnvironmentRevision,
+  resolveContinuedRuntimeEnvironmentRevision
+} from './runtime-environment-revision'
+import { runtimeEnvironmentPairingChangedError } from './runtime-environment-pairing-refresh'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   clearRuntimeCompatibilityCache,
@@ -221,12 +226,20 @@ export async function runtimeEnvironmentCapabilityProof(
   capability: RuntimeCapability,
   timeoutMs?: number
 ): Promise<RuntimeCapabilityProof> {
-  const pairingRevision = captureRuntimeEnvironmentRequestRevision(environmentId.trim())
+  const trimmed = environmentId.trim()
+  const pairingRevision = captureRuntimeEnvironmentRequestRevision(trimmed)
   const { supported, status } = await resolveRuntimeEnvironmentCapabilities(
-    environmentId,
+    trimmed,
     [capability],
     timeoutMs
   )
+  // A re-pair while the status was in flight voids its answer, negative included.
+  if (
+    resolveContinuedRuntimeEnvironmentRevision(trimmed, pairingRevision) !==
+    getRuntimeEnvironmentRevision(trimmed)
+  ) {
+    throw runtimeEnvironmentPairingChangedError()
+  }
   return { supported: supported[0], runtimeId: status.runtimeId, pairingRevision }
 }
 

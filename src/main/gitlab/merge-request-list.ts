@@ -32,10 +32,13 @@ const SIGN_IN_REQUIRED_MESSAGE =
 
 class GitLabSignInRequiredError extends Error {}
 
+// A bare "401" would also match a port or host in the request URL of a network failure.
+const SIGNED_OUT_LOOKUP_FAILURE =
+  /\b401 unauthorized\b|http 401\b|not logged|not authenticated|no token/
+
 function isSignedOutLookupFailure(err: unknown): boolean {
-  const lower = (err instanceof Error ? err.message : String(err)).toLowerCase()
-  return ['401', 'unauthorized', 'not logged', 'not authenticated', 'no token'].some((marker) =>
-    lower.includes(marker)
+  return SIGNED_OUT_LOOKUP_FAILURE.test(
+    (err instanceof Error ? err.message : String(err)).toLowerCase()
   )
 }
 
