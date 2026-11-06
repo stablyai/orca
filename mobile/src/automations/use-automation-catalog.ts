@@ -10,6 +10,7 @@ import { AppState } from 'react-native'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { hostStatusProbe } from '../transport/host-status-probe-operations'
+import { readHostStatusReply } from '../query/host-status-query'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
 import { subscribeSharedClientEvents } from '../transport/shared-client-events'
 import { automationListRead } from './automation-operations'
@@ -115,9 +116,7 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
         try {
           const listRequest = automationListRead.request(client, {}, { signal: controller.signal })
           requests.push(listRequest)
-          const statusRequest = hostStatusProbe.request(client, undefined, {
-            signal: controller.signal
-          })
+          const statusRequest = readHostStatusReply(client, { signal: controller.signal })
           requests.push(statusRequest)
           const [parsed, host] = await Promise.all([
             listRequest.then(automationListRead.interpret),
