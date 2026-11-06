@@ -48,7 +48,7 @@ export function MobileSessionAccessoryKeys({
     prepareAccessoryPress,
     handlePaste
   } = controller
-  const { keyboardLift } = useMobileSessionKeyboardLift(controller)
+  const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const accessoryPresses = useRef(new Map<string, ReturnType<typeof prepareAccessoryPress>>())
   const keepsKeyboard = useKeyboardPersistingTaps('always')
   // An unmounting Pressable never fires onPressOut, so a held key would outlive its row.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 export type ShellKeyboardSource = {
   read: () => number
@@ -66,16 +66,11 @@ export function currentSoftKeyboardHeight(): number {
   return viewport === undefined ? 0 : occlusion(viewport)
 }
 
+function subscribeKeyboardHeight(onChange: () => void): () => void {
+  return subscribeSoftKeyboard(onChange, onChange)
+}
+
+// Read on first render too, so a view that mounts under an open keyboard paints in place.
 export function useKeyboardOcclusion(): number {
-  const [keyboardLift, setKeyboardLift] = useState(0)
-
-  useEffect(() => {
-    setKeyboardLift(currentSoftKeyboardHeight())
-    return subscribeSoftKeyboard(
-      (height) => setKeyboardLift(height),
-      () => setKeyboardLift(0)
-    )
-  }, [])
-
-  return keyboardLift
+  return useSyncExternalStore(subscribeKeyboardHeight, currentSoftKeyboardHeight)
 }

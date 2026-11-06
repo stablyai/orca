@@ -16,13 +16,13 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
-import { useLiveInputCaptureText } from './use-mobile-session-screen-state'
+import { useLiveInputCaptureText } from './live-input-capture'
 
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const rail = useSessionTerminalKeyRail(controller)
-  const { keyboardLift } = useMobileSessionKeyboardLift(controller)
+  const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const {
     insets,
     dictationMode,

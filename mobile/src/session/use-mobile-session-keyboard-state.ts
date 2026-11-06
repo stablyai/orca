@@ -89,7 +89,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     subscribeToTerminal
   })
 
-  // Use the keyboard seam because web Keyboard emits nothing; visibility goes out in the event, before the lift renders, so refits defer while it opens.
+  // Use the keyboard seam because web Keyboard emits nothing; visibility goes out with the event, before the lift renders, so refits defer while it opens.
   useEffect(() => {
     notifyKeyboardVisibility(currentSoftKeyboardHeight() > 0)
     return subscribeSoftKeyboard(

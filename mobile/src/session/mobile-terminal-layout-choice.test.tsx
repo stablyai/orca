@@ -54,8 +54,7 @@ vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))
 const keyboard = vi.hoisted(() => ({ lift: 0 }))
 vi.mock('./use-mobile-session-keyboard-lift', () => ({
-  useMobileSessionKeyboardLift: () => ({
-    keyboardHeight: keyboard.lift,
+  useMobileSessionContentKeyboardLift: () => ({
     keyboardLift: keyboard.lift,
     activeTerminalKeyboardLift: 0,
     toastAnimatedStyle: {}

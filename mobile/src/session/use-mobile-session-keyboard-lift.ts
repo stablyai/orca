@@ -1,26 +1,23 @@
-import { useSyncExternalStore } from 'react'
-import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { hostOs } from '../platform/host-os'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
-function subscribeKeyboardHeight(onChange: () => void): () => void {
-  return subscribeSoftKeyboard(onChange, onChange)
+// Read where the layout moves, so a keyboard change re-renders those views and not the whole session.
+// Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
+export function useMobileSessionKeyboardLift(dockBottomInset: number): number {
+  const keyboardHeight = useKeyboardOcclusion()
+  if (keyboardHeight <= 0) {
+    return 0
+  }
+  // Subtract only the space actually reserved below the input dock.
+  return hostOs() === 'ios' ? Math.max(0, keyboardHeight - dockBottomInset) : keyboardHeight
 }
 
-// Read where the layout moves, so a keyboard change re-renders those views and not the whole session.
-export function useMobileSessionKeyboardLift(controller: MobileSessionController) {
-  const { activeHandle, dockBottomInset, terminalKeyboardMetrics, toastOpacityRef, toastRise } =
-    controller
-  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
-  const keyboardHeight = useSyncExternalStore(subscribeKeyboardHeight, currentSoftKeyboardHeight)
-  // Subtract only the space actually reserved below the input dock.
-  const keyboardLift =
-    keyboardHeight > 0
-      ? hostOs() === 'ios'
-        ? Math.max(0, keyboardHeight - dockBottomInset)
-        : keyboardHeight
-      : 0
+// The content row also lifts the active terminal by what the keyboard hides and the toast above the dock.
+export function useMobileSessionContentKeyboardLift(controller: MobileSessionController) {
+  const { activeHandle, terminalKeyboardMetrics, toastOpacityRef, toastRise } = controller
+  const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
     keyboardLift,
     metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
@@ -35,5 +32,5 @@ export function useMobileSessionKeyboardLift(controller: MobileSessionController
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }, { translateY: toastRise }]
   }
-  return { keyboardHeight, keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle }
+  return { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle }
 }
