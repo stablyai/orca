@@ -14,6 +14,7 @@ import {
   installTerminalLinkifierHoverResetOnWindowBlur
 } from './terminal-linkifier-hover-reset-on-mouseleave'
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
+import { installTerminalLinkifierHoverResetOnTooltipDisabled } from './terminal-linkifier-hover-reset-on-tooltip-disabled'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachDomBlockFill } from './terminal-dom-block-fill'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
@@ -74,6 +75,8 @@ export function openTerminal(
     terminal,
     linkTooltip
   )
+  pane.linkifierTooltipDisabledResetDisposable =
+    installTerminalLinkifierHoverResetOnTooltipDisabled(terminal, linkTooltip)
 
   // Activate Unicode v11 before every restore/write path: xterm bakes widths into cells, and default v6 mismeasures CJK/emoji/ZWJ into broken glyphs.
   activateOrcaTerminalUnicodeProvider(terminal)
@@ -186,6 +189,8 @@ export function disposePane(
   pane.linkifierMouseLeaveResetDisposable = null
   pane.linkifierWindowBlurResetDisposable?.dispose()
   pane.linkifierWindowBlurResetDisposable = null
+  pane.linkifierTooltipDisabledResetDisposable?.dispose()
+  pane.linkifierTooltipDisabledResetDisposable = null
   // Deregister the RTL shaping joiner: terminal.dispose() below does not.
   try {
     pane.arabicShapingJoinerCleanup?.()

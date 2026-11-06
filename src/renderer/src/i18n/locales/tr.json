@@ -20442,7 +20442,9 @@
         "copyTrimsGutterDescription": "Ajan çıktısının arkasına çizildiği sol kenar boşluğunu kaldırır, böylece kopyalanan metin girintili olmaz. Yalnızca seçilen tüm satırların paylaştığı girinti kaldırılır.",
         "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın.",
         "scrollOnUserInput": "Girişte en alta kaydır",
-        "scrollOnUserInputDescription": "Yukarı kaydırılmışken yazmak veya yapıştırmak en son çıktıya götürür. Konumunuzu korumak için kapatın."
+        "scrollOnUserInputDescription": "Yukarı kaydırılmışken yazmak veya yapıştırmak en son çıktıya götürür. Konumunuzu korumak için kapatın.",
+        "linkTooltip": "Bağlantı Hedefi Önizlemesi",
+        "linkTooltipDescription": "Algılanan bağlantıların ve yolların üzerine gelindiğinde bölmenin alt kısmında bağlantı hedefi çubuğunu gösterir."
       },
       "terminal": {
         "clipboard": {
@@ -20465,7 +20467,13 @@
           "bottom": "alt",
           "scrollback": "kaydırma geçmişi",
           "snap": "hizala",
-          "position": "konum"
+          "position": "konum",
+          "link": "bağlantı",
+          "tooltip": "ipucu",
+          "preview": "önizleme",
+          "url": "url",
+          "bar": "çubuk",
+          "terminalLink": "terminal bağlantısı"
         }
       },
       "nativeChat": {

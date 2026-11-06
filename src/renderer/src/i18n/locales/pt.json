@@ -21420,7 +21420,9 @@
         "copyTrimsGutterDescription": "Remove a margem esquerda onde a saída do agente é desenhada por trás, para que o texto copiado não fique indentado. Apenas a indentação compartilhada por todas as linhas selecionadas é removida.",
         "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência.",
         "scrollOnUserInput": "Rolar para o final ao digitar",
-        "scrollOnUserInputDescription": "Digitar ou colar com o painel rolado para cima leva à saída mais recente. Desative para manter sua posição."
+        "scrollOnUserInputDescription": "Digitar ou colar com o painel rolado para cima leva à saída mais recente. Desative para manter sua posição.",
+        "linkTooltip": "Pré-visualização do destino do link",
+        "linkTooltipDescription": "Mostra a barra com o destino do link na parte inferior do painel ao passar o cursor sobre links e caminhos detectados."
       },
       "terminal": {
         "clipboard": {
@@ -21443,7 +21445,13 @@
           "bottom": "final",
           "scrollback": "histórico",
           "snap": "encaixar",
-          "position": "posição"
+          "position": "posição",
+          "link": "link",
+          "tooltip": "tooltip",
+          "preview": "pré-visualização",
+          "url": "url",
+          "bar": "barra",
+          "terminalLink": "link do terminal"
         }
       },
       "nativeChat": {

@@ -13,6 +13,7 @@ import {
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
+import { isTerminalLinkTooltipEnabled } from './terminal-link-tooltip-visibility'
 import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
@@ -190,7 +191,15 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         pane.terminal.clearSelection()
       }
     },
+    /**
+     * Shows the bottom link-target bar while hovering an OSC 8 hyperlink.
+     * Gated by the Link Target Preview setting so the bar can be hidden without giving up
+     * clickable links; leave() still hides it when the pointer moves off.
+     */
     hover: (_event, text) => {
+      if (!isTerminalLinkTooltipEnabled()) {
+        return
+      }
       oscTooltipHoverToken += 1
       const hoverToken = oscTooltipHoverToken
       const hint = getUrlOpenLinkHint(pane.id)

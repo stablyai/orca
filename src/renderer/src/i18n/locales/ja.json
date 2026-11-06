@@ -19754,7 +19754,9 @@
         "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。",
         "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。",
         "scrollOnUserInput": "入力時に一番下へスクロール",
-        "scrollOnUserInputDescription": "上にスクロール中に入力または貼り付けを行うと、最新の出力に移動します。オフにすると現在の位置を維持します。"
+        "scrollOnUserInputDescription": "上にスクロール中に入力または貼り付けを行うと、最新の出力に移動します。オフにすると現在の位置を維持します。",
+        "linkTooltip": "リンク先プレビュー",
+        "linkTooltipDescription": "検出されたリンクやパスにカーソルを合わせると、ペインの下部にリンク先のバーを表示します。"
       },
       "terminal": {
         "clipboard": {
@@ -19777,7 +19779,13 @@
           "bottom": "一番下",
           "scrollback": "スクロールバック",
           "snap": "スナップ",
-          "position": "位置"
+          "position": "位置",
+          "link": "リンク",
+          "tooltip": "ツールチップ",
+          "preview": "プレビュー",
+          "url": "url",
+          "bar": "バー",
+          "terminalLink": "ターミナルリンク"
         }
       },
       "nativeChat": {

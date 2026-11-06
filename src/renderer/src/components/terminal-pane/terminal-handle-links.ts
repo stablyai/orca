@@ -1,6 +1,7 @@
 import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 
 import { type AppState, useAppStore } from '@/store'
+import { isTerminalLinkTooltipEnabled } from './terminal-link-tooltip-visibility'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -232,7 +233,15 @@ export function createTerminalHandleLinkProvider(
                 terminal.clearSelection()
               }
             },
+            /**
+             * Shows the bottom link-target bar while hovering a detected terminal handle.
+             * Gated by the Link Target Preview setting so the bar can be hidden without giving
+             * up clickable handles; leave() still hides it when the pointer moves off.
+             */
             hover: () => {
+              if (!isTerminalLinkTooltipEnabled()) {
+                return
+              }
               const showActions = deps.getLinkActionContext
                 ? deps.getLinkActionContext() !== null
                 : true

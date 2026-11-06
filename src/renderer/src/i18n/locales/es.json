@@ -20290,7 +20290,9 @@
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
         "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat.",
         "scrollOnUserInput": "Desplazar al final al escribir",
-        "scrollOnUserInputDescription": "Escribir o pegar con el panel desplazado hacia arriba salta a la salida más reciente. Desactívalo para mantener tu posición."
+        "scrollOnUserInputDescription": "Escribir o pegar con el panel desplazado hacia arriba salta a la salida más reciente. Desactívalo para mantener tu posición.",
+        "linkTooltip": "Vista previa del destino del enlace",
+        "linkTooltipDescription": "Muestra la barra con el destino del enlace en la parte inferior del panel al pasar el cursor sobre enlaces y rutas detectadas."
       },
       "terminal": {
         "clipboard": {
@@ -20313,7 +20315,13 @@
           "bottom": "final",
           "scrollback": "historial",
           "snap": "ajustar",
-          "position": "posición"
+          "position": "posición",
+          "link": "enlace",
+          "tooltip": "tooltip",
+          "preview": "vista previa",
+          "url": "url",
+          "bar": "barra",
+          "terminalLink": "enlace del terminal"
         }
       }
     },

@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal, type ILink, type ITerminalOptions } from '@xterm/xterm'
 
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { isTerminalLinkTooltipEnabled } from '../../components/terminal-pane/terminal-link-tooltip-visibility'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
@@ -77,8 +78,13 @@ export function createPaneDOM(
 
   const linkHandlers = {
     activate: (event, uri) => options.onLinkClick?.(id, event, uri),
+    /**
+     * Shows the Ghostty-style bottom link-target bar while hovering a detected HTTP link.
+     * Gated by the Link Target Preview setting so the bar can be hidden without giving up
+     * clickable links; leave() still hides it when the pointer moves off or the setting flips.
+     */
     hover: (_event, uri) => {
-      if (uri) {
+      if (uri && isTerminalLinkTooltipEnabled()) {
         linkTooltipHoverToken += 1
         const hoverToken = linkTooltipHoverToken
         const openLinkHint = options.linkOpenHint(id)

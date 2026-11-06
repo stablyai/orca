@@ -21083,7 +21083,9 @@
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
         "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
         "scrollOnUserInput": "Scroll to Bottom on Input",
-        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
+        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.",
+        "linkTooltip": "Link Target Preview",
+        "linkTooltipDescription": "Show the link target bar at the bottom of the pane while hovering detected links and paths."
       },
       "terminal": {
         "clipboard": {
@@ -21106,7 +21108,13 @@
           "bottom": "bottom",
           "scrollback": "scrollback",
           "snap": "snap",
-          "position": "position"
+          "position": "position",
+          "link": "link",
+          "tooltip": "tooltip",
+          "preview": "preview",
+          "url": "url",
+          "bar": "bar",
+          "terminalLink": "terminal link"
         }
       },
       "nativeChat": {

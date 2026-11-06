@@ -20560,7 +20560,9 @@
         "copyTrimsGutterDescription": "Déposez la sortie de l'agent de gouttière gauche qui est peinte derrière, donc le texte copié n'est pas en retrait. Seul le retrait de chaque partage de ligne sélectionnée est supprimé.",
         "copyOnSelectDescription": "Copier automatiquement vers le presse-papiers le texte sélectionné dans un terminal ou un chat.",
         "scrollOnUserInput": "Défiler vers le bas lors de la saisie",
-        "scrollOnUserInputDescription": "Taper ou coller pendant que le volet est défilé vers le haut ramène à la dernière sortie. Désactivez pour conserver votre position."
+        "scrollOnUserInputDescription": "Taper ou coller pendant que le volet est défilé vers le haut ramène à la dernière sortie. Désactivez pour conserver votre position.",
+        "linkTooltip": "Aperçu de la cible du lien",
+        "linkTooltipDescription": "Affiche la barre de la cible du lien en bas du volet au survol des liens et des chemins détectés."
       },
       "terminal": {
         "clipboard": {
@@ -20583,7 +20585,13 @@
           "bottom": "bas",
           "scrollback": "historique",
           "snap": "aligner",
-          "position": "position"
+          "position": "position",
+          "link": "lien",
+          "tooltip": "info-bulle",
+          "preview": "aperçu",
+          "url": "url",
+          "bar": "barre",
+          "terminalLink": "lien de terminal"
         }
       },
       "nativeChat": {

@@ -6,7 +6,10 @@ import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getTerminalScrollOnUserInputSearchEntry } from './appearance/terminal-pane-appearance-search'
+import {
+  getTerminalLinkTooltipSearchEntry,
+  getTerminalScrollOnUserInputSearchEntry
+} from './appearance/terminal-pane-appearance-search'
 import { getTerminalRightClickToPasteSearchEntry } from './platform/terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../../terminal-pane/osc52-clipboard-setting-anchor'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
@@ -18,6 +21,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
+import { resolveTerminalLinkTooltipEnabled } from '../../../../../shared/terminal/links/terminal-link-tooltip-settings'
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
@@ -255,6 +259,27 @@ export function TerminalInteractionSection({
             onChange={() =>
               updateSettings({
                 terminalFocusFollowsMouse: !settings.terminalFocusFollowsMouse
+              })
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting {...getTerminalLinkTooltipSearchEntry()[0]}>
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalInteraction.linkTooltip',
+              'Link Target Preview'
+            )}
+            description={translate(
+              'components.settings.TerminalInteraction.linkTooltipDescription',
+              'Show the link target bar at the bottom of the pane while hovering detected links and paths.'
+            )}
+            checked={resolveTerminalLinkTooltipEnabled(settings.terminalLinkTooltipEnabled)}
+            onChange={() =>
+              updateSettings({
+                terminalLinkTooltipEnabled: !resolveTerminalLinkTooltipEnabled(
+                  settings.terminalLinkTooltipEnabled
+                )
               })
             }
           />
