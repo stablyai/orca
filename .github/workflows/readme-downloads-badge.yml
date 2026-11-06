@@ -64,7 +64,8 @@ jobs:
           git commit -m "Update README downloads badge"
           git push --force-with-lease="refs/heads/$branch:$expected" origin "HEAD:refs/heads/$branch"
 
-          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$branch" --json url --jq '.[0].url // empty')"
+          # Why: a fork PR can reuse this branch name; auto-merge must only ever target the bot's own PR.
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$branch" --json url,isCrossRepository --jq '[.[] | select(.isCrossRepository == false)][0].url // empty')"
           if [ -n "$existing" ]; then
             echo "Updated $existing"
             pr_url="$existing"
