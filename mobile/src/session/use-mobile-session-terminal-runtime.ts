@@ -29,6 +29,8 @@ import type {
 } from './mobile-session-route-types'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
 
+const MULTI_TAP_HIDDEN_KEYBOARD_FOCUS_DELAY_MS = 420
+
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
   const {
     hostId,
@@ -151,6 +153,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
+    hiddenKeyboardTapFocusDelayMs: scope.tripleTapEnterEnabled
+      ? MULTI_TAP_HIDDEN_KEYBOARD_FOCUS_DELAY_MS
+      : undefined,
     inputRef: liveInputRef,
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),

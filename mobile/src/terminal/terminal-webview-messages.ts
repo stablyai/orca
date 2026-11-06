@@ -5,6 +5,7 @@ export type TerminalFrame = { width: number; height: number }
 
 export type TerminalWebViewCommand =
   | { type: 'set-interaction-active'; active: boolean }
+  | { type: 'set-triple-tap-enter'; id?: number; enabled: boolean }
   | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
   | {

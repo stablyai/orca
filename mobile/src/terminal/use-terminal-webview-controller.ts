@@ -1,15 +1,10 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
-import { fitDimensionsFromCell } from './terminal-grid-fit'
-import type {
-  TerminalInit,
-  TerminalWebViewHandle,
-  TerminalWebViewProps
-} from './terminal-webview-contract'
+import type { TerminalWebViewProps } from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
+import { useTerminalWebViewHandle } from './use-terminal-webview-handle'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
-import type { TerminalFrame, TerminalWebViewCommand } from './terminal-webview-messages'
+import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
@@ -34,6 +29,7 @@ export function useTerminalWebViewController(
   const {
     terminalTheme,
     interactionActive = true,
+    tripleTapEnterEnabled = true,
     textScale = 1,
     onWebReady,
     onEngineError,
@@ -48,6 +44,7 @@ export function useTerminalWebViewController(
     onTerminalQueryReply,
     onTerminalInteraction,
     onTerminalTap,
+    onTerminalTripleTap,
     onFileTap,
     onOpenUrl,
     onTextScaleChange,
@@ -55,6 +52,7 @@ export function useTerminalWebViewController(
   } = props
   const { coalesce, pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
+  const sentTripleTapEnterRef = useRef<boolean>(true)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
@@ -118,11 +116,18 @@ export function useTerminalWebViewController(
       }
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
       sendToDocument({ type: 'set-interaction-active', active: interactionActive })
+      if (!tripleTapEnterEnabled) {
+        sendToDocument({ type: 'set-triple-tap-enter', enabled: false })
+        sentTripleTapEnterRef.current = false
+      } else {
+        sentTripleTapEnterRef.current = true
+      }
       sendToDocument({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },
     [
       interactionActive,
+      tripleTapEnterEnabled,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
@@ -137,6 +142,13 @@ export function useTerminalWebViewController(
       sendToDocument({ type: 'set-interaction-active', active: interactionActive })
     }
   }, [sendToDocument, interactionActive])
+
+  useEffect(() => {
+    if (isWebReadyRef.current && sentTripleTapEnterRef.current !== tripleTapEnterEnabled) {
+      sentTripleTapEnterRef.current = tripleTapEnterEnabled
+      sendToDocument({ type: 'set-triple-tap-enter', enabled: tripleTapEnterEnabled })
+    }
+  }, [sendToDocument, tripleTapEnterEnabled])
 
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
@@ -179,6 +191,7 @@ export function useTerminalWebViewController(
           onTerminalInput: interactionActive ? onTerminalInput : undefined,
           onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
           onTerminalTap: interactionActive ? onTerminalTap : undefined,
+          onTerminalTripleTap: interactionActive ? onTerminalTripleTap : undefined,
           onFileTap: interactionActive ? onFileTap : undefined,
           onOpenUrl: interactionActive ? onOpenUrl : undefined,
           onTextScaleChange
@@ -201,6 +214,7 @@ export function useTerminalWebViewController(
       onTerminalQueryReply,
       onTerminalInteraction,
       onTerminalTap,
+      onTerminalTripleTap,
       onFileTap,
       onOpenUrl,
       onTextScaleChange,
@@ -227,90 +241,19 @@ export function useTerminalWebViewController(
     postMessage({ type: 'set-font-scale', fontScale: textScale })
   }, [postMessage, textScale])
 
-  const fitDimensions = useCallback(
-    (frame: TerminalFrame) => {
-      const cell = cellBoxRef.current
-      // A cell box measured at another text scale cannot authorize this grid’s fit.
-      return cell && cell.fontScale === textScale && frame.width > 0 && frame.height > 0
-        ? fitDimensionsFromCell(cell, frame.width, frame.height)
-        : null
-    },
-    [textScale]
-  )
-
-  const handle = useMemo<TerminalWebViewHandle>(
-    () => ({
-      prepareForForegroundRecovery() {
-        if (!pingsOnForegroundRecovery()) {
-          return
-        }
-        // Only direct ping bypasses invalid readiness; queue init/write until this exact document proves liveness.
-        isWebReadyRef.current = false
-        armWebReadyWatchdog()
-        pendingPingIdRef.current = sendToDocument({ type: 'ping' })
-      },
-      write(data: string) {
-        writeCoalescer.write(data)
-      },
-      init({ cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit) {
-        // Arm ready before posting init so a synchronous reply cannot be lost.
-        promises.armReady()
-        // The init snapshot supersedes buffered chunks; replaying them afterward would duplicate old output.
-        writeCoalescer.clear()
-        postMessage({
-          type: 'init',
-          cols,
-          rows,
-          initialData,
-          oscLinks,
-          kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
-          terminalTheme,
-          fontScale: textScale,
-          preserveScroll,
-          frame
-        })
-      },
-      resize(cols: number, rows: number, frame: TerminalFrame | null) {
-        // Flush prior writes before resize/reflow so terminal bytes stay ordered.
-        writeCoalescer.flushNow()
-        postMessage({ type: 'resize', cols, rows, frame })
-      },
-      reflow(cols: number, rows: number, frame: TerminalFrame | null) {
-        writeCoalescer.flushNow()
-        postMessage({ type: 'reflow', cols, rows, frame })
-      },
-      clear() {
-        writeCoalescer.clear()
-        postMessage({ type: 'clear' })
-      },
-      fitDimensions,
-      scrollToBottom() {
-        writeCoalescer.flushNow()
-        postMessage({ type: 'scroll-to-bottom' })
-      },
-      resetZoom() {
-        postMessage({ type: 'reset-zoom' })
-      },
-      cancelSelect() {
-        postMessage({ type: 'cancel-select' })
-      },
-      doSelectAll() {
-        postMessage({ type: 'do-select-all' })
-      },
-      awaitReady: promises.awaitReady
-    }),
-    [
-      armWebReadyWatchdog,
-      fitDimensions,
-      pingsOnForegroundRecovery,
-      postMessage,
-      promises,
-      sendToDocument,
-      terminalTheme,
-      textScale,
-      writeCoalescer
-    ]
-  )
+  const handle = useTerminalWebViewHandle({
+    armWebReadyWatchdog,
+    cellBoxRef,
+    isWebReadyRef,
+    pendingPingIdRef,
+    pingsOnForegroundRecovery,
+    postMessage,
+    promises,
+    sendToDocument,
+    terminalTheme,
+    textScale,
+    writeCoalescer
+  })
 
   return {
     armWebReadyWatchdog,

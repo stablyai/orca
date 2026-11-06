@@ -182,6 +182,32 @@ export function TerminalShortcutSettings({
 
   return (
     <>
+      <SettingsSection title={t('components.terminalShortcutSettings.gestures', 'GESTURES')}>
+        <ListRow
+          key="tripleTapEnter"
+          title={t('components.terminalShortcutSettings.tripleTapEnter', 'Triple-tap for Enter')}
+          subtitle={t(
+            'components.terminalShortcutSettings.tripleTapEnterDescription',
+            'Tap the terminal three times to send Enter, confirming prompts or inline input without opening the keyboard.'
+          )}
+          accessory={
+            <MobileSwitch
+              accessibilityLabel={t(
+                'components.terminalShortcutSettings.tripleTapEnter',
+                'Triple-tap for Enter'
+              )}
+              value={shortcutLayout.tripleTapEnterEnabled !== false}
+              onValueChange={(enabled) =>
+                setShortcutLayout((current) => {
+                  const next = { ...current, tripleTapEnterEnabled: enabled }
+                  persistLayout(next)
+                  return next
+                })
+              }
+            />
+          }
+        />
+      </SettingsSection>
       {hasPad ? (
         <SettingsSection
           title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}

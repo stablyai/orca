@@ -79,6 +79,7 @@ export type TerminalSelectionEvents = {
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalInteraction?: () => void
   onTerminalTap?: () => void
+  onTerminalTripleTap?: () => void
   // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
   onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl?: (url: string) => void
@@ -95,6 +96,7 @@ export type TerminalWebViewProps = {
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
   interactionActive?: boolean
+  tripleTapEnterEnabled?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
