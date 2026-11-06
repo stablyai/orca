@@ -90,7 +90,7 @@ export async function readClaudeStartupFacts(input: {
       throw claudeStartFailure([
         input.connection.startupFailure?.(),
         proof,
-        error,
+        proof && isClaudeQueryClosed(error) ? undefined : error,
         await claudeExitForReport(input.connection, error)
       ])
     }),
