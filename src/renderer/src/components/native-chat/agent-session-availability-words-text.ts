@@ -21,6 +21,7 @@ type AvailabilityCopyId = Extract<
   | 'cliTooOld'
   | 'modelUnavailable'
   | 'modelUnavailableUpdate'
+  | 'modelNotSelected'
 >
 
 export const AVAILABILITY_PIECES: Record<
@@ -81,6 +82,12 @@ export const AVAILABILITY_PIECES: Record<
     translate(
       'components.native-chat.failureWords.modelUnavailable',
       COPY.modelUnavailable,
+      values
+    ),
+  modelNotSelected: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelNotSelected',
+      COPY.modelNotSelected,
       values
     ),
   modelUnavailableUpdate: (values) =>

@@ -1959,6 +1959,7 @@
       "managedAccountUnsupported": "雖然已在 WSL 中新增 Claude 帳戶，Claude 聊天仍需要 Windows Claude 帳戶。",
       "modelUnavailable": "{{agent}} 無法使用 {{detail}}。請選擇其他模型並重新傳送。",
       "modelUnavailableUpdate": "{{agent}} 無法使用 {{detail}}。請將 {{agent}} 更新到 {{minimumVersion}} 或更新版本，以便重新啟動後繼續使用；或選擇其他模型並重新傳送。",
+      "modelNotSelected": "{{agent}} 沒有選擇模型。請檢查模型選擇和 {{agent}} 登入狀態，然後重新傳送。",
       "noTurnToStop": "{{agent}} 沒有正在執行的輪次可停止。",
       "notDelivered": "此訊息未送達。",
       "notDeliveredSendAgain": "此訊息未送達。請重新傳送以繼續。",

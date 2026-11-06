@@ -2029,6 +2029,7 @@
       "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
       "modelUnavailable": "{{agent}} no pudo usar {{detail}}. Elige otro modelo y vuelve a enviar el mensaje.",
       "modelUnavailableUpdate": "{{agent}} no pudo usar {{detail}}. Actualiza {{agent}} a {{minimumVersion}} o posterior para conservarlo tras un reinicio, o elige otro modelo y vuelve a enviar el mensaje.",
+      "modelNotSelected": "{{agent}} no tiene ningún modelo seleccionado. Revisa la selección de modelo y el inicio de sesión de {{agent}}, y vuelve a enviar el mensaje.",
       "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
       "notDelivered": "Este mensaje no se entregó.",
       "notDeliveredSendAgain": "Este mensaje no se entregó. Vuelva a enviarlo para continuar.",

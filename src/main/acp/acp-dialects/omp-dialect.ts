@@ -7,7 +7,8 @@ import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp
 // Only timed foreground completion implies exit zero; service/background launches prove no exit.
 const textBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
 const promptErrorDataSchema = z.looseObject({ details: z.string() })
-const SIGNED_OUT_DETAIL_PREFIXES = ['No model selected.\n\nUse /login', 'No API key found for ']
+// "No model selected" is not one: a launch selector OMP never resolved says it too (modelNotSelected).
+const SIGNED_OUT_DETAIL_PREFIXES = ['No API key found for ']
 const CANCEL_CLEANUP_TIMED_OUT = 'ACP cancel cleanup timed out'
 const toolResultSchema = z.looseObject({
   content: z.array(z.unknown()),
@@ -136,6 +137,8 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   modelCommand: {
     // #setModelById (acp-agent.ts) takes listed provider/id values only.
     refusedByOption: (error) => errorDetails(error)?.startsWith('Unknown ACP model: ') === true,
+    // A launch selector OMP deferred and never resolved leaves the session without a model.
+    noModel: (error) => errorDetails(error)?.startsWith('No model selected.') === true,
     // Checked against published packages: 18.1.8's `/model` matches ids, 18.1.9's resolves roles.
     resolvesSelectorsFrom: '18.1.9',
     text: (value) => `/model ${value}`,

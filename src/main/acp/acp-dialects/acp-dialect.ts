@@ -67,6 +67,8 @@ export type AcpTurnEnding = {
   durationMs?: number
   failureDetail?: string
   notSignedIn?: boolean
+  /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
+  modelNotSelected?: boolean
   usageLimit?: AgentSessionUsageLimit
   /** Structured error data shows the model provider failed; runtime only. */
   providerFailure?: boolean
@@ -144,6 +146,8 @@ export type AcpDialect = {
   modelCommand?: {
     /** Only the model option's own "unknown model" refusal sends the value to the command. */
     refusedByOption(error: AcpAgentError): boolean
+    /** The prompt failed because no model resolved, not because the agent is signed out. */
+    noModel(error: AcpAgentError): boolean
     /** The first release whose command resolves what its option refuses; older ones take ids only. */
     resolvesSelectorsFrom: string
     text(value: string): string

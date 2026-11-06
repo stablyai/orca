@@ -8,7 +8,7 @@ import {
   type AcpDialect,
   type AcpTurnEnding
 } from './acp-dialects/acp-dialect'
-import { AcpAgentError } from './acp-errors'
+import type { AcpAgentError } from './acp-errors'
 import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
 import { translateAcpRequest } from './acp-timeline-requests'
@@ -18,7 +18,8 @@ import { AcpToolTimeline } from './acp-tool-timeline'
 import {
   AcpTurnFailures,
   acpAuthenticationRequired,
-  acpPromptErrorDetail
+  acpPromptErrorDetail,
+  acpPromptFailureEnding
 } from './acp-turn-failures'
 import { acpNamedTextKey, AcpTurnMessages, type AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from './generated/acp-protocol.generated'
@@ -90,14 +91,8 @@ export class AcpTimelineTranslator {
 
   /** Only agent-authored failures supply diagnostic text; connection loss is handled separately. */
   promptFailed(clientMessageId: string, error: Error, at: number): ProviderTimelineEvent[] {
-    const detail =
-      error instanceof AcpAgentError ? acpPromptErrorDetail(this.dialect, error) : undefined
-    const failure =
-      error instanceof AcpAgentError ? this.dialect.promptFailure?.(error, at) : undefined
-    const stopReason = failure?.stopReason ?? 'error'
     const ended = this.prompts.last
-    const notSignedIn = this.authenticationRequired(error)
-    const ending = { ...failure, stopReason, at, failureDetail: detail, notSignedIn }
+    const ending = acpPromptFailureEnding(this.dialect, error, at)
     if (this.prompts.current?.clientMessageId !== clientMessageId) {
       // A late prompt answer may supply a failure reason missing from the provider's end.
       return ended?.clientMessageId === clientMessageId && this.failures.has(ended.turn)

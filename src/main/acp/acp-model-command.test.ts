@@ -5,7 +5,7 @@ import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { AcpAgentError } from './acp-errors'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
-import { acpModelCommandFor } from './acp-model-command'
+import { acpModelCommandFor, acpNoModelSelected } from './acp-model-command'
 import { writeAcpSessionOption } from './acp-session-option-write'
 import type { AcpSessionEvent } from './acp-session-runtime'
 import { AcpStructuredOptions } from './acp-structured-options'
@@ -155,5 +155,75 @@ describe("OMP's own model command", () => {
     )
     options.adoptConfigOptions(config('p/b', 'low'))
     expect(options.appliedInput.get('model')).toBe('p/a')
+  })
+
+  it('leaves the role unapplied and retires OMP when the command is not answered in time', async () => {
+    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+    options.adoptSession({ configOptions: config('p/a', 'low') }, 'loaded')
+    const late = Promise.withResolvers<{ stopReason: string }>()
+    const retired = vi.fn()
+    const aborted = new AbortController()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command reads only spec, options, turns.running and connection.prompt, which this fake provides.
+    const session = {
+      spec: acpLaunchSpecFor('omp')!,
+      options,
+      turns: { running: false },
+      connection: { prompt: () => late.promise }
+    } as unknown as AcpStructuredSession
+    const pending = acpModelCommandFor(session, {
+      agent: 'omp',
+      timeoutMs: 1_000,
+      signal: aborted.signal,
+      onUncertain: retired
+    })!('@worker_be')
+    aborted.abort()
+    await expect(pending).rejects.toThrow()
+    expect(retired).toHaveBeenCalledOnce()
+    // A late success cannot restore proof the abort retired.
+    late.resolve({ stopReason: 'end_turn' })
+    await Promise.resolve()
+    expect(options.appliedInput.has('model')).toBe(false)
+    expect(options.writing).toBe(0)
+  })
+
+  it('says a cancelled command left the message unsent', async () => {
+    const cancelled = rig([])
+    cancelled.prompt.mockResolvedValue({ stopReason: 'cancelled' })
+    const error: AgentSessionOptionRejectedError = await cancelled
+      .send('@worker_be')
+      .catch((e) => e)
+    expect(error.rejection).toMatchObject({ kind: 'cancelled', neverReachedAgent: true })
+  })
+
+  it('says OMP had no model, not that it is signed out, and applies the role again next send', async () => {
+    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+    // A typo'd launch role: OMP defers it, never resolves it, and still lists models[0] as current.
+    options.adoptSession({ configOptions: config('p/a', 'low') }, 'new')
+    options.adoptLaunchModel('@worker_bee')
+    // OMP's prompt error with no model (agent-session.ts), the same text a signed-out OMP gives.
+    const noModel = new AcpAgentError(-32603, 'Internal error', {
+      details:
+        'No model selected.\n\nUse /login, set an API key environment variable, or create ~/.omp/agent/models.yml\n\nThen use /model to select a model.'
+    })
+    expect(acpNoModelSelected(OMP_ACP_DIALECT, options, noModel)).toEqual({
+      kind: 'modelNotSelected'
+    })
+    expect(OMP_ACP_DIALECT.authenticationRequired!(noModel)).toBe(false)
+    // The saved selection stays; its proof is gone, so the next send writes it again.
+    const setOption = vi.fn(async () => undefined)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with the write accepted, the send path reads only session.options.
+    await applyAcpMessageOptions(
+      { options } as unknown as AcpStructuredSession,
+      { model: '@worker_bee' },
+      setOption,
+      () => true
+    )
+    expect(setOption).toHaveBeenCalledWith('model', '@worker_bee')
+    // An explicit missing key is still a sign-in problem.
+    const noKey = new AcpAgentError(-32603, 'Internal error', {
+      details: 'No API key found for openai.\n\nUse /login'
+    })
+    expect(acpNoModelSelected(OMP_ACP_DIALECT, options, noKey)).toBeUndefined()
+    expect(OMP_ACP_DIALECT.authenticationRequired!(noKey)).toBe(true)
   })
 })

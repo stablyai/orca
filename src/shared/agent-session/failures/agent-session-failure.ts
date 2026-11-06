@@ -53,6 +53,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'restartFailed',
   'providerRejected',
   'modelUnavailable',
+  /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
+  'modelNotSelected',
   'claudeEffortInvalid',
   'attachmentInvalid',
   'attachmentUnreadable',

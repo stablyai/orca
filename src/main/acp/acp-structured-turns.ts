@@ -14,6 +14,7 @@ import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { acpWithdrawnSteer } from './acp-model-command'
 import { acpCompactPrompt } from './acp-compaction-turn'
 import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -37,6 +38,8 @@ export type AcpStructuredTurnsDeps = {
   settle: (settlement: AcpDispatchSettlement) => void
   /** Replace the child so the next send reopens the session. */
   sessionLost: (error: Error) => void
+  /** The agent had no model for the prompt, which it may word like a sign-in failure. */
+  modelRefusal?: (error: AcpAgentError) => SubmissionRejectionFact | undefined
 }
 
 export class AcpStructuredTurns {
@@ -48,6 +51,8 @@ export class AcpStructuredTurns {
   private readonly idleWaiters = new Set<() => void>()
   private ended = false
   private stopAt: number | null = null
+  // Steers still preparing their controls; they hold their place like queued steers.
+  private reservedSteers = 0
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {}
 
@@ -115,6 +120,22 @@ export class AcpStructuredTurns {
       this.idleWaiters.add(wake)
       signal?.addEventListener('abort', wake, { once: true })
     })
+  }
+
+  /** A steer whose controls must run as a prompt first: answers ahead of it are cancelled as they
+   *  start, as for any newer steer, and it waits for idle before preparing. */
+  async reserveSteer(signal?: AbortSignal): Promise<void> {
+    this.reservedSteers += 1
+    try {
+      this.cancelForSteer()
+      await this.whenIdle(signal)
+    } finally {
+      this.reservedSteers -= 1
+    }
+    // A Stop or teardown while it waited withdraws it like any held steer: nothing more is sent.
+    if (this.stopAt !== null || this.ended) {
+      throw acpWithdrawnSteer(this.deps.agentName, this.ended)
+    }
   }
 
   dispatch(send: Send): void {
@@ -206,7 +227,7 @@ export class AcpStructuredTurns {
       ? { promptId, requestId: promptId }
       : undefined
     const answered = this.deps.connection.prompt(send.prompt, meta)
-    if (this.steers.length > 0) {
+    if (this.steers.length > 0 || this.reservedSteers > 0) {
       this.cancelForSteer()
     }
     answered.then(
@@ -244,7 +265,11 @@ export class AcpStructuredTurns {
   private agentFailed(send: Send, error: AcpAgentError): void {
     const { lane } = this.deps
     const refusal = lane.translator.promptRefused(send.clientMessageId, error)
-    if (refusal !== null) {
+    // Also retires the proof of a model the agent turned out not to have.
+    const noModel = this.deps.modelRefusal?.(error)
+    if (noModel && refusal !== null) {
+      this.reject(send.clientMessageId, noModel)
+    } else if (refusal !== null) {
       const detail = providerDiagnostic(refusal, 'person')
       this.reject(
         send.clientMessageId,

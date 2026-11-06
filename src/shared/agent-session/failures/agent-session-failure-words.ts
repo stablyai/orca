@@ -202,6 +202,7 @@ const FAILURE_SENTENCES = {
       ? say('modelUnavailableUpdate', { ...words, minimumVersion: fact.agentUpdate })
       : say('modelUnavailable', words)
   },
+  modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
       say,

@@ -47,6 +47,9 @@ export async function applyAcpMessageOptions(
       if (!isCurrent()) {
         return false
       }
+      if (error instanceof AgentSessionOptionRejectedError) {
+        throw error
+      }
       if (error instanceof AcpModelCommandRefusedError) {
         throw modelCommandRefusal(error, value, await acpAgentUpdate(session))
       }

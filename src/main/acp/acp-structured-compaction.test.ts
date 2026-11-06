@@ -433,22 +433,31 @@ describe('ACP compaction settlement', () => {
   })
 
   it.each([
-    { spec: OPENCODE, code: -32000, data: undefined },
-    { spec: OMP, code: -32603, data: { details: 'No model selected.\n\nUse /login to sign in.' } }
-  ])('says $spec.agent is not signed in, as a send does', async ({ spec, code, data }) => {
-    const { rig, command, prompt } = await compact(spec)
-    rig.child().agent.fail(prompt, code, 'Authentication required', data)
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(inside).toEqual([
-      expect.objectContaining({
-        tone: 'error',
-        failure: expect.objectContaining({ kind: 'notSignedIn' })
-      })
-    ])
-    // A sign-in failure is the agent's, so cards waiting behind the compaction stay held.
-    expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
-  })
+    { spec: OPENCODE, code: -32000, data: undefined, kind: 'notSignedIn' },
+    // OMP says this both signed out and for a launch selector it never resolved.
+    {
+      spec: OMP,
+      code: -32603,
+      data: { details: 'No model selected.\n\nUse /login to sign in.' },
+      kind: 'modelNotSelected'
+    }
+  ])(
+    'says why $spec.agent cannot run it ($kind), as a send does',
+    async ({ spec, code, data, kind }) => {
+      const { rig, command, prompt } = await compact(spec)
+      rig.child().agent.fail(prompt, code, 'Authentication required', data)
+      const { turn, inside } = await ended(rig, command)
+      expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+      expect(inside).toEqual([
+        expect.objectContaining({
+          tone: 'error',
+          failure: expect.objectContaining({ kind })
+        })
+      ])
+      // The agent's own failure, so cards waiting behind the compaction stay held.
+      expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
+    }
+  )
 
   it('fails a compaction the agent ended with any other stop reason', async () => {
     const { rig, command, prompt } = await compact(GROK)

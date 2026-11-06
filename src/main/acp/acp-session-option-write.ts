@@ -71,7 +71,12 @@ export function boundAcpOptionWrite(
       () => fail(new Error(`${agent} did not answer an option write within ${timeoutMs}ms`)),
       timeoutMs
     )
+    let settled = false
     const settle = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
       options.writing -= 1
