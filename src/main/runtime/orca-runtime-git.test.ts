@@ -43,6 +43,21 @@ vi.mock('../git/source-control/status-read', async (importOriginal) => ({
   getStatus: mocks.getStatus
 }))
 
+// The guard has its own real-git tests; here only the runtime's wiring to the provider matters.
+vi.mock('../git/branch-switch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  switchBranchGuarded: async (
+    _path: string,
+    branch: string,
+    _options: unknown,
+    deps: { checkout: () => Promise<unknown>; onSwitched?: () => void }
+  ) => {
+    await deps.checkout()
+    deps.onSwitched?.()
+    return { branch, previousBranch: 'main' }
+  }
+}))
+
 vi.mock('../git/checkout', () => ({
   checkoutBranch: mocks.checkoutBranch,
   listLocalBranches: mocks.listLocalBranches
@@ -176,7 +191,7 @@ describe('RuntimeGitCommands', () => {
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
-    mocks.checkoutBranch.mockResolvedValue(undefined)
+    mocks.checkoutBranch.mockResolvedValue({ skippedPaths: [] })
 
     await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
       ok: true,
