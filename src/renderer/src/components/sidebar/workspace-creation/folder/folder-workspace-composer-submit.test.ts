@@ -56,7 +56,6 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
 
   it('uses the linked repository project prompt for a folder workspace draft', async () => {
     const original = useAppStore.getState()
-    const url = linkedIssue.url
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/test'),
@@ -103,7 +102,9 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
         createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
         onOpenChange: vi.fn()
       })
-      expect(seededDraftFor('tab-1')?.text).toBe(`${url} /project`)
+      expect(seededDraftFor('tab-1')?.text).toBe(
+        'https://github.com/stablyai/orca/issues/42 /project'
+      )
     } finally {
       useAppStore.setState({
         settings: original.settings,
