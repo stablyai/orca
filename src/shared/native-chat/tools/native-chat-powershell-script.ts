@@ -157,6 +157,15 @@ export function powershellWords(command: string): string[] | null {
       index += 1
       continue
     }
+    if (char === '`' && (command[index + 1] === '\n' || command[index + 1] === '\r')) {
+      // A line continuation separates words, as whitespace does.
+      if (word !== null) {
+        words.push(word)
+      }
+      word = null
+      index += command[index + 1] === '\r' && command[index + 2] === '\n' ? 3 : 2
+      continue
+    }
     word ??= ''
     if (char === "'" || char === '"') {
       index += 1

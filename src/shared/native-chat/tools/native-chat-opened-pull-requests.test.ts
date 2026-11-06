@@ -383,6 +383,8 @@ describe('PowerShell create commands', () => {
       )
     ).toEqual([38712])
     expect(viaPowerShellTool('pwsh -Command "gh pr create --title `"x`" --fill"')).toEqual([38712])
+    // A backtick line continuation joins words, so the create is an argument here.
+    expect(viaPowerShellTool("pwsh -Command 'echo' `\ngh pr create --fill")).toEqual([])
     expect(viaPowerShellTool('gh pr create --title "it`"s" --fill')).toEqual([38712])
     expect(viaPowerShellTool("Write-Output 'gh pr create'")).toEqual([])
   })
