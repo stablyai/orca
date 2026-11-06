@@ -3,7 +3,13 @@ import { isAbsolute, resolve } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printPluginResult, requirePluginPathArg } from '../plugin-authoring/plugin-cli-output'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import {
+  approvalFingerprintOf,
+  approvalRerunCommand,
+  nextStepsOf,
+  pendingApprovalsOf,
+  perPluginApprovalCommands
+} from './plugin-approval-rerun'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 
@@ -26,67 +32,6 @@ const APPROVAL_CODES = new Set(['approval_required', 'approval_stale'])
 export function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-/** The caller's exact command with `--approve <fingerprint>`, so nothing else changes on re-run. */
-export function approvalRerunCommand(rawArgs: readonly string[], fingerprint: string): string {
-  const kept: string[] = []
-  for (let index = 0; index < rawArgs.length; index += 1) {
-    const arg = rawArgs[index]
-    if (arg === '--approve') {
-      index += 1
-      continue
-    }
-    if (arg.startsWith('--approve=')) {
-      continue
-    }
-    kept.push(arg)
-  }
-  return ['orca', ...kept, '--approve', fingerprint].map(quoteCliCommandArgument).join(' ')
-}
-
-function approvalFingerprintOf(data: unknown): string | null {
-  return typeof data === 'object' &&
-    data !== null &&
-    'approvalFingerprint' in data &&
-    typeof data.approvalFingerprint === 'string'
-    ? data.approvalFingerprint
-    : null
-}
-
-function nextStepsOf(data: unknown): string[] {
-  return typeof data === 'object' &&
-    data !== null &&
-    'nextSteps' in data &&
-    Array.isArray(data.nextSteps)
-    ? data.nextSteps.filter((step): step is string => typeof step === 'string')
-    : []
-}
-
-type PendingApproval = { pluginKey: string; approvalFingerprint: string }
-
-function pendingApprovalsOf(data: unknown): PendingApproval[] {
-  if (typeof data !== 'object' || data === null || !('approvals' in data)) {
-    return []
-  }
-  const { approvals } = data
-  return Array.isArray(approvals)
-    ? approvals.filter(
-        (entry): entry is PendingApproval =>
-          typeof entry === 'object' &&
-          entry !== null &&
-          typeof entry.pluginKey === 'string' &&
-          typeof entry.approvalFingerprint === 'string'
-      )
-    : []
-}
-
-/** `update --all` re-runs per plugin: the same command with the key in place of --all. */
-function perPluginApprovalCommands(ctx: HandlerContext, approvals: PendingApproval[]): string[] {
-  return approvals.map((approval) => {
-    const args = (ctx.rawArgs ?? []).map((arg) => (arg === '--all' ? approval.pluginKey : arg))
-    return `To approve ${approval.pluginKey}, run: ${approvalRerunCommand(args, approval.approvalFingerprint)}`
-  })
 }
 
 export function translatePluginRpcError(
