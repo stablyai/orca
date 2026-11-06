@@ -63,15 +63,17 @@ function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
 
 // A generation that failed to list may still own sessions, so its silence is not "none".
 async function listSessionsOfEveryAdapter(
-  adapters: DaemonPtyAdapter[]
+  adapters: DaemonPtyAdapter[],
+  onListed?: (adapter: DaemonPtyAdapter, sessions: DaemonSessionInfo[]) => Promise<void>
 ): Promise<{ sessions: DaemonSessionInfo[]; unlistedVersions: Set<number> }> {
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
-      const sessions = await adapter.listSessions()
-      return sessions.map<DaemonSessionInfo>((s) => ({
+      const sessions = (await adapter.listSessions()).map<DaemonSessionInfo>((s) => ({
         ...s,
         protocolVersion: adapter.protocolVersion
       }))
+      await onListed?.(adapter, sessions)
+      return sessions
     })
   )
   return {
@@ -113,6 +115,70 @@ export async function confirmNoDaemonSessionsRemain(): Promise<boolean> {
     await sleep(POLL_INTERVAL_MS)
   } while (Date.now() < pollDeadline)
   return false
+}
+
+export type DaemonKillAllResult = {
+  killedCount: number
+  remainingCount: number
+  killedSessionIds: string[]
+  listingIncomplete?: boolean
+}
+
+/** Stop sessions across current and legacy adapters while leaving daemon processes alive. */
+export async function killAllDaemonSessions(): Promise<DaemonKillAllResult> {
+  const adapters = getDaemonAdapters()
+  // Exclude panes respawned after the user requested killAll.
+  // Each generation stops its own sessions once listed, so a wedged generation cannot hold back the rest.
+  const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(
+    adapters,
+    async (adapter, sessions) => {
+      // Each session owns its kill ladder; one rejection must not abort the others.
+      // Legacy/future adapters may use immediate; stuck sessions are reported by remainingCount.
+      await Promise.allSettled(
+        sessions.map(async (session) => adapter.shutdown(session.sessionId, { immediate: true }))
+      )
+    }
+  )
+  const initialIds = new Set(initial.map((s) => s.sessionId))
+  const initialCount = initial.length
+  const incomplete = listedEveryGeneration(adapters, unlistedVersions)
+    ? {}
+    : { listingIncomplete: true }
+
+  if (initialCount === 0) {
+    return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
+  }
+
+  let remainingOriginalIds = initialIds
+  const pollDeadline = Date.now() + POLL_WINDOW_MS
+  while (Date.now() < pollDeadline) {
+    await sleep(POLL_INTERVAL_MS)
+    const polled = await listSessionsOfEveryAdapter(adapters)
+    const listedIds = new Set(polled.sessions.map((session) => session.sessionId))
+    // Per generation: an answer proves its own sessions' state; a failed one keeps the last confirmed state.
+    remainingOriginalIds = new Set(
+      initial
+        .filter(
+          (session) =>
+            remainingOriginalIds.has(session.sessionId) &&
+            (polled.unlistedVersions.has(session.protocolVersion) ||
+              listedIds.has(session.sessionId))
+        )
+        .map((session) => session.sessionId)
+    )
+    if (remainingOriginalIds.size === 0) {
+      break
+    }
+  }
+
+  const remainingOriginalCount = remainingOriginalIds.size
+  const killedCount = initialCount - remainingOriginalCount
+  return {
+    killedCount,
+    remainingCount: remainingOriginalCount,
+    killedSessionIds: [...initialIds].filter((sessionId) => !remainingOriginalIds.has(sessionId)),
+    ...incomplete
+  }
 }
 
 export function registerDaemonManagementHandlers(): void {
@@ -197,74 +263,8 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  // Stop sessions across current and legacy adapters while leaving daemon processes alive.
-  ipcMain.handle(
-    'pty:management:killAll',
-    async (): Promise<{
-      killedCount: number
-      remainingCount: number
-      killedSessionIds: string[]
-      listingIncomplete?: boolean
-    }> => {
-      const adapters = getDaemonAdapters()
-      // Exclude panes respawned after the user requested killAll.
-      const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
-      const initialIds = new Set(initial.map((s) => s.sessionId))
-      const initialCount = initial.length
-      const incomplete = listedEveryGeneration(adapters, unlistedVersions)
-        ? {}
-        : { listingIncomplete: true }
-
-      if (initialCount === 0) {
-        return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
-      }
-
-      // Each session owns its kill ladder; one rejection must not abort the others.
-      await Promise.allSettled(
-        initial.map(async (session) => {
-          // Current and legacy protocol versions must remain distinct to route to the owning adapter.
-          const owner = adapters.find((a) => a.protocolVersion === session.protocolVersion)
-          if (!owner) {
-            return
-          }
-          // Legacy/future adapters may use immediate; stuck sessions are reported by remainingCount.
-          await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
-        })
-      )
-
-      let remainingOriginalIds = initialIds
-      const pollDeadline = Date.now() + POLL_WINDOW_MS
-      while (Date.now() < pollDeadline) {
-        await sleep(POLL_INTERVAL_MS)
-        const polled = await listSessionsOfEveryAdapter(adapters)
-        const listedIds = new Set(polled.sessions.map((session) => session.sessionId))
-        // Per generation: an answer proves its own sessions' state; a failed one keeps the last confirmed state.
-        remainingOriginalIds = new Set(
-          initial
-            .filter(
-              (session) =>
-                remainingOriginalIds.has(session.sessionId) &&
-                (polled.unlistedVersions.has(session.protocolVersion) ||
-                  listedIds.has(session.sessionId))
-            )
-            .map((session) => session.sessionId)
-        )
-        if (remainingOriginalIds.size === 0) {
-          break
-        }
-      }
-
-      const remainingOriginalCount = remainingOriginalIds.size
-      const killedCount = initialCount - remainingOriginalCount
-      return {
-        killedCount,
-        remainingCount: remainingOriginalCount,
-        killedSessionIds: [...initialIds].filter(
-          (sessionId) => !remainingOriginalIds.has(sessionId)
-        ),
-        ...incomplete
-      }
-    }
+  ipcMain.handle('pty:management:killAll', (): Promise<DaemonKillAllResult> =>
+    killAllDaemonSessions()
   )
 
   ipcMain.handle(
