@@ -52,11 +52,17 @@ export function AntigravityProviderSignInArea(props: {
         owner={props.owner}
         disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
         onSignIn={signIn.start}
+        hostLabel={props.label}
         heading={
           <div>
-            {' '}
             <p className="text-xs font-medium leading-none">
               {translate('settings.chat.providers.antigravityAccount', 'Account')}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {translate(
+                'settings.chat.providers.antigravitySignInNeeded',
+                'Chats need an Antigravity sign-in, separate from your agy terminal account.'
+              )}
             </p>
           </div>
         }
@@ -71,7 +77,7 @@ export function AntigravityProviderSignInArea(props: {
               >
                 {ownFlow ? <LoadingSpinner className="size-3 shrink-0" /> : null}
                 <span className="min-w-0 break-words">
-                  {!ownFlow && !alert ? (auth.hint ?? line) : line}
+                  {!alert ? signIn.lineForAuth(auth) : line}
                   {line && alert ? ' ' : null}
                   {alert && (
                     <span role="alert" className="text-destructive">

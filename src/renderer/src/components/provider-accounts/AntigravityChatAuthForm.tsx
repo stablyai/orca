@@ -17,12 +17,13 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
-type AuthAction = { disabled: boolean; start: () => void; hint: string | null }
+type AuthAction = { disabled: boolean; start: () => void; hint: string | null; reauth: boolean }
 type AuthFormProps = {
   owner: RuntimeClientTarget
   disabled: boolean
   onSignIn: () => void
   heading: ReactNode
+  hostLabel: string
   children: (action: AuthAction) => ReactNode
 }
 
@@ -31,6 +32,7 @@ export function AntigravityChatAuthForm({
   disabled,
   onSignIn,
   heading,
+  hostLabel,
   children
 }: AuthFormProps): React.JSX.Element | null {
   const capability = useStructuredAgentSessionHostCapabilityState(
@@ -41,7 +43,7 @@ export function AntigravityChatAuthForm({
     return (
       <>
         {heading}
-        {children({ disabled: false, start: onSignIn, hint: null })}
+        {children({ disabled: false, start: onSignIn, hint: null, reauth: false })}
       </>
     )
   }
@@ -54,6 +56,7 @@ export function AntigravityChatAuthForm({
       supported={capability === 'supported'}
       onSignIn={onSignIn}
       heading={heading}
+      hostLabel={hostLabel}
     >
       {children}
     </AuthForm>
@@ -66,6 +69,7 @@ function AuthForm({
   supported,
   onSignIn,
   heading,
+  hostLabel,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const id = useId()
@@ -312,6 +316,7 @@ function AuthForm({
       {children({
         disabled: disabled || !loaded || !valid || preparing,
         start,
+        reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         hint:
           !loaded || (method !== 'oauth-business' && method !== 'oauth-personal')
             ? null
@@ -326,12 +331,17 @@ function AuthForm({
                         : translate('accounts.antigravity.personal', 'Google account')
                   }
                 )
-              : translate('accounts.antigravity.signInWith', 'Signs in with {{method}}.', {
-                  method:
-                    method === 'oauth-business'
-                      ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                      : translate('accounts.antigravity.personal', 'Google account')
-                })
+              : translate(
+                  'accounts.antigravity.signInWith',
+                  'Signs in with {{method}} on {{host}}.',
+                  {
+                    host: hostLabel,
+                    method:
+                      method === 'oauth-business'
+                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                        : translate('accounts.antigravity.personal', 'Google account')
+                  }
+                )
       })}
     </>
   )

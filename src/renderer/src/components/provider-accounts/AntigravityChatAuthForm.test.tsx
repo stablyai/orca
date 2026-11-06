@@ -11,6 +11,8 @@ import {
 } from '@/runtime/runtime-antigravity-accounts-client'
 import { observeAntigravityChatSignIn } from '@/runtime/antigravity-chat-sign-in-status'
 import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/runtime-rpc-subscribe'
+import type { AntigravityChatAuthConfig } from '../../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatSignInStatus } from '../../../../shared/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const streams = vi.hoisted(() => {
@@ -18,6 +20,7 @@ const streams = vi.hoisted(() => {
   return {
     handlers: new Map<string, RuntimeRpcSubscriptionHandlers>(),
     releases,
+    initial: new Map<string, AntigravityChatSignInStatus>(),
     capability: 'supported'
   }
 })
@@ -35,7 +38,9 @@ vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
   subscribeAntigravityChatSignIn: vi.fn(
     async (owner: RuntimeClientTarget, handlers: RuntimeRpcSubscriptionHandlers) => {
       streams.handlers.set(owner.kind === 'local' ? 'local' : owner.environmentId, handlers)
-      handlers.onEvent({ revision: 0, auth: 'unknown', flow: null })
+      handlers.onEvent(
+        streams.initial.get(key(owner)) ?? { revision: 0, auth: 'unknown', flow: null }
+      )
       return { unsubscribe: () => {} }
     }
   )
@@ -44,6 +49,7 @@ afterEach(() => {
   cleanup()
   streams.releases.splice(0).forEach((release) => release())
   streams.handlers.clear()
+  streams.initial.clear()
   vi.mocked(callAntigravityChatAuthConfig).mockReset()
   vi.mocked(callAntigravityChatSignIn).mockClear()
   streams.capability = 'supported'
@@ -56,6 +62,39 @@ const enterprise = {
   gcpProject: 'enterprise-project',
   gcpLocation: 'us-central1'
 } as const
+
+function renderSurface(surface: 'accounts' | 'provider', target: RuntimeClientTarget) {
+  if (surface === 'accounts') {
+    render(
+      <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
+    )
+  } else {
+    render(
+      <AntigravityProviderSignInArea
+        owner={target}
+        label="Test host"
+        install={{
+          kind: 'active',
+          removable: true,
+          subject: { target, runtimeId: null, agent: 'antigravity' },
+          snapshot: {
+            kind: 'known',
+            state: {
+              agent: 'antigravity',
+              revision: 1,
+              available: true,
+              version: '1',
+              installedVersion: '1',
+              installedCurrent: true,
+              operation: null,
+              source: 'managed'
+            }
+          }
+        }}
+      />
+    )
+  }
+}
 
 it.each(['accounts', 'provider'] as const)(
   '%s saves the visible Enterprise choice before the first Sign in click, sharing the last-field blur save',
@@ -70,41 +109,7 @@ it.each(['accounts', 'provider'] as const)(
           })
     )
     const user = userEvent.setup()
-    if (surface === 'accounts') {
-      render(
-        <AntigravityChatSignInRow
-          owner={target}
-          label="Test host"
-          description=""
-          disabled={false}
-        />
-      )
-    } else {
-      render(
-        <AntigravityProviderSignInArea
-          owner={target}
-          label="Test host"
-          install={{
-            kind: 'active',
-            removable: true,
-            subject: { target, runtimeId: null, agent: 'antigravity' },
-            snapshot: {
-              kind: 'known',
-              state: {
-                agent: 'antigravity',
-                revision: 1,
-                available: true,
-                version: '1',
-                installedVersion: '1',
-                installedCurrent: true,
-                operation: null,
-                source: 'managed'
-              }
-            }
-          }}
-        />
-      )
-    }
+    renderSurface(surface, target)
     await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
     expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
     await user.click(screen.getByRole('combobox'))
@@ -253,3 +258,58 @@ it('refreshes the saved method after reconnecting to a restarted host with the s
   )
   expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
 })
+
+it.each(['accounts', 'provider'] as const)(
+  '%s preserves another client’s active and settled sign-in status',
+  async (surface) => {
+    const target = { kind: 'environment', environmentId: `other-client-${surface}` } as const
+    streams.initial.set(key(target), {
+      revision: 0,
+      auth: 'unknown',
+      flow: { phase: 'waiting', flowId: null }
+    })
+    vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
+    renderSurface(surface, target)
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Sign-in is in progress in another client.'
+    )
+    await act(async () => {
+      streams.handlers
+        .get(key(target))
+        ?.onEvent({ revision: 1, auth: 'unknown', flow: { phase: 'expired', flowId: null } })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Sign-in timed out. Try again.')
+  }
+)
+
+it.each(['accounts', 'provider'] as const)(
+  '%s preserves signed-in host context and explains a changed method',
+  async (surface) => {
+    const target = { kind: 'environment', environmentId: `signed-in-${surface}` } as const
+    streams.initial.set(key(target), { revision: 0, auth: 'signedIn', flow: null })
+    let current: AntigravityChatAuthConfig = personal
+    vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
+      if (config) {
+        current = config
+      }
+      return current
+    })
+    const user = userEvent.setup()
+    renderSurface(surface, target)
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+    expect(screen.getByRole('status')).toHaveTextContent('Signed in on Test host.')
+    expect(screen.getByRole('button', { name: 'Change account' })).toBeEnabled()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: 'Gemini Enterprise' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Sign in again to use Gemini Enterprise.')
+    await user.type(screen.getByLabelText('Google Cloud project'), enterprise.gcpProject)
+    await user.type(screen.getByLabelText('Google Cloud location'), enterprise.gcpLocation)
+    await user.tab()
+    await act(async () => {
+      streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Sign in again to use Gemini Enterprise.')
+  }
+)

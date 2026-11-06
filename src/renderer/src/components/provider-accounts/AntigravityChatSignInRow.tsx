@@ -224,16 +224,22 @@ export function useAntigravityChatSignInControls(props: {
   )
   const ownFlow = running(flow) && flow.flowId !== null
   const action = signInAction(flow, auth, error)
+  const line =
+    status === 'known'
+      ? (chatSignInLine(flow, auth, openFailed, label, props.signedOut) ?? props.unanswered ?? null)
+      : null
+  const hintAllowed =
+    status === 'known' &&
+    !running(flow) &&
+    flow?.phase !== 'failed' &&
+    !((flow?.phase === 'cancelled' || flow?.phase === 'expired') && auth === 'unknown')
   return {
     flow,
     ownFlow,
     url: ownFlow && flow?.phase === 'waiting' ? (flow.url ?? null) : null,
-    line:
-      status === 'known'
-        ? (chatSignInLine(flow, auth, openFailed, label, props.signedOut) ??
-          props.unanswered ??
-          null)
-        : null,
+    line,
+    lineForAuth: ({ hint, reauth }: { hint: string | null; reauth: boolean }) =>
+      hintAllowed && (auth !== 'signedIn' || reauth) ? (hint ?? line) : line,
     alert:
       error ??
       (status === 'readFailed' ? readFailed : null) ??
@@ -279,9 +285,9 @@ export function AntigravityChatSignInRow(props: {
         owner={props.owner}
         disabled={props.disabled || signIn.ownFlow}
         onSignIn={signIn.start}
+        hostLabel={props.label}
         heading={
           <div>
-            {' '}
             <p className="text-sm font-medium leading-none">
               {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
             </p>
@@ -296,7 +302,7 @@ export function AntigravityChatSignInRow(props: {
             <div className="min-w-0 flex-1">
               {/* Reserve line height so the host’s answer cannot shift layout. */}
               <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
-                {!signIn.ownFlow && !alert ? (auth.hint ?? line) : line}
+                {!alert ? signIn.lineForAuth(auth) : line}
                 {line && alert ? ' ' : null}
                 {alert && (
                   <span role="alert" className="text-destructive">

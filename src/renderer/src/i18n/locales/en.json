@@ -22189,7 +22189,7 @@
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "signInAgainWith": "Sign in again to use {{method}}.",
-      "signInWith": "Signs in with {{method}}."
+      "signInWith": "Signs in with {{method}} on {{host}}."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
