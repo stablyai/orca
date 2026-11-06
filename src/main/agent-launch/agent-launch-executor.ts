@@ -1,3 +1,4 @@
+import { awaitRequiredSetup, AgentLaunchSetupNotCompletedError } from '../runtime/setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
@@ -15,7 +16,6 @@ import {
   ignoredStructuredLaunchInputsWarning
 } from './agent-launch-warnings'
 import {
-  argvLaunchPrompt,
   launchPromptCreateInputs,
   deliverTerminalLaunchPrompt,
   HANDED_TO_TERMINAL,
@@ -49,6 +49,13 @@ import {
   beginCreatedWorkspaceLaunch,
   recoverCreatedWorkspace
 } from './agent-launch-created-workspace'
+import {
+  acceptedTerminalIntent,
+  assertAcceptedLaunchOpen,
+  awaitAcceptedLaunchSetup
+} from './agent-launch-acceptance'
+import { createTerminalSurface } from './agent-launch-terminal-surface'
+import { agentSessionExecutionOptionsRecord } from '../../shared/agent-session/options/agent-session-execution-options'
 
 export type { AgentLaunchExecution } from './agent-launch-execution'
 
@@ -123,18 +130,28 @@ export async function executeAgentLaunch(
       }
     }
 
+    const acceptance = execution.acceptance
+    if (acceptance ? acceptance.setupReceipt.required : placed.requiredSetup?.waitsForAgent) {
+      execution.onStage?.('setup_wait')
+    }
+    await (acceptance
+      ? awaitAcceptedLaunchSetup(acceptance, intent.agent, execution.signal)
+      : awaitRequiredSetup(placed.requiredSetup, intent.agent, execution.signal))
+
     // Recover a created workspace on cancellation before an agent exists.
     recoverableWorktreeId = execution.signal?.aborted ? placed.worktreeId : undefined
     assertAgentPromptRequestActive(execution.signal)
+    // An accepted launch decides after Setup, as a created workspace does: a refusal starts its terminal.
     const settlement: AgentLaunchModeSettlement = {
-      phase: intent.target.kind === 'existing' ? 'before-effects' : 'created-workspace',
+      phase:
+        intent.target.kind === 'existing' && !acceptance ? 'before-effects' : 'created-workspace',
       agent: intent.agent,
       workspacePath: placed.workspacePath,
       cwd: intent.cwd
     }
     execution.onStage?.('mode_settle')
     let settled =
-      execution.decidedMode && intent.target.kind === 'existing'
+      execution.decidedMode && intent.target.kind === 'existing' && !acceptance
         ? preflight
         : await resolveAgentLaunchModeOnHost(
             runtime,
@@ -145,9 +162,12 @@ export async function executeAgentLaunch(
             settlement
           )
 
+    // A prepared launch starts nothing on either surface until its final input arrives.
+    await acceptance?.release?.finalInput()
     execution.onStage?.('surface_create')
     recoverableWorktreeId = placed.worktreeId
     assertAgentPromptRequestActive(execution.signal)
+    assertAcceptedLaunchOpen(acceptance)
     let created: CreatedSurface
     try {
       created = await createSurface(execution, placed, settled)
@@ -161,27 +181,37 @@ export async function executeAgentLaunch(
       }
       // Cancellation must prevent a fallback from starting a new agent and argv prompt.
       assertAgentPromptRequestActive(execution.signal)
+      assertAcceptedLaunchOpen(acceptance)
       settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary, settlement)
       created = await createTerminalSurface(execution, placed)
     }
     // Create warnings are untyped strings, so startup-failure warnings may remain stale after recovery.
     const warning = combineLaunchWarnings(placed.warning, created.warning)
+    const delivered =
+      created.outcome.kind === 'terminal'
+        ? { ...execution, intent: acceptedTerminalIntent(intent, acceptance) }
+        : execution
     const surface = published(execution, {
       outcome: created.outcome,
       worktreeId: placed.worktreeId,
       receipt: settled,
       ...(warning ? { warning } : {}),
-      ...promptReceipt(intent, settledAtCreation(intent, created))
+      ...promptReceipt(delivered.intent, settledAtCreation(delivered.intent, created))
     })
     surfacePublished = true
     launch?.release()
     return {
       ...surface,
-      ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
+      ...promptReceipt(delivered.intent, await settleLaunchPromptDisposal(delivered, created))
     }
   } catch (error) {
     const createdWorktreeId = recoverableWorktreeId ?? launch?.createdWorktreeId()
-    if (!surfacePublished && intent.target.kind !== 'existing' && createdWorktreeId) {
+    if (
+      !surfacePublished &&
+      intent.target.kind !== 'existing' &&
+      createdWorktreeId &&
+      !(error instanceof AgentLaunchSetupNotCompletedError && error.outcome.kind === 'failed')
+    ) {
       await recoverCreatedWorkspace(execution.workspaces, createdWorktreeId)
     }
     throw error
@@ -241,6 +271,8 @@ export type CreatedSurface = {
   terminalCreation?: RuntimeTerminalCreate
   structured?: AgentLaunchStructuredSurface
   promptRodeLaunchCommand?: boolean
+  /** The caller's plan gives this terminal none of the launch's text. */
+  promptLeftUnsent?: boolean
 }
 
 async function createSurface(
@@ -251,15 +283,31 @@ async function createSurface(
   const { intent, surfaces } = execution
   if (settled.mode === 'structured') {
     const reservedTabId = intent.paneKey ? parsePaneKey(intent.paneKey)?.tabId : undefined
+    // A prepared launch's released choices are the create's options and its first message's.
+    const released = execution.acceptance?.release?.releasedInput()
     const session = await surfaces.createStructuredSession({
       worktreeId: workspace.worktreeId,
       agent: intent.agent,
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
       ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
+      ...(released
+        ? {
+            releasedOptions: {
+              options: released.options,
+              ...(released.optionsMode ? { optionsMode: released.optionsMode } : {})
+            }
+          }
+        : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
-      ...launchPromptCreateInputs(intent, execution.signal),
-      ...(intent.prompt ? {} : { withoutPrompt: true as const })
+      ...launchPromptCreateInputs(
+        intent,
+        execution.signal,
+        execution.acceptance?.clientMessageId,
+        released ? agentSessionExecutionOptionsRecord(released.selection) : undefined
+      ),
+      ...(intent.prompt ? {} : { withoutPrompt: true as const }),
+      ...(execution.acceptance ? { closed: execution.acceptance.closed } : {})
     })
     return {
       outcome: {
@@ -273,29 +321,4 @@ async function createSurface(
     }
   }
   return createTerminalSurface(execution, workspace)
-}
-
-async function createTerminalSurface(
-  execution: AgentLaunchSurfaceExecution,
-  workspace: { worktreeId: string; connectionId?: string | null }
-): Promise<CreatedSurface> {
-  const { intent, surfaces } = execution
-  const startupPrompt = argvLaunchPrompt(intent)
-  const terminal = await surfaces.createTerminalAgent({
-    worktreeId: workspace.worktreeId,
-    agent: intent.agent,
-    ...(startupPrompt ? { startupPrompt } : {}),
-    ...terminalLaunchInputs(intent),
-    viewMode: 'terminal'
-  })
-  return {
-    outcome: {
-      kind: 'terminal',
-      handle: terminal.handle,
-      ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
-    },
-    terminalCreation: terminal.terminalCreation,
-    ...(terminal.warning ? { warning: terminal.warning } : {}),
-    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
-  }
 }

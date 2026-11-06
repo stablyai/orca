@@ -75,7 +75,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
-  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
+  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch,
+  // No host to ask: this create keeps its shipped chat route.
+  structuredLaunchOwner: () => null
 }))
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
@@ -204,6 +206,8 @@ describe('launchStructuredWorktreeSession', () => {
       })
 
       const completion = launchStructuredWorktreeSession(baseArgs)
+      // The host is asked whether it owns the new workspace's Setup before the chat opens.
+      await vi.waitFor(() => expect(openTab).toBeDefined())
       if (navigation === 'workspace') {
         mocks.state.activePendingCreationId = null
       } else {
@@ -220,6 +224,9 @@ describe('launchStructuredWorktreeSession', () => {
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(launch)
 
     const completion = launchStructuredWorktreeSession(baseArgs)
+    await vi.waitFor(() =>
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalled()
+    )
     mocks.state.pendingWorktreeCreations = {}
     mocks.listener?.(mocks.state)
 

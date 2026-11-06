@@ -18,10 +18,16 @@ import type {
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
 
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import type { AgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import type {
+  AgentLaunchSetupReceipt,
+  AgentLaunchTerminalStartupParams
+} from '../../../shared/rpc-contract/agent-launch-accept-params'
+import type { AgentLaunchTerminalAlternativeParams } from '../../../shared/rpc-contract/agent-launch-release-params'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -109,6 +115,9 @@ export type WorktreeCreationRequest = {
   note: string
   // Seed the first terminal only when backend did not launch it; null for blank shells.
   startupPlan: AgentStartupPlan | null
+  /** What `startupPlan` was planned from, so a host that runs the chat's terminal after Setup plans
+   *  it again with the first turn's final choices instead of rereading settings. Memory only. */
+  startupRecipe?: { inputs: AgentStartupPlanInputs; prompt: string; draftPrompt?: string }
   quickPrompt: string
   /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
    *  startup paste); completion seeds the chat-composer copy from it. */
@@ -146,6 +155,26 @@ export type PendingWorktreeCreation = {
   heldChatSkills?: readonly AgentJournalSkillRef[]
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
+  /** The host launch this creation's chat hands off to, chosen before the workspace was created; a
+   *  Retry of the handoff adopts it again. Absent: the creation keeps its shipped chat create. */
+  hostLaunch?: {
+    operationId: string
+    sessionId: string
+    /** The held message's id, which the host's chat founds it under. */
+    clientMessageId: string
+    /** The host takes the first turn's final choices after Setup (prepare, then release); absent,
+     *  it takes the launch whole with accept. Chosen with the route and kept for the launch. */
+    protocol?: 'release'
+    /** What the workspace's creation reported about the Setup the chat waits for. */
+    setupReceipt?: AgentLaunchSetupReceipt
+    /** The terminal alternative planned once at handoff, so every Retry sends the same launch:
+     *  accept's compiled plan, or for release the planner's inputs the host compiles. */
+    terminal?: {
+      startup?: AgentLaunchTerminalStartupParams
+      alternative?: AgentLaunchTerminalAlternativeParams
+      launchSource?: string
+    }
+  }
   request: WorktreeCreationRequest
 }
 

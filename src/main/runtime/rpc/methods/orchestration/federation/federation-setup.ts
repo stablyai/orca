@@ -58,10 +58,14 @@ export function monitorFederatedSetup(
   ) {
     return
   }
-  void args.runtime
-    .waitForSetupTerminalCompletion(setupTerminal.id)
+  const worktreeId = args.worktreeId
+  const run = worktreeId ? args.runtime.getSetupRun(worktreeId) : undefined
+  if (!run) {
+    return
+  }
+  void run.outcome
     .then((completion) => {
-      const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
+      const setupState = completion.kind === 'succeeded' ? 'succeeded' : 'failed'
       const effects = args.effects.map((effect) =>
         effect.kind === 'setup' ? { ...effect, state: setupState } : effect
       )

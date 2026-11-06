@@ -1,3 +1,4 @@
+import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../src/shared/setup-agent-sequencing'
 import { translate } from '../i18n/mobile-i18n'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
@@ -166,6 +167,13 @@ function readCreateResult(
   }
 }
 
+// The host's keepalives renew a launch's ordinary idle budget through required setup, never past
+// setup's own deadline plus the workspace allowance.
+const AGENT_LAUNCH_CREATE_BUDGET = {
+  timeoutMs: WORKTREE_CREATE_TIMEOUT_MS,
+  keepaliveTotalMs: DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + WORKTREE_CREATE_TIMEOUT_MS
+}
+
 // Resend unchanged mutation/operation ids only after ambiguous delivery; a new id would create again.
 // Legacy launch cache expires after 60s; only advertised launchOperationId provides durable ledger replay.
 function sendWorktreeCreateResilient(
@@ -194,12 +202,12 @@ function sendWorktreeCreateResilient(
                 ...agentLaunchCreateParams(launchAgent, params),
                 operationId: launchOperationId
               },
-              { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+              AGENT_LAUNCH_CREATE_BUDGET
             )
           : agentLaunchRun.request(
               client,
               agentLaunchCreateParams(launchAgent, params, launchOperationId),
-              { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+              AGENT_LAUNCH_CREATE_BUDGET
             )
         : worktreeCreateRun.request(client, params, {
             timeoutMs: WORKTREE_CREATE_TIMEOUT_MS

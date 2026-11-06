@@ -19,7 +19,8 @@ import {
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
-import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
+import { settleRetiredHostInput } from './purged-structured-launch-retirement'
+import { batchStructuredAgentLaunchRecordWrites } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -30,8 +31,9 @@ export function createPurgeStaleRuntimeHostState(
     if (removed.size === 0) {
       return
     }
-    // Why before the purge: delayed views must commit text it may offer back.
-    flushRetiredHostEdits(get(), removed)
+    // Why before the purge: delayed views must commit text it may offer back, and a saved chat
+    // launch may name a workspace no listing or session loaded.
+    settleRetiredHostInput(get(), removed)
     // Why no flag settle: the purged host's rows are dropped here, and a surviving same-id row on
     // another host must keep its own flag (a marker-less Mark as unread included).
     settleAttentionRemovedBy(
@@ -316,7 +318,9 @@ export function createPurgeStaleRuntimeHostState(
       beginEnclosingWorktreeRemoval({ hostId: toRuntimeExecutionHostId(id) })
     )
     try {
-      purge(removed)
+      // One logical retirement: every chat launch the host takes with it is cancelled at once and
+      // each launch journal is saved once, at its end.
+      batchStructuredAgentLaunchRecordWrites(() => purge(removed))
     } finally {
       finishRemovals.forEach((finish) => finish())
     }

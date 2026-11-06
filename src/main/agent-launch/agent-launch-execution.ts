@@ -11,6 +11,7 @@ import type {
   AgentLaunchSurfaceFactory,
   AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
+import type { AgentLaunchAcceptance } from './agent-launch-acceptance'
 
 /** Persist the surface result before delivery so a host crash leaves an honest prompt receipt. */
 type AgentLaunchPublishedSurface = AgentLaunchResult
@@ -21,7 +22,7 @@ type AgentLaunchExecutionBase = {
   vocabulary?: AgentLaunchModeVocabulary
   /** False if the client cannot display this chat; host callers may omit it. */
   callerRendersStructured?: boolean
-  onStage?: (stage: 'worktree_create' | 'mode_settle' | 'surface_create') => void
+  onStage?: (stage: 'worktree_create' | 'setup_wait' | 'mode_settle' | 'surface_create') => void
   /** Runs after tab publication, before post-creation delivery; must not throw. */
   onSurfacePublished?: (surface: AgentLaunchPublishedSurface) => void
   /** Abort at the next boundary; return an existing agent and skip pending prompt delivery. */
@@ -35,10 +36,13 @@ export type AgentLaunchSurfaceExecution = AgentLaunchExecutionBase & {
   /** Host-only override for callers that require a terminal handle. */
   terminalOnly?: boolean
   promptPolicy?: undefined
+  /** An existing-workspace launch accepted before Setup: it waits, then decides its surface. */
+  acceptance?: AgentLaunchAcceptance
 } & (
     | { decidedMode?: undefined }
     | {
-        /** Host-only preflight receipt; existing-workspace callers must already include the host verdict. */
+        /** Host-only preflight receipt; existing-workspace callers must already include the host verdict,
+         *  except an accepted launch, whose verdict waits for Setup. */
         decidedMode: AgentLaunchModeReceipt
         terminalOnly?: never
         callerRendersStructured?: never

@@ -1,6 +1,8 @@
+import type { SetupRun } from '../../setup/setup-run'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
+import type { RuntimeWorktreeLifecycleEvent } from '../../workspaces/lifecycle/worktree-lifecycle-event'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
@@ -24,6 +26,7 @@ export const STRUCTURED_PREFERENCE = {
 export type AgentLaunchRuntimeStubOptions = {
   settings?: Record<string, unknown>
   createSupport?: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
+  setupRun?: SetupRun
   setupReceipt?: {
     startupPolicy: 'start-immediately' | 'wait-for-setup'
     state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
@@ -69,15 +72,19 @@ export function setAgentLaunchRecordStore(store: AgentSessionRecordStore | null)
   launchRecordStore = store
 }
 
+// The runtime's workspace lifecycle stream, as an authoritative removal announces itself.
+const worktreeLifecycleListeners = new Set<(event: RuntimeWorktreeLifecycleEvent) => void>()
+
+export function emitWorktreeRemovedForTests(worktreeId: string): void {
+  for (const listener of worktreeLifecycleListeners) {
+    listener({ kind: 'removed', worktreeId, path: '/tmp/wt-7' })
+  }
+}
+
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   const worktreeCreateResults = new Map<string, Promise<unknown>>()
   // Only the panes this runtime created or adopted, under the handle it issued them.
   const handlesByPaneKey = new Map(Object.entries(options.adoptedPanes ?? {}))
-  const waitForSetupTerminalCompletion = vi.fn(
-    async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({
-      exitCode: 0
-    })
-  )
   return {
     getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
     requireStore: vi.fn(() => ({
@@ -105,6 +112,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createFolderWorkspace: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'fw-new' })),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
+      if (options.setupRun && typeof args.onSetupRun === 'function') {
+        args.onSetupRun(options.setupRun)
+      }
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       if (args.startupAgent && options.startupTerminalPaneKey) {
         handlesByPaneKey.set(options.startupTerminalPaneKey, 'term_agent_first')
@@ -157,13 +167,16 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       })
     ),
     ensureStructuredAgentSessionHost: vi.fn(async () => {}),
+    onWorktreeLifecycle: vi.fn((listener: (event: RuntimeWorktreeLifecycleEvent) => void) => {
+      worktreeLifecycleListeners.add(listener)
+      return () => worktreeLifecycleListeners.delete(listener)
+    }),
     openAgentSessionRecordStore: vi.fn(async (): Promise<AgentSessionRecordStore> => {
       if (!launchRecordStore) {
         throw new Error('agent_session_record_store_unavailable')
       }
       return launchRecordStore
     }),
-    waitForSetupTerminalCompletion,
     canPublishAgentLaunchTab: vi.fn(() => options.publishAgentLaunchTab !== undefined),
     publishAgentLaunchTab: vi.fn(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>

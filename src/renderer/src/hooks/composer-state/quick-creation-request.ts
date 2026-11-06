@@ -50,6 +50,7 @@ export type QuickCreationRequestInput = {
   pendingFirstAgentMessageRename: boolean
   note: string
   startupPlan: AgentStartupPlan | null
+  startupRecipe?: WorktreeCreationRequest['startupRecipe']
   quickPrompt: string
   launchDraftPrompt: string | null | undefined
   promptDelivery: 'draft' | 'auto-submit'
@@ -122,6 +123,7 @@ export function buildQuickCreationRequest(
     pendingFirstAgentMessageRename: input.pendingFirstAgentMessageRename,
     note: input.note,
     startupPlan: input.startupPlan,
+    ...(input.startupRecipe ? { startupRecipe: input.startupRecipe } : {}),
     quickPrompt: input.quickPrompt,
     ...(input.launchDraftPrompt ? { launchDraftPrompt: input.launchDraftPrompt } : {}),
     promptDelivery: input.promptDelivery,

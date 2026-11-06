@@ -16,6 +16,7 @@ import type { RpcContext } from '../core'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
+import { createUnderStructuredAgentSessionCloseFence } from './structured-agent-session-close-before-create'
 import { structuredAgentRuntimeMetadata } from '../../agent-session/installation/structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
@@ -27,7 +28,12 @@ import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import {
+  AgentLaunchClosedBeforeDispatchError,
+  AgentLaunchTabClosedError
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentLaunchMovesHostWindow,
   agentLaunchTabViewerRule,
@@ -53,11 +59,13 @@ export function agentLaunchSurfaceFactory(
       agent,
       options,
       chatOptions,
+      releasedOptions,
       sessionId: requested,
       tabId,
       withoutPrompt,
       firstMessage,
-      signal
+      signal,
+      closed
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
       const definition = structuredAgentRuntimeMetadata(agent)?.definition
@@ -66,14 +74,21 @@ export function agentLaunchSurfaceFactory(
           definition?.restingOptions.acceptsKey(key)
         )
       )
-      const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
+      const seeded = releasedOptions
+        ? releasedOptions.options
+        : (chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined))
+      const optionsMode = releasedOptions
+        ? releasedOptions.optionsMode
+        : chatOptions?.model
+          ? ('replace-model-selection' as const)
+          : undefined
       // A client that creates chats without starting them starts this one on its first message.
       const atRest =
         firstMessage !== undefined ||
         (withoutPrompt === true &&
           context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
             true)
-      const created = await createStructuredAgentSessionForWorktree({
+      const createArgs = {
         runtime: context.runtime,
         ensureHost: async () => {
           await context.runtime.ensureStructuredAgentSessionHost()
@@ -92,7 +107,7 @@ export function agentLaunchSurfaceFactory(
         },
         worktree: `id:${worktreeId}`,
         agent,
-        ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
+        ...(optionsMode ? { optionsMode } : {}),
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
@@ -101,7 +116,10 @@ export function agentLaunchSurfaceFactory(
         activate:
           !callerPresentsSurface &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
-      })
+      }
+      const created = closed
+        ? await createUnderLaunchCloseFence(sessionId, context.runtime, closed, createArgs)
+        : await createStructuredAgentSessionForWorktree(createArgs)
       if (!created.ok) {
         // A caller-named session conflict must surface to that caller, never downgrade to terminal.
         if (requested && created.refusal.code === 'agent_session_conflict') {
@@ -130,39 +148,50 @@ export function agentLaunchSurfaceFactory(
       paneKey,
       options,
       viewMode,
-      accountEnv
+      accountEnv,
+      startup,
+      draft,
+      closed
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options, agent)
       let promptRodeLaunchCommand = false
+      let dispatched = false
       const hasEarlyTab = earlyTab !== null
       if (earlyTab?.closedByUser()) {
         // The user closed its tab while it waited: nothing is spawned, and that is the answer.
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
+      if (closed?.aborted) {
+        terminalSpawn.rethrow(new AgentLaunchClosedBeforeDispatchError())
+      }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
         wslUserAct: true,
-        // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
-        startupAgent: agent,
+        ...(startup
+          ? callerBuiltStartup(agent, startup, accountEnv, launchSource)
+          : {
+              // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
+              startupAgent: agent,
+              // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
+              ...(startupPrompt
+                ? {
+                    startupPrompt,
+                    onStartupPromptCarry: (carried: boolean) => {
+                      promptRodeLaunchCommand = carried
+                    }
+                  }
+                : {}),
+              ...(agentArgs !== undefined ? { agentArgs } : {}),
+              // The model the user picked outranks configured args here too, as it does on a chat.
+              ...(launchPreferences ? { launchPreferences } : {}),
+              ...(accountEnv ? { accountEnv: { ...accountEnv } } : {})
+            }),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
-        // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
-        ...(startupPrompt
-          ? {
-              startupPrompt,
-              onStartupPromptCarry: (carried: boolean) => {
-                promptRodeLaunchCommand = carried
-              }
-            }
-          : {}),
-        ...(agentArgs !== undefined ? { agentArgs } : {}),
         ...(cwd ? { cwd } : {}),
-        // The model the user picked outranks configured args here too, as it does on a chat.
-        ...(launchPreferences ? { launchPreferences } : {}),
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(accountEnv ? { accountEnv: { ...accountEnv } } : {}),
         ...(presentation && (!movesHostWindow || !hasEarlyTab || presentation === 'background')
           ? { presentation: movesHostWindow ? presentation : ('background' as const) }
           : {}),
@@ -175,13 +204,25 @@ export function agentLaunchSurfaceFactory(
                   : agentLaunchTabViewerRule(context, presentation)
             }
           : {}),
-        onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
+        // A close during account and launch preparation stops the spawn before it leaves.
+        ...(closed ? { signal: closed } : {}),
+        onPtySpawnDispatched: () => {
+          dispatched = true
+          terminalSpawn.onPtySpawnDispatched()
+        }
       })
-      const terminal = await created.catch(terminalSpawn.rethrow)
-      if (earlyTab?.closedByUser()) {
+      const terminal = await created.catch((error: unknown) =>
+        terminalSpawn.rethrow(
+          closed?.aborted && !dispatched ? new AgentLaunchClosedBeforeDispatchError() : error
+        )
+      )
+      if (earlyTab?.closedByUser() || closed?.aborted) {
         // Close a terminal created after its tab was closed before pasting; command-line prompts may already have reached it.
         await context.runtime.closeTerminal(terminal.handle).catch(() => {})
         throw new AgentLaunchTabClosedError()
+      }
+      if (draft) {
+        context.runtime.pasteStartupDraftWhenReady(terminal.handle, { agent, content: draft })
       }
       return {
         handle: terminal.handle,
@@ -224,6 +265,47 @@ export function agentLaunchSurfaceFactory(
       })
     }
   }
+}
+
+/** The caller quoted this command for its host; the runtime spawns it as given, attributed to `agent`.
+ *  A prepared account rides over its env, as the account patch does an ordinary caller-built launch. */
+function callerBuiltStartup(
+  agent: TuiAgent,
+  startup: NonNullable<Parameters<AgentLaunchSurfaceFactory['createTerminalAgent']>[0]['startup']>,
+  accountEnv: Readonly<Record<string, string>> | undefined,
+  launchSource: string | undefined
+) {
+  const env = startup.env || accountEnv ? { ...startup.env, ...accountEnv } : undefined
+  return {
+    command: startup.command,
+    launchAgent: agent,
+    ...(env ? { env } : {}),
+    ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+    ...(startup.startupCommandDelivery
+      ? { startupCommandDelivery: startup.startupCommandDelivery }
+      : {}),
+    // Counted as the agent start it is, under the surface that asked for it.
+    telemetry: agentStartedTelemetry(agent, launchSource)
+  }
+}
+
+/** The same fence the RPC create runs under. A close during preparation starts nothing; one while the
+ *  chat is made closes it again, and the launch answers closed, never that nothing was made. */
+async function createUnderLaunchCloseFence(
+  sessionId: string,
+  runtime: RpcContext['runtime'],
+  closed: AbortSignal,
+  args: Parameters<typeof createStructuredAgentSessionForWorktree>[0]
+): ReturnType<typeof createStructuredAgentSessionForWorktree> {
+  const { closedFirst, result } = await createUnderStructuredAgentSessionCloseFence(
+    sessionId,
+    runtime,
+    (capture) => createStructuredAgentSessionForWorktree({ ...args, closed, capture })
+  )
+  if (closedFirst) {
+    throw new AgentLaunchTabClosedError()
+  }
+  return result
 }
 
 function launchWarning(...parts: (string | undefined)[]): { warning?: string } {

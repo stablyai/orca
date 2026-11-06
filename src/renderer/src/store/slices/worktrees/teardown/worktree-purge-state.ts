@@ -18,6 +18,7 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { batchStructuredAgentLaunchRecordWrites } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
@@ -90,16 +91,23 @@ export function buildFullWorktreePurgeState(
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
-  const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
-  for (const worktreeId of worktreeIdSet) {
-    retirePurgedTabLaunches(
-      s,
-      worktreeId,
-      s.tabsByWorktree[worktreeId] ?? [],
-      s.unifiedTabsByWorktree[worktreeId] ?? [],
-      cancelledSessionIds
+  // One retirement: each launch journal it changes is saved once, at its end.
+  batchStructuredAgentLaunchRecordWrites(() => {
+    const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
+      worktreeIdSet,
+      undefined,
+      normalizedTargets
     )
-  }
+    for (const worktreeId of worktreeIdSet) {
+      retirePurgedTabLaunches(
+        s,
+        worktreeId,
+        s.tabsByWorktree[worktreeId] ?? [],
+        s.unifiedTabsByWorktree[worktreeId] ?? [],
+        cancelledSessionIds
+      )
+    }
+  })
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
   // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
   for (const id of worktreeIdSet) {

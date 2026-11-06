@@ -17,6 +17,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
+import type { AgentLaunchAcceptance } from '../../../agent-launch/agent-launch-acceptance'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { agentLaunchFailureMessage } from './agent-launch-failure-code'
@@ -40,6 +41,7 @@ export type ReplaySafeLaunch = {
   terminalSpawn: TerminalSpawnDispatch
   /** Queue provisional surface/prompt recording without awaiting it; ordered ledger transactions keep final settlement after it. */
   recordSurface: (provisional: AgentLaunchResult) => void
+  acceptance?: AgentLaunchAcceptance
 }
 
 export type AgentLaunchAdmission =
@@ -54,6 +56,8 @@ export type AgentLaunchAdmission =
       /** Distinct from the launch id: the inner attach reserves in this same ledger. */
       attachOperationId: string
       callerKey: string
+      /** When this launch's record expires; a prepared launch's input wait ends there. */
+      expiresAt: number
     }
   /** Already run under this id; hand back what it produced rather than producing it again. */
   | { decision: 'replay'; result: AgentLaunchResult }
@@ -161,6 +165,16 @@ function presentRecordedAnswer(
   return { decision: 'replay', result: withLiveTerminalHandle(answer.result, context.runtime) }
 }
 
+/** A recorded row's answer as admission would give it; null while no one has answered it yet. */
+export function recordedAgentLaunchAnswer(
+  context: RpcContext,
+  operationId: string,
+  outcome: AgentSessionOperationOutcome
+): AgentLaunchAdmission | null {
+  const answer = answerFromRecordedRow(operationId, outcome)
+  return answer ? presentRecordedAnswer(context, operationId, answer) : null
+}
+
 /** Admit and conditionally claim in one durable transaction.
  * Admission checks identity/consistency; only the claim selects one executor among concurrent retries. */
 export async function admitAgentLaunchOperation(
@@ -224,6 +238,7 @@ export async function admitAgentLaunchOperation(
     decision: 'execute',
     attachOperationId,
     callerKey,
+    expiresAt: claim.row.expiresAt,
     // The same row shape twice: a build that predates the first write reads either one.
     record: succeeded,
     settle: succeeded,

@@ -13,6 +13,7 @@ import {
   showWorktreeCreationError
 } from '@/lib/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
@@ -158,7 +159,13 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   if (!entry) {
     return
   }
-  if (entry.chatInputHandedOff && entry.worktreeId) {
+  // A workspace whose chat handoff alone failed retries that handoff into the same workspace, and a
+  // host launch into the same launch; nothing is created twice.
+  if (
+    entry.worktreeId &&
+    (entry.chatInputHandedOff ||
+      (entry.hostLaunch && findWorktreeById(store.worktreesByRepo, entry.worktreeId)))
+  ) {
     store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
     store.setActivePendingWorktreeCreation(creationId)
     store.setActiveView('terminal')
@@ -173,7 +180,10 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     error: undefined,
     provisioningLog: undefined,
     checkoutProgress: undefined,
-    worktreeId: undefined
+    worktreeId: undefined,
+    // A route chosen for a create whose reply never came stays chosen; one already handed a launch
+    // is not reused for another workspace.
+    ...(entry.hostLaunch?.terminal ? { hostLaunch: undefined } : {})
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

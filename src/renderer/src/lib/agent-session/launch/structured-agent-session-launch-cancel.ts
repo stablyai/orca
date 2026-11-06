@@ -14,7 +14,8 @@ import {
   deleteStructuredLaunchStateIfCurrent,
   getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners
+  notifyStructuredLaunchStateChanged,
+  publishStructuredLaunchStatus
 } from './structured-agent-session-launch-registry'
 
 function markStructuredAgentSessionLaunchCancelledInternal(
@@ -63,7 +64,12 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     removeStructuredLaunchSlot(owner, worktreeId, sessionId)
   }
   if (!alreadyCancelled && owner) {
-    notifyStructuredLaunchListeners()
+    // Only a launch still held for another workspace keeps a row to save again.
+    if (state) {
+      notifyStructuredLaunchStateChanged(state)
+    } else {
+      publishStructuredLaunchStatus()
+    }
   }
   return !alreadyCancelled
 }

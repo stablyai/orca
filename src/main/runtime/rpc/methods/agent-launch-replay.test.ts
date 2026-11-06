@@ -1,3 +1,4 @@
+import { createSetupRun } from '../../setup/setup-run'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Exercise at-most-once launch and truthful replay against the durable ledger; adjacent ablations prove each guard prevents duplication. */
@@ -365,6 +366,52 @@ describe('an uncertain launch stays uncertain', () => {
       }
     })
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
+  it('releases a disconnected caller while the durable launch waits for the same Setup run', async () => {
+    const run = createSetupRun(true)
+    const runtime = runtimeStub({ setupRun: run })
+    const controller = new AbortController()
+    const params = createLaunch({ operationId: OPERATION_ID })
+    const pending = launch(params, runtime, { ...PAIRED_CLIENT, signal: controller.signal })
+    const refused = expect(pending).rejects.toThrow('caller disconnected')
+    await vi.waitFor(() => expect(runtime.createManagedWorktree).toHaveBeenCalledOnce())
+    controller.abort(new Error('caller disconnected'))
+    await refused
+    expect(run.result).toBeUndefined()
+    expect(createStructuredSession).not.toHaveBeenCalled()
+    const retry = launch(params, runtime)
+    run.settle({ kind: 'succeeded' })
+    await expect(retry).resolves.toMatchObject({ outcome: { kind: 'structured' } })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
+    expect(createStructuredSession).toHaveBeenCalledOnce()
+  })
+
+  it('reports a live setup failure truthfully while replay cannot create a second workspace', async () => {
+    const run = createSetupRun(true)
+    run.settle({ kind: 'failed', exitCode: 7 })
+    const runtime = { ...runtimeStub({ setupRun: run }), getRuntimeId: () => 'runtime-1' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime fixture implements the launch and dispatcher metadata ports reached here.
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_LAUNCH_METHODS
+    })
+    const params = createLaunch({ operationId: OPERATION_ID })
+    const request = { id: 'failed-setup', authToken: 'token', method: 'agent.launchReplay', params }
+    expect(await dispatcher.dispatch(request)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'agent_launch_setup_not_completed',
+        message: expect.stringContaining('Claude was not started')
+      }
+    })
+    expect(rowFor(OPERATION_ID)?.outcome.status).toBe('unknown')
+    expect(await dispatcher.dispatch(request)).toMatchObject({
+      ok: false,
+      error: { code: 'agent_session_operation_unknown' }
+    })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
+    expect(createStructuredSession).not.toHaveBeenCalled()
   })
 
   it('records a failure that happened before anything could be created', async () => {

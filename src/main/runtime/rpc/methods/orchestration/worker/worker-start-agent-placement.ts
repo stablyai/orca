@@ -1,3 +1,4 @@
+import { AgentLaunchSetupNotCompletedError, type SetupRun } from '../../../../setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
@@ -14,6 +15,7 @@ import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { WorkerStartInput } from './worker-start-schema'
 import {
+  applySetupRunOutcome,
   createExistingWorktreeWorkerTerminal,
   createStructuredWorkerSessionForWorktree,
   type WorkerEffect,
@@ -29,6 +31,7 @@ type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerS
 export type WorkerAgentPlacement = {
   /** The mode that actually ran; a created worktree can settle it later than the caller could. */
   mode: WorkerStartModeReceipt
+  readinessDeadline?: number
   worktree: PlacedWorktree
   terminalHandle: string
   terminalCreation?: RuntimeTerminalCreate
@@ -71,6 +74,17 @@ export const EXISTING_WORKTREE_SETUP: WorkerSetupReceipt = {
   hookFound: false,
   startupPolicy: 'start-immediately',
   state: 'not_applicable'
+}
+
+/** A placement that failed after creating its worktree, with that worktree's setup evidence and the stage that ran out. */
+export class WorkerSetupGateError extends Error {
+  constructor(
+    readonly setup: WorkerSetupReceipt,
+    cause: unknown,
+    readonly stage: 'setup_wait' | 'agent_readiness' = 'setup_wait'
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+  }
 }
 
 export async function placeWorkerAgent(
@@ -126,9 +140,15 @@ async function launchWorkerAgent(
   let structuredSession: WorkerStructuredSession | null = null
   let terminalCreation: RuntimeTerminalCreate | undefined
   let launched: Awaited<ReturnType<typeof executeAgentLaunch>>
+  let readinessDeadline: number | undefined
+  let setupTimer: ReturnType<typeof setTimeout> | undefined
+  // The run a structured worker waits on; a terminal worker's readiness wait owns its own result.
+  let gatingSetup: SetupRun | undefined
+  const setupDeadline = new AbortController()
   try {
     launched = await executeAgentLaunch({
       runtime: args.runtime,
+      signal: setupDeadline.signal,
       intent: {
         agent,
         // The worker's own factory builds the create from the dispatch, so the target carries none.
@@ -140,7 +160,9 @@ async function launchWorkerAgent(
       decidedMode: args.mode,
       vocabulary: WORKER_START_VOCABULARY,
       onStage: (stage) =>
-        args.onStage(stage === 'worktree_create' ? 'worktree_create' : 'terminal_create'),
+        args.onStage(
+          stage === 'worktree_create' || stage === 'setup_wait' ? stage : 'terminal_create'
+        ),
       workspaces: {
         createRecoveryShell: async (worktreeId) => {
           const shell = await args.runtime.createTerminal(`id:${worktreeId}`, {
@@ -170,7 +192,17 @@ async function launchWorkerAgent(
             ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
             effects: args.effects
           })
+          if (promisedAgentChat) {
+            gatingSetup = created.requiredSetup
+            readinessDeadline = Date.now() + (args.params.timeoutMs ?? 60_000)
+            const expired = { kind: 'ended', reason: 'deadline' } as const
+            setupTimer = setTimeout(
+              () => setupDeadline.abort(new AgentLaunchSetupNotCompletedError(expired, agent)),
+              Math.max(0, readinessDeadline - Date.now())
+            )
+          }
           return {
+            requiredSetup: created.requiredSetup,
             worktreeId: created.worktree.id,
             startupTerminalHandle: created.terminalHandle,
             startupTerminalCreation: created.terminalCreation
@@ -195,9 +227,26 @@ async function launchWorkerAgent(
       structuredSession,
       dispatchId: args.dispatchId
     })
+    if (created && gatingSetup) {
+      applySetupRunOutcome(created.setupReceipt, args.effects, gatingSetup)
+      // The shared deadline ran out after setup finished: a readiness timeout, not a setup failure.
+      if (gatingSetup.result?.kind === 'succeeded' && setupDeadline.signal.aborted) {
+        const timeout = new Error('Agent did not become ready (timeout).')
+        throw new WorkerSetupGateError(created.setupReceipt, timeout, 'agent_readiness')
+      }
+      if (error instanceof AgentLaunchSetupNotCompletedError) {
+        throw new WorkerSetupGateError(created.setupReceipt, error)
+      }
+    }
     throw error
+  } finally {
+    clearTimeout(setupTimer)
+  }
+  if (created && gatingSetup) {
+    applySetupRunOutcome(created.setupReceipt, args.effects, gatingSetup)
   }
   return {
+    readinessDeadline,
     mode: launched.receipt,
     worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,

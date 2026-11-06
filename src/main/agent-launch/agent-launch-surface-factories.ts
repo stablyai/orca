@@ -1,3 +1,4 @@
+import type { SetupRun } from '../runtime/setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
@@ -14,6 +15,7 @@ import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/age
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchTerminalStartupParams } from '../../shared/rpc-contract/agent-launch-accept-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 
@@ -24,6 +26,11 @@ export type AgentLaunchSurfaceFactory = {
     agent: StructuredAgentId
     chatOptions?: Readonly<Record<string, string>>
     options?: Readonly<Record<string, unknown>>
+    /** A prepared launch's final choices: exactly these create options and mode, never derived. */
+    releasedOptions?: {
+      options: Readonly<Record<string, string>>
+      optionsMode?: 'replace-model-selection'
+    }
     /** Caller-minted ID; reject with AgentLaunchSessionAlreadyExistsError if taken. */
     sessionId?: string
     /** Caller-reserved tab ID; omit to use the ID clients derive. */
@@ -32,6 +39,8 @@ export type AgentLaunchSurfaceFactory = {
     withoutPrompt?: true
     firstMessage?: StructuredAgentSessionFirstMessage
     signal?: AbortSignal
+    /** An accepted launch's close: before commit it starts nothing; after, the chat made is closed. */
+    closed?: AbortSignal
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
     worktreeId: string
@@ -48,6 +57,15 @@ export type AgentLaunchSurfaceFactory = {
     viewMode?: 'terminal' | 'chat'
     /** Account routing overrides merged over the agent environment. */
     accountEnv?: Readonly<Record<string, string>>
+    /** The caller's own command, run verbatim instead of the configured launcher. */
+    startup?: Omit<
+      Extract<AgentLaunchTerminalStartupParams, { kind: 'command' }>,
+      'kind' | 'prompt' | 'draftPrompt'
+    >
+    /** Left unsent in the agent's input once it is ready. */
+    draft?: string
+    /** An accepted launch's close: before dispatch it spawns nothing; after, the terminal is closed. */
+    closed?: AbortSignal
   }): Promise<{
     handle: string
     /** Omit when the runtime reports no pane; never invent one. */
@@ -116,6 +134,7 @@ export type AgentLaunchWorkspaceFactory = {
     /** Null means local; absent means unresolved. */
     connectionId?: string | null
     startupTerminalHandle: string | undefined
+    requiredSetup?: SetupRun
     startupTerminalCreation?: RuntimeTerminalCreate
     startupTerminalPaneKey?: string
     warning?: string

@@ -28,6 +28,7 @@ import {
   retireStructuredAgentLaunchCancellation
 } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
+import { hostLaunchAwaitsItsTab } from './structured-agent-session-host-launch-retention'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -72,9 +73,33 @@ export function notifyStructuredLaunchListeners(): void {
     }
   }
   updateStructuredAgentLaunchRecords(changes())
+  publishStructuredLaunchStatus()
+}
+
+/** Tells views launch status changed, saving nothing: for a change already saved, or to
+ *  tombstones only. Never saves a launch, so it may run where saving one would be wrong. */
+export function publishStructuredLaunchStatus(): void {
   for (const listener of structuredLaunchListeners) {
     listener()
   }
+}
+
+/** Saves the one launch that changed, then tells views. A launch this window no longer holds (its
+ *  row already retired, or replaced) saves nothing, so a late callback can never bring a row back. */
+export function notifyStructuredLaunchStateChanged(state: StructuredLaunchState): void {
+  notifyStructuredLaunchIntentChanged(state.intent, state)
+}
+
+/** As above, for the launch this window holds with exactly this intent. */
+export function notifyStructuredLaunchIntentChanged(
+  intent: StructuredLaunchState['intent'],
+  expected?: StructuredLaunchState
+): void {
+  const state = structuredLaunchesBySessionId.get(intent.sessionId)
+  if (state && state.intent === intent && (!expected || expected === state)) {
+    persistStructuredLaunchState(state)
+  }
+  publishStructuredLaunchStatus()
 }
 
 export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
@@ -106,8 +131,15 @@ export function setStructuredLaunchState(state: StructuredLaunchState): void {
   persistStructuredLaunchState(state)
 }
 
-export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
-  if (structuredLaunchesBySessionId.get(state.intent.sessionId) !== state) {
+/** `adoptedElsewhere`: the host's own surface took the launch and nothing is left for its chat. */
+export function deleteStructuredLaunchStateIfCurrent(
+  state: StructuredLaunchState,
+  adoptedElsewhere?: true
+): boolean {
+  if (
+    structuredLaunchesBySessionId.get(state.intent.sessionId) !== state ||
+    (hostLaunchAwaitsItsTab(state) && !adoptedElsewhere)
+  ) {
     return false
   }
   structuredLaunchesBySessionId.delete(state.intent.sessionId)
@@ -128,11 +160,17 @@ function structuredLaunchRecord(
   state: StructuredLaunchState
 ): StructuredAgentLaunchPersistedRecord | null {
   const lifecycle = launchStateLifecycle(state)
-  if (lifecycle === 'published' || lifecycle === 'cancelled') {
+  // A host launch's chat this window never showed is not the user's yet: a reload redraws it from
+  // this row and reads the host again.
+  const unshown = lifecycle === 'published' && hostLaunchAwaitsItsTab(state)
+  if (lifecycle === 'cancelled' || (lifecycle === 'published' && !unshown)) {
     return null
   }
   return {
-    ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
+    ...structuredAgentLaunchRecordFor(
+      state.intent,
+      lifecycle === 'published' ? 'visibility-unknown' : lifecycle
+    ),
     ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
   }
 }
@@ -237,7 +275,7 @@ export function retireStructuredAgentSessionLaunchCancellationTombstone(
     return false
   }
   retireStructuredAgentLaunchCancellation(sessionId)
-  notifyStructuredLaunchListeners()
+  publishStructuredLaunchStatus()
   return true
 }
 
@@ -252,7 +290,7 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
     executionHostId
   )
   if (changed) {
-    notifyStructuredLaunchListeners()
+    publishStructuredLaunchStatus()
   }
   return changed
 }

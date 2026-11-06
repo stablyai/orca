@@ -9,7 +9,8 @@ export type StructuredAgentSessionViewArgs = {
   agent: AgentType
   isVisible: boolean
   transportEnabled?: boolean
-  /** The host has published the session but its provider has not answered startup yet. */
+  /** The host has published the session, or taken its first turn after Setup, but its provider
+   *  has not answered startup yet. */
   providerStarting?: boolean
   /** The host runs the session's provider and its start is proven. */
   providerRunning?: boolean

@@ -1,10 +1,3 @@
-import {
-  findIndexedProjectGroupOwner,
-  findIndexedWorktreeOwner,
-  getCatalogOwnerHostId
-} from '../../worktree-runtime-owner-index'
-import { findIndexedRepoOwner } from '../../repo-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -14,6 +7,7 @@ import { useAppStore } from '@/store/index'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import {
+  batchStructuredAgentLaunchRecordWrites,
   readStructuredAgentLaunchRecord,
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
@@ -33,11 +27,16 @@ import {
   type OpenedAgentSessionTab
 } from '../../structured-agent-session-tab-open-through-layout-owner'
 import {
+  groupHoldingTab,
+  noteLaunchTabDrawn,
+  workspaceShowsLaunchChat,
+  workspaceTabIdShown
+} from './structured-agent-session-launch-tab-index'
+import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type LaunchSurface = {
   sessionId: string
@@ -46,11 +45,21 @@ type LaunchSurface = {
   surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 
-export function findStructuredLaunchTab(args: {
-  worktreeId: string
-  sessionId: string
-  executionHostId: ExecutionHostId
-}): Tab | null {
+type LaunchTabAddress = { worktreeId: string; sessionId: string; executionHostId: ExecutionHostId }
+
+/** The launch's chat already shows here, on its own host. */
+export function structuredLaunchTabShown(args: LaunchTabAddress): boolean {
+  return workspaceShowsLaunchChat(
+    useAppStore.getState().unifiedTabsByWorktree[args.worktreeId],
+    args,
+    getStructuredAgentSessionLaunchOwner(args.sessionId)
+  )
+}
+
+export function findStructuredLaunchTab(args: LaunchTabAddress): Tab | null {
+  if (!structuredLaunchTabShown(args)) {
+    return null
+  }
   const owner = getStructuredAgentSessionLaunchOwner(args.sessionId)
   const tabs = useAppStore.getState().unifiedTabsByWorktree[args.worktreeId]
   return (
@@ -85,40 +94,54 @@ export function captureStructuredLaunchSurfaceAddress(
 }
 
 let stopTrackingSlots: (() => void) | undefined
+// While a batch draws launch surfaces, their slot bookkeeping waits to be reconciled once, at its end.
+let slotReconcileDeferred = false
 
 export function stopStructuredLaunchSlotTracking(): void {
   stopTrackingSlots?.()
   stopTrackingSlots = undefined
 }
 
-function trackSlotAddresses(): void {
-  stopTrackingSlots ??= useAppStore.subscribe((state, previous) => {
-    if (state.groupsByWorktree === previous.groupsByWorktree) {
-      return
-    }
-    let hasHiddenSlot = false
+function sameSurfaceAddress(
+  saved: StructuredLaunchSurfaceAddress | undefined,
+  next: StructuredLaunchSurfaceAddress
+): boolean {
+  return (
+    saved?.worktreeId === next.worktreeId &&
+    saved.targetGroupId === next.targetGroupId &&
+    saved.precedingTabIds.length === next.precedingTabIds.length &&
+    saved.precedingTabIds.every((id, index) => id === next.precedingTabIds[index])
+  )
+}
+
+/** Saves where each hidden local slot now sits, in one write; false once no slot is hidden. */
+function reconcileSlotAddresses(
+  state: ReturnType<typeof useAppStore.getState>,
+  previousGroups: ReturnType<typeof useAppStore.getState>['groupsByWorktree']
+): boolean {
+  let hasHiddenSlot = false
+  batchStructuredAgentLaunchRecordWrites(() => {
     for (const record of readStructuredAgentLaunchRecords()) {
       const address = record.surfaceAddress
       if (!address || record.executionHostId !== 'local') {
         continue
       }
       const tabId = structuredAgentSessionTabId(record.sessionId)
-      if (state.unifiedTabsByWorktree[address.worktreeId]?.some((tab) => tab.id === tabId)) {
+      if (workspaceTabIdShown(state.unifiedTabsByWorktree[address.worktreeId], tabId)) {
         continue
       }
       hasHiddenSlot = true
-      if (
-        state.groupsByWorktree[address.worktreeId] === previous.groupsByWorktree[address.worktreeId]
-      ) {
+      if (state.groupsByWorktree[address.worktreeId] === previousGroups[address.worktreeId]) {
         continue
       }
-      const group = state.groupsByWorktree[address.worktreeId]?.find((entry) =>
-        entry.tabOrder.includes(tabId)
-      )
+      const slot = groupHoldingTab(state.groupsByWorktree[address.worktreeId], tabId)
       const surfaceAddress = {
         worktreeId: address.worktreeId,
-        targetGroupId: group?.id,
-        precedingTabIds: group ? group.tabOrder.slice(0, group.tabOrder.indexOf(tabId)) : []
+        targetGroupId: slot?.group.id,
+        precedingTabIds: slot ? slot.group.tabOrder.slice(0, slot.position) : []
+      }
+      if (sameSurfaceAddress(address, surfaceAddress)) {
+        continue
       }
       const launch = getStructuredLaunchStateBySessionId(record.sessionId)
       if (launch) {
@@ -126,8 +149,38 @@ function trackSlotAddresses(): void {
       }
       writeStructuredAgentLaunchRecord({ ...record, surfaceAddress })
     }
-    if (!hasHiddenSlot) {
+  })
+  return hasHiddenSlot
+}
+
+function trackSlotAddresses(): void {
+  stopTrackingSlots ??= useAppStore.subscribe((state, previous) => {
+    if (slotReconcileDeferred || state.groupsByWorktree === previous.groupsByWorktree) {
+      return
+    }
+    if (!reconcileSlotAddresses(state, previous.groupsByWorktree)) {
       stopStructuredLaunchSlotTracking()
+    }
+  })
+}
+
+/** Draws many launch surfaces at once: their slots are reconciled and their rows saved once, after
+ *  every draw, rather than on each tab each draw adds. */
+export function batchStructuredLaunchSurfaces(draw: () => void): void {
+  if (slotReconcileDeferred) {
+    draw()
+    return
+  }
+  const previousGroups = useAppStore.getState().groupsByWorktree
+  slotReconcileDeferred = true
+  batchStructuredAgentLaunchRecordWrites(() => {
+    try {
+      draw()
+    } finally {
+      slotReconcileDeferred = false
+      if (stopTrackingSlots && !reconcileSlotAddresses(useAppStore.getState(), previousGroups)) {
+        stopStructuredLaunchSlotTracking()
+      }
     }
   })
 }
@@ -169,13 +222,12 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   const record = readStructuredAgentLaunchRecord(args.sessionId)
   const address =
     record?.executionHostId === args.executionHostId ? record.surfaceAddress : undefined
-  const group = state.groupsByWorktree?.[args.worktreeId]?.find((entry) =>
-    entry.tabOrder.includes(tabId)
-  )
+  const group = groupHoldingTab(state.groupsByWorktree?.[args.worktreeId], tabId)?.group
   const targetGroupId =
     group?.id ??
     (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId)
   const drawHere = (): Tab => {
+    const shown = useAppStore.getState().unifiedTabsByWorktree[args.worktreeId]
     const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
       id: tabId,
       entityId: args.sessionId,
@@ -186,6 +238,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       activate: args.activate !== false
     })
+    noteLaunchTabDrawn(shown, useAppStore.getState().unifiedTabsByWorktree[args.worktreeId], tab)
     const target = structuredAgentSessionTargetForHost(args.executionHostId)
     holdFrameDrawnProvisionalChatTab(target, args.worktreeId, tab.id)
     if (args.activate !== false) {
@@ -220,8 +273,8 @@ function slotAnchor(
   if (address?.worktreeId !== worktreeId) {
     return {}
   }
-  const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-  const afterTabId = address.precedingTabIds.findLast((id) => tabs.some((tab) => tab.id === id))
+  const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId]
+  const afterTabId = address.precedingTabIds.findLast((id) => workspaceTabIdShown(tabs, id))
   return afterTabId ? { afterTabId } : {}
 }
 
@@ -246,40 +299,5 @@ export function materializeStructuredLaunchSurface(launch: LaunchSurface, activa
   })
   if (activate !== false) {
     clearWebSessionFocusIntentIfMatches(owner, address.worktreeId, hostTabId)
-  }
-}
-
-export function restoreStructuredLaunchSurfaces(): void {
-  const state = useAppStore.getState()
-  const catalog = {
-    workspaces: [
-      ...state.allWorktrees(),
-      ...selectFolderWorkspaces(state).flatMap((workspace) => {
-        const group = findIndexedProjectGroupOwner(state.projectGroups, workspace.projectGroupId)
-        const host = workspace.executionHostId || workspace.connectionId ? workspace : group
-        const owned = host && { ...workspace, executionHostId: getCatalogOwnerHostId(host) }
-        return owned ? [folderWorkspaceToWorktree(owned)] : []
-      })
-    ]
-  }
-  for (const record of readStructuredAgentLaunchRecords()) {
-    if (
-      record.executionHostId !== 'local' ||
-      record.lifecycle !== 'visibility-unknown' ||
-      !record.surfaceAddress
-    ) {
-      continue
-    }
-    const workspace = findIndexedWorktreeOwner(catalog, record.surfaceAddress.worktreeId)
-    if (!workspace || workspace.runtimeOwnerEnvironmentId?.trim()) {
-      continue
-    }
-    const repo = findIndexedRepoOwner(state.repos, workspace.repoId)
-    const host = workspace.hostId ?? (repo ? getCatalogOwnerHostId(repo) : undefined)
-    if (host !== getStructuredAgentSessionLaunchOwner(record.sessionId)) {
-      continue
-    }
-    reserveStructuredLaunchSlot(record)
-    materializeStructuredLaunchSurface(record, false)
   }
 }

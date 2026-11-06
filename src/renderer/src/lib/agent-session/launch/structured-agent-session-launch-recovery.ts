@@ -15,6 +15,7 @@ import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
+import { observeStructuredHostLaunch } from './structured-agent-session-host-launch'
 
 export type StructuredAgentLaunchReceipt = {
   sessionId: string
@@ -139,6 +140,10 @@ export async function launchAndReconcile(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
+  const { hostLaunch } = state.intent
+  if (hostLaunch) {
+    return observeStructuredHostLaunch(state, hostLaunch, () => throwIfLaunchCancelled(state))
+  }
   let receipt: StructuredAgentLaunchReceipt
   try {
     receipt = await launchStructuredAgentSession(
@@ -174,6 +179,13 @@ export async function reconcileUnknownLaunch(
   requested = false
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
+  // The host's own record of its launch answers; a lost observer never sends anything new.
+  const { hostLaunch } = state.intent
+  if (hostLaunch) {
+    state.visibilityUnknown = false
+    state.onVisibilityChanged?.()
+    return observeStructuredHostLaunch(state, hostLaunch, () => throwIfLaunchCancelled(state))
+  }
   if (state.intent.params.firstMessage && !requested) {
     return recoverPublishedSessionReceipt(state)
   }

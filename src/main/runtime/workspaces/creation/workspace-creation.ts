@@ -12,7 +12,11 @@ import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-er
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
+import {
+  prepareRuntimeLocalWorktreeSetup,
+  runtimeWorktreeSetupReceipt
+} from './runtime-local-worktree-setup'
+import { promisedChatSetupReceipt } from '../../setup/setup-run'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
@@ -111,7 +115,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     const createRoute = resolveWorktreeCreateRoute(repo)
     if (isFolderRepo(repo)) {
       // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
-      return createRuntimeFolderWorktree({
+      const folder = await createRuntimeFolderWorktree({
         request: args,
         repo,
         startup: effectiveStartup,
@@ -136,6 +140,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           activate: activationCallbacks.folder
         }
       })
+      // A folder runs no Setup, so a chat it promised waits for nothing.
+      return { ...folder, ...promisedChatSetupReceipt(args.promisedAgentChat, undefined) }
     }
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
@@ -187,15 +193,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       localCreate
     const { lineage, workspaceLineage } = metadataResult
 
-    let {
-      setup,
-      defaultTabs,
-      warning,
-      effectiveDecision,
-      hookFound,
-      shouldRunSetup,
-      didStartInProcessSetupHook
-    } = await prepareRuntimeLocalWorktreeSetup({
+    const setupPreparation = await prepareRuntimeLocalWorktreeSetup({
       request: args,
       repo,
       worktreePath,
@@ -208,6 +206,14 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning:
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
+
+    let { setup, setupRun, defaultTabs, warning } = setupPreparation
+    const { didStartInProcessSetupHook } = setupPreparation
+
+    if (setupRun) {
+      this.registerSetupRun(worktree.id, setupRun)
+      args.onSetupRun?.(setupRun)
+    }
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -230,6 +236,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       repo,
       worktree,
       setup,
+      setupRun,
       defaultTabs,
       startup: effectiveStartup,
       startupFollowup: effectiveStartupFollowup,
@@ -251,6 +258,12 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         activate: activationCallbacks.local
       }
     })
+    if (setupRun && !args.observeSetupCompletion && !args.promisedAgentChat) {
+      setupRun.settle({ kind: 'ended', reason: 'observation_lost' })
+    }
+    if (setupRun && !this.ptyController?.spawn && !didStartInProcessSetupHook) {
+      setupRun.settle({ kind: 'ended', reason: 'spawn_failed' })
+    }
     warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
@@ -268,28 +281,18 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         git: created
       },
       ...(lineageInput ? metadataResult : {}),
-      ...(returnedSetup ? { setup: returnedSetup } : {}),
+      ...(returnedSetup && !args.promisedAgentChat ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
-            setupReceipt: {
-              requested: effectiveDecision,
-              hookFound,
-              startupPolicy: setup?.waitForAgentStartup
-                ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
-              state: !hookFound
-                ? ('not_configured' as const)
-                : effectiveDecision === 'skip' || !shouldRunSetup
-                  ? ('skipped' as const)
-                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
-                    didSpawnSetup || didStartInProcessSetupHook
-                    ? ('running' as const)
-                    : ('spawn_failed' as const),
-              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-            }
+            setupReceipt: runtimeWorktreeSetupReceipt(
+              setupPreparation,
+              didSpawnSetup,
+              setupTerminalHandle
+            )
           }
         : {}),
-      ...(defaultTabs ? { defaultTabs } : {}),
+      ...(defaultTabs && !args.promisedAgentChat ? { defaultTabs } : {}),
+      ...promisedChatSetupReceipt(args.promisedAgentChat, setupRun),
       ...(warning ? { warning } : {}),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh

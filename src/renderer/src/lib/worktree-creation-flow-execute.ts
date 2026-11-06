@@ -27,6 +27,7 @@ import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { recordChatSetupReceipt, selectChatRoute } from '@/lib/worktree-creation-host-launch'
 import {
   isCreatedWorkspaceInView,
   showWorktreeCreationError
@@ -59,6 +60,9 @@ export async function executeWorktreeCreation(
   let result: CreatedWorktreeResult
   try {
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
+    // Before anything exists: a host that owns the chat's Setup wait is promised it, else this
+    // creates exactly as the shipped route does.
+    const chatRoute = await selectChatRoute(creationId, preparedRequest)
     const backendStartup =
       provisionedRoot || structuredLaunch ? undefined : resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
@@ -90,6 +94,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          ...chatRoute,
           setupOnly: preparedRequest.setupOnly,
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
@@ -136,7 +141,7 @@ export async function executeWorktreeCreation(
     return
   }
 
-  const worktree = result.worktree
+  const worktree = recordChatSetupReceipt(creationId, result)
   // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     if (preparedRequest.ephemeralVmRuntimeId) {

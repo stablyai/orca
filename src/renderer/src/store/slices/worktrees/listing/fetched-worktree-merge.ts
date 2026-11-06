@@ -303,6 +303,13 @@ export function mergeFetchedWorktrees(
       args.hostId,
       args.refresh.result.source === 'git' ? authoritativelyRemovedIds : []
     )
+    // A chat launch saved before a reload comes back once its own host lists its workspace; only
+    // the workspaces this listing names are looked at.
+    const listedWorktreeIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
+    void import('@/lib/agent-session/launch/structured-agent-session-launch-restore').then(
+      ({ restoreStructuredLaunchSurfacesListedBy }) =>
+        restoreStructuredLaunchSurfacesListedBy(args.hostId, listedWorktreeIds)
+    )
   }
   return decision.outcome
 }

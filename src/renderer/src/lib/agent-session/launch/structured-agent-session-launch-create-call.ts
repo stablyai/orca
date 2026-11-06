@@ -91,7 +91,9 @@ async function requireHostCreateSupport(
 /** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
 const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
 
-async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
+export async function requireHostPermission(
+  intent: StructuredAgentSessionLaunchIntent
+): Promise<void> {
   const permission =
     intent.target.kind === 'local'
       ? { kind: 'allowed' as const }

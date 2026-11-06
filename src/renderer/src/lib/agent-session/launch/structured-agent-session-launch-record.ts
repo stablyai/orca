@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
@@ -6,6 +7,7 @@ import type {
 } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { isAgentSessionOptions } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { SendBodyStructure } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { AgentLaunchRelease } from '../../../../../shared/rpc-contract/agent-launch-release-params'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 
@@ -42,6 +44,21 @@ export function parseStructuredLaunchSurfaceAddress(
   }
 }
 
+const HostLaunchFirstTurnSchema = AgentLaunchRelease.omit({ operationId: true }).extend({
+  phase: z.enum(['editing', 'submitted'])
+})
+
+/** A host launch's first turn, released to it after Setup. `editing`: the choices the chat showed
+ *  when it started, which the user may still change; `submitted`: the exact input release sent,
+ *  sent again unchanged and never edited. */
+export type HostLaunchFirstTurn = z.infer<typeof HostLaunchFirstTurnSchema>
+
+/** Unreadable is absent: nothing is guessed in its place, so that launch is never released. */
+export function parseHostLaunchFirstTurn(value: unknown): HostLaunchFirstTurn | undefined {
+  const parsed = HostLaunchFirstTurnSchema.safeParse(value)
+  return parsed.success ? parsed.data : undefined
+}
+
 export type StructuredAgentLaunchPersistedRecord = {
   surfaceAddress?: StructuredLaunchSurfaceAddress
   sessionId: string
@@ -53,6 +70,10 @@ export type StructuredAgentLaunchPersistedRecord = {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** The executing host's own launch, which a reload reads again; older builds ignore it. */
+  hostLaunchOperationId?: string
+  /** That launch takes its first turn's final choices after Setup; absent, it was accepted whole. */
+  hostLaunchFirstTurn?: HostLaunchFirstTurn
   firstMessage?: StructuredAgentSessionFirstMessage
   explicitLaunchOptions?: Readonly<Record<string, string>>
   optionsMode?: 'replace-model-selection'
@@ -81,7 +102,13 @@ export function structuredAgentLaunchRecordFor(
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
     ...(resumeFrom ? { resumeFrom } : {}),
+    ...(intent.hostLaunch ? { hostLaunchOperationId: intent.hostLaunch.operationId } : {}),
+    ...(intent.hostLaunch?.firstTurn ? { hostLaunchFirstTurn: intent.hostLaunch.firstTurn } : {}),
+    // A host launch's held message is saved beside its create payload, never inside it.
     ...(firstMessage ? { firstMessage } : {}),
+    ...(!firstMessage && intent.hostLaunch?.firstMessage
+      ? { firstMessage: intent.hostLaunch.firstMessage }
+      : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
     ...(intent.explicitLaunchOptions
@@ -124,6 +151,8 @@ export function validRecord(value: unknown): value is Omit<
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
   const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
   const failedAt = 'failedAt' in value ? value.failedAt : undefined
+  const hostLaunchOperationId =
+    'hostLaunchOperationId' in value ? value.hostLaunchOperationId : undefined
   const firstMessage = 'firstMessage' in value ? value.firstMessage : undefined
   const optionsMode = 'optionsMode' in value ? value.optionsMode : undefined
   const options = 'options' in value ? value.options : undefined
@@ -140,6 +169,7 @@ export function validRecord(value: unknown): value is Omit<
     typeof payloadFingerprint === 'string' &&
     (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
     (failedAt === undefined || Number.isFinite(failedAt)) &&
+    (hostLaunchOperationId === undefined || typeof hostLaunchOperationId === 'string') &&
     (firstMessage === undefined || validFirstMessage(firstMessage)) &&
     (optionsMode === undefined || optionsMode === 'replace-model-selection') &&
     (options === undefined || isAgentSessionOptions(options)) &&

@@ -7,11 +7,8 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import {
-  type AgentStartupPlan,
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan
-} from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import { planQuickAgentStartup } from '../../../../shared/agent-launch/startup/agent-launch-terminal-recipe'
 
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -38,6 +35,8 @@ export type QuickComposerStartupInput = {
 
 export type QuickComposerStartup = {
   startupPlan: AgentStartupPlan | null
+  /** The planner's own inputs behind `startupPlan`, carried in memory with the request. */
+  startupRecipe?: WorktreeCreationRequest['startupRecipe']
   backendStartup: WorktreeCreationRequest['startup']
   telemetry: AgentStartedTelemetry | null
 }
@@ -56,37 +55,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
         })
-  const draftLaunchPlan =
-    !inputs || !draftPrompt
-      ? null
-      : buildAgentDraftLaunchPlan({
-          ...inputs,
-          draft: draftPrompt
-        })
-  let startupPlan: AgentStartupPlan | null = null
-  if (draftLaunchPlan) {
-    startupPlan = {
-      agent: draftLaunchPlan.agent,
-      launchCommand: draftLaunchPlan.launchCommand,
-      expectedProcess: draftLaunchPlan.expectedProcess,
-      followupPrompt: null,
-      launchConfig: draftLaunchPlan.launchConfig,
-      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
-      ...(draftLaunchPlan.startupCommandDelivery
-        ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-        : {}),
-      ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-    }
-  } else if (inputs) {
-    startupPlan = buildAgentStartupPlan({
-      ...inputs,
-      prompt,
-      allowEmptyPromptLaunch: true
-    })
-    if (startupPlan && draftPrompt) {
-      startupPlan.draftPrompt = draftPrompt
-    }
-  }
+  const startupPlan = inputs ? planQuickAgentStartup(inputs, prompt, draftPrompt) : null
   if (agent && input.route !== 'structured-native-chat' && !startupPlan) {
     throw new Error(
       translate(
@@ -119,7 +88,10 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           ...(telemetry ? { telemetry } : {})
         }
       : undefined
-  return { startupPlan, backendStartup, telemetry }
+  const startupRecipe = inputs
+    ? { inputs, prompt, ...(draftPrompt ? { draftPrompt } : {}) }
+    : undefined
+  return { startupPlan, ...(startupRecipe ? { startupRecipe } : {}), backendStartup, telemetry }
 }
 
 export async function prepareQuickComposerStartup(

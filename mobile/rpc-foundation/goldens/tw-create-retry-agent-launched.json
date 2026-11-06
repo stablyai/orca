@@ -7,6 +7,41 @@
     "3f946ad0279c": {
       "outcome": "uncreated"
     },
+    "5e3ee0de5454": {
+      "name": "agent.launch#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "target": {
+              "create": {
+                "clientMutationId": "mutation-1",
+                "name": "kestrel",
+                "repo": "id:repo-1"
+              },
+              "kind": "create-worktree"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "keepaliveTotalMs": 7800000,
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -26,7 +61,7 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launch\",\"params\":{\"agent\":\"codex\",\"target\":{\"kind\":\"create-worktree\",\"create\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}}}"
     },
-    "f02b3d4d2928": {
+    "d0f5d2d2f6f6": {
       "name": "agent.launch#1",
       "ordinal": 1,
       "args": [
@@ -51,40 +86,7 @@
         {
           "name": "options",
           "value": {
-            "timeoutMs": 600000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "f53a3cfe8aa9": {
-      "name": "agent.launch#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "agent.launch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "codex",
-            "target": {
-              "create": {
-                "clientMutationId": "mutation-1",
-                "name": "kestrel",
-                "repo": "id:repo-1"
-              },
-              "kind": "create-worktree"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
+            "keepaliveTotalMs": 7800000,
             "timeoutMs": 600000
           }
         }
@@ -128,7 +130,7 @@
       {
         "id": "sent",
         "observation": {
-          "sender": ["f02b3d4d2928"],
+          "sender": ["5e3ee0de5454"],
           "payloads": ["a19446c94e4f"],
           "settlements": {
             "create": "9270aeb7d9c6"
@@ -140,7 +142,7 @@
       {
         "id": "launched",
         "observation": {
-          "sender": ["f53a3cfe8aa9"],
+          "sender": ["d0f5d2d2f6f6"],
           "payloads": ["a19446c94e4f"],
           "settlements": {
             "create": "97555d579c32"

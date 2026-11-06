@@ -143,6 +143,9 @@ describe('structured agent-session create intent', () => {
         caller: { callerKey: 'test' },
         options: { model: 'gpt-5.6-sol', fastMode: 'false' }
       })
+      if ('refusal' in explicit) {
+        throw new Error(explicit.refusal.code)
+      }
       expect(explicit.attachParams.options).toMatchObject({ fastMode: 'false' })
       settings.agentLaunchChoices = { codex: { model: 'different', options: { effort: 'low' } } }
       expect((await createIntent()).options).toMatchObject({ model: 'different', effort: 'low' })

@@ -10,6 +10,7 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { joinSentences } from '../../../../../shared/sentence-joining'
 import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -18,13 +19,25 @@ import {
   StructuredAgentSessionCreateSourceFailedError
 } from './structured-agent-session-launch-errors'
 
-export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
+export type StructuredLaunchRefusal = AgentSessionWriteRefusal & {
   /** Words that replace the refusal's generic cause: the host's sign-in guidance, or why this
    *  workspace can't run the chat. */
   causeText?: string
   /** The chat the refusal named as holding the conversation; null when it named none. */
   owner?: AgentSessionConversationOwner | null
 }
+
+export type StructuredLaunchFailure =
+  | StructuredLaunchRefusal
+  /** A host's launch ended before any agent started, and these words say so whole (Setup did not
+   *  finish). */
+  | {
+      kind: 'not-started'
+      causeText: string
+      code?: undefined
+      details?: undefined
+      owner?: undefined
+    }
 
 /** A WSL distro added as a host runs chat itself, so point there once this desktop can add one. */
 function wslHostChatAvailable(): boolean {
@@ -60,8 +73,22 @@ export function structuredChatUnavailableText(reason?: string): string {
         )
 }
 
+/** A host that cannot run the chat, with no terminal planned in its place: nothing started. */
+export function structuredChatNotStartedText(agentLabel: string): string {
+  return joinSentences([
+    translate(
+      'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',
+      "{{agent}} couldn't start.",
+      {
+        agent: agentLabel
+      }
+    ),
+    structuredChatUnavailableText()
+  ])
+}
+
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
-export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure | undefined {
+export function structuredLaunchFailure(error: unknown): StructuredLaunchRefusal | undefined {
   if (error instanceof StructuredAgentSessionCreateSourceFailedError) {
     return {
       kind: 'refused',

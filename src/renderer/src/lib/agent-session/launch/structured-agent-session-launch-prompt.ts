@@ -18,6 +18,7 @@ export {
   discardStructuredLaunchPrompts,
   discardStructuredAgentSessionChatSends,
   takeBackLegacyStructuredLaunchPrompts,
+  settleHostCarriedStructuredLaunchPrompts,
   prepareLegacyStructuredLaunchPrompts,
   prepareStructuredLaunchPromptForCreate,
   issueStructuredLaunchPromptForCreate,

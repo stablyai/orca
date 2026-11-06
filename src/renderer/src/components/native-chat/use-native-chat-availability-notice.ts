@@ -10,7 +10,7 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { inSendOrder } from '../../../../shared/native-chat/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
-import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import {
@@ -63,7 +63,8 @@ export function useNativeChatAvailabilityNotice(input: {
   agent: AgentType
   /** The WSL distro the chat's host runs in, to say where the agent is missing. */
   wslDistro?: string | null
-  launchFailure: AgentSessionWriteRefusal | null
+  /** A launch that never started names no host verdict, so only a refusal is compared. */
+  launchFailure: StructuredLaunchFailure | null
   journalItems: readonly AgentJournalRenderItem[] | undefined
   submissions?: readonly NoticeSubmission[]
   /** The lines under the chat's messages, by message key: a refused send's says why. */
@@ -92,7 +93,8 @@ export function useNativeChatAvailabilityNotice(input: {
   if (!unavailable || (dismissal.key === key && dismissal.dismissed)) {
     return null
   }
-  const launchWords = input.launchFailure && agentSessionRefusalReasonWords(input.launchFailure)
+  const refusal = input.launchFailure?.kind === 'not-started' ? null : input.launchFailure
+  const launchWords = refusal && agentSessionRefusalReasonWords(refusal)
   const launchReason = launchWords && 'fact' in launchWords ? launchWords.fact : null
   if (
     launchReason === unavailable.reason ||

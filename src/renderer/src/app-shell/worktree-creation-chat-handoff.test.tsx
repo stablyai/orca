@@ -27,7 +27,9 @@ const host = vi.hoisted(() => ({ createSupport: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn((_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? host.createSupport() : new Promise(() => undefined)
-  )
+  ),
+  // A host from before agent.launchAccept: the window keeps its own chat create.
+  structuredAgentSessionHostSupports: async () => false
 }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (

@@ -8,12 +8,14 @@ import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-re
 import type { SendRequestOptions } from './rpc-client'
 import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
 import type { ConnectionState, RpcResponse } from './types'
+import { startRpcRequestDeadline, type RpcRequestDeadline } from './rpc-request-keepalive'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
+  deadline: RpcRequestDeadline
 }
 
 type RequestTrackerOptions = {
@@ -61,7 +63,8 @@ export class RpcClientRequestTracker {
       params,
       resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS),
       requestOptions?.envelope,
-      requestOptions?.signal
+      requestOptions?.signal,
+      requestOptions?.keepaliveTotalMs
     )
   }
 
@@ -78,12 +81,13 @@ export class RpcClientRequestTracker {
     params: unknown,
     timeoutMs: number,
     envelope?: RpcEnvelopeFields,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    keepaliveTotalMs?: number
   ): Promise<RpcResponse> {
     const id = this.options.nextId()
-    let timeout: ReturnType<typeof setTimeout>
+    let deadline: RpcRequestDeadline | undefined
     const response = new Promise<RpcResponse>((resolve, reject) => {
-      timeout = setTimeout(() => {
+      const requestDeadline = startRpcRequestDeadline(timeoutMs, keepaliveTotalMs, () => {
         this.pending.delete(id)
         console.log('[net] sendRequest TIMEOUT', {
           method,
@@ -91,20 +95,22 @@ export class RpcClientRequestTracker {
           state: this.options.getState()
         })
         reject(markRpcDeliveryUnknown(new Error(`Request timed out: ${method}`)))
-      }, timeoutMs)
+      })
+      deadline = requestDeadline
       this.pending.set(id, {
         resolve: (response) => {
-          clearTimeout(timeout)
+          requestDeadline.clear()
           resolve(response)
         },
         reject: (error) => {
-          clearTimeout(timeout)
+          requestDeadline.clear()
           reject(error)
-        }
+        },
+        deadline: requestDeadline
       })
       if (!this.options.sendFrame({ id, method, params, envelope })) {
         this.pending.delete(id)
-        clearTimeout(timeout)
+        requestDeadline.clear()
         reject(new Error('Connection interrupted'))
       }
     })
@@ -113,7 +119,7 @@ export class RpcClientRequestTracker {
           signal,
           onAbandon: () => {
             this.pending.delete(id)
-            clearTimeout(timeout)
+            deadline?.clear()
           }
         })
       : response
@@ -127,6 +133,11 @@ export class RpcClientRequestTracker {
     this.pending.delete(response.id)
     request.resolve(response)
     return true
+  }
+
+  /** A retired or unknown request's keepalive renews nothing. */
+  keepalive(requestId: string): void {
+    this.pending.get(requestId)?.deadline.renew()
   }
 
   rejectAll(reason: string, options?: { deliveryUnknown?: boolean }): void {

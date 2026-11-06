@@ -99,6 +99,8 @@ export class DirectRpcClient implements RpcClient {
       onAuthenticated: (session) => this.handleAuthenticated(session),
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
       onRpcResponse: (session, response) => this.handleRpcResponse(session, response),
+      // A keepalive from an earlier connection's socket renews nothing.
+      onRequestKeepalive: (s, id) => s === this.socketSession && this.requests.keepalive(id),
       onBinary: (bytes) => this.streams.handleBinary(bytes),
       onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),
@@ -309,8 +311,7 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private sendLivenessProbe(id: string): boolean {
-    const frame = livenessProbeFrame(id)
-    return this.getState() === 'connected' && this.sendFrame(frame)
+    return this.getState() === 'connected' && this.sendFrame(livenessProbeFrame(id))
   }
 
   private waitForConnected(timeoutMs?: number): Promise<void> {

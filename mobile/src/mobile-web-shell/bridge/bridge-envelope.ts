@@ -109,6 +109,8 @@ export const BridgeInitStorageSchema = z
 
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
+  // The total a request's own keepalives can renew its idle timeout up to.
+  keepaliveTotalMs: z.number().int().positive().optional(),
   budgetSpansConnect: z.boolean().optional(),
   failWhenDisconnected: z.boolean().optional()
 })

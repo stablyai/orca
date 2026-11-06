@@ -12,11 +12,7 @@ import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
-import {
-  withRpcEnvelopeFields,
-  type RpcEnvelopeFields,
-  type RpcRequestFrame
-} from './rpc-envelope-fields'
+import { withRpcEnvelopeFields, type RpcRequestFrame } from './rpc-envelope-fields'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
@@ -29,8 +25,9 @@ import {
 } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
-import type { RpcClient } from './rpc-client'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
+import { startRpcRequestDeadline } from './rpc-request-keepalive'
 
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
@@ -123,7 +120,7 @@ export function connectMobileRelayRpcSession(args: {
       throwIfSignalAborted(options?.signal)
       const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
       options?.beforeSend?.()
-      return sendRpc(method, params, timeoutMs, false, options?.envelope, options?.signal)
+      return sendRpc(method, params, timeoutMs, false, options)
     },
 
     subscribe(method, params, listener, options) {
@@ -234,23 +231,20 @@ export function connectMobileRelayRpcSession(args: {
     params: unknown,
     timeoutMs = requestTimeoutMs,
     beforeConnected = false,
-    envelope?: RpcEnvelopeFields,
-    signal?: AbortSignal
+    { envelope, signal, keepaliveTotalMs }: SendRequestOptions = {}
   ): Promise<RpcResponse> {
     if (closed || (!beforeConnected && state !== 'connected')) {
       return Promise.reject(new Error('relay session not connected'))
     }
     const id = pending.nextId()
-    let timer: ReturnType<typeof setTimeout>
     const response = new Promise<RpcResponse>((resolve, reject) => {
-      timer = setTimeout(() => {
+      const deadline = startRpcRequestDeadline(timeoutMs, keepaliveTotalMs, () => {
         pending.drop(id)
         // Written requests may already have committed; timeout remains delivery-unknown.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
-      }, timeoutMs)
-      pending.track(id, { resolve, reject, timer, written: false })
+      })
+      pending.track(id, { resolve, reject, deadline, written: false })
       if (!sendFrame({ id, method, params, envelope })) {
-        clearTimeout(timer)
         pending.drop(id)
         reject(new Error('relay E2EE channel not ready'))
         return
@@ -260,10 +254,8 @@ export function connectMobileRelayRpcSession(args: {
     return signal
       ? sharedPromiseSettlementWaiters(response).wait({
           signal,
-          onAbandon: () => {
-            pending.drop(id)
-            clearTimeout(timer)
-          }
+          // Dropping the request also ends its deadline.
+          onAbandon: () => pending.drop(id)
         })
       : response
   }
@@ -278,6 +270,9 @@ export function connectMobileRelayRpcSession(args: {
     try {
       value = JSON.parse(plaintext)
     } catch {
+      return
+    }
+    if (pending.renewFromKeepalive(value)) {
       return
     }
     if (isRpcResponse(value)) {

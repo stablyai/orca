@@ -56,5 +56,5 @@ export function openBackgroundDeclinedTerminal(
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
   mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
-  return { opened: tabId !== null }
+  return tabId === null ? { opened: false } : { opened: true, tabId }
 }

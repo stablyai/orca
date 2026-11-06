@@ -1,0 +1,281 @@
+/** A new workspace's chat on a host that owns its Setup wait: the creation picks that route before
+ *  it creates anything, names the host's launch once, hands it the held message and this creation's
+ *  own terminal plan, and keeps its input when this window could not show the chat. */
+
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  pendingCreationChatDraftScopeKey,
+  type PendingWorktreeCreation,
+  type WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
+import { planWorktreeHostLaunchTerminal } from '@/lib/worktree-creation-host-launch-terminal'
+import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import { isWorktreeCreationSelected } from '@/lib/worktree-creation-surface'
+import { structuredLaunchOwner } from '@/lib/agent-session/structured-agent-session-provisional-tab'
+import { notifyExplicitChatFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
+import { getStructuredLaunchStateBySessionId } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { cancelStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
+import {
+  deleteNativeChatComposerDraft,
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import { structuredAgentSessionHostSupports } from '@/runtime/structured-agent-session-client'
+import { hasNativeChatStagedFiles } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
+import {
+  AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RELEASE_RUNTIME_CAPABILITY
+} from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { AgentLaunchSetupReceipt } from '../../../shared/rpc-contract/agent-launch-accept-params'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+
+type HostLaunchIdentity = NonNullable<PendingWorktreeCreation['hostLaunch']>
+
+/** The host a creation runs on, reached as its create call reaches it. */
+function creationHostTarget(request: WorktreeCreationRequest): RuntimeClientTarget | null {
+  const hostId = request.workspaceRunContext?.hostId ?? request.executionHostId
+  return hostId
+    ? (runtimeRpcTargetForAuthorityKey(hostId) ?? { kind: 'local' })
+    : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
+}
+
+/** How this creation's host takes a launch it runs after Setup: prepared and released with the first
+ *  turn's final choices, accepted whole, or not at all (the shipped chat create). */
+async function hostLaunchProtocol(
+  target: RuntimeClientTarget
+): Promise<'release' | 'accept' | null> {
+  if (await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_RELEASE_RUNTIME_CAPABILITY)) {
+    return 'release'
+  }
+  return (await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY))
+    ? 'accept'
+    : null
+}
+
+/** Chosen before the workspace exists, once per creation: a host that owns its Setup wait gets the
+ *  chat as its own launch, and an older one keeps the shipped chat create. A creation that chose
+ *  the host's launch keeps it, and how that host takes it, whatever its create reply says; one that
+ *  did not never takes it up. Answers with what the create promises: the chat, or nothing. */
+export async function selectChatRoute(
+  creationId: string,
+  request: WorktreeCreationRequest
+): Promise<{ promisedAgentChat?: true }> {
+  const chosen = { promisedAgentChat: true as const }
+  if (useAppStore.getState().pendingWorktreeCreations[creationId]?.hostLaunch) {
+    return chosen
+  }
+  const target = creationHostTarget(request)
+  if (
+    !request.agent ||
+    request.agentLaunchRoute !== 'structured-native-chat' ||
+    getProvisionedRootCreateOptions(request) ||
+    !target
+  ) {
+    return {}
+  }
+  const protocol = await hostLaunchProtocol(target)
+  if (!protocol || !useAppStore.getState().pendingWorktreeCreations[creationId]) {
+    return {}
+  }
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    hostLaunch: {
+      operationId: createStructuredAgentSessionOperationId(createBrowserUuid),
+      sessionId: createStructuredAgentSessionId(request.agent, createBrowserUuid),
+      clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
+      ...(protocol === 'release' ? { protocol } : {})
+    }
+  })
+  return chosen
+}
+
+/** What the creation's host said about the Setup the chat waits for, kept for its launch; answers
+ *  with the created workspace. A reply without a readable word is uncertainty, never "nothing to
+ *  wait for". */
+export function recordChatSetupReceipt<T extends { worktree: unknown; agentLaunchSetup?: unknown }>(
+  creationId: string,
+  reply: T
+): T['worktree'] {
+  const hostLaunch = useAppStore.getState().pendingWorktreeCreations[creationId]?.hostLaunch
+  if (hostLaunch) {
+    const parsed = AgentLaunchSetupReceipt.safeParse(reply.agentLaunchSetup)
+    useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+      hostLaunch: {
+        ...hostLaunch,
+        setupReceipt: parsed.success ? parsed.data : { required: true, runId: null }
+      }
+    })
+  }
+  return reply.worktree
+}
+
+/** What accept (or prepare) carries: the held message under its own id, the creation's Setup
+ *  receipt, and the terminal this creation's own path would open if the host cannot run the chat.
+ *  The terminal is planned once, at the first handoff; a Retry sends the same launch. */
+export function worktreeHostLaunch(args: {
+  creationId: string
+  identity: HostLaunchIdentity
+  request: WorktreeCreationRequest
+  worktreeId: string
+  agent: TuiAgent
+  prompt: string | undefined
+  heldChatMessage: string | undefined
+  foreground: boolean
+}): StructuredHostLaunch {
+  const { identity } = args
+  const release = identity.protocol === 'release'
+  const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, args.worktreeId)
+  const terminal =
+    identity.terminal ??
+    (owner
+      ? planWorktreeHostLaunchTerminal({
+          ...args,
+          prompt: args.prompt ?? '',
+          owner,
+          release
+        })
+      : release
+        ? { alternative: { kind: 'none' as const } }
+        : {})
+  if (!identity.terminal) {
+    useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+      hostLaunch: { ...identity, terminal }
+    })
+  }
+  const text = args.prompt?.trim() ? args.prompt : undefined
+  return {
+    operationId: identity.operationId,
+    sessionId: identity.sessionId,
+    ...(release ? { protocol: 'release' as const } : {}),
+    ...(text
+      ? {
+          firstMessage: {
+            clientMessageId: identity.clientMessageId,
+            body: structuredAgentSessionSendBody(text, [])
+          }
+        }
+      : {}),
+    accept: {
+      ...(text ? { prompt: { text, clientMessageId: identity.clientMessageId } } : {}),
+      presentation: args.foreground ? 'focused' : 'background',
+      setupReceipt: identity.setupReceipt ?? { required: true, runId: null },
+      ...(terminal.startup ? { terminalStartup: terminal.startup } : {}),
+      ...(release
+        ? { terminalAlternative: terminal.alternative ?? { kind: 'none' as const } }
+        : {}),
+      ...(terminal.launchSource ? { launchSource: terminal.launchSource } : {})
+    }
+  }
+}
+
+/** The layout refused the chat's tab, or opening it threw: the creation shows why, with a Retry
+ *  that hands off into this same workspace again. A launch still held keeps its draft in its own
+ *  saved chat, which a reload shows; one the throw ended gives its draft back to the creation. Out
+ *  of view, the existing short notice says so without moving the user. */
+export function keepPendingChatAfterRefusedHandoff(
+  creationId: string,
+  worktreeId: string,
+  agent: TuiAgent,
+  { sessionId }: Pick<StructuredHostLaunch, 'sessionId'>
+): void {
+  const launchScope = structuredAgentSessionDraftScopeKey(sessionId)
+  const { text, document, pastedTextFiles, images } = readNativeChatComposerDraft(launchScope)
+  if (!heldHostLaunch(sessionId) && (text !== '' || images.length > 0)) {
+    const draft = { text, images, ...(document ? { document } : {}) }
+    updateNativeChatComposerDraft(
+      pendingCreationChatDraftScopeKey(creationId),
+      pastedTextFiles ? { ...draft, pastedTextFiles } : draft,
+      'immediate'
+    )
+    deleteNativeChatComposerDraft(launchScope)
+  }
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    worktreeId,
+    status: 'error',
+    error: translate(
+      'auto.components.tab.bar.QuickLaunchButton.chatUnavailableAfterSelection',
+      "Couldn't start a {{value0}} chat.",
+      { value0: structuredAgentLabel(agent) }
+    ),
+    chatInputHandedOff: false
+  })
+  if (!isWorktreeCreationSelected(useAppStore.getState(), creationId, 'terminal')) {
+    notifyExplicitChatFailure(agent)
+  }
+}
+
+/** The launch a creation that chose its host's route hands that host, and where its unsent draft
+ *  goes at once: its own chat, where a refused or reloaded launch still finds it. The host's launch
+ *  carries text alone, so a held message with attachments, skills or staged files stays with the
+ *  chat's own send and comes back to its composer whole, never founded without them. */
+export function creationHostLaunchPlan(args: {
+  creationId: string
+  pending: PendingWorktreeCreation | undefined
+  request: WorktreeCreationRequest
+  worktreeId: string
+  agent: TuiAgent
+  prompt: string | undefined
+  foreground: boolean
+  draftScope: string
+}): { hostLaunch?: StructuredHostLaunch; draftFromScope?: string } {
+  const identity = args.pending?.hostLaunch
+  if (!identity) {
+    return {}
+  }
+  const richInput = Boolean(
+    args.pending?.heldChatAttachments?.length ||
+    args.pending?.heldChatSkills?.length ||
+    hasNativeChatStagedFiles(args.draftScope)
+  )
+  const hostLaunch = worktreeHostLaunch({
+    ...args,
+    identity,
+    prompt: richInput ? undefined : args.prompt,
+    heldChatMessage: richInput ? undefined : args.pending?.heldChatMessage
+  })
+  return { hostLaunch, draftFromScope: args.draftScope }
+}
+
+/** The launch this window still holds for a creation's chat, until the user closes it. */
+function heldHostLaunch(sessionId: string): boolean {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  return state !== undefined && !state.cancelled
+}
+
+/** Where the creation's composer writes: the chat its launch holds, once handed off. */
+export function pendingChatDraftScopeKey(entry: PendingWorktreeCreation): string {
+  return entry.hostLaunch && heldHostLaunch(entry.hostLaunch.sessionId)
+    ? structuredAgentSessionDraftScopeKey(entry.hostLaunch.sessionId)
+    : pendingCreationChatDraftScopeKey(entry.creationId)
+}
+
+/** Dismissing a creation whose chat its host still owns closes that chat, so nothing starts later
+ *  in a workspace the user walked away from; the host fences its launch on the close. The launch
+ *  this window held ends with it, as a closed chat's does, unsent draft included. */
+export function closeDismissedHostLaunch(entry: PendingWorktreeCreation | undefined): void {
+  const route = entry?.request.agentLaunchRoute
+  const owner =
+    entry?.hostLaunch && entry.worktreeId && route
+      ? structuredLaunchOwner({ route }, entry.worktreeId)
+      : null
+  if (entry?.hostLaunch && entry.worktreeId && heldHostLaunch(entry.hostLaunch.sessionId)) {
+    cancelStructuredAgentLaunch(entry.worktreeId, entry.hostLaunch.sessionId)
+    deleteNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(entry.hostLaunch.sessionId))
+  }
+  if (owner && entry?.hostLaunch) {
+    closeStructuredAgentSession(owner.target, entry.hostLaunch.sessionId).catch((error) => {
+      console.warn('[worktree-create] closing a dismissed chat launch failed', error)
+    })
+  }
+}

@@ -30,7 +30,7 @@ import {
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
+  notifyStructuredLaunchStateChanged,
   setStructuredLaunchState,
   structuredLaunchIdentity,
   type StructuredLaunchState
@@ -54,6 +54,8 @@ import {
   structuredLaunchSelectionController
 } from './structured-agent-session-launch-options'
 import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
+import { joinHeldHostLaunch } from './structured-agent-session-host-launch-join'
+import { adoptRereadHostLaunchTerminal } from './structured-agent-session-host-launch-terminal'
 import * as launchDraft from './structured-agent-session-launch-draft'
 
 type StructuredLaunchStateResult = {
@@ -91,7 +93,7 @@ function adoptPairedHostSeed(
     delete state.intent.seedOptions
   }
   state.selection = { ...selection, seed: seedOptions }
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
 }
 
 function resetStructuredLaunchCallers(
@@ -106,7 +108,8 @@ function resetStructuredLaunchCallers(
 function restartStructuredLaunchState(state: StructuredLaunchState, requested = false): void {
   const wasVisibilityUnknown = state.visibilityUnknown
   const retainedOpening = wasVisibilityUnknown && !!state.intent.params.firstMessage
-  if (!wasVisibilityUnknown || (retainedOpening && requested)) {
+  // A host launch keeps its operation whatever became of it: restarting it only reads it again.
+  if (!state.intent.hostLaunch && (!wasVisibilityUnknown || (retainedOpening && requested))) {
     const surfaceAddress = state.intent.surfaceAddress
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening)
     state.intent.surfaceAddress = surfaceAddress
@@ -129,7 +132,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState, requested = 
   )
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
 }
 
 function joinStructuredLaunchState(
@@ -186,6 +189,10 @@ function structuredAgentLaunchState(
   agent: TuiAgent,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
+  const held = joinHeldHostLaunch(worktreeId, agent, options, restartStructuredLaunchState)
+  if (held) {
+    return held
+  }
   const identity = structuredLaunchIdentity(worktreeId, agent, options)
   const existing = getJoinableStructuredLaunchState(identity, options.requestId)
   const joined = existing && joinStructuredLaunchState(existing, options)
@@ -199,7 +206,8 @@ function structuredAgentLaunchState(
     options.executionHostId,
     options.resumeFrom,
     options.hostSeedOptions,
-    options.activate
+    options.activate,
+    options.hostLaunch
   )
   intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate
@@ -222,7 +230,7 @@ function structuredAgentLaunchState(
     promise: Promise.resolve({ sessionId: '', fence: 0 }),
     visibilityUnknown: false,
     cancelled: false,
-    onVisibilityChanged: notifyStructuredLaunchListeners,
+    onVisibilityChanged: () => notifyStructuredLaunchStateChanged(state),
     callers,
     selection: initialStructuredLaunchSelection(intent)
   }
@@ -242,7 +250,7 @@ function structuredAgentLaunchState(
   })
   trackStructuredLaunchPromptOutcome(state, caller)
   setStructuredLaunchState(state)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
   trackLaunchSettlement(state, state.promise)
   return { state, caller, joined: false }
 }
@@ -260,7 +268,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   )
   discardStructuredAgentSessionChatSends(state.intent.sessionId)
   abandonStructuredAgentSessionLaunchIntent(state.intent)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
   return true
 }
 
@@ -294,7 +302,13 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   ) {
     return false
   }
+  // Only reads the host's record of its launch, unknown or failed; whatever that started shows in
+  // the chat's place.
+  const rereadsHostLaunch = state.intent.hostLaunch !== undefined
   restartStructuredLaunchState(state, true)
+  if (rereadsHostLaunch) {
+    adoptRereadHostLaunchTerminal(state)
+  }
   return true
 }
 

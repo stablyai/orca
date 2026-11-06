@@ -28,6 +28,7 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { batchStructuredAgentLaunchRecordWrites } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
@@ -147,24 +148,29 @@ export function buildHostTwinPurgeState(
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
   const canonical = (worktreeId: string) =>
     removedHostCanonicalizer(s, worktreeId, hostId, twinHostIds.get(worktreeId) ?? [])
-  const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
-    twinIds,
-    (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId
-  )
   const terminalTabs: { id: string; ptyId: string | null }[] = []
-  for (const worktreeId of twinIds) {
-    const legacyTabs = (s.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
-      removed.terminalTabIds.has(tab.id)
+  // One retirement: each launch journal it changes is saved once, at its end.
+  batchStructuredAgentLaunchRecordWrites(() => {
+    const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
+      twinIds,
+      (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId
     )
-    terminalTabs.push(...legacyTabs)
-    retirePurgedTabLaunches(
-      s,
-      worktreeId,
-      legacyTabs,
-      (s.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) => removed.otherTabIds.has(tab.id)),
-      cancelledSessionIds
-    )
-  }
+    for (const worktreeId of twinIds) {
+      const legacyTabs = (s.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
+        removed.terminalTabIds.has(tab.id)
+      )
+      terminalTabs.push(...legacyTabs)
+      retirePurgedTabLaunches(
+        s,
+        worktreeId,
+        legacyTabs,
+        (s.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) =>
+          removed.otherTabIds.has(tab.id)
+        ),
+        cancelledSessionIds
+      )
+    }
+  })
   // Why: a hydrated terminal can exist only as a unified tab, with no legacy row.
   for (const tabId of removed.terminalTabIds) {
     if (!terminalTabs.some((tab) => tab.id === tabId)) {

@@ -132,7 +132,9 @@ export function discardStructuredAgentSessionChatSends(sessionId: string): void 
 }
 
 // Prepublication Stop returns unsent text to the composer while allowing chat startup to continue.
-export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
+/** True once every taken-back text is durably in the composer or kept by its sender. */
+export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): boolean {
+  let kept = true
   for (const prompt of staged.get(sessionId) ?? []) {
     if (prompt.delivery || prompt.createOwned) {
       continue
@@ -140,8 +142,22 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
     unstageStructuredLaunchPrompt(prompt)
     prompt.discarded = true
     const inComposer = handBackStagedLaunchPrompt(prompt)
+    kept &&= inComposer || prompt.callerKeepsText === true
     prompt.settleCreate({ delivered: false, inComposer, failureNotified: true })
     prompt.discard()
+  }
+  return kept
+}
+
+/** The host carried the launch's text itself, as its chat's first message or to its terminal:
+ *  none of it is sent from here or given back. */
+export function settleHostCarriedStructuredLaunchPrompts(sessionId: string): void {
+  for (const prompt of staged.get(sessionId) ?? []) {
+    // The host's receipt is the truth, over whatever the reserved send said when it was released.
+    const delivered = { delivered: true, inComposer: false }
+    prompt.delivery = Promise.resolve(delivered)
+    prompt.settleCreate(delivered)
+    unstageStructuredLaunchPrompt(prompt)
   }
 }
 

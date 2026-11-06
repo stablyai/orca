@@ -1,3 +1,4 @@
+import { createSetupRun } from '../../../../setup/setup-run'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -67,9 +68,6 @@ describe('orchestration new-worktree workers', () => {
       status: 'running',
       exitCode: null
     })
-    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockReturnValue(
-      new Promise(() => undefined)
-    )
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
@@ -410,13 +408,8 @@ describe('orchestration new-worktree workers', () => {
         { handle: 'term_setup', title: 'Setup' }
       ]
     })
-    let finishSetup: ((result: { exitCode: number | null }) => void) | undefined
-    vi.mocked(runtime.waitForSetupTerminalCompletion).mockImplementation(
-      async () =>
-        await new Promise((resolve) => {
-          finishSetup = resolve
-        })
-    )
+    const run = createSetupRun(false)
+    runtime.registerSetupRun('repo::created', run)
 
     const { result, task } = await startWorker()
     const dispatchId = (result as { dispatchId: string }).dispatchId
@@ -430,7 +423,7 @@ describe('orchestration new-worktree workers', () => {
         result: '{}'
       })
     ).toMatchObject({ action: 'settled' })
-    finishSetup?.({ exitCode: 1 })
+    run.settle({ kind: 'failed', exitCode: 1 })
     await vi.waitFor(() => expect(db.getWorkerDispatch(dispatchId)?.setup_state).toBe('failed'))
     expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'succeeded',

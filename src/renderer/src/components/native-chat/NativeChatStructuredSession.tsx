@@ -93,7 +93,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     queueFollowUps,
     hostStopping: hostExecution.stopping,
     hostOptionStamp: hostExecution.optionStamp,
-    providerStarting: hostExecution.phase === 'starting',
+    // A first turn handed to the host after Setup is starting there, whatever this tab has read.
+    providerStarting: hostExecution.phase === 'starting' || provisionalLaunch.firstTurnSubmitted,
     // A start's own verdict (a signed-out agent) exists only once that start is proven.
     providerRunning: hostExecution.phase === 'ready',
     rewind: rewindHost,

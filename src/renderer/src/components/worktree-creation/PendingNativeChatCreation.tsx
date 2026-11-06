@@ -1,4 +1,8 @@
 import React from 'react'
+import {
+  closeDismissedHostLaunch,
+  pendingChatDraftScopeKey
+} from '@/lib/worktree-creation-host-launch'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -185,6 +189,7 @@ export default function PendingNativeChatCreation({
   const tabId = `${pendingCreationChatDraftScopeKey(creationId)}:tab`
   // Explicit back-outs drop the unsent draft; completion leaves it for the launch to move.
   const dismiss = (): void => {
+    closeDismissedHostLaunch(useAppStore.getState().pendingWorktreeCreations[creationId])
     useAppStore.getState().removePendingWorktreeCreation(creationId)
   }
   const steps =
@@ -236,7 +241,7 @@ export default function PendingNativeChatCreation({
           ref={composerRef}
           terminalTabId={tabId}
           paneKey={`${tabId}:composer`}
-          draftScopeKey={pendingCreationChatDraftScopeKey(creationId)}
+          draftScopeKey={pendingChatDraftScopeKey(entry)}
           targetPtyId={null}
           agent={agent}
           structuredTransport={transport}

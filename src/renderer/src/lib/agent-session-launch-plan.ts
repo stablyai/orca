@@ -31,6 +31,7 @@ import {
 } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
@@ -54,6 +55,7 @@ export type AgentSessionLaunchVerdict = Pick<
   StructuredAgentLaunchOptions,
   'promptAttachments' | 'promptSkills' | 'preparePrompt'
 > & {
+  hostLaunch?: StructuredHostLaunch
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -98,6 +100,7 @@ export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
 
 function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): StructuredAgentLaunchOptions {
   return {
+    ...(verdict.hostLaunch ? { hostLaunch: verdict.hostLaunch } : {}),
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptAttachments?.length ? { promptAttachments: verdict.promptAttachments } : {}),

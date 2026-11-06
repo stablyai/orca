@@ -1,3 +1,9 @@
+import {
+  resolveRuntimeMethodKeepaliveTotalMs,
+  resolveRuntimeMethodTimeoutMs
+} from './runtime-request-timeout'
+import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../shared/setup-agent-sequencing'
+import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
 import { createServer, type Server } from 'node:net'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -55,6 +61,32 @@ function expectPromptRetryBlockedJson(error: unknown, requestId: string): void {
 }
 
 describe('RuntimeClient orchestration recovery identity', () => {
+  it('keeps the setup failure and its existing workspace recovery action', async () => {
+    const error = new RuntimeRpcFailureError({
+      id: 'setup',
+      ok: false,
+      error: {
+        code: 'agent_launch_setup_not_completed',
+        message:
+          'Setup failed, so Claude was not started. Fix setup, then start Claude in this workspace.'
+      }
+    })
+    await expect(
+      withCliAgentLaunchRecovery(Promise.reject(error), { operationId: 'launch', params: {} })
+    ).rejects.toBe(error)
+  })
+
+  it("keeps the idle timeout for a workspace launch, letting keepalives renew it to setup's deadline", () => {
+    const launch = { agent: 'codex', target: { kind: 'create-worktree', create: {} } }
+    expect(resolveRuntimeMethodTimeoutMs('agent.launch', launch, 60_000)).toBe(60_000)
+    expect(resolveRuntimeMethodKeepaliveTotalMs('agent.launch', launch, 60_000)).toBe(
+      DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + 10 * 60_000
+    )
+    expect(
+      resolveRuntimeMethodKeepaliveTotalMs('agent.launch', { agent: 'codex' }, 60_000)
+    ).toBeUndefined()
+  })
+
   it('attaches the request and exact retry identity to a real RPC failure response', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-recovery-'))
     const endpoint = join(userDataPath, 'runtime.sock')

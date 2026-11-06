@@ -322,9 +322,7 @@ export const RestartResumableParams = z
   .strict()
 
 /** Absent selects the whole offered set; IDs narrow it. Host rechecks eligibility, excluding invented IDs. */
-export const RestartResumeParams = z
-  .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
-  .strict()
+export const RestartResumeParams = RestartResumableParams
 
 export const HistoryParams = z
   .object({

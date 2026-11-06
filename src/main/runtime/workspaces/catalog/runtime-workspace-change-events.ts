@@ -41,6 +41,9 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
   }
 
   protected emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+    if (event.kind === 'removed') {
+      this.forgetSetupRun(event.worktreeId)
+    }
     this.worktreeLifecycleEvents.emit(event)
   }
 

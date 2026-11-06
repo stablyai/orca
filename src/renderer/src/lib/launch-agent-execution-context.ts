@@ -21,7 +21,12 @@ export type AgentLaunchExecutionContext = {
 /** `null` means the host's OS is unknown; the user has been told why the launch stopped. */
 export function resolveAgentLaunchExecutionContext(
   store: ReturnType<typeof useAppStore.getState>,
-  args: { worktreeId: string; launchPlatform?: NodeJS.Platform }
+  args: {
+    worktreeId: string
+    launchPlatform?: NodeJS.Platform
+    /** Planning ahead of a launch that may never need it: nothing is said here. */
+    quiet?: true
+  }
 ): AgentLaunchExecutionContext | null {
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
   const worktreeSshConnectionId = getConnectionIdFromState(store, args.worktreeId)
@@ -33,7 +38,9 @@ export function resolveAgentLaunchExecutionContext(
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
   const fact = resolveWorktreeExecutionHostPlatform(store, args.worktreeId, workspacePath)
   if (fact.kind === 'withheld') {
-    toast.error(fact.reason)
+    if (!args.quiet) {
+      toast.error(fact.reason)
+    }
     return null
   }
   const launchHost = refineLocalLaunchPlatform(fact, args.launchPlatform)

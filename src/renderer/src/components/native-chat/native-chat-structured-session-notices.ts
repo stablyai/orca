@@ -43,15 +43,19 @@ function nativeChatLaunchNotice({
           'auto.components.native.chat.NativeChatLaunchRetry.unknown',
           'Chat connection could not be confirmed.'
         )
-  const cause = failure
-    ? (failure.causeText ??
-      agentSessionWriteNoticeText(
-        agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
-      ))
-    : ''
-  // An argument problem already says the start failed; the generic lead would repeat it.
+  const cause = !failure
+    ? ''
+    : failure.kind === 'not-started'
+      ? failure.causeText
+      : (failure.causeText ??
+        agentSessionWriteNoticeText(
+          agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
+        ))
+  // An argument problem, or a launch that never started, already says the start failed; the
+  // generic lead would repeat it.
   const saysStartFailure =
-    failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
+    failure?.kind === 'not-started' ||
+    (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
   const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
   return {
     content: signInContent,

@@ -28,9 +28,9 @@ import {
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
-import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import {
   provisionWorktreeTerminals,
+  type WorktreeTerminalProvisioningArgs,
   type WorktreeTerminalProvisioningHost
 } from './runtime-worktree-terminal-provisioning'
 import { waitForTerminalComposer } from '../../terminal/wait/terminal-composer-lifetime'
@@ -196,7 +196,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
-  protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
+  /** Leave text unsent in an agent's input once it starts, as a workspace's startup draft is. */
+  pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
     pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
   }
 
@@ -252,24 +253,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   }
 
   async provisionManagedWorktreeTerminals(
-    args: {
-      worktreeSelector: string
-      worktreeId: string
-      worktreePath: string
-      setup?: CreateWorktreeResult['setup']
-      defaultTabs?: CreateWorktreeResult['defaultTabs']
-      primaryTerminalHandle?: string | null
-      hasStartupTerminal: boolean
-      setupOnly?: boolean
-      setupCommandPlatform: 'windows' | 'posix'
-      observeSetupCompletion?: boolean
-      // Pass the setup wrapper that the agent awaits; a bare runner would execute a different script.
-      wrappedSetupCommand?: string
-      // Background provisioning must not move the user's sidebar selection.
-      surfaceOwner?: false
-      /** The create was the user's act: its terminals may start a stopped WSL distro. */
-      wslUserAct?: true
-    },
+    args: WorktreeTerminalProvisioningArgs,
     createdWorktree?: Worktree
   ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
     return provisionWorktreeTerminals(

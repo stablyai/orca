@@ -1,3 +1,10 @@
+import {
+  createSetupRun,
+  AgentLaunchSetupNotCompletedError,
+  promisedChatSetupReceipt,
+  type SetupRun
+} from '../runtime/setup/setup-run'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -356,6 +363,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   worktree: Worktree
   startup: CreateWorktreeArgs['startup']
   setup: CreateWorktreeResult['setup']
+  setupRun?: SetupRun
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
   /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
@@ -1715,6 +1723,7 @@ async function performLocalWorktreeCreate(
 
   // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
   let setup: CreateWorktreeResult['setup']
+  let setupRun: SetupRun | undefined
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
@@ -1739,6 +1748,13 @@ async function performLocalWorktreeCreate(
       }
     }
     if (setupScript && shouldLaunchSetup) {
+      setupRun = createSetupRun(
+        shouldWaitForSetupBeforeAgentStartup(
+          repo.hookSettings?.setupAgentStartupPolicy,
+          createdYamlHooks?.setupAgentStartupPolicy
+        )
+      )
+      runtime.registerSetupRun(worktree.id, setupRun)
       try {
         // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
         setup = await createSetupRunnerScript(
@@ -1750,10 +1766,18 @@ async function performLocalWorktreeCreate(
           createdYamlHooks?.setupAgentStartupPolicy
         )
       } catch (error) {
+        setupRun?.settle({ kind: 'ended', reason: 'preparation_failed' })
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
       }
     }
   })
+
+  if (args.startup && setupRun?.waitsForAgent && !setup) {
+    throw new AgentLaunchSetupNotCompletedError(
+      { kind: 'ended', reason: 'preparation_failed' },
+      args.createdWithAgent ?? 'the agent'
+    )
+  }
 
   // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
   runtime?.invalidateWorktreeCatalog?.(repo.id)
@@ -1763,6 +1787,7 @@ async function performLocalWorktreeCreate(
       worktree,
       startup: args.startup,
       setup,
+      setupRun,
       defaultTabs,
       createdWithAgent: args.createdWithAgent,
       automationCreate: Boolean(args.automationProvenance)
@@ -1770,7 +1795,10 @@ async function performLocalWorktreeCreate(
   )
 
   // Automation terminals are host-provisioned, so return none for renderer launch.
-  const provisionedByHost = Boolean(args.automationProvenance)
+  const provisionedByHost = Boolean(args.automationProvenance || args.promisedAgentChat)
+  if (!provisionedByHost) {
+    setupRun?.settle({ kind: 'ended', reason: 'observation_lost' })
+  }
   if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
     void runtime.provisionManagedWorktreeTerminals(
       {
@@ -1778,6 +1806,9 @@ async function performLocalWorktreeCreate(
         worktreeId: worktree.id,
         worktreePath: worktree.path,
         ...(setup ? { setup } : {}),
+        setupRun,
+        observeSetupCompletion: true,
+        callerProvidesSurface: args.promisedAgentChat === true,
         ...(defaultTabs ? { defaultTabs } : {}),
         hasStartupTerminal: false,
         setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
@@ -1816,6 +1847,7 @@ async function performLocalWorktreeCreate(
               : {}),
           ...(defaultTabs ? { defaultTabs } : {})
         }),
+    ...promisedChatSetupReceipt(args.promisedAgentChat, setupRun),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
       : {}),

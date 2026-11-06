@@ -45,10 +45,15 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
   requestSelection?: RuntimeRequestSelection,
-  prepareRequest?: RuntimeRequestPreparation
+  prepareRequest?: RuntimeRequestPreparation,
+  /** How long this request's keepalives may renew its idle timeout, from its dispatch; never past this in total. */
+  keepaliveTotalMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
-  if (!isSafeTimerDelayMs(timeoutMs)) {
+  if (
+    !isSafeTimerDelayMs(timeoutMs) ||
+    (keepaliveTotalMs !== undefined && !isSafeTimerDelayMs(keepaliveTotalMs))
+  ) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -107,6 +112,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     let timeout = setTimeout(onTimeout, timeoutMs)
+    let totalTimeout: ReturnType<typeof setTimeout> | undefined
 
     function onTimeout(): void {
       finishError(
@@ -140,6 +146,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       }
       settled = true
       clearTimeout(timeout)
+      clearTimeout(totalTimeout)
       try {
         cleanupSocketListeners()
         ws?.close()
@@ -173,6 +180,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
         const frame = handshake.channel.sealText(request)
         requestSelection?.onDispatch?.()
+        // The cap covers the request itself; connection, auth and status keep their own budget.
+        if (keepaliveTotalMs !== undefined) {
+          totalTimeout = setTimeout(onTimeout, Math.max(timeoutMs, keepaliveTotalMs))
+        }
         ws?.send(frame)
       } catch (error) {
         finishError(error instanceof Error ? error : new Error(String(error)))

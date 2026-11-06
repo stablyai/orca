@@ -10,9 +10,12 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
 import type { AgentLaunchRequestId } from '../../agent-launch-request-id'
+import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
 import type { StructuredAgentSessionCreateGate } from './structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchOptions = StructuredLaunchPromptOptions & {
+  /** The executing host accepts this launch and decides its surface; the window only reads it. */
+  hostLaunch?: StructuredHostLaunch
   /** The user action this start serves; only a re-delivery of it joins its chat. */
   requestId: AgentLaunchRequestId
   /** Background launches never ask host publication to select their tab. */

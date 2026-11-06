@@ -1,4 +1,5 @@
 import type { WorktreeCatalogVersion } from './catalog-version'
+import type { AgentLaunchSetupReceipt } from '../rpc-contract/agent-launch-accept-params'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
@@ -90,6 +91,7 @@ export type SparsePreset = {
 }
 
 export type CreateWorktreeArgs = {
+  promisedAgentChat?: boolean
   repoId: string
   name: string
   /** Retire only generator-chosen names. User-typed pool names remain reusable; omitted callers retain legacy behavior. */
@@ -189,6 +191,9 @@ export type CreateWorktreeResult = {
     terminalHandle?: string
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
+  /** Only for a create that promised a chat: the Setup that chat must wait for. Older hosts omit it,
+   *  and they also lack agent.launch.accept.v1, so no caller reads its absence as "none". */
+  agentLaunchSetup?: AgentLaunchSetupReceipt
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent

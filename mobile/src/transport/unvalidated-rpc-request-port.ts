@@ -9,7 +9,9 @@ export type SendRequestOptions = {
   signal?: AbortSignal
   /** Local assertion, after the connect wait and immediately before frame admission. */
   beforeSend?: () => void
+  /** Idle timeout; the host's keepalives for this request renew it up to keepaliveTotalMs. */
   timeoutMs?: number
+  keepaliveTotalMs?: number
   /** Include the connect wait in the caller's timeout budget. */
   budgetSpansConnect?: boolean
   /** Reject instead of replaying the request after reconnect. */

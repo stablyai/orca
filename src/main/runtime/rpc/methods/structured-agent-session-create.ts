@@ -34,9 +34,11 @@ import {
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { StructuredCreateRefused } from './structured-agent-session-precommit-refusal'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
+import { replayRecordedAtRestCreate } from './structured-agent-session-create-replay'
+import { AgentLaunchClosedBeforeDispatchError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -93,7 +95,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
-}): Promise<PreparedStructuredAgentSessionCreate> {
+}): Promise<PreparedStructuredAgentSessionCreate | StructuredCreateRefused> {
   const structuredAgentCliSourceEvidence =
     args.structuredAgentCliSourceEvidence ??
     (args.resumeFrom?.cliSource
@@ -103,8 +105,16 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
           (source) => args.runtime.getStructuredAgentCliSourceRoute(source)
         )
       : undefined)
-  // Adoption replay may need the record loaded from disk before source discovery can be skipped.
-  let host = args.resumeFrom ? await args.ensureHost() : null
+  // Adoption replay may need the record loaded from disk before source discovery can be skipped,
+  // and a recorded at-rest create answers from its record before fresh support is asked.
+  let host = args.resumeFrom || args.atRest !== undefined ? await args.ensureHost() : null
+  const recorded =
+    host && args.atRest !== undefined
+      ? replayRecordedAtRestCreate(host, { ...args, atRest: args.atRest })
+      : null
+  if (recorded) {
+    return recorded
+  }
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,
@@ -206,10 +216,7 @@ export async function commitStructuredAgentSessionCreate(args: {
               const tableId =
                 prepared.attachParams.surfaceTabId ?? structuredAgentSessionTabId(sessionId)
               args.capture?.({ tableId, presentation: { raw: null, saved: [] } })
-              if (
-                ORCA_LAYOUT_OWNER_IS_MAIN &&
-                structuredAgentSessionClosedBeforeCreate(sessionId)
-              ) {
+              if (structuredAgentSessionClosedBeforeCreate(sessionId)) {
                 return Promise.resolve()
               }
               return args.runtime.publishStructuredAgentSessionTab({
@@ -240,10 +247,7 @@ export async function commitStructuredAgentSessionCreate(args: {
     structuredAgentSessionTabId(result.value.sessionId)
   args.capture?.({ tableId: surfaceTabId, presentation: { raw: null, saved: [] } })
   // A chat closed while it was being made gets no tab to show before main closes it.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(result.value.sessionId)
-  ) {
+  if (structuredAgentSessionClosedBeforeCreate(result.value.sessionId)) {
     return result
   }
   try {
@@ -290,6 +294,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
   atRest?: true
   firstMessage?: StructuredAgentSessionFirstMessage
   signal?: AbortSignal
+  /** The user's close of a launch's reserved chat; checked once preparation is done, before commit. */
+  closed?: AbortSignal
+  capture?: (surface: StructuredSessionSurface) => void
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   // An at-rest create's ledger row is keyed by its intent, as a client's create is.
   const envelope = args.atRest
@@ -306,10 +313,15 @@ export async function createStructuredAgentSessionForWorktree(args: {
     return { ok: false, refusal: prepared.refusal }
   }
   assertAgentPromptRequestActive(args.signal)
+  if (args.closed?.aborted) {
+    // Nothing is made yet, so a close during preparation starts nothing, as the RPC create refuses.
+    throw new AgentLaunchClosedBeforeDispatchError()
+  }
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,
     prepared,
-    activate: args.activate
+    activate: args.activate,
+    ...(args.capture ? { capture: args.capture } : {})
   })
 }

@@ -91,9 +91,9 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import {
   reserveStructuredLaunchSlot,
-  restoreStructuredLaunchSurfaces,
   stopStructuredLaunchSlotTracking
 } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
+import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-restore'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { buildHydratedTabState } from '@/store/slices/tabs-hydration'

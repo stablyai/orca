@@ -1,4 +1,8 @@
-import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
+import type {
+  HostLaunchFirstTurn,
+  StructuredLaunchSurfaceAddress
+} from './agent-session/launch/structured-agent-session-launch-record'
+import type { StructuredHostLaunch } from './agent-session/launch/structured-agent-session-host-launch'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
@@ -56,6 +60,8 @@ export type StructuredAgentSessionLaunchIntent = {
   /** The saved selection create seeds, read when the intent is built. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
+  /** The executing host accepted this launch and decides its surface; the window only reads it. */
+  hostLaunch?: StructuredHostLaunch
 }
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
@@ -98,13 +104,16 @@ export function createStructuredAgentSessionLaunchIntent(
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
-  activate = true
+  activate = true,
+  hostLaunch?: StructuredHostLaunch
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
-  const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
+  // A host launch names its chat once, so every retry of that request adopts the same one.
+  const sessionId =
+    hostLaunch?.sessionId ?? createStructuredAgentSessionId(agent, createBrowserUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),
@@ -114,14 +123,17 @@ export function createStructuredAgentSessionLaunchIntent(
       resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
     )
   }
-  return buildStructuredAgentSessionLaunchIntent(
-    worktreeId,
-    owner,
-    agent,
-    sessionId,
-    resumeFrom,
-    hostSeedOptions
-  )
+  return {
+    ...buildStructuredAgentSessionLaunchIntent(
+      worktreeId,
+      owner,
+      agent,
+      sessionId,
+      resumeFrom,
+      hostSeedOptions
+    ),
+    ...(hostLaunch ? { hostLaunch } : {})
+  }
 }
 
 function buildStructuredAgentSessionLaunchIntent(
@@ -150,7 +162,9 @@ function buildStructuredAgentSessionLaunchIntent(
   }
 }
 
-/** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
+/** A definitive refusal consumed its operation id, but the provisional tab still owns its session.
+ *  Only an ordinary create is rebuilt: a host launch keeps its operation, and its Retry reads that
+ *  same launch again and never starts another agent. */
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent,
   retainOpening = false
@@ -189,6 +203,11 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
+  /** A host launch from before a reload: it is read again, never accepted again. Its
+   *  `firstMessage` is the held message this window still owes the user. */
+  hostLaunchOperationId?: string
+  /** Its first turn, released after Setup: what the chat showed, or the exact input it sent. */
+  hostLaunchFirstTurn?: HostLaunchFirstTurn
   resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -201,6 +220,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
+  const firstTurn = args.hostLaunchOperationId ? args.hostLaunchFirstTurn : undefined
   return {
     sessionId: args.sessionId,
     worktreeId: args.worktreeId,
@@ -217,7 +237,10 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-      ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+      // A host launch's message was never part of this payload or its digest.
+      ...(args.firstMessage && !args.hostLaunchOperationId
+        ? { firstMessage: args.firstMessage }
+        : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
     },
@@ -226,11 +249,24 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
     ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
-    ...(args.createMessageSupport !== undefined
-      ? args.seedOptions
-        ? { seedOptions: args.seedOptions }
-        : {}
-      : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
+    ...(args.hostLaunchOperationId
+      ? {
+          hostLaunch: {
+            operationId: args.hostLaunchOperationId,
+            sessionId: args.sessionId,
+            ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+            ...(firstTurn ? { protocol: 'release' as const, firstTurn } : {})
+          }
+        }
+      : {}),
+    // A released first turn shows what it saved, never this machine's defaults of now.
+    ...(firstTurn
+      ? { seedOptions: firstTurn.options }
+      : args.createMessageSupport !== undefined
+        ? args.seedOptions
+          ? { seedOptions: args.seedOptions }
+          : {}
+        : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
   }
 }
 

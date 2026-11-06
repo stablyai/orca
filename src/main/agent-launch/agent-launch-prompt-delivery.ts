@@ -13,7 +13,6 @@ import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup
 
 import type { CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
-import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): string | undefined {
   return intent.prompt?.delivery === 'submit' && intent.prompt.text.trim().length > 0
@@ -21,16 +20,22 @@ function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): 
     : undefined
 }
 
+/** `clientMessageId`: the caller's own id for the message, so its chat founds that same message.
+ *  `selection`: a prepared launch's released choices for that message, present even when empty so
+ *  the chat never falls back to remembered ones. */
 export function launchPromptCreateInputs(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  clientMessageId?: string,
+  selection?: Readonly<Record<string, string>>
 ): { firstMessage?: StructuredAgentSessionFirstMessage; signal?: AbortSignal } {
   const text = structuredLaunchSubmitText(intent)
   return text !== undefined
     ? {
         firstMessage: {
-          clientMessageId: createStructuredAgentSessionOperationId(randomUUID),
-          body: structuredAgentSessionSendBody(text, [])
+          clientMessageId: clientMessageId ?? createStructuredAgentSessionOperationId(randomUUID),
+          body: structuredAgentSessionSendBody(text, []),
+          ...(selection !== undefined ? { selection } : {})
         },
         ...(signal ? { signal } : {})
       }
@@ -44,7 +49,7 @@ const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
 /** Persist owed submits as unconfirmed: a crash during delivery must not invite duplicate turns. */
 export function settledAtCreation(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
-  created: { promptRodeLaunchCommand?: boolean; structured?: AgentLaunchStructuredSurface }
+  created: Pick<CreatedSurface, 'promptRodeLaunchCommand' | 'promptLeftUnsent' | 'structured'>
 ): AgentLaunchPromptDisposal {
   if (created.structured?.firstMessage) {
     return { outcome: 'journaled', messageId: created.structured.firstMessage.clientMessageId }
@@ -55,7 +60,9 @@ export function settledAtCreation(
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
-  return intent.prompt?.delivery === 'submit' ? UNCONFIRMED : NOT_DELIVERED
+  return intent.prompt?.delivery === 'submit' && !created.promptLeftUnsent
+    ? UNCONFIRMED
+    : NOT_DELIVERED
 }
 
 export async function settleLaunchPromptDisposal(
@@ -67,6 +74,9 @@ export async function settleLaunchPromptDisposal(
   }
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
+  }
+  if (created.promptLeftUnsent) {
+    return NOT_DELIVERED
   }
   return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {
     freshLaunch: true,

@@ -4,6 +4,7 @@ import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/nati
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { SetupRun } from '../../../../setup/setup-run'
 import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 
@@ -137,6 +138,20 @@ export function applyWaitForSetupOutcome(
   }
 }
 
+/** A structured worker's setup evidence is its run's own result; an unsettled run stays running. */
+export function applySetupRunOutcome(
+  receipt: WorkerSetupReceipt,
+  effects: WorkerEffect[],
+  run: SetupRun
+): void {
+  if (run.result) {
+    applyWaitForSetupOutcome(receipt, effects, {
+      satisfied: run.result.kind === 'succeeded',
+      status: 'exited'
+    })
+  }
+}
+
 export function monitorWorkerSetup(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -156,10 +171,14 @@ export function monitorWorkerSetup(args: {
     return
   }
   // Why: setup is intentionally non-gating, but command completion remains durable evidence.
-  void args.runtime
-    .waitForSetupTerminalCompletion(setupTerminal.id)
+  const worktreeId = args.effects.find((effect) => effect.kind === 'worktree')?.id
+  const run = worktreeId ? args.runtime.getSetupRun(worktreeId) : undefined
+  if (!run) {
+    return
+  }
+  void run.outcome
     .then((completion) => {
-      const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
+      const setupState = completion.kind === 'succeeded' ? 'succeeded' : 'failed'
       const evidence = args.db.updateWorkerSetupEvidence({
         dispatchId: args.dispatchId,
         setupState,
