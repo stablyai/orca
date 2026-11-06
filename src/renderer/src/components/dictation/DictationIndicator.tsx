@@ -27,12 +27,11 @@ export function DictationIndicator({ captureLive }: { captureLive: boolean }) {
   const isListening = dictationState === 'listening' || isLoadingModel
   const isClipping = isListening && dictationMeter.isClipping
   const isSpeaking = isListening && dictationMeter.isSpeaking && !isClipping
-  const lifecycleLabel =
-    dictationState === 'starting' && !isLoadingModel
+  const lifecycleLabel = isListening
+    ? translate('auto.components.dictation.DictationIndicator.3de5a129e7', 'Listening')
+    : dictationState === 'starting'
       ? translate('auto.components.dictation.DictationIndicator.7f3660a7ba', 'Starting mic…')
-      : dictationState === 'stopping'
-        ? translate('auto.components.dictation.DictationIndicator.f082d0cb9d', 'Processing…')
-        : translate('auto.components.dictation.DictationIndicator.3de5a129e7', 'Listening')
+      : translate('auto.components.dictation.DictationIndicator.f082d0cb9d', 'Processing…')
   const label = isClipping
     ? translate('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
     : isSpeaking
