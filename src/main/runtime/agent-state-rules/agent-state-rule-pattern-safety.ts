@@ -1,6 +1,5 @@
-// Why a subset: rule patterns run on every poll, and Node has no linear-time regex engine, so a
-// pattern that can backtrack exponentially is refused when the file loads. Overlapping adjacent
-// quantifiers (`\s*\s*x`) are polynomial and not detected.
+// Reject exponential regex backtracking at load: patterns run every poll without a linear-time engine.
+// Adjacent overlapping quantifiers (\s*\s*x) are polynomial and remain undetected.
 export function findUnsafePatternReason(pattern: string): string | null {
   try {
     new RegExp(pattern)
@@ -22,8 +21,7 @@ function isRepeatingQuantifier(char: string | undefined): boolean {
   return char === '*' || char === '+' || char === '{'
 }
 
-// A repeated group whose body varies, by a quantifier or an alternation: `(a+)*`, `(a?)+`,
-// `(a|aa)+`. Such a body can split one input many ways, each of which a failed match retries.
+// Quantified groups with variable bodies can split failed input exponentially: (a+)*, (a?)+, (a|aa)+.
 function repeatsAVariableGroup(pattern: string): boolean {
   const groupVaries: boolean[] = []
   let inClass = false
@@ -37,7 +35,7 @@ function repeatsAVariableGroup(pattern: string): boolean {
       inClass = true
     } else if (char === '(') {
       groupVaries.push(false)
-      // Why skip: the `?` of `(?:`, `(?=` or `(?<name>` opens a group; it quantifies nothing.
+      // The ? in a group opener is not a quantifier.
       if (pattern[index + 1] === '?') {
         index += 1
       }

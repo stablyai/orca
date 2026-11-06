@@ -1,6 +1,4 @@
-// A pane rename in a layout-owner build: main applies it and its frame draws the title; the window
-// does not write it again. Main's frames run through the shared transport, whose apply check
-// fails any flush that differs from the full build.
+// Main applies renames and frames draw titles without a second window write. Shared transport checks each flush against full-build behavior.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -95,15 +93,5 @@ describe('a pane title drawn from main’s frame', () => {
     expect(writes.count()).toBe(1)
     // A mounted pane follows the layout's titles (use-host-pane-title-sync), not an event.
     expect(dispatchEvent).not.toHaveBeenCalled()
-  })
-
-  it('clears a pane’s name from main’s frame alone', async () => {
-    const writes = layoutWrites()
-    applyRuntimePaneTitle({ tabId: 'tab-shell', leafId: leaf(2), title: null })
-    await settle()
-    writes.stop()
-
-    expect(titles()).toBeUndefined()
-    expect(writes.count()).toBe(1)
   })
 })

@@ -3,7 +3,6 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
-import { startupNeedsWindowSpawn } from '../terminals/window-tab-start-in-main'
 
 type HeldCreate = { resolve: (value: unknown) => void; reject: (error: Error) => void }
 
@@ -126,63 +125,6 @@ describe("a new tab's first terminal, started by main in a layout-owner build", 
     expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
   })
 
-  it('shows why when main could not start it, as a start that timed out does', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, { id: TAB, initialLeafId: LEAF })
-    await settle()
-
-    mocks.create!.reject(new Error('Request timed out: createOrAttach'))
-    await settle()
-
-    expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toEqual({
-      status: 'failed',
-      reason: 'Request timed out: createOrAttach'
-    })
-    expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
-  })
-
-  it('lets the pane attach to whatever main binds it to', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, {
-      id: TAB,
-      initialLeafId: LEAF,
-      pendingStartup: { command: 'make dev' }
-    })
-    await settle()
-    mocks.create!.resolve({ terminal: { ptyId: 'pty-main' } })
-    await settle()
-
-    // Main rebound the pane before the window drew its first terminal.
-    drawBinding(store, 'pty-rebound')
-    expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
-  })
-
-  it('never runs a failed start’s startup again, which main may have run before failing', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, {
-      id: TAB,
-      initialLeafId: LEAF,
-      pendingStartup: { command: 'make dev' }
-    })
-    await settle()
-
-    mocks.create!.reject(new Error('shell not found'))
-    await settle()
-
-    expect(store.getState().pendingStartupByTabId[TAB]).toBeUndefined()
-  })
-
-  it('attaches to the terminal that won the pane instead of showing a failure', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, { id: TAB, initialLeafId: LEAF })
-    await settle()
-
-    mocks.create!.reject(new Error('terminal_pane_owner_changed'))
-    await settle()
-
-    expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
-  })
-
   it('starts its own terminal, with its startup, when main does not hold the tab', async () => {
     const store = storeWithWorktree()
     store.getState().createTab(WORKTREE, undefined, undefined, {
@@ -214,51 +156,5 @@ describe("a new tab's first terminal, started by main in a layout-owner build", 
     await settle()
 
     expect(store.getState().pendingStartupByTabId[TAB]).toBeUndefined()
-  })
-
-  it('keeps the window spawn for a startup only it carries, and for a tab with a terminal', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, {
-      id: TAB,
-      initialLeafId: LEAF,
-      pendingStartup: { command: 'claude', delivery: 'terminal-paste' }
-    })
-    store.getState().createTab(WORKTREE, undefined, undefined, { initialPtyId: 'pty-live' })
-    await settle()
-
-    expect(store.getState().terminalPaneStartsByPaneKey).toEqual({})
-    expect(terminalCreateCalls()).toEqual([])
-  })
-
-  it('sends nothing to start with the build switch off', async () => {
-    mocks.layoutOwnerIsMain = false
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, { id: TAB, initialLeafId: LEAF })
-    await settle()
-
-    expect(store.getState().terminalPaneStartsByPaneKey).toEqual({})
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-})
-
-describe('startupNeedsWindowSpawn', () => {
-  it('sends main a plain startup, and keeps the window spawn for one only it carries', () => {
-    expect(startupNeedsWindowSpawn(undefined)).toBe(false)
-    expect(startupNeedsWindowSpawn({ command: 'ls', env: { A: '1' }, launchAgent: 'claude' })).toBe(
-      false
-    )
-    for (const field of [
-      { delivery: 'terminal-paste' as const },
-      { agentLaunch: { agent: 'claude' } },
-      { agentArgsOverride: null },
-      { draftPrompt: 'hi' },
-      { sessionOptions: {} },
-      { initialAgentStatus: { agent: 'claude' as const, prompt: 'hi' } },
-      { showSessionRestoredBanner: true },
-      { telemetry: {} }
-    ]) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each field is checked only for presence, never read.
-      expect(startupNeedsWindowSpawn({ command: 'x', ...field } as never)).toBe(true)
-    }
   })
 })

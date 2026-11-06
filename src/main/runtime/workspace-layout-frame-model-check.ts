@@ -1,6 +1,4 @@
-// Main's model check on a records frame: the frame applied to what subscribers held must equal a
-// fresh projection of every partition. Tests that install it check every frame; dev builds log a
-// mismatch on frames a Store write caused (see workspace-layout-frame-observer.ts).
+// Applying each records frame must equal a fresh partition projection; tests check every frame and dev builds log Store-write mismatches (workspace-layout-frame-observer.ts).
 
 import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-report'
 import { applyWorkspaceLayoutRecordChange } from '../../shared/workspace-layout/workspace-layout-records'

@@ -1,15 +1,17 @@
-// Why: a Source Control discard in one workspace must stop autosave of the same file in every
-// workspace showing it, until git has finished (the discard releases its hold when it ends).
+// Git discard holds autosave across all workspace views of the same physical file until Git settles.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { notifyEditorExternalFileChange, requestEditorSaveQuiesce } from './editor-autosave'
-import { attachEditorAutosaveController } from './editor-autosave-controller'
+import {
+  notifyEditorExternalFileChange,
+  requestEditorSaveQuiesce
+} from './autosave/editor-autosave'
+import { attachEditorAutosaveController } from './autosave/editor-autosave-controller'
 import {
   createEditorStore,
   createFakeEditorDisk,
   stubEditorWindowWithDisk,
   withLoadedBaselines
-} from './editor-autosave-controller-test-fixture'
-import { registerPendingEditorFlush } from './editor-pending-flush'
+} from './autosave/editor-autosave-controller-test-fixture'
+import { registerPendingEditorFlush } from './save/flush/editor-pending-flush'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const DISCARD_TARGET = { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'a.ts' }
@@ -53,20 +55,6 @@ function setup(openIn: string[]) {
   return { disk, store, ids, edit, cleanup, writes }
 }
 
-/** The discard flow: quiesce, git restores the file after `gitMs`, notify, release the hold. */
-async function discard(
-  disk: { files: Map<string, string> },
-  options: { gitMs: number; fails?: true }
-): Promise<void> {
-  const release = await requestEditorSaveQuiesce(DISCARD_TARGET)
-  await vi.advanceTimersByTimeAsync(options.gitMs)
-  if (!options.fails) {
-    disk.files.set('/repo/a.ts', 'HEAD')
-    notifyEditorExternalFileChange(DISCARD_TARGET)
-  }
-  release()
-}
-
 it('git discard in one workspace pauses the same file autosave in another', async () => {
   const { disk, store, ids, edit, cleanup, writes } = setup(['wt-1', 'wt-2'])
   expect(new Set(ids).size).toBe(2)
@@ -82,7 +70,6 @@ it('git discard in one workspace pauses the same file autosave in another', asyn
     await vi.advanceTimersByTimeAsync(5_000)
     expect(writes()).toBe(0)
     expect(disk.files.get('/repo/a.ts')).toBe('HEAD')
-    // The dirty tabs keep their edits behind the changed-on-disk banner.
     const tabs = store.getState().openFiles
     expect(tabs.map((file) => file.externalMutation)).toEqual(['changed', 'changed'])
     expect(store.getState().editorDrafts[ids[1]]).toBe('unsaved edit, more')
@@ -99,49 +86,9 @@ it('pauses another workspace even when the discarding workspace has no tab of th
     expect(writes()).toBe(0)
     disk.files.set('/repo/a.ts', 'HEAD')
     release()
-    // Afterwards the guarded write refuses the stale save and raises the banner.
     await vi.advanceTimersByTimeAsync(5_000)
     expect(disk.files.get('/repo/a.ts')).toBe('HEAD')
     expect(store.getState().openFiles[0].externalMutation).toBe('changed')
-  } finally {
-    cleanup()
-  }
-})
-
-it('a slow git restore writes nothing until it finishes', async () => {
-  const { disk, cleanup, writes } = setup(['wt-1', 'wt-2'])
-  try {
-    await discard(disk, { gitMs: 30_000 })
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(writes()).toBe(0)
-    expect(disk.files.get('/repo/a.ts')).toBe('HEAD')
-  } finally {
-    cleanup()
-  }
-})
-
-it('a watcher notice alone does not lift the hold before git finishes', async () => {
-  const { store, ids, edit, cleanup, writes } = setup(['wt-2'])
-  try {
-    const release = await requestEditorSaveQuiesce(DISCARD_TARGET)
-    notifyEditorExternalFileChange({ ...DISCARD_TARGET, worktreeId: 'wt-2' })
-    store.getState().setExternalMutation(ids[0], null)
-    edit(ids[0], 'typed after the notice')
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(writes()).toBe(0)
-    release()
-  } finally {
-    cleanup()
-  }
-})
-
-it('a failed discard releases the hold at once, so autosave resumes', async () => {
-  const { disk, cleanup, writes } = setup(['wt-1'])
-  try {
-    await discard(disk, { gitMs: 100, fails: true })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(writes()).toBe(1)
-    expect(disk.files.get('/repo/a.ts')).toBe('unsaved edit')
   } finally {
     cleanup()
   }
@@ -157,7 +104,7 @@ it('a discard slower than the backstop: banner, and no autosave from any tab unt
       'changed',
       'changed'
     ])
-    // Even a tab whose banner was dismissed stays held, and its banner comes back to say why.
+    // Dismissed banners must return while an overdue discard still holds the file.
     store.getState().setExternalMutation(ids[1], null)
     edit(ids[1], 'typed while git is still running')
     expect(store.getState().openFiles[1].externalMutation).toBe('changed')

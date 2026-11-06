@@ -4,6 +4,7 @@ import type { AndroidSdkPaths } from './android-sdk-discovery'
 import {
   findRunningAvdSerial,
   listAndroidDevices,
+  listConfirmedAdbSerials,
   mergeAndroidDevices
 } from './android-device-inventory'
 import { parseAdbDevices } from './adb-devices'
@@ -11,8 +12,7 @@ import { parseAdbDevices } from './adb-devices'
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  emulator: '/sdk/emulator'
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })
@@ -76,6 +76,31 @@ describe('listAndroidDevices', () => {
     const devices = await listAndroidDevices(fake as unknown as AndroidCommandRunner, SDK)
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({ id: 'emulator-5554', name: 'Pixel_7', state: 'booted' })
+  })
+
+  it('lists USB devices without running the emulator binary on adb-only hosts', async () => {
+    const binaries: string[] = []
+    const fake = runner((binary, a) => {
+      binaries.push(binary)
+      return a === 'devices -l' ? 'List of devices attached\n721a6f41\tdevice model:M2007J17C' : ''
+    })
+    const adbOnly: AndroidSdkPaths = { sdkRoot: null, adb: '/usr/bin/adb', emulator: null }
+    const devices = await listAndroidDevices(fake, adbOnly)
+    expect(devices).toEqual([expect.objectContaining({ id: '721a6f41', detail: 'device' })])
+    expect(binaries.every((binary) => binary === '/usr/bin/adb')).toBe(true)
+  })
+})
+
+describe('listConfirmedAdbSerials', () => {
+  it('lists every attached serial, and null when adb itself fails', async () => {
+    const answering: AndroidCommandRunner = async () =>
+      ok('List of devices attached\nemulator-5554\tdevice\nemulator-5556\toffline')
+    expect(await listConfirmedAdbSerials(answering, SDK)).toEqual([
+      'emulator-5554',
+      'emulator-5556'
+    ])
+    const failing: AndroidCommandRunner = async () => ({ stdout: '', stderr: 'boom', code: 1 })
+    expect(await listConfirmedAdbSerials(failing, SDK)).toBeNull()
   })
 })
 

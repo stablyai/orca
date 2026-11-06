@@ -1,5 +1,5 @@
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
   getLinearOrganizationUrlKeyFromIssueUrl,
@@ -9,7 +9,6 @@ import {
 export type LinearIssueAttachmentRef = Pick<LinearIssue, 'identifier'> &
   Partial<Pick<LinearIssue, 'workspaceId' | 'url'>>
 
-/** Normalized identifier -> linking worktrees, in worktree order. */
 export type LinearIssueWorkspaceAttachmentIndex = ReadonlyMap<string, readonly Worktree[]>
 
 export function normalizeLinearIdentifier(value: string | null | undefined): string | null {
@@ -107,8 +106,7 @@ export function findLinearIssueWorkspaceAttachment(
   )
 }
 
-/** Why: issue rows would otherwise rescan (and re-parse) every worktree per row; one
- *  pass per worktree list turns each row lookup into a map hit. */
+/** Index once per worktree list so issue rows need map lookups rather than repeated parsing/scanning. */
 export function buildLinearIssueWorkspaceAttachmentIndex(
   worktrees: readonly Worktree[]
 ): LinearIssueWorkspaceAttachmentIndex {

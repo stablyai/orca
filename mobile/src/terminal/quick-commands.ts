@@ -1,44 +1,16 @@
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import {
-  applyTerminalQuickCommandMutation,
   flattenTerminalQuickCommand,
-  getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand,
-  MAX_QUICK_COMMANDS,
-  MAX_QUICK_COMMAND_LABEL_LENGTH,
-  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
-  parseNormalizedTerminalQuickCommands,
-  supportsTerminalAgentQuickCommand,
-  terminalQuickCommandMatchesRepo,
-  type TerminalQuickCommandMutation
-} from '../../../src/shared/terminal-quick-commands'
-import {
-  getTerminalQuickCommandBodySize,
-  formatKilobytes,
-  terminalQuickCommandAgentPromptMaxLength
-} from '../../../src/shared/terminal-quick-command-prompt-limit'
-import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+  supportsTerminalAgentQuickCommand
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import '../../../src/shared/protocol-version'
+import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-capabilities'
+import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
-// Reuse the canonical desktop quick-command logic (pure, no heavy deps) so
-// mobile behaves identically to desktop. Only genuinely mobile-specific pieces
-// — agent-branded labels, native row truncation, and the launch plan — live here.
-export {
-  isTerminalAgentQuickCommand as isAgentQuickCommand,
-  getTerminalQuickCommandBody,
-  terminalQuickCommandMatchesRepo as quickCommandMatchesRepo,
-  supportsTerminalAgentQuickCommand,
-  getTerminalQuickCommandBodySize,
-  formatKilobytes,
-  MAX_QUICK_COMMANDS,
-  MAX_QUICK_COMMAND_LABEL_LENGTH,
-  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
-  parseNormalizedTerminalQuickCommands,
-  terminalQuickCommandAgentPromptMaxLength,
-  applyTerminalQuickCommandMutation,
-  type TerminalQuickCommandMutation
-}
+// Reuse the pure desktop command logic; renderer-only labels and native truncation stay here.
 
 const MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH = 240
 
@@ -79,10 +51,7 @@ export function buildMobileQuickCommandLaunch(
         }
       }
     : {
-        // Why: raw commands that resemble bare agent launches can otherwise
-        // select the fast path and race slow native, WSL, or SSH shell startup.
-        // flattenTerminalQuickCommand joins multiline bodies exactly as desktop
-        // does so the same saved command runs identically on both.
+        // Raw agent-looking commands must not bypass slow native/WSL/SSH startup; flatten multiline commands identically to desktop.
         options: {
           startupCommand: flattenTerminalQuickCommand(command).command,
           startupCommandDelivery: 'shell-ready'
@@ -94,8 +63,6 @@ export function getQuickCommandAgentLabel(agent: TuiAgent): string {
   return MOBILE_TUI_AGENT_LABELS[agent] ?? agent
 }
 
-// The subtitle desktop shows under each quick command: agent prompts read
-// "Codex: <prompt>", terminal commands show the raw command text.
 export function getQuickCommandPreview(command: TerminalQuickCommand): string {
   if (isTerminalAgentQuickCommand(command)) {
     return `${getQuickCommandAgentLabel(command.agent)}: ${command.prompt}`
@@ -108,7 +75,6 @@ export function getQuickCommandDisplayPreview(command: TerminalQuickCommand): st
   if (preview.length <= MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH) {
     return preview
   }
-  // Why: one-line rows should not send whole prompts through native text
-  // layout; full command bodies remain available to search, edit, and launch.
+  // Bound native row layout for long prompts while preserving full bodies for search, editing and launch.
   return `${preview.slice(0, MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH - 1)}…`
 }

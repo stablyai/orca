@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
-import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { flushAsyncTicks, createDeferred, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -10,7 +10,13 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
+import type { PtyDataMeta } from './pty-dispatcher'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -19,16 +25,7 @@ import {
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 
-// STA-4869 — routes R1 (host retry budget), R2 (permanently-unavailable) and R5
-// (local deferred-retry exhaustion) all end in the NON-QUIET abandon at
-// pty-connection.ts:7106, whose only loss disclosure is
-// writeRestoreUnavailableWarning (7302). That function early-returns the banner
-// when the pane is not foreground, and the abandon has already zeroed
-// hiddenOutputRestoreNeeded/PtyId and cleared the flood repaint timer.
-//
-// Invariant asserted here: when renderer delivery was withheld while hidden,
-// reveal must either reconcile every retained byte exactly once or leave a
-// durable loss banner on the pane. Never neither.
+// STA-4869: exhausted/permanent restore failures must reconcile retained bytes or disclose loss on reveal, even if abandonment occurred while backgrounded.
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -128,8 +125,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => ({
 
 const REMOTE_PTY_ID = 'remote:env-1@@terminal-sta4869'
 const LOCAL_PTY_ID = 'pty-id'
-// Overruns the renderer's 2MB hidden background queue: the bytes exist only in
-// the authority's buffer afterwards, which is what reveal has to reconcile.
+// Overflow the 2MB client queue so reveal must reconcile bytes retained only by the authority.
 const HIDDEN_FLOOD = 'x'.repeat(2 * 1024 * 1024 + 1)
 const LIVE_CHUNK = 'live-after-reveal\r\n'
 const BANNER_FRAGMENT = 'main recovery was unavailable'
@@ -163,6 +159,7 @@ type PaneDrive = {
   deps: PaneConnectionDeps
   disposable: { dispose: () => void }
   deliver: (data: string, seq: number) => void
+  deliverWithMeta?: (data: string, meta: PtyDataMeta) => void
   setVisible: (visible: boolean) => void
   setOutputPaused: (paused: boolean, dropsReported?: boolean) => void
   reportPausedOutputDropped: () => void
@@ -195,7 +192,13 @@ async function connectHiddenPane(
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const disposable = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {
@@ -278,7 +281,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     await restoreTerminalTestGlobals()
   })
 
-  // ── R1: host retry-worthy budget (7 answers) ────────────────────────────
   describe('R1 host retry budget exhaustion', () => {
     const retryWorthy = {
       availability: {
@@ -324,39 +326,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.disposable.dispose()
     })
 
-    it('[invariant] discloses or recovers when the budget ends while the pane is hidden', async () => {
-      const seventhAnswer = createDeferred<unknown>()
-      const serializeBufferOutcome = vi.fn().mockResolvedValue(retryWorthy)
-      const drive = await driveToSeventhAnswer(serializeBufferOutcome)
-
-      serializeBufferOutcome.mockReturnValueOnce(seventhAnswer.promise)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await flushAsyncTicks(20)
-      expect(serializeBufferOutcome).toHaveBeenCalledTimes(7)
-
-      // The user switches tabs while the seventh request is still outstanding;
-      // the restore loop keeps running across the await.
-      drive.setVisible(false)
-      seventhAnswer.resolve(retryWorthy)
-      await flushAsyncTicks(20)
-
-      // The host is healthy again and still holds the dropped bytes.
-      serializeBufferOutcome.mockResolvedValue(hostAnswers(retainedSnapshot(R1_MARKER)))
-      const requestsBeforeReveal = serializeBufferOutcome.mock.calls.length
-      await revealPane(drive)
-      await allowRecoveryWindow()
-
-      const disclosure = observeDisclosure(drive, R1_MARKER)
-      expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-      expectDisclosedOrRecovered(disclosure)
-      // Whichever way the gap is closed, silence is not one of them: recovering
-      // it costs a fresh request, disclosing it costs a banner.
-      expect(
-        serializeBufferOutcome.mock.calls.length - requestsBeforeReveal
-      ).toBeGreaterThanOrEqual(disclosure.bannerWrites > 0 ? 0 : 1)
-      drive.disposable.dispose()
-    })
-
     async function exhaustBudgetWhileHidden(
       serializeBufferOutcome: ReturnType<typeof vi.fn>
     ): Promise<PaneDrive> {
@@ -398,21 +367,17 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       await revealPane(drive)
       await allowRecoveryWindow()
 
-      // The spent budget abandons on the first foreground answer, so the
-      // disclosure now lands where it can be read.
+      // Spent-budget abandonment must defer disclosure until foreground reveal.
       expect(observeDisclosure(drive, R1_MARKER)).toMatchObject({
         bannerWrites: 1,
         markerWrites: 0
       })
-      // Reveal is a bounded retry, not a fresh budget: one host request, then
-      // the banner. Carrying the spent counters across the deferral is what
-      // makes this hold — a reset would re-run all seven against a dead host.
+      // Preserve spent counters across deferral: reveal gets one host request, not another seven-attempt budget.
       expect(serializeBufferOutcome.mock.calls.length - requestsBeforeReveal).toBe(1)
       drive.disposable.dispose()
     })
   })
 
-  // ── R2: permanently-unavailable ─────────────────────────────────────────
   describe('R2 permanently-unavailable answer', () => {
     const permanentlyUnavailable = {
       availability: {
@@ -467,8 +432,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     })
   })
 
-  // SSH (orcad) and paired `orca serve` panes both reveal through the host's output
-  // unpause, not the local backlog recovery, so pin that path on its own.
+  // SSH and paired panes reveal through host unpause, requiring separate coverage from local backlog recovery.
   describe('remote output-pause reveal', () => {
     const REMOTE_MARKER = 'REMOTE-LOST-4d19'
     const answersWhileHidden = [
@@ -518,8 +482,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         await flushAsyncTicks(20)
         expect(request).toHaveBeenCalledTimes(1)
 
-        // The user switches away before the answer lands. A drop-reporting host sends no
-        // second drop frame for bytes it already reported, so the pending restore must survive.
+        // Switch away before the answer; hosts do not resend reported drops, so the pending restore must survive.
         drive.setVisible(false)
         drive.setOutputPaused(true, dropsReported)
         answer.resolve(failure)
@@ -542,14 +505,12 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     )
   })
 
-  // ── R5: local snapshot unavailable, deferred retries exhausted ──────────
   describe('R5 local deferred-retry exhaustion', () => {
-    async function connectLocalHiddenPane(): Promise<PaneDrive> {
-      // A codex startup makes the renderer skip hidden bytes locally, which is
-      // the local mirror of the remote pause the other routes model.
+    async function connectLocalHiddenPane(): Promise<PaneDrive & { transport: MockTransport }> {
+      // Gate local hidden output to mirror the host pause exercised by remote routes.
       const transport = createMockTransport(LOCAL_PTY_ID)
       const captured: {
-        current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+        current: ((data: string, meta?: PtyDataMeta) => void) | null
       } = { current: null }
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
@@ -563,14 +524,23 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = await connectMockPanePty(pane, createManager(1), deps)
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+      const disposable = await connectMockPanePty(
+        pane,
+        createManager(1),
+        bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
       expect(captured.current).not.toBeNull()
       return {
+        transport,
         pane,
         deps,
         disposable,
         deliver: (data, seq) => captured.current?.(data, { seq, rawLength: data.length }),
+        deliverWithMeta: (data, meta) => captured.current?.(data, meta),
         setVisible: (visible) => {
           deps.isVisibleRef.current = visible
         },
@@ -602,6 +572,25 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.disposable.dispose()
     })
 
+    it('[fix] nudges the idle TUI to repaint over the banner', async () => {
+      vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
+      const drive = await connectLocalHiddenPane()
+      vi.useFakeTimers()
+      floodWhileHiddenThenReveal(drive)
+      await flushAsyncTicks(20)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await vi.advanceTimersByTimeAsync(50)
+        await flushAsyncTicks(20)
+      }
+      expect(observeDisclosure(drive, R5_MARKER).bannerWrites).toBe(1)
+      const { cols, rows } = drive.pane.terminal
+      // Differential TUIs (Codex, Claude Code) never rewrite cells they believe unchanged.
+      expect(drive.transport.resize).toHaveBeenLastCalledWith(cols, rows - 1, { claim: true })
+      await vi.advanceTimersByTimeAsync(250)
+      expect(drive.transport.resize).toHaveBeenLastCalledWith(cols, rows, { claim: true })
+      drive.disposable.dispose()
+    })
+
     it('[invariant] keeps recovery armed when the pane hides before the retries run out', async () => {
       const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
       getMainBufferSnapshot.mockResolvedValue(null)
@@ -626,17 +615,96 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       expectDisclosedOrRecovered(disclosure)
       drive.disposable.dispose()
     })
+
+    // #33766: main marks the first chunk after its hidden drop when it resumes inside an escape.
+    async function abandonAfterResumedChunk(
+      resumed: string,
+      midEscape?: true | 'unknown',
+      transform?: { rawLength: number }
+    ) {
+      vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
+      const drive = await connectLocalHiddenPane()
+      vi.useFakeTimers()
+      drive.deliver(HIDDEN_FLOOD, HIDDEN_FLOOD.length)
+      drive.setVisible(true)
+      const rawLength = transform?.rawLength ?? resumed.length
+      drive.deliverWithMeta?.(resumed, {
+        seq: HIDDEN_FLOOD.length + rawLength,
+        rawLength,
+        ...(transform ? { transformed: true } : {}),
+        ...(midEscape ? { midEscape } : {})
+      })
+      await flushAsyncTicks(20)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await vi.advanceTimersByTimeAsync(50)
+        await flushAsyncTicks(20)
+      }
+      drive.disposable.dispose()
+      vi.useRealTimers()
+      return (await renderHeadlessBuffer(drive.writtenChunks(), 120, 8)).join('\n')
+    }
+
+    it.each([
+      ['an OSC title', 'ial refactoring PRs | cleanup-dumb-exports\x07> prompt', 'ial refactoring'],
+      ['an SGR sequence', ';5;242m> prompt', ';242m']
+    ])('skips a delivery resuming inside %s after the gap reset', async (_name, resumed, tail) => {
+      // Skipped whole, never trimmed: the prompt it carried returns with the repaint nudge.
+      const screen = await abandonAfterResumedChunk(resumed, true)
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes(tail)
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
+
+    it('skips a mid-escape delivery after the gap reset even when main stripped agent status from it', async () => {
+      const screen = await abandonAfterResumedChunk('2C> prompt', true, { rawLength: 40 })
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes('2C')
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
+
+    it('keeps a mid-escape continuation when the snapshot at the gap carries the open escape', async () => {
+      // The snapshot predates the resumed chunk, so its pending escape needs every continuation byte.
+      vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
+        data: 'history\r\n',
+        cols: 120,
+        rows: 40,
+        seq: HIDDEN_FLOOD.length,
+        pendingEscapeTailAnsi: '\x1b[38;5'
+      })
+      const drive = await connectLocalHiddenPane()
+      vi.useFakeTimers()
+      drive.deliver(HIDDEN_FLOOD, HIDDEN_FLOOD.length)
+      drive.setVisible(true)
+      const resumed = ';242m+ line'
+      drive.deliverWithMeta?.(resumed, {
+        seq: HIDDEN_FLOOD.length + resumed.length,
+        rawLength: resumed.length,
+        midEscape: true
+      })
+      await allowRecoveryWindow()
+      drive.disposable.dispose()
+      vi.useRealTimers()
+      const written = drive.writtenChunks().join('')
+      const screen = (await renderHeadlessBuffer(drive.writtenChunks(), 120, 8)).join('\n')
+      expect({
+        continuationWritten: written.includes('\x1b[38;5') && written.includes(resumed),
+        line: screen.includes('+ line'),
+        tail: screen.includes(';242m'),
+        banner: screen.includes(BANNER_FRAGMENT)
+      }).toEqual({ continuationWritten: true, line: true, tail: false, banner: false })
+    })
+
+    it('keeps unlabeled output that ends in a bell', async () => {
+      const screen = await abandonAfterResumedChunk('build done\x07')
+      expect(screen.includes('build done')).toBe(true)
+    })
   })
 
-  // ── The restore loop's PTY-swap arm (pty-connection.ts ~7660) ────────────
-  // The one writeRestoreUnavailableWarning caller the defer guard does not
-  // cover. It is reachable only from loop iteration 2+, which the hidden-pause
-  // guard after the replay makes foreground-only, and it is remote-only (a
-  // local ptyId always satisfies canUseHiddenOutputSnapshot) — so the re-arm
-  // budget clearHiddenOutputRestoreState() just reset always wins and the
-  // banner call is dead. Entering it with the budget already spent is not
-  // constructible: iteration 2 requires a successful snapshot first, and that
-  // zeroes hiddenOutputRestoreRemoteAbandonCycles on the way through.
+  // The PTY-swap arm requires a prior successful snapshot, which resets its abandon budget; a deferred repaint must keep any subsequent gap recoverable.
   describe('restore-loop PTY-swap arm', () => {
     it('[fix] re-arms instead of declaring a loss when the host loses snapshot capability', async () => {
       const swapMarker = 'R7-LOST-3e91'
@@ -659,8 +727,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       await flushAsyncTicks(20)
       expect(serializeBufferOutcome).toHaveBeenCalledTimes(1)
 
-      // A chunk landing while the pane is momentarily background marks the
-      // in-flight snapshot stale, which is what sends the loop around again.
+      // A background chunk stales the in-flight snapshot and forces a second iteration.
       drive.setVisible(false)
       drive.deliver('stale-during-restore\r\n', HIDDEN_FLOOD.length + LIVE_CHUNK.length + 32)
       drive.setVisible(true)

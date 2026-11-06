@@ -30,7 +30,6 @@ export type ImportItemResult =
       reason: string
     }
 
-// Why: staging crosses IPC to the renderer and back into the streamer, so the
-// shape lives in shared and every layer names the same type.
+// Staging crosses IPC into the renderer and back to the streamer; share one shape.
 export type StagedExternalImportSource = StagedRuntimeUploadSource
 export type StagedExternalImportEntry = StagedRuntimeUploadEntry

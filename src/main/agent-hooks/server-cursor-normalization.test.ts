@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('Cursor hook normalization', () => {
-  it('publishes the conversation identity through the owning hook store', () => {
+  it('normalizes the Cursor conversation identity', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({
@@ -128,7 +128,7 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
-    // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
+    // A retained tool name would hide the failure text in compact status cards.
     expect(failed?.payload).toMatchObject({
       state: 'working',
       lastAssistantMessage: 'file not found'

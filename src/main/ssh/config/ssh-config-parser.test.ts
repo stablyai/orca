@@ -521,8 +521,6 @@ describe('sshConfigHostsToSummaries', () => {
   })
 })
 
-// ── parseSshGOutput ──────────────────────────────────────────────────
-
 describe('parseSshGOutput', () => {
   it('parses hostname, user, port from ssh -G output', () => {
     const output = [

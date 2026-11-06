@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-// Why: when the .md file is being modified externally (e.g. the AI is
-// streaming writes), each external-change event replaces the `content`
-// prop, which makes react-markdown replace the rendered text nodes. Any
-// in-progress browser selection inside the preview collapses mid-drag
-// because its anchor/focus nodes are detached. This hook holds back content
-// updates while the user has an active selection inside the preview body
-// and applies the latest pending content once the selection is released.
+// Defer external preview text updates during selection so React cannot detach the browser’s active anchor/focus nodes mid-drag.
 export function usePreserveSectionDuringExternalEdit(
   content: string,
   bodyRef: React.RefObject<HTMLDivElement | null>
@@ -14,8 +8,10 @@ export function usePreserveSectionDuringExternalEdit(
   const [renderedContent, setRenderedContent] = useState(content)
   const pendingContentRef = useRef(content)
   pendingContentRef.current = content
+  const deferredUntilRef = useRef<number | null>(null)
   useEffect(() => {
     if (content === renderedContent) {
+      deferredUntilRef.current = null
       return
     }
     const body = bodyRef.current
@@ -35,19 +31,18 @@ export function usePreserveSectionDuringExternalEdit(
       )
     }
     if (!hasSelectionInsideBody()) {
+      deferredUntilRef.current = null
       setRenderedContent(content)
       return
     }
-    // Why: cap the deferral so a forgotten selection (user walked away with
-    // text highlighted) can't freeze the preview indefinitely while the file
-    // keeps changing on disk. After the cap elapses we apply the pending
-    // content even if the selection is still held — the user loses a
-    // highlight they'd abandoned anyway, which is preferable to stale content.
+    // Bound deferral so an abandoned selection cannot freeze a preview while disk keeps changing.
     const MAX_DEFER_MS = 3000
-    const deadline = performance.now() + MAX_DEFER_MS
+    const deadline = deferredUntilRef.current ?? performance.now() + MAX_DEFER_MS
+    deferredUntilRef.current = deadline
     let frameId = 0
     const waitForSelectionRelease = (): void => {
       if (performance.now() >= deadline || !hasSelectionInsideBody()) {
+        deferredUntilRef.current = null
         setRenderedContent(pendingContentRef.current)
         return
       }

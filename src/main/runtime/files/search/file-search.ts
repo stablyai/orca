@@ -1,5 +1,6 @@
 import {
   QUICK_OPEN_SEARCH_VERSION,
+  QuickOpenPathRanker,
   isQuickOpenQueryTooLarge
 } from '../../../../shared/quick-open-path-search'
 import type { RuntimeFileListResult } from '../../../../shared/runtime-types'
@@ -8,8 +9,8 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../shared/abort-signal-reason'
-import { listQuickOpenFiles } from '../../../ipc/filesystem-list-files'
-import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem-search-file-paths'
+import { listQuickOpenFiles } from '../../../ipc/filesystem/filesystem-list-files'
+import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem/filesystem-search-file-paths'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from '../mobile-file-kind'
 import {
   requireRuntimeFileProvider,
@@ -18,7 +19,7 @@ import {
   type ResolvedRuntimeFileTarget
 } from '../file-target'
 import { basenameFromRelativePath } from '../file-paths'
-import { RuntimeMobileFilePathSearchCache, rankRuntimeMobileFilePaths } from './mobile-path-search'
+import { RuntimeMobileFilePathSearchCache } from './mobile-path-search'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 
@@ -54,7 +55,7 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Why: an `ssh:` host lists nothing rather than failing, and never lists this machine.
+    // Unsupported SSH hosts return empty, never this machine's files.
     const files =
       route.kind === 'ssh'
         ? []
@@ -93,8 +94,7 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Why: identical paths exist on local and on several SSH hosts; the cache key must name the
-    // resolved host, which `connectionId` could not tell apart from "unresolved".
+    // Identical paths exist on multiple hosts; resolved-host identity must partition the cache.
     const cacheKey = `${target.executionHostId}:${worktree.id}:${worktree.path}`
     const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
       const listed =
@@ -116,7 +116,12 @@ export class RuntimeFileSearch {
         truncated: safePaths.length > MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT
       }
     })
-    const matches = rankRuntimeMobileFilePaths(inventory.paths, query, limit)
+    // Rank the cached inventory with desktop's Quick Open rule, so every phone version gets it without a walk per query.
+    const ranker = new QuickOpenPathRanker(query, limit)
+    for (const path of inventory.paths) {
+      ranker.consider(path)
+    }
+    const matches = ranker.result()
     return {
       worktree: worktree.id,
       rootPath: worktree.path,
@@ -145,7 +150,6 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Why: an `ssh:` host reports no matches (version 0) rather than failing the keystroke.
     const quickOpenSearchVersion = route.kind === 'ssh' ? 0 : QUICK_OPEN_SEARCH_VERSION
     const result =
       !query.trim() || isQuickOpenQueryTooLarge(query) || route.kind === 'ssh'
@@ -203,7 +207,6 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const route = runtimeFileRouteForTarget(target)
     if (route.kind === 'ssh') {
-      // Why: quick-open listings degrade to empty for an `ssh:` host rather than throwing.
       return []
     }
     return listQuickOpenFiles(

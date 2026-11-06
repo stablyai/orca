@@ -1,13 +1,8 @@
-// OSC 7 — "report current working directory". Shells (bash/zsh, plus the
-// typical PROMPT_COMMAND / precmd one-liner) emit
-//
-//     \x1b]7;file://<host>/<percent-encoded-path>\x07   (or ST terminator)
-//
-// on every prompt so terminal emulators can track the live cwd. xterm's
-// parser strips the leading `\x1b]7;` and trailing BEL/ST before handing us
-// the payload, so `data` here is just the `file://...` URI.
+// xterm strips OSC 7 framing; the payload is a file:// URI reporting the shell’s current directory.
+import { escapeLiteralPercent, hasNulCharacter } from '../../../../shared/osc7-path-text'
 
-const OSC7_URI = /^file:\/\/([^/]*)(\/.*)$/
+// [\s\S]: a raw newline in a folder name is part of the path (nushell sends it unencoded).
+const OSC7_URI = /^file:\/\/([^/]*)(\/[\s\S]*)$/
 
 type ParseOsc7Options = {
   uncHost?: string | null
@@ -26,26 +21,21 @@ export function parseOsc7(data: string, options: ParseOsc7Options = {}): string 
   const host = match[1]
   let path: string
   try {
-    path = decodeURIComponent(match[2])
+    path = decodeURIComponent(escapeLiteralPercent(match[2]))
   } catch {
     return null
   }
-  if (!path) {
+  if (!path || hasNulCharacter(path)) {
     return null
   }
   const isWindowsDrivePath = /^\/[A-Za-z]:/.test(path)
   if (options.uncHost && !isWindowsDrivePath) {
-    // Why: only the launch UNC server is known to be a Windows file host.
-    // Other OSC-7 hosts can come from SSH/Linux shells and must stay POSIX.
+    // Only the launch UNC server is a known Windows file host; other hosts may name POSIX shells.
     if (host.toLowerCase() === options.uncHost.toLowerCase()) {
       return `\\\\${host}${path.replace(/\//g, '\\')}`
     }
   }
-  // Why: on Windows the URI looks like file:///C:/Users/... — the path is
-  // `/C:/Users/...`, which `spawn`'s cwd option does not accept. Strip the
-  // leading slash before the drive letter so we hand back `C:/Users/...`.
-  // Renderer runs with sandbox + contextIsolation so process.platform is
-  // unavailable; detect Windows paths by shape instead.
+  // Strip the URI’s leading slash from drive paths; sandboxed renderers lack process.platform, so detect Windows paths by shape.
   if (isWindowsDrivePath) {
     path = path.slice(1)
   }

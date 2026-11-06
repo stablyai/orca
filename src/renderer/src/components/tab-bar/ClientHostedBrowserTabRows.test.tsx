@@ -113,11 +113,7 @@ describe('ClientHostedBrowserTabRows selection', () => {
     expect(isRowActive(container)).toBe(true)
   })
 
-  /**
-   * The other half of the strip paints itself from the group's `activeTabId`, which a keyboard
-   * switch or the command palette moves without ever touching this row. Holding the underline
-   * through that move is how the strip ends up showing two active tabs.
-   */
+  /** Keyboard/palette activation changes group selection without touching this row; remove its underline to prevent two active tabs. */
   it('drops the underline once the group activates a real tab', () => {
     const container = renderRows('tab-a')
     clickRow(container)
@@ -129,8 +125,7 @@ describe('ClientHostedBrowserTabRows selection', () => {
 })
 
 describe('ClientHostedBrowserTabRows close', () => {
-  // Why a toast and not just the console: this row is the only way to close a page this host does
-  // not render, and a refused close leaves it sitting there looking like the click missed.
+  // A refused remote close needs visible feedback because this row is the host’s only page control.
   it('tells the user when the close is refused', async () => {
     vi.mocked(closeClientHostedBrowserRow).mockRejectedValue(new Error('runtime rpc timed out'))
     const container = renderRows()

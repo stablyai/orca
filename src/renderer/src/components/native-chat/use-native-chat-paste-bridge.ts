@@ -1,3 +1,4 @@
+import { nativeChatComposerDestination } from './native-chat-composer-destination'
 import { useCallback, useEffect } from 'react'
 import type { RefObject } from 'react'
 import { toast } from 'sonner'
@@ -16,9 +17,26 @@ import type { NativeChatComposerHandle } from './NativeChatComposer'
 type NativeChatPasteBridgeRefs = {
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
-  /** The question card's free-text answer input; the paste target while the
-   *  card owns the input region (the composer is unmounted then). */
-  questionAnswerInputRef?: RefObject<HTMLInputElement | null>
+  /** Paste here while the question card owns input and the composer is unmounted. */
+  questionAnswerInputRef?: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
+}
+
+/** Text-only on purpose: an answer input takes no image attachments. */
+function pasteClipboardTextInto(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  stillTarget: () => boolean
+): void {
+  void (async () => {
+    const text = await window.api.ui
+      .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
+      .catch(() => '')
+    if (text.length > 0 && stillTarget()) {
+      await pasteTextIntoTextControl(input, text, {
+        source: 'programmatic',
+        canContinue: stillTarget
+      })
+    }
+  })()
 }
 
 export function useNativeChatPasteBridge({
@@ -41,31 +59,19 @@ export function useNativeChatPasteBridge({
         }
         return
       }
-      if (composerRef.current) {
-        composerRef.current.pasteFromClipboard()
+      if (nativeChatComposerDestination(rootRef.current, composerRef.current)) {
+        nativeChatComposerDestination(rootRef.current, composerRef.current)?.pasteFromClipboard()
         return
       }
       const answerInput = questionAnswerInputRef?.current
-      if (!answerInput) {
-        return
+      if (answerInput) {
+        pasteClipboardTextInto(answerInput, () => questionAnswerInputRef?.current === answerInput)
       }
-      // Text-only on purpose: the answer input takes no image attachments.
-      void (async () => {
-        const text = await window.api.ui
-          .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
-          .catch(() => '')
-        if (text.length > 0 && questionAnswerInputRef?.current === answerInput) {
-          await pasteTextIntoTextControl(answerInput, text, {
-            source: 'programmatic',
-            canContinue: () => questionAnswerInputRef?.current === answerInput
-          })
-        }
-      })()
     },
     [composerRef, questionAnswerInputRef, rootRef]
   )
 
-  // Capture at the pane root so repeated composer mounts do not miss image paste.
+  // Capture at the pane so composer remounts cannot miss image pastes.
   useEffect(() => {
     const root = rootRef.current
     if (!root) {
@@ -76,13 +82,19 @@ export function useNativeChatPasteBridge({
         return
       }
       if (isEditableTarget(event.target)) {
-        // Other text fields (search, answer) keep their native paste.
-        if (event.target instanceof Node && composerRef.current?.contains(event.target)) {
-          composerRef.current.handlePasteEvent(event)
+        if (
+          event.target instanceof Node &&
+          nativeChatComposerDestination(rootRef.current, composerRef.current)?.contains(
+            event.target
+          )
+        ) {
+          nativeChatComposerDestination(rootRef.current, composerRef.current)?.handlePasteEvent(
+            event
+          )
         }
         return
       }
-      const composer = composerRef.current
+      const composer = nativeChatComposerDestination(rootRef.current, composerRef.current)
       if (composer) {
         composer.handlePasteEvent(event)
         event.preventDefault()
@@ -99,9 +111,9 @@ export function useNativeChatPasteBridge({
           })
         }
       }
-      // Neither input mounted: left unclaimed so the pane's chat cover refuses it visibly.
+      // Without mounted inputs, leave paste unclaimed so the chat cover shows its refusal.
     }
-    // Chromium may dispatch to an old selection in another pane or the body.
+    // Chromium may target a stale selection in another pane or the body.
     const onOwnedPaste = (event: ClipboardEvent): void => {
       const field = findNativeChatPasteField(document.activeElement, root)
       if (event.defaultPrevented || !field) {
@@ -113,9 +125,12 @@ export function useNativeChatPasteBridge({
         event.preventDefault()
       }
     }
-    // Named-pane pastes (terminal context menu, a paste on the cover itself) carry no event data.
+    // Named-pane paste requests carry no clipboard event data.
     const onPasteRequest = (event: Event): void => {
-      if (composerRef.current || questionAnswerInputRef?.current) {
+      if (
+        nativeChatComposerDestination(rootRef.current, composerRef.current) ||
+        questionAnswerInputRef?.current
+      ) {
         event.preventDefault()
         pasteClipboardIntoComposer()
       }
@@ -125,7 +140,6 @@ export function useNativeChatPasteBridge({
         return
       }
       const activeElement = document.activeElement
-      // Only the pane containing focus may claim this window-scoped command.
       if (!(activeElement instanceof Element) || !root.contains(activeElement)) {
         return
       }
@@ -140,12 +154,13 @@ export function useNativeChatPasteBridge({
       }
       if (
         isEditableTarget(activeElement) &&
-        !composerRef.current?.contains(activeElement) &&
+        !nativeChatComposerDestination(rootRef.current, composerRef.current)?.contains(
+          activeElement
+        ) &&
         activeElement !== questionAnswerInputRef?.current
       ) {
         return
       }
-      // With no mounted input, native delivery lets the chat cover show its refusal.
       onPasteRequest(event)
     }
 

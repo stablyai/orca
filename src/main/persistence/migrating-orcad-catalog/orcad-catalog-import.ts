@@ -53,6 +53,7 @@ import {
   pruneOrcadMigrationBlobStaging,
   stageOrcadMigrationBlobChunk
 } from './orcad-migration-blob-staging'
+import { withStagedAutomationRunHistory } from './orcad-staged-automation-run-history'
 import { assertOrcadMigrationBlobContentsValid } from './orcad-migration-blob-installers'
 import {
   abortOrcadMigrationCatalogByReference,
@@ -153,7 +154,7 @@ export class OrcadCatalogImportPersistence {
     })
   }
 
-  /** `expectedBlobs` absent (SSH, older senders) keeps the pre-blob-set commit unchanged. */
+  /** Omitted expectedBlobs preserves older senders' commit behavior. */
   commitStagedOrcadMigrationCatalog(
     manifest: OrcadMigrationManifest,
     options: { now?: () => Date; expectedBlobs?: readonly OrcadMigrationBlobDescriptor[] } = {}
@@ -166,7 +167,6 @@ export class OrcadCatalogImportPersistence {
     if (current.state !== 'staged') {
       throw new Error('orcad_migration_catalog_not_staged')
     }
-    const prepared = prepareOrcadMigrationCatalog(manifest, context.runtime.state)
     const blobRoot = context.runtime.orcadMigrationBlobRoot
     assertOrcadMigrationSnapshotsReady(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     if (options.expectedBlobs) {
@@ -174,6 +174,10 @@ export class OrcadCatalogImportPersistence {
     }
     assertOrcadMigrationBlobsReady(manifest, blobRoot)
     assertOrcadMigrationBlobContentsValid(manifest, blobRoot)
+    const prepared = prepareOrcadMigrationCatalog(
+      withStagedAutomationRunHistory(manifest, blobRoot),
+      context.runtime.state
+    )
     commitOrcadMigrationSnapshots(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     commitOrcadMigrationBlobs(manifest, blobRoot)
     const receipt = commitPreparedCatalog(context, manifest, prepared, options.now)
@@ -191,7 +195,7 @@ export class OrcadCatalogImportPersistence {
     if (current.state === 'committed' || current.state === 'absent') {
       return { ...current, aborted: false }
     }
-    // Dormant import only: nothing but this stage references the staged rows before commit.
+    // Staged rows are dormant and unreferenced outside this stage.
     context.runtime.state.orcadMigrationStagedCatalogs = (
       context.runtime.state.orcadMigrationStagedCatalogs ?? []
     ).filter((entry) => entry.manifest.migrationId !== manifest.migrationId)
@@ -201,7 +205,7 @@ export class OrcadCatalogImportPersistence {
     return { ...absentCatalogState(manifest), aborted: true }
   }
 
-  /** For a source whose manifest no request can carry: this server's own copy stands in for it. */
+  /** Use the stored manifest when the source cannot send one. */
   abortStagedOrcadMigrationCatalogByReference(
     reference: OrcadMigrationCatalogReference
   ): OrcadMigrationCatalogReferenceAbortResult {
@@ -217,7 +221,6 @@ export class OrcadCatalogImportPersistence {
     return migrationCatalogState(context.runtime, manifest)
   }
 
-  /** A migration into this server staged recently and neither committed nor aborted. */
   hasStagedOrcadMigrationCatalog(now: number = Date.now()): boolean {
     return (this[orcadCatalogImportContext].runtime.state.orcadMigrationStagedCatalogs ?? []).some(
       (entry) => isLiveOrcadMigrationStage(entry.stagedAt, now)
@@ -269,10 +272,7 @@ function migrationCatalogState(
   return stagedCatalogState(manifest, staged.stagedAt, runtime)
 }
 
-/**
- * The receipt alone proves the commit: the server is live afterwards, so its rows and snapshot
- * files may legitimately change, and a later read must still say "committed".
- */
+// A committed receipt stays authoritative even after live rows and snapshots change.
 function assertCommittedReceipt(
   receipt: OrcadMigrationImportReceipt,
   manifest: OrcadMigrationManifest
@@ -300,7 +300,7 @@ function stagedCatalogState(
     manifest,
     runtime.terminalScrollbackSnapshotStorage
   )
-  // Absent, not empty, when nothing is staged: the shape an older host already answers with.
+  // Omit absent uploads to preserve older hosts' response shape.
   const blobUploads = inspectOrcadMigrationBlobUploads(manifest, runtime.orcadMigrationBlobRoot)
   return {
     state: 'staged',

@@ -11,6 +11,7 @@ import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { FederationAttachStartParams } from '../federation/federation-start-schema'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
@@ -288,6 +289,48 @@ describe('orchestration new-worktree workers', () => {
     expect(db.getDispatchContext(task.id)).toBeUndefined()
   })
 
+  describe('from a terminal outside a managed git worktree', () => {
+    beforeEach(async () => {
+      const coordinator = await runtime.showTerminal('term_coord')
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        ...coordinator,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+      vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
+    })
+
+    it('creates a new-top-level worktree in the explicit repo', async () => {
+      mockCreatedWorktree()
+
+      const { result } = await startWorker({ worktree: 'new-top-level', repo: 'repo' })
+
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoSelector: 'repo',
+          lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
+        })
+      )
+      expect(result).toMatchObject({ state: 'ready' })
+    })
+
+    it.each([
+      ['new-child', { repo: 'repo' }],
+      ['new-top-level', {}]
+    ] as const)(
+      'refuses %s without a caller worktree before creating effects',
+      async (worktree, extra) => {
+        const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+
+        await expect(startWorker({ worktree, ...extra })).rejects.toMatchObject({
+          code: 'invalid_argument',
+          message: expect.stringContaining('could not be resolved to a git worktree Orca manages')
+        })
+        expect(createWorktree).not.toHaveBeenCalled()
+        expect(db.getDispatchContext(db.listTasks()[0]!.id)).toBeUndefined()
+      }
+    )
+  })
+
   it('injects the execution host CLI command without a Dispatch capability', async () => {
     mockCreatedWorktree()
     vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca-ide')
@@ -454,8 +497,7 @@ describe('orchestration new-worktree workers', () => {
     )
   })
 
-  // Why: a first dispatch the composer signal settles must record setup exactly as one the idle
-  // wait settles; the composer lane once returned nothing and skipped this record.
+  // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
   it('settles a fresh worker start on main’s idle wait, not the launch paste’s signal', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
     const composerSignal = vi.spyOn(runtime, 'waitForFreshWorkerComposer')

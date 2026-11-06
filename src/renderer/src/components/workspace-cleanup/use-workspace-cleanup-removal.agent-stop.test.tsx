@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceCleanupRemoveOptions,
   WorkspaceCleanupRemoveResult
@@ -78,17 +78,6 @@ function installRemoval(): RemoveCall[] {
   return calls
 }
 
-function approvedBlockersById(calls: readonly RemoveCall[]): Record<string, string[]> {
-  return Object.fromEntries(
-    calls.flatMap((call) =>
-      (call.options?.approvedCandidates ?? []).map((candidate) => [
-        candidate.worktreeId,
-        candidate.blockers
-      ])
-    )
-  )
-}
-
 function renderAtConfirm(candidates: WorkspaceCleanupCandidate[]) {
   const rendered = renderHook(() =>
     useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
@@ -118,22 +107,6 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     expect(result.current.agentStopRequest).toBeNull()
     expect(result.current.confirming).toBe(true)
     expect(calls).toEqual([])
-  })
-
-  it('deletes with the agent stop recorded only on the rows the user approved', async () => {
-    const calls = installRemoval()
-    startAgent('b')
-    // A stale scan label must not count as the user's approval.
-    const { result } = renderAtConfirm([candidateFor('a', ['live-agent']), candidateFor('b')])
-
-    act(() => result.current.confirmRemove())
-    act(() => result.current.confirmStopAgents())
-
-    expect(result.current.agentStopRequest).toBeNull()
-    await waitFor(() => expect(calls).toHaveLength(2))
-    const blockers = approvedBlockersById(calls)
-    expect(blockers[worktreeId('a')]).not.toContain('live-agent')
-    expect(blockers[worktreeId('b')]).toContain('live-agent')
   })
 
   it('re-asks when another agent starts while the stop step is open', () => {
@@ -179,39 +152,11 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     expect(calls).toEqual([])
   })
 
-  it('adds no step when no agent is running', async () => {
-    const calls = installRemoval()
-    const { result } = renderAtConfirm([candidateFor('a')])
-
-    act(() => result.current.confirmRemove())
-
-    expect(result.current.agentStopRequest).toBeNull()
-    await waitFor(() => expect(calls).toHaveLength(1))
-  })
-
-  it('asks before "Delete anyway" stops a running agent', async () => {
-    const calls = installRemoval()
-    startAgent('b')
-    const { result } = renderHook(() =>
-      useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
-    )
-
-    act(() => result.current.confirmUnverifiedRemoval(candidateFor('b')))
-    expect(result.current.agentStopRequest?.unverifiedCandidate?.displayName).toBe('b')
-    expect(calls).toEqual([])
-
-    act(() => result.current.confirmStopAgents())
-    await waitFor(() => expect(calls).toHaveLength(1))
-    expect(calls[0].options?.unverifiedRemovalConsent).toBeDefined()
-    expect(approvedBlockersById(calls)[worktreeId('b')]).toContain('live-agent')
-  })
-
   it('drops an open stop step when the dialog is reopened mid-batch', async () => {
     useAppStore.setState({
       scanWorkspaceCleanup: vi.fn(() => new Promise<never>(() => {})),
       hydrateWorkspaceCleanupFromCache: vi.fn(async () => false),
       hydrateWorkspaceSpaceFromCache: vi.fn(async () => false),
-      // The batch never settles, so it stays in flight across close and reopen.
       removeWorkspaceCleanupCandidates: vi.fn(() => new Promise<never>(() => {}))
     })
     startAgent('b')

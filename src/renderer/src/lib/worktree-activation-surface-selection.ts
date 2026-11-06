@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -18,6 +18,7 @@ export type WorktreeActivationSurfaceSelection = {
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
+  worktreeCreationId?: string
   startup?: WorktreeStartupPayload
   initialCwd?: string
   setup?: WorktreeSetupLaunch
@@ -29,6 +30,7 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   /** Explicit request to see the workspace in the list: leave the activity view once activation commits. */
   showWorkspaceList?: boolean
   executionHostId?: ExecutionHostId
+  runtimeEnvironmentId?: string | null
   backendStartupTerminalSpawned?: boolean
   /** Install a preserved fallback startup beside setup/default terminals already seeded. */
   createNewTerminalForStartup?: boolean

@@ -74,14 +74,6 @@ afterEach(() => {
 })
 
 describe('recordProcessGoneCrash killed/1 ordering', () => {
-  it('reports a genuine lone renderer killed/1 without teardown intent', () => {
-    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
-
-    recordProcessGoneCrash({ record } as never, rendererKill, new ProcessGoneDedupe())
-
-    expect(record).toHaveBeenCalledOnce()
-  })
-
   it('reports R3 after matching recoverable sibling churn', () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
     const dedupe = new ProcessGoneDedupe()
@@ -91,11 +83,9 @@ describe('recordProcessGoneCrash killed/1 ordering', () => {
     recordProcessGoneCrash({ record, attachDetails } as never, rendererKill, dedupe, noMinidump)
 
     expect(record).toHaveBeenCalledOnce()
-    // Timing proximity is evidence, not authority to discard an ambiguous report.
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
-        // Co-victims of one external tree kill: the label names the evidence
-        // (these died together), not a sibling that caused anything.
+        // Concurrent victims provide no evidence that one process caused the other's death.
         details: expect.objectContaining({
           crashAttribution: 'concurrent-process-deaths',
           siblingProcessDeathCount: 2

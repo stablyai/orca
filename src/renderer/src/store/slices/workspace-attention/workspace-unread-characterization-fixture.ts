@@ -56,10 +56,7 @@ export function screenOf(store: AttentionStore): AttentionScreen {
   return screen
 }
 
-/**
- * Runs the hook's scan against `store`, with the window's visibility+focus behind a fake document
- * so marking and the scan read the same gate; no native idle query keeps it synchronous.
- */
+/** Drive the production hook scan with fake visibility/focus shared by marking; skip native idle queries for synchronous tests. */
 export function installAttentionScreen(
   store: AttentionStore,
   onScreen: boolean,

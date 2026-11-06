@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat-question-auto-advance'
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat/input/native-chat-question-auto-advance'
 
 /** One cancellable delayed step: a single-select pick shows as chosen before the card moves on. */
-export function useNativeChatQuestionAutoAdvance(): {
+export function useNativeChatQuestionAutoAdvance(disabled = false): {
   schedule: (step: () => void) => void
   cancel: () => void
 } {
@@ -12,6 +12,6 @@ export function useNativeChatQuestionAutoAdvance(): {
     cancel()
     timerRef.current = setTimeout(step, NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS)
   }
-  useEffect(() => () => clearTimeout(timerRef.current), [])
+  useEffect(() => () => clearTimeout(timerRef.current), [disabled])
   return { schedule, cancel }
 }

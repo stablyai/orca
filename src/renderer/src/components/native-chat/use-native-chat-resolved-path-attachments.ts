@@ -79,7 +79,6 @@ export function useNativeChatResolvedPathAttachments({
         return
       }
       const input = textareaRef.current
-      // The editor shows each file as a pill and reports the new draft and caret itself.
       if (input?.insertFileReferences) {
         input.insertFileReferences(paths)
         return

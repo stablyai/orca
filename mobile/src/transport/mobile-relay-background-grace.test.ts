@@ -30,11 +30,12 @@ describe('MobileRelayBackgroundGraceTimer', () => {
   })
 
   it('detects expiry on resume when the background timer was suspended', () => {
+    vi.useFakeTimers()
     let now = 1_000
     const timer = new MobileRelayBackgroundGraceTimer(
       {
         now: () => now,
-        setTimer: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
+        setTimer: vi.fn(() => setTimeout(() => {}, 0)),
         clearTimer: vi.fn()
       },
       vi.fn()
@@ -47,26 +48,31 @@ describe('MobileRelayBackgroundGraceTimer', () => {
     expect(timer.consumeExpired()).toBe(false)
   })
 
-  it('rejects a stale expiry callback after foreground cancellation', () => {
-    let callback: (() => void) | null = null
+  it('rejects a stale expiry callback after foreground cancellation and rearming', () => {
+    vi.useFakeTimers()
+    const callbacks: (() => void)[] = []
     const onExpired = vi.fn()
     const timer = new MobileRelayBackgroundGraceTimer(
       {
         now: () => 1_000,
         setTimer: vi.fn((next) => {
-          callback = next
-          return 1 as unknown as ReturnType<typeof setTimeout>
+          callbacks.push(next)
+          return setTimeout(() => {}, 0)
         }),
-        clearTimer: vi.fn()
+        clearTimer: vi.fn((handle) => clearTimeout(handle))
       },
       onExpired
     )
 
     timer.arm()
     expect(timer.consumeExpired()).toBe(false)
-    const staleCallback = callback as (() => void) | null
-    staleCallback?.()
-
+    timer.arm()
+    expect(callbacks).toHaveLength(2)
+    callbacks[0]()
     expect(onExpired).not.toHaveBeenCalled()
+
+    callbacks[1]()
+    expect(onExpired).toHaveBeenCalledOnce()
+    expect(timer.consumeExpired()).toBe(false)
   })
 })

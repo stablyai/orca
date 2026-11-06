@@ -1,3 +1,5 @@
+import { CsvPreviewError } from './csv-preview-error'
+
 export { detectCsvDelimiter, CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS } from './csv-delimiter-detection'
 
 export type CsvParseResult = { rows: string[][]; maxColumns: number }
@@ -35,7 +37,7 @@ export function parseCsv(
   }
   const pushField = (end: number): void => {
     if (row.length >= (limits.maxColumns ?? Infinity) || ++cells > (limits.maxCells ?? Infinity)) {
-      throw new Error('CSV contains too many cells to preview safely.')
+      throw new CsvPreviewError('too-many-cells')
     }
     // Slice ordinary fields once; only escaped or interleaved quotes need a join.
     if (parts.length) {
@@ -52,7 +54,7 @@ export function parseCsv(
   }
   const pushRow = (end: number, next: number): void => {
     if (end - recordStart > (limits.maxRecordLength ?? Infinity)) {
-      throw new Error('CSV record is too large to preview safely.')
+      throw new CsvPreviewError('record-too-large')
     }
     pushField(end)
     maxColumns = Math.max(maxColumns, row.length)
@@ -72,7 +74,7 @@ export function parseCsv(
       i - recordStart >= (limits.maxRecordLength ?? Infinity) &&
       (inQuotes || (ch !== '\r' && ch !== '\n'))
     ) {
-      throw new Error('CSV record is too large to preview safely.')
+      throw new CsvPreviewError('record-too-large')
     }
     if (inQuotes) {
       if (ch === '"') {

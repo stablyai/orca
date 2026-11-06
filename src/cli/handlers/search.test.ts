@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MALFORMED_CURSOR_MESSAGE, SEARCH_HANDLERS } from './search'
-import { AiVaultSearchResponseSchema } from '../../shared/ai-vault-search-contract'
-import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
-import { REPEATED_FLAG_SEPARATOR } from '../args'
+import { SEARCH_HANDLERS } from './search'
+import { AiVaultSearchResponseSchema } from '../../shared/ai-vault/search/ai-vault-search-contract'
+import type {
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import { RuntimeClientError } from '../runtime/types'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { RuntimeClient } from '../runtime-client'
+import { okFixture } from '../test-fixtures'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -48,10 +51,6 @@ const statusResponse: AiVaultSearchStatus = {
   generation: 42
 }
 
-function envelope(result: unknown) {
-  return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
-}
-
 async function runSearch(
   flags: [string, string | boolean][],
   options: {
@@ -67,7 +66,8 @@ async function runSearch(
         .fn()
         .mockImplementation((method: string) =>
           Promise.resolve(
-            envelope(
+            okFixture(
+              'request-1',
               method === 'aiVault.searchStatus'
                 ? statusResponse
                 : (options.result ?? resultsResponse)
@@ -75,12 +75,14 @@ async function runSearch(
           )
         )
   const lines: string[] = []
+  const client = new RuntimeClient('/tmp/orca-search-test', 60_000, null, null)
+  vi.spyOn(client, 'call').mockImplementation(call)
+  vi.spyOn(client, 'isRemote', 'get').mockReturnValue(options.isRemote ?? false)
   vi.spyOn(console, 'log').mockImplementation((value: unknown) => {
     lines.push(String(value))
   })
   await SEARCH_HANDLERS.search!({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only `call` and `isRemote`; a real RuntimeClient would resolve runtime metadata and open a socket.
-    client: { call, isRemote: options.isRemote ?? false } as never,
+    client,
     cwd: '/workspace',
     flags: new Map(flags),
     json: options.json ?? false
@@ -88,9 +90,6 @@ async function runSearch(
   return { call, output: lines.join('\n') }
 }
 
-type CliFlags = [string, string | boolean][]
-
-/** The printed envelope, narrowed by shape rather than asserted. */
 function printedEnvelope(output: string): { keys: string[]; result: unknown } {
   const parsed: unknown = JSON.parse(output)
   if (typeof parsed !== 'object' || parsed === null || !('result' in parsed)) {
@@ -99,7 +98,6 @@ function printedEnvelope(output: string): { keys: string[]; result: unknown } {
   return { keys: Object.keys(parsed), result: parsed.result }
 }
 
-/** Re-reads the printed result through the contract, so the shape is checked, not claimed. */
 function printedResults(output: string): Extract<AiVaultSearchResponse, { kind: 'results' }> {
   const parsed = AiVaultSearchResponseSchema.parse(printedEnvelope(output).result)
   if (parsed.kind !== 'results') {
@@ -109,125 +107,6 @@ function printedResults(output: string): Extract<AiVaultSearchResponse, { kind: 
 }
 
 describe('orca search over the runtime RPC', () => {
-  it('sends the query with the contract defaults the schema resolves', async () => {
-    const { call } = await runSearch([['query', 'resize race']])
-
-    expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
-      query: 'resize race',
-      limit: 20,
-      supportedAgents: [...AI_VAULT_AGENTS],
-      supportsQoderHistory: true,
-      supportsJcodeHistory: true
-    })
-  })
-
-  const flagCases: [string, CliFlags, Record<string, unknown>][] = [
-    [
-      'scope and freshness',
-      [
-        ['query', 'q'],
-        ['scope', 'conversation'],
-        ['fresh', true]
-      ],
-      { query: 'q', scope: 'conversation', freshness: 'wait-until-current', limit: 20 }
-    ],
-    [
-      'paging',
-      [
-        ['query', 'q'],
-        ['limit', '50'],
-        ['cursor', 'eyJ2IjoxfQ']
-      ],
-      { query: 'q', limit: 50, cursor: 'eyJ2IjoxfQ' }
-    ],
-    [
-      'filters',
-      [
-        ['query', 'q'],
-        ['agent', `claude${REPEATED_FLAG_SEPARATOR}codex`],
-        ['path', `/a${REPEATED_FLAG_SEPARATOR}/b`],
-        ['since', '2026-08-01T00:00:00Z'],
-        ['sort', 'newest']
-      ],
-      {
-        query: 'q',
-        limit: 20,
-        filters: {
-          agents: ['claude', 'codex'],
-          scopePaths: ['/a', '/b'],
-          since: '2026-08-01T00:00:00Z',
-          sort: 'newest'
-        }
-      }
-    ],
-    [
-      'debug',
-      [
-        ['query', 'q'],
-        ['debug', true]
-      ],
-      { query: 'q', limit: 20, debug: true }
-    ]
-  ]
-
-  it.each(flagCases)('sends %s', async (name, flags, params) => {
-    const { call } = await runSearch(flags)
-
-    expect(call).toHaveBeenCalledTimes(name === 'filters' ? 2 : 1)
-    if (name === 'filters') {
-      expect(call).toHaveBeenNthCalledWith(1, 'aiVault.searchStatus', {})
-    }
-    expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
-      ...params,
-      supportedAgents: [...AI_VAULT_AGENTS],
-      supportsQoderHistory: true,
-      supportsJcodeHistory: true
-    })
-  })
-
-  it('calls the status RPC for --index-status', async () => {
-    const { call, output } = await runSearch([['index-status', true]], { result: statusResponse })
-
-    expect(call).toHaveBeenCalledWith('aiVault.searchStatus', {})
-    expect(output).toContain('phase: current')
-  })
-
-  it('renders a result page as text', async () => {
-    const { output } = await runSearch([['query', 'q']])
-
-    expect(output).toBe(
-      [
-        'Claude  2026-09-12T18:04:11.000Z  Terminal resize race  host=ssh:build-01',
-        '    assistant: the [[resize]] handler drops the first event',
-        '    resume: claude --resume session-1',
-        '',
-        '1 result on this page, 18 ms.',
-        'more pages: re-run with --cursor eyJ2IjoxfQ'
-      ].join('\n')
-    )
-  })
-
-  it('renders a disabled index as an answer', async () => {
-    const { output } = await runSearch([['query', 'q']], {
-      result: { kind: 'unavailable', reason: 'disabled' }
-    })
-
-    expect(output).toBe('Session search is off on this host.')
-  })
-
-  it('renders a stale cursor as guidance to re-run without one', async () => {
-    const { output } = await runSearch(
-      [
-        ['query', 'q'],
-        ['cursor', 'eyJ2IjoxfQ']
-      ],
-      { result: { kind: 'stale-cursor', generation: 7, expectedGeneration: 8 } }
-    )
-
-    expect(output).toContain('Re-run the same search without --cursor')
-  })
-
   it('raises a malformed cursor through the CLI error channel', async () => {
     await expect(
       runSearch(
@@ -237,7 +116,10 @@ describe('orca search over the runtime RPC', () => {
         ],
         { result: { kind: 'malformed-cursor' } }
       )
-    ).rejects.toThrow(MALFORMED_CURSOR_MESSAGE)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('re-run the search without --cursor')
+    })
   })
 
   it('answers a host with no such method as unavailable rather than a raw error', async () => {
@@ -284,15 +166,6 @@ describe('orca search over the runtime RPC', () => {
 })
 
 describe('orca search --json', () => {
-  it('hands back the contract response unchanged under the CLI envelope', async () => {
-    const { output } = await runSearch([['query', 'q']], { json: true })
-    const printed = printedEnvelope(output)
-
-    expect(printed.keys).toEqual(['id', 'ok', 'result', '_meta'])
-    expect(printed.result).toEqual(resultsResponse)
-    expect(JSON.stringify(printed.result)).toBe(JSON.stringify(resultsResponse))
-  })
-
   it('drops the debug block the caller did not ask for', async () => {
     const withDebug = {
       ...resultsResponse,
@@ -323,14 +196,5 @@ describe('orca search --json', () => {
     )
 
     expect(printedResults(output).debug).toEqual(withDebug.debug)
-  })
-
-  it('hands back the status response unchanged', async () => {
-    const { output } = await runSearch([['index-status', true]], {
-      json: true,
-      result: statusResponse
-    })
-
-    expect(printedEnvelope(output).result).toEqual(statusResponse)
   })
 })

@@ -207,7 +207,7 @@ export function removeArtifactCreateIntent(
   try {
     matches = readIntent(path).idempotencyKey === expectedIdempotencyKey
   } catch {
-    // An unreadable record cannot be replayed, so a completed mutation may discard it safely.
+    // Unreadable intents cannot be replayed and may be discarded after completion.
   }
   if (matches) {
     rmSync(path, { force: true })

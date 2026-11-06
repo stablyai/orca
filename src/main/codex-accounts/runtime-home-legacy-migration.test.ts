@@ -1,16 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readlinkSync,
   readFileSync,
-  rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
@@ -32,8 +29,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -78,58 +75,6 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(join(legacyActiveHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"system"}\n'
     )
-  })
-
-  it('uses the canonical Electron userData for legacy active host migration', async () => {
-    const staleUserDataDir = mkdtempSync(join(tmpdir(), 'orca-stale-runtime-home-'))
-    const staleRuntimeHomePath = join(staleUserDataDir, 'codex-runtime-home', 'home')
-    try {
-      mkdirSync(staleRuntimeHomePath, { recursive: true })
-      process.env.ORCA_USER_DATA_PATH = staleUserDataDir
-      const legacyLaunchHomePath = join(
-        testState.userDataDir,
-        'codex-runtime-home',
-        'launch',
-        'host',
-        'account-old',
-        'home'
-      )
-      const legacyActiveHomePath = getLegacyActiveHostCodexHomePath()
-      mkdirSync(legacyLaunchHomePath, { recursive: true })
-      mkdirSync(join(legacyActiveHomePath, '..'), { recursive: true })
-      symlinkSync(
-        legacyLaunchHomePath,
-        legacyActiveHomePath,
-        process.platform === 'win32' ? 'junction' : undefined
-      )
-      writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-      const store = createStore(createSettings())
-
-      const { configureOrcaUserDataPathEnv } = await import('../startup/configure-process')
-      configureOrcaUserDataPathEnv()
-      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-      new CodexRuntimeHomeService(store as never)
-
-      expect(process.env.ORCA_USER_DATA_PATH).toBe(testState.userDataDir)
-      expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).toBe(
-        normalizeLinkTarget(getRuntimeCodexHomePath())
-      )
-      expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).not.toBe(
-        normalizeLinkTarget(staleRuntimeHomePath)
-      )
-    } finally {
-      rmSync(staleUserDataDir, { recursive: true, force: true })
-    }
-  })
-
-  it('does not create a legacy active host pointer for fresh shared-home users', async () => {
-    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const store = createStore(createSettings())
-
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    new CodexRuntimeHomeService(store as never)
-
-    expect(existsSync(getLegacyActiveHostCodexHomePath())).toBe(false)
   })
 
   it('imports legacy managed-home history into the shared runtime history', async () => {

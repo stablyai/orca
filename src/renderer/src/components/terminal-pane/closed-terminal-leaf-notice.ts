@@ -1,16 +1,18 @@
 import { CLOSE_TERMINAL_PANE_EVENT, type CloseTerminalPaneDetail } from '@/constants/terminal'
 import { collapseParkedTerminalLeaf } from './terminal-parked-pty-watcher'
 import { isTerminalTabParked } from './terminal-parked-watcher-registry'
+import type { TerminalTabCloseIntent } from '../terminal/terminal-tab-close-intent'
 
-/**
- * Drops a split pane main already closed. Addressed by leaf, so it is a no-op once the pane's own
- * exit handling removed it, and the exit is a no-op after it: whichever lands first wins.
- */
-export function applyClosedTerminalLeafNotice(tabId: string, leafId: string): void {
+/** Remove main-closed leaves idempotently so this notice and local exit handling can arrive in either order. */
+export function applyClosedTerminalLeafNotice(
+  tabId: string,
+  leafId: string,
+  lastPaneCloseReason: TerminalTabCloseIntent
+): void {
   if (isTerminalTabParked(tabId)) {
     collapseParkedTerminalLeaf(tabId, leafId)
     return
   }
-  const detail: CloseTerminalPaneDetail = { tabId, leafId }
+  const detail: CloseTerminalPaneDetail = { tabId, leafId, lastPaneCloseReason }
   window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
 }

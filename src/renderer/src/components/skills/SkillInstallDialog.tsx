@@ -49,8 +49,7 @@ export function SkillInstallDialog({
   const [preview, setPreview] = useState<ResolvedSkillShare | null>(null)
   const [environmentId, setEnvironmentId] = useState<string>('local')
   const [scope, setScope] = useState<'global' | 'workspace'>('global')
-  // Why: null means "follow detection"; storing the derived default instead
-  // would freeze the picker on whichever machine was selected first.
+  // Null follows detection across target changes instead of freezing the first machine’s default.
   const [providerChoice, setProviderChoice] = useState<Set<SkillInstallProviderId> | null>(null)
   const [workspace, setWorkspace] = useState<string>('')
   const [executionTarget, setExecutionTarget] = useState<{ kind: 'wsl'; distro: string } | null>(
@@ -127,12 +126,10 @@ export function SkillInstallDialog({
 
   const inspect = (): Promise<void> => resolveLink(link)
 
-  /** True from the moment a prefilled link opens the dialog until it resolves
-   *  or fails, so the paste step never appears for a caller-supplied link. */
+  /** Skip the paste step while a caller-supplied link resolves, until preview or error arrives. */
   const resolvingInitialLink = Boolean(initialLink) && !preview && !error
 
-  // Why: arriving with a link already in hand means the paste step is busywork,
-  // so the dialog opens on the review screen instead of asking for a click.
+  // A supplied link opens directly on review rather than asking the user to paste it again.
   useEffect(() => {
     if (!open || !initialLink || autoResolved.current) {
       return
@@ -273,11 +270,7 @@ export function SkillInstallDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !busy && !bundleBusy && close()}>
-      {/* Why: DialogContent is a grid, so a child that cannot wrap (a digest, a
-          path, a long name) raises the grid's minimum width and the whole dialog
-          scrolls sideways with its content clipped. min-w-0 lets children reflow
-          at the dialog width; overflow-x-hidden makes sideways scroll impossible
-          even if some future child still refuses to shrink. */}
+      {/* Grid children need min-w-0 to wrap long paths/names; clip residual horizontal overflow. */}
       <DialogContent
         className="max-h-[calc(100vh-3rem)] overflow-x-hidden overflow-y-auto scrollbar-sleek sm:max-w-xl [&>*]:min-w-0"
         aria-describedby={undefined}
@@ -297,8 +290,7 @@ export function SkillInstallDialog({
         </DialogHeader>
 
         {resolvingInitialLink ? (
-          // Why: the paste form would flash for the length of the round-trip
-          // before being replaced by a review the caller already asked for.
+          // Avoid flashing the paste form while the supplied link’s review loads.
           <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             {translate('auto.components.skills.SkillInstallDialog.opening', 'Opening this link…')}

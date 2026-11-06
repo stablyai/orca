@@ -1,9 +1,10 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import {
   LinearCustomViewTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageLinearCustomViewList({
   model
 }: {
@@ -40,7 +41,7 @@ export function TaskPageLinearCustomViewList({
           onSelectView={openLinearCustomViewContext}
           onOpenView={(view) => {
             if (view.url) {
-              void window.api.shell.openUrl(view.url)
+              openAppHttpLink(view.url)
             }
           }}
         />
@@ -49,7 +50,7 @@ export function TaskPageLinearCustomViewList({
         errors={linearCustomViewsResult.errors}
         hasMore={linearCustomViewsResult.hasMore}
         count={linearCustomViewsResult.items.length}
-        label={translate('auto.components.TaskPage.3cb855080f', 'views')}
+        kind="views"
       />
     </div>
   )

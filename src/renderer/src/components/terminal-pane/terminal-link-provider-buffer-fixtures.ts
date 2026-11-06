@@ -2,11 +2,21 @@ import { expect, vi } from 'vitest'
 import type { IDisposable, ILink } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
+
 import type {
   installFilePathLinkClickFallback,
   openFilePathLinkAtBufferPosition
 } from './terminal-link-handlers'
 import type { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
+
+export function makeExistsCache(
+  entries: Iterable<[string, boolean]> = []
+): TerminalPathExistsCache {
+  return new Map(
+    [...entries].map(([key, exists]) => [key, { exists, checkedAt: Date.now(), sequence: 0 }])
+  )
+}
 
 export type TestBufferLine = {
   isWrapped: boolean
@@ -63,7 +73,7 @@ export function makePane(rows: TestBufferLine[]): { id: number; terminal: unknow
 
 export function createProviderSetup(
   rows: TestBufferLine[],
-  pathExistsCache = new Map<string, boolean>([
+  pathExistsCache = makeExistsCache([
     ['/repo', true],
     ['/repo/CLAUDE.md', true],
     ['/repo/package.json', true],

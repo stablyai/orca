@@ -1,5 +1,5 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
   removeManagedCommands,
@@ -68,9 +68,7 @@ export async function installCopilotHooksRemote(
     config.version = 1
     delete config.disableAllHooks
     config.hooks = nextHooks
-    // Why: SSH remotes use POSIX scripts regardless of Orca's local OS. Write
-    // the script before hooks/orca.json so a partial install cannot point
-    // Copilot at a missing managed command.
+    // SSH uses POSIX scripts on every local OS; publish the script before config can reference it.
     await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
     await writeHooksJsonRemote(sftp, remoteConfigPath, config)
 

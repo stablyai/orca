@@ -3,9 +3,11 @@ import {
   diskConflictFromReadFailure,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD,
+  hostEnforcesPrecondition,
   FILE_WRITE_OK,
+  FILE_WRITE_UNCHANGED,
   parseFileWriteResult,
-  type FileWriteDiskConflict,
+  type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
@@ -16,7 +18,7 @@ import {
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import {
   callRuntimeFileMutationWithCapabilities,
   isRuntimeConnectionChangedError
@@ -102,7 +104,7 @@ export async function writeRemoteFileIfUnchanged(
         context.target,
         'files.write',
         async (capabilities) => {
-          if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+          if (hostEnforcesPrecondition(capabilities, precondition)) {
             return {
               method: FILE_WRITE_IF_UNCHANGED_METHOD,
               params: { ...params, diskPrecondition: precondition }
@@ -111,9 +113,21 @@ export async function writeRemoteFileIfUnchanged(
           const diskConflict = await checkDiskPreconditionFromClient(
             context,
             filePath,
-            precondition
+            precondition,
+            content
           )
-          return diskConflict ? { result: { ok: false, diskConflict } } : { params }
+          if (diskConflict === 'identical') {
+            return { result: FILE_WRITE_UNCHANGED }
+          }
+          if (diskConflict) {
+            return { result: { ok: false, diskConflict } }
+          }
+          return capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)
+            ? {
+                method: FILE_WRITE_IF_UNCHANGED_METHOD,
+                params: { ...params, diskPrecondition: precondition }
+              }
+            : { params }
         },
         15_000,
         pairingRevision,
@@ -148,13 +162,18 @@ export async function writeRemoteFileIfUnchanged(
 async function checkDiskPreconditionFromClient(
   context: RemoteFileContext,
   filePath: string,
-  precondition: FileWriteDiskPrecondition
-): Promise<FileWriteDiskConflict | null> {
+  precondition: FileWriteDiskPrecondition,
+  content: string
+): Promise<FileWriteDiskComparison> {
   let current: { content: string; isBinary: boolean }
   try {
     current = await readRemoteFile(context, filePath)
   } catch (error) {
     return diskConflictFromReadFailure(precondition, error)
   }
-  return compareDiskWritePrecondition(precondition, current.isBinary ? undefined : current.content)
+  return compareDiskWritePrecondition(
+    precondition,
+    current.isBinary ? undefined : current.content,
+    content
+  )
 }

@@ -5,14 +5,17 @@ import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/runtime-environment-revision'
-import type { FileLinkExists } from '@/components/sidebar/comment-markdown-native-chat-file-links'
+import type { FileLinkExists } from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import {
   createNativeChatFileLinkExistence,
-  NativeChatFileLinkExistenceContext,
-  type NativeChatFileLinkExistence,
-  type NativeChatFileLinkSnapshot
+  NativeChatFileLinkExistenceContext
 } from './native-chat-file-link-existence'
+import type { NativeChatFileLinkExistence } from '../../../../shared/native-chat/native-chat-file-link-existence'
+import { createNativeChatFileLinkHooks } from '../../../../shared/native-chat/native-chat-file-link-hooks'
+
+const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
+  createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
 
 const subscribeToPairings = (onChange: () => void): (() => void) =>
   onRuntimeEnvironmentRevisionsChanged(onChange)
@@ -44,7 +47,6 @@ function useFileLinkHostEpoch(
   return { sshUp, runtime: `${runtimeStatus}|${pairing ?? ''}` }
 }
 
-/** Asks again about watched paths when the workspace's host comes back. */
 function useRecheckWhenHostReturns(
   existence: NativeChatFileLinkExistence | null,
   { sshUp, runtime }: FileLinkHostEpoch
@@ -57,11 +59,11 @@ function useRecheckWhenHostReturns(
   useEffect(() => {
     const previous = seen.current
     seen.current = { existence, sshUp, runtime }
-    // Why: a fresh checker has nothing to recheck; its messages are asking right now.
+    // Fresh checkers are already checking their messages; only retained watchers need a host-return retry.
     if (!existence || previous?.existence !== existence) {
       return
     }
-    // Why: only a host coming back (or a new connection) can change answers; going down cannot.
+    // Only returning/replaced connections can change file answers; disconnects cannot prove deletion.
     const sshReturned = sshUp !== null && sshUp !== previous.sshUp
     if (sshReturned || runtime !== previous.runtime) {
       existence.recheck()
@@ -69,19 +71,11 @@ function useRecheckWhenHostReturns(
   }, [existence, sshUp, runtime])
 }
 
-/** For the chat view that knows its turn state: a finished turn may have changed the files. */
 export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): void {
-  const existence = useContext(NativeChatFileLinkExistenceContext)
-  const seen = useRef<{ existence: NativeChatFileLinkExistence | null; isWorking: boolean } | null>(
-    null
+  useRecheckNativeChatFileLinksWhenSettled(
+    useContext(NativeChatFileLinkExistenceContext),
+    isWorking
   )
-  useEffect(() => {
-    const previous = seen.current
-    seen.current = { existence, isWorking }
-    if (existence && previous?.existence === existence && previous.isWorking && !isWorking) {
-      existence.recheck()
-    }
-  }, [existence, isWorking])
 }
 
 /** One per chat view: paths in its transcript are checked on the workspace's host. */
@@ -120,25 +114,14 @@ export function NativeChatFileLinkExistenceProvider({
   )
 }
 
-const subscribeToNothing = (): (() => void) => () => {}
-const getNoSnapshot = (): null => null
-
 /** Undefined when this chat cannot open files, so nothing is underlined. */
 export function useNativeChatFileLinkExists(
   enabled: boolean,
   streaming: boolean
 ): FileLinkExists | undefined {
-  const existence = useContext(NativeChatFileLinkExistenceContext)
-  const watcher = useMemo(
-    () => (enabled && existence ? existence.watch() : null),
-    [enabled, existence]
+  return useNativeChatFileLinkExistsFrom(
+    useContext(NativeChatFileLinkExistenceContext),
+    enabled,
+    streaming
   )
-  const getSnapshot = watcher?.getSnapshot ?? getNoSnapshot
-  const snapshot: NativeChatFileLinkSnapshot | null = useSyncExternalStore(
-    watcher?.subscribe ?? subscribeToNothing,
-    getSnapshot,
-    getSnapshot
-  )
-  // Why: text still streaming in ends mid-path; ask the host once the reply settles.
-  return snapshot ? (streaming ? snapshot.peek : snapshot.check) : undefined
 }

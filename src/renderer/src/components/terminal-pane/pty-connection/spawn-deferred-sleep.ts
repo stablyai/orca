@@ -1,13 +1,15 @@
-import { useAppStore } from '@/store'
+import { isColdRestoreStartup, paneResumeRecord } from './pane-resume-record'
+import { releaseDeferredCwdFence } from './fresh-spawn-start'
+import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
+import { useAppStore } from '@/store/index'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import {
   agentProviderSessionsEqual,
-  isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
 import {
   clearPaneSpawnDeferral,
@@ -24,11 +26,8 @@ import {
 } from '@/runtime/resume-host-automatic-restores'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { releaseHiddenAgentResumeHold } from './hidden-agent-resume-deferral'
-import type {
-  ColdRestoreAgentResumeStartup,
-  FreshSpawnOptions,
-  PendingStartupCommand
-} from './fresh-spawn-types'
+import { startPaneThroughMainThenAttach } from './main-pane-start-request'
+import type { FreshSpawnOptions, PendingStartupCommand } from './fresh-spawn-types'
 
 const SESSION_RUNNING_ELSEWHERE_NOTICE =
   '\r\n\x1b[2mThis agent session is already running in another tab.\x1b[0m\r\n'
@@ -37,45 +36,6 @@ type DeferredSpawn = {
   reason: SpawnDeferralReason
   startupOverride: PendingStartupCommand | null | undefined
   options: FreshSpawnOptions
-}
-
-function isColdRestoreStartup(
-  startup: PendingStartupCommand | null | undefined
-): startup is ColdRestoreAgentResumeStartup {
-  return Boolean(startup && 'launchConfig' in startup && 'resumeProviderSession' in startup)
-}
-
-/** The record a deferred restore leaves behind, so the session stays listed and resumable even if
- *  this pane goes away before the user opens it. */
-function deferredResumeRecord(
-  session: ConnectPanePtySession,
-  startupOverride: PendingStartupCommand | null | undefined
-): SleepingAgentSessionRecord | null {
-  const coldRestore = isColdRestoreStartup(startupOverride) ? startupOverride : null
-  const agent = coldRestore?.agent ?? session.paneStartup?.launchAgent
-  const providerSession =
-    coldRestore?.resumeProviderSession ?? session.paneStartup?.resumeProviderSession
-  if (!agent || !isResumableTuiAgent(agent) || !providerSession) {
-    return null
-  }
-  const launchConfig = coldRestore?.launchConfig ?? session.paneStartup?.launchConfig
-  const now = Date.now()
-  return {
-    paneKey: session.cacheKey,
-    tabId: session.deps.tabId,
-    worktreeId: session.deps.worktreeId,
-    agent,
-    providerSession,
-    prompt: '',
-    state: 'done',
-    capturedAt: now,
-    updatedAt: now,
-    ...(launchConfig ? { launchConfig } : {}),
-    // Why `quit`: like a quit capture it names a pane that still exists and is unfinished work,
-    // so a sweep never discards it as passive history (a `live` done note is).
-    origin: 'quit',
-    restoreOnTabOpenOnly: true
-  }
 }
 
 function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): boolean {
@@ -149,17 +109,27 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
   session.pendingSpawnDeferral = null
   session.deferredSpawn = null
 
+  /** Keeps the resume handle of a restore the host did not run, so a later restore tries again. */
+  session.keepUnrunResumeHandle = (
+    startupOverride: PendingStartupCommand | null | undefined
+  ): void => {
+    const captured =
+      startupOverride?.resumeSource?.record ?? session.paneStartup?.resumeSource?.record
+    const record = captured ?? paneResumeRecord(session, startupOverride)
+    if (record && !useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]) {
+      // Why left after a later resume: the next quit capture replaces it, and a pane with a live PTY owns it.
+      useAppStore.getState().rememberSleepingAgentSession(record)
+    }
+  }
+
   session.enterSpawnDeferredSleep = (
     reason: SpawnDeferralReason,
     startupOverride: PendingStartupCommand | null | undefined,
     options: FreshSpawnOptions,
     visibleAtSpawn: boolean
   ): void => {
-    const record = deferredResumeRecord(session, startupOverride)
-    if (record) {
-      // Why left after a later resume: the next quit capture replaces it, and a pane with a live PTY owns it.
-      useAppStore.getState().rememberSleepingAgentSession(record)
-    }
+    releaseDeferredCwdFence(session)
+    session.keepUnrunResumeHandle(startupOverride)
     session.deferredSpawn = { reason, startupOverride, options }
     const deferral = { reason, resume: () => void session.resumeDeferredSpawn() }
     setPaneSpawnDeferral(session.cacheKey, deferral)
@@ -173,6 +143,7 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
         async () => (await session.resumeDeferredSpawn().catch(() => null)) !== null
       )
     }
+    session.settlePaneAttachAttempt?.('failed')
     if (!visibleAtSpawn) {
       // Why: a pane opened while its hidden restore was in flight resumes as the user's own.
       queueMicrotask(() => session.resumeDeferredSpawnOnReveal())
@@ -186,7 +157,7 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
     }
     session.deferredSpawn = null
     cancelDeferredRestoreRetry(session.cacheKey)
-    const resume = deferredResumeRecord(session, deferred.startupOverride)
+    const resume = paneResumeRecord(session, deferred.startupOverride)
     if (
       resume &&
       (providerSessionLiveInAnotherPane(resume) ||
@@ -199,8 +170,7 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
       })
       return Promise.resolve(null)
     }
-    // Why keep the entry while in flight: until the PTY binds, the pane is still the session's
-    // owner, and a sweep in between must not start it in another tab.
+    // Retain session ownership until PTY binding so activation cannot resume it in another tab mid-spawn.
     const resuming = { reason: deferred.reason, resume: () => {}, resuming: true as const }
     setPaneSpawnDeferral(session.cacheKey, resuming)
     const settle = (): void => {
@@ -208,14 +178,41 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
         clearPaneSpawnDeferral(session.cacheKey)
       }
     }
-    return session.startFreshSpawn(deferred.startupOverride, deferred.options).then(
+    const startup = deferred.startupOverride
+    const mainStartup =
+      isColdRestoreStartup(startup) && mainResumedSleepPane(session, startup) ? startup : null
+    const generation = session.transportStreamGeneration
+    const visibleAtDispatch = session.deps.isVisibleRef.current === true
+    const spawned: Promise<string | null> = mainStartup
+      ? session.spawnColdRestoreAgentResume(mainStartup, deferred.options, !visibleAtDispatch)
+      : startPaneThroughMainThenAttach(session, () =>
+          session.startFreshSpawn(startup, deferred.options)
+        )
+    return spawned.then(
       (ptyId: string | null) => {
         settle()
         return ptyId
       },
       (error: unknown) => {
+        if (!mainStartup) {
+          settle()
+          throw error
+        }
+        if (
+          getPaneSpawnDeferral(session.cacheKey) === resuming &&
+          session.deferredSpawn === null &&
+          !session.transport.getPtyId() &&
+          isMainResumedSleepPaneCurrent(session, mainStartup, generation)
+        ) {
+          session.enterSpawnDeferredSleep(
+            deferred.reason,
+            mainStartup,
+            deferred.options,
+            visibleAtDispatch
+          )
+        }
         settle()
-        throw error
+        return null
       }
     )
   }

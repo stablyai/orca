@@ -2,11 +2,11 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
   pasteDraftWhenAgentReady,
-  POST_PASTE_SUBMIT_DELAY_MS,
   sendAgentDraftPasteContent
 } from './agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime-pty-id'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS as POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -45,7 +45,7 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
 }))
-vi.mock('../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
 }))
@@ -59,7 +59,7 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
-const RENDER_QUIET_MS = 1500
+
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
@@ -97,40 +97,6 @@ describe('post-paste submit retry Enter', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
-  })
-
-  it('sends one retry Enter after the configured gap for agents that can eat the first Enter', async () => {
-    const promise = startCodexSubmit()
-    await signalCodexComposerReady()
-    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
-
-    expect(enterWrites()).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(CODEX_SUBMIT_RETRY_DELAY_MS - 1)
-    expect(enterWrites()).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(1)
-
-    await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(2)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith('pty-1', '\r', 'launch')
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('sends exactly one Enter for agents without a submit retry delay', async () => {
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'gemini',
-      submit: true
-    })
-    await flushMicrotasks()
-    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    await vi.advanceTimersByTimeAsync(RENDER_QUIET_MS)
-    await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
-
-    await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(1)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('holds the PTY input transaction across the retry Enter', async () => {

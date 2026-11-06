@@ -1,12 +1,6 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
-/**
- * True iff `hostId` names a `runtime:<envId>` host whose environment id is in the
- * removed set. Local, SSH, and unhosted (`hostId` undefined) rows never match.
- * Removal-diff scoping (not "absent from the saved list") is load-bearing: a
- * serving instance's locally-persisted runtime-stamped repos carry an env id that
- * was never in this instance's saved list, so it can never enter the removed diff.
- */
+/** Match only explicitly removed runtime IDs; serving-local runtime stamps may never have belonged to this instance’s saved list, so absence cannot prove removal. */
 export function isRemovedRuntimeHostId(
   hostId: string | null | undefined,
   removedEnvironmentIds: ReadonlySet<string>
@@ -20,13 +14,7 @@ export type DropRuntimeRowsResult<T> = {
   removedRows: T[]
 }
 
-/**
- * Drops rows owned by a removed-env runtime host from a `worktreesByRepo`-shaped
- * map. Legacy unhosted rows are dropped only when their repo had removed owners
- * and none survive. Returns the SAME reference when nothing changed (render-churn
- * guard). Repo keys are kept even when their row list empties. Generic so it serves
- * both `Worktree[]` and the detected worktrees' `.worktrees` arrays.
- */
+/** Drop removed-runtime rows; drop legacy unhosted rows only if no repo owner survives. Preserve unchanged references and empty repo keys; supports Worktree and detection arrays. */
 export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
 >(
@@ -61,10 +49,7 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   return changed ? { rowsByRepo: next, removedRows } : { rowsByRepo, removedRows: [] }
 }
 
-/**
- * Drops catalog rows (project groups, folder workspaces) stamped with a removed runtime host, so a
- * stopped server leaves no empty heading behind. Returns the SAME reference when nothing changed.
- */
+/** Drop removed-runtime catalog headings, preserving unchanged references. */
 export function dropRuntimeHostedCatalogRows<T extends { executionHostId?: string | null }>(
   rows: readonly T[],
   removedEnvironmentIds: ReadonlySet<string>

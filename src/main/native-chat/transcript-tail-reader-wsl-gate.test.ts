@@ -51,10 +51,7 @@ describe('native chat transcript tail under WSL gate refusals', () => {
 
 describe('native chat transcript tail with stalled post-resolution UNC I/O', () => {
   const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\a.jsonl'
-  // A stalled task holds its gate permit until the underlying call settles, so
-  // each case releases its stall before the next one runs. The deadline also
-  // quarantines the route, and a late release never lifts that, so each case
-  // starts from a reset gate.
+  // Release stalled calls to free permits; reset quarantine separately because late release cannot clear it.
   let releaseStall: (() => void) | undefined
 
   function stalls<T>(): Promise<T> {
@@ -112,7 +109,6 @@ describe('native chat transcript tail with stalled post-resolution UNC I/O', () 
 
     expect(result).toEqual({ error: SLOW_MESSAGE })
     expect(result).not.toHaveProperty('notFound')
-    // Fire-and-forget close: never gated, never awaited, exactly once.
     await vi.advanceTimersByTimeAsync(0)
     expect(close).toHaveBeenCalledTimes(1)
   })

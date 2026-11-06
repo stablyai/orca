@@ -42,7 +42,7 @@ export function ArtifactsPageAuthState({
                 'Sign in to Orca again'
               )
             : translate(
-                'auto.components.artifacts.ArtifactsPage.signInHeading',
+                'auto.components.artifacts.ArtifactsPage.shareSignInHeading',
                 'Sign in to share artifacts'
               )}
         </h2>
@@ -53,7 +53,7 @@ export function ArtifactsPageAuthState({
                 'Sign in again to view and manage the artifacts shared through your account.'
               )
             : translate(
-                'auto.components.artifacts.ArtifactsPage.signInCopy',
+                'auto.components.artifacts.ArtifactsPage.shareSignInCopy',
                 'Use your Orca account to upload artifacts and manage their public links.'
               )}
         </p>

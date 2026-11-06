@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', () => ({ app: {} }))
-
 import { serveSimKillArgs } from './serve-sim-execution'
 
 const SERVE_SIM_ENTRY = join(

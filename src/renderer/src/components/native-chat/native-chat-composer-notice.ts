@@ -1,5 +1,4 @@
-// What the notice card above a native chat's composer shows: Orca's own words, plus, apart from
-// them, any error text Orca did not write, so it can be read and copied as written.
+// Separate Orca’s notice wording from verbatim external errors so the latter stay readable and copyable.
 
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
@@ -19,8 +18,7 @@ export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   onDismiss?: () => void
 } & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
 
-/** `headline` in Orca's words, with the error as written beside it. `localErrorIsOrcaWords`: an
- *  error raised in this window (not wrapped by main-process IPC) is already Orca's sentence. */
+/** Keep external errors apart from headline; localErrorIsOrcaWords identifies already-worded renderer errors. */
 export function nativeChatNoticeFromError(
   error: unknown,
   headline: string,
@@ -51,8 +49,7 @@ export function setNativeChatNoticeFromError(
   }
 }
 
-/** A failed paste: an error this window raised, or Orca's own size limit coming back from the main
- *  process, is already Orca's sentence; any other is kept apart under `headline`. */
+/** Local errors and main’s size refusals already use Orca wording; keep other paste errors apart under headline. */
 export function setNativeChatPasteFailure(
   setNotice: (text: string | null, errorText?: string) => void,
   error: unknown,

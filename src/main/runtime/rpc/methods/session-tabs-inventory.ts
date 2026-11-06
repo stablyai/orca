@@ -1,17 +1,17 @@
+import {
+  collectSessionTabsInventory,
+  type SessionTabsInventory
+} from './session-tabs-inventory-collection'
 import { isDeepStrictEqual } from 'node:util'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
-import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
+import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
+import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
-
-type SessionTabsInventory = {
-  snapshots: RuntimeMobileSessionTabsResult[]
-  authoritative?: true
-}
 
 type SessionTabsChange = RuntimeMobileSessionTabsResult & { removed?: true }
 
@@ -31,8 +31,17 @@ export function projectSessionTabsForClient(
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): RuntimeMobileSessionTabsResult {
+  // Phones draw no agent message cards, so they never pay for sender identity.
+  const { agentSenderAssociations: _desktopOnly, ...phone } = snapshot
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    projectSessionTabFileHosts(
+      projectSessionTabAgentStatus(
+        clientKind === 'mobile' ? phone : snapshot,
+        clientKind,
+        clientCapabilities
+      ),
+      clientKind
+    ),
     clientCapabilities
   )
 }
@@ -51,33 +60,8 @@ function projectInventory(
   }
 }
 
-async function collectSessionTabsInventory(
-  context: RpcContext,
-  includeChangeSequence = false
-): Promise<{
-  inventory: SessionTabsInventory
-  changeSequence: number
-}> {
-  const { runtime, pairedDeviceId, signal } = context
-  // Why: a failed census degrades inside the runtime to the same scan without
-  // the authoritative label, so no client ever pays a second full collection.
-  if (!includeChangeSequence) {
-    const inventory = runtime.supportsAuthoritativeSessionTabsInventory()
-      ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
-      : { snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId) }
-    return { inventory: projectInventory(inventory, context), changeSequence: 0 }
-  }
-  const collected = runtime.supportsAuthoritativeSessionTabsInventory()
-    ? await runtime.listAllMobileSessionTabsInventoryWithChangeSequence(pairedDeviceId, signal)
-    : await runtime.listAllMobileSessionTabsWithChangeSequence(pairedDeviceId)
-  return {
-    inventory: projectInventory(collected, context),
-    changeSequence: collected.changeSequence
-  }
-}
-
 export async function listSessionTabsInventory(context: RpcContext): Promise<SessionTabsInventory> {
-  return (await collectSessionTabsInventory(context)).inventory
+  return projectInventory((await collectSessionTabsInventory(context)).inventory, context)
 }
 
 export async function subscribeSessionTabsInventory(
@@ -109,14 +93,15 @@ export async function subscribeSessionTabsInventory(
   const deliveredChangeSequenceByWorktree = new Map<string, number>()
   let censusChangeSequence: number | undefined
   let censusInvalidated = false
-  const withProofDelta = createSessionTabsRetirementProofDelta(context.clientCapabilities)
+  const withProofDelta = createSessionTabsStreamDelta(context.clientCapabilities)
   const tabDelta = createSessionTabsTabDeltaEncoder(context.clientCapabilities)
+  const canonicalSnapshotsByWorktree = new Map<string, SessionTabsChange>()
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection rewrites only tabs and groups; the change fields it was handed pass through.
     projectSessionTabsForClient(
       snapshot,
       context.clientKind,
-      context.clientCapabilities
+      context.capabilitySource?.current ?? context.clientCapabilities
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {
@@ -178,6 +163,12 @@ export async function subscribeSessionTabsInventory(
     })
   }
   const publishChange = (snapshot: SessionTabsChange, changeSequence: number): void => {
+    const { navigationIntent: _intent, ...canonical } = snapshot
+    if (snapshot.removed) {
+      canonicalSnapshotsByWorktree.delete(snapshot.worktree)
+    } else {
+      canonicalSnapshotsByWorktree.set(snapshot.worktree, canonical)
+    }
     const projected = projectChange(snapshot)
     const state = withoutNavigationIntent(projected)
     const published = publishedSnapshotsByWorktree.get(snapshot.worktree)
@@ -197,20 +188,37 @@ export async function subscribeSessionTabsInventory(
       deliveredChangeSequenceByWorktree.set(snapshot.worktree, changeSequence)
     }
   }
-  const unsubscribe = runtime.onMobileSessionTabsChanged((runtimeSnapshot, changeSequence) => {
-    const snapshot = runtimeSnapshot as SessionTabsChange
-    if (!initialized) {
-      bufferChange(snapshot, changeSequence)
+  const unsubscribe = runtime.onMobileSessionTabsChanged(
+    (runtimeSnapshot, changeSequence) => {
+      const snapshot = runtimeSnapshot as SessionTabsChange
+      if (!initialized) {
+        bufferChange(snapshot, changeSequence)
+        return
+      }
+      if (
+        changeSequence <= (censusChangeSequence ?? 0) ||
+        changeSequence <= (deliveredChangeSequenceByWorktree.get(snapshot.worktree) ?? 0)
+      ) {
+        return
+      }
+      publishChange(snapshot, changeSequence)
+    },
+    pairedDeviceId,
+    context.clientKind
+  )
+  const stopCapabilities = context.capabilitySource?.observe(() => {
+    if (!initialized || closed) {
       return
     }
-    if (
-      changeSequence <= (censusChangeSequence ?? 0) ||
-      changeSequence <= (deliveredChangeSequenceByWorktree.get(snapshot.worktree) ?? 0)
-    ) {
-      return
+    for (const snapshot of canonicalSnapshotsByWorktree.values()) {
+      const projected = projectChange(snapshot)
+      if (isDeepStrictEqual(publishedSnapshotsByWorktree.get(snapshot.worktree), projected)) {
+        continue
+      }
+      emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+      publishedSnapshotsByWorktree.set(snapshot.worktree, projected)
     }
-    publishChange(snapshot, changeSequence)
-  }, pairedDeviceId)
+  })
   runtime.registerSubscriptionCleanup(
     subscriptionId,
     () => {
@@ -218,6 +226,8 @@ export async function subscribeSessionTabsInventory(
       context.signal?.removeEventListener('abort', onTransportAbort)
       inventoryController.abort()
       unsubscribe()
+      stopCapabilities?.()
+      canonicalSnapshotsByWorktree.clear()
       clearBufferedChanges()
       publishedSnapshotsByWorktree.clear()
       deliveredChangeSequenceByWorktree.clear()
@@ -232,8 +242,8 @@ export async function subscribeSessionTabsInventory(
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
-    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
-    const restoring = restoreStructuredTabsIfSupported(context)
+    // Register before restore so unsubscribe/socket close can find the stream during its awaits.
+    const restoring = prepareStructuredTabsIfSupported(context)
     if (restoring) {
       await restoring
       if (closed) {
@@ -269,11 +279,17 @@ export async function subscribeSessionTabsInventory(
   censusChangeSequence = changeSequence
   emit({
     type: 'snapshots',
-    ...inventory,
-    snapshots: inventory.snapshots.map((snapshot) => tabDelta.full(withProofDelta(snapshot)))
+    ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
+      ? { authoritative: true as const }
+      : {}),
+    snapshots: inventory.snapshots.map((snapshot) =>
+      tabDelta.full(withProofDelta(projectChange(snapshot)))
+    )
   })
   for (const snapshot of inventory.snapshots) {
-    publishedSnapshotsByWorktree.set(snapshot.worktree, withoutNavigationIntent(snapshot))
+    const canonical = withoutNavigationIntent(snapshot)
+    canonicalSnapshotsByWorktree.set(snapshot.worktree, canonical)
+    publishedSnapshotsByWorktree.set(snapshot.worktree, projectChange(canonical))
   }
   bufferedChanges.sort((left, right) => left.changeSequence - right.changeSequence)
   for (const buffered of bufferedChanges) {

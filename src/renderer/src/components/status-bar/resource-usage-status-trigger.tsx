@@ -23,7 +23,7 @@ export function renderResourceUsageStatusTrigger({
   iconOnly: boolean
   commitToneClass: string | null
   memBadgeLabel: string
-  triggerSessionCount: number
+  triggerSessionCount: number | null
   orphanCount: number
   resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
 }): React.JSX.Element {
@@ -74,7 +74,7 @@ export function renderResourceUsageStatusTrigger({
                 </span>
               </>
             )}
-            {iconOnly && triggerSessionCount > 0 && (
+            {iconOnly && triggerSessionCount !== null && triggerSessionCount > 0 && (
               <span className="text-[11px] tabular-nums text-muted-foreground">
                 {triggerSessionCount}
               </span>

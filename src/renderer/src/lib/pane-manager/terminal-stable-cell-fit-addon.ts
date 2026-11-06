@@ -4,11 +4,7 @@ import { terminalGridSizeForBox } from './terminal-grid-size-for-box'
 
 type CellSizeSource = Pick<Terminal, 'dimensions' | 'element'>
 
-/**
- * The rendered cell size, independent of the current grid. xterm's css cell is
- * the rounded canvas width divided by cols, so it shifts with cols and a fit
- * from 75 cols proposes 51 where a fit from 52 keeps 52 in the same box.
- */
+/** Use cell size independent of current columns: xterm’s rounded canvas-width/cols ratio shifts with the source grid, proposing 51 from 75 cols but 52 from 52 in the same box. */
 export function readTerminalStableCellSize(
   terminal: CellSizeSource
 ): { width: number; height: number } | null {

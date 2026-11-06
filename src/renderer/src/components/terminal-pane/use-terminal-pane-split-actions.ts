@@ -87,8 +87,7 @@ export function useTerminalPaneSplitActions({
     window.addEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
     return () =>
       window.removeEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
-    // splitWithInheritedCwd closes over live refs; re-registering keeps the
-    // tour action aligned with the current focused pane and fallback cwd.
+    // Re-register the tour action so splitWithInheritedCwd uses the current pane and fallback cwd.
   }, [tabId, splitWithInheritedCwd, contextPaneIdRef])
 
   return { onSplitRight, onSplitDown }

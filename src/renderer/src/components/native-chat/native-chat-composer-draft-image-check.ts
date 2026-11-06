@@ -1,9 +1,12 @@
+import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 // Restored store images are checked only with affirmative execution-host ownership.
 
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
 import { chatImageAccess } from '@/lib/local-file-access'
-import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import {
   records,
   restoredImageChecks,
@@ -15,15 +18,13 @@ import {
 import type { NativeChatComposerDraftImage } from './native-chat-composer-draft-storage'
 import {
   isKeptLocalPaste,
-  resolveNativeChatComposerDraftOwner,
   structuredAgentSessionIdOfDraftScope,
   readNativeChatComposerDraft,
   unavailableNativeChatComposerDraftImage,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 
-/** Ids of images whose file is gone. One that cannot be checked (no read permission for that
- *  path, host not connected) counts as present: the send's own check still guards it. */
+/** Mark only proven missing files; unavailable permissions/hosts remain unknown and send-time validation still guards them. */
 export async function findMissingNativeChatComposerDraftImages(
   images: readonly NativeChatComposerDraftImage[]
 ): Promise<Set<string>> {
@@ -65,11 +66,22 @@ export async function findMissingNativeChatComposerDraftImages(
   return missing
 }
 
-function localStoreAuthority(scopeKey: string): string | null {
+function localStoreAuthority(
+  state: AppState,
+  scopeKey: string,
+  checks: readonly DraftImageCheck[]
+): string | null {
+  if (
+    structuredAgentSessionIdOfDraftScope(scopeKey) === null ||
+    !checks.some(
+      ({ image }) => isAgentSessionAttachmentStorePath(image.path) && !image.connectionId
+    )
+  ) {
+    return null
+  }
   const stored = readNativeChatComposerDraft(scopeKey).owner
-  const current = resolveNativeChatComposerDraftOwner(scopeKey)
-  return structuredAgentSessionIdOfDraftScope(scopeKey) !== null &&
-    (stored ?? current)?.executionHostId === 'local' &&
+  const current = resolveNativeChatDraftOwner(state, scopeKey)
+  return (stored ?? current)?.executionHostId === 'local' &&
     (!current || current.executionHostId === 'local')
     ? JSON.stringify([stored, current])
     : null
@@ -84,16 +96,16 @@ function checkAuthority(image: NativeChatComposerDraftImage, local: string | nul
 }
 
 function replaceCheck(scopeKey: string, entry: DraftImageCheck, next?: DraftImageCheck): void {
-  const checks = restoredImageChecks.get(scopeKey)
+  const checks = restoredImageChecks.get(currentDraftScope(scopeKey))
   if (!checks?.includes(entry)) {
     return
   }
   restoredImageChecks.set(
-    scopeKey,
+    currentDraftScope(scopeKey),
     checks.flatMap((held) => (held === entry ? (next ? [next] : []) : [held]))
   )
-  if (restoredImageChecks.get(scopeKey)?.length === 0) {
-    restoredImageChecks.delete(scopeKey)
+  if (restoredImageChecks.get(currentDraftScope(scopeKey))?.length === 0) {
+    restoredImageChecks.delete(currentDraftScope(scopeKey))
   }
   notifyScope(scopeKey)
 }
@@ -101,17 +113,20 @@ function replaceCheck(scopeKey: string, entry: DraftImageCheck, next?: DraftImag
 function attemptIsCurrent(scopeKey: string, entry: DraftImageCheck): boolean {
   return (
     !!entry.attempt &&
-    restoredImageChecks.get(scopeKey)?.includes(entry) === true &&
+    restoredImageChecks.get(currentDraftScope(scopeKey))?.includes(entry) === true &&
     readNativeChatComposerDraft(scopeKey).images.some(
       (image) => restoredImageKey(image) === restoredImageKey(entry.image)
     ) &&
-    entry.attempt.authority === checkAuthority(entry.image, localStoreAuthority(scopeKey))
+    entry.attempt.authority ===
+      checkAuthority(entry.image, localStoreAuthority(useAppStore.getState(), scopeKey, [entry]))
   )
 }
 
 async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void> {
+  const destination = captureLaunchDraftDestination(scopeKey)
   try {
     const missing = await findMissingNativeChatComposerDraftImages([entry.image])
+    scopeKey = destination?.scopeKey ?? scopeKey
     if (attemptIsCurrent(scopeKey, entry) && missing.has(entry.image.id)) {
       updateNativeChatComposerDraft(
         scopeKey,
@@ -126,6 +141,7 @@ async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void>
       )
     }
   } finally {
+    scopeKey = destination?.scopeKey ?? scopeKey
     if (attemptIsCurrent(scopeKey, entry)) {
       replaceCheck(scopeKey, entry)
     }
@@ -134,14 +150,17 @@ async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void>
 
 export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: string): Promise<void> {
   await Promise.all(
-    (restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).map(async (entry) => {
-      const authority = checkAuthority(entry.image, localStoreAuthority(scopeKey))
+    (restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS).map(async (entry) => {
+      const authority = checkAuthority(
+        entry.image,
+        localStoreAuthority(useAppStore.getState(), scopeKey, [entry])
+      )
       if (entry.attempt && entry.attempt.authority !== authority) {
         replaceCheck(scopeKey, entry, { image: entry.image })
       } else if (!entry.attempt && authority !== null) {
         const claimed = { image: entry.image, attempt: { authority } }
         replaceCheck(scopeKey, entry, claimed)
-        if (restoredImageChecks.get(scopeKey)?.includes(claimed)) {
+        if (restoredImageChecks.get(currentDraftScope(scopeKey))?.includes(claimed)) {
           await runCheck(scopeKey, claimed)
         }
       }
@@ -156,8 +175,7 @@ function isInsideUploadDir(path: string, uploadDir: string): boolean {
   )
 }
 
-/** A sweep may have removed this local upload folder after a draft's restore check said its image
- *  was there, so every loaded draft naming it checks again, whether its composer is shown or not. */
+/** Recheck every draft referencing a swept upload directory, including hidden composers with earlier successful checks. */
 export function recheckNativeChatComposerDraftImagesIn(uploadDir: string): void {
   for (const scopeKey of records.keys()) {
     const named = readNativeChatComposerDraft(scopeKey).images.filter(
@@ -173,7 +191,7 @@ export function recheckNativeChatComposerDraftImagesIn(uploadDir: string): void 
     // A fresh entry replaces any attempt in flight, whose answer predates the removal.
     const keys = new Set(named.map(restoredImageKey))
     restoredImageChecks.set(scopeKey, [
-      ...(restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).filter(
+      ...(restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS).filter(
         (entry) => !keys.has(restoredImageKey(entry.image))
       ),
       ...named.map((image) => ({ image }))
@@ -190,9 +208,9 @@ export function useRestoredNativeChatComposerDraftImageCheck(
 ): ReadonlySet<string> {
   const checks = useSyncExternalStore(
     subscribe,
-    () => restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS
+    () => restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS
   )
-  const local = useAppStore(() => localStoreAuthority(scopeKey))
+  const local = useAppStore((state) => localStoreAuthority(state, scopeKey, checks))
   const pending = useMemo(
     () =>
       new Set(

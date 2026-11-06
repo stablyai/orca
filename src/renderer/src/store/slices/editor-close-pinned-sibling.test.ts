@@ -55,13 +55,6 @@ function addPinnedSibling(): OpenFile {
 }
 
 describe('case 7: closing a document with a pinned clean sibling', () => {
-  it('premise: the sibling tab is pinned and both records are open', () => {
-    addPinnedSibling()
-    const tabs = store.getState().unifiedTabsByWorktree['wt-1']
-    expect(tabs.find((tab) => tab.id === 'duplicate-tab')?.isPinned).toBe(true)
-    expect(store.getState().openFiles.map((open) => open.id)).toEqual([file.id, 'duplicate-record'])
-  })
-
   it('keeps the pinned sibling record open', () => {
     const sibling = addPinnedSibling()
     store.getState().closeFile(file.id)

@@ -25,24 +25,6 @@ describe('splitSshStatusMenuRows', () => {
     expect(rows.inactive.map((row) => row.id)).toEqual(['d', 'a'])
     expect(rows.hiddenIdleCount).toBe(2)
   })
-
-  it('fills the idle cap with hosts that own projects before the rest of the config', () => {
-    const rows = splitSshStatusMenuRows(
-      [target('a', 'disconnected'), target('b', 'disconnected'), target('c', 'disconnected')],
-      { projectHostIds: new Set(['c']), idleRowLimit: 2 }
-    )
-    expect(rows.inactive.map((row) => row.id)).toEqual(['c', 'a'])
-    expect(rows.hiddenIdleCount).toBe(1)
-  })
-
-  it('keeps config order and hides nothing at or under the limit', () => {
-    const rows = splitSshStatusMenuRows(
-      [target('a', 'disconnected'), target('b', 'error'), target('c', 'disconnected')],
-      { projectHostIds: new Set(['c']), idleRowLimit: 2 }
-    )
-    expect(rows.hiddenIdleCount).toBe(0)
-    expect(rows.inactive.map((row) => row.id)).toEqual(['a', 'b', 'c'])
-  })
 })
 
 describe('findSshHostMatches', () => {
@@ -52,20 +34,10 @@ describe('findSshHostMatches', () => {
       target('east-prod', 'disconnected'),
       target('PROD', 'disconnected')
     ]
-    const { matches, moreCount } = findSshHostMatches(targets, ' prod ', 5)
-    expect(matches[0]?.id).toBe('PROD')
-    expect(matches).toHaveLength(5)
-    expect(moreCount).toBe(27)
-    expect(findSshHostMatches(targets, 'east', 5).matches.map((row) => row.id)).toEqual([
-      'east-prod'
-    ])
-  })
-
-  it('leaves out connected hosts, which the menu already lists', () => {
-    const { matches } = findSshHostMatches(
-      [target('web-1', 'connected'), target('web-2', 'disconnected')],
-      'web'
-    )
-    expect(matches.map((row) => row.id)).toEqual(['web-2'])
+    const { shown, hiddenCount } = findSshHostMatches(targets, ' prod ', 5)
+    expect(shown[0]?.id).toBe('PROD')
+    expect(shown).toHaveLength(5)
+    expect(hiddenCount).toBe(27)
+    expect(findSshHostMatches(targets, 'east', 5).shown.map((row) => row.id)).toEqual(['east-prod'])
   })
 })

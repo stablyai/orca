@@ -11,7 +11,6 @@ afterEach(() => {
   }
 })
 
-/** A packaged app's `resources`, holding a recognizer package; the app root is app.asar.unpacked. */
 function resourcesWith(packageName: string): string {
   const resources = mkdtempSync(join(tmpdir(), 'orca-serve-speech-'))
   roots.push(resources)

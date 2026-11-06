@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -9,15 +9,19 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
-import { reduceHostTurnEnd } from '../../../../shared/agent-hook-turn-end-timing'
-import { pickHostTurnEnd } from '../../../../shared/agent-status-types'
+import { reduceHostTurnEnd } from '../../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 import {
   installTerminalTestGlobals,
@@ -35,10 +39,7 @@ type TimelineEvent =
 
 type HookName = 'UserPromptSubmit' | 'PreToolUse' | 'Stop' | 'Notification'
 
-// Recorded from Claude Code 2.1.280 over a real PTY (ms from launch): one prompt, then a
-// `/btw` side question 45 s later. The side question spins the title and fires no hook.
-// The BEL beside each idle title is the burst agents commonly emit at a turn end; the one 600 ms
-// after the side question's idle title stands in for Codex /compact's (QA F5b).
+// Recorded Claude 2.1.280 PTY timing: /btw spins titles without hooks; adjacent BELs model turn-end bursts and a delayed /compact bell.
 const SIDE_QUESTION: TimelineEvent[] = [
   { at: 0, title: '✳ Claude Code' },
   { at: 3_416, hook: 'UserPromptSubmit' },
@@ -60,10 +61,7 @@ const SIDE_QUESTION: TimelineEvent[] = [
   { at: 90_000, foreground: null }
 ]
 
-// A Stop hook that blocks twice: Stop #1's banner goes out at 6.5 s, Claude continues text-only and
-// re-enters Stop with the same text, then again with the final text 3 s after that banner, both
-// inside main's 5 s cooldown. A minute on an idle reminder restates the turn. Then a second turn
-// whose re-entered Stop is overtaken by the user's next prompt before its cooldown passes.
+// Repeat blocked Stop hooks inside cooldown, then idle restatements and a new prompt overtaking a delayed Stop banner.
 const BLOCKED_STOP: TimelineEvent[] = [
   { at: 0, title: '✳ Claude Code' },
   { at: 1_000, hook: 'UserPromptSubmit' },
@@ -81,9 +79,7 @@ const BLOCKED_STOP: TimelineEvent[] = [
   { at: 93_000, hook: 'Stop', message: 'Third turn.' }
 ]
 
-// Prompt hooks the host never received (a POST past its 1.5 s limit). Each such end is ambiguous,
-// so the pane keeps main's banners whichever of the title and the hook comes first; a verified
-// tool-using continuation still gets its final banner, and a later unflagged repeat stays quiet.
+// Lost opening hooks make ends ambiguous; retain title/hook fallback banners, verified continuations and repeat suppression.
 const LOST_OPENINGS: TimelineEvent[] = [
   { at: 0, title: '✳ Claude Code' },
   { at: 1_000, hook: 'UserPromptSubmit' },
@@ -140,7 +136,9 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
     await installTerminalTestGlobals()
     vi.useFakeTimers()
     vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
-    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => foreground !== null)
+    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(
+      async () => foreground !== null && foreground !== 'zsh'
+    )
     // Main's desktop cooldown, keyed as main's delivery service keys it, decides what the user sees.
     banners = []
     const recentDesktop = new Map<string, number>()
@@ -171,7 +169,13 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
       dispatchNotification: (event: Parameters<typeof dispatchTerminalNotification>[1]) =>
         dispatchTerminalNotification('wt-1', event)
     })
-    await connectMockPanePty(createPane(1), createManager(1), deps)
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+    await connectMockPanePty(
+      createPane(1),
+      createManager(1),
+      bindPaneAgentTitleMocks(deps, agentTitleMocks)
+    )
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks(20)
     if (servedBy) {
@@ -268,7 +272,8 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
     // Claude is replaced in the pane by goose (no hooks), which later exits.
     foreground = 'goose'
     await vi.advanceTimersByTimeAsync(15_000)
-    foreground = null
+    // An unreadable foreground is not exit proof; goose exits back to the shell.
+    foreground = 'zsh'
     await vi.advanceTimersByTimeAsync(15_000)
 
     expect(banners).toEqual([

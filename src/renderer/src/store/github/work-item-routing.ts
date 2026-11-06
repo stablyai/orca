@@ -1,4 +1,7 @@
+import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
@@ -39,12 +42,14 @@ export type GitHubWorkItemsListArgs = {
   query?: string
   page?: number
   noCache?: true
+  /** Local IPC only: a remote host gates its own reads. */
+  wakeWslDistro?: boolean
 }
 
 export function settingsForGitHubRepoOwner(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (!repo) {
     return settings
   }
@@ -59,18 +64,15 @@ export function settingsForGitHubRepoOwner(
 function withActiveRuntimeEnvironmentId(
   settings: AppState['settings'],
   activeRuntimeEnvironmentId: string | null
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId }
-    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
-      ({ activeRuntimeEnvironmentId } as AppState['settings'])
+): RuntimeFocusSettings {
+  return settings ? { ...settings, activeRuntimeEnvironmentId } : { activeRuntimeEnvironmentId }
 }
 
 function settingsForGitHubTaskSource(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id'> | undefined,
   sourceContext: TaskSourceContext
-): AppState['settings'] {
+): RuntimeFocusSettings {
   const sourceHost = parseExecutionHostId(sourceContext.hostId)
   return withActiveRuntimeEnvironmentId(
     state.settings,
@@ -78,6 +80,18 @@ function settingsForGitHubTaskSource(
       ? sourceHost.environmentId
       : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
   )
+}
+
+/** A source names its host even when two registered copies share an id and path. */
+export function findGitHubWorkItemRepo(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  source?: TaskSourceContext | null
+): Repo | undefined {
+  return source?.provider === 'github'
+    ? getGitHubRepoLookupIndex(state.repos).findOnHost(source.hostId, repoId, repoPath)
+    : findRepoForGitHubOwner(state, repoId, repoPath)
 }
 
 export function getWorkItemsCacheKeyForOwner(
@@ -89,7 +103,13 @@ export function getWorkItemsCacheKeyForOwner(
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
   // Why canonical: an SSH row may carry only connectionId, and an unstamped row is local, not focus.
-  return workItemsCacheKey(repoId, limit, query, repo ? getRepoExecutionHostId(repo) : undefined)
+  return workItemsCacheKey(
+    repoId,
+    limit,
+    query,
+    repo ? getRepoExecutionHostId(repo) : undefined,
+    repo && githubTaskBinding(repo)
+  )
 }
 
 export function getGitHubWorkItemSourceHostId(
@@ -133,18 +153,14 @@ export function getGitHubRepoSourceSettings(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (sourceContext?.provider === 'github') {
     return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
   return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
-/**
- * Transport for a repo's GitHub request: a row-less task source's host, else the repo's owner.
- * Local and SSH repos use this app's credentials; an unknown repo stays here too (main refuses
- * repos it does not own) instead of following the focused server.
- */
+/** Use row-less task source host, else repo owner. Local/SSH/unknown repos use desktop credentials; never follow focused runtime (main refuses unowned repos). */
 export function getGitHubSourceTarget(
   state: Pick<AppState, 'repos'>,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
@@ -184,7 +200,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, requestTarget)
+  const runtimeRepo = getRuntimeRepoTarget(state, { repoId, repoPath }, requestTarget)
   return {
     repoId,
     repoPath,
@@ -203,12 +219,13 @@ export function listGitHubWorkItemsForRepo(
   args: GitHubWorkItemsListArgs
 ): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> {
   if (context.target.kind === 'environment') {
+    const { wakeWslDistro: _wake, ...remoteArgs } = args
     return callRuntimeRpc<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>(
       { kind: 'environment', environmentId: context.target.environmentId },
       'github.listWorkItems',
       {
         repo: context.target.runtimeRepoId,
-        ...args
+        ...remoteArgs
       },
       { timeoutMs: 30_000 }
     )
@@ -222,15 +239,16 @@ export function listGitHubWorkItemsForRepo(
 
 export function countGitHubWorkItemsForRepo(
   context: GitHubWorkItemRequestContext,
-  args: { query?: string }
+  args: { query?: string; wakeWslDistro?: boolean }
 ): Promise<number> {
   if (context.target.kind === 'environment') {
+    const { wakeWslDistro: _wake, ...remoteArgs } = args
     return callRuntimeRpc<number>(
       { kind: 'environment', environmentId: context.target.environmentId },
       'github.countWorkItems',
       {
         repo: context.target.runtimeRepoId,
-        ...args
+        ...remoteArgs
       },
       { timeoutMs: 30_000 }
     )
@@ -243,7 +261,7 @@ export function countGitHubWorkItemsForRepo(
 }
 
 export function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
-  // Why: only `runtime_error` came from the GitHub method; other RPC transport failures ("timed out"/"unavailable") must not be blamed on GitHub.
+  // Only runtime_error came from the GitHub method; transport timeouts/unavailability are not GitHub faults.
   if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
     return false
   }

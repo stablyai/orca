@@ -18,8 +18,7 @@ import {
 } from './terminal-pane-tab-detach-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// The window makes the new tab itself; the layout-owner build's equivalents (main's command plus
-// its frame) are in terminal-pane-tab-detach-main-move.test.ts.
+// Window-created tab coverage; main-command/frame equivalents live in terminal-pane-tab-detach-main-move.test.ts.
 const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
@@ -345,6 +344,68 @@ describe('detachTerminalPaneToTab', () => {
       sourceTabId: SOURCE_TAB_ID,
       targetTabId: 'tab-detached'
     })
+  })
+
+  itSwitchOff('names the new tab as the client that already drew it did', async () => {
+    const moveLeafToNewTab = vi.fn(() => Promise.resolve({ status: 'moved', ptyId: 'pty-left' }))
+    vi.stubGlobal('window', { api: { pty: { moveLeafToNewTab } } })
+    const store = createStore()
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getLeafId: vi.fn((paneId: number) => (paneId === 1 ? LEAF_1 : LEAF_2)),
+      detachPaneForExternalMove: vi.fn(() => true)
+    }
+
+    await detachTerminalPaneToTab({
+      getStore: () => store,
+      manager,
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneId: 1,
+      sourceTabId: SOURCE_TAB_ID,
+      targetGroupId: TARGET_GROUP_ID,
+      targetTabId: 'client-drawn-tab',
+      worktreeId: WORKTREE_ID
+    })
+
+    expect(moveLeafToNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ targetTabId: 'client-drawn-tab', leafId: LEAF_1 })
+    )
+    expect(store.createTab).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      TARGET_GROUP_ID,
+      'powershell.exe',
+      expect.objectContaining({ id: 'client-drawn-tab' })
+    )
+  })
+
+  itSwitchOff.each([
+    ["this window's own drag", undefined, 1],
+    ["another client's move", 'client-drawn-tab', 0]
+  ])('reports a refused move as a toast only for %s', async (_label, targetTabId, toasts) => {
+    const moveLeafToNewTab = vi.fn(() =>
+      Promise.resolve({ status: 'refused', reason: 'target_tab_exists' })
+    )
+    vi.stubGlobal('window', { api: { pty: { moveLeafToNewTab } } })
+    const store = createStore()
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getLeafId: vi.fn((paneId: number) => (paneId === 1 ? LEAF_1 : LEAF_2)),
+      detachPaneForExternalMove: vi.fn(() => true)
+    }
+
+    await expect(
+      detachTerminalPaneToTab({
+        getStore: () => store,
+        manager,
+        persistLayoutSnapshot: vi.fn(),
+        sourcePaneId: 1,
+        sourceTabId: SOURCE_TAB_ID,
+        targetGroupId: TARGET_GROUP_ID,
+        ...(targetTabId ? { targetTabId } : {}),
+        worktreeId: WORKTREE_ID
+      })
+    ).resolves.toBeNull()
+    expect(toastErrorMock).toHaveBeenCalledTimes(toasts)
   })
 
   itSwitchOff('moves the detached tab into the requested group slot', async () => {

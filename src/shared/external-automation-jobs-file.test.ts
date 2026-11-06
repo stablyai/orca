@@ -35,7 +35,7 @@ describe('readExternalAutomationJobsFile', () => {
     ).resolves.toEqual([{ id: 'two' }])
   })
 
-  it('rejects oversized sparse files before reading them wholesale', async () => {
+  it('rejects oversized sparse files with the explicit memory-limit error', async () => {
     const path = await tempFile('oversized.json')
     await writeFile(path, '')
     await truncate(path, EXTERNAL_AUTOMATION_JOBS_FILE_MAX_BYTES + 64 * 1024 * 1024)

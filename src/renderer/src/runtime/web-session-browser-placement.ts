@@ -54,8 +54,7 @@ export function recordWebSessionBrowserPlacement(args: {
   placementByPendingPage.set(key, {
     groupId: args.groupId,
     ownsGroupCleanup: args.callerCreatedGroup === true || existing?.ownsGroupCleanup === true,
-    // Why carried like the cleanup flag: an intent the host already spent must not come back to
-    // life because something re-recorded the page it belonged to.
+    // Preserve spent intent like cleanup state; re-recording must not revive it.
     ...(existing?.adopted ? { adopted: true } : {})
   })
 }
@@ -114,12 +113,7 @@ export function takeWebSessionBrowserPlacementGroup(args: {
   return placement?.groupId
 }
 
-/**
- * The create's group intent is spent once the host publishes the page: from here the local row is
- * the truth about where it sits, and re-applying the intent would drag the tab back out of a group
- * the user moved it to. The entry itself stays — the group it named is still reserved against
- * cleanup, and only the create that made it knows when that reservation can end.
- */
+// Publication spends group intent; local placement now wins so user moves stick. Retain the entry’s group reservation until its create releases it.
 export function markWebSessionBrowserPlacementAdopted(args: {
   environmentId: string
   worktreeId: string

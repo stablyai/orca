@@ -1,0 +1,41 @@
+{
+  "available": {
+    "effective": {
+      "effortLevel": "xhigh",
+      "ultracode": true
+    },
+    "applied": {
+      "effort": "xhigh",
+      "ultracode": true,
+      "ultracodeRequested": true,
+      "ultracodeAvailable": true
+    }
+  },
+  "unavailable": {
+    "effective": {
+      "enableWorkflows": false,
+      "effortLevel": "xhigh",
+      "ultracode": true
+    },
+    "applied": {
+      "effort": "xhigh",
+      "ultracode": false,
+      "ultracodeRequested": true,
+      "ultracodeAvailable": false
+    }
+  },
+  "configured": {
+    "effective": {
+      "ultracode": true
+    },
+    "applied": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "advisor": null,
+      "ultracode": true,
+      "ultracodeRequested": true,
+      "ultracodeAvailable": true,
+      "ultrathinkAvailable": false
+    }
+  }
+}

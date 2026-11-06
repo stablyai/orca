@@ -37,8 +37,7 @@ export function notifyInstalledAgentSkillsChanged(): void {
 export function invalidateInstalledAgentSkillDiscovery(): void {
   discoveryGeneration += 1
   clearInstalledAgentSkillDiscoveryCache()
-  // Why: an install/uninstall must start a post-mutation scan; older pending
-  // reads may finish, but their generation can no longer repopulate the cache.
+  // Install/uninstall advances generation so older reads cannot repopulate the cache.
   pendingDiscoveryByTarget.clear()
   pendingDiscoverySatisfiesForcedRefreshByTarget.clear()
 }
@@ -143,11 +142,7 @@ export function getSkillDiscoveryTargetKey(
   )
 }
 
-// Why: a connected remote runtime scans its own disk. Sharing the local key
-// would keep showing the client's skills after switching environments. The
-// caller's target is dropped for a remote scan (it describes the client's WSL /
-// project runtime), so it must not fragment the key either — otherwise the same
-// remote gets rescanned once per client-side target shape.
+// Remote scans read the remote disk: isolate environment keys from local results and omit client target shape to avoid duplicate scans.
 export function getRuntimeScopedSkillDiscoveryKey(
   runtimeTarget: RuntimeClientTarget,
   target: SkillDiscoveryTarget | undefined,
@@ -172,8 +167,7 @@ function startInstalledAgentSkillDiscovery(
 ): Promise<SkillDiscoveryResult> {
   const generation = discoveryGeneration
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
-  // Why: a forced caller knows disk changed (install finished, explicit recheck),
-  // so it must also bypass the host's shared scans — not just this window's cache.
+  // Forced post-mutation rechecks must bypass host scan sharing as well as window cache.
   const requestTarget = force ? { ...normalizedTarget, refresh: true } : normalizedTarget
   const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, requestTarget)
     .then((result) => {
@@ -193,10 +187,7 @@ function startInstalledAgentSkillDiscovery(
   return discovery
 }
 
-/**
- * Cached, de-duplicated skill scan for one runtime. Concurrent callers share a
- * single in-flight scan per key; `force` bypasses the cache to re-read disk.
- */
+/** Share one pending scan per runtime-scoped key; force rereads disk. */
 export async function discoverInstalledAgentSkills(
   force: boolean,
   target?: SkillDiscoveryTarget,
@@ -206,8 +197,7 @@ export async function discoverInstalledAgentSkills(
 ): Promise<SkillDiscoveryResult> {
   const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target, names, sourceKinds)
   if (!force) {
-    // Why: only a cache-serving read should refresh recency — a forced refresh
-    // discards the entry it would otherwise promote.
+    // Promote only cache-serving reads; forced refresh discards the entry instead.
     const cachedDiscovery = readInstalledAgentSkillDiscoveryCache(key)
     if (cachedDiscovery) {
       return cachedDiscovery
@@ -222,8 +212,7 @@ export async function discoverInstalledAgentSkills(
     try {
       await inFlightDiscovery
     } catch {
-      // Why: an explicit re-check should still read current disk state even if
-      // the older background scan failed.
+      // Explicit rechecks still read disk after earlier background scan failure.
     }
     const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
     if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {

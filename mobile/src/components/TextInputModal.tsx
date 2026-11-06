@@ -1,53 +1,49 @@
 import { useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Platform,
-  type KeyboardTypeOptions
-} from 'react-native'
+import { View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
-import { BottomDrawer } from './BottomDrawer'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
+import { TextField } from './composer-input/TextField'
 
-type Props = {
-  visible: boolean
+type SheetProps = {
   title: string
   message?: string
-  defaultValue?: string
+  value: string
+  onChangeText: (value: string) => void
   placeholder?: string
   submitLabel?: string
   selectTextOnFocus?: boolean
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
+  /** Shown under the field; the text stays so the user can retry. */
+  error?: string | null
+  /** A save in flight: Save is disabled so it can't be sent twice. */
+  busy?: boolean
   onSubmit: (value: string) => void
   onCancel: () => void
+}
+
+type Props = Omit<SheetProps, 'value' | 'onChangeText' | 'error' | 'busy'> & {
+  visible: boolean
+  defaultValue?: string
   /** Called once the drawer has gone, which is when the field stops holding the focus. */
   onAfterClose?: () => void
 }
 
 export function TextInputModal({
   visible,
-  title,
-  message,
   defaultValue = '',
-  placeholder,
-  submitLabel = 'Save',
-  selectTextOnFocus = false,
-  allowEmpty = false,
-  keyboardType,
-  onSubmit,
   onCancel,
-  onAfterClose
+  onAfterClose,
+  ...sheetProps
 }: Props) {
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
 
-  // Why: reset before the opening commit so the drawer never paints the
-  // previous modal value while preserving the existing close animation state.
+  // Reset before opening commit to prevent previous-value flash; preserve close-animation state.
   const shouldResetValue = visible && (!previousVisible || defaultValue !== previousDefaultValue)
   if (visible !== previousVisible || shouldResetValue) {
     setPreviousVisible(visible)
@@ -57,28 +53,56 @@ export function TextInputModal({
     }
   }
 
+  return (
+    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+      <TextInputSheetContent
+        {...sheetProps}
+        value={value}
+        onChangeText={setValue}
+        onCancel={onCancel}
+      />
+    </BottomDrawer>
+  )
+}
+
+/** The text sheet's body, for a drawer that is already open (e.g. a menu that swaps to it). */
+export function TextInputSheetContent({
+  title,
+  message,
+  value,
+  onChangeText,
+  placeholder,
+  submitLabel,
+  selectTextOnFocus = false,
+  allowEmpty = false,
+  keyboardType,
+  error,
+  busy = false,
+  onSubmit,
+  onCancel
+}: SheetProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+
+  const canSubmit = !busy && (allowEmpty || value.trim().length > 0)
+
   function handleSubmit() {
-    const trimmed = value.trim()
-    if (trimmed || allowEmpty) {
-      onSubmit(trimmed)
+    if (canSubmit) {
+      onSubmit(value.trim())
     }
   }
 
-  const canSubmit = allowEmpty || value.trim().length > 0
-
   return (
-    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+    <>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
 
-      <TextInput
-        style={styles.input}
+      <TextField
         value={value}
-        onChangeText={setValue}
+        onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
@@ -86,15 +110,16 @@ export function TextInputModal({
         keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
-        selectionColor={colors.accentBlue}
       />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.actions}>
         <Pressable
           style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
           onPress={onCancel}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -105,14 +130,14 @@ export function TextInputModal({
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>{submitLabel}</Text>
+          <Text style={styles.submitText}>{submitLabel ?? t('common.save', 'Save')}</Text>
         </Pressable>
       </View>
-    </BottomDrawer>
+    </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -127,19 +152,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2
   },
-  // Why: matches NewWorktreeModal's input — bgRaised on the modal
-  // background reads as a tappable surface (brighter than the wrapper)
-  // rather than a recessed pit (darker than the wrapper, which is what
-  // bgBase looked like inside a bgPanel group).
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+  error: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs
   },
   actions: {
     flexDirection: 'row',
@@ -150,13 +167,13 @@ const styles = StyleSheet.create({
   cancelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   submitButton: {
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonPressed: {
     opacity: 0.7
@@ -174,4 +191,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

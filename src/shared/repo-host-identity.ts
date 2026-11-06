@@ -16,6 +16,11 @@ export function getRepoHostIdentityForParts(repoId: string, hostId: string): Hos
   return `${hostId}\0${repoId}` as HostScopedRepoKey
 }
 
+/** One host's registration of a repo; the same repo id may be registered on several hosts. */
+export function getRepoHostIdentity(repo: RepoHostTarget): HostScopedRepoKey {
+  return getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+}
+
 /** The hosts registering `repoId`; two or more means same-id twins on different hosts. */
 export function getRepoRegistrationHostIds(
   repos: readonly RepoHostTarget[],

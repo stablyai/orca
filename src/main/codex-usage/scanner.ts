@@ -36,15 +36,12 @@ export async function scanCodexUsageFiles(
 }> {
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
-  // Why: one resolver for the whole scan so every file shares the per-cwd memo.
+  // Share the per-cwd attribution cache across all files in this scan.
   const resolveWorktree = await createUsageWorktreeResolver(worktrees)
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
 
   const currentPaths = new Set(files)
-  // Why: when a rollout that owned event keys is deleted, remaining forks still
-  // contain those records but their caches record them as unowned. Only files
-  // that previously deferred claims can reclaim, so invalidate those — not the
-  // entire rollout corpus.
+  // Deleted owners release copied records; reparse only forks that deferred those claims.
   const lostOwnerPath = previousProcessedFiles.some(
     (file) =>
       !currentPaths.has(file.path) &&
@@ -59,7 +56,6 @@ export async function scanCodexUsageFiles(
     const legacySourceSkipBytes = legacySourceSkipBytesByPath.get(filePath) ?? 0
     const fileInfo = await getProcessedFileInfo(filePath)
     const previous = previousByPath.get(filePath)
-    // When an owner disappears, only deferred-claim files need reparse.
     const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const hasGenerationMetadata =
       previous &&
@@ -79,9 +75,7 @@ export async function scanCodexUsageFiles(
     if (canReuse) {
       reusedByPath.set(filePath, previous)
     } else {
-      // Why: rollouts are append-only and grow all day, so re-reading each one
-      // from byte 0 dominated scans (#20940). A reclaim or a legacy suffix
-      // offset still needs the whole file, so neither may resume.
+      // Resume growing rollouts; reclaims and legacy suffix parses require fresh context.
       if (
         !mustReclaimDeferred &&
         legacySourceSkipBytes === 0 &&
@@ -102,12 +96,7 @@ export async function scanCodexUsageFiles(
     }
   }
 
-  // Why: resuming or forking a Codex session copies the parent rollout's
-  // token_count records into a new file, so per-file parsing re-counts the
-  // whole copied history once per descendant (#8006). Cross-file ownership
-  // counts each record for exactly one file; cached and resumed files keep the
-  // claims they persisted, and the rest claim in sorted-path order so rescans
-  // stay deterministic.
+  // Forks copy usage records; retained claims and sorted-path parsing prevent double-counting.
   const eventOwnerByKey = new Map<string, string>()
   for (const filePath of files) {
     const retained = previousByPath.get(filePath)
@@ -152,9 +141,7 @@ export async function scanCodexUsageFiles(
   for (const [index, filePath] of pathsToParse.entries()) {
     await parseAndPublish(filePath, resumeByPath.get(filePath))
 
-    // Why: Codex session history can grow large, and scans run on the Electron
-    // main process. Yield regularly so opening Settings does not stall while
-    // a background refresh walks old JSONL files.
+    // Yield so large histories do not monopolize the scan worker.
     onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
       await yieldToEventLoop()

@@ -1,12 +1,12 @@
-import { reportWorkerTerminalUserInput } from './worker-terminal-takeover-report'
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
 import { terminalInputSend } from './mobile-terminal-operations'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { ConnectionState } from '../transport/types'
 
 type TerminalLiveAccessoryRawSendArgs = {
-  readonly client: RpcClient | null
+  readonly sendTerminalUserInput: typeof terminalInputSend.request
+  readonly client: RpcOperationSender | null
   readonly targetHandle: string
   readonly activeHandle: string | null
   readonly activeSessionTabType: string | null
@@ -18,7 +18,7 @@ type TerminalLiveAccessoryRawSendArgs = {
 export async function sendTerminalLiveAccessoryRawBytes(
   args: TerminalLiveAccessoryRawSendArgs
 ): Promise<boolean> {
-  // Why: async IME flushing can outlive the original terminal selection.
+  // IME flush can outlive terminal selection; recheck the target afterward.
   const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
     targetHandle: args.targetHandle,
     activeHandle: args.activeHandle,
@@ -27,8 +27,8 @@ export async function sendTerminalLiveAccessoryRawBytes(
   if (!args.client || !rawSendTarget || args.connState !== 'connected') {
     return false
   }
-  return terminalInputSend
-    .request(
+  return args
+    .sendTerminalUserInput(
       args.client,
       buildTerminalSendParams({
         terminal: rawSendTarget,
@@ -40,11 +40,7 @@ export async function sendTerminalLiveAccessoryRawBytes(
     )
     .then(
       (reply) => {
-        const accepted = terminalInputSend.interpret(reply) === true
-        if (accepted) {
-          reportWorkerTerminalUserInput(args.client!, rawSendTarget)
-        }
-        return accepted
+        return terminalInputSend.interpret(reply) === true
       },
       () => false
     )

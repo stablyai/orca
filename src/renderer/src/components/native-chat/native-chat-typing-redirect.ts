@@ -46,7 +46,6 @@ export function shouldRedirectNativeChatTyping(
   if (targetMatches(event.target, KEY_OWNER_TARGET_SELECTOR)) {
     return false
   }
-  // Space presses a focused button or link.
   return event.key !== ' ' || !targetMatches(event.target, PRESSABLE_TARGET_SELECTOR)
 }
 
@@ -57,11 +56,7 @@ export function shouldFocusNativeChatPaneFromPointerTarget(target: EventTarget |
   )
 }
 
-/** Unmodified Backspace/Delete pressed outside any input should focus the
- *  composer, the same way printable typing does — but unlike typing these keys
- *  are not inserted (their character has no literal form), so the caller only
- *  focuses. Modified chords (Shift/Alt/Ctrl/Cmd+Delete = cut, delete-word, …)
- *  are left to the focused target. */
+/** Unmodified editing keys outside inputs focus without inserting; modified delete/cut chords remain with the target. */
 export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedirectEvent): boolean {
   if (
     event.defaultPrevented ||
@@ -77,8 +72,7 @@ export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedir
   return !targetMatches(event.target, KEY_OWNER_TARGET_SELECTOR)
 }
 
-/** The platform paste chord pressed outside any input: the caller focuses an
- *  input first so the native paste that follows lands in it. */
+/** Focus input before the native paste following this platform chord arrives. */
 export function shouldFocusNativeChatInputForPaste(
   event: KeyboardRedirectEvent,
   isMac: boolean

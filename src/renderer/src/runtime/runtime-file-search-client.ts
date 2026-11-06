@@ -72,9 +72,7 @@ export async function listRuntimeFiles(
     followSymlinks?: boolean
     excludePaths?: string[]
     requestToken?: string
-    // Why: naming the cap is what makes a full page readable as "there is more". The host returns
-    // the whole listing when no limit is named, so a caller that never states one cannot tell a
-    // bound from a total.
+    // State a limit so a full page proves more may exist; uncapped host listings cannot distinguish a bound from a total.
     maxResults?: number
     /** Local hosts only; SSH and runtime hosts list unfiltered. */
     nameFilter?: string
@@ -272,11 +270,7 @@ export async function searchRuntimeFilePaths(
   }
 }
 
-/**
- * Best-effort abort of an in-flight listRuntimeFiles call (#7721). Switching
- * workspaces must stop the previous workspace's full-tree scan — over SSH an
- * abandoned scan keeps loading the relay and starves fs.readDir/fs.stat.
- */
+/** Best-effort cancel old-workspace scans on switch; abandoned SSH trees starve relay readDir/stat (#7721). */
 export function cancelRuntimeFileList(
   context: RuntimeFileOperationArgs,
   requestToken: string

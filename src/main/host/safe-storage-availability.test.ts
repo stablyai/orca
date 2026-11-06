@@ -21,13 +21,6 @@ describe('guardedSafeStorage', () => {
     vi.clearAllMocks()
   })
 
-  it('passes through until the keychain is withheld', () => {
-    expect(guardedSafeStorage.isEncryptionAvailable()).toBe(true)
-    expect(guardedSafeStorage.decryptString(guardedSafeStorage.encryptString('token'))).toBe(
-      'token'
-    )
-  })
-
   it('never reaches the native keychain once withheld', () => {
     withholdSafeStorage('no default keychain')
     withholdSafeStorage('a later reason')

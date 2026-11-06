@@ -1,8 +1,14 @@
 // @vitest-environment happy-dom
 
-// A queue action still on its way to the host greys its controls until the host answers.
-
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -22,11 +28,8 @@ import { toast } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
-import type {
-  StructuredAgentSessionMutate,
-  StructuredAgentSessionWrite
-} from './use-structured-agent-session-mutate'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 function waitingDraft(messageId: string, position: number): AgentSessionQueuedMessage {
   return {
@@ -45,6 +48,8 @@ function renderHeldQueue(
 ): void {
   function HeldQueue(): React.JSX.Element {
     const owner = useStructuredAgentSessionQueuedMessages({
+      admit: () => ({ target: { kind: 'local' }, write: write, mutate: async () => null }),
+      capturePresentation: () => () => true,
       enabled: true,
       queuedMessages,
       queuePause: { reason: 'stopped' },
@@ -52,8 +57,7 @@ function renderHeldQueue(
       hasPendingPrompt: false,
       isWorking: false,
       composerScopeKey: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list only awaits mutate; its answer is never read.
-      mutate: mutate as StructuredAgentSessionMutate,
+      mutate: mutate,
       editTransport: { target: { kind: 'local' }, sessionId: 'session', capable: false, write }
     })
     return <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} />
@@ -99,23 +103,36 @@ it('a slow Clear all greys Clear all, Resume and every card until the host answe
   expect(toast.error).toHaveBeenCalledExactlyOnceWith('Could not delete')
 })
 
-it('Clear all waits out a card Delete on its way, then deletes every card', async () => {
-  const deleted = Promise.withResolvers<null>()
+it('offers the head-card steer only while a press would send it', async () => {
+  const answer = Promise.withResolvers<null>()
   const mutate = vi.fn(
-    async (..._call: [string, string, Record<string, unknown>]) => await deleted.promise
+    async (..._call: [string, string, Record<string, unknown>]) => answer.promise
   )
-  // Only what Clear asks to delete matters here; its answer never comes.
-  const write = vi.fn(
-    (..._call: [string, string, Record<string, unknown>]) => new Promise<never>(() => {})
+  const write = vi.fn()
+  const { result } = renderHook(() =>
+    useStructuredAgentSessionQueuedMessages({
+      admit: () => ({ target: { kind: 'local' }, write, mutate: async () => null }),
+      capturePresentation: () => () => true,
+      enabled: true,
+      queuedMessages: [waitingDraft('a', 1)],
+      queuePause: null,
+      submissions: [],
+      hasPendingPrompt: false,
+      isWorking: true,
+      composerScopeKey: undefined,
+      mutate,
+      editTransport: { target: { kind: 'local' }, sessionId: 'session', capable: false, write }
+    })
   )
-  renderHeldQueue([waitingDraft('a', 1), waitingDraft('b', 2)], write, mutate)
-  const clearAll = () => screen.getByRole('button', { name: 'Clear all' })
-  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
-  await waitFor(() => expect(clearAll()).toHaveProperty('disabled', true))
-  // The Delete failed: its card stays, and Clear all takes it with the rest.
-  deleted.resolve(null)
-  await waitFor(() => expect(clearAll()).toHaveProperty('disabled', false))
-  fireEvent.click(clearAll())
-  await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
-  expect(write.mock.calls.map((call) => call[2])).toEqual([{ messageId: 'a' }, { messageId: 'b' }])
+  act(() => {
+    expect(result.current.steerHead?.()).toBe(true)
+  })
+  // While that steer is on its way the composer offers none, so a held Cmd previews no dead steer.
+  expect(result.current.steerHead).toBeUndefined()
+  await act(async () => answer.resolve(null))
+  expect(mutate).toHaveBeenCalledExactlyOnceWith(
+    'agentSession.queuedMessageSend',
+    'agentSession.queuedMessageSend',
+    { messageId: 'a' }
+  )
 })

@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; phase and cursor state intentionally advance from animation effects and reduced-motion gates. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
@@ -31,8 +30,6 @@ type Phase =
   | { kind: 'creating'; issueIdx: number }
   | { kind: 'ready'; issueIdx: number }
 
-// Beat timings (ms). Match the HTML mock's runCycle so the React port reads
-// the same as the prototype.
 const HOVER_SETTLE_MS = 700
 const HOVER_TO_BUTTON_MS = 700
 const PRESS_MS = 360
@@ -79,8 +76,7 @@ function useFakeCursor(
     visible: false
   })
 
-  // Why: rect math has to run after layout/commit so the row + button refs
-  // have measurable boxes. useLayoutEffect avoids a frame of stale position.
+  // Measure after commit but before paint so the cursor never shows stale row/button geometry.
   useLayoutEffect(() => {
     if (reducedMotion) {
       setPos((p) => ({ ...p, visible: false }))
@@ -129,8 +125,6 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
   const [cursorTarget, setCursorTarget] = useState<CursorTarget>({ kind: 'hidden' })
   const [rippleKey, setRippleKey] = useState(0)
 
-  // Why: drive the animation loop as a chain of setTimeouts. Each step is
-  // self-contained so reduced-motion can short-circuit the entire effect.
   useEffect(() => {
     if (reducedMotion) {
       setPhase({ kind: 'idle' })
@@ -151,14 +145,12 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
 
     function runCycle(): void {
       const issueIdx = 0
-      // 1. Cursor enters and travels toward the row.
       setPhase({ kind: 'idle' })
       setCursorTarget({ kind: 'row', issueIdx, settle: false })
       schedule(() => {
         setCursorTarget({ kind: 'row', issueIdx, settle: true })
       }, 50)
 
-      // 2. Activate the row — Start workspace button slides in.
       schedule(() => {
         setPhase({ kind: 'hover', issueIdx })
       }, 50 + HOVER_SETTLE_MS)
@@ -169,27 +161,23 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
         50 + HOVER_SETTLE_MS + 40
       )
 
-      // 3. Click the button.
       const pressStart = 50 + HOVER_SETTLE_MS + 40 + HOVER_TO_BUTTON_MS
       schedule(() => {
         setPhase({ kind: 'pressing', issueIdx })
         setRippleKey((k) => k + 1)
       }, pressStart)
 
-      // 4. Workspace card materializes below with a running agent.
       const creatingStart = pressStart + PRESS_MS
       schedule(() => {
         setPhase({ kind: 'creating', issueIdx })
         setCursorTarget({ kind: 'hidden' })
       }, creatingStart)
 
-      // 5. Agent finishes — flip the spinner to a check.
       const readyStart = creatingStart + CREATING_MS
       schedule(() => {
         setPhase({ kind: 'ready', issueIdx })
       }, readyStart)
 
-      // 6. Tear down for next cycle.
       const teardown = readyStart + READY_MS
       schedule(() => {
         setPhase({ kind: 'idle' })
@@ -214,10 +202,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
     phase.kind === 'ready'
       ? phase.issueIdx
       : -1
-  // Why: the dropdown appears as soon as the workspace starts being created so
-  // the user sees a "Creating workspace" beat, but the workspace card itself
-  // only materialises once the workspace is ready — at which point the Claude
-  // agent inside it is already working.
+  // Show creation in the dropdown before revealing the ready workspace card.
   const showDropdown = phase.kind === 'creating' || phase.kind === 'ready'
   const workspaceCreating = phase.kind === 'creating'
   const workspaceIssue = phase.kind === 'ready' ? ISSUES[phase.issueIdx] : null
@@ -331,10 +316,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                 <ClaudeIcon size={14} />
                 <span className="truncate font-mono text-[11px] leading-[1.2] text-muted-foreground">
                   {translate(
-                    'auto.components.feature.wall.TasksAnimatedVisual.efba6f77eb',
-                    'Reading issue #'
+                    'auto.components.feature.wall.TasksAnimatedVisual.readingIssue',
+                    'Reading issue #{{number}}…',
+                    { number: workspaceIssue.number }
                   )}
-                  {workspaceIssue.number}…
                 </span>
               </div>
             </div>

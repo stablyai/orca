@@ -5,7 +5,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
@@ -132,8 +132,7 @@ describe('terminal subscribe mount replay', () => {
         }
         return { data: 'raced idle prompt $ ', cols: 80, rows: 24, seq: 5 }
       }),
-      // Baseline race: the pane settles between the attachment answer and the wait, so the wait
-      // must still count that settle against the pre-fit generation.
+      // Count a settle racing between attachment answer and wait against the pre-fit generation.
       serializeRendererTerminalBuffer: vi
         .fn()
         .mockImplementationOnce(async () => {
@@ -326,8 +325,7 @@ describe('terminal subscribe mount replay', () => {
         rows: 24,
         seq: 1
       }),
-      // Baseline race: the pre-PTY mount settles between the attachment answer and the wait, so the
-      // wait must still count that settle against the pre-mount generation.
+      // Count a settle racing between attachment answer and wait against the pre-mount generation.
       serializeRendererTerminalBuffer: vi
         .fn()
         .mockImplementationOnce(async () => {

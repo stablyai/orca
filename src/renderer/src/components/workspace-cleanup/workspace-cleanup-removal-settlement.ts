@@ -1,10 +1,10 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveResult
 } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupRemovalSettlement =
   | { status: 'fulfilled'; result: WorkspaceCleanupRemoveResult }
@@ -39,8 +39,7 @@ export async function waitForWorkspaceCleanupRemovalWithTimeout(
     return settlement
   }
 
-  // Why: a timeout does not cancel renderer IPC, so the deadline is provisional;
-  // the grace stretches it so a settlement racing the deadline stays authoritative.
+  // Timeout cannot cancel IPC; a grace window keeps deadline-racing settlement authoritative.
   const graceMs =
     settlementGraceMs > 0 && Number.isFinite(settlementGraceMs) ? settlementGraceMs : 0
   const outcome = await pollWorkspaceCleanupRemoval(settlement, timeoutMs + graceMs)
@@ -105,8 +104,7 @@ export function trackWorkspaceCleanupLateSettlement(
       if (!state.active) {
         return
       }
-      // Why: hung settlements retain only a two-field identity and the compact
-      // post-batch reporter, never the candidate or batch reconciliation closure.
+      // Hung settlement retains only compact identity/reporting, never candidates or batch reconciliation closures.
       state.reconcile = null
       state.report = reportAfterBatchResult ?? null
     }

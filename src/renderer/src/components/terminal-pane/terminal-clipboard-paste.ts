@@ -2,6 +2,7 @@ import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
+import { textOnlyLabelsCopiedFiles } from '../../../../shared/native-chat/input/native-chat-clipboard-event'
 import { TERMINAL_PASTE_MAX_BYTES } from './terminal-paste-limits'
 import type { TerminalPasteTextOptions } from './terminal-paste-model'
 
@@ -10,23 +11,30 @@ type SaveClipboardImageAsTempFile = (args?: {
   runtimeEnvironmentId?: string | null
 }) => Promise<string | null>
 
+export type TerminalClipboardCopiedFiles = {
+  readPaths: () => Promise<string[]>
+  hasImage: () => Promise<boolean | null>
+  /** Reports its own failures, like a drop. */
+  paste: (paths: string[]) => Promise<void>
+}
+
 type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
+  copiedFiles?: TerminalClipboardCopiedFiles
   pasteText: (
     text: string,
     options?: TerminalPasteTextOptions
   ) => boolean | void | Promise<boolean | void>
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
-  forceBracketedMultilineTextPaste?: boolean
   protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
 }
 
 export type TerminalClipboardPasteResult =
-  | { status: 'pasted'; kind: 'image-path' | 'text' }
+  | { status: 'pasted'; kind: 'file-paths' | 'image-path' | 'text' }
   | {
       status: 'skipped'
       reason:
@@ -41,15 +49,17 @@ export type TerminalClipboardPasteResult =
 export async function pasteTerminalClipboard({
   readClipboardText,
   saveClipboardImageAsTempFile,
+  copiedFiles,
   pasteText,
   connectionId,
   runtimeEnvironmentId,
-  forceBracketedMultilineTextPaste = false,
   protectedMultilineTextPasteOptions,
   onTextPasteError,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
   let text = ''
+  // File-manager copies carry the file names as text; read the file list beside it.
+  const copiedFilePathsRead = copiedFiles?.readPaths().catch(() => []) ?? Promise.resolve([])
   try {
     text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
   } catch (error) {
@@ -57,15 +67,25 @@ export async function pasteTerminalClipboard({
       onTextPasteError?.(error)
       return { status: 'skipped', reason: 'text-too-large' }
     }
-    // Why: browser clipboard text reads can fail for image-only clipboards.
-    // Still try the image path so Cmd/Ctrl+V works for screenshots.
+    // Image-only clipboards can reject text reads; still try the screenshot path.
+  }
+  const copiedFilePaths = await copiedFilePathsRead
+  // Unlabelled files beside a picture (screenshot tools, Windows image files) keep the image path.
+  if (
+    copiedFiles &&
+    copiedFilePaths.length > 0 &&
+    (text
+      ? textOnlyLabelsCopiedFiles(text, copiedFilePaths)
+      : !(await copiedFiles.hasImage().catch(() => false)))
+  ) {
+    await copiedFiles.paste(copiedFilePaths)
+    return { status: 'pasted', kind: 'file-paths' }
   }
   if (text) {
     try {
-      const textOptions =
-        protectedMultilineTextPasteOptions ??
-        (forceBracketedMultilineTextPaste ? { forceBracketedPasteForMultiline: true } : undefined)
-      const result = await (textOptions ? pasteText(text, textOptions) : pasteText(text))
+      const result = await (protectedMultilineTextPasteOptions
+        ? pasteText(text, protectedMultilineTextPasteOptions)
+        : pasteText(text))
       if (result === false) {
         return { status: 'skipped', reason: 'text-paste-rejected' }
       }
@@ -82,8 +102,7 @@ export async function pasteTerminalClipboard({
       return { status: 'skipped', reason: 'empty' }
     }
     const result = await pasteText(filePath, {
-      // Why: a generated clipboard-image path is terminal image injection, not
-      // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
+      // Generated image paths must bypass the Ctrl+C stale-text path.
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })

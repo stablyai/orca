@@ -1,14 +1,15 @@
 import { z } from 'zod'
-import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
-import { normalizeJiraProjectReference } from '../jira-project-reference'
+import { normalizeJiraProjectReference } from '../jira/jira-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../worktree/visibility-sources'
 import { OptionalFiniteNumber, OptionalString } from './rpc-param-primitives'
+import { editorFormatterSchema } from '../editor-formatter'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -36,9 +37,7 @@ export const RepoUpstream = z
   .nullable()
   .optional()
 
-// The return type is inferred on purpose: an explicit z.ZodObject<...> annotation
-// widened `updates` to an open record, which erased all 24 named fields from
-// RpcParams<'repo.update'> for every typed caller.
+// Infer the return type: an explicit ZodObject annotation erases named update fields into an open record.
 export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodType>>>(
   selectorFields: T
 ) {
@@ -53,6 +52,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
+      editorFormatter: editorFormatterSchema.optional(),
       worktreeBaseRef: OptionalString,
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),

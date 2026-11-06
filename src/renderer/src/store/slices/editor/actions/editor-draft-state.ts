@@ -5,6 +5,8 @@ import {
   type EditorBufferViewIndex
 } from '../buffers/editor-buffer-views'
 import type { EditorViewMode, MarkdownViewMode } from '../types/open-file'
+import type { MarkdownDefaultViewMode } from '../../../../../../shared/markdown-default-view-mode'
+import { markdownViewModesForNewDefault } from './markdown-default-view-mode-action'
 import { clampMarkdownTocPanelWidth } from '../../../../../../shared/markdown-toc-panel-width'
 import {
   clampCombinedDiffFileTreeWidth,
@@ -20,6 +22,8 @@ export type EditorDraftState = {
   clearEditorDrafts: (fileIds: string[]) => void
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+  /** Persists the default view for newly opened Markdown files without flipping open tabs. */
+  setMarkdownDefaultViewMode: (mode: MarkdownDefaultViewMode) => void
   // Why: per-file opt-in to open an oversized markdown file in the rich editor despite the size limit.
   markdownRichModeSizeOverride: Record<string, boolean>
   setMarkdownRichModeSizeOverride: (fileId: string, enabled: boolean) => void
@@ -52,7 +56,7 @@ function clearEditorDraftsOf<TState extends Pick<AppState, 'editorDrafts'> & Edi
   return next === s.editorDrafts ? s : { editorDrafts: next }
 }
 
-export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorDraftState {
+export function createEditorDraftState(set: EditorSet, get: EditorGet): EditorDraftState {
   return {
     editorDrafts: {},
     setCsvPreviewOnly: (fileId, enabled) =>
@@ -75,7 +79,7 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         if (viewIds.every((id) => s.editorDrafts[id] === content)) {
           return s
         }
-        // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
+        // Read-only drafts could trigger dirty/autosave/hot-exit overwrite of agent transcripts; refuse them.
         const file = s.openFiles.find((f) => f.id === fileId)
         if (file?.readOnly === true || file?.csvPreviewOnly === true) {
           return s
@@ -89,14 +93,16 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
     clearEditorDraft: (fileId) => set((s) => clearEditorDraftsOf(s, [fileId])),
     clearEditorDrafts: (fileIds) => set((s) => clearEditorDraftsOf(s, fileIds)),
 
-    // Markdown view mode
     markdownViewMode: {},
     setMarkdownViewMode: (fileId, mode) =>
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
+    setMarkdownDefaultViewMode: (mode) => {
+      set((s) => ({ markdownViewMode: markdownViewModesForNewDefault(s, mode) }))
+      void get().updateSettings({ markdownDefaultViewMode: mode })
+    },
 
-    // Rich-markdown size-limit override
     markdownRichModeSizeOverride: {},
     setMarkdownRichModeSizeOverride: (fileId, enabled) =>
       set((s) => {
@@ -114,7 +120,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
       }),
 
-    // Editor view mode (edit vs changes-diff). See EditorViewMode.
     editorViewMode: {},
     setEditorViewMode: (fileId, mode) =>
       set((s) => {
@@ -130,7 +135,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
       }),
 
-    // Markdown preview front-matter visibility (#4468).
     markdownFrontmatterVisible: {},
     setMarkdownFrontmatterVisible: (fileId, visible) =>
       set((s) => {
@@ -146,7 +150,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
       }),
 
-    // Markdown table of contents visibility
     markdownTableOfContentsVisible: {},
     setMarkdownTableOfContentsVisible: (fileId, visible) =>
       set((s) => {
@@ -166,14 +169,12 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
       }),
 
-    // Markdown table of contents panel sizing
     markdownTocPanelWidth: 240,
     setMarkdownTocPanelWidth: (width) =>
       set((s) => ({
         markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
       })),
 
-    // Combined diff file tree sizing
     combinedDiffFileTreeWidth: COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH,
     setCombinedDiffFileTreeWidth: (width) =>
       set((s) => ({

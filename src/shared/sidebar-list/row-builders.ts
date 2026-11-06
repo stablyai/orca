@@ -1,7 +1,7 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
@@ -17,6 +17,7 @@ import type {
   NewExternalWorktreesInboxRow,
   PendingCreationRef,
   PendingCreationRow,
+  RepoOfWorktree,
   Row
 } from './row-types'
 
@@ -34,15 +35,14 @@ export function buildPendingCreationRow(
 
 export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
-  placement: ImportedWorktreesCardRow['placement'],
   hostContext?: NoticeHostContext
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
-    key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
+    key: `imported-worktrees-card:repo-group:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement,
+    placement: 'repo-group',
     ...(hostContext
       ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
       : {})
@@ -66,7 +66,7 @@ export function buildNewExternalWorktreesInboxRow(
 
 export function appendWorktreeRows(
   result: Row[],
-  repoMap: Map<string, Repo>,
+  repoOf: RepoOfWorktree,
   plan: WorktreeOccurrencePlan<Worktree>,
   options: {
     collapsedGroups: Set<string>
@@ -76,9 +76,17 @@ export function appendWorktreeRows(
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
 ): void {
-  const occurrences = getExpandedWorktreeOccurrences(
-    plan.bySection.get(options.sectionKey) ?? [],
-    (worktree) => options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  const childIdsByParent = new Map<string, string[]>()
+  for (const occurrence of sectionOccurrences) {
+    if (occurrence.parent) {
+      const children = childIdsByParent.get(occurrence.parent.key) ?? []
+      children.push(occurrence.row.id)
+      childIdsByParent.set(occurrence.parent.key, children)
+    }
+  }
+  const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
+    options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
@@ -88,11 +96,12 @@ export function appendWorktreeRows(
       rowKey: occurrence.key,
       sectionKey: occurrence.sectionKey,
       worktree,
-      repo: repoMap.get(worktree.repoId),
+      repo: repoOf(worktree),
       depth: occurrence.depth,
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
+      lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
@@ -107,9 +116,7 @@ export function appendWorktreeRows(
   }
 }
 
-/** The one folder-workspace row constructor, shared by the project-group,
- *  grouped-lane and flat emitters so their rows cannot diverge. Keyed by host: two hosts can
- *  share a folder id. */
+/** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
   groupDepth: number

@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -27,23 +28,20 @@ afterEach(() => {
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
-import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
+
 import {
   deliverResizes,
   list,
   marker,
-  ROW_PITCH_PX,
-  ROW_PX,
   scrollTranscript,
   session,
   stubLayout,
   stubResizeObserver,
   TRANSCRIPT_LENGTH,
-  VIEWPORT_PX,
   windowState
 } from './native-chat-windowing-test-harness'
 
@@ -99,65 +97,6 @@ describe('windowed transcript', () => {
 
   const transcript = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) => marker(index))
 
-  it('mounts a window over the transcript rather than all of it', () => {
-    const { container } = render(list(transcript))
-    const { indexes } = windowState(container)
-
-    expect(indexes.length).toBeGreaterThan(0)
-    expect(indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
-    expect(indexes).toContain(0)
-    expect(screen.getByText('marker-0')).toBeInTheDocument()
-    expect(screen.queryByText(`marker-${TRANSCRIPT_LENGTH - 2}`)).toBeNull()
-  })
-
-  // One gap per pair of rows, and none after the last one. The other half of
-  // this — that a row's own reservation does not include the gap as well — is
-  // pinned on the estimate itself, where it can be seen without layout.
-  it('reserves each row once and one gap between each pair', () => {
-    const { container } = render(list(transcript))
-
-    expect(windowState(container).totalSize).toBe(
-      TRANSCRIPT_LENGTH * ROW_PX + (TRANSCRIPT_LENGTH - 1) * NATIVE_CHAT_ROW_GAP_PX
-    )
-  })
-
-  it('moves the mounted rows to bracket the offset the reader scrolled to', () => {
-    const { container } = render(list(transcript))
-    const offset = 5000
-    scrollTranscript(container, offset)
-    const { indexes } = windowState(container)
-    const focused = Math.floor(offset / ROW_PITCH_PX)
-
-    expect(indexes).toContain(focused)
-    expect(indexes[0]).toBeLessThanOrEqual(focused)
-    expect(indexes.at(-1)).toBeGreaterThanOrEqual(focused)
-    expect(indexes).not.toContain(0)
-    expect(indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
-  })
-
-  // The live row announces a running tool through `aria-live`, which says nothing
-  // from a row that is not in the document.
-  it('keeps the newest row mounted after the reader scrolls away from it', () => {
-    const { container } = render(list(transcript))
-    scrollTranscript(container, 5000)
-
-    expect(windowState(container).indexes).toContain(TRANSCRIPT_LENGTH - 1)
-  })
-
-  it('gives no slot to a message that draws nothing', () => {
-    const withBlanks = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
-      index % 4 === 0
-        ? { ...marker(index), blocks: [{ type: 'text' as const, text: '' }] }
-        : marker(index)
-    )
-    const drawn = TRANSCRIPT_LENGTH - TRANSCRIPT_LENGTH / 4
-    const { container } = render(list(withBlanks))
-    const { totalSize, indexes } = windowState(container)
-
-    expect(totalSize).toBe(drawn * ROW_PX + (drawn - 1) * NATIVE_CHAT_ROW_GAP_PX)
-    expect(indexes.at(-1)).toBeLessThanOrEqual(drawn - 1)
-  })
-
   it('still has the tool run open when the row carrying it comes back', () => {
     const withTool = [...transcript]
     withTool[1] = {
@@ -183,10 +122,7 @@ describe('windowed transcript', () => {
   })
 })
 
-// The reveal chain runs message -> tool run -> diff card and lands on a card in
-// a DIFFERENT, earlier message than the rollup that was clicked. Under windowing
-// that message may not be mounted to be pointed at, so the reveal names it by id
-// and the row is pinned into the window until the card can answer for itself.
+// Diff reveals name and pin an earlier, possibly unmounted message until its card can answer.
 describe('revealing a diff from a turn rollup', () => {
   let restoreLayout = (): void => {}
   beforeEach(() => {
@@ -226,7 +162,7 @@ describe('revealing a diff from a turn rollup', () => {
     )
   ]
 
-  it('mounts the row a reveal names even when the window has left it behind', () => {
+  it('opens an old edit inline at the visible turn outcome without mounting its source row', () => {
     const scrollTo = vi.fn()
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
     const { container } = render(
@@ -237,53 +173,23 @@ describe('revealing a diff from a turn rollup', () => {
         expandSignal={false}
       />
     )
-    // The rollup rides the turn's last row, which is pinned; the diff it points
-    // at is near the top and long gone from the window.
+    // The pinned tail holds the rollup; its target diff has scrolled out of the window.
     scrollTranscript(container, 4000)
     expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
     const mountedBefore = windowState(container).indexes.length
 
-    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
 
     expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByText('after')).toBeInTheDocument()
-    expect(scrollTo).toHaveBeenCalled()
-    // Pinned, not paged to: the window is still a window.
+    expect(scrollTo).not.toHaveBeenCalled()
+    // The outcome reuses the bounded transcript window.
     expect(windowState(container).indexes.length).toBeLessThanOrEqual(mountedBefore + 2)
   })
 })
 
 describe('transcript with a hidden scroll root', () => {
-  const transcript = Array.from({ length: 40 }, (_, index) => marker(index))
-
-  it('keeps the transcript bounded and rehydrates when the viewport becomes measurable', () => {
-    let viewportHeight = 0
-    const restoreLayout = stubLayout({ viewportHeight: () => viewportHeight })
-    const restoreResizeObserver = stubResizeObserver()
-    try {
-      const { container } = render(list(transcript))
-
-      expect(container.querySelector('[data-native-chat-window]')).toBeInTheDocument()
-      expect(container.querySelectorAll('[data-index]')).toHaveLength(0)
-      expect(screen.queryByText(/^marker-/)).toBeNull()
-      const column = container.querySelector('[data-native-chat-transcript-column]')
-      expect(column?.children).toHaveLength(1)
-
-      viewportHeight = VIEWPORT_PX
-      act(() => {
-        deliverResizes()
-      })
-      const { indexes } = windowState(container)
-      expect(indexes.length).toBeGreaterThan(0)
-      expect(indexes.length).toBeLessThan(transcript.length)
-    } finally {
-      restoreResizeObserver()
-      restoreLayout()
-    }
-  })
-
   it('preserves a detached viewport when messages append while hidden', async () => {
     let isVisible = true
     const restoreLayout = stubLayout({

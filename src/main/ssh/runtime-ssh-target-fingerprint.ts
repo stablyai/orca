@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { SshTarget } from '../../shared/ssh-types'
 
-/** The connection settings an SSH-access link was verified against; an edit to any of them changes it. */
 export function fingerprintRuntimeSshTarget(target: SshTarget): string {
   return createHash('sha256')
     .update(
@@ -16,7 +15,8 @@ export function fingerprintRuntimeSshTarget(target: SshTarget): string {
         gssapiAuthentication: target.gssapiAuthentication,
         proxyCommand: target.proxyCommand,
         jumpHost: target.jumpHost,
-        systemSshConnectionReuse: target.systemSshConnectionReuse
+        systemSshConnectionReuse: target.systemSshConnectionReuse,
+        systemSshProxyConnectionReuse: target.systemSshProxyConnectionReuse
       })
     )
     .digest('hex')

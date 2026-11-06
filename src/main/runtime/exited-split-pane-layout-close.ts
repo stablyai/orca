@@ -1,17 +1,12 @@
-// A pane whose terminal ended, in a workspace main owns (layout-owner build): main keeps it by the
-// rule the window used to apply to its own panes; any other exit retires as it always has.
-import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
+import { collectLeafIds } from '../../shared/workspace-layout/terminal-pane-layout-tree'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { RetiredTerminalSurface } from './terminal/surface/mobile-session-terminal-retirement'
 import {
   exitedSplitPaneOutcome,
   type ExitedSplitPaneFacts
 } from './terminal/lifecycle/exited-split-pane-rule'
 
-/**
- * Whether the rule keeps the pane (its "Terminal exited" card stays); otherwise the persistence
- * retirement removes the pane, or a last pane's tab, as it did before.
- */
+/** Keep the Terminal exited card where policy requires it; otherwise retire the pane or its empty tab. */
 export function keepsExitedPane(
   session: WorkspaceSessionState,
   surface: RetiredTerminalSurface,

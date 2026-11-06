@@ -2,7 +2,7 @@ import {
   getRegisteredSshState,
   listRegisteredSshTargets
 } from '../../ssh/targets/ssh-target-registry'
-import { getWslHostService } from '../../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -10,11 +10,13 @@ import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/workt
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
 import type { PairedServerRowsProducer } from './paired-server-rows-producer'
-import type { WorkspaceCreationRegistry } from './workspace-creation-registry'
+import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
+import { readStoreInstallationId } from '../hosts/platform-probe/host-descriptor'
+import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { readSidebarProjectCatalog } from './sidebar-project-catalog'
 import {
   buildPairedServerReviewFacts,
@@ -22,14 +24,19 @@ import {
 } from '../../../shared/sidebar-list/workspace-review-facts'
 import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
-export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSidebarFacts {
+export function readRuntimeDesktopSidebarFacts(
+  store: RuntimeStore,
+  installationId: string | undefined
+): DesktopSidebarFacts {
   return readDesktopSidebarFacts({
     store,
     sshTargets: listRegisteredSshTargets(),
     sshStateOf: getRegisteredSshState,
-    wslStatuses: getWslHostService()?.getStatuses() ?? []
+    wslStatuses: getWslHostService()?.getStatuses() ?? [],
+    installationId
   })
 }
 
@@ -67,7 +74,7 @@ const DESKTOP_WRITE_DOMAINS = [...WORKTREE_METADATA_DOMAINS, 'settings', 'ui']
 export type SidebarInputsFeedSources = {
   facts: OrcaRuntimeWithSidebarTemporal
   pairedServerRows: PairedServerRowsProducer
-  workspaceCreations: WorkspaceCreationRegistry
+  workspaceLifecycle: WorkspaceLifecycleQueue
   workspaceRows: WorkspaceRowsProducer
   repoIcons: Pick<RepoIconDataUrls, 'idsByRepo'>
   store: () => RuntimeStore | null
@@ -81,7 +88,7 @@ export type SidebarInputsFeedSources = {
 export function sidebarInputsFeedDomains(
   sources: SidebarInputsFeedSources
 ): SidebarInputsFeedDomain[] {
-  const { facts, pairedServerRows, workspaceCreations, workspaceRows } = sources
+  const { facts, pairedServerRows, workspaceLifecycle, workspaceRows } = sources
   const urgent = { urgent: true }
   const watchCatalog = (changed: () => void): (() => void) =>
     sources.onClientEvent(
@@ -92,6 +99,13 @@ export function sidebarInputsFeedDomains(
       },
       { consumesTerminalSideEffects: false }
     )
+  // Why: until the id loads, cross-store children stay standalone; its arrival is a desktop change.
+  let installationId: string | undefined
+  const installationLoaded = readStoreInstallationId(null, getCanonicalUserDataPath()).then(
+    (id) => {
+      installationId = id
+    }
+  )
   const requireStore = (): RuntimeStore => {
     const store = sources.store()
     if (!store) {
@@ -102,17 +116,25 @@ export function sidebarInputsFeedDomains(
   return [
     {
       name: 'activity',
-      read: () => ({
-        // A paired server's rows too; this host's own rows win an id both list.
-        ...buildPairedServerActivityFacts(
-          pairedServerRows.snapshot().servers,
-          (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
-        ),
-        ...facts.getWorkspaceActivityFacts().facts
-      }),
+      read: () => {
+        const rows = workspaceRows.snapshot()?.rows
+        if (!rows) {
+          return null
+        }
+        return {
+          // This host's session tabs and agents are by bare id, so a same-id pair it lists share them.
+          ...keyWorkspaceActivityByRow(facts.getWorkspaceActivityFacts().facts, rows),
+          ...buildPairedServerActivityFacts(
+            pairedServerRows.snapshot().servers,
+            (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
+          )
+        }
+      },
+      ready: () => workspaceRows.ready(),
       watch: (changed) => {
         const detaches = [
           facts.workspaceActivityFacts.revision.onChange(changed),
+          workspaceRows.revision.onChange(changed),
           pairedServerRows.revision.onChange(changed),
           // This desktop's saved session for a paired server holds its browser and chat tabs there.
           sources.store()?.onWorkspaceSessionWritten?.((hostId) => {
@@ -133,10 +155,17 @@ export function sidebarInputsFeedDomains(
       watch: (changed) => facts.onSidebarTemporalChange(changed)
     },
     {
+      // The queue's creates, as the creations readers read them.
       name: 'creations',
-      read: () => workspaceCreations.snapshot().creations,
+      read: () => workspaceLifecycle.creationsSnapshot().creations,
       // An accepted command shows at once.
-      watch: (changed) => workspaceCreations.revision.onChange(() => changed(urgent))
+      watch: (changed) => workspaceLifecycle.revision.onChange(() => changed(urgent))
+    },
+    {
+      // Each workspace's running, waiting or paused lifecycle command, keyed host-qualified.
+      name: 'inProgress',
+      read: () => workspaceLifecycle.hints(),
+      watch: (changed) => workspaceLifecycle.revision.onChange(() => changed(urgent))
     },
     {
       name: 'workspaces',
@@ -192,7 +221,7 @@ export function sidebarInputsFeedDomains(
     {
       name: 'desktop',
       // Each field its own entity.
-      read: () => readRuntimeDesktopSidebarFacts(requireStore()),
+      read: () => readRuntimeDesktopSidebarFacts(requireStore(), installationId),
       watch: (changed) => {
         const store = sources.store()
         const detaches = [
@@ -209,7 +238,16 @@ export function sidebarInputsFeedDomains(
           }),
           getWslHostService()?.onStatusesChanged(changed)
         ]
-        return () => detaches.forEach((detach) => detach?.())
+        let watching = true
+        void installationLoaded.then(() => {
+          if (watching && installationId !== undefined) {
+            changed()
+          }
+        })
+        return () => {
+          watching = false
+          detaches.forEach((detach) => detach?.())
+        }
       }
     },
     {
@@ -248,9 +286,9 @@ export function sidebarInputsFeedDomains(
         const store = requireStore()
         const prCache = store.getGitHubCache().pr
         return {
-          // A paired server's rows by the window's cache too; this host's own rows win an id both list.
-          ...buildPairedServerReviewFacts(pairedServerRows.snapshot().servers, prCache),
-          ...buildWorkspaceReviewFacts(worktrees, store.getRepos(), prCache)
+          ...buildWorkspaceReviewFacts(worktrees, store.getRepos(), prCache),
+          // A paired server's rows by the window's cache too.
+          ...buildPairedServerReviewFacts(pairedServerRows.snapshot().servers, prCache)
         }
       },
       watch: (changed) => {

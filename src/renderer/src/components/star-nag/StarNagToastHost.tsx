@@ -130,6 +130,7 @@ function StarNagToast({
           variant="ghost"
           size="icon"
           className="size-7 shrink-0"
+          data-close-button
           onClick={close}
           disabled={busy}
           aria-label={translate('auto.components.star.nag.StarNagToastHost.dismiss', 'Dismiss')}
@@ -231,8 +232,7 @@ export function StarNagToastHost(): null {
     return () => {
       unsubscribeShow()
       unsubscribeHide()
-      // The toast has an infinite lifetime; dismiss it when this host unmounts
-      // so its React tree and captured callbacks cannot outlive the surface.
+      // Dismiss infinite-lived toasts on unmount so their React tree and callbacks cannot outlive this host.
       dismissActiveToast()
       activeToastIdRef.current = null
       activeToastResolvedRef.current = null

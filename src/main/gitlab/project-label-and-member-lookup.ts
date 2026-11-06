@@ -16,9 +16,8 @@ import {
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
 
-// GitLab's per_page maximum.
 const PAGE_SIZE = 100
-// Why: bounds the walk (5,000 entries) when a proxy strips x-next-page or it never advances.
+// Bound pagination when a proxy strips or fails to advance next-page headers.
 const MAX_PAGES = 50
 
 type GitLabRawLabel = { name?: string | null } | null
@@ -76,9 +75,7 @@ export async function listAssignableUsers(
   }
   await acquire()
   try {
-    // Why: `members/all` returns project members including those inherited
-    // from parent groups — important for projects under a top-level group
-    // where assignable users typically come from the group, not the project.
+    // Include members inherited from parent groups, where assignable project users commonly originate.
     const members = await fetchAllPages<GitLabRawUser | null>(
       repoPath,
       projectRef,
@@ -94,8 +91,7 @@ export async function listAssignableUsers(
   }
 }
 
-// Why: `glab api` has no --jq and older glab lacks `--output ndjson`, so walk the pages here
-// and parse each one as a JSON list.
+// Older glab lacks NDJSON output and --jq; parse each API page separately.
 async function fetchAllPages<T>(
   repoPath: string,
   projectRef: ProjectRef,
@@ -125,8 +121,7 @@ function nextPageNumber(
   page: number,
   pageLength: number
 ): number | undefined {
-  // Why: GitLab sends an empty x-next-page on the last page, so an absent one means a proxy
-  // stripped it; a full page then probes one more.
+  // GitLab ends with an empty header; an absent header may be proxy-stripped, so probe after full pages.
   if (nextPageHeader === undefined) {
     return pageLength < PAGE_SIZE ? undefined : page + 1
   }

@@ -3,8 +3,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { runDeferredSessionReattachChoice } from './deferred-session-reattach-choice'
 import type * as PairedParkedTerminalRestore from './paired-parked-terminal-restore'
 
-// Reproduction: a mirrored remote web-terminal pane whose host PTY is alive, with a periodic
-// origin:'live' crash-recovery bookmark, must attach to that PTY, not cold-restore a fresh agent.
+// Live mirrored PTYs must reattach despite periodic crash-recovery bookmarks, which cannot authorize a second cold-restored agent.
 
 const TAB_ID = 'web-terminal-tab-1'
 const LEAF_ID = 'leaf-1'

@@ -1,7 +1,4 @@
-// Making preview tabs permanent in a layout-owner build: main promotes each tab and its frame
-// clears the flag; the window changes no tab itself. A workspace whose layout a paired server
-// owns is not main's to change, so the window ends its tabs' previews there, as today; so it does
-// for a twin's tab main routes to a paired server, as the switch-off window does.
+// Main-owned previews end in main’s frame; paired-server layouts and host_not_owned twins promote in the window copy.
 
 import type { Tab } from '../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'

@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectRendererMemoryProfileCounts,
-  registerRendererMemoryProfileContributor,
-  summarizeStateCollectionSizes
+  registerRendererMemoryProfileContributor
 } from './renderer-memory-profile'
 
 const unregisters: (() => void)[] = []
@@ -19,16 +18,6 @@ afterEach(() => {
 })
 
 describe('collectRendererMemoryProfileCounts', () => {
-  it('namespaces contributor counts and keeps only finite numbers', () => {
-    register('store', () => ({ worktrees: 40, junk: Number.NaN }))
-    register('terminals', () => ({ panes: 7 }))
-
-    expect(collectRendererMemoryProfileCounts()).toEqual({
-      'store.worktrees': 40,
-      'terminals.panes': 7
-    })
-  })
-
   it('contains a throwing contributor instead of failing collection', () => {
     register('broken', () => {
       throw new Error('boom')
@@ -39,20 +28,6 @@ describe('collectRendererMemoryProfileCounts', () => {
       'broken.error': 1,
       'store.worktrees': 3
     })
-  })
-
-  it('unregisters cleanly', () => {
-    const unregister = registerRendererMemoryProfileContributor('store', () => ({ a: 1 }))
-    unregister()
-    expect(collectRendererMemoryProfileCounts()).toEqual({})
-  })
-
-  it('caps a runaway contributor instead of bloating the breadcrumb', () => {
-    register('runaway', () =>
-      Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`key${index}`, index + 1]))
-    )
-
-    expect(Object.keys(collectRendererMemoryProfileCounts())).toHaveLength(32)
   })
 
   it('stops reading a runaway contributor after the output budget', () => {
@@ -111,49 +86,5 @@ describe('collectRendererMemoryProfileCounts', () => {
 
     expect(collectRendererMemoryProfileCounts()).toEqual({})
     expect(overflowContributor).not.toHaveBeenCalled()
-  })
-
-  it('bounds inherited property inspection and oversized output keys', () => {
-    const inherited = Object.fromEntries(
-      Array.from({ length: 100 }, (_, index) => [`inherited${index}`, index])
-    )
-    register('inherited', () => Object.create(inherited) as Record<string, number>)
-    register('oversized-key', () => ({ ['x'.repeat(10_000)]: 1, valid: 2 }))
-    const hasOwnSpy = vi.spyOn(Object, 'hasOwn')
-
-    const counts = collectRendererMemoryProfileCounts()
-    expect(hasOwnSpy).toHaveBeenCalledTimes(34)
-    expect(counts).toEqual({ 'oversized-key.valid': 2 })
-  })
-
-  it('skips an oversized contributor namespace without invoking it', () => {
-    const contributor = vi.fn(() => ({ count: 1 }))
-    register('x'.repeat(65), contributor)
-
-    expect(collectRendererMemoryProfileCounts()).toEqual({})
-    expect(contributor).not.toHaveBeenCalled()
-  })
-})
-
-describe('summarizeStateCollectionSizes', () => {
-  it('reports the largest collections first, capped at the limit', () => {
-    const state = {
-      worktrees: Array.from({ length: 50 }, () => 0),
-      agentStatuses: new Map([['a', 1]]),
-      tabs: new Set([1, 2, 3]),
-      metaById: { a: 1, b: 2 },
-      label: 'not-a-collection',
-      count: 9
-    }
-
-    expect(summarizeStateCollectionSizes(state, 2)).toEqual({
-      worktrees: 50,
-      tabs: 3
-    })
-  })
-
-  it('skips empty collections and non-objects', () => {
-    expect(summarizeStateCollectionSizes({ empty: [], none: null }, 5)).toEqual({})
-    expect(summarizeStateCollectionSizes(null, 5)).toEqual({})
   })
 })

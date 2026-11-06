@@ -3,24 +3,10 @@ import type SyncDatabase from '../sqlite/sync-database'
 import { deleteSearchMessages } from './session-search-message-rows'
 
 export const RETENTION_DELETE_ROWS_PER_STEP = 256
-// Why in step with the deletes rather than one sweep at the end: `auto_vacuum =
-// INCREMENTAL` holds every freed page until something asks for it back, and
-// asking for a whole purge's worth at once is one long stall (40 ms per 22 MB
-// freed, measured) instead of many short ones.
+// Reclaim freed pages incrementally to avoid a long vacuum after the purge.
 const RECLAIM_PAGES_PER_STEP = 2000
 
-/**
- * Drops every file older than the cutoff, then hands its rows back in bounded
- * steps.
- *
- * The two halves are separate on purpose. Cutting a session loose from its file
- * is one small transaction, and it is what makes the session stop answering
- * searches — every read joins `sessions`, so a row whose session is gone is
- * already unreachable. Reclaiming those rows is the expensive half, and it can
- * be paused, interrupted or resumed at any point without a reader ever seeing a
- * session that is half deleted. A crash in the middle leaves rows nothing
- * points at, and `drainOrphanedMessages` finds them on the next pass.
- */
+/** Hide expired sessions atomically, then reclaim their unreachable messages in bounded transactions. */
 export async function deleteExpiredSearchFiles(
   db: SyncDatabase,
   cutoffMs: number | null,
@@ -37,8 +23,7 @@ export async function deleteExpiredSearchFiles(
       }
       db.exec('BEGIN IMMEDIATE')
       try {
-        // Re-read under the lock: a read of this file may have landed since the
-        // list was taken, which makes it new enough to keep.
+        // Recheck expiry under the write lock in case a read refreshed this file after the initial scan.
         const file = db
           .prepare('SELECT session_row_id FROM files WHERE path = ? AND mtime_ms < ?')
           .get(path, cutoffMs) as { session_row_id: number | null } | undefined
@@ -57,25 +42,13 @@ export async function deleteExpiredSearchFiles(
   await drainOrphanedMessages(db, closed, yieldStep)
 }
 
-/**
- * Deletes rows whose session no longer exists, a bounded batch per transaction.
- *
- * That set is exactly what retention, a replace that cut its old generation
- * loose, a removed source and an interrupted earlier drain leave behind, so the
- * index needs no record of unfinished work beyond the rows themselves.
- *
- * Exported for the store, which runs it after a replace commits for the same
- * reason retention runs it after its own small transaction: cutting a session
- * loose is what hides it, and reclaiming its rows is the half that must not
- * hold one transaction.
- */
+/** Drain orphaned rows left by retention, replacement, or interruption; the rows record unfinished work. */
 export async function drainOrphanedMessages(
   db: SyncDatabase,
   closed: () => boolean,
   yieldStep: () => Promise<void> = yieldToEventLoop
 ): Promise<void> {
-  // Ordered by session so one call to this walks a session's rows to the end
-  // before paying for the scan that finds the next one.
+  // Finish one session before scanning for the next orphan to avoid repeating that scan per batch.
   const nextOrphan = db.prepare(
     `SELECT session_row_id FROM messages
      WHERE session_row_id NOT IN (SELECT id FROM sessions) LIMIT 1`
@@ -97,6 +70,6 @@ export async function drainOrphanedMessages(
     }
     await yieldStep()
   }
-  // A `removeFile` frees its pages outside this loop and may leave none to drain.
+  // removeFile may free pages even when this drain has no orphaned messages.
   db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
 }

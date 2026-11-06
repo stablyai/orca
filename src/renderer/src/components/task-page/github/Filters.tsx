@@ -1,5 +1,9 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { getGitHubTaskKindPresets } from '@/components/task-page-localized-options'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import {
+  getGitHubPRStateChips,
+  getGitHubPRWhoChips,
+  getIssueTaskQueryPresets
+} from '@/components/task-page/task-page-localized-options'
 import { cn } from '@/lib/utils'
 import PRFilterDropdowns from '@/components/github/PRFilterDropdowns'
 import { Search, X, Plus, LoaderCircle, RefreshCw } from 'lucide-react'
@@ -7,15 +11,59 @@ import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { resolveNewIssueOpenSeed } from '@/components/task-page-new-issue-draft'
+import { resolveNewIssueOpenSeed } from '@/components/task-page/task-page-new-issue-draft'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../../task-page-draft-storage'
+import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../task-page-draft-storage'
 import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { deriveGitHubTaskPreset } from './task-page-preset-highlight'
+import {
+  deriveGitHubPRStateChip,
+  deriveGitHubPRWhoChip,
+  gitHubPRWhoChange,
+  gitHubPRWhoPreset
+} from './task-page-pr-chips'
+
+function PresetChip({
+  label,
+  active,
+  onSelect,
+  onSetDefault
+}: {
+  label: string
+  active: boolean
+  onSelect: () => void
+  /** Right-click saves this chip as the default Tasks view. */
+  onSetDefault?: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      onContextMenu={
+        onSetDefault
+          ? (event) => {
+              event.preventDefault()
+              onSetDefault()
+            }
+          : undefined
+      }
+      className={cn(
+        'rounded-md border px-2.5 py-1 text-xs font-medium transition',
+        active
+          ? 'border-border/50 bg-foreground/90 text-background shadow-xs'
+          : 'border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60'
+      )}
+    >
+      {label}
+    </button>
+  )
+}
 export function TaskPageGitHubFilters({
   model
 }: {
@@ -30,10 +78,10 @@ export function TaskPageGitHubFilters({
     appliedTaskSearch,
     setAppliedTaskSearch,
     taskSearchInputRef,
-    activeTaskPreset,
     setActiveTaskPreset,
     setTaskRefreshNonce,
     perRepoSourceState,
+    githubSourceDisplayState,
     handleRefreshGithubTasks,
     setNewIssueOpen,
     setNewIssueTitle,
@@ -53,6 +101,9 @@ export function TaskPageGitHubFilters({
     handleTaskSearchKeyDown,
     githubTasksBusy
   } = model
+  const highlightedPreset = deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery)
+  const prStateChip = deriveGitHubPRStateChip(appliedTaskQuery)
+  const prWhoChip = deriveGitHubPRWhoChip(appliedTaskQuery)
   // Why: filter metadata for the primary slug is read from the host that owns the repo it came from.
   const primaryGithubFilterSource = perRepoSourceState.find((state) =>
     activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
@@ -66,20 +117,61 @@ export function TaskPageGitHubFilters({
     )
   )
   return (
-    // Why: top of the joined GitHub list card — pairs with the
-    // table shell below (rounded-t-none border-t-0) as one surface.
+    // Join filter chrome and table as one surface.
     <div
       className="flex min-w-0 flex-col gap-2.5 rounded-md rounded-b-none border border-border/50 bg-muted/35 px-3 py-2.5"
       data-contextual-tour-target="tasks-search-presets"
     >
-      <div className="flex flex-wrap gap-1.5">
-        {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
-          const active = activeTaskPreset === option.id
-          return (
-            <button
+      {activeGithubTaskKind === 'prs' ? (
+        // Why: each group wraps as one unit so the divider always separates state from who.
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
+            {getGitHubPRStateChips().map(({ id, label }) => (
+              <PresetChip
+                key={id}
+                label={label}
+                active={prStateChip === id}
+                onSelect={() => {
+                  // Why: re-applying a lit chip would only rewrite the query and refetch the same rows.
+                  if (prStateChip !== id) {
+                    applyPRFilterChange({ state: id })
+                  }
+                }}
+                // Why: keeps main's right-click on Open, which saved the open-PRs preset.
+                onSetDefault={id === 'open' ? () => handleSetDefaultTaskPreset('prs') : undefined}
+              />
+            ))}
+          </div>
+          <span aria-hidden className="mx-0.5 h-4 w-px bg-border/60" />
+          <div className="flex flex-wrap gap-1.5">
+            {getGitHubPRWhoChips().map(({ id, label }) => (
+              <PresetChip
+                key={id}
+                label={label}
+                active={prWhoChip === id}
+                onSelect={() => {
+                  if (prWhoChip !== id) {
+                    applyPRFilterChange(gitHubPRWhoChange(id))
+                  }
+                }}
+                // Why: the default view is a saved preset, and only the open-state combinations are presets.
+                onSetDefault={
+                  prStateChip === 'open'
+                    ? () => handleSetDefaultTaskPreset(gitHubPRWhoPreset(id))
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {getIssueTaskQueryPresets().map((option) => (
+            <PresetChip
               key={option.id}
-              type="button"
-              onClick={() => {
+              label={option.label}
+              active={highlightedPreset === option.id}
+              onSelect={() => {
                 const query = option.query
                 setTaskSearchInput(query)
                 setAppliedTaskSearch(query)
@@ -90,22 +182,11 @@ export function TaskPageGitHubFilters({
                 })
                 setTaskRefreshNonce((current) => current + 1)
               }}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                handleSetDefaultTaskPreset(option.id)
-              }}
-              className={cn(
-                'rounded-md border px-2.5 py-1 text-xs font-medium transition',
-                active
-                  ? 'border-border/50 bg-foreground/90 text-background shadow-xs'
-                  : 'border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60'
-              )}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
+              onSetDefault={() => handleSetDefaultTaskPreset(option.id)}
+            />
+          ))}
+        </div>
+      )}
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <PRFilterDropdowns
           parsed={appliedTaskQuery}
@@ -207,7 +288,7 @@ export function TaskPageGitHubFilters({
 
       {(() => {
         // Why: show the source-slug chip only when the selector can't render (no upstream to toggle); otherwise it duplicates the selector.
-        const rows = perRepoSourceState.filter(
+        const rows = githubSourceDisplayState.filter(
           (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
         )
         if (rows.length === 0) {
@@ -241,7 +322,7 @@ export function TaskPageGitHubFilters({
               if (!selectorRenderable || !repo) {
                 return null
               }
-              // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
+              // The selector renders a div; keep a block wrapper to avoid invalid nesting.
               return (
                 <div key={s.sourceKey} className={issueSourceChipClass}>
                   {showRepoBadgeLabel ? (
@@ -256,6 +337,7 @@ export function TaskPageGitHubFilters({
                     preference={repo.issueSourcePreference}
                     origin={s.sources.originCandidate}
                     upstream={s.sources.upstreamCandidate}
+                    issueSource={s.sources.issues}
                     onChange={(next) => {
                       void setIssueSourcePreference(repo.id, repo.path, next, s.hostId)
                     }}

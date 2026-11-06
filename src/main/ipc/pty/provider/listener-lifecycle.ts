@@ -2,10 +2,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { notifyLocalPtyProviderRebound } from './local-provider-rebound'
 import type { PtyRendererDelivery } from '../session'
 
-// Why: localProvider.onData/onExit return unsubscribe functions. Without
-// storing and calling these on re-registration, macOS app re-activation
-// creates a new BrowserWindow and re-calls registerPtyHandlers, leaking
-// duplicate listeners that forward every event twice.
+// Re-registration must unsubscribe old provider listeners or macOS window reactivation forwards events twice.
 export let localDataUnsub: (() => void) | null = null
 export let localExitUnsub: (() => void) | null = null
 export let localBackgroundStreamUnsub: (() => void) | null = null
@@ -14,12 +11,11 @@ export let didFinishLoadHandler: (() => void) | null = null
 export let didFinishLoadWebContents: PtyRendererDelivery['webContents'] | null = null
 export let rendererLifecycleResetWebContents: PtyRendererDelivery['webContents'] | null = null
 export let rendererLifecycleResetHandler: (() => void) | null = null
-// Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so they reset when the renderer is replaced (drop memory preserved).
+// Renderer replacement resets abandoned marks/interest while preserving unrestored drop memory.
 export let rendererGateResetLoadHandler: (() => void) | null = null
 export let rendererGateResetGoneHandler: (() => void) | null = null
 export let rendererGateResetWebContents: PtyRendererDelivery['webContents'] | null = null
-// Why: the backgrounded-delivery dedupe map lives in the registerPtyHandlers closure but teardown funnels through module-scope clearProviderPtyState.
-// Why null-init + wrapper fn: see delivery/debug.ts — rolldown const-folds `export let fn = noop` bridges (STA-5661).
+// Module cleanup reaches closure-owned pacing state; null-initialized wrappers avoid Rolldown no-op folding (STA-5661).
 let clearBackgroundedDeliverySyncForPtyImpl: ((id: string) => void) | null = null
 
 export function clearBackgroundedDeliverySyncForPty(id: string): void {
@@ -31,17 +27,16 @@ export type RendererNavigationDetails = {
   isSameDocument: boolean
 }
 
-// Why: navigation details identify the triggering frame; querying aggregate load state can misclassify an overlapping subframe load.
+// Use navigation frame details; aggregate load state can confuse overlapping subframes.
 export let rendererDidStartNavigationHandler:
   | ((details: RendererNavigationDetails) => void)
   | null = null
 
-// Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
+// Provider replacement must rebind listeners or output stays attached to the disposed adapter.
 export let rebindProviderListeners: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
-  // Switch point: main shows the live terminals a new or restarted provider reports.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     notifyLocalPtyProviderRebound()
   }
@@ -99,7 +94,7 @@ export function setRendererGateResetState(args: {
   rendererGateResetGoneHandler = args.gone
 }
 
-// Why: Restart daemon must detach listeners AFTER synthetic pty:exit events fan out but BEFORE replaceDaemonProvider swaps the adapter; this export narrows that window to the caller.
+// Detach after synthetic exits fan out and before replacing the adapter.
 export function unbindLocalProviderListeners(): void {
   localDataUnsub?.()
   localExitUnsub?.()

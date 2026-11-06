@@ -8,6 +8,7 @@ import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-per
 import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
 import { useHostPaneTitleSync } from './use-host-pane-title-sync'
 import { useTerminalPaneCloseActions } from './use-terminal-pane-close-actions'
+import { useTerminalPaneTabDetachActions } from './use-terminal-pane-tab-detach-actions'
 import { useTerminalPaneLifecycleStage } from './use-terminal-pane-lifecycle-stage'
 import { useTerminalPaneReconciliation } from './use-terminal-pane-reconciliation'
 import { useTerminalPaneGlobalListeners } from './use-terminal-pane-global-listeners'
@@ -19,6 +20,11 @@ import { useTerminalPaneProjection } from './use-terminal-pane-projection'
 import { useLayoutOwnerPaneTree } from './use-layout-owner-pane-tree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
+// Switch point: the mounted tab follows main's pane tree. Chosen once per build, so hook order is fixed.
+const useLayoutOwnerPaneTreeWhenMain = ORCA_LAYOUT_OWNER_IS_MAIN
+  ? useLayoutOwnerPaneTree
+  : (): void => {}
+
 export function useTerminalPaneController(props: TerminalPaneProps) {
   const foundation = useTerminalPaneFoundation(props)
   const title = Object.assign(foundation, useTerminalPaneTitleState(foundation))
@@ -28,14 +34,14 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const layout = Object.assign(startup, useTerminalPaneLayoutPersistence(startup))
   useHostPaneTitleSync(layout)
   const bindings = Object.assign(layout, useTerminalPaneLayoutBindings(layout))
-  const close = Object.assign(bindings, useTerminalPaneCloseActions(bindings))
+  const close = Object.assign(
+    bindings,
+    useTerminalPaneCloseActions(bindings),
+    useTerminalPaneTabDetachActions(bindings)
+  )
   useTerminalPaneLifecycleStage(close)
   const reconciliation = Object.assign(close, useTerminalPaneReconciliation(close))
-  // Switch point: the mounted tab follows main's pane tree. A build constant, so the hook order is fixed.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- SAFETY: the condition is a compile-time constant.
-    useLayoutOwnerPaneTree(close)
-  }
+  useLayoutOwnerPaneTreeWhenMain(close)
   useTerminalPaneGlobalListeners(reconciliation)
   useTerminalPanePasteListeners(reconciliation)
   useTerminalPaneTitleEffects(reconciliation)

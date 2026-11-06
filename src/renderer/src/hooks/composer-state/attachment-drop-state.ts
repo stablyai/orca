@@ -20,6 +20,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { joinPath } from '@/lib/path'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
@@ -84,9 +85,9 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       if (folderPaths.length === 0) {
         return
       }
-      // Why: de-dup within one drop — the OS can deliver the same folder twice when the selection includes an item and its parent.
+      // OS selections can repeat a folder through parent+child items; deduplicate within each drop.
       const uniqueFolderPaths = Array.from(new Set(folderPaths))
-      // Why: quote paths with shell metacharacters so an inserted folder ref stays one token if pasted into a terminal; simple paths stay unadorned.
+      // Quote shell metacharacters so dropped paths remain one terminal token; keep simple paths unquoted.
       const formatPath = (p: string): string => {
         if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
           return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
@@ -95,13 +96,13 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       }
       const insertion = uniqueFolderPaths.map(formatPath).join(' ')
       const textarea = promptTextareaRef.current
-      // Why: compute selection/insertion/caret outside the setAgentPrompt updater so it stays pure — Strict Mode double-invokes updaters in dev.
+      // Compute insertion/caret outside state updaters, which Strict Mode can invoke twice.
       const current = agentPromptRef.current
       const selStart = textarea?.selectionStart ?? current.length
       const selEnd = textarea?.selectionEnd ?? current.length
       const before = current.slice(0, selStart)
       const after = current.slice(selEnd)
-      // Why: pad with spaces when the caret abuts text so the folder path doesn't merge into an adjacent word.
+      // Separate dropped paths from adjoining text so they cannot merge into a word.
       const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
       const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
       const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
@@ -117,7 +118,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
           textarea.setSelectionRange(caret, caret)
         })
       }
-      // Why: pass a plain value (not an updater) since before/after were already resolved, keeping the write pure under Strict-Mode double-render.
+      // Write the precomputed value directly so Strict Mode replay cannot repeat insertion work.
       setAgentPrompt(before + padded + after)
     },
     [cancelPromptCaretFrame, agentPromptRef, promptCaretFrameRef, promptTextareaRef, setAgentPrompt]
@@ -148,7 +149,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         }
         return { filePaths: [], folderPaths: [] }
       }
-      const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+      const destinationDir = joinPath(targetRepoPath, DROP_STAGING_RELATIVE_DIR)
       const sshExpectation = targetConnectionId
         ? captureDirectSshMutationExpectation(
             useAppStore.getState(),

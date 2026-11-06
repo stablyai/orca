@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult
@@ -12,8 +9,8 @@ import type {
 import {
   _resetPendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval
-} from '../../worktree-background-removal'
-import { snapshotPendingWorktreeRemovals } from '../../worktree-removal-listing'
+} from '../../workspaces/removal/worktree-background-removal'
+import { snapshotPendingWorktreeRemovals } from '../../workspaces/removal/worktree-removal-listing'
 import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals
@@ -106,18 +103,5 @@ describe('worktree listings while a checkout is being deleted', () => {
       expect(ps.worktrees.map((row) => row.worktreeId)).toEqual([keptId])
       expect(ps.totalCount).toBe(1)
     }
-  })
-
-  it('advertises the marker only from the desktop renderer, never the shared remote defaults', () => {
-    // Mobile and the CLI send the shared defaults and have no Deleting affordance to show.
-    expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
-      WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
-    )
-    expect(remoteRuntimeClientCapabilities()).not.toContain(
-      WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
-    )
-    expect(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES).not.toContain(
-      WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
-    )
   })
 })

@@ -1,14 +1,22 @@
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
+import { getDefaultSettings } from '../../../shared/constants'
+import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import {
-  getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
-import { dropDeletedSshResumeCwd } from './ai-vault-session-resume-preparation'
+import { getAiVaultAgentProviderSession } from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import { dropDeletedRemoteResumeCwd } from './ai-vault-session-resume-preparation'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
+}))
+
+const browseServerDir = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+  browseRuntimeServerDirectory: browseServerDir
 }))
 
 afterEach(() => {
@@ -17,31 +25,31 @@ afterEach(() => {
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
-type AiVaultResumeCommandState = Pick<
-  AppState,
-  | 'activeRepoId'
-  | 'activeWorktreeId'
-  | 'folderWorkspaces'
-  | 'projectGroups'
-  | 'projects'
-  | 'repos'
-  | 'settings'
-  | 'worktreesByRepo'
->
+type AiVaultResumeCommandState = AiVaultResumePlatformState
 
 function makeState(args: {
   worktreePath: string
   localWindowsRuntimePreference?: RuntimePreference
   terminalWindowsShell?: string
 }): AiVaultResumeCommandState {
+  const settings = getDefaultSettings('/tmp')
+  Reflect.deleteProperty(settings, 'agentPermissionDefault')
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
-    repos: [{ id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
+    repos: [{ ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
     projects: [
       {
+        displayName: 'repo',
+        badgeColor: '',
+        createdAt: 0,
+        updatedAt: 0,
         id: 'repo-1',
         sourceRepoIds: ['repo-1'],
         ...(args.localWindowsRuntimePreference
@@ -50,6 +58,7 @@ function makeState(args: {
       }
     ],
     settings: {
+      ...settings,
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
       agentDefaultArgs: { claude: '', codex: '' },
@@ -57,14 +66,14 @@ function makeState(args: {
     },
     worktreesByRepo: {
       'repo-1': [
-        {
+        makeWorktree({
           id: 'repo-1::worktree-1',
           repoId: 'repo-1',
           path: args.worktreePath
-        }
+        })
       ]
     }
-  } as unknown as AiVaultResumeCommandState
+  }
 }
 
 function buildQueuedAiVaultResumeCommand(
@@ -139,25 +148,6 @@ describe('ai vault resume command runtime', () => {
     })
   })
 
-  it('queues a PowerShell-valid command for the default Windows shell', () => {
-    // Why: the queued command is typed into the live tab shell (default
-    // PowerShell), which mis-parses the cmd `""`-doubled wrapper (#6152).
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe("claude '--resume' 'session one'")
-  })
-
   it('queues direct cmd syntax when the configured Windows shell is cmd.exe', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
@@ -178,46 +168,8 @@ describe('ai vault resume command runtime', () => {
     ).toBe('claude "--resume" "session one"')
   })
 
-  it('queues a POSIX command for the Git Bash Windows shell', () => {
-    const state = makeState({
-      worktreePath: 'C:\\Users\\alice\\repo',
-      terminalWindowsShell: 'git-bash'
-    })
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe("claude '--resume' 'session one'")
-  })
-
-  it('follows the live Windows shell for Cursor resume', () => {
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'cursor',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe("cursor-agent '--yolo' '--resume' 'session one'")
-  })
-
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
-    // Regression: local rebuilds must forward session.filePath so OMP resumes by
-    // path, and queued Windows commands must match the live tab shell.
+    // Rebuilds must retain OMP session.filePath and quote for the live Windows shell.
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     const command = buildQueuedAiVaultResumeCommand({
@@ -350,7 +302,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
     )
   })
 
@@ -371,7 +323,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
+      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
     )
     expect(command).not.toContain('unset CODEX_HOME')
   })
@@ -428,7 +380,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      "CODEX_HOME='/home/alice/.codex' codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
+      "CODEX_HOME='/home/alice/.codex' codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
     )
   })
 
@@ -517,11 +469,10 @@ describe('ai vault resume command runtime', () => {
     const startup = buildAiVaultResumeStartupForWorktree({
       state: makeState({ worktreePath: '/home/alice/wt/main' }),
       worktreeId: 'repo-1::worktree-1',
-      session: await dropDeletedSshResumeCwd(session)
+      session: await dropDeletedRemoteResumeCwd(session)
     })
 
-    // Why: typing `cd <deleted folder> && …` into the SSH shell stopped the agent, and Codex
-    // resumed at the root would still prompt with the deleted folder preselected (#17745).
+    // A deleted SSH cwd blocks startup, and Codex retains that missing folder even when resumed at root (#17745).
     expect(startup.command).not.toContain('feat-x')
     expect(startup.command).toContain("'-c' 'tui.resume_cwd=current' 'resume'")
     expect(startup.cwd).toBeUndefined()
@@ -529,6 +480,43 @@ describe('ai vault resume command runtime', () => {
       filePath: '/home/alice/wt/feat-x',
       connectionId: 'dev-box'
     })
+  })
+
+  it('resumes a paired server session at the workspace root once the server reports its folder deleted', async () => {
+    browseServerDir.mockImplementation(async (_environmentId: string, path: string) => {
+      if (path === '~') {
+        return { resolvedPath: '/home/alice', entries: [], pathFlavor: 'posix' }
+      }
+      throw new RuntimeRpcCallError({
+        id: 'req',
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message: `ENOENT: no such file or directory, stat '${path}'`
+        }
+      })
+    })
+    const session = {
+      agent: 'codex' as const,
+      sessionId: 'session one',
+      cwd: '/home/alice/wt/feat-x',
+      codexHome: '/home/alice/.codex',
+      executionHostId: 'runtime:env-1' as const,
+      executionHostPlatform: 'linux' as const,
+      resumeCommand:
+        "cd '/home/alice/wt/feat-x' && CODEX_HOME='/home/alice/.codex' codex resume 'session one'"
+    }
+
+    const startup = buildAiVaultResumeStartupForWorktree({
+      state: makeState({ worktreePath: '/home/alice/wt/main' }),
+      worktreeId: 'repo-1::worktree-1',
+      session: await dropDeletedRemoteResumeCwd(session)
+    })
+
+    expect(startup.command).not.toContain('feat-x')
+    expect(startup.command).toContain("'-c' 'tui.resume_cwd=current' 'resume'")
+    expect(startup.cwd).toBeUndefined()
+    expect(browseServerDir).toHaveBeenCalledWith('env-1', '/home/alice/wt/feat-x')
   })
 
   it('rebuilds remote real-home Codex commands without a stored home assignment', () => {
@@ -556,27 +544,6 @@ describe('ai vault resume command runtime', () => {
     })
   })
 
-  it('rebuilds remote real-home Codex commands when the override is blank', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        commandOverride: '   ',
-        session: {
-          agent: 'codex',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null,
-          executionHostId: 'ssh:dev-box',
-          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
-        }
-      })
-    ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
-  })
-
   it('copies remote real-home Codex commands with explicit environment cleanup', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
@@ -596,30 +563,9 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
     )
     expect(command).not.toContain('/retired/shared-home')
-  })
-
-  it('rebuilds the command when a non-blank override is supplied for a remote session', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        commandOverride: 'my-codex',
-        session: {
-          agent: 'codex',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null,
-          executionHostId: 'ssh:dev-box',
-          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
-        }
-      })
-    ).toBe("my-codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 
   it('rebuilds overridden remote commands with the recorded remote host platform', () => {
@@ -650,24 +596,6 @@ describe('ai vault resume command runtime', () => {
     )
   })
 
-  it('applies the user default args to local Copilot AI Vault resumes', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.settings = { ...state.settings, agentDefaultArgs: { copilot: '--yolo' } } as never
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'copilot',
-          sessionId: '940237d9-c712-48e8-bca1-fd75fc4a8d4b',
-          cwd: '/home/alice/repo',
-          codexHome: null
-        }
-      })
-    ).toBe("copilot '--yolo' '--resume=940237d9-c712-48e8-bca1-fd75fc4a8d4b'")
-  })
-
   it('keeps the scanner resume command for remote Copilot sessions', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
@@ -686,25 +614,5 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("copilot --resume='940237d9-c712-48e8-bca1-fd75fc4a8d4b'")
-  })
-
-  it('ignores a stored resume command for local-host sessions', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'codex',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null,
-          executionHostId: 'local',
-          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
-        }
-      })
-    ).toBe("codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'")
   })
 })

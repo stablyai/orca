@@ -129,9 +129,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
   it.skipIf(WINDOWS)(
     'deletes the links of a repo skill whose content lives outside every root',
     async () => {
-      // The shape that bit a real user: `<repo>/.agents/skills/<name>` is a link
-      // to a tool-managed directory elsewhere on disk. The links are Orca's to
-      // remove; the content behind them is not.
+      // Remove Orca-owned links into tool-managed content while preserving external bytes.
       const { home } = await fixture()
       const repo = join(home, 'projects', 'app')
       const managedElsewhere = join(home, '.local', 'share', 'devex', 'skills', 'demo')
@@ -155,7 +153,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
           kind: 'alias-dir'
         })
       ])
-      // Nothing outside the roots is ever offered for removal.
       expect(entry.placements.some((placement) => placement.path.includes('devex'))).toBe(false)
     }
   )
@@ -175,7 +172,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
       const { home } = await fixture()
       const bundled = join(home, '.claude', 'skills', '.system', 'demo')
       const file = await writeSkill(bundled, 'demo')
-      // Symlinked into a plain home root, which is what makes the row read `home`.
       await mkdir(join(home, '.agents', 'skills'), { recursive: true })
       await symlink(bundled, join(home, '.agents', 'skills', 'demo'), 'dir')
 
@@ -197,9 +193,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
 
   it('lists an overlapping root\u2019s directory once, not twice', async () => {
     const { home } = await fixture()
-    // `~/.claude/skills` is both a home root and a repo root when the home
-    // directory is also the workspace; staging that path twice would fail the
-    // second rename and roll the whole skill back.
+    // Home-as-workspace duplicates roots; staging one path twice would fail and roll back.
     const canonicalDirectory = join(home, '.claude', 'skills', 'demo')
     const file = await writeSkill(canonicalDirectory, 'demo')
     const resolved = await buildSkillDeletePlan({
@@ -219,7 +213,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
   it('never treats a root itself as a placement', async () => {
     const { home } = await fixture()
     const root = join(home, '.agents', 'skills')
-    // A SKILL.md directly in the root would otherwise look like a placement.
     const file = await writeSkill(root, 'demo')
     const resolved = await plan(home, await request(file))
     expect(resolved.plan.skills[0].placements).toEqual([])

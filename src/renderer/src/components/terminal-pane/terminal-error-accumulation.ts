@@ -1,7 +1,7 @@
 import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
+import { isTerminalResourceLimitError } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-resource-error'
 
-// The toast still consumes newline-joined copy, so legacy tab-wide messages need
-// whole-run dedup even though pane errors remain structurally separate until render.
+// Legacy tab messages render as newline-joined text and need whole-run dedup; pane errors stay separate until render.
 function containsWholeLineRun(accumulated: string, message: string): boolean {
   return (
     accumulated === message ||
@@ -11,7 +11,15 @@ function containsWholeLineRun(accumulated: string, message: string): boolean {
   )
 }
 
-export type TerminalErrorsByPaneId = Record<number, readonly string[]>
+type PaneTerminalError = {
+  message: string
+  resourceLimit: boolean
+}
+export type TerminalErrorsByPaneId = Record<number, readonly PaneTerminalError[]>
+type TerminalErrorSurface = {
+  error: string
+  resourceLimit: boolean
+}
 const MAX_TERMINAL_ERRORS_PER_PANE = 8
 export const MAX_TERMINAL_ERROR_LINES = 24
 export const MAX_TERMINAL_ERROR_CHARS = 4_000
@@ -37,20 +45,25 @@ export function appendPaneTerminalError(
   paneId: number,
   message: string
 ): TerminalErrorsByPaneId {
+  const resourceLimit = isTerminalResourceLimitError(message)
   const boundedMessage = boundTerminalErrorSurface(message)
   const current = errorsByPaneId[paneId] ?? []
   if (
     current.some(
       (entry) =>
-        entry === boundedMessage ||
-        (!boundedMessage.includes('\n') && containsWholeLineRun(entry, boundedMessage))
+        entry.resourceLimit === resourceLimit &&
+        (entry.message === boundedMessage ||
+          (!boundedMessage.includes('\n') && containsWholeLineRun(entry.message, boundedMessage)))
     )
   ) {
     return errorsByPaneId
   }
   return {
     ...errorsByPaneId,
-    [paneId]: [...current.slice(-(MAX_TERMINAL_ERRORS_PER_PANE - 1)), boundedMessage]
+    [paneId]: [
+      ...current.slice(-(MAX_TERMINAL_ERRORS_PER_PANE - 1)),
+      { message: boundedMessage, resourceLimit }
+    ]
   }
 }
 
@@ -64,8 +77,13 @@ export function clearPaneTerminalError(
     return errorsByPaneId
   }
   const boundedMessage = message === undefined ? undefined : boundTerminalErrorSurface(message)
+  const resourceLimit = message === undefined ? undefined : isTerminalResourceLimitError(message)
   const kept =
-    boundedMessage === undefined ? [] : current.filter((entry) => entry !== boundedMessage)
+    boundedMessage === undefined
+      ? []
+      : current.filter(
+          (entry) => entry.message !== boundedMessage || entry.resourceLimit !== resourceLimit
+        )
   if (kept.length === current.length) {
     return errorsByPaneId
   }
@@ -85,7 +103,10 @@ export function mapPaneTerminalErrors(
   let next = errorsByPaneId
   for (const [rawPaneId, messages] of Object.entries(errorsByPaneId)) {
     const paneId = Number(rawPaneId)
-    const mapped = messages.map(mapMessage).filter((message): message is string => message !== null)
+    const mapped = messages.flatMap((entry) => {
+      const message = mapMessage(entry.message)
+      return message === null ? [] : [message === entry.message ? entry : { ...entry, message }]
+    })
     if (
       mapped.length === messages.length &&
       mapped.every((message, index) => message === messages[index])
@@ -108,15 +129,23 @@ export function terminalErrorForPane(
   tabError: string | null,
   errorsByPaneId: TerminalErrorsByPaneId,
   paneId: number | null
-): string | null {
-  const paneError = paneId === null ? null : errorsByPaneId[paneId]?.join('\n') || null
-  if (!tabError) {
-    return paneError ? boundTerminalErrorSurface(paneError) : null
-  }
-  return paneError ? appendTerminalErrorMessage(tabError, paneError) : tabError
+): TerminalErrorSurface | null {
+  const messages = paneId === null ? undefined : errorsByPaneId[paneId]
+  // Legacy tab errors have already lost their event boundaries.
+  const resourceLimit =
+    !tabError &&
+    messages !== undefined &&
+    messages.length > 0 &&
+    messages.every((entry) => entry.resourceLimit)
+  const paneError = messages?.map((entry) => entry.message).join('\n') || null
+  const error = paneError
+    ? tabError
+      ? appendTerminalErrorMessage(tabError, paneError)
+      : boundTerminalErrorSurface(paneError)
+    : tabError
+  return error ? { error, resourceLimit } : null
 }
 
-/** Appends an error to the aggregated surface, keeping the first occurrence of an already-present message. */
 export function appendTerminalErrorMessage(accumulated: string | null, message: string): string {
   if (!accumulated) {
     return boundTerminalErrorSurface(message)

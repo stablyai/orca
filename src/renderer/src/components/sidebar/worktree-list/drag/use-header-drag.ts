@@ -15,12 +15,12 @@ import type { RenderRow } from '../listing/render-row'
 import {
   getProjectGroupHeaderSectionEndByGroupId,
   getRepoHeaderSectionEndByRepoId
-} from '../../worktree-header-section-boundaries'
-import { useHostHeaderDrag } from '../../host-header-drag'
-import { useRepoHeaderDrag } from '../../project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-drop'
-import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
-import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
+} from '../viewport/worktree-header-section-boundaries'
+import { useHostHeaderDrag } from './host-header-drag'
+import { useRepoHeaderDrag } from './project-header-drag'
+import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import { useProjectGroupHeaderDrag } from './project-group-header-drag'
+import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
 
 const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
@@ -47,8 +47,6 @@ function bucketById(byBucket: ReadonlyMap<string, readonly string[]>): Map<strin
   return map
 }
 
-// Reordering the three header tiers (host card, project group, project) plus the bucket
-// bookkeeping their drag controllers and DOM attributes need.
 export function useWorktreeSidebarHeaderDrag(args: {
   rows: HostSectionRow[]
   renderRows: readonly RenderRow[]
@@ -100,7 +98,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     return byGroupId
   }, [projectGroups])
 
-  // Why: reorder keeps scrollTop stable; flag direct scroll input so anchor-restore won't chase the moved row (jumpy drop).
+  // Suppress anchor correction after manual header moves so it cannot chase the reordered row.
   const suppressScrollCorrectionForHeaderCommit = useCallback(() => {
     const suppressUntil = window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil

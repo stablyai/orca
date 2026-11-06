@@ -13,7 +13,7 @@ const host = vi.hoisted(() => ({ dataDirectory: '' }))
 vi.mock('../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => host.dataDirectory
 }))
-vi.mock('../../structured-agent-launch-support', () => ({
+vi.mock('../../agent-session/launch/structured-agent-launch-support', () => ({
   resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' })
 }))
 // The download never answers until its cancel.
@@ -29,7 +29,7 @@ vi.mock('../../../network/http-client', () => ({
 // A host with one loaded chat, which a requested close stops.
 const chats = vi.hoisted((): { loaded: string[]; closed: string[] } => ({ loaded: [], closed: [] }))
 vi.mock(
-  '../../../native-chat/agent-session-wire/structured-agent-session-registry',
+  '../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
   async (actual) => ({
     ...(await actual<object>()),
     getStructuredAgentSessionHost: () => ({

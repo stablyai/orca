@@ -19,7 +19,6 @@ describe('reconcileTabOrder', () => {
   })
 
   it('deduplicates IDs that appear in both terminal and editor lists', () => {
-    // Edge case: same ID in both lists should only appear once
     expect(reconcileTabOrder(undefined, ['x'], ['x'])).toEqual(['x'])
   })
 

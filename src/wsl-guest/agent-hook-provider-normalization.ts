@@ -1,14 +1,18 @@
-import { hasOtherAgentProcessOwner } from '../shared/agent-process-presence'
-import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { hasOtherAgentProcessOwner } from '../shared/agent-status/process/agent-process-presence'
+import {
+  isOwnerProviderGuestHook,
+  readHookProcessVerdict
+} from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status/identity/agent-status-terminal-owner'
+import { normalizeHookPayload } from '../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   clearPaneCacheState,
   createHookListenerState,
   type HookListenerState
 } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
-import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { cacheRelayLegacyAgentStatus } from '../shared/agent-status/transport/agent-status-legacy-relay-cache'
 import { MAX_CACHED_PANES } from './agent-hook-cached-pane-status'
 
 /** Forward every provider; only the client knows about desktop-only owner completion. */
@@ -22,6 +26,10 @@ export class RelayProviderHookNormalization {
     env: string,
     options: Parameters<typeof normalizeHookPayload>[4] = {}
   ): AgentHookEventPayload | null {
+    // Why: the owner's own provider folds would take the guest's prompt and tools.
+    if (isOwnerProviderGuestHook(canonical, source, body, env)) {
+      return null
+    }
     let state = this.states.get(source)
     if (!state) {
       state = createHookListenerState()
@@ -34,7 +42,10 @@ export class RelayProviderHookNormalization {
       lastToolByPaneKey: state.lastToolByPaneKey,
       lastStatusByPaneKey: state.lastStatusByPaneKey
     }
-    const event = normalizeHookPayload(view, source, body, env, options)
+    const event = normalizeHookPayload(view, source, body, env, {
+      ...options,
+      bindingStatusByPaneKey: canonical.lastStatusByPaneKey
+    })
     if (event) {
       const providerState = state
       cacheRelayLegacyAgentStatus(state, event, MAX_CACHED_PANES, (paneKey) =>
@@ -45,7 +56,14 @@ export class RelayProviderHookNormalization {
         owner &&
         !owner.providerSessionOnly &&
         sameAgentStatusTerminalOwner(owner, event) &&
-        hasOtherAgentProcessOwner(owner.agentPresence, source)
+        hasOtherAgentProcessOwner(owner.agentPresence, {
+          agent: source,
+          process: event.agentPresence?.process
+        }) &&
+        readHookProcessVerdict(canonical, owner, {
+          paneKey: event.paneKey,
+          process: event.agentPresence?.process
+        }) !== 'root'
       ) {
         return event
       }

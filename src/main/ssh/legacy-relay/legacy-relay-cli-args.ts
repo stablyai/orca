@@ -8,7 +8,7 @@ import {
   RETRY_REQUEST_ID_GUIDANCE
 } from '../../../shared/orchestration-retry-request-id'
 
-export type LegacyRelayCliArgs = { command: string; flags: Map<string, string | boolean> }
+type LegacyRelayCliArgs = { command: string; flags: Map<string, string | boolean> }
 
 export function parseLegacyRelayCliArgs(argv: readonly string[]): LegacyRelayCliArgs {
   const commandPath: string[] = []

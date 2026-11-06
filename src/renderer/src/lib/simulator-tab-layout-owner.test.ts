@@ -1,17 +1,15 @@
 // @vitest-environment happy-dom
 
-// With ORCA_LAYOUT_OWNER=main, a simulator tab's open and close reach main as commands, so the
-// window's next save changes nothing in main's model (what the save-divergence detector checks).
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// With ORCA_LAYOUT_OWNER=main, a simulator tab's open and close reach main as commands first and
+// the window draws them from main's frames, so its next save changes nothing in main's model.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
-import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
-import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
+import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   createTestStore,
   makeRuntimeOwnedWorktree,
@@ -20,22 +18,21 @@ import {
   seedStore
 } from '@/store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 type LayoutLoad = ReturnType<typeof loadWorkspaceLayoutWithoutReport>
 
 type Mocks = {
   layoutOwnerIsMain: boolean
   store: ReturnType<typeof createTestStore> | null
-  main: LayoutLoad | null
-  sent: LayoutCommand[]
 }
 
-const mocks = vi.hoisted((): Mocks => ({
-  layoutOwnerIsMain: true,
-  store: null,
-  main: null,
-  sent: []
-}))
+const mocks = vi.hoisted((): Mocks => ({ layoutOwnerIsMain: true, store: null }))
+let main: TabsDrawnFromMain
 
 vi.mock('../../../shared/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
@@ -50,30 +47,16 @@ vi.mock('@/store', () => ({
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn(
-    async (_target: unknown, method: string, params?: { command?: LayoutCommand }) => {
-      if (method !== 'layout.apply' || !params?.command) {
-        return {}
-      }
-      mocks.sent.push(params.command)
-      const main = mainLoad()
-      // As runtime-layout-apply.ts: the window already confirmed its close, so main forces it.
-      const command: LayoutCommand =
-        params.command.type === 'closeTabs' ? { ...params.command, force: true } : params.command
-      const applied = applyLayoutCommand(main.layout, command, {
-        mintId: createBrowserUuid,
-        mintLeafId: createBrowserUuid,
-        now: Date.now
-      })
-      if (!applied.ok) {
-        return { ok: false, code: applied.code }
-      }
-      mocks.main = { ...main, layout: applied.model }
-      return { ok: true, result: applied.result }
-    }
-  )
-}))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 createStoreCascadesMockApi()
 
@@ -90,11 +73,8 @@ function store(): ReturnType<typeof createTestStore> {
   return mocks.store
 }
 
-function mainLoad(): LayoutLoad {
-  if (!mocks.main) {
-    throw new Error('main not loaded')
-  }
-  return mocks.main
+function sent(): readonly LayoutCommand[] {
+  return layoutApplyTestTransport.sent
 }
 
 function loadWindowSave(): LayoutLoad {
@@ -107,18 +87,17 @@ function loadWindowSave(): LayoutLoad {
 
 /** The workspace as the window's save would give it to main, beside main's stored copy. */
 function expectSaveTeachesMainNothing(worktreeId = WORKTREE): void {
-  const stored = saveWorkspaceLayout(mainLoad())
-  const main = loadWorkspaceLayoutWithoutReport(
-    LOCAL_EXECUTION_HOST_ID,
-    stored,
-    nameBasedLoadContext()
-  ).layout
-  expect(loadWindowSave().layout.workspaces[worktreeId]).toEqual(main.workspaces[worktreeId])
+  // A lone group's tree is implied: the window may store its leaf, main none.
+  const withoutLoneLeaf = (workspace: WorkspaceLayout | undefined) =>
+    workspace && { ...workspace, groupLayout: split(workspace.groupLayout) }
+  const split = (tree: TabGroupLayoutNode | undefined) => (tree?.type === 'split' ? tree : null)
+  expect(withoutLoneLeaf(loadWindowSave().layout.workspaces[worktreeId])).toEqual(
+    withoutLoneLeaf(layoutApplyTestTransport.mainModel!.workspaces[worktreeId])
+  )
 }
 
 async function settled(): Promise<void> {
-  await vi.waitFor(() => Promise.resolve())
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await main.settle()
 }
 
 function terminalTab(id: string, groupId: string, worktreeId = WORKTREE): Tab {
@@ -160,31 +139,35 @@ function seed(groups: TabGroup[], layout: TabGroupLayoutNode): void {
     activeGroupIdByWorktree: { [WORKTREE]: groups[0]!.id },
     layoutByWorktree: { [WORKTREE]: layout }
   })
-  // Main starts from the window's last save, as it does today.
-  mocks.main = loadWindowSave()
 }
 
-beforeEach(() => {
+/** Main takes the window's layout and draws it from here on. */
+async function seedDrawnFromMain(groups: TabGroup[], layout: TabGroupLayoutNode): Promise<void> {
+  main?.close()
+  seed(groups, layout)
+  main = await drawTabsFromMain(store())
+}
+
+beforeEach(async () => {
   mocks.layoutOwnerIsMain = true
-  mocks.sent = []
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.store = createTestStore()
-  seed([{ id: GROUP, worktreeId: WORKTREE, activeTabId: TERMINAL, tabOrder: [TERMINAL] }], {
-    type: 'leaf',
-    groupId: GROUP
-  })
+  await seedDrawnFromMain(
+    [{ id: GROUP, worktreeId: WORKTREE, activeTabId: TERMINAL, tabOrder: [TERMINAL] }],
+    { type: 'leaf', groupId: GROUP }
+  )
+})
+
+afterEach(() => {
+  main.close()
 })
 
 function sentTypes(): string[] {
-  return mocks.sent.map((command) => command.type)
+  return sent().map((command) => command.type)
 }
 
 describe('simulator tabs in a layout-owner build', () => {
-  it('starts with main holding the window’s layout', () => {
-    expectSaveTeachesMainNothing()
-  })
-
-  it('records a simulator tab opened in the active group, and its close', async () => {
+  it('opens a simulator tab in the active group through main, and closes it there', async () => {
     const tabId = ensureSimulatorTab(WORKTREE, { placement: 'activeGroup' })
     expect(tabId).toBeTruthy()
     await settled()
@@ -196,12 +179,12 @@ describe('simulator tabs in a layout-owner build', () => {
     expect(sentTypes()).toEqual(['openSimulatorTab', 'closeTabs'])
   })
 
-  it('records the split group a right-side open makes, and its collapse on close', async () => {
+  it('makes the right split with the tab in main, and collapses it on close', async () => {
     const tabId = ensureSimulatorTab(WORKTREE, { placement: 'rightSplit' })
     await settled()
     expect(store().getState().groupsByWorktree[WORKTREE]).toHaveLength(2)
     expectSaveTeachesMainNothing()
-    expect(mainLoad().layout.workspaces[WORKTREE]?.groupLayout).toMatchObject({
+    expect(layoutApplyTestTransport.mainModel!.workspaces[WORKTREE]?.groupLayout).toMatchObject({
       type: 'split',
       direction: 'horizontal',
       first: { type: 'leaf', groupId: GROUP }
@@ -213,9 +196,9 @@ describe('simulator tabs in a layout-owner build', () => {
     expectSaveTeachesMainNothing()
   })
 
-  it('records a right-side open into the right group the workspace already has', async () => {
+  it('opens a right-side tab into the right group the workspace already has', async () => {
     const right = 'group-2'
-    seed(
+    await seedDrawnFromMain(
       [
         { id: GROUP, worktreeId: WORKTREE, activeTabId: TERMINAL, tabOrder: [TERMINAL] },
         { id: right, worktreeId: WORKTREE, activeTabId: 'terminal-2', tabOrder: ['terminal-2'] }
@@ -233,26 +216,33 @@ describe('simulator tabs in a layout-owner build', () => {
     expectSaveTeachesMainNothing()
   })
 
-  it('records an open into the window’s emptied root group', async () => {
-    seed([{ id: GROUP, worktreeId: WORKTREE, activeTabId: null, tabOrder: [] }], {
-      type: 'leaf',
-      groupId: GROUP
-    })
+  it('opens into the root group of a workspace whose tabs all closed', async () => {
+    await seedDrawnFromMain(
+      [{ id: GROUP, worktreeId: WORKTREE, activeTabId: null, tabOrder: [] }],
+      {
+        type: 'leaf',
+        groupId: GROUP
+      }
+    )
+    // Main keeps no empty group, so its frame drops GROUP; the open makes the root group again.
+    expect(store().getState().groupsByWorktree[WORKTREE] ?? []).toEqual([])
     const tabId = ensureSimulatorTab(WORKTREE, { placement: 'activeGroup' })
     await settled()
-    expect(mocks.sent).toMatchObject([
-      { type: 'openSimulatorTab', tabId, groupId: GROUP, index: 0 }
-    ])
+    const groups = store().getState().groupsByWorktree[WORKTREE] ?? []
+    expect(groups).toHaveLength(1)
+    expect(store().getState().getTab(tabId!)?.groupId).toBe(groups[0]!.id)
+    expect(groups[0]!.tabOrder).toEqual([tabId])
+    expect(sent()).toMatchObject([{ type: 'openSimulatorTab', tabId, groupId: groups[0]!.id }])
     expectSaveTeachesMainNothing()
   })
 
   it('sends nothing when the workspace already has its simulator tab', async () => {
     const tabId = ensureSimulatorTab(WORKTREE)
     await settled()
-    mocks.sent = []
+    const before = sent().length
     expect(ensureSimulatorTab(WORKTREE)).toBe(tabId)
     await settled()
-    expect(mocks.sent).toEqual([])
+    expect(sent()).toHaveLength(before)
   })
 
   it('leaves a paired server’s simulator tab to that server', async () => {
@@ -285,7 +275,7 @@ describe('simulator tabs in a layout-owner build', () => {
     expect(tabId).toBeTruthy()
     store().getState().closeUnifiedTab(tabId!)
     await settled()
-    expect(mocks.sent).toEqual([])
+    expect(sent()).toEqual([])
   })
 
   it('sends nothing with the switch off', async () => {
@@ -295,6 +285,6 @@ describe('simulator tabs in a layout-owner build', () => {
     const split = ensureSimulatorTab(WORKTREE, { placement: 'rightSplit' })
     store().getState().closeUnifiedTab(split!)
     await settled()
-    expect(mocks.sent).toEqual([])
+    expect(sent()).toEqual([])
   })
 })

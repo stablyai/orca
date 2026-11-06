@@ -1,14 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import {
   syncSinglePty,
   TEST_WORKTREE_PATH,
   expectStablePaneKeyEnv,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OSC 7501 program status', () => {
   it('projects split reports from a rendererless PTY into hook-yielding status events', async () => {
@@ -18,7 +20,7 @@ describe('OSC 7501 program status', () => {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -58,7 +60,7 @@ describe('OSC 7501 program status', () => {
       onTerminalProgramStatusFacet: (event) => order.push(`facet:${event.facet?.state ?? 'none'}`)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -68,7 +70,7 @@ describe('OSC 7501 program status', () => {
     runtime.onPtyData('pty-order', '\x1b]7501;state=working:app=brew:progress=10\x1b\\', 1)
     runtime.onPtyData('pty-order', '\x1b]7501;state=done:app=brew\x1b\\', 2)
 
-    // Why it matters: a reader between the two (the 133;D drop) must never see done + a live facet.
+    // Readers between status updates must never see done with a live facet.
     expect(order).toEqual(['facet:working', 'status:working', 'facet:done', 'status:done'])
   })
 
@@ -83,7 +85,7 @@ describe('OSC 7501 program status', () => {
         facets.push([event.ptyId, event.facet?.state ?? null])
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -104,8 +106,7 @@ describe('OSC 7501 program status', () => {
   })
 
   it("drives agent edges and the PTY's status from Claude's OSC 7501, not its glyph-less titles", () => {
-    // Byte order captured from Claude Code 2.1.302 once the terminal answers the OSC 7501 probe:
-    // its titles lose the ⠂/✳ prefix, so only the program's report says working or idle.
+    // Claude Code 2.1.302 drops title spinners after OSC 7501; only its program report distinguishes working from idle.
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
     const osc7501 = (body: string) => `\x1b]7501;${body}\x1b\\`
@@ -185,5 +186,46 @@ describe('OSC 7501 program status', () => {
       1
     )
     expect(lifecycle.agentPromptLifecycleByPtyId.get('pty-1')?.status).toBe('working')
+  })
+
+  it('reports a lasting sign-in block as blocked instead of waiting out tui-idle (#37056, #28348)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    vi.setSystemTime(1_000_000)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agy' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: committingSpawn(runtime, spawn),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'w'
+    })
+    const signIn = Buffer.from('Sign in required').toString('base64')
+    // agy 1.5.2's bytes at its "Select login method" menu.
+    runtime.onPtyData(
+      'pty-agy',
+      `\x1b]7501;state=blocked:kind=auth:app=antigravity:msg=${signIn}\x07Select login method:\r\n> 1. Google OAuth\r\n`,
+      Date.now()
+    )
+    // agy flashes this at startup before signing itself in, so a fresh block is not yet final.
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).rejects.toThrow('timeout')
+
+    vi.setSystemTime(1_003_001)
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({ satisfied: false, blockedReason: 'agent-sign-in-prompt' })
+
+    runtime.onPtyData('pty-agy', '\x1b]7501;state=idle:app=antigravity\x07', Date.now())
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({ satisfied: true })
   })
 })

@@ -3,8 +3,7 @@ import type { SFTPWrapper } from 'ssh2'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { uploadSshDirectory, type SshFileTransferHost } from './ssh-connection-file-transfers'
 
-// What ssh2 does once the connection dies: the session closes, and a request sent after that (or a
-// write stream's CLOSE) is never answered, so the transfer itself never settles.
+// Model ssh2 session loss: queued requests and write-stream CLOSE never answer, leaving transfers pending.
 vi.mock('../sftp-upload', () => ({ uploadDirectory: vi.fn(() => new Promise<void>(() => {})) }))
 
 function hostWith(

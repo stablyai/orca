@@ -1,3 +1,4 @@
+import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubApiRepository } from './github-api-repository'
 import {
   getOwnerRepoForRemote,
@@ -13,7 +14,6 @@ import {
   resolveGitHubApiRepositoryProbe
 } from './github-api-repository-probe'
 
-// Why: cache the uncached Enterprise remote probe used by hot paths.
 const ORIGIN_REPO_CACHE_TTL_MS = 30_000
 const ORIGIN_REPO_CACHE_MAX_ENTRIES = 512
 const originRepoCache = new Map<string, { value: GitHubApiRepository | null; expiresAt: number }>()
@@ -40,11 +40,7 @@ function pruneOriginRepoCache(now: number): void {
   }
 }
 
-/**
- * Host-qualified repository identity for one remote: github.com remotes come
- * from the cached slug parser; any other GitHub-shaped host is auth-gated so a
- * non-GitHub forge never routes to the GitHub provider.
- */
+/** Resolve this remote exactly; auth-gate Enterprise hosts so other forges cannot route to GitHub. */
 export async function getGitHubApiRepositoryForRemote(
   repoPath: string,
   remoteName: string,
@@ -52,75 +48,75 @@ export async function getGitHubApiRepositoryForRemote(
   localGitOptions: LocalGitExecOptions = {},
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<GitHubApiRepository | null> {
-  // Why: generic PR resolution prefers upstream, but this API represents the
-  // caller-selected remote exactly (#7331).
-  const requireVerifiedSshProbe = probeOptions.requireVerifiedSshProbe === true
-  const verifiedIdentityArgs = requireVerifiedSshProbe ? ([probeOptions] as const) : []
-  const ownerRepo = await getOwnerRepoForRemote(
-    repoPath,
-    remoteName,
-    connectionId,
-    localGitOptions,
-    ...verifiedIdentityArgs
-  )
-  if (ownerRepo) {
-    return { ...ownerRepo, host: 'github.com' }
-  }
-  const cacheKey = githubApiRepositoryProbeCacheKey(
-    repoPath,
-    remoteName,
-    connectionId,
-    localGitOptions,
-    requireVerifiedSshProbe
-  )
-  const now = Date.now()
-  pruneOriginRepoCache(now)
-  const cached = originRepoCache.get(cacheKey)
-  if (cached && cached.expiresAt > now) {
-    return cached.value
-  }
-  const inFlight = originRepoInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
-  const probe = (async () => {
-    const enterpriseOptions =
-      Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {}
-    const verifiedEnterpriseArgs = requireVerifiedSshProbe ? ([true] as const) : []
-    const slug =
-      remoteName === 'origin'
-        ? await getEnterpriseGitHubRepoSlug(
-            repoPath,
-            connectionId,
-            enterpriseOptions,
-            ...verifiedEnterpriseArgs
-          )
-        : await getEnterpriseGitHubRepoSlugForRemote(
-            repoPath,
-            remoteName,
-            connectionId,
-            enterpriseOptions,
-            ...verifiedEnterpriseArgs
-          )
-    // Why: undefined means the gh auth inventory could not be read. Caching it
-    // as a negative would turn a transient spawn failure into a 30-second miss.
-    if (slug !== undefined) {
-      originRepoCache.set(cacheKey, {
-        value: slug,
-        expiresAt: Date.now() + ORIGIN_REPO_CACHE_TTL_MS
-      })
-      pruneOriginRepoCache(Date.now())
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    // Generic PR resolution prefers upstream; this entry point must honor the selected remote.
+    const requireVerifiedSshProbe = probeOptions.requireVerifiedSshProbe === true
+    const verifiedIdentityArgs = requireVerifiedSshProbe ? ([probeOptions] as const) : []
+    const ownerRepo = await getOwnerRepoForRemote(
+      repoPath,
+      remoteName,
+      connectionId,
+      localGitOptions,
+      ...verifiedIdentityArgs
+    )
+    if (ownerRepo) {
+      return { ...ownerRepo, host: 'github.com' }
     }
-    return resolveGitHubApiRepositoryProbe(slug, requireVerifiedSshProbe)
-  })()
-  originRepoInFlight.set(cacheKey, probe)
-  try {
-    return await probe
-  } finally {
-    if (originRepoInFlight.get(cacheKey) === probe) {
-      originRepoInFlight.delete(cacheKey)
+    const cacheKey = githubApiRepositoryProbeCacheKey(
+      repoPath,
+      remoteName,
+      connectionId,
+      localGitOptions,
+      requireVerifiedSshProbe
+    )
+    const now = Date.now()
+    pruneOriginRepoCache(now)
+    const cached = originRepoCache.get(cacheKey)
+    if (cached && cached.expiresAt > now) {
+      return cached.value
     }
-  }
+    const inFlight = originRepoInFlight.get(cacheKey)
+    if (inFlight) {
+      return inFlight
+    }
+    const probe = (async () => {
+      const enterpriseOptions =
+        Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {}
+      const verifiedEnterpriseArgs = requireVerifiedSshProbe ? ([true] as const) : []
+      const slug =
+        remoteName === 'origin'
+          ? await getEnterpriseGitHubRepoSlug(
+              repoPath,
+              connectionId,
+              enterpriseOptions,
+              ...verifiedEnterpriseArgs
+            )
+          : await getEnterpriseGitHubRepoSlugForRemote(
+              repoPath,
+              remoteName,
+              connectionId,
+              enterpriseOptions,
+              ...verifiedEnterpriseArgs
+            )
+      // Undefined means auth inventory was unreadable; do not cache transient probe failures.
+      if (slug !== undefined) {
+        originRepoCache.set(cacheKey, {
+          value: slug,
+          expiresAt: Date.now() + ORIGIN_REPO_CACHE_TTL_MS
+        })
+        pruneOriginRepoCache(Date.now())
+      }
+      return resolveGitHubApiRepositoryProbe(slug, requireVerifiedSshProbe)
+    })()
+    originRepoInFlight.set(cacheKey, probe)
+    try {
+      return await probe
+    } finally {
+      if (originRepoInFlight.get(cacheKey) === probe) {
+        originRepoInFlight.delete(cacheKey)
+      }
+    }
+  })
 }
 
 export async function getOriginGitHubApiRepository(

@@ -104,7 +104,7 @@ export function resolveLegacyWorkerCoordinatorDelivery(
 ): { to: string; contract: MessageDeliveryContract } {
   const run = this.getRunRaw(runId)
   const principal = this.getLegacyCoordinatorPrincipal(runId)
-  // Why: `!== null` alone reads an unknown run (undefined) as taken over and misroutes it to run: delivery.
+  // Unknown Runs are undefined, not null; neither proves takeover.
   const takenOver = run?.coordinator_handle != null && principal?.status !== 'committed'
   return takenOver
     ? { to: `run:${runId}`, contract: 'current_delivery' }

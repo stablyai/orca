@@ -1,5 +1,4 @@
-// Where this host's copy of the chat-visuals skill plugin lives. Resolved on the host that spawns
-// the agent: a client's install path means nothing to another machine.
+// Resolve on the execution host; a client’s install paths are meaningless remotely.
 
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -9,9 +8,9 @@ const PLUGIN_DIR_NAME = 'native-chat-visuals'
 export const NATIVE_CHAT_VISUALS_SKILL_NAME = 'orca-chat-visuals'
 
 export type NativeChatVisualsSkillLocation = {
-  /** A Claude plugin folder: `.claude-plugin/plugin.json` plus `skills/<name>/SKILL.md`. */
+  /** Contains .claude-plugin/plugin.json and skills/<name>/SKILL.md. */
   pluginDir: string
-  /** The plugin's `skills` folder, the shape a Codex skill root takes. */
+  /** Codex expects the plugin’s skills directory as its root. */
   skillsRoot: string
 }
 
@@ -22,12 +21,10 @@ function candidatePluginDirs(): string[] {
   }
   const packaged = hasAppEnvironment() && getAppEnvironment().isPackaged()
   if (packaged) {
-    // Why: plain-Node orcad has no resourcesPath; its build copies the folder into its own root.
-    // Nothing else: an install must never load a skill from whatever checkout it was started in.
+    // Plain-Node orcad uses its app root; packaged installs must never fall back to launch-directory checkouts.
     candidates.push(join(getAppEnvironment().getAppPath(), PLUGIN_DIR_NAME))
     return candidates
   }
-  // Development and test hosts run from a checkout.
   for (const root of [
     hasAppEnvironment() ? getAppEnvironment().getAppPath() : null,
     process.cwd()
@@ -53,7 +50,7 @@ async function isComplete(pluginDir: string): Promise<boolean> {
 
 let found: NativeChatVisualsSkillLocation | null = null
 
-/** This install's skill plugin, or null when it is missing; only a found location is remembered. */
+/** Cache only found locations so missing plugins can appear later. */
 export async function resolveNativeChatVisualsSkillLocation(
   candidates: readonly string[] = candidatePluginDirs()
 ): Promise<NativeChatVisualsSkillLocation | null> {

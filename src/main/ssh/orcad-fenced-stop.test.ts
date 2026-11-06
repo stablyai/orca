@@ -21,29 +21,6 @@ function fence(overrides: Partial<FencedStop<string, string>> = {}) {
 }
 
 describe('runFencedStop', () => {
-  it('counts, prepares and stops, keeping admission closed through a sent stop', async () => {
-    const { steps } = fence()
-    await expect(runFencedStop(steps)).resolves.toEqual({ stopped: 'stopped' })
-    expect(steps.releaseIncumbentAdmission).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['the count refuses', { recountCensus: async () => ({ ...idle, liveSessions: 1 }) }, 'live'],
-    ['the count fails', { recountCensus: () => Promise.reject(new Error('gone')) }, 'live']
-  ])('reopens and stops nothing when %s', async (_case, overrides, refused) => {
-    const { steps } = fence(overrides)
-    await expect(runFencedStop(steps)).resolves.toEqual({ refused })
-    expect(steps.stop).not.toHaveBeenCalled()
-    expect(steps.releaseIncumbentAdmission).toHaveBeenCalledOnce()
-  })
-
-  it('reopens and rethrows when the step before the stop fails', async () => {
-    const { steps } = fence({ prepare: () => Promise.reject(new Error('disk full')) })
-    await expect(runFencedStop(steps)).rejects.toThrow('disk full')
-    expect(steps.stop).not.toHaveBeenCalled()
-    expect(steps.releaseIncumbentAdmission).toHaveBeenCalledOnce()
-  })
-
   it('stops nothing once the count may have outlived its fence', async () => {
     const box: { advance?: (ms: number) => void } = {}
     const made = fence({

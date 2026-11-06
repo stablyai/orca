@@ -16,11 +16,10 @@ import {
   probeRelayEndpointIncumbent,
   relayEndpointIncumbentProbeCommand
 } from './ssh-relay-endpoint-incumbent'
-import type { SshConnection } from '../connection/ssh-connection'
 import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never dereferences the connection; the Windows path returns before using it.
-const connection = {} as SshConnection
+const connection = unusedSshConnection()
 
 const SOCK = '/home/u/.orca-remote/relay-0.1.0+aaaa/relay-deadbeef.sock'
 const POSIX_HOST = getRemoteHostPlatform('linux-x64')
@@ -82,8 +81,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
     }
   })
 
-  // A relay on node A of a round-robin alias sharing an NFS home: node B's kernel refuses the
-  // socket and B's lsof sees no holder, though A's relay still runs its terminals.
+  // Shared-home sockets may be held on another kernel; local refusal/no-holder evidence cannot prove exit.
   it('reports unverifiable for a refused socket that another machine may hold', () => {
     for (const fsType of [
       'linux 6969 ef53', // nfs

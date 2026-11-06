@@ -1,8 +1,9 @@
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import { translate } from '@/i18n/i18n'
-import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
-import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session-refusal-notice'
-import type { StructuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
@@ -15,7 +16,6 @@ import type {
   NativeChatComposerNoticeContent
 } from './native-chat-composer-notice'
 
-/** A chat whose start failed or went unconfirmed, as a notice with Retry. */
 function nativeChatLaunchNotice({
   lifecycle,
   failure = null,
@@ -25,10 +25,9 @@ function nativeChatLaunchNotice({
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
-  /** Names the agent in a start failure's words. */
   agentLabel?: string
   onRetry: () => void
-  /** Offered instead of Retry until it signs in, when the start failed for want of a sign-in. */
+  /** Replace Retry with sign-in until authentication succeeds. */
   claudeSignIn?: NativeChatClaudeSignIn | null
 }): NativeChatComposerNotice | null {
   if (lifecycle !== 'failed' && lifecycle !== 'visibility-unknown') {
@@ -44,13 +43,12 @@ function nativeChatLaunchNotice({
           'auto.components.native.chat.NativeChatLaunchRetry.unknown',
           'Chat connection could not be confirmed.'
         )
-  const cause =
-    lifecycle === 'failed' && failure
-      ? (failure.causeText ??
-        agentSessionWriteNoticeText(
-          agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
-        ))
-      : ''
+  const cause = failure
+    ? (failure.causeText ??
+      agentSessionWriteNoticeText(
+        agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
+      ))
+    : ''
   // An argument problem already says the start failed; the generic lead would repeat it.
   const saysStartFailure =
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
@@ -76,11 +74,11 @@ function nativeChatLaunchNotice({
   }
 }
 
-/** A structured chat's own notices, for the card above its composer. */
 export function structuredSessionNotices({
   launch,
   agentLabel,
   sessionError,
+  readRefusal,
   composerError,
   claudeSignIn = null,
   availability = null,
@@ -93,11 +91,10 @@ export function structuredSessionNotices({
   }
   agentLabel: string
   sessionError: string | null
+  readRefusal?: AgentSessionRefusalReference
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
   claudeSignIn?: NativeChatClaudeSignIn | null
-  /** Why the host says no chat can start here, from `useNativeChatAvailabilityNotice`. */
   availability?: NativeChatComposerNotice | null
-  /** Why this chat's host may not take a turn, from `useNativeChatHostPermissionGate`. */
   hostPermission?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
   // A host held for its permission mode already says why nothing starts; Retry returns with it.
@@ -108,20 +105,27 @@ export function structuredSessionNotices({
     onRetry: launch.retry,
     claudeSignIn
   })
+  // A missing history cannot replace the creation owner's available recovery.
+  const sessionNotice =
+    sessionError &&
+    !(
+      launch.lifecycle === 'visibility-unknown' &&
+      launchNotice?.action &&
+      readRefusal?.code === 'agent_session_identity_required' &&
+      readRefusal.details?.reason === 'recordMissing'
+    )
+      ? {
+          key: 'session',
+          kind: 'error' as const,
+          text: sessionError,
+          ...(launchNotice ? { action: launchNotice.action } : {})
+        }
+      : null
   return [
     ...(hostPermission ? [hostPermission] : []),
     ...(availability ? [availability] : []),
-    ...(launchNotice && !sessionError ? [launchNotice] : []),
-    ...(sessionError
-      ? [
-          {
-            key: 'session',
-            kind: 'error' as const,
-            text: sessionError,
-            ...(launchNotice ? { action: launchNotice.action } : {})
-          }
-        ]
-      : []),
+    ...(launchNotice && !sessionNotice ? [launchNotice] : []),
+    ...(sessionNotice ? [sessionNotice] : []),
     ...(composerError ? [{ key: 'composer-error', kind: 'error' as const, ...composerError }] : [])
   ]
 }

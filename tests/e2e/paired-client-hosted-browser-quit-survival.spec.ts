@@ -192,11 +192,7 @@ async function readClientBrowserRows(
   }, worktreeId)
 }
 
-/**
- * What the client-hosted pane has settled on: its guest, the unavailable notice, or still waiting.
- * Read off the rendered pane rather than the store, because "the spinner never stops" is a
- * rendering fact and the store field behind it looks the same either way.
- */
+// Read the rendered pane to distinguish attached guest, unavailable notice and endless spinner; store state alone cannot.
 async function readClientHostedPaneResolution(
   page: Page
 ): Promise<'guest' | 'unavailable' | 'waiting'> {
@@ -319,9 +315,7 @@ test('keeps a client-hosted browser tab across a client quit and relaunch', asyn
       'the runtime must hold the client-hosted page before the quit'
     ).toContain(opened.remotePageId)
 
-    // Why the guest moves before the quit: with the tab still on its create URL, restoring to the
-    // create URL and restoring to where the user was are the same answer, and the test cannot tell
-    // a working restore from one that just replays the URL the tab was born on.
+    // Move away from create URL so replaying the initial destination cannot pass as restore.
     await navigateGuest(client.page, fixture.markerUrl, fixture.movedUrl)
     expect(
       await waitForRenderedClientWebview(
@@ -365,8 +359,7 @@ test('keeps a client-hosted browser tab across a client quit and relaunch', asyn
       })
       .not.toBeNull()
 
-    // Counted across the whole fixture origin, not just the moved URL: a restore that also replays
-    // the create URL leaves two rows, and matching only the moved one would call that a pass.
+    // Count the entire origin to catch create-URL duplicates beside the restored page.
     const rows = await readClientBrowserRows(client.page, relaunchedWorktreeId)
     const survivorRows = rows.filter((row) => row.url.startsWith(fixture.origin))
     expect(survivorRows, 'the restored tab must come back exactly once').toHaveLength(1)
@@ -418,9 +411,7 @@ test('keeps a client-hosted browser tab across a client quit and relaunch', asyn
   }
 })
 
-// Why: retention is only safe if a retained tab can still be dismissed. The comment that justified
-// retiring on a fence warned the tab would otherwise stay listed and un-closeable for the life of
-// the runtime, so that warning is the acceptance criterion for keeping it.
+// Retained pages must remain dismissible even while their desktop is absent.
 test('closes a retained client-hosted tab while its host is gone', async ({
   testRepoPath
 }, testInfo) => {
@@ -462,9 +453,7 @@ test('closes a retained client-hosted tab while its host is gone', async ({
       'the closed tab must leave the runtime for good'
     ).not.toContain(opened.remotePageId)
 
-    // The other half of "closeable while absent" is what the desktop does when it comes back to a
-    // page nobody has any more. Its own session still lists the row and nothing will ever publish
-    // it, so the row has to resolve on its own and then go when the user says so.
+    // After host-side close, require the returning desktop to resolve and dismiss its own stale session row.
     client = await launchPairedElectronClient(host.offer, testInfo, CLIENT_NAME, {
       reuseUserDataDir: profileDir
     })

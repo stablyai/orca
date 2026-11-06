@@ -134,7 +134,7 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     title: 'Send Review Notes to Agent',
     group: 'Global',
     scope: 'global',
-    // Why: fires from the global capture handler even while the editor is focused, so Settings must warn on collisions with editor chords (e.g. Add Review Note) too, not just global ones.
+    // Global capture also fires in editors; include editor collisions such as Add Review Note in Settings warnings.
     conflictGroup: 'editor',
     searchKeywords: [
       'shortcut',

@@ -31,9 +31,7 @@ const CHILD_PERMISSION = {
   tool_input: { command: 'rm scratch' }
 }
 
-// A Claude row whose main agent settled while child agents still work (or wait on a prompt) is
-// decided by the row's `mainAgent` fact: OSC cannot settle it, and restart restores the settled
-// main agent so the children's own lifecycle hooks can.
+// Persist the settled main-agent fact so child lifecycle hooks, rather than OSC, can settle the restored row.
 describe('Claude rows held open by child agents', () => {
   let userDataPath: string
 
@@ -182,7 +180,6 @@ describe('Claude rows held open by child agents', () => {
           mainAgent: expect.objectContaining({ state: 'working' })
         })
       ])
-      // The main agent keeps working: nothing it publishes changed, so nothing is pushed.
       await post(server, { hook_event_name: 'PreToolUse', tool_name: 'Grep' })
       expect(pushed).toHaveLength(1)
     } finally {
@@ -310,7 +307,7 @@ describe('Claude rows held open by child agents', () => {
     }
   })
 
-  // The shell fact rides beside `mainAgent`; a row rewritten without it would read as shell-free.
+  // Preserve shell evidence beside mainAgent so restart cannot mistake the row for shell-free.
   async function expectShellHeldRowStaysOpenAfterRestart(
     server: AgentHookServer,
     childEvents: Record<string, unknown>[]

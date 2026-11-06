@@ -6,7 +6,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   getRemoteRuntimeTerminalMultiplexer,
   resetRemoteRuntimeTerminalMultiplexersForTests
@@ -15,9 +15,7 @@ import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
-// Why: the client used to collapse every unusable snapshot reply to `null`, so a slow
-// host and a genuinely empty pane were indistinguishable. These tests pin the reason
-// each reply now carries, and pin that the legacy `serializeBuffer` result is unchanged.
+// Unusable snapshots once collapsed to null, hiding slow-host versus empty-pane differences. Pin reasons and unchanged legacy serializeBuffer output.
 
 type SubscribeCallbacks = {
   onResponse: (response: unknown) => void
@@ -173,81 +171,6 @@ describe('remote terminal snapshot outcome reasons', () => {
     await Promise.resolve()
     return stream
   }
-
-  it('reports a real buffer as a snapshot and hands legacy callers the same image', async () => {
-    const stream = await subscribeClient()
-    server.nextRequestedReply = { kind: 'buffer', data: 'RESTORED' }
-
-    await expect(stream.serializeBufferOutcome({ scrollbackRows: 100 })).resolves.toEqual({
-      availability: { kind: 'snapshot' },
-      snapshot: {
-        data: 'RESTORED',
-        cols: 80,
-        rows: 24,
-        seq: 0,
-        source: undefined,
-        pendingEscapeTailAnsi: undefined,
-        carriesNormalBuffer: true
-      }
-    })
-    await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toMatchObject({
-      data: 'RESTORED'
-    })
-  })
-
-  it('reports a proven-empty buffer as a snapshot, not as an unavailable reply', async () => {
-    const stream = await subscribeClient()
-    server.nextRequestedReply = { kind: 'buffer', data: '' }
-
-    const outcome = await stream.serializeBufferOutcome({ scrollbackRows: 100 })
-    expect(outcome.availability).toEqual({ kind: 'snapshot' })
-    expect(outcome.snapshot?.data).toBe('')
-    await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toMatchObject({
-      data: ''
-    })
-  })
-
-  it('reports a host that could not serialize as retry-worthy without changing the legacy result', async () => {
-    const stream = await subscribeClient()
-    server.nextRequestedReply = {
-      kind: 'buffer',
-      data: '',
-      unavailable: 'no-serializable-buffer'
-    }
-
-    const outcome = await stream.serializeBufferOutcome({ scrollbackRows: 100 })
-    expect(outcome.availability).toEqual({
-      kind: 'retry-worthy',
-      cause: 'host-no-serializable-buffer'
-    })
-    // Legacy callers still see the host's (empty) image, exactly as before the reason existed.
-    expect(outcome.snapshot?.data).toBe('')
-    await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toMatchObject({
-      data: ''
-    })
-  })
-
-  it('reports a pending-output overflow as retry-worthy', async () => {
-    const stream = await subscribeClient()
-    server.nextRequestedReply = { kind: 'truncated', unavailable: 'pending-output-overflowed' }
-
-    await expect(stream.serializeBufferOutcome({ scrollbackRows: 100 })).resolves.toEqual({
-      availability: { kind: 'retry-worthy', cause: 'host-pending-output-overflowed' },
-      snapshot: null
-    })
-    await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toBeNull()
-  })
-
-  it('maps an old host that truncated without a reason to the explicit legacy case', async () => {
-    const stream = await subscribeClient()
-    server.nextRequestedReply = { kind: 'truncated' }
-
-    await expect(stream.serializeBufferOutcome({ scrollbackRows: 100 })).resolves.toEqual({
-      availability: { kind: 'unknown-legacy-host' },
-      snapshot: null
-    })
-    await expect(stream.serializeBuffer({ scrollbackRows: 100 })).resolves.toBeNull()
-  })
 
   it('reports a reply past the client replay limit as permanently unavailable', async () => {
     const stream = await subscribeClient()

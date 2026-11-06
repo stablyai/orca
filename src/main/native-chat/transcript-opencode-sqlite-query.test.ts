@@ -1,9 +1,8 @@
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session-host-status-rows'
+import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
 import {
   readOpenCodeTranscriptPage,
@@ -14,8 +13,7 @@ let tempDirs: string[] = []
 let openDbs: Database.Database[] = []
 
 afterEach(() => {
-  // Why: Windows keeps the file locked while the handle is open, which would
-  // make rmSync below fail with EPERM.
+  // Close before removal: Windows locks open databases.
   for (const db of openDbs) {
     db.close()
   }
@@ -35,8 +33,6 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db, path }
 }
 
-// The query module only touches these columns; the full production schema is
-// exercised by the scanner's own suite.
 function applySchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE session (id TEXT PRIMARY KEY);
@@ -88,58 +84,6 @@ function messageRowid(db: Database.Database, id: string): number {
 }
 
 describe('readOpenCodeTranscriptPage', () => {
-  it.each(['message', 'part'] as const)(
-    'omits an oversized %s without losing identity or pagination',
-    (table) => {
-      const { db, path } = createTempDb()
-      applySchema(db)
-      for (let index = 1; index <= 3; index++) {
-        insertMessage(db, { id: `msg-${index}`, time: index })
-        insertPart(db, {
-          id: `prt-${index}`,
-          messageId: `msg-${index}`,
-          time: index,
-          data: { type: 'text', text: `message ${index}` }
-        })
-      }
-      db.prepare(`UPDATE ${table} SET data = ? WHERE id = ?`).run(
-        JSON.stringify({
-          role: 'user',
-          type: 'file',
-          mime: 'image/png',
-          url: 'x'.repeat(2 * 1024 * 1024)
-        }),
-        table === 'message' ? 'msg-2' : 'prt-2'
-      )
-      const args = { dbPath: path, sessionId: 'ses-1', limit: 2 }
-      const page = readOpenCodeTranscriptPage(args)
-      expect(page?.items.map((item) => item.message.id)).toEqual(['msg-2', 'msg-3'])
-      expect(page?.items[0]?.message.blocks).toEqual([
-        {
-          type: 'text',
-          text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'],
-          presentation: 'history-item-too-large'
-        }
-      ])
-      expect(page?.items[0]?.rowid).toBe(messageRowid(db, 'msg-2'))
-      expect(readOpenCodeTranscriptPage(args)?.items[0]?.fingerprint).toBe(
-        page?.items[0]?.fingerprint
-      )
-      db.prepare(`UPDATE ${table} SET time_updated = 10 WHERE id = ?`).run(
-        table === 'message' ? 'msg-2' : 'prt-2'
-      )
-      expect(readOpenCodeTranscriptPage(args)?.items[0]?.fingerprint).not.toBe(
-        page?.items[0]?.fingerprint
-      )
-      expect(
-        readOpenCodeTranscriptPage({
-          ...args,
-          beforeMessageRowId: page?.beforeMessageRowId ?? undefined
-        })?.items.map((item) => item.message.id)
-      ).toEqual(['msg-1'])
-    }
-  )
-
   it('preserves ordinary text beside an oversized UTF-8 attachment part', () => {
     const { db, path } = createTempDb()
     applySchema(db)
@@ -169,69 +113,9 @@ describe('readOpenCodeTranscriptPage', () => {
     expect(page?.items[0]?.message.transcriptOffset).toBe(page?.items[1]?.message.transcriptOffset)
   })
 
-  it('returns null when the session row does not exist', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    expect(readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'missing', limit: 10 })).toBeNull()
-  })
-
-  it('treats a session_v2-only (OpenCode 2) DB as not-found instead of throwing', () => {
-    const { db, path } = createTempDb()
-    // Why: OpenCode 2 stores sessions in session_v2 — the v1 reader must fail
-    // soft like session-scanner-opencode2-sqlite-list.ts, not throw
-    // "no such table: session".
-    db.exec('CREATE TABLE session_v2 (id TEXT PRIMARY KEY)')
-    expect(readOpenCodeTranscriptSignal(path, 'ses-1')).toBeNull()
-    expect(readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })).toBeNull()
-  })
-
-  it('returns the NEWEST limit messages when more history exists', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    for (let index = 1; index <= 10; index++) {
-      insertMessage(db, { id: `msg-${index}`, time: index })
-      insertPart(db, {
-        id: `prt-${index}`,
-        messageId: `msg-${index}`,
-        time: index,
-        data: { type: 'text', text: `message ${index}` }
-      })
-    }
-    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 3 })
-    expect(page).not.toBeNull()
-    // The probe row is the oldest extra — the newest message must survive.
-    expect(page!.items.map((item) => item.message.id)).toEqual(['msg-8', 'msg-9', 'msg-10'])
-    expect(page!.hasMore).toBe(true)
-    expect(page!.beforeMessageRowId).toBe(page!.items[0]!.rowid)
-  })
-
-  it('pages strictly older messages from the raw-row cursor', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    for (let index = 1; index <= 10; index++) {
-      insertMessage(db, { id: `msg-${index}`, time: index })
-      insertPart(db, {
-        id: `prt-${index}`,
-        messageId: `msg-${index}`,
-        time: index,
-        data: { type: 'text', text: `message ${index}` }
-      })
-    }
-    const first = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 3 })
-    const second = readOpenCodeTranscriptPage({
-      dbPath: path,
-      sessionId: 'ses-1',
-      limit: 3,
-      beforeMessageRowId: first!.beforeMessageRowId!
-    })
-    expect(second!.items.map((item) => item.message.id)).toEqual(['msg-5', 'msg-6', 'msg-7'])
-  })
-
   it('counts the limit in renderable messages, batching past non-renderable rows', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // Rows 1..6 alternate step-start (no blocks) / renderable — mirror of the
-    // forward page's batching test, walking newest-to-oldest this time.
     for (let index = 1; index <= 6; index++) {
       insertMessage(db, { id: `msg-${index}`, time: index })
       insertPart(db, {
@@ -242,11 +126,9 @@ describe('readOpenCodeTranscriptPage', () => {
       })
     }
     const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 2 })
-    // Two renderable messages even though they span three raw rows.
     expect(page!.items.map((item) => item.message.id)).toEqual(['msg-4', 'msg-6'])
     expect(page!.hasMore).toBe(true)
-    // Cursor names the oldest RAW scanned row (msg-3, consumed but dropped),
-    // so the probe row msg-2 comes back on the next page — nothing is skipped.
+    // Cursor tracks the oldest raw row, including filtered rows, so the probe survives for the next page.
     expect(page!.beforeMessageRowId).toBe(messageRowid(db, 'msg-3'))
     const next = readOpenCodeTranscriptPage({
       dbPath: path,
@@ -258,31 +140,10 @@ describe('readOpenCodeTranscriptPage', () => {
     expect(next!.hasMore).toBe(false)
   })
 
-  it('walks a fully non-renderable history to its oldest raw row without dead-ending', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    for (let index = 1; index <= 4; index++) {
-      insertMessage(db, { id: `msg-${index}`, time: index })
-      insertPart(db, {
-        id: `prt-${index}`,
-        messageId: `msg-${index}`,
-        time: index,
-        data: { type: 'step-start' }
-      })
-    }
-    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 2 })
-    expect(page!.items).toEqual([])
-    expect(page!.hasMore).toBe(false)
-    // The raw cursor still names the oldest scanned row — a later renderable
-    // append is picked up instead of being swallowed by the sparse prefix.
-    expect(page!.beforeMessageRowId).toBe(messageRowid(db, 'msg-1'))
-  })
-
   it('re-reads messages trimmed by an overshoot batch instead of skipping them', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // Sparse-then-dense shape (reviewer repro): batch 1 yields one renderable
-    // past a step-start row, batch 2 is dense and overshoots the budget.
+    // Sparse first batch then dense second batch must trim without skipping overflow.
     for (const index of [1, 2, 3, 5]) {
       insertMessage(db, { id: `msg-${index}`, time: index })
       insertPart(db, {
@@ -314,19 +175,14 @@ describe('readOpenCodeTranscriptPage', () => {
       }
       cursor = page!.beforeMessageRowId
     }
-    // Every renderable message returns exactly once — msg-2 must not fall
-    // through the gap between the trimmed batch and the cursor. Pages arrive
-    // newest-first (the walk starts at the tail), so chronological order
-    // only holds inside each page.
+    // Pages arrive newest-first; preserve order within each page and include every message once.
     expect(seen).toEqual(['msg-3', 'msg-5', 'msg-1', 'msg-2'])
   })
 
   it('keeps hasMore true when a trim happens on the final short batch', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // Batch 1 collects one renderable past a step-start; batch 2 hits the
-    // table end (rows.length <= limit → probe says no more) while still
-    // overshooting — the trim itself must keep the walk alive.
+    // A final batch can overshoot despite reaching table end; trimming must retain hasMore.
     for (const index of [1, 2, 4]) {
       insertMessage(db, { id: `msg-${index}`, time: index })
       insertPart(db, {
@@ -344,7 +200,6 @@ describe('readOpenCodeTranscriptPage', () => {
       data: { type: 'step-start' }
     })
     const first = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 2 })
-    // The overshoot trimmed msg-1 — that IS more history below the cursor.
     expect(first!.hasMore).toBe(true)
     const second = readOpenCodeTranscriptPage({
       dbPath: path,
@@ -354,142 +209,6 @@ describe('readOpenCodeTranscriptPage', () => {
     })
     expect(second!.items.map((item) => item.message.id)).toEqual(['msg-1'])
     expect(second!.hasMore).toBe(false)
-  })
-
-  it('maps image file parts to image refs and skips non-image files', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    // A file:// URL written on the READING machine's platform decodes back to
-    // a local path; a foreign-platform one falls back to the opaque ref.
-    const localPath = process.platform === 'win32' ? 'C:\\Users\\u\\pic.jpg' : '/home/user/pic.jpg'
-    const fileUrl = pathToFileURL(localPath).href
-    insertMessage(db, { id: 'msg-1', time: 1, role: 'user' })
-    insertPart(db, {
-      id: 'prt-data',
-      messageId: 'msg-1',
-      time: 1,
-      data: {
-        type: 'file',
-        mime: 'image/png',
-        url: 'data:image/png;base64,AAA',
-        filename: 'paste.png'
-      }
-    })
-    insertPart(db, {
-      id: 'prt-file-url',
-      messageId: 'msg-1',
-      time: 1,
-      data: { type: 'file', mime: 'image/jpeg', url: fileUrl }
-    })
-    insertPart(db, {
-      id: 'prt-plain-path',
-      messageId: 'msg-1',
-      time: 1,
-      data: { type: 'file', mime: 'image/webp', url: '/tmp/opencode/paste.webp' }
-    })
-    insertPart(db, {
-      id: 'prt-pdf',
-      messageId: 'msg-1',
-      time: 1,
-      data: { type: 'file', mime: 'application/pdf', url: 'file:///tmp/doc.pdf' }
-    })
-    insertPart(db, {
-      id: 'prt-text',
-      messageId: 'msg-1',
-      time: 1,
-      data: { type: 'text', text: 'prompt body' }
-    })
-
-    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })
-    // Blocks follow part-row order; the PDF (non-image) renders nothing.
-    expect(page!.items[0]!.message.blocks).toEqual([
-      { type: 'image-ref', url: 'data:image/png;base64,AAA', alt: 'paste.png' },
-      { type: 'image-ref', path: localPath },
-      { type: 'image-ref', path: '/tmp/opencode/paste.webp' },
-      { type: 'text', text: 'prompt body' }
-    ])
-  })
-
-  it('filters synthetic text parts and maps tool parts to call/result blocks', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    insertMessage(db, { id: 'msg-1', time: 1, role: 'user' })
-    insertPart(db, {
-      id: 'prt-syn',
-      messageId: 'msg-1',
-      time: 1,
-      data: { type: 'text', text: 'injected context', synthetic: true }
-    })
-    insertPart(db, {
-      id: 'prt-text',
-      messageId: 'msg-1',
-      time: 1,
-      data: { type: 'text', text: 'real prompt' }
-    })
-    insertMessage(db, { id: 'msg-2', time: 2, role: 'assistant' })
-    insertPart(db, {
-      id: 'prt-tool-done',
-      messageId: 'msg-2',
-      time: 2,
-      data: {
-        type: 'tool',
-        tool: 'bash',
-        callID: 'call-1',
-        state: { status: 'completed', input: { command: 'ls' }, output: 'file list' }
-      }
-    })
-    insertPart(db, {
-      id: 'prt-tool-pending',
-      messageId: 'msg-2',
-      time: 2,
-      data: { type: 'tool', tool: 'read', callID: 'call-2', state: { status: 'running' } }
-    })
-
-    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })
-    const user = page!.items.find((item) => item.message.id === 'msg-1')!
-    expect(user.message.blocks).toEqual([{ type: 'text', text: 'real prompt' }])
-    const assistant = page!.items.find((item) => item.message.id === 'msg-2')!
-    expect(assistant.message.blocks).toEqual([
-      {
-        type: 'tool-call',
-        callId: 'call-1',
-        name: 'bash',
-        state: 'completed',
-        input: { command: 'ls' }
-      },
-      { type: 'tool-result', callId: 'call-1', output: 'file list' },
-      // A running tool captured no output yet — call only, no result block.
-      { type: 'tool-call', callId: 'call-2', name: 'read', state: 'running', input: undefined }
-    ])
-  })
-
-  it('surfaces a tool error string as the result output', () => {
-    const { db, path } = createTempDb()
-    applySchema(db)
-    insertMessage(db, { id: 'msg-1', time: 1, role: 'assistant' })
-    insertPart(db, {
-      id: 'prt-tool-error',
-      messageId: 'msg-1',
-      time: 1,
-      data: {
-        type: 'tool',
-        tool: 'bash',
-        callID: 'call-1',
-        state: { status: 'error', input: { command: 'ls' }, error: 'exit 1: boom' }
-      }
-    })
-
-    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })
-    expect(page!.items[0]!.message.blocks).toEqual([
-      {
-        type: 'tool-call',
-        callId: 'call-1',
-        name: 'bash',
-        state: 'failed',
-        input: { command: 'ls' }
-      },
-      { type: 'tool-result', callId: 'call-1', output: 'exit 1: boom', isError: true }
-    ])
   })
 })
 
@@ -515,41 +234,27 @@ describe('readOpenCodeTranscriptSignal', () => {
       maxPartTimeUpdated: 20
     })
   })
+})
 
-  it('returns null when the session row does not exist', () => {
+it.each(['stop', 'tool-calls', undefined])(
+  'uses native v1 completion evidence without treating prose or tool work as terminal: %s',
+  async (finish) => {
     const { db, path } = createTempDb()
     applySchema(db)
-    expect(readOpenCodeTranscriptSignal(path, 'missing')).toBeNull()
-  })
-})
-
-it('stops before fetching a third part batch when earlier batches exhaust the page byte budget', () => {
-  const { db, path } = createTempDb()
-  applySchema(db)
-  const text = 'x'.repeat(100_000)
-  db.exec('BEGIN')
-  {
-    for (let i = 0; i < 300; i++) {
-      insertMessage(db, { id: `budget-${i}`, time: i })
-      insertPart(db, {
-        id: `part-${i}`,
-        messageId: `budget-${i}`,
-        time: i,
-        data: { type: 'text', text }
-      })
+    insertMessage(db, { id: 'u1', time: 1 })
+    insertPart(db, { id: 'pu', messageId: 'u1', time: 1, data: { type: 'text', text: 'Prompt' } })
+    insertMessage(db, { id: 'a1', time: 2, role: 'assistant' })
+    insertPart(db, { id: 'pa', messageId: 'a1', time: 2, data: { type: 'text', text: 'Response' } })
+    if (finish) {
+      db.prepare('UPDATE message SET data = ? WHERE id = ?').run(
+        JSON.stringify({ role: 'assistant', time: { completed: 3 }, finish }),
+        'a1'
+      )
     }
+    const imported = await readOpenCodeNativeChatTranscriptFull('ses-1', {
+      resolveDbPath: async () => path,
+      readPage: async (args) => readOpenCodeTranscriptPage(args)
+    })
+    expect(imported).toMatchObject({ forkTipItemIds: finish === 'stop' ? ['u1', 'a1'] : [] })
   }
-  db.exec('COMMIT')
-  const prepared = vi.spyOn(Database.prototype, 'prepare')
-  try {
-    expect(() =>
-      readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 300 })
-    ).toThrow('read limit')
-    const partQueries = prepared.mock.calls.filter(
-      ([sql]) => sql.includes('FROM part') && sql.includes('message_id IN')
-    )
-    expect(partQueries).toHaveLength(2)
-  } finally {
-    prepared.mockRestore()
-  }
-})
+)

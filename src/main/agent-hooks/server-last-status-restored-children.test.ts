@@ -45,7 +45,6 @@ describe('Last-status persistence', () => {
   }
 
   it('hydrates last-status.json into the cache before listener registration', async () => {
-    // Pre-populate the file directly to simulate a prior session.
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     const receivedAt = recentTs()
     const stateStartedAt = recentTs(-1000)
@@ -142,7 +141,6 @@ describe('Last-status persistence', () => {
       )
       const byPane = new Map(server.getStatusSnapshot().map((entry) => [entry.paneKey, entry]))
       expect(byPane.get(PANE)).toMatchObject({ state: 'working', restoredUnconfirmed: true })
-      // Why: `done` is a terminal fact — no later transition can have been missed, so it restores confirmed.
       expect(byPane.get(GOOD_PANE)?.restoredUnconfirmed).toBeUndefined()
 
       server.ingestRemote(

@@ -2,11 +2,9 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import type { NativeChatReservedAttachment } from './native-chat-session-attachment-drop'
-import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
+import { hasNativeChatPendingAttachment } from './native-chat-pending-attachment-cache'
 
-/**
- * Preview URLs belong to this composer; pending uploads belong to the draft's attachment cache.
- */
+/** Composer owns preview URLs; the draft attachment cache owns pending uploads. */
 export function useNativeChatPasteLifetime(args: {
   targetKey?: string
   attachmentScopeKey?: string
@@ -37,8 +35,7 @@ export function useNativeChatPasteLifetime(args: {
     id: string | null
     reveal: () => void
   }
-  /** One chip per file a macOS paste may attach. `reveal` previews the first as the clipboard's
-   *  picture; `transfer` hands the chips still in the draft to the file intake to settle. */
+  /** Reserve each macOS file candidate; reveal the clipboard preview and transfer retained chips to file intake for settlement. */
   startClipboardCandidateChips: (
     owner: NativeChatAttachmentOwner,
     paths: string[]
@@ -84,10 +81,7 @@ export function useNativeChatPasteLifetime(args: {
         }
         if (
           lifetime.uploads.get(id)?.kind !== 'runtime-session' &&
-          !(
-            attachmentScopeKey &&
-            nativeChatPendingAttachmentSnapshot(attachmentScopeKey).some((chip) => chip.id === id)
-          )
+          !(attachmentScopeKey && hasNativeChatPendingAttachment(id))
         ) {
           dropPendingRef.current(id)
         }
@@ -113,15 +107,9 @@ export function useNativeChatPasteLifetime(args: {
         if (id) {
           track(id, '', owner)
         }
-        // Through the scope's cache, so it shows even in a composer that came back since.
+        // Reveal through the scope cache so a remounted composer sees the result.
         const reveal = (): void => {
-          if (
-            !id ||
-            (attachmentScopeKey &&
-              !nativeChatPendingAttachmentSnapshot(attachmentScopeKey).some(
-                (chip) => chip.id === id
-              ))
-          ) {
+          if (!id || (attachmentScopeKey && !hasNativeChatPendingAttachment(id))) {
             return
           }
           const previewUrl = lifetime.active ? URL.createObjectURL(imageFile) : undefined
@@ -182,10 +170,9 @@ export function useNativeChatPasteLifetime(args: {
           lifetime.uploads.delete(chipId)
         }
         // A chip removed or cleared meanwhile starts no file work.
-        const current = attachmentScopeKey
-          ? nativeChatPendingAttachmentSnapshot(attachmentScopeKey)
-          : null
-        return reserved.filter(({ chipId }) => !current || current.some(({ id }) => id === chipId))
+        return reserved.filter(
+          ({ chipId }) => !attachmentScopeKey || hasNativeChatPendingAttachment(chipId)
+        )
       }
       return { reserved, reveal: () => chips[0]?.reveal(), transfer }
     },
@@ -211,12 +198,7 @@ export function useNativeChatPasteLifetime(args: {
       const owner = lifetime.uploads.get(pendingId)
       if (
         owner?.kind !== 'runtime-session' &&
-        !(
-          attachmentScopeKey &&
-          nativeChatPendingAttachmentSnapshot(attachmentScopeKey).some(
-            (chip) => chip.id === pendingId
-          )
-        )
+        !(attachmentScopeKey && hasNativeChatPendingAttachment(pendingId))
       ) {
         lifetime.uploads.delete(pendingId)
         return false

@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookTarget } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   extractExecutableToken,
   hasPathSeparatorToken,
@@ -11,6 +11,8 @@ import {
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
+import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import {
   isUnderWindowsDriveMount,
   readGuestWindowsDriveMounts
@@ -146,7 +148,6 @@ async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
   }
 }
 
-/** Merges the login shell's PATH into this process once (cached), as CLI detection does. */
 export async function hydrateAgentCliShellPath(
   hydratePath: () => Promise<HydrationResult> = hydrateShellPath
 ): Promise<void> {
@@ -156,9 +157,31 @@ export async function hydrateAgentCliShellPath(
       mergePathSegments(result.segments)
     }
   } catch (error) {
-    // Detection failure must never permit config mutation.
     console.warn('[agent-hooks] Shell PATH hydration failed; using inherited PATH:', error)
   }
+}
+
+async function resolveSearchPath(
+  options: DetectOptions,
+  platform: NodeJS.Platform
+): Promise<string> {
+  if (options.pathEnv !== undefined) {
+    return options.pathEnv
+  }
+  if (platform !== 'win32') {
+    return process.env.PATH ?? ''
+  }
+  // Why: terminals launch with the registry PATH, so a CLI installed after Orca started runs in a pane but stays invisible to the inherited PATH (#17672).
+  const env = { ...process.env }
+  try {
+    await mergePersistedWindowsPathAsync(env)
+  } catch (error) {
+    console.warn(
+      '[agent-hooks] Persisted Windows PATH refresh failed; using inherited PATH:',
+      error
+    )
+  }
+  return env[resolvePathEnvKey(env, platform)] ?? ''
 }
 
 export async function detectLocalManagedAgentCliPresence(
@@ -170,7 +193,7 @@ export async function detectLocalManagedAgentCliPresence(
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
   const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
-  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter).filter(
+  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
     (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
   )
   const homeDir = options.homeDir ?? homedir()

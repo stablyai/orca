@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExactWorkerProviderSession } from '../../../shared/orchestration-worker-output'
 import {
   isWslHookRelayConnectionId,
@@ -58,9 +58,7 @@ export function terminalHostConnectionMatches(
   if (expectedConnectionId === undefined || entryConnectionId === expectedConnectionId) {
     return true
   }
-  // WSL hook relays stamp their distro on the event, while the host PTY stays
-  // local (connectionId null). Require the PTY's known distro to avoid mixing
-  // same-pane events from another WSL transport.
+  // WSL PTYs stay local; require their attested distro to avoid same-pane events from another guest.
   return (
     expectedConnectionId === null &&
     typeof wslDistro === 'string' &&

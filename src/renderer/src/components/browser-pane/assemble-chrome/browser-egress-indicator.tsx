@@ -17,13 +17,7 @@ import { getHostSettingOverride } from '../../../../../shared/host-setting-overr
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
 
-/**
- * The address bar's leading icon, egress-aware: pages that render locally and
- * pages whose traffic leaves from a remote host look identical when working,
- * so the globe slot becomes the one visible tell of where a page's traffic
- * leaves from. Hover shows the summary; clicking expands the explanation and
- * a settings link.
- */
+/** Use the shared globe slot to expose egress location because local and remotely routed pages otherwise look identical. */
 function EgressIndicatorButton({
   icon,
   egress,

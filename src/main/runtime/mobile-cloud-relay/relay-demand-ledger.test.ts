@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DeviceRegistry } from '../device-registry'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { RelayRevokeOutbox, type RelayDeviceBinding } from './relay-revoke-outbox'
 
@@ -89,6 +89,12 @@ describe('RelayDemandLedger', () => {
     deviceRegistry.setRelayBinding(pending.deviceId, {
       ...binding(pending.deviceId, 2_000),
       ownerIdentityKey: 'other-user\0profile\0org'
+    })
+    expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
+    const otherHost = deviceRegistry.addDevice('Other relay host')
+    deviceRegistry.setRelayBinding(otherHost.deviceId, {
+      ...binding(otherHost.deviceId, 2_000),
+      relayHostId: 'other-relay-host'
     })
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
   })

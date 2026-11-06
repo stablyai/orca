@@ -1,7 +1,6 @@
 import { formatPreviewByteLength } from '../files/mobile-file-preview-response'
 import type { MarkdownDocState } from './mobile-session-route-types'
 
-/** The markdown floating bar's status line; a truncated preview reads like a file tab's note. */
 export function markdownReaderStatusText(
   doc: Extract<MarkdownDocState, { status: 'ready' }>
 ): string | null {

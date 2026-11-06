@@ -29,8 +29,7 @@ describe('terminal write coalescer', () => {
 
     coalescer.write('a')
 
-    // Why: interactive latency invariant — keystroke echo on an idle terminal
-    // must not wait for any timer.
+    // Idle keystroke echo must never wait for a batching timer.
     expect(sink.delivered).toEqual(['a'])
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -72,7 +71,6 @@ describe('terminal write coalescer', () => {
     coalescer.write('b')
     expect(sink.delivered).toEqual(['a'])
 
-    // The trailing timer covers only the remainder of the window.
     vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - 40 - 1)
     expect(sink.delivered).toEqual(['a'])
     vi.advanceTimersByTime(1)
@@ -84,11 +82,9 @@ describe('terminal write coalescer', () => {
     const sink = createDeliverySink()
     const coalescer = createTerminalWriteCoalescer(sink.deliver)
 
-    // 200 chunks at 5ms cadence ≈ the desktop runtime's flush rate on a busy PTY.
     for (let i = 0; i < 200; i += 1) {
       coalescer.write(`c${i};`)
-      // Why: a regression arming one timer per chunk (instead of per window) would
-      // still flush once per window — bound the live timer count, not just flushes.
+      // Check live timer count too; one timer per chunk could preserve flush counts while wasting work.
       expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
       vi.advanceTimersByTime(5)
     }
@@ -106,8 +102,7 @@ describe('terminal write coalescer', () => {
     const coalescer = createTerminalWriteCoalescer(sink.deliver)
 
     coalescer.write('a')
-    // Why: Date.now() is not monotonic (NTP/timezone correction); an unclamped
-    // timer remainder would span the whole jump and stall the stream for hours.
+    // Wall-clock corrections can jump backward; clamp timer remainders to avoid hours-long stream stalls.
     vi.setSystemTime(100_000 - 60 * 60 * 1000)
     coalescer.write('b')
 

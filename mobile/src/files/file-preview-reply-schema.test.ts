@@ -7,7 +7,6 @@ import {
 
 describe('file preview reply schemas', () => {
   it('requires the content the markdown disk fallback publishes unguarded', () => {
-    // `content` alone, with no sibling requirement able to stand in for it.
     expect(filePreviewTextSchema.safeParse({ truncated: false, byteLength: 0 }).success).toBe(false)
     expect(filePreviewTextSchema.safeParse({ content: '# readme' }).success).toBe(true)
     expect(filePreviewTextSchema.safeParse({ content: 7 }).success).toBe(false)
@@ -19,15 +18,13 @@ describe('file preview reply schemas', () => {
       truncated: 'yes',
       byteLength: 'four'
     })
-    // Absent reads as not truncated, and an unreadable byteLength falls through to content.length
-    // at the call site, which is what main's `typeof === 'number'` guard already did.
+    // Absent truncation is false; unreadable byteLength uses the caller’s content.length fallback.
     expect(parsed.truncated).toBeUndefined()
     expect(parsed.byteLength).toBeUndefined()
   })
 
   it('keeps every member of an image preview optional so the host binary arms still render', () => {
-    // The host answers this shape for a binary it cannot preview, and this one for a path mobile
-    // classified as an image and the host did not. Both reach the screen as main's own copy.
+    // Both are valid host replies: an unpreviewable binary and a path only mobile classified as an image.
     expect(filePreviewImageSchema.safeParse({ content: '', isBinary: true }).success).toBe(true)
     expect(filePreviewImageSchema.safeParse({ content: 'text', isBinary: false }).success).toBe(
       true

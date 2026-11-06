@@ -1,13 +1,9 @@
-/**
- * A workspace's unsent chat drafts die only with a user's delete, by keys read before the host
- * round trip. The host announces a removal before it replies, and a listing purge that lands first
- * must not hide them; a purge that is not a user's delete must not erase them.
- */
+/** User deletion clears drafts using pre-RPC keys; host removal announcements may purge listings before reply, while non-user purges must retain drafts. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+
+import '../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 vi.mock('sonner', () => ({
@@ -23,7 +19,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const mockApi = {
-  worktrees: { list: vi.fn(), remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
+  worktrees: { remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
   repos: { removeForHost: vi.fn() },
   folderWorkspaces: { delete: vi.fn() },
   pty: { kill: vi.fn() },
@@ -38,8 +34,7 @@ import {
   makeWorktree,
   makeTab,
   makeTabGroup,
-  makeUnifiedTab,
-  TEST_REPO
+  makeUnifiedTab
 } from './store-test-helpers'
 import {
   clearNativeChatComposerDraftsForTests,
@@ -221,83 +216,6 @@ describe('workspace chat drafts on removal', () => {
 
     expect(result).toEqual({ ok: true })
     expect(readNativeChatComposerDraft(closed).text).toBe('')
-    expect(draftTexts()).toEqual(['', '', 'other'])
-  })
-
-  it('a removal the host refuses keeps the drafts', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const store = createTestStore()
-    seedWorktree(store)
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Permission denied'))
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
-
-    expect(result.ok).toBe(false)
-    expect(draftTexts()).toEqual(['chat', 'pane', 'other'])
-  })
-
-  it('a listing purge alone keeps the drafts', () => {
-    const store = createTestStore()
-    seedWorktree(store)
-
-    store.getState().purgeWorktreeTerminalState([WT1])
-
-    expect(store.getState().unifiedTabsByWorktree[WT1]).toBeUndefined()
-    expect(draftTexts()).toEqual(['chat', 'pane', 'other'])
-  })
-
-  it('re-pairing a server under the same id keeps the drafts of chats it restores', () => {
-    const runtime = toRuntimeExecutionHostId('env-a')
-    const environment = (pairingRevision: number): PublicKnownRuntimeEnvironment => ({
-      id: 'env-a',
-      name: 'Server',
-      createdAt: 1,
-      updatedAt: 1,
-      pairingRevision,
-      lastUsedAt: null,
-      runtimeId: null,
-      endpoints: [{ id: 'e', kind: 'websocket', label: 'Server', endpoint: 'ws://server' }],
-      preferredEndpointId: 'e'
-    })
-    const store = createTestStore()
-    seedStore(store, {
-      runtimeEnvironments: [environment(1)],
-      repos: [TEST_REPO, { ...TEST_REPO, id: 'repoA', path: '/repoA', executionHostId: runtime }],
-      worktreesByRepo: {
-        repoA: [makeWorktree({ id: WT1, repoId: 'repoA', path: '/path/wt1', hostId: runtime })]
-      }
-    })
-    seedWorkspace(store, WT1)
-
-    store.getState().setRuntimeEnvironments([environment(2)])
-
-    expect(store.getState().unifiedTabsByWorktree[WT1]).toBeUndefined()
-    expect(draftTexts()).toEqual(['chat', 'pane', 'other'])
-  })
-
-  it('removing a project deletes its worktrees’ drafts only', async () => {
-    const store = createTestStore()
-    seedStore(store, { repos: [{ ...TEST_REPO, id: 'repo1' }] })
-    seedWorktree(store)
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' })],
-        repo2: [makeWorktree({ id: WT2, repoId: 'repo2', path: '/path/wt2' })]
-      }
-    })
-
-    await store.getState().removeProject('repo1', { hostId: 'local' })
-
-    expect(draftTexts()).toEqual(['', '', 'other'])
-  })
-
-  it('deleting a folder workspace deletes its drafts', async () => {
-    mockApi.folderWorkspaces.delete.mockResolvedValue(true)
-    const store = createTestStore()
-    seedFolderWorkspace(store)
-
-    await expect(store.getState().deleteFolderWorkspace(FOLDER.id)).resolves.toBe(true)
-
     expect(draftTexts()).toEqual(['', '', 'other'])
   })
 

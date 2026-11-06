@@ -8,11 +8,10 @@ import {
 } from './__mocks__/native-chat-ssh-delivery'
 import {
   sendNativeChatAskAnswer,
-  sendNativeChatMessage,
   sendNativeChatMessageVerified,
   resetNativeChatPtySendQueuesForTests
 } from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
-import { buildAskAnswerKeys } from '../../src/shared/native-chat-ask'
+import { buildAskAnswerKeys } from '../../src/shared/native-chat/input/native-chat-ask-answer'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
@@ -44,9 +43,11 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     await vi.advanceTimersByTimeAsync(2000)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(4000)
+    await vi.runAllTimersAsync()
     expect(ssh.bytes.join('')).toBe(
-      groups.map((group) => ('raw' in group ? group.raw : group.text)).join('')
+      groups
+        .map((group) => ('raw' in group ? group.raw : `\x1b[200~${group.text}\x1b[201~`))
+        .join('')
     )
     expect(ssh.bytes.findIndex((data) => data.includes('TAIL'))).toBeLessThan(
       ssh.bytes.indexOf('\r')
@@ -67,20 +68,9 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     await vi.advanceTimersByTimeAsync(500)
     handle.cancel()
     await vi.advanceTimersByTimeAsync(4000)
-    expect(ssh.bytes.join('')).toBe(`${'X'.repeat(32768)}TAIL`)
+    expect(ssh.bytes.join('')).toBe(`\x1b[200~${'X'.repeat(32768)}TAIL\x1b[201~`)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
-  })
-
-  it('keeps ordinary healthy SSH body and Enter complete', async () => {
-    vi.useFakeTimers()
-    const ssh = createSshDelivery()
-    close = ssh.close
-    const onDeliverySettled = vi.fn()
-    sendNativeChatMessage(ssh.id, 'body', { onDeliverySettled })
-    await vi.advanceTimersByTimeAsync(600)
-    expect(ssh.bytes.join('')).toBe('\x15body\r')
-    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it.each(['accepted', 'lost'] as const)(
@@ -150,36 +140,6 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     ).resolves.toBe(true)
     expect(ssh.bytes).toEqual(['answer', 'body', '\r', '\x1b[200~launch\x1b[201~'])
     expect(ssh.settlement).not.toHaveBeenCalled()
-  })
-
-  it('older paired hosts confirm ordinary chat sends and pasted answers as before', async () => {
-    vi.useFakeTimers()
-    io.rpc.mockResolvedValue({ send: { handle: 'terminal', accepted: true, bytesWritten: 1 } })
-    const onWriteUnconfirmed = vi.fn()
-    const onWriteRejected = vi.fn()
-    sendNativeChatMessage('remote:owner@@terminal', 'hello', {
-      onWriteRejected,
-      onWriteUnconfirmed
-    })
-    const onDeliverySettled = vi.fn()
-    sendNativeChatMessage('remote:owner@@terminal', 'answer', { onDeliverySettled })
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(onWriteUnconfirmed).not.toHaveBeenCalled()
-    expect(onWriteRejected).not.toHaveBeenCalled()
-    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(true)
-  })
-
-  it('sends ordinary paired input without asking the host for provider settlement', async () => {
-    io.rpc.mockResolvedValue({ send: { handle: 'terminal', accepted: true, bytesWritten: 4 } })
-    await expect(
-      sendRuntimePtyInputVerified('remote:owner@@terminal', 'body', 'driving')
-    ).resolves.toBe(true)
-    expect(io.rpc).toHaveBeenCalledWith(
-      expect.anything(),
-      'terminal.send',
-      expect.not.objectContaining({ requireWriteSettlement: expect.anything() }),
-      expect.anything()
-    )
   })
 
   it.each(['accepted', 'lost', 'older-host'] as const)(

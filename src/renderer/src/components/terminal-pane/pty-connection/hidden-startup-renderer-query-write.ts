@@ -1,11 +1,12 @@
-import { parseTerminalOscColorQuery } from '../../../../../shared/terminal-osc-color-reply'
+import { parseTerminalOscColorQuery } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
   extractHiddenStartupRendererQueryData,
   findCsiFinalByteIndex,
+  isPrimaryDeviceAttributesQuerySequence,
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
-} from '../../../../../shared/terminal-reply-query-extraction'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import {
   DEFAULT_DA1_RESPONSE,
@@ -110,11 +111,14 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
   }
 
   // Why: discarding flood bytes must not swallow terminal queries (a lost DSR/CPR hangs the program); the snapshot repaint owns the content, so synthesize replies via the immediate input path, not xterm replay.
-  session.salvageRendererQueriesFromDiscardedRestoreData = function (data: string): void {
-    if (!data || !data.includes('\x1b')) {
-      return
+  session.salvageRendererQueriesFromDiscardedRestoreData = function (
+    data: string,
+    pending = ''
+  ): string {
+    if (!data || (!pending && !data.includes('\x1b'))) {
+      return pending
     }
-    const extracted = extractHiddenStartupRendererQueryData(data, '')
+    const extracted = extractHiddenStartupRendererQueryData(data, pending)
     if (extracted.oscColorQueryData && session.shouldAnswerPaneOscColorQueries()) {
       sendTerminalOscColorQueryReplies(
         extracted.oscColorQueryData,
@@ -132,7 +136,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
         const row = Math.min(buffer.cursorY + 1, session.pane.terminal.rows)
         const col = Math.min(buffer.cursorX + 1, session.pane.terminal.cols)
         session.sendDesktopQueryReplyImmediate(`\x1b[${row};${col}R`)
-      } else if (sequence === '\x1b[c' || sequence === '\x1b[0c') {
+      } else if (isPrimaryDeviceAttributesQuerySequence(sequence)) {
         session.sendDesktopQueryReplyImmediate(DEFAULT_DA1_RESPONSE)
       } else {
         unansweredQueryData += sequence
@@ -142,6 +146,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
       // Best-effort for rarer queries (DECRQM, DA2, XTVERSION): replay into xterm so its handlers answer when no replay is active.
       session.writePtyOutputToXterm(unansweredQueryData, true, { hiddenStartupRendererQuery: true })
     }
+    return extracted.pending
   }
 
   function splitCsiSequences(queryData: string): string[] {

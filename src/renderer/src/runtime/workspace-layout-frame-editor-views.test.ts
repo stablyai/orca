@@ -1,5 +1,4 @@
-// A diff tab main holds, drawn by a window that lacks its open file: the frame's view rebuilds it,
-// both from a records frame and from the snapshot a reloaded window starts with.
+// Frame views reconstruct main-owned diff tabs after window reload, from both records frames and initial snapshots.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -122,16 +121,6 @@ describe('a diff tab main publishes with its view', () => {
     expect(check.workspaceBuilt).toEqual([GIT_KEY])
     expect(diffTabs(store)).toHaveLength(1)
     expect(store.getState().openFiles.filter((file) => file.id === DIFF_ID)).toEqual([REBUILT])
-    close()
-  })
-
-  it('is not drawn without a view, since the window cannot rebuild it', async () => {
-    const { store, apply, close } = await boot()
-
-    await apply(openDiff())
-
-    expect(diffTabs(store)).toEqual([])
-    expect(store.getState().openFiles.some((file) => file.id === DIFF_ID)).toBe(false)
     close()
   })
 

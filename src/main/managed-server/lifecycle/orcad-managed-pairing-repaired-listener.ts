@@ -1,4 +1,3 @@
-/** How a managed re-pair retires transports still on the refused token; the IPC layer registers it. */
 let listener: (environmentId: string) => void | Promise<void> = () => {}
 
 export function setManagedOrcadPairingRepairedListener(

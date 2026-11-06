@@ -1,7 +1,6 @@
 import type { XtermBypassEvent } from './xterm-bypass-policy'
 
-// Shared test fixture: builds a fully-defaulted XtermBypassEvent so the bypass
-// and IME candidate-guard suites all stay in sync when the event shape changes.
+// Keep bypass/IME suites aligned with the complete XtermBypassEvent shape.
 export function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
   return {
     type: 'keydown',

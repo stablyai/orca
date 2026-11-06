@@ -35,9 +35,9 @@ describe('useHostStatusGates', () => {
       }
     })
     const newClient = { sendRequest: newSendRequest } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
+    let gates: HostStatusGates | undefined
     const firstRenderByHost = new Map<string, HostStatusGates>()
-    let renderer: ReactTestRenderer | null = null
+    let renderer: ReactTestRenderer | undefined
 
     function Probe({ hostId, client }: { hostId: string; client: RpcClient }): null {
       gates = useHostStatusGates({ hostId, client, connState: 'connected' })
@@ -99,8 +99,8 @@ describe('useHostStatusGates', () => {
       }
     })
     const client = { sendRequest } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
-    let renderer: ReactTestRenderer | null = null
+    let gates: HostStatusGates | undefined
+    let renderer: ReactTestRenderer | undefined
 
     function Probe({ hostId }: { hostId: string }): null {
       gates = useHostStatusGates({ hostId, client, connState: 'connected' })
@@ -142,8 +142,8 @@ describe('useHostStatusGates', () => {
       })
       .mockReturnValueOnce(pendingReconnect)
     const client = { sendRequest } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
-    let renderer: ReactTestRenderer | null = null
+    let gates: HostStatusGates | undefined
+    let renderer: ReactTestRenderer | undefined
 
     function Probe({ connState }: { connState: 'connected' | 'disconnected' }): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState })
@@ -160,7 +160,7 @@ describe('useHostStatusGates', () => {
       await act(async () => {
         renderer?.update(createElement(Probe, { connState: 'disconnected' }))
       })
-      // Why (F10): the drop invalidates nothing the host already proved — capabilities survive it.
+      // Retain proven capabilities through drops while awaiting re-verification.
       expect(gates).toMatchObject({
         hostCapabilities: ['browser.screencast.v1'],
         floatingWorkspaceEnabled: true,
@@ -203,8 +203,8 @@ describe('useHostStatusGates', () => {
     const secondClient = {
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
     } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
-    let renderer: ReactTestRenderer | null = null
+    let gates: HostStatusGates | undefined
+    let renderer: ReactTestRenderer | undefined
 
     function Probe({ client }: { client: RpcClient }): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
@@ -241,8 +241,8 @@ describe('useHostStatusGates', () => {
         }
       })
     const client = { sendRequest } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
-    let renderer: ReactTestRenderer | null = null
+    let gates: HostStatusGates | undefined
+    let renderer: ReactTestRenderer | undefined
 
     function Probe(): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
@@ -288,8 +288,8 @@ describe('useHostStatusGates', () => {
       .mockResolvedValueOnce({ ok: false, error: { code: 'unavailable', message: 'busy' } })
       .mockResolvedValueOnce({ ok: true, result: { capabilities: ['browser.screencast.v1'] } })
     const client = { sendRequest } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
-    let renderer: ReactTestRenderer | null = null
+    let gates: HostStatusGates | undefined
+    let renderer: ReactTestRenderer | undefined
 
     function Probe(): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
@@ -321,8 +321,8 @@ describe('useHostStatusGates', () => {
     vi.useFakeTimers()
     const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: 'not a status' })
     const client = { sendRequest } as unknown as RpcClient
-    let gates: HostStatusGates | null = null
-    let renderer: ReactTestRenderer | null = null
+    let gates: HostStatusGates | undefined
+    let renderer: ReactTestRenderer | undefined
 
     function Probe(): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
@@ -349,7 +349,7 @@ describe('useHostStatusGates', () => {
     vi.useFakeTimers()
     const sendRequest = vi.fn().mockRejectedValue(new Error('request timed out'))
     const client = { sendRequest } as unknown as RpcClient
-    let renderer: ReactTestRenderer | null = null
+    let renderer: ReactTestRenderer | undefined
 
     function Probe(): null {
       useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
@@ -363,7 +363,7 @@ describe('useHostStatusGates', () => {
       })
       await act(async () => {
         renderer?.unmount()
-        renderer = null
+        renderer = undefined
       })
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_000)

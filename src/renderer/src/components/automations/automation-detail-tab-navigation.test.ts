@@ -68,9 +68,9 @@ describe('shouldHandleAutomationDetailTabArrowKey', () => {
     expect(shouldHandleAutomationDetailTabArrowKey(makeEvent({ target: editable }))).toBe(false)
   })
 
-  it('ignores keys when target is inside a modal dialog, menu, or listbox', () => {
+  it.each(['dialog', 'menu', 'listbox'])('ignores keys inside a %s', (role) => {
     const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('role', role)
     const childButton = document.createElement('button')
     dialog.appendChild(childButton)
     document.body.appendChild(dialog)
@@ -134,6 +134,7 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
   function makeEvent(
     overrides: Partial<{
       key: string
+      defaultPrevented: boolean
       altKey: boolean
       ctrlKey: boolean
       metaKey: boolean
@@ -169,6 +170,10 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ key: 'ArrowLeft' }))).toBe(false)
   })
 
+  it('ignores Escape already consumed while returning from a run', () => {
+    expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ defaultPrevented: true }))).toBe(false)
+  })
+
   it('ignores modified or composing Escape keys', () => {
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ metaKey: true }))).toBe(false)
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ ctrlKey: true }))).toBe(false)
@@ -193,9 +198,9 @@ describe('shouldHandleAutomationDetailEscapeKey', () => {
     expect(shouldHandleAutomationDetailEscapeKey(makeEvent({ target: clearsValue }))).toBe(false)
   })
 
-  it('ignores Escape when target is inside a modal dialog, menu, or listbox', () => {
+  it.each(['dialog', 'menu', 'listbox'])('ignores Escape inside a %s', (role) => {
     const dialog = document.createElement('div')
-    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('role', role)
     const childButton = document.createElement('button')
     dialog.appendChild(childButton)
     document.body.appendChild(dialog)

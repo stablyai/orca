@@ -1,3 +1,5 @@
+import type { ClassifiedError } from '../../../src/shared/classified-error'
+import { getWorkItemPageErrorTypes } from '../../../src/shared/github/work-item-page-errors'
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
 import { readJiraConnection, reconcileJiraConnection } from './jira-mobile-connection'
 import {
@@ -73,7 +75,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     taskUiReady,
     tasksSupported
   } = model
-  // Desktop connection changes need an explicit status refresh on mobile.
+  // Mobile needs explicit status refreshes to observe desktop connection changes.
   const refreshJiraConnection = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
@@ -120,11 +122,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      // Fire-and-forget: the reply is never interpreted, so no acceptance policy applies here.
       void taskSettingsWrite
         .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
-          // Best-effort preference persistence; the local picker state already changed.
+          // Preference persistence is best-effort; the local picker already changed.
         })
     },
     [client, taskUiReady]
@@ -134,10 +135,12 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     async (
       requestClient: RpcClient,
       queriedRepos: RepoSummary[],
-      taskPage = 0
+      taskPage = 0,
+      isCurrent: () => boolean = () => true
     ): Promise<{
       items: Array<Extract<TaskItem, { provider: 'github' }>>
       failedCount: number
+      errorTypes: ClassifiedError['type'][]
       sourcesByRepoId: Record<string, GitHubRepoSources>
       sourceErrors: GitHubIssueSourceError[]
       sourceFallbacks: GitHubIssueSourceFallback[]
@@ -151,16 +154,19 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
+          if (!isCurrent()) {
+            return { items: [], repoId: repo.id }
+          }
           try {
-            // Same paging as desktop's task page: numbered pages, the display budget split per repo.
             const reply = await githubWorkItemSearchRead.request(requestClient, {
               repo: `id:${repo.id}`,
               limit: perRepoLimit,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
               page: taskPageToGitHubApiPage(taskPage)
             })
+            const decoded = githubWorkItemSearchRead.interpret(reply)
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
-            const envelope = githubWorkItemSearchRead.interpret(reply) as {
+            const envelope = decoded as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources
               errors?: { issues?: { message: string } }
@@ -169,6 +175,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
             return {
               items: envelope.items.map((item) => createGitHubTask(repo, item)),
               sources: envelope.sources,
+              errorTypes: getWorkItemPageErrorTypes(decoded.errors),
               sourceError: extractGitHubIssueSourceError(repo, envelope),
               sourceFallback: extractGitHubIssueSourceFallback(repo, envelope),
               repoId: repo.id
@@ -206,12 +213,12 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
 
       return {
-        // Why: the host pages by issue number, so the merge must order the same way
-        // (desktop's sortWorkItemsByNumber) or rows reshuffle across page boundaries.
+        // Host pagination orders by issue number; merge in that order so rows cannot reshuffle between pages.
         items: results
           .flatMap((result) => result.items)
           .sort((a, b) => b.source.number - a.source.number),
         failedCount: results.filter((result) => result.error).length,
+        errorTypes: results.flatMap((result) => result.errorTypes ?? []),
         sourcesByRepoId,
         sourceErrors,
         sourceFallbacks
@@ -221,11 +228,18 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
   )
 
   const countGitHubItemPages = useCallback(
-    async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
+    async (
+      requestClient: RpcClient,
+      queriedRepos: RepoSummary[],
+      isCurrent: () => boolean = () => true
+    ): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
+          if (!isCurrent()) {
+            return 0
+          }
           try {
             const reply = await githubWorkItemCountRead.request(
               requestClient,
@@ -235,9 +249,6 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
               },
               { timeoutMs: 30_000 }
             )
-            // The reader answers the number, so the `typeof` fallback this call site kept is gone:
-            // a reply that is not one reaches the catch below, which already counts a failed repo
-            // as zero and now says which repo and why.
             return githubWorkItemCountRead.interpret(reply)
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)

@@ -42,12 +42,12 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: vi.fn()
+  downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 
 vi.mock('@/lib/file-preview', () => ({
   getWorkspaceFilePreviewPlan: vi.fn(() => ({ status: 'doc-preview' })),
-  openFileInBrowserTab: vi.fn(() => ({ status: 'doc-preview' }))
+  openFileInBrowserTab: vi.fn()
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -232,7 +232,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
-      '/home/me/repo/report.html'
+      '/home/me/repo/report.html',
+      expect.objectContaining({ grant: null })
     )
   })
 
@@ -252,11 +253,9 @@ describe('handleOscLink', () => {
       filePath: '/home/me/repo/report.html',
       worktreeId: 'wt-1'
     })
-    // Why: the preview tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
+    // The preview is the surface; activation must not seed a shell into an emptied workspace.
     expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true,
-      executionHostId: 'ssh:ssh-1'
+      providesInitialSurface: true
     })
   })
 
@@ -266,7 +265,7 @@ describe('handleOscLink', () => {
     vi.mocked(getWorkspaceFilePreviewPlan).mockReturnValueOnce({
       status: 'unsupported',
       message: 'nope',
-      reason: 'outside-worktree'
+      reason: 'no-channel'
     })
 
     openDetectedFilePath('/home/me/repo/report.html', null, null, {

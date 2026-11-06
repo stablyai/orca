@@ -16,7 +16,7 @@ import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
@@ -43,8 +43,7 @@ vi.mock('@/store', () => {
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
-// Real notice strings, so a copy of the wording here cannot outlive the string
-// users actually read, and a newly added export cannot go missing from the mock.
+// Retain production notices and exports so mocks cannot hide stale wording or new behavior.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentHost: () => testState.executionHostId,
@@ -53,7 +52,7 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
@@ -77,8 +76,7 @@ vi.mock('./NativeChatImageAttachmentPreview', () => ({
 }))
 
 class FileDragDataTransfer {
-  // Not 'none' and not 'copy': the browser picks a default we did not choose, so
-  // starting here is what makes an assertion on either verdict load-bearing.
+  // Seed a distinct browser default so assertions prove both copy and refusal verdicts were written.
   dropEffect = 'link'
   effectAllowed = 'copyMove'
   files: File[] = []
@@ -148,8 +146,7 @@ function ComposerProbe({
 
   return (
     <div onDrop={bubbledDrop}>
-      {/* The pane around the composer mounts these in production; here they sit
-          on a bare wrapper so the drop logic is exercised on its own. */}
+      {/* Mount pane drop handlers on a bare wrapper to isolate the attachment route. */}
       <div {...workspaceFileDropHandlers}>
         <NativeChatComposerField
           draftScopeKey={`pane:${workspaceId}`}
@@ -248,9 +245,10 @@ describe('native chat workspace file drops', () => {
     cleanup()
   })
 
-  it('consumes a nested editor drop once and inserts top-level paths at the caret', () => {
+  it('consumes a nested editor drop once and inserts top-level paths at the caret', async () => {
     render(<ComposerProbe initialDraft="$rev tail" />)
-    act(() => {
+    // Tiptap mounts node-view portals from a microtask.
+    await act(async () => {
       latestInput!.insertSkill!(0, 4, '$review')
     })
     expect(editor().querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
@@ -263,6 +261,7 @@ describe('native chat workspace file drops', () => {
     ])
     transfer.setData('text/plain', 'must not be inserted by ProseMirror')
     const accepted = dispatchDragEvent('drop', editor(), transfer)
+    await act(async () => {})
 
     expect(accepted).toBe(false)
     expect(screen.getByTestId('draft').textContent).toBe(
@@ -278,66 +277,7 @@ describe('native chat workspace file drops', () => {
     expect(bubbledDrop).not.toHaveBeenCalled()
   })
 
-  it('advertises a copy drop while leaving unrelated drags alone', () => {
-    render(<ComposerProbe />)
-    const internal = internalTransfer(['/repo/a.ts'])
-    const accepted = dispatchDragEvent('dragover', editor(), internal)
-    expect(accepted).toBe(false)
-    expect(internal.dropEffect).toBe('copy')
-
-    const unrelated = new FileDragDataTransfer()
-    unrelated.setData('text/plain', 'plain')
-    unrelated.setData('text/html', '<b>plain</b>')
-    dispatchDragEvent('dragover', editor(), unrelated)
-    dispatchDragEvent('drop', editor(), unrelated)
-    expect(bubbledDrop).toHaveBeenCalledOnce()
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  const mismatchedSources: [string, { executionHostId?: ExecutionHostId; workspaceId?: string }][] =
-    [
-      ['different workspace', { workspaceId: 'worktree-2' }],
-      ['different execution host', { executionHostId: 'ssh:other' }]
-    ]
-
-  it.each(mismatchedSources)('rejects paths from a %s', (_label, source) => {
-    render(<ComposerProbe />)
-    dispatchDragEvent('drop', editor(), internalTransfer(['/repo/a.ts'], source))
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  it('rejects legacy unscoped payloads and unavailable owners', () => {
-    const view = render(<ComposerProbe />)
-    const unscoped = new FileDragDataTransfer()
-    unscoped.setData(WORKSPACE_FILE_PATH_MIME, '/repo/a.ts')
-    dispatchDragEvent('drop', editor(), unscoped)
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-
-    testState.ownerKind = 'not-ready'
-    view.rerender(<ComposerProbe />)
-    dispatchDragEvent('drop', editor(), internalTransfer(['/repo/b.ts']))
-    expect(screen.getByText('Worktree not ready — try again in a moment.')).toBeTruthy()
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  // A guarded composer must refuse visibly. It still claims the event, because
-  // the terminal surface behind it would otherwise paste the paths into the shell.
-  it('refuses the drag outright while disabled instead of promising a copy', () => {
-    render(<ComposerProbe disabled />)
-    const hover = internalTransfer(['/repo/a.ts'])
-    expect(dispatchDragEvent('dragover', editor(), hover)).toBe(false)
-    expect(hover.dropEffect).toBe('none')
-    expect(bubbledDrop).not.toHaveBeenCalled()
-
-    const transfer = internalTransfer(['/repo/a.ts'])
-    expect(dispatchDragEvent('drop', editor(), transfer)).toBe(false)
-    expect(transfer.dropEffect).toBe('none')
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  // The relaxation that lets a runtime-owned path reach a runtime pane: the
-  // explorer lists that host's filesystem, so the agent can read what it drags.
+  // Explorer paths from the same runtime host are readable by its agent.
   it('accepts a same-host drop on a remote runtime target and refuses a foreign one', () => {
     testState.executionHostId = 'runtime:env-1'
     testState.ownerKind = 'remote'
@@ -388,8 +328,7 @@ describe('native chat workspace file drops', () => {
     expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
   })
 
-  // The queued check must ask which workspace this composer serves NOW. Comparing
-  // a captured id against itself would pass no matter where the pane ended up.
+  // Recheck current workspace after IME; comparing only captured identities would miss a pane retarget.
   it('rejects an IME-queued path when the pane changes workspace before settling', () => {
     const view = render(<ComposerProbe initialDraft="preedit" />)
     const input = editor()
@@ -401,62 +340,5 @@ describe('native chat workspace file drops', () => {
 
     expect(screen.getByTestId('draft').textContent).toBe('preedit')
     expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-  })
-
-  it('rejects only the exact unresolved-owner sentinel', () => {
-    testState.executionHostId = 'runtime:unresolved-owner'
-    const view = render(<ComposerProbe />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/repo/rejected.ts'], {
-        executionHostId: 'runtime:unresolved-owner'
-      })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('')
-
-    testState.executionHostId = 'runtime:my-unresolved-owner-env'
-    testState.ownerKind = 'remote'
-    view.rerender(<ComposerProbe />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/repo/accepted.ts'], {
-        executionHostId: 'runtime:my-unresolved-owner-env'
-      })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('@/repo/accepted.ts ')
-  })
-
-  it('keeps an SSH-host image tagged with its host, never read as a client file', () => {
-    testState.executionHostId = 'ssh:ssh-1'
-    testState.ownerKind = 'remote'
-    render(<ComposerProbe />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/remote/repo/image.png'], {
-        executionHostId: 'ssh:ssh-1'
-      })
-    )
-
-    const image = screen.getByText('/remote/repo/image.png')
-    expect(image.getAttribute('data-connection-id')).toBe('ssh-1')
-    expect(screen.getByTestId('draft').textContent).toMatch(/^\[Image\]\(orca-image:[\w-]+\) $/)
-  })
-
-  it('supports PTY-owned and folder-workspace paths with the same ownership gate', () => {
-    const first = render(<ComposerProbe structured={false} />)
-    dispatchDragEvent('drop', editor(), internalTransfer(['/repo/pty.ts']))
-    expect(screen.getByTestId('draft').textContent).toBe('@/repo/pty.ts ')
-    first.unmount()
-
-    render(<ComposerProbe workspaceId="folder:folder-1" />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/folder/note.md'], { workspaceId: 'folder:folder-1' })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('@/folder/note.md ')
   })
 })

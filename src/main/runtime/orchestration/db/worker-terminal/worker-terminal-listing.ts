@@ -1,11 +1,12 @@
 import type { DispatchStatus } from '../../types'
-import type { TerminalExitCause } from '../../../../../shared/terminal-exit-cause'
-import { deriveWorkerTerminalListState } from '../../worker-terminal-ownership'
-import type {
-  WorkerDispatchListState,
-  WorkerTerminalResourceRow,
-  WorkerTerminalListState
+import type { TerminalExitCause } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import {
+  deriveWorkerTerminalListState,
+  type WorkerDispatchListState,
+  type WorkerTerminalResourceRow,
+  type WorkerTerminalListState
 } from '../../worker-terminal-ownership'
+
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import {
@@ -14,15 +15,22 @@ import {
 } from './worker-terminal-attention-query'
 import {
   countWorkerTerminalInventory,
-  scanWorkerTerminalStates
+  scanWorkerTerminalStates,
+  WORKER_TERMINAL_HANDED_ON_SQL
 } from './worker-terminal-inventory-counts'
-import { markWorkerTerminalUserOwned } from './worker-terminal-user-takeover'
+import {
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen
+} from './worker-terminal-user-keep'
 
 export {
   countWorkerTerminalInventory,
   getWorkerAttentionFacts,
   getWorkerAttentionFactsForDispatches,
-  markWorkerTerminalUserOwned
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen
 }
 
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
@@ -131,10 +139,7 @@ export function listWorkerTerminalResources(
     }
   }
   if (params.after) {
-    // Order and fence must share one key, or a row created between pages moves across the cut.
-    // Pages walk down from the newest row, so the continuation takes what sits below the anchor.
-    // A pre-v3 cursor is resolved from its anchor row; when a reset deleted that row
-    // `rowid < NULL` matched nothing and the page read as a finished, empty inventory.
+    // Fence and order by rowid; resolve old cursors from their anchor and reject missing anchors after reset.
     where.push('d.rowid < ?')
     values.push(resolveAnchorRowId.call(this, params.after, params.runId))
   }
@@ -142,7 +147,7 @@ export function listWorkerTerminalResources(
   let detailValues = values
   let detailLimit = params.limit
   if (params.terminalState) {
-    // Terminal state is derived by one TS function; page it before reading detail columns.
+    // Derive states and page before fetching detail columns.
     const matching = scanWorkerTerminalStates
       .call(this, where, values)
       .filter((row) => row.terminalState === params.terminalState)
@@ -165,8 +170,10 @@ export function listWorkerTerminalResources(
               d.rowid AS database_id,
               ${orderExpression} AS created_at,
               COALESCE(w.state, 'unsupervised') AS worker_state,
-              COALESCE(w.agent_terminal_handle, d.assignee_handle) AS agent_terminal_handle,
-              COALESCE(r.pane_key, d.assignee_pane_key) AS pane_key,
+              CASE WHEN ${WORKER_TERMINAL_HANDED_ON_SQL} THEN NULL
+                ELSE COALESCE(w.agent_terminal_handle, d.assignee_handle) END AS agent_terminal_handle,
+              CASE WHEN ${WORKER_TERMINAL_HANDED_ON_SQL} THEN NULL
+                ELSE COALESCE(r.pane_key, d.assignee_pane_key) END AS pane_key,
               COALESCE(w.worktree_id, r.worktree_id) AS worktree_id,
               w.stage AS worker_stage,
               t.parent_id AS parent_task_id,
@@ -275,7 +282,9 @@ export function getWorkerTerminalOrderingKey(
 }
 
 export type WorkerTerminalListingMethods = {
-  markWorkerTerminalUserOwned: typeof markWorkerTerminalUserOwned
+  allowWorkerTerminalAutoClose: typeof allowWorkerTerminalAutoClose
+  getWorkerAutoCloseState: typeof getWorkerAutoCloseState
+  keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
@@ -287,7 +296,9 @@ export type WorkerTerminalListingMethods = {
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    markWorkerTerminalUserOwned,
+    allowWorkerTerminalAutoClose,
+    getWorkerAutoCloseState,
+    keepWorkerTerminalOpen,
     listWorkerTerminalReleaseBacklog,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,

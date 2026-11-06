@@ -1,10 +1,4 @@
-/**
- * ConPTY from a process started the way a Windows SSH host starts orcad: the slot's
- * process-tree addon `spawnOutsideJob` (CREATE_BREAKAWAY_FROM_JOB | CREATE_NO_WINDOW, stdio to
- * files, no inherited pipes). orcad's terminals live or die on node-pty working there, with no
- * visible console and no parent session, so this spawns a shell, writes to it, reads its output
- * and sees it exit from inside such a process.
- */
+// Exercise ConPTY under the hidden, job-detached process used by Windows SSH hosts.
 import { createRequire } from 'node:module'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -66,7 +60,7 @@ describe.skipIf(skip || !windows)('ConPTY in a broken-away, windowless orcad pro
     writeFileSync(script, SMOKE)
     const stdoutPath = join(root, 'smoke.out')
     const stderrPath = join(root, 'smoke.err')
-    // From out/orcad, not the temp slot: a loaded .node stays mapped and pins its directory.
+    // Load outside the temp slot: mapped native modules pin their directories.
     const addon: unknown = createRequire(import.meta.url)(
       resolve('out/orcad', ORCAD_WINDOWS_PROCESS_TREE_FILENAME)
     )
@@ -84,7 +78,7 @@ describe.skipIf(skip || !windows)('ConPTY in a broken-away, windowless orcad pro
     const record =
       result && typeof result === 'object' ? Object.fromEntries(Object.entries(result)) : {}
     if (record.reason === 'breakaway-denied') {
-      // A runner whose own job forbids breakaway cannot host this check; Windows SSH hosts allow it.
+      // Skip runners whose own job forbids breakaway; SSH hosts permit it.
       context.skip()
     }
     expect(record, JSON.stringify(record)).toMatchObject({ ok: true })

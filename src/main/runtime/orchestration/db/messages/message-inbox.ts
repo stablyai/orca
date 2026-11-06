@@ -9,7 +9,8 @@ const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 function runBatchedMessageMutation(
   db: OrchestrationDb,
   ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string
+  sqlForPlaceholders: (placeholders: string) => string,
+  leadingBindings: string[] = []
 ): void {
   if (ids.length === 0) {
     return
@@ -19,7 +20,7 @@ function runBatchedMessageMutation(
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
-      db.db.prepare(sqlForPlaceholders(placeholders)).run(...batch)
+      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingBindings, ...batch)
     }
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
   } catch (error) {
@@ -74,7 +75,7 @@ export function convertLifecycleMessageToRejection(
   const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
   const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
   const payload = addLifecycleRejectionMarker(message.payload, code, reason)
-  // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
+  // Keep rejected lifecycle signals auditable but non-actionable on read paths.
   this.db
     .prepare(
       `UPDATE messages
@@ -86,12 +87,12 @@ export function convertLifecycleMessageToRejection(
   return this.getMessageById(messageId)
 }
 
-// Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
+// delivered_at prevents push replay; only explicit check sets read.
 export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; limit?: number }
+  options?: { excludeTypes?: readonly string[]; excludeIds?: readonly string[]; limit?: number }
 ): MessageRow[] {
   const conditions = [
     'to_handle = ?',
@@ -108,6 +109,10 @@ export function getUndeliveredUnreadMessages(
   if (options?.excludeTypes?.length) {
     conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
     params.push(...options.excludeTypes)
+  }
+  if (options?.excludeIds?.length) {
+    conditions.push(`id NOT IN (${options.excludeIds.map(() => '?').join(',')})`)
+    params.push(...options.excludeIds)
   }
   const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
   if (options?.limit !== undefined) {
@@ -164,8 +169,8 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
   )
 }
 
-// Why: use datetime('now') so delivered_at matches the space-format UTC shape of the table's other timestamps for correct ordering (§3.2).
-export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
+// Use the table's UTC timestamp format and mailbox-fence late delivery stamps.
+export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHandle: string): void {
   runBatchedMessageMutation(
     this,
     ids,
@@ -173,7 +178,8 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
       `UPDATE messages
        SET delivered_at = datetime('now'), pointer_enter_pending = 0,
            pointer_pty_id = NULL, pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE to_handle = ? AND id IN (${placeholders})`,
+    [mailboxHandle]
   )
 }
 
@@ -206,7 +212,7 @@ export function areUnreadMessages(this: OrchestrationDb, toHandle: string, ids: 
   return matched === ids.length
 }
 
-// Why: superseded lifecycle messages stay in history but must not be consumed or injected after their dispatch finished.
+// Superseded lifecycle mail must not be consumed or injected after Dispatch settlement.
 export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): void {
   runBatchedMessageMutation(
     this,
@@ -228,7 +234,7 @@ export function getInbox(this: OrchestrationDb, limit = 20): MessageRow[] {
   )
 }
 
-// Why: read-only history for a handle — returns every message regardless of read/delivered state, never flips the read bit (§3.3).
+// History reads include all messages without marking them read.
 export function getAllMessagesForHandle(
   this: OrchestrationDb,
   toHandle: string,
@@ -252,7 +258,7 @@ export function getAllMessagesForHandle(
   )
 }
 
-// Why: ask wait-loop read — to_handle filter shows only replies to the worker; afterSequence resumes past its own outbound ask.
+// Resume after the outbound ask and return only replies addressed to this worker.
 export function getThreadMessagesFor(
   this: OrchestrationDb,
   threadId: string,

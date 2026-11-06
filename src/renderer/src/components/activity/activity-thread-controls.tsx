@@ -19,14 +19,14 @@ export { ActivityThreadOptionsMenu } from './activity-thread-options-menu'
 
 export function EventTime({
   timestamp,
-  compact = false
+  compact = false,
+  className
 }: {
   timestamp: number
   compact?: boolean
+  className?: string
 }): React.JSX.Element {
-  // Why: rows reuse their identity across store writes, so this label can't rely on
-  // incidental re-renders to stay honest; the shared visibility-gated clock re-renders
-  // only this leaf (memo'd rows stay bailed out). 30s cadence matches WorktreeCardAgents.
+  // Memoized rows ignore unrelated writes; refresh this leaf from the visibility-gated 30s clock, matching WorktreeCardAgents.
   const now = useNow(30_000)
   const absolute = formatAbsoluteDate(timestamp)
   return (
@@ -36,7 +36,8 @@ export function EventTime({
           type="button"
           className={cn(
             'rounded text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-            compact ? 'px-0 py-0 text-[11px] tabular-nums' : 'px-1 py-0.5 text-xs'
+            compact ? 'px-0 py-0 text-2xs tabular-nums' : 'px-1 py-0.5 text-xs',
+            className
           )}
           aria-label={absolute}
           onClick={(event) => event.stopPropagation()}

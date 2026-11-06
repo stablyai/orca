@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { diffFromText, diffFromToolCall } from './native-chat-diff'
+import {
+  diffFromText,
+  diffFromToolCall
+} from '../../../../shared/native-chat/tools/native-chat-diff'
 
 describe('diffFromToolCall', () => {
   it('returns null for non-edit tools', () => {

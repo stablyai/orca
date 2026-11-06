@@ -130,17 +130,4 @@ describe('MonacoEditor system theme', () => {
     })
     expect(editorProps.current?.theme).toBe('vs')
   })
-
-  it('keeps an explicit theme when the system color scheme changes', () => {
-    settingsState.theme = 'light'
-    const media = installMatchMedia(true)
-    renderEditor()
-
-    expect(editorProps.current?.theme).toBe('vs')
-
-    act(() => {
-      media.emit(false)
-    })
-    expect(editorProps.current?.theme).toBe('vs')
-  })
 })

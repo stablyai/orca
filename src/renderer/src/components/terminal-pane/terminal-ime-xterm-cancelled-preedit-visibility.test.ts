@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-/** Covers #11951: cancelling Cangjie preedit must clear and hide xterm's overlay. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -16,7 +15,6 @@ type RecordedEvent = {
   value?: string
 }
 
-/** Compose a single Cangjie radical: the preedit 尸 is showing and nothing is committed yet. */
 const COMPOSE_RADICAL: RecordedEvent[] = [
   { type: 'keydown', key: 'Process', keyCode: 229, isComposing: false },
   { type: 'compositionstart', data: '' },
@@ -32,13 +30,11 @@ const CANCEL_WITH_EMPTY_UPDATE: RecordedEvent[] = [
   { type: 'input', isComposing: true, inputType: 'deleteContentBackward', value: '' }
 ]
 
-/** The same cancel from an IME that reports only the deletion, with no composition event at all. */
 const CANCEL_WITH_INPUT_ONLY: RecordedEvent[] = [
   { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
   { type: 'input', isComposing: true, inputType: 'deleteContentBackward', value: '' }
 ]
 
-/** Backspace over one of several radicals: a preedit is still showing and must stay visible. */
 const SHORTEN_PREEDIT: RecordedEvent[] = [
   { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
   { type: 'compositionupdate', data: '尸' },
@@ -123,7 +119,6 @@ function openTerminal(): Rig {
       }
       textarea.dispatchEvent(buildEvent(recorded))
     }
-    // The overlay is re-derived on a deferred task, exactly as the position update is.
     await nextEventLoop()
     await nextEventLoop()
   }

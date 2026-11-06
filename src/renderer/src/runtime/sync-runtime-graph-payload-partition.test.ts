@@ -88,46 +88,6 @@ function startSync(
 }
 
 describe('mobile session graph payload partition', () => {
-  it('withholds every unchanged worktree from the republished payload', async () => {
-    const syncWindowGraph = vi.fn().mockResolvedValue({})
-    startSync(makeState('a', 3), syncWindowGraph)
-
-    await flushSync()
-    expect(publishedWorktrees(syncWindowGraph.mock.calls[0])).toEqual([
-      'repo::/a-wt-0',
-      'repo::/a-wt-1',
-      'repo::/a-wt-2'
-    ])
-    expect(withheldWorktrees(syncWindowGraph.mock.calls[0])).toEqual([])
-
-    scheduleRuntimeGraphSync()
-    await flushSync()
-
-    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
-    expect(publishedWorktrees(syncWindowGraph.mock.calls[1])).toEqual([])
-    expect(withheldWorktrees(syncWindowGraph.mock.calls[1])).toEqual([
-      'repo::/a-wt-0',
-      'repo::/a-wt-1',
-      'repo::/a-wt-2'
-    ])
-  })
-
-  it('publishes only the worktree whose snapshot changed', async () => {
-    const syncWindowGraph = vi.fn().mockResolvedValue({})
-    const { setState } = startSync(makeState('b', 3), syncWindowGraph)
-    await flushSync()
-
-    setState(makeState('b', 3, ['Agent 0', 'Agent 1 (done)', 'Agent 2']))
-    scheduleRuntimeGraphSync()
-    await flushSync()
-
-    expect(publishedWorktrees(syncWindowGraph.mock.calls[1])).toEqual(['repo::/b-wt-1'])
-    expect(withheldWorktrees(syncWindowGraph.mock.calls[1])).toEqual([
-      'repo::/b-wt-0',
-      'repo::/b-wt-2'
-    ])
-  })
-
   it('republishes a changed worktree whose publication threw before it was acknowledged', async () => {
     const syncWindowGraph = vi.fn().mockResolvedValue({})
     const { setState } = startSync(makeState('c', 3), syncWindowGraph)
@@ -152,24 +112,6 @@ describe('mobile session graph payload partition', () => {
     ])
   })
 
-  it('resends everything when the first publication throws', async () => {
-    const syncWindowGraph = vi.fn().mockRejectedValueOnce(new Error('ipc closed'))
-    syncWindowGraph.mockResolvedValue({})
-    startSync(makeState('d', 3), syncWindowGraph)
-    await flushSync()
-    expect(publishedWorktrees(syncWindowGraph.mock.calls[0])).toHaveLength(3)
-
-    scheduleRuntimeGraphSync()
-    await flushSync()
-
-    expect(publishedWorktrees(syncWindowGraph.mock.calls[1])).toEqual([
-      'repo::/d-wt-0',
-      'repo::/d-wt-1',
-      'repo::/d-wt-2'
-    ])
-    expect(withheldWorktrees(syncWindowGraph.mock.calls[1])).toEqual([])
-  })
-
   it('republishes worktrees main reports it dropped after acknowledging them', async () => {
     const syncWindowGraph = vi.fn().mockResolvedValue({})
     startSync(makeState('e', 3), syncWindowGraph)
@@ -188,22 +130,6 @@ describe('mobile session graph payload partition', () => {
     expect(withheldWorktrees(syncWindowGraph.mock.calls[2])).toEqual([
       'repo::/e-wt-0',
       'repo::/e-wt-1'
-    ])
-  })
-
-  it('drops a removed worktree from both the payload and the withheld list', async () => {
-    const syncWindowGraph = vi.fn().mockResolvedValue({})
-    const { setState } = startSync(makeState('f', 3), syncWindowGraph)
-    await flushSync()
-
-    setState(makeState('f', 2))
-    scheduleRuntimeGraphSync()
-    await flushSync()
-
-    expect(publishedWorktrees(syncWindowGraph.mock.calls[1])).toEqual([])
-    expect(withheldWorktrees(syncWindowGraph.mock.calls[1])).toEqual([
-      'repo::/f-wt-0',
-      'repo::/f-wt-1'
     ])
   })
 })

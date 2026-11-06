@@ -20,14 +20,7 @@ export type BrowserFrameGeometry = {
   offsetX: number
   offsetY: number
   scale: number
-  /**
-   * What the frame's device pixels divide by to reach the page's own CSS pixels.
-   *
-   * Mobile view emulates a phone viewport, and a page with no `<meta name="viewport">` lays out at
-   * Chromium's 980 px default and is scaled into it, so the two spaces differ by this much. The
-   * browser's input commands take page CSS pixels, which is why nothing may be sent in the frame's
-   * space. One in web view mode, where no emulation is on.
-   */
+  // Convert frame device pixels to page CSS pixels: no-meta mobile page scales Chromium’s 980px layout into phone viewport; web mode has scale 1.
   pageScale: number
 }
 
@@ -89,8 +82,7 @@ export function mapScreenToBrowserPoint(
   ) {
     return null
   }
-  // Why no scrollOffsetX/Y: the frame is the visual viewport and the input commands take
-  // viewport-relative CSS pixels, so adding the page's scroll would aim a screenful past the target.
+  // CDP input uses viewport CSS coordinates; adding scrollOffset aims past target by a page scroll.
   return {
     x: clamp(
       Math.round(((localX / geometry.renderedWidth) * geometry.sourceWidth) / geometry.pageScale),
@@ -108,14 +100,7 @@ export function mapScreenToBrowserPoint(
 /** A scroll the page should receive, in its own CSS pixels, the way a wheel reports one. */
 export type BrowserWheelDelta = { dx: number; dy: number }
 
-/**
- * What one point of screen is worth in the page's own CSS pixels, or null when it cannot be read.
- *
- * Three factors, and every screen-space quantity the pane sends needs all three: the frame's fit
- * into the pane, the pinch zoom on top of it, and the page scale the frame was painted at. A
- * consumer that composes two of them is off by the third, which is how the wheel came to deliver
- * 41% of the requested scroll on a page with no viewport meta.
- */
+// Compose frame-to-pane fit, pinch zoom and page scale for every screen delta; omitting last factor produced only 41% scroll on no-meta page. Return null if unreadable.
 export function browserScreenToPageCssScale(
   geometry: BrowserFrameGeometry | null,
   zoomScale: number
@@ -152,8 +137,7 @@ export function computeBrowserTouchClickRadiusCss(
   if (scale === null) {
     return 10
   }
-  // Why: phone taps are finger-sized while CDP clicks are pixel exact. Convert a
-  // small screen radius back into page CSS pixels so tiny links remain hittable.
+  // Convert finger-sized screen radius back to CSS pixels so pixel-exact CDP taps can hit tiny links.
   return clamp(Math.round(touchRadiusDip / scale), 6, 48)
 }
 

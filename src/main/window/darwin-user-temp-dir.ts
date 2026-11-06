@@ -6,10 +6,7 @@ const GETCONF_TIMEOUT_MS = 5_000
 
 let resolved: Promise<string> | null = null
 
-/**
- * The per-user temp dir macOS drag providers write to. `os.tmpdir()` follows
- * `$TMPDIR`, so a custom one would hide every `TemporaryItems/NSIRD_*` drop.
- */
+/** Resolve the real macOS per-user temp root: custom TMPDIR makes os.tmpdir miss drag-provider files. */
 export function getDarwinUserTempDir(
   platform: NodeJS.Platform = process.platform
 ): Promise<string> {
@@ -32,9 +29,9 @@ async function readDarwinUserTempDir(): Promise<string> {
       return dir
     }
   } catch {
-    // Fall through: `os.tmpdir()` is right whenever `$TMPDIR` is not customised.
+    // os.tmpdir is correct when TMPDIR is unmodified.
   }
-  // Why: don't pin a transient failure for the app's lifetime.
+  // Do not cache transient resolution failures for the app lifetime.
   resolved = null
   return tmpdir()
 }

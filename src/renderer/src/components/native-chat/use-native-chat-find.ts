@@ -16,7 +16,7 @@ import type { NativeChatMessageListHandle } from './use-native-chat-reveal-lates
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-/** The chat's find: open state and query live with the chat, so a reopen keeps the last query. */
+// Keep open state/query with the retained chat so reopen preserves its last search.
 export type NativeChatFind = {
   isOpen: boolean
   query: string
@@ -33,7 +33,6 @@ export type NativeChatFind = {
   revealMatch: (match: Range) => void
 }
 
-/** A composer whose suggestion list is open spends its own Escape closing that list. */
 function ownsEscape(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
@@ -47,7 +46,6 @@ function focusInput(input: HTMLInputElement): void {
   input.select()
 }
 
-/** Mod+F inside the focused chat opens find over its transcript. */
 export function useNativeChatFind(
   enabled: boolean,
   rootRef: RefObject<HTMLDivElement | null>,
@@ -76,8 +74,7 @@ export function useNativeChatFind(
       previous?.isConnected && root.contains(previous) && !previous.closest('[hidden], [inert]')
         ? previous
         : null
-    // A shown prompt card that wants focus takes it, as it would have with the bar closed (one that
-    // arrived while the bar held focus included), unless focus came from a control inside it.
+    // Restore an eligible prompt card, including one arriving during find, unless returning to a control inside it.
     if (focusNativeChatPromptCard(root, usable)) {
       return
     }
@@ -127,9 +124,7 @@ export function useNativeChatFind(
     return () => removeAppKeyListener('keydown', onKeyDown)
   }, [enabled, open, rootRef])
 
-  // Why React capture on the root: it runs before the composer's own onKeyDownCapture (outer
-  // first), so the composer never interrupts the turn; layers that close on Escape at the
-  // document (Radix popovers, the context card) still claim it earlier.
+  // Root capture precedes composer interruption; document-level layers still claim Escape before find.
   const onKeyDownCapture = useCallback(
     (event: ReactKeyboardEvent) => {
       if (

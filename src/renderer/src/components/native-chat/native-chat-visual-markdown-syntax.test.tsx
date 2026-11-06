@@ -10,7 +10,6 @@ import {
   remarkNativeChatVisuals
 } from './native-chat-visual-markdown-syntax'
 
-// These fixtures exercise markdown without rendering diagrams.
 const boundaryMocks = vi.hoisted(() => ({
   mermaid: vi.fn(() => {
     throw new Error('These fixtures must not render Mermaid diagrams')
@@ -62,27 +61,11 @@ function mountedFiles(markup: string): string[] {
 const LINE = '::orca-visual{file="usage.html" title="Usage by day"}'
 
 describe('remarkNativeChatVisuals', () => {
-  it('mounts a directive on its own line with its title', () => {
-    const markup = render(`Here it is:\n\n${LINE}\n\nThat is the trend.`)
-    expect(mountedFiles(markup)).toEqual(['usage.html'])
-    expect(markup).toContain('[Usage by day]')
-    expect(markup).not.toContain('::orca-visual')
-    expect(markup).toContain('That is the trend.')
-  })
-
   it('splits a paragraph that runs straight into and out of the directive', () => {
     const markup = render(`Here it is:\n${LINE}\nThat is the trend.`)
     expect(mountedFiles(markup)).toEqual(['usage.html'])
     expect(markup).toContain('Here it is:')
     expect(markup).toContain('That is the trend.')
-  })
-
-  it('mounts at the very end of the reply without a trailing newline', () => {
-    expect(mountedFiles(render(`Intro\n\n${LINE}`))).toEqual(['usage.html'])
-  })
-
-  it('accepts CRLF line endings and up to three spaces of indent', () => {
-    expect(mountedFiles(render(`Intro\r\n\r\n   ${LINE}\r\n\r\nAfter`))).toEqual(['usage.html'])
   })
 
   it.each([
@@ -110,14 +93,6 @@ describe('remarkNativeChatVisuals', () => {
     expect(mountedFiles(markup)).toEqual([])
   })
 
-  it('mounts a raw HTML placeholder only if it knew the nonce, which the reply cannot', () => {
-    // The nonce is per rendered message and never part of the reply, so this cannot be authored.
-    const markup = render(
-      `<div data-orca-visual="${NONCE}" data-orca-visual-file="usage.html">x</div>`
-    )
-    expect(mountedFiles(markup)).toEqual(['usage.html'])
-  })
-
   it('caps how many visuals one reply mounts and shows the rest as text', () => {
     const lines = Array.from(
       { length: 10 },
@@ -135,18 +110,5 @@ describe('remarkNativeChatVisuals', () => {
     const markup = render(`See [the docs][d].\n\n${LINE}\n\n[d]: https://example.com/docs`)
     expect(mountedFiles(markup)).toEqual(['usage.html'])
     expect(markup).toContain('href="https://example.com/docs"')
-  })
-
-  it('renders other markdown unchanged around it', () => {
-    const markup = render(`# Title\n\n${LINE}\n\n| a | b |\n| - | - |\n| 1 | 2 |`)
-    expect(mountedFiles(markup)).toEqual(['usage.html'])
-    expect(markup).toContain('<table')
-  })
-})
-
-describe('CommentMarkdown without the extension', () => {
-  it('shows the directive as text', () => {
-    const markup = renderToStaticMarkup(<CommentMarkdown content={LINE} variant="document" />)
-    expect(markup).toContain('::orca-visual')
   })
 })

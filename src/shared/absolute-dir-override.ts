@@ -1,13 +1,6 @@
 import { posix, win32 } from 'node:path'
 
-/**
- * An env-provided directory override, kept only when absolute (#13082).
- *
- * A relative value resolves against the *reading* process's cwd — `/` for a Finder-launched app,
- * the user data dir for the terminal daemon — never against the cwd the agent CLI used to write
- * it, so it names a different directory in every Orca process. Syntactic only: `/..` passes and
- * collapses to `/`, so this is not a containment check.
- */
+/** Require absolute overrides: relative paths resolve against each reader's cwd, not the writer's (#13082). Syntax only; /.. passes, so this proves no containment. */
 export function resolveAbsoluteDirOverride(
   value: string | undefined | null,
   fallback: string,

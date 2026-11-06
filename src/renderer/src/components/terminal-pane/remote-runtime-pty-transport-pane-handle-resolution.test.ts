@@ -3,13 +3,12 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -99,8 +98,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
-      leafId
+      leafId,
+      executionHostId: 'runtime:hub-env'
     })
+    const executionHostChanged = vi.fn()
+    transport.onExecutionHostChange?.(executionHostChanged)
 
     const result = await transport.connect({
       url: '',
@@ -118,6 +120,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-1')
     expect(transport.getExecutionHostId?.()).toBe('ssh:hub-private')
     expect(transport.getRemotePlatform?.()).toBe('win32')
+    // The pane's resize model re-resolves on this: the PTY's host is the server's SSH target.
+    expect(executionHostChanged).toHaveBeenCalledOnce()
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         selector: 'hub-env',
@@ -471,9 +475,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     setFitOverride('remote:env-1@@terminal-1', 'mobile-fit', 49, 20)
     setDriverForPty('remote:env-1@@terminal-1', { kind: 'mobile', clientId: 'phone-1' })
 
-    // Why: while the tunnel was down the host re-minted this pane's handle;
-    // resubscribing the stale closure handle would bind the mirror to a
-    // different PTY (#7718). The transport must re-derive from the snapshot.
+    // Re-derive host handles after transport loss; stale closure handles may now name a different PTY (#7718).
     runtimeCall.mockImplementation(async (args: { method: string }) =>
       args.method === 'session.tabs.list'
         ? {
@@ -560,8 +562,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onClose?.()
 
-    // Why: no red xterm error — retire quietly and let the next session-tabs
-    // snapshot drive respawn/removal.
+    // Retire quietly and leave later authoritative snapshots to drive recovery/removal.
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', -1))
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()

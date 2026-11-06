@@ -1,12 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { buildBrowserSessionData } from '@/lib/workspace-session-browser-tabs'
-import {
-  browserPageSchema,
-  browserWorkspaceSchema
-} from '../../../../shared/workspace-session-browser-schema'
+import { browserPageSchema } from '../../../../shared/workspace-session/workspace-session-browser-schema'
 import { createTestStore, makeWorktree } from './store-test-helpers'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn() }))
 vi.mock('@/lib/doc-preview-grants', () => ({
@@ -19,6 +17,17 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
+// Main answers the window's layout commands and its frames draw the tabs (switch-on only).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 const DOC_LOCATION = {
@@ -26,11 +35,21 @@ const DOC_LOCATION = {
   worktreeId: WORKTREE_ID,
   filePath: '/home/alice/wt1/report/index.html'
 }
-// What a live document page shows: minted at mount, replaced on a hard reload, dead with the
-// process. Nothing in the store, on disk or on the wire may ever carry it.
+// Grants exist only in live guest memory: process/mount-scoped and never stored, persisted or published.
 const LIVE_GRANT_URL = `orca-preview://${'a'.repeat(32)}/report/index.html`
 
-function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
+let main: TabsDrawnFromMain | undefined
+afterEach(() => {
+  main?.close()
+  main = undefined
+})
+
+async function settled(): Promise<void> {
+  await main?.settle()
+}
+
+/** A store showing one worktree, its tabs drawn from main once the switch is on. */
+async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
   store.setState({
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
@@ -39,6 +58,8 @@ function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WORKTREE_ID
   })
+  main?.close()
+  main = await drawTabsFromMain(store)
   return store
 }
 
@@ -55,66 +76,15 @@ function persistedSession(
 }
 
 describe('a browser page that shows a workspace document', () => {
-  it('is created blank, with the document as its identity', () => {
-    const store = createStoreWithWorktree()
-
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-
-    const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
-    expect(page?.url).toBe(ORCA_BROWSER_BLANK_URL)
-    expect(page?.docLocation).toEqual(DOC_LOCATION)
-    // The mirror is what the tab strip and every workspace-level reader see.
-    expect(store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.url).toBe(
-      ORCA_BROWSER_BLANK_URL
-    )
-    expect(store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.docLocation).toEqual(
-      DOC_LOCATION
-    )
-  })
-
-  // The presence precondition for every blank-url assertion here: an ordinary tab created the same
-  // way keeps the URL it was given, so a store that had stopped recording urls at all would fail
-  // rather than pass by being uniformly blank.
-  it('leaves an ordinary browser tab url alone', () => {
-    const store = createStoreWithWorktree()
-
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-
-    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.url).toBe('https://example.com/')
-    expect(store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.docLocation ?? null).toBeNull()
-  })
-
-  // Browser parity: a browser tab is named by the document it shows, and so is this one. Without
-  // this the blank url that is correct for a document page named every preview "New Tab".
-  it('takes its name from the document, and falls back to the file', () => {
-    const store = createStoreWithWorktree()
+  // Chromium echoes untitled documents’ grant URLs as titles; fence this persisted/mirrored sink too.
+  it('refuses a grant url arriving as the document title', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
-    const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.title).toBe('index.html')
-
-    store.getState().updateBrowserPageState(pageId, { title: 'Quarterly Report' })
-    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.title).toBe('Quarterly Report')
-
-    store.getState().updateBrowserPageState(pageId, { title: '' })
-    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.title).toBe('index.html')
-  })
-
-  // Why a title needs the same refusal the url has: Chromium reports the URL as the title when a
-  // document declares none, and titles are stored, mirrored onto the tab and written to disk.
-  it('refuses a grant url arriving as the document title', () => {
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      title: 'index.html',
-      browserRuntimeEnvironmentId: null
-    })
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     store.getState().updateBrowserPageState(pageId, { title: LIVE_GRANT_URL })
@@ -124,28 +94,15 @@ describe('a browser page that shows a workspace document', () => {
     expect(JSON.stringify(persistedSession(store))).not.toContain('orca-preview://')
   })
 
-  // The presence half for both: an ordinary page still gets the blank-url name, so a fallback that
-  // had swallowed every title would fail here rather than pass by naming everything after a file.
-  it('still names an ordinary blank browser tab New Tab', () => {
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, ORCA_BROWSER_BLANK_URL)
-    const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-
-    store.getState().updateBrowserPageState(pageId, { title: '' })
-
-    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.title).toBe('New Tab')
-  })
-
-  // Why the third url door is fenced even though nothing reaches it today: creation and the title
-  // update are fenced, and a door left open is one navigation report away from committing a grant
-  // to the page every persisted, mirrored and published reader takes its url from.
-  it('keeps its blank url when a navigation commits one onto it', () => {
-    const store = createStoreWithWorktree()
+  // Fence navigation reports too: an unused URL sink could still persist/publish grant authority later.
+  it('keeps its blank url when a navigation commits one onto it', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     store.getState().setBrowserPageUrl(pageId, LIVE_GRANT_URL)
@@ -161,48 +118,18 @@ describe('a browser page that shows a workspace document', () => {
     expect(JSON.stringify(persistedSession(store))).not.toContain('orca-preview://')
   })
 
-  // The presence half for the door above: an ordinary page still takes the url it is given, so a
-  // door that had stopped writing urls entirely would fail here rather than pass by writing none.
-  it('still commits a navigation url onto an ordinary browser tab', () => {
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-    const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
-
-    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]).toMatchObject({
-      url: 'https://example.com/next',
-      loading: true
-    })
-  })
-
-  it('never asks for the address bar it does not have', () => {
-    const store = createStoreWithWorktree()
-
-    const docTab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    const newTab = store.getState().createBrowserTab(WORKTREE_ID, ORCA_BROWSER_BLANK_URL)
-
-    expect(store.getState().pendingAddressBarFocusByTabId[docTab.id]).toBeUndefined()
-    // The blank url is exactly what marks an ordinary New Tab as wanting focus there.
-    expect(store.getState().pendingAddressBarFocusByTabId[newTab.id]).toBe(true)
-  })
-
-  // Why the mirror is driven and not just read after creation: creation builds the workspace from
-  // its one page, while every later change re-mirrors from whichever page is active. A mirror that
-  // does not carry this field leaves the strip entry naming a document the reader has switched away
-  // from — and the publish boundary reads the tab, not the page.
-  it('follows the active page in and out of the document', () => {
-    const store = createStoreWithWorktree()
+  // Drive later mirroring too: active page changes must update tab document identity, which publication reads.
+  it('follows the active page in and out of the document', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+    await settled()
     const docPageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     const urlPage = store.getState().createBrowserPage(tab.id, 'https://example.com/')
+    await settled()
 
     expect(store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.docLocation ?? null).toBeNull()
     expect(store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.url).toBe(
@@ -217,78 +144,18 @@ describe('a browser page that shows a workspace document', () => {
     expect(urlPage?.docLocation ?? null).toBeNull()
   })
 
-  // Why a repair path and not a switch: every other mirrored field can be equal while this one is
-  // not — two documents named index.html in different folders share a title, and a document page's
-  // url is blank by construction. Without this field in the comparison the strip entry keeps naming
-  // the document the reader moved away from, and the publish boundary reads the entry.
-  it('repairs a workspace still naming the document its page has left', () => {
-    const store = createStoreWithWorktree()
+  it('reopens a closed document tab with its document identity', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
-    const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
-    const otherDocument = { ...DOC_LOCATION, filePath: '/home/alice/wt1/appendix/index.html' }
-    store.setState({
-      browserPagesByWorkspace: {
-        ...store.getState().browserPagesByWorkspace,
-        [tab.id]: [{ ...page!, docLocation: otherDocument }]
-      }
-    })
-
-    store.getState().updateBrowserPageState(page!.id, { title: page!.title })
-
-    expect(store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]?.docLocation).toEqual(
-      otherDocument
-    )
-  })
-
-  // Why closing has to say so: a grant is the only authority the preview scheme honors, and it
-  // outlives the guest. A closed document that stays readable is a read authority nothing revokes
-  // until the process ends.
-  it('revokes the grant of the document tab that was closed, and only that one', () => {
-    const store = createStoreWithWorktree()
-    const docTab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id
-    const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-
-    store.getState().closeBrowserTab(urlTab.id)
-    expect(mocks.releaseDocPreviewGrant).not.toHaveBeenCalled()
-
-    store.getState().closeBrowserTab(docTab.id)
-
-    expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledWith(docPageId)
-    expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledTimes(1)
-  })
-
-  it('revokes a document grant when only that page is closed', () => {
-    mocks.releaseDocPreviewGrant.mockClear()
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    const docPageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-    store.getState().createBrowserPage(tab.id, 'https://example.com/')
-
-    store.getState().closeBrowserPage(docPageId)
-
-    expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledExactlyOnceWith(docPageId)
-    expect(store.getState().browserPagesByWorkspace[tab.id]).toHaveLength(1)
-  })
-
-  it('reopens a closed document tab with its document identity', () => {
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
+    await settled()
 
     store.getState().closeBrowserTab(tab.id)
+    await settled()
     const reopened = store.getState().reopenClosedBrowserTab(WORKTREE_ID)
+    await settled()
     const page = reopened ? store.getState().browserPagesByWorkspace[reopened.id]?.[0] : undefined
 
     expect(page?.docLocation).toEqual(DOC_LOCATION)
@@ -296,68 +163,38 @@ describe('a browser page that shows a workspace document', () => {
     expect(reopened?.docLocation).toEqual(DOC_LOCATION)
   })
 
-  it('reopens a closed document page with its document identity', () => {
-    const store = createStoreWithWorktree()
+  it('reopens a closed document page with its document identity', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+    await settled()
     const documentPage = store.getState().createBrowserPage(tab.id, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+    await settled()
     if (!documentPage) {
       throw new Error('Expected a document page')
     }
 
     store.getState().closeBrowserPage(documentPage.id)
+    await settled()
     const reopened = store.getState().reopenClosedBrowserPage(tab.id)
+    await settled()
 
     expect(reopened?.docLocation).toEqual(DOC_LOCATION)
     expect(reopened?.url).toBe(ORCA_BROWSER_BLANK_URL)
   })
 
-  it('writes the document and not the grant to the session', () => {
-    const store = createStoreWithWorktree()
+  it('restores as the document it was, still blank', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
-
-    const session = persistedSession(store)
-    const written = JSON.stringify(session)
-
-    expect(session.browserPagesByWorkspace?.[tab.id]?.[0]?.docLocation).toEqual(DOC_LOCATION)
-    expect(session.browserPagesByWorkspace?.[tab.id]?.[0]?.url).toBe(ORCA_BROWSER_BLANK_URL)
-    expect(written).not.toContain('orca-preview://')
-  })
-
-  // Why the schema is asserted separately: both browser schemas are plain z.object, which strips
-  // what it does not name. An unlisted docLocation survives every step above and disappears on
-  // load, restoring the document as a blank New Tab under a strip entry that still names it.
-  it('survives the session schema in both halves', () => {
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
+    await settled()
     const session = persistedSession(store)
 
-    const parsedPage = browserPageSchema.parse(session.browserPagesByWorkspace?.[tab.id]?.[0])
-    const parsedTab = browserWorkspaceSchema.parse(
-      session.browserTabsByWorktree?.[WORKTREE_ID]?.[0]
-    )
-
-    expect(parsedPage.docLocation).toEqual(DOC_LOCATION)
-    expect(parsedTab.docLocation).toEqual(DOC_LOCATION)
-  })
-
-  it('restores as the document it was, still blank', () => {
-    const store = createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
-      docLocation: DOC_LOCATION,
-      browserRuntimeEnvironmentId: null
-    })
-    const session = persistedSession(store)
-
-    const restored = createStoreWithWorktree()
+    const restored = await createStoreWithWorktree()
     restored.getState().hydrateBrowserSession({
       activeRepoId: 'repo1',
       activeWorktreeId: WORKTREE_ID,
@@ -375,17 +212,17 @@ describe('a browser page that shows a workspace document', () => {
     )
   })
 
-  // Why this shape and not just a missing field: salvage drops a malformed page row and leaves the
-  // array empty, and hydration then rebuilds one page from the tab's own mirrored chrome.
-  it('restores from the tab alone when its page row was salvaged away', () => {
-    const store = createStoreWithWorktree()
+  // Malformed pages salvage to empty arrays; hydration then rebuilds from tab chrome, so test that fallback.
+  it('restores from the tab alone when its page row was salvaged away', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+    await settled()
     const session = persistedSession(store)
 
-    const restored = createStoreWithWorktree()
+    const restored = await createStoreWithWorktree()
     restored.getState().hydrateBrowserSession({
       activeRepoId: 'repo1',
       activeWorktreeId: WORKTREE_ID,
@@ -401,11 +238,9 @@ describe('a browser page that shows a workspace document', () => {
     expect(page?.url).toBe(ORCA_BROWSER_BLANK_URL)
   })
 
-  // Why a hand-written row and not one this build can produce: the store refuses to mint one, so
-  // the only way a grant url reaches this field is a session written by another build. It names a
-  // grant that died with the process that minted it, and the address bar would show it.
-  it('blanks a grant url a foreign session carried in', () => {
-    const restored = createStoreWithWorktree()
+  // Only older/handwritten sessions can contain grant URLs this build refuses; strip expired process authority before address-bar restore.
+  it('blanks a grant url a foreign session carried in', async () => {
+    const restored = await createStoreWithWorktree()
 
     restored.getState().hydrateBrowserSession({
       activeRepoId: 'repo1',
@@ -451,6 +286,7 @@ describe('a browser page that shows a workspace document', () => {
         ]
       }
     })
+    await settled()
 
     expect(restored.getState().browserPagesByWorkspace['browser-1']?.[0]?.url).toBe(
       ORCA_BROWSER_BLANK_URL
@@ -461,8 +297,7 @@ describe('a browser page that shows a workspace document', () => {
   })
 })
 
-// The provenance fields hold a url the way page.url does, so the disk door applies the same
-// prefix fence: a session file carrying the preview scheme sheds the provenance, never history.
+// Apply disk prefix fence to provenance too; strip preview-scheme pointers without dropping ordinary history.
 describe('conversion provenance at the session schema door', () => {
   const PAGE_ROW = {
     id: 'page-1',

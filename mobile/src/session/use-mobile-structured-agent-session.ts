@@ -1,21 +1,13 @@
-import { useCallback, useMemo, useRef } from 'react'
-import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
+import { useMemo, useRef } from 'react'
+import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
-  projectStructuredQuestionMessages,
-  structuredQuestionTranscript
-} from '../../../src/shared/structured-agent-question-projection'
-import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
-import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
-import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
-import {
-  isStructuredAgentSessionThinking,
   runningStructuredAgentSessionTurnId,
-  structuredAgentSessionHostSaysWorking
-} from '../../../src/shared/structured-agent-session-live-turn'
-import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat-turn-activity'
+  structuredAgentSessionQueueSendsNext
+} from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -28,55 +20,61 @@ import type {
   MobileStructuredAgentSessionArgs,
   StructuredMobileSession
 } from './mobile-structured-agent-session-contract'
-import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press'
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredCommandController } from './use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import {
   pendingStructuredPromptIdentity,
-  requestMobileStructuredAgentSessionCancel
+  useMobileStructuredRequestCancel
 } from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
-import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
-import {
-  mobileStructuredSendQueues,
-  useMobileStructuredSendWithOutcome
-} from './use-mobile-structured-send-with-outcome'
+import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send-with-outcome'
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
+import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
+import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
+import { useMobileStructuredContextUsage } from './use-mobile-structured-context-usage'
+import { useMobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
+import {
+  useMobileStructuredThreadGoal,
+  useMobileStructuredThreadGoalSend
+} from './use-mobile-structured-thread-goal'
+import { useMobileStructuredTranscript } from './use-mobile-structured-transcript'
+import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
+import { useMobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
 ): StructuredMobileSession {
   const {
     agent,
-    appendComposerText,
     client,
+    pairedHostClient: paired,
     connected,
     sessionId,
     sourceIdentity = '',
     enabled,
     onActionResolved,
     onSendError,
-    hostSupport
+    hostSupport,
+    onCommandsChanged
   } = args
-  // Only a host that queues sends gets the delivery field; any host's published cards show.
+  // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
-  // A /compact waits in line only where its card renders.
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const promptCancelSupported = hostSupport?.promptCancel ?? null
-  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
+  const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const hostStopsConversation = hostSupport?.conversationStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const commandPendingRef = useRef(false)
-  // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
-  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
-  const stateArgs = { client, sessionId, sessionKey, enabled, connected }
+  const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
 
@@ -94,6 +92,7 @@ export function useMobileStructuredAgentSession(
     sessionId,
     enabled: enabled && connected && hostSupport?.statusFeed === true
   })
+  const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
     agent,
     client,
@@ -102,38 +101,21 @@ export function useMobileStructuredAgentSession(
     fence: state.fence,
     mutate,
     optionStamp,
+    turnId,
+    hasTurn: state.latestTurn != null || state.submissions.length > 0,
+    unloadedTurnRevisions: state.unloadedTurnRevisions,
     hostSupport
   })
-  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
-    options
-  // Stable across renders, or the send callback is rebuilt on every streamed frame.
-  const sendController = useMemo(
-    () => ({
-      snapshot: optionSnapshot,
-      setOption: setStructuredOption,
-      invokeAction: invokeStructuredOption,
-      conversationCommands
-    }),
-    [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
-  )
+  const sendController = useMobileStructuredCommandController(options)
+  const { contextUsageSupport, ...optionFields } = options
 
-  const { groupedDraft, respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
+  const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
-    sessionKey,
     mutate,
     questionAnswersSupported: hostSupport?.questionAnswers ?? null,
     onSendError
   })
 
-  // What the transcript reads, as desktop does: the journal since the latest /clear, plus the one
-  // notice a cut turn with no row gets.
-  const transcriptItems = useMemo(
-    () =>
-      withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items), {
-        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined
-      }),
-    [agent, state.items]
-  )
   const sends = useMobileStructuredSends({
     sessionKey,
     cursor: state.cursor,
@@ -141,29 +123,17 @@ export function useMobileStructuredAgentSession(
     queuedMessages,
     onSendError
   })
-  const messages = useMemo(
-    // A message the host recorded and then rejected stays where it was sent, as not sent.
-    () =>
-      projectStructuredAgentSessionMessages(
-        transcriptItems,
-        sends.optimistic,
-        state.submissions,
-        projectStructuredQuestionMessages
-      ),
-    [transcriptItems, sends.optimistic, state.submissions]
+  const { transcriptItems, messages, receipts } = useMobileStructuredTranscript(
+    agent,
+    state,
+    sends.optimistic
   )
-  const turnId = runningStructuredAgentSessionTurnId(state)
   const turnTiming = useMobileStructuredAgentTurnTiming(
     { ...state, items: transcriptItems },
     turnId
   )
-  const activityText =
-    selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
-  const thinking = isStructuredAgentSessionThinking(state)
-  // The host's answer counts only the agent running now; an older host gives none.
-  const isWorking = structuredAgentSessionHostSaysWorking(state.working, () =>
-    isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence)
-  )
+  const isWorking = mobileStructuredAgentSessionWorking(state)
+  const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
     state,
@@ -176,62 +146,88 @@ export function useMobileStructuredAgentSession(
     sessionId,
     enabled: enabled && connected && hostSupport?.statusFeed === true
   })
-  // The host's word, bridged by this phone's own press until its Stop event lands.
   const stopPress = useMobileStructuredStopPress(sessionKey)
-  const stopping =
-    agentStopDisplayStatus({
-      working: isWorking,
-      hostStopping,
-      stopPressed: stopPress.pressed
-    }) === 'stopping'
-  const stopRequestInFlight = isWorking && stopPress.pressed
-  const sendWithOutcome = useMobileStructuredSendWithOutcome({
+  const { canStop, sendsOut } = useMobileStructuredStopOffer({
+    sessionKey,
+    turnId,
+    isWorking,
+    stopsConversation: hostStopsConversation === true
+  })
+  const turnIndicator = useMobileStructuredTurnIndicator({
+    state,
+    turnId,
+    isWorking,
+    canStop,
+    hostStopping,
+    stopPressed: stopPress.pressed,
+    queueCapable,
+    queueFollowUps,
+    queueSendsNext
+  })
+  const goal = useMobileStructuredThreadGoal(args, state, {
+    sessionKey,
+    report: options.threadGoalSupport,
+    turnId,
+    workingStartedAt: turnTiming.workingStartedAt,
+    working: isWorking || queueSendsNext,
+    mutate,
+    commands: sendController
+  })
+  const sendWithOutcomeUngated = useMobileStructuredSendWithOutcome({
     agent,
     client,
     sessionId,
     enabled,
     queueCapable,
+    queueFollowUps,
     commandsWait,
     stateRef,
-    stopping,
+    stopping: turnIndicator.stopping,
     accept: sends.accept,
-    hold: sends.hold,
+    acknowledge: sends.acknowledge,
+    reject: sends.reject,
     commandPending: commandPendingRef,
-    controller: sendController,
+    sendsOut,
+    controller: goal.commands,
+    sessionCommands: args.sessionCommands,
     onSendError,
-    sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined
+    queueSendsNext,
+    sendSelection: options.sendSelection,
+    takesSkills: hostSupport?.sendSkills === true
   })
-  const turnIndicator = useMemo(
-    () => ({
-      thinking,
-      activityText,
-      stopping,
-      stopRequestInFlight,
-      ...(stopping
-        ? {
-            afterStop: mobileStructuredSendQueues(queueCapable, state)
-              ? ('queue' as const)
-              : ('send' as const)
-          }
-        : {})
-    }),
-    [thinking, activityText, stopping, stopRequestInFlight, queueCapable, state]
-  )
-  const { items, currentRequests, actionablePromptIds, status } = state
-  // The host's answer where it gives one: a prompt an agent that ended raised takes no answer.
+  const { items, currentRequests, actionablePromptIds, status, epoch } = state
+  // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
     const prompts = { items, currentRequests, actionablePromptIds }
     return [actionableStructuredApproval(prompts), actionableStructuredQuestion(prompts)] as const
   }, [items, currentRequests, actionablePromptIds])
-  // What a refused command's line on the phone stands on.
   const commandRefusalCauses = useMemo(
     () => ({
-      working: turnId !== null,
+      working: turnId !== null || queueSendsNext,
       prompt: approvalPrompt !== null || questionPrompt !== null
     }),
-    [approvalPrompt, questionPrompt, turnId]
+    [approvalPrompt, questionPrompt, queueSendsNext, turnId]
   )
+  const { rewind, sendWithOutcome } = useMobileStructuredAgentRewind({
+    ...args,
+    state,
+    stateRef,
+    options,
+    turnId,
+    backgroundTasks,
+    sendsOut,
+    commandPendingRef,
+    queuedMessages,
+    send: sendWithOutcomeUngated
+  })
+  useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
+  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
+    busy: isWorking || queueSendsNext || sendsOut.sending(),
+    send: sendWithOutcome
+  })
   const queued = useMobileStructuredQueuedMessageControls({
+    ...args,
+    appendComposerText: args.appendComposerText,
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,
@@ -239,66 +235,49 @@ export function useMobileStructuredAgentSession(
     queuePause,
     submissions: state.submissions,
     agentWorking: isWorking,
-    client,
-    sessionId,
+    imagesCapable: hostSupport?.queuedMessageImageEdit === true,
+    skillsCapable: hostSupport?.queuedMessageSkillsEdit === true,
+    reorderCapable: hostSupport?.queuedMessageReorder === true,
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
     mutate,
-    appendComposerText,
-    onSendError,
     ...(onActionResolved ? { onActionResolved } : {})
   })
-  // Stop never touches the queue: held cards stay on the host, visible on every
-  // device, and resume only from the user's own next action.
-  const requestCancel = useCallback(
-    (prompt?: { itemId: string; expectedRevision: number }): Promise<boolean> =>
-      requestMobileStructuredAgentSessionCancel({
-        client,
-        enabled,
-        hostAnswersRepeatedStops,
-        hostStopsConversation,
-        inFlight: inFlightStopsRef.current,
-        onSendError,
-        prompt,
-        promptCancelSupported,
-        sessionId,
-        stateRef
-      }),
-    [
-      client,
-      enabled,
-      hostAnswersRepeatedStops,
-      hostStopsConversation,
-      onSendError,
-      promptCancelSupported,
-      sessionId,
-      stateRef
-    ]
-  )
-
-  const visualSource = useMemo<MobileNativeChatVisualSource | null>(
-    () => (client && sessionId ? { client, sessionId } : null),
-    [client, sessionId]
-  )
+  // Stop preserves host-held cards under queue pause; only a later user action resumes them.
+  const requestCancel = useMobileStructuredRequestCancel({
+    client,
+    enabled,
+    hostSupport,
+    onSendError,
+    sessionId,
+    stateRef
+  })
 
   return {
-    ...options,
-    visualSource,
+    ...optionFields,
+    contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
+    visualSource: useMemo<MobileNativeChatVisualSource | null>(
+      () => (client && sessionId ? { client, sessionId } : null),
+      [client, sessionId]
+    ),
+    asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
+    submissions: state.submissions,
     session: {
       messages,
       status,
       transcriptLoading: status === 'loading',
       error: state.error,
       readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
-      // History that can never be read from here ends paging; its line says so.
       hasMore: state.hasOlder && olderPages !== 'unavailable',
       loadingEarlier: olderPages === 'loading',
       olderPages,
       loadEarlier
     },
-    isWorking,
+    isWorking: isWorking || queueSendsNext,
+    canStop,
+    sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
     ...turnTiming,
@@ -306,14 +285,21 @@ export function useMobileStructuredAgentSession(
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
-    receipts: structuredQuestionTranscript(transcriptItems).receipts,
+    receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
-    question: projectStructuredQuestion(questionPrompt, groupedDraft),
+    question: projectStructuredQuestion(questionPrompt),
     respondPermission,
     respondQuestion,
     queued,
     commandRefusalCauses,
-    backgroundTasks
+    backgroundTasks,
+    interruptedContinue: useMobileStructuredInterruptedContinue(
+      { client, sessionId, sessionKey, hostSupport, ...state },
+      isWorking || queueSendsNext
+    ),
+    threadGoal: goal.threadGoal,
+    rewind,
+    usageLimit
   }
 }

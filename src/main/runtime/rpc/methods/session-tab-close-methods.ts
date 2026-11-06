@@ -18,7 +18,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
       if (context.clientKind) {
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
-          context.pairedDeviceId
+          context.pairedDeviceId,
+          { includeAgentSenders: false }
         )
         const visible = projectSessionTabsForClient(
           raw,
@@ -41,7 +42,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
       return withSpan(
         'runtime.session-tabs.close',
         async (span) => {
-          // Why: old runtime clicks and cleanup are wire-identical, so changing their behavior would regress mixed-version pairings.
+          // Preserve legacy runtime closes: user clicks and cleanup have identical wire shapes.
           if (!params.reason && requiresIntent) {
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
@@ -55,6 +56,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.tabId,
             {
               reason: 'user',
+              // Only explicit reasons prove confirmation; legacy reasonless closes do not.
+              ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
@@ -95,7 +98,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
       if (context.clientKind) {
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
-          context.pairedDeviceId
+          context.pairedDeviceId,
+          { includeAgentSenders: false }
         )
         const visible = projectSessionTabsForClient(
           raw,

@@ -1,5 +1,6 @@
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
+  DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
@@ -18,7 +19,7 @@ function requireBridgeCaller(context: RpcContext): {
     throw new Error('desktop_browser_bridge_not_served')
   }
   const { clientKind, connectionId, pairedDeviceId, clientCapabilities } = context
-  // Why: only an authenticated, end-to-end encrypted paired desktop socket may receive the host's commands.
+  // Host commands require an authenticated, E2EE paired-desktop socket.
   if (clientKind !== 'runtime' || !connectionId || !pairedDeviceId) {
     throw new Error('authenticated_desktop_browser_bridge_required')
   }
@@ -41,6 +42,9 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
       const handle = getDesktopBrowserBridgeRegistry(runtime).attach({
         ...caller,
         acceptsCancel,
+        enforcesExpectUrl:
+          context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY) ??
+          false,
         emit
       })
       let release = (): void => {}

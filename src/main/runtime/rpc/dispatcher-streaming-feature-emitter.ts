@@ -1,6 +1,6 @@
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { RpcEnvelopeMeta, RpcRequest } from './core'
+import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import { successResponse } from './errors'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 
@@ -8,7 +8,7 @@ export function createDispatcherStreamingFeatureEmitter(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   meta: RpcEnvelopeMeta,
-  reply: (response: string) => void
+  reply: (response: RpcResponse) => void
 ) {
   const recordedFeatureInteractions = new Set<FeatureInteractionId>()
   const emit = (result: unknown): void => {
@@ -21,7 +21,7 @@ export function createDispatcherStreamingFeatureEmitter(
     )
     const response = successResponse(request.id, meta, result)
     response.streaming = true
-    reply(JSON.stringify(response))
+    reply(response)
   }
   return { emit, recordedFeatureInteractions }
 }

@@ -1,5 +1,5 @@
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { FolderWorkspacePathStatusRequest } from '../../../../shared/folder-workspace-path-status'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { FolderWorkspacePathStatusRequest } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'

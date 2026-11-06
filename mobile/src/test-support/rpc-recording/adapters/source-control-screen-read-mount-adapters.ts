@@ -6,29 +6,15 @@ import { hostClientContextExposure, loadHostClientContext } from '../host-client
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
-import type {
-  MobileBranchCompareState,
-  MobileBranchDiffPreviewState
-} from '../../../source-control/mobile-source-control-screen-state'
-import type {
-  MobileGitBranchChangeEntry,
-  MobileGitBranchCompareReply
-} from '../../../source-control/git-compare-reply-schema'
 
 const HOST = 'host-1'
 const WORKTREE = 'repo42::/p'
 
-/** The commit list reads its reconnect handle through the context `client-context.tsx` keeps. */
 export const sourceControlScreenReadMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/**
- * The four source-control reads whose replies no other adapter observes: the Changes screen's
- * status and branch compare, the history list's per-commit file list, and the committed-diff
- * preview. Each is mounted through the hook or screen that owns it rather than through the sender,
- * because the reply these operations return is only visible in what the owner then publishes.
- */
+// Mount reply owners so recordings observe published state rather than sender return values.
 export function sourceControlScreenReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -40,8 +26,7 @@ export function sourceControlScreenReadMountAdapters(
         'mobile/src/source-control/use-mobile-source-control-loaders.ts'
       ).useMobileSourceControlLoaders
       let loaders: ReturnType<typeof useLoaders>
-      // Stable across renders: the hook's mount effect keys on the callbacks it was handed, so a
-      // fresh closure per render would re-send the status load and hide the settled state.
+      // Keep callbacks stable; new identities would retrigger status loading and hide settled state.
       const reportActionError = (message: string | null): void =>
         effect('source-control.action-error', { message })
       const reportStatusLoadSuccess = (): void => effect('source-control.status-load-success', {})
@@ -68,8 +53,7 @@ export function sourceControlScreenReadMountAdapters(
           }
           throw new Error(`Unknown changes load action: ${name}`)
         },
-        // The branch compare is loaded by the status load, not by an action, so both states are
-        // projected together: a status reply the reader rejects never reaches the compare at all.
+        // Project status and compare together because a refused status read prevents the compare load.
         state: () => ({
           screenState: loaders?.screenState ?? 'unmounted',
           branchCompareState: loaders?.branchCompareState ?? 'unmounted'
@@ -77,7 +61,7 @@ export function sourceControlScreenReadMountAdapters(
         dispose: hook.unmount
       }
     },
-    'source-control.history-commit-files': ({ client, effect }) => {
+    'source-control.history-branch-commits': ({ client, effect }) => {
       const List = modules.load<typeof import('../../../source-control/MobileGitHistoryList')>(
         'mobile/src/source-control/MobileGitHistoryList.tsx'
       ).MobileGitHistoryList
@@ -102,7 +86,9 @@ export function sourceControlScreenReadMountAdapters(
               connState: 'connected',
               worktreeId: WORKTREE,
               hostId: HOST,
-              bottomInset: 34
+              bottomInset: 34,
+              onOpenCommit: (commit: { id: string }) =>
+                effect('history.open-commit', { id: commit.id })
             })
           ),
         effect
@@ -115,110 +101,26 @@ export function sourceControlScreenReadMountAdapters(
           if (name === 'unmount') {
             return screen.unmount()
           }
-          if (name === 'expand') {
-            // An inert FlatList never calls `renderItem`, so expanding a commit means rendering one
-            // row through the screen's own callback and calling the handler it put on it.
+          if (name === 'open') {
+            // The inert FlatList never renders rows; invoke the handler from the screen’s own renderItem.
             return performHookAction(() => pressFirstCommit(screen.tree()))
           }
-          throw new Error(`Unknown history commit action: ${name}`)
+          throw new Error(`Unknown history action: ${name}`)
         },
         state: () => ({
           ...projectMountedScreen(screen),
-          // The commit-compare reply is only ever drawn inside a row, so the row is rendered
-          // through the screen's own callback and read back. Without it the file list is
-          // unobservable and the operation has no oracle.
+          // Render the first commit row to observe its timeline, stats and copy.
           commitRow: projectFirstCommitRow(screen.tree())
         }),
         dispose: screen.unmount
-      }
-    },
-    'source-control.branch-diff-preview': ({ client, effect }) => {
-      const useOpeners = modules.load<
-        typeof import('../../../source-control/use-mobile-source-control-openers')
-      >(
-        'mobile/src/source-control/use-mobile-source-control-openers.ts'
-      ).useMobileSourceControlOpeners
-      const mountedRef = { current: true }
-      const busyActionRef: { current: string | null } = { current: null }
-      let openers: ReturnType<typeof useOpeners>
-      const hook = hookMount(() => {
-        openers = useOpeners({
-          client,
-          connState: 'connected',
-          hostId: HOST,
-          worktreeId: WORKTREE,
-          name: 'orca',
-          // Only the session origin previews in place; any other pushes a route instead.
-          origin: 'session',
-          embedded: true,
-          branchCompareState: BRANCH_COMPARE_READY,
-          mountedRef,
-          busyActionRef,
-          setActionError: (message) => effect('source-control.action-error', { message })
-        })
-      })
-      return {
-        action(name) {
-          if (name === 'mount' || name === 'remount') {
-            return hook.mount()
-          }
-          if (name === 'unmount') {
-            return hook.unmount()
-          }
-          if (name === 'open') {
-            return performHookAction(() => openers.openBranchDiff(BRANCH_ENTRY))
-          }
-          throw new Error(`Unknown branch diff action: ${name}`)
-        },
-        // The highlighted lines are a rendering of the diff, not an observation of the reply, so the
-        // preview is projected by what it is and how much it carried.
-        state: () => ({ preview: projectBranchDiffPreview(openers?.branchDiffPreview) }),
-        dispose: hook.unmount
       }
     }
   }
 }
 
-const BRANCH_ENTRY = mountFixture<MobileGitBranchChangeEntry>({
-  path: 'src/app.ts',
-  status: 'modified',
-  added: 2,
-  removed: 1
-})
-
-/** A compare the screen has already loaded, which is the precondition the diff open guards on. */
-const BRANCH_COMPARE_READY: MobileBranchCompareState = {
-  kind: 'ready',
-  result: mountFixture<MobileGitBranchCompareReply>({
-    summary: {
-      baseRef: 'origin/main',
-      baseOid: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
-      compareRef: 'feature',
-      headOid: 'f0e1d2c3b4a5968778695a4b3c2d1e0f98765432',
-      mergeBase: '0123456789abcdef0123456789abcdef01234567',
-      changedFiles: 1,
-      status: 'ready'
-    },
-    entries: [BRANCH_ENTRY]
-  })
-}
-
-function projectBranchDiffPreview(preview: MobileBranchDiffPreviewState | null): unknown {
-  if (!preview) {
-    return 'unopened'
-  }
-  if (preview.kind === 'ready') {
-    return { kind: 'ready', lines: preview.lines.length, truncated: preview.truncated }
-  }
-  return preview.kind === 'error'
-    ? { kind: 'error', message: preview.message }
-    : { kind: preview.kind }
-}
-
 type RenderedRow = { props?: { onPress?: () => void; children?: unknown } }
 type CommitList = { data?: unknown; renderItem?: (row: { item: unknown }) => unknown }
 
-/** The copy the first commit row carries, which is where an expanded commit's files are drawn. */
 function projectFirstCommitRow(tree: unknown): unknown {
   const row = renderFirstCommit(tree)
   if (!row) {
@@ -229,28 +131,27 @@ function projectFirstCommitRow(tree: unknown): unknown {
   return text
 }
 
-/** The first commit row the list rendered, pressed through the handler the screen gave it. */
 function pressFirstCommit(tree: unknown): void {
   const press = findPressHandler(renderFirstCommit(tree))
   if (!press) {
-    throw new Error('The history list rendered no commit to expand')
+    throw new Error('The history list rendered no commit to open')
   }
   press()
 }
 
-/**
- * One row, built by the list's own `renderItem`. An inert FlatList never calls it, so this is the
- * only way either to reach a row's handler or to read what it drew.
- */
+// The inert FlatList never calls renderItem; build the row to read its copy or invoke its handler.
 function renderFirstCommit(tree: unknown): unknown {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are read back optionally and guarded below; FlatList props are whatever the screen passed.
   const list = renderedElementProps(tree, 'FlatList')[0] as CommitList | undefined
-  const rows = Array.isArray(list?.data) ? list.data : []
+  const rows: unknown[] = Array.isArray(list?.data) ? list.data : []
+  // Section headers share the list; the first commit row is the first item of kind commit.
+  const commit = rows.find(
+    (row) => typeof row === 'object' && row !== null && 'kind' in row && row.kind === 'commit'
+  )
   const render = list?.renderItem
-  return typeof render === 'function' && rows.length > 0 ? render({ item: rows[0] }) : null
+  return typeof render === 'function' && commit !== undefined ? render({ item: commit }) : null
 }
 
-/** The strings an unmounted element tree would draw, in render order. */
 function collectElementText(node: unknown, text: string[]): void {
   if (typeof node === 'string') {
     text.push(node)
@@ -273,7 +174,6 @@ function collectElementText(node: unknown, text: string[]): void {
   collectElementText((node as RenderedRow).props?.children, text)
 }
 
-/** First `onPress` in a rendered-but-unmounted element, depth first. */
 function findPressHandler(node: unknown): (() => void) | null {
   if (Array.isArray(node)) {
     for (const child of node) {

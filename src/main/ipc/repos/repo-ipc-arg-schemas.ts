@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
-import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
+import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 
@@ -49,7 +49,11 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
 const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('inherit-global') }),
   z.object({ kind: z.literal('windows-host') }),
-  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+  z.object({
+    kind: z.literal('wsl'),
+    distro: z.string().min(1),
+    git: z.literal('windows-host').optional()
+  })
 ])
 
 export const ProjectUpdateIpcArgs = z.object({
@@ -71,7 +75,7 @@ const IpcExecutionHostId = z
     return hostId
   })
 
-// Why optional: the row's host; without it the first row with the id moves, as before.
+// Omitted host retains legacy behavior: move the first matching project ID.
 export const ProjectGroupMoveProjectArgs = z.object({
   projectId: z.string().min(1),
   groupId: z.string().nullable(),

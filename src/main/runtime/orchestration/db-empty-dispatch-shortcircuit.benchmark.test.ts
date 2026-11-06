@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
-// Why: runtime-agent-orchestration-projection skips its per-terminal dispatch
-// fan-out on every 16ms graph publish while hasAnyDispatchContexts() is false,
-// so the cached predicate must flip exactly when dispatch rows appear and go.
+// Graph projection skips dispatch fan-out while empty; cache invalidation must follow row lifecycle.
 describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
   it('predicate lifecycle: false when empty, true after dispatch (even completed), false after reset', () => {
     const db = new OrchestrationDb(':memory:')

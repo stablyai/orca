@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
-// Imported through the registry the way the drag lifecycle imports it, so these drive the entry
-// point the shipping gesture actually calls.
+// Use the registry entry point called by the shipping drag lifecycle.
 import {
   acquireWebviewsDragPassthrough,
   registerPersistentWebview,

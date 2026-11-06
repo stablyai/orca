@@ -22,10 +22,13 @@ import { WebPairingSecurityNotice } from './WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 import { installOsFileDropCancellationGuard } from '../lib/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/app-keyboard-router'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 installAppKeyboardRouter()
 const App = lazy(() => import('../App'))
 
@@ -36,10 +39,11 @@ function WebRoot(): React.JSX.Element {
   const startupDecision = useMemo(() => {
     const decision = decideWebPairingStartup({
       initialPairingInput,
-      hasStoredEnvironment: readStoredWebRuntimeEnvironment() !== null
+      storedEnvironment: readStoredWebRuntimeEnvironment()
     })
     if (
       decision.kind === 'auto-save-runtime-offer' ||
+      decision.kind === 'confirm-replace-saved-server' ||
       (decision.kind === 'show-connect' && decision.initialPairingInput !== null)
     ) {
       clearPairingInputFromAddressBar()
@@ -64,8 +68,12 @@ function WebRoot(): React.JSX.Element {
     return (
       <WebConnect
         initialPairingInput={
-          startupDecision.kind === 'show-connect' ? startupDecision.initialPairingInput : null
+          startupDecision.kind === 'show-connect' ||
+          startupDecision.kind === 'confirm-replace-saved-server'
+            ? startupDecision.initialPairingInput
+            : null
         }
+        confirmReplacingSavedServer={startupDecision.kind === 'confirm-replace-saved-server'}
         onConnected={() => setHasEnvironment(true)}
       />
     )
@@ -110,10 +118,7 @@ void initWebDeviceKeySupport()
     )
   })
 
-// Why: the web client is its own entry point and hosts terminals too, so it has
-// to start the deferred WebGL addon load itself (see main.tsx). Dynamic because
-// this entry deliberately keeps the whole App graph — pane manager included —
-// out of its own startup chunk.
+// Prime WebGL here because web hosts terminals too; dynamic import keeps the App/pane-manager graph out of startup.
 void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
   module.primeTerminalWebglAddon()
 )

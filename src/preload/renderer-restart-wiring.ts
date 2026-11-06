@@ -32,7 +32,7 @@ export function registerRendererRestartIpcRelays(
   ipcRenderer.on('updater:status', (_event, status: UpdateStatus) => {
     relay.handleStatus(status)
   })
-  // Why: main abandons some installs without an error status, and only this tells the renderer.
+  // Main can abandon an install without emitting an error status.
   ipcRenderer.on('updater:quitAndInstallAborted', () => {
     relay.abort()
   })

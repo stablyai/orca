@@ -1,8 +1,8 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
-import { readTerminalSendAcknowledgment } from '../../../shared/terminal-send-acknowledgment'
-import { classifyTerminalProcessInspectionFailure } from '../../../shared/terminal-process-inspection'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
+import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal/input/terminal-input'
+import { readTerminalSendAcknowledgment } from '../../../shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
+import { classifyTerminalProcessInspectionFailure } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getRemoteRuntimePtyOwner } from './runtime-terminal-stream'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
@@ -36,8 +36,7 @@ export async function sendRuntimePtyInputVerified(
     const accepted = await window.api.pty.writeAccepted(ptyId, data, inputKind)
     if (!accepted) {
       window.api.pty.write(ptyId, data, inputKind)
-      // Why: SSH/local fallback writes are fire-and-forget. Callers use this
-      // boolean to continue UX flow, while hook telemetry confirms real turns.
+      // SSH/local fallback writes are fire-and-forget; boolean advances UX while hook telemetry proves actual turns.
       recordRuntimeTerminalInputForPtyId(ptyId)
       return true
     }

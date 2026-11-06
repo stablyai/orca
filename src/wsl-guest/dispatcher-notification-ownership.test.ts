@@ -8,11 +8,9 @@ describe('RelayDispatcher notification ownership', () => {
 
     dispatcher.onNotification('pty.ackData', owner)
 
-    // Why: the slot holds one handler, so a second registration used to win purely by
-    // construction order — that is how a no-op ack handler nearly disabled credit acks.
+    // Duplicate single-slot handlers must fail rather than let construction order silently disable credit acks.
     expect(() => dispatcher.onNotification('pty.ackData', vi.fn())).toThrow(/already registered/)
 
-    // Why: the constructor arms a keepalive interval that would outlive the test.
     dispatcher.dispose()
   })
 })

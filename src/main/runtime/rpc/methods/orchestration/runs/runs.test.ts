@@ -3,6 +3,7 @@ import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -24,6 +25,27 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('lightweight Runs', () => {
+    it('shows another caller the work a reset removed, listed only on request', async () => {
+      setup(false)
+      const run = db.createRun({
+        objective: 'Removed work read contract',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ runId: run.id, spec: 'worker task' })
+      db.resetTasks()
+      const other = { ...ctx, authenticatedCallerFingerprint: 'different_workspace_caller' }
+
+      const summary = await h.call('orchestration.runShow', { id: run.id }, other)
+      expect(summary).toMatchObject({ removedWork: { coverage: 'complete', tasks: 1 } })
+      expect(summary).not.toHaveProperty('removedWork.entries')
+      await expect(
+        h.call('orchestration.runShow', { id: run.id, removed: true }, other)
+      ).resolves.toMatchObject({
+        removedWork: { entries: [{ kind: 'task', id: task.id }], page: { hasMore: false } }
+      })
+    })
+
     it('creates and binds a Run to the runtime-resolved caller pane', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
@@ -40,6 +62,50 @@ describe('orchestration RPC methods', () => {
 
       expect(created.run.consumer_generation).toBe(1)
       expect(current.run?.id).toBe(created.run.id)
+    })
+
+    it('tells a terminal bound to one Run about the Dispatch it works in another', async () => {
+      setup(false)
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_coord'
+          ? coordinatorPaneKey
+          : handle === 'term_former'
+            ? 'tab_former:leaf_former'
+            : 'tab_recovery:leaf_recovery'
+      )
+      const currentRun = db.createRun({
+        objective: 'Current coordinator',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const olderRun = db.createRun({
+        objective: 'Older Run',
+        coordinatorHandle: 'term_former',
+        coordinatorPaneKey: 'tab_former:leaf_former'
+      })
+      const dispatch = createRootDispatch(
+        db,
+        db.createTask({ runId: currentRun.id, spec: 'worker task' }).id,
+        'term_former',
+        'tab_former:leaf_former'
+      )
+      const runCurrent = () => call('orchestration.runCurrent', { from: 'term_former' })
+
+      expect(await runCurrent()).toMatchObject({
+        run: { id: olderRun.id },
+        next: expect.stringMatching(
+          new RegExp(
+            `Dispatch ${dispatch.id} in Run ${currentRun.id}.*orca orchestration run-use --id ${olderRun.id}`
+          )
+        )
+      })
+
+      await call('orchestration.runUse', { id: olderRun.id, from: 'term_recovery' })
+      expect(await runCurrent()).toEqual({ run: null })
+
+      expect(await call('orchestration.runCurrent', { from: 'term_coord' })).not.toHaveProperty(
+        'next'
+      )
     })
 
     it('publishes a run receipt without internal routing columns', async () => {

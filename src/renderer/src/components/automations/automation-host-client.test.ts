@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Automation, AutomationCreateInput } from '../../../../shared/automations-types'
 import {
+  getAutomationListedTargetFromHostId,
   listAutomationRunsForTarget,
   listAutomationsForTarget,
   runAutomationNowForTarget,
@@ -190,5 +191,28 @@ describe('automation host client', () => {
       { id: automation.id },
       { timeoutMs: 15_000 }
     )
+  })
+})
+
+describe('getAutomationListedTargetFromHostId', () => {
+  const state = { runtimeEnvironments: [{ id: 'env-1' }] }
+
+  // #32415: a web run link names 'local', but the catalog lists the server only as its runtime.
+  it('lists a paired web client local and SSH hosts under its server', () => {
+    Object.assign(globalThis, { __ORCA_WEB_CLIENT__: true })
+    try {
+      for (const hostId of ['local', 'ssh:box', undefined]) {
+        expect(getAutomationListedTargetFromHostId(hostId, state)).toEqual({
+          kind: 'environment',
+          environmentId: 'env-1'
+        })
+      }
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
+    }
+  })
+
+  it('keeps Desktop hosts local in the desktop app', () => {
+    expect(getAutomationListedTargetFromHostId('local', state)).toEqual({ kind: 'local' })
   })
 })

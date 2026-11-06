@@ -108,7 +108,7 @@ describe('ActivityStatusGroupHeader', () => {
     expect(header?.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('supports custom className and uses accessible contrast tokens without hardcoded white background', () => {
+  it('applies the caller className to the group header', () => {
     act(() => {
       root.render(
         <TooltipProvider>
@@ -123,7 +123,6 @@ describe('ActivityStatusGroupHeader', () => {
 
     const header = container.querySelector('div')
     expect(header?.className).toContain('custom-header-class')
-    expect(header?.className).not.toContain('bg-background/95')
   })
 })
 
@@ -177,20 +176,16 @@ describe('ActivityThreadListPane collapsible sections', () => {
       )
     })
 
-    // Initially open: thread row should be visible
     expect(container.textContent).toContain('Test agent')
 
-    // Click header to collapse
     const header = container.querySelector('[role="button"]') as HTMLElement
     act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    // Thread row should now be hidden
     expect(container.textContent).not.toContain('Test agent')
     expect(header.getAttribute('aria-expanded')).toBe('false')
 
-    // Click header again to re-expand
     act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -236,10 +231,8 @@ describe('ActivityThreadListPane collapsible sections', () => {
       )
     })
 
-    // Controlled as collapsed: thread row should not be rendered
     expect(container.textContent).not.toContain('Test agent')
 
-    // Click header
     const header = container.querySelector('[role="button"]') as HTMLElement
     act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }))

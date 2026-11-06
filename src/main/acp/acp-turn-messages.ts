@@ -1,4 +1,5 @@
-import { BoundedMap } from '../../shared/bounded-map'
+import type { AcpItemOwnership } from './acp-item-ownership'
+import type { AcpMessageOwner, AcpOwnershipReader } from './acp-ownership-reader'
 import type { SessionUpdate } from './generated/acp-protocol.generated'
 import type { ProviderTimelineTextChannel } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { providerTimelineKeyPart } from '../native-chat/agent-session-timeline/provider-timeline-identity'
@@ -9,7 +10,6 @@ export function acpNamedTextKey(messageId: string, channel: ProviderTimelineText
 }
 
 type MessagePosition = { ordinal: number; channel?: string }
-type MessageOwner = { turn: string; settled: boolean }
 
 export type AcpTextDrop = {
   reason: 'turn-settled' | 'stream-mismatch'
@@ -20,13 +20,20 @@ export type AcpTextDrop = {
   producerAgentId?: string
 }
 
-/** Stable turn-relative message positions. */
 export class AcpTurnMessages {
-  private readonly turns = new BoundedMap<string, MessagePosition>({ maxEntries: 128 })
-  private readonly owners = new BoundedMap<string, MessageOwner>({ maxEntries: 128 })
+  private readonly turns = new Map<string, MessagePosition>()
 
-  /** Channel items inherit the provider message's first turn, including trailing chunks. */
-  owner(turn: string | undefined, update: SessionUpdate): { turn?: string; settled?: boolean } {
+  constructor(
+    private readonly owners: AcpItemOwnership,
+    private readonly read?: AcpOwnershipReader
+  ) {}
+
+  /** Keep trailing chunks on the provider message's original turn. */
+  owner(
+    turn: string | undefined,
+    update: SessionUpdate,
+    settled: (turn: string) => boolean
+  ): AcpMessageOwner {
     if (
       (update.sessionUpdate !== 'agent_message_chunk' &&
         update.sessionUpdate !== 'agent_thought_chunk') ||
@@ -34,34 +41,82 @@ export class AcpTurnMessages {
     ) {
       return { turn }
     }
-    const key = providerTimelineKeyPart(update.messageId)
+    const key = `message:${providerTimelineKeyPart(update.messageId)}`
     const owner = this.owners.get(key)
     if (owner) {
-      return owner
+      return { ...owner, settled: owner.settled || settled(owner.turn) }
     }
-    if (turn !== undefined) {
-      this.owners.set(key, { turn, settled: false })
+    return (
+      this.read?.message(update.messageId) ?? {
+        turn,
+        settled: turn !== undefined && settled(turn)
+      }
+    )
+  }
+
+  observe(turn: string | undefined, update: SessionUpdate | undefined): void {
+    if (
+      turn !== undefined &&
+      (update?.sessionUpdate === 'agent_message_chunk' ||
+        update?.sessionUpdate === 'agent_thought_chunk') &&
+      update.messageId
+    ) {
+      this.owners.remember(`message:${providerTimelineKeyPart(update.messageId)}`, turn)
     }
-    return { turn }
+  }
+
+  rejection(
+    update: SessionUpdate | undefined,
+    owner: AcpMessageOwner,
+    threadId: string,
+    turnId: string | undefined
+  ): AcpTextDrop | undefined {
+    if (
+      !owner.settled ||
+      (update?.sessionUpdate !== 'agent_message_chunk' &&
+        update?.sessionUpdate !== 'agent_thought_chunk') ||
+      !update.messageId
+    ) {
+      return undefined
+    }
+    const channel = update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
+    return {
+      reason: 'turn-settled',
+      itemId: acpNamedTextKey(update.messageId, channel),
+      channel,
+      threadId,
+      turnId
+    }
   }
 
   key(turn: string, update: SessionUpdate): string | undefined {
+    if (
+      (update.sessionUpdate === 'agent_message_chunk' ||
+        update.sessionUpdate === 'agent_thought_chunk') &&
+      update.messageId
+    ) {
+      return acpNamedTextKey(
+        update.messageId,
+        update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
+      )
+    }
+    if (!this.owners.isLive(turn)) {
+      return undefined
+    }
     const state = this.turns.get(turn) ?? { ordinal: 0 }
     this.turns.set(turn, state)
     if (
       update.sessionUpdate !== 'agent_message_chunk' &&
       update.sessionUpdate !== 'agent_thought_chunk'
     ) {
-      if (['tool_call', 'tool_call_update', 'plan'].includes(update.sessionUpdate)) {
+      if (
+        ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(
+          update.sessionUpdate
+        )
+      ) {
         state.channel = undefined
       }
       return undefined
-    }
-    if (update.messageId) {
-      return acpNamedTextKey(
-        update.messageId,
-        update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
-      )
     }
     if (state.channel !== update.sessionUpdate) {
       state.ordinal += 1
@@ -70,12 +125,11 @@ export class AcpTurnMessages {
     return `turn-message:${JSON.stringify([turn, state.ordinal])}`
   }
 
+  dispose(): void {
+    this.turns.clear()
+  }
+
   end(turn: string): void {
     this.turns.delete(turn)
-    for (const owner of this.owners.values()) {
-      if (owner.turn === turn) {
-        owner.settled = true
-      }
-    }
   }
 }

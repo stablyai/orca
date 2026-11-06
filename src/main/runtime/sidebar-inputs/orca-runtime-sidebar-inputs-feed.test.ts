@@ -28,7 +28,7 @@ describe('the runtime sidebar inputs feed', () => {
     await phone.settle()
     expect(phone.view().temporal).toEqual({ sessionId: null, retention: null })
 
-    const creation = requireSwitchedOn(runtime.workspaceCreations).open({
+    const creation = requireSwitchedOn(runtime.workspaceLifecycle).openCreate({
       creationId: 'c1',
       repoId: 'repo-1'
     })

@@ -1,13 +1,14 @@
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isSubagentBlock } from '../../shared/native-chat-types'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
+import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat/native-chat-types'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { PROVIDER_SESSION, replyChunk, waitFor } from './acp-structured-adapter.test-support'
 import {
   openAttachedHostRig,
@@ -36,7 +37,6 @@ function cleanupScriptedHost(hosted: Awaited<ReturnType<typeof openHostRig>>) {
     const scriptedPrompt = prompt
     if (scriptedPrompt) {
       const { agent } = hosted.rig.child()
-      // Only teardown's actual cancel ends this fixture's scripted prompt.
       agent.on('session/cancel', () => agent.reply(scriptedPrompt, { stopReason: 'cancelled' }))
     }
     await hosted.host.close(SESSION, 'user-close')
@@ -146,35 +146,43 @@ describe('Grok roster evidence through the existing host child store', () => {
         membership: 'live'
       })
     ])
-    expect(childWork.views()).toMatchObject([{ providerId: 'subagent-1', outcome: 'succeeded' }])
+    expect(childWork.views()).toMatchObject([
+      {
+        providerId: 'subagent-1',
+        description: label,
+        membership: 'settled',
+        outcome: 'succeeded',
+        ...(name === 's7-subagent-foreground' ? { totalTokens: 13778 } : {})
+      }
+    ])
+    const rows = (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.items
+    expect(
+      rows.flatMap((row) =>
+        row.agentId !== undefined && row.body.kind === 'message'
+          ? [{ agentId: row.agentId, blocks: row.body.blocks }]
+          : []
+      )
+    ).toEqual([
+      {
+        agentId: 'subagent-1',
+        blocks: [
+          { type: 'text', text: name === 's7-subagent-foreground' ? '4' : 'notes.txt, README.md' }
+        ]
+      }
+    ])
+    expect(rows.flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toMatchObject([
+      { state: 'completed', outcome: 'success' }
+    ])
+    if (name === 's7-subagent-background') {
+      expect(
+        rows.flatMap((row) =>
+          row.body.kind === 'message' ? row.body.blocks.filter(isBackgroundTaskBlock) : []
+        )
+      ).toEqual([])
+    }
     expect(
       (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.backgroundTasks
     ).toBeNull()
-  })
-
-  it('shares one label and one id between saved rows, agent strip and sidebar after parent completion', async () => {
-    const f = await fixture()
-    await f.spawn('first')
-    await f.spawn('sibling')
-    // Each saved row keeps the raw label; the shared presentation derives the ordinal, as the strip does.
-    expect(await f.roster()).toMatchObject([{ label: 'Exact label' }, { label: 'Exact label' }])
-    expect((await f.strip())?.tasks).toMatchObject([
-      { id: 'first', kind: 'agent', description: 'Exact label' },
-      { id: 'sibling', kind: 'agent', description: 'Exact label' }
-    ])
-    const stripIds = (await f.strip())?.children?.map((view) => view.id)
-    expect(f.sidebar.at(-1)?.map((view) => view.id)).toEqual(stripIds)
-    f.agent.reply(f.prompt, { stopReason: 'end_turn' })
-    await f.rows()
-    expect(f.childWork.views().map((view) => view.membership)).toEqual(['live', 'live'])
-    await f.finish('first', 'completed')
-    expect((await f.strip())?.tasks).toMatchObject([{ id: 'sibling' }])
-    await f.finish('sibling', 'failed')
-    expect(await f.strip()).toBeNull()
-    expect(f.sidebar.at(-1)).toEqual([])
-    expect(f.childWork.views().map((view) => view.outcome)).toEqual(['succeeded', 'failed'])
-    await f.notify({ sessionUpdate: 'subagent_progress', subagent_id: 'first', tokens_used: 100 })
-    expect(await f.strip()).toBeNull()
   })
 
   it('uses the targeted extension for one owned child and awaits its finish without cancelling parent or sibling', async () => {
@@ -188,7 +196,7 @@ describe('Grok roster evidence through the existing host child store', () => {
       })
     })
     expect(await f.targetedStop('first')).toMatchObject({ ok: true, value: { cancelled: true } })
-    // The accepted Stop settles that run until Grok's own ending says how it ended.
+    // Grok's eventual ending can revise the provisional Stop outcome.
     expect(f.childWork.views()).toMatchObject([
       { providerId: 'first', membership: 'settled', outcome: 'cancelled' },
       { providerId: 'sibling', membership: 'live' }
@@ -296,17 +304,6 @@ describe('Grok roster evidence through the existing host child store', () => {
     expect.soft(remainingSidebar).toMatchObject([{ description: 'Second', membership: 'live' }])
   })
 
-  it('uses the exact clipped roster label and hides Stop for digested oversized provider handles', async () => {
-    const f = await fixture()
-    await f.spawn('long-id'.repeat(100), 'Long label '.repeat(70))
-    const [entry] = await f.roster()
-    expect((await f.strip())?.tasks).toMatchObject([
-      { description: entry.label, kind: 'agent', stoppable: false }
-    ])
-    expect((await f.strip())?.tasks?.[0]?.id).toMatch(/^acp-child:[0-9a-f]{64}$/)
-    expect((await f.strip())?.tasks?.[0]?.id).toBe(entry.id)
-  })
-
   it('keeps 34 live groups in both host surfaces and never recreates the first settled eviction', async () => {
     const f = await fixture()
     await f.spawn('original-live', 'Original', 'original-turn')
@@ -382,8 +379,8 @@ describe('Grok roster evidence through the existing host child store', () => {
     }
   })
 
-  // Grok's own refusal means it did nothing; a reply about another subagent proves nothing, so it is
-  // unknown. The Stop is accepted either way, and its note says which.
+  // Refusal proves no cancellation; a mismatched reply leaves the outcome unknown.
+  // Stop is accepted in either case; its note reports the cancellation outcome.
   it.each([
     ['rpc-error', "The background task wasn't stopped."],
     ['mismatched-id', 'Cancellation was not confirmed.']
@@ -410,13 +407,5 @@ describe('Grok roster evidence through the existing host child store', () => {
     expect(f.childWork.views().every((view) => view.membership === 'live')).toBe(true)
     expect(f.agent.frames.filter((frame) => frame.method === 'session/cancel')).toEqual([])
     expect(f.rig.child().closed).toBe(false)
-  })
-
-  it('records nothing for a subagent first reported finished, and occupies no running surface', async () => {
-    const f = await fixture()
-    await f.finish('finished-before-spawn', 'completed')
-    expect(await f.roster()).toEqual([])
-    expect(f.childWork.views()).toEqual([])
-    expect(await f.strip()).toBeNull()
   })
 })

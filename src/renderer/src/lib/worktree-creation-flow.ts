@@ -1,11 +1,17 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
+  pendingCreationChatDraftScopeKey,
   type WorktreeCreationPhase,
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  isInstantFolderWorktreeCreation,
+  showWorktreeCreationError
+} from '@/lib/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
 import {
   getInitialWorktreeCreationPhase,
@@ -20,23 +26,40 @@ type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
 }
 
-// Why: nothing awaits these creations, so an escaped rejection would otherwise
-// strand the pending entry — and the creation surface — with no error shown.
+// Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
-  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+  const originView = useAppStore.getState().activeView
+  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {
       return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
-    // Why: the panel renders this error inline while its surface is visible;
-    // only announce it separately after the user has navigated away.
-    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
-      toast.error(message)
-    }
+    showWorktreeCreationError(store, creationId, originView, message)
   })
+}
+
+// The chat composer shows before the worktree exists, so a linked item's draft starts there.
+function seedPendingChatDraft(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  prior?: WorktreeCreationRequest
+): void {
+  const draft = request.launchDraftPrompt
+  if (
+    !draft ||
+    draft === prior?.launchDraftPrompt ||
+    request.promptDelivery !== 'draft' ||
+    request.agentLaunchRoute !== 'structured-native-chat'
+  ) {
+    return
+  }
+  updateNativeChatComposerDraft(
+    pendingCreationChatDraftScopeKey(creationId),
+    { text: draft, document: promptTextContent(draft) },
+    'immediate'
+  )
 }
 
 function revealPendingCreation(
@@ -46,20 +69,25 @@ function revealPendingCreation(
 ): void {
   const store = useAppStore.getState()
   const indeterminate = getWorktreeCreationIndeterminate(request)
+  const loaderVisible = !(
+    isInstantFolderWorktreeCreation(store, request) &&
+    phase !== 'preparing' &&
+    phase !== 'provisioning-vm'
+  )
   store.beginPendingWorktreeCreation({
     creationId,
     phase,
     status: 'creating',
     startedAt: Date.now(),
     indeterminate,
-    // Why: the creation surface owns the tab strip immediately. Delaying this
-    // caused the real workspace tab bar to flash out when the debounce elapsed.
-    loaderVisible: true,
+    loaderVisible,
     request
   })
-  // Why: the creation panel only renders under the terminal view (App content
-  // router), so force it active so the panel is what fills the content area.
-  store.setActiveView('terminal')
+  seedPendingChatDraft(creationId, request)
+  // Creation UI renders only in terminal view; activate it before publishing the panel.
+  if (loaderVisible) {
+    store.setActiveView('terminal')
+  }
   store.setSidebarOpen(true)
 }
 
@@ -71,13 +99,13 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     request
   )
   if (existingCreationId) {
+    store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
     return existingCreationId
   }
-  // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
-  // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
+  // Plain-HTTP LAN clients lack randomUUID; createBrowserUuid uses getRandomValues fallback.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
   startWorktreeCreation(creationId, request)
@@ -98,12 +126,12 @@ export function continueBackgroundWorktreeCreation(
   options: ContinueBackgroundWorktreeCreationOptions = {}
 ): boolean {
   const store = useAppStore.getState()
-  if (!store.pendingWorktreeCreations[creationId]) {
+  const staged = store.pendingWorktreeCreations[creationId]
+  if (!staged) {
     return false
   }
-  // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Use the request's captured repo owner so
-  // Retry does not change shape when focus moves to another runtime.
+  seedPendingChatDraft(creationId, request, staged.request)
+  // Remote creates emit no phases; use captured submit-owner progress mode so Retry cannot change with focused runtime.
   store.updatePendingWorktreeCreation(creationId, {
     phase: getInitialWorktreeCreationPhase(request),
     status: 'creating',
@@ -113,8 +141,7 @@ export function continueBackgroundWorktreeCreation(
     checkoutProgress: undefined,
     request
   })
-  // Why: background work-item preflight can finish after the user moved on; keep
-  // the pending row alive without reselecting the creation panel in that case.
+  // Late background preflight preserves pending rows without reselecting creation after navigation.
   if (options.revealCreationSurface !== false) {
     store.setActivePendingWorktreeCreation(creationId)
     store.setActiveView('terminal')
@@ -131,16 +158,57 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   if (!entry) {
     return
   }
+  if (entry.chatInputHandedOff && entry.worktreeId) {
+    store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    void retryCreatedWorktreeChat(creationId, entry.worktreeId, entry.request)
+    return
+  }
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
+    loaderVisible: true,
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
     provisioningLog: undefined,
-    checkoutProgress: undefined
+    checkoutProgress: undefined,
+    worktreeId: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
   startWorktreeCreation(creationId, entry.request)
+}
+
+async function retryCreatedWorktreeChat(
+  creationId: string,
+  worktreeId: string,
+  request: WorktreeCreationRequest
+): Promise<void> {
+  const { launchStructuredWorktreeSession } = await import('./worktree-creation-structured-session')
+  const result = await launchStructuredWorktreeSession({
+    creationId,
+    worktreeId,
+    request,
+    agentLaunchRoute: 'structured-native-chat',
+    shouldActivateOnCompletion: true,
+    activation: false,
+    primaryTabId: null
+  })
+  if (result.cancelled || result.retainedInput) {
+    return
+  }
+  const { completeWorktreeCreation } = await import('./worktree-creation-completion')
+  await completeWorktreeCreation({
+    creationId,
+    worktreeId,
+    request,
+    structuredLaunchAccepted: true,
+    activation: result.activation,
+    primaryTabId: result.primaryTabId,
+    backendSpawned: false,
+    hostPlannedStartup: false,
+    focusOnCompletion: false
+  })
 }

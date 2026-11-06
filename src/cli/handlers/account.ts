@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -8,17 +8,13 @@ import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,
   withCliRuntimeOnPath
 } from '../../shared/node-cli-command-resolution'
-import {
-  getSpawnArgsForWindows,
-  UnsafeWindowsBatchArgumentsError,
-  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
-} from '../../shared/windows-batch-spawn'
 import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
@@ -36,15 +32,31 @@ import {
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
 import { getWslAccountTarget } from './account-wsl-location'
-import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
-import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import {
+  addDataAccount,
+  redactLoginAnswers,
+  rejectOpenCodeLoginFlagsForAgent
+} from './data-account-commands'
+import {
+  formatAccountsBlock,
+  formatAntigravityAccounts,
+  formatDataAccounts
+} from './account-list-format'
+import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
+import {
+  listAgentAccounts,
+  readAntigravityAccountsForList,
+  removeAgentAccount,
+  selectAgentAccount
+} from './account-selection'
+import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 
-// Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
   devin?: ManagedDataAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
+  antigravity?: AntigravityAccountState
 }
 
 function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -56,16 +68,14 @@ function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const existing = new Set(currentEntries)
   const missing = getVersionManagerBinPaths().filter((entry) => !existing.has(entry))
   if (missing.length > 0) {
-    env[pathKey] = [...missing, ...currentEntries].join(delimiter)
+    const append = missing.filter(isWindowsFnmDefaultAliasDir)
+    const prepend = missing.filter((entry) => !append.includes(entry))
+    env[pathKey] = [...prepend, ...currentEntries, ...append].join(delimiter)
   }
   return env
 }
 
-/**
- * Runs the real agent login attached to the user's terminal so the OAuth
- * URL/device-code prompt is visible and the code can be pasted back — the desktop
- * GUI flow drives this via a browser Orca can't reach on a headless host.
- */
+/** Attach login to the terminal so device-code authentication works on headless hosts. */
 async function runAgentLoginInTerminal(
   command: string,
   args: string[],
@@ -73,40 +83,26 @@ async function runAgentLoginInTerminal(
   json: boolean,
   session: InteractiveLoginSession
 ): Promise<void> {
+  if (command === 'opencode') {
+    command = await resolveOpenCodeLoginCommand(
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv }),
+      session
+    )
+  }
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
-    let spawnCmd: string
-    let spawnArgs: string[]
-    try {
-      ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args))
-    } catch (error) {
-      // Why: the bare sentinel message reaches the user verbatim otherwise, with
-      // nothing naming the path or the characters that made it unspawnable.
-      rejectPromise(
-        error instanceof UnsafeWindowsBatchArgumentsError
-          ? new RuntimeClientError(
-              'invalid_environment',
-              `Cannot run \`${command}\` from "${resolvedCommand}": the path contains characters ` +
-                `cmd.exe would reinterpret. Install it somewhere without ` +
-                `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL} in the path.`
-            )
-          : error
-      )
-      return
-    }
-    // Why paired after the seed: addAgentNodePaths prepends the *newest* version
-    // manager bin, which is not necessarily where this CLI lives. Pairing last puts
-    // the CLI's own node in front of that seed (stablyai/orca#10932).
+    // Put the CLI's own Node ahead of newer version-manager bins to keep the command/runtime pair intact.
     const env = withCliRuntimeOnPath(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
     const consoleStdio = stdioForWindowsInteractiveChild(json)
-    let child: ReturnType<typeof spawn>
+    let child: ReturnType<typeof spawnProcess>
     try {
-      child = spawn(spawnCmd, spawnArgs, {
-        // Why: JSON mode reserves stdout for the response envelope while keeping
-        // the interactive login attached to the user's terminal via stderr.
+      child = spawnProcess({
+        program: resolvedCommand,
+        args,
+        // Reserve stdout for JSON; keep interactive login on the terminal via stderr.
         stdio: consoleStdio.stdio,
         env
       })
@@ -133,14 +129,13 @@ async function runAgentLoginInTerminal(
       rejectPromise(
         new RuntimeClientError(
           'internal',
-          `\`${command} ${args.join(' ')}\` exited with code ${code ?? 'null'}.`
+          `\`${[command, ...redactLoginAnswers(args)].join(' ')}\` exited with code ${code ?? 'null'}.`
         )
       )
     })
   })
 }
 
-/** Signs in to a new account folder the host created, then registers it (superset AddAccountDialog). */
 async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<void> {
   const { result: signIn } = await client.call<ClaudeAccountSignIn>(
     'accounts.beginClaudeSignIn',
@@ -154,8 +149,7 @@ async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<
   }
   const result = await withInteractiveLoginCleanup(
     session,
-    // Why always: the host keeps a folder that became an account, and deletes an abandoned one.
-    // Never thrown: an older running Orca lacks the method, and the add itself already finished.
+    // Cancel cleans abandoned folders and preserves registered accounts; older hosts may lack the method.
     async () => {
       const { accountId, runtime, wslDistro } = signIn
       await client
@@ -192,7 +186,6 @@ async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<
   printResult(result, json, (state) => formatAccountsBlock('Claude', state))
 }
 
-/** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
   const session: InteractiveLoginSession = {
@@ -206,8 +199,7 @@ async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<v
       rmSync(codexHome, { recursive: true, force: true })
     },
     async () => {
-      // Why: plain OAuth binds a loopback callback the user's browser cannot reach
-      // on a headless/SSH host; device auth is explicitly designed for this flow.
+      // Device auth works over SSH where the browser cannot reach the host's loopback OAuth callback.
       await runAgentLoginInTerminal(
         'codex',
         ['login', '--device-auth'],
@@ -225,13 +217,6 @@ async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<v
   printResult(result, json, (state) => formatAccountsBlock('Codex', state))
 }
 
-/**
- * Rejects the runtime-selector flags instead of ignoring them. shouldIgnoreRemoteSelection
- * pins account commands to the local runtime, so honoring `--environment homelab`
- * silently would target the laptop rather than the host the user named — the exact
- * mistake this feature exists to avoid. A `--help` note does not reach someone who
- * already typed the flag.
- */
 function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
   rejectRemoteSelectionFlags(
     ctx.flags,
@@ -254,12 +239,10 @@ async function assertAccountImportSupported(
   }
 }
 
-/** CLI handlers for managed account enrollment and listing. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
-    // Why: a valueless `--agent` parses as boolean true; defaulting it to claude
-    // would silently run a full OAuth login for the provider the user did not ask for.
+    // A valueless flag is true; never silently default it to a different provider's OAuth flow.
     if (agentFlag !== undefined && typeof agentFlag !== 'string') {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -274,11 +257,12 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
+    rejectOpenCodeLoginFlagsForAgent(ctx, agent)
     if (agent === 'opencode' || agent === 'devin') {
       await addDataAccount(ctx, agent, runAgentLoginInTerminal)
       return
     }
-    // Why: fail on runtime version skew before burning a full OAuth round trip.
+    // Check runtime support before spending an OAuth round trip.
     await assertAccountImportSupported(ctx, agent)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
@@ -287,30 +271,35 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
     const provider = ctx.flags.get('agent')
     if (provider !== undefined) {
-      await listDataAccounts(ctx, provider)
+      await listAgentAccounts(ctx, provider)
       return
     }
     const { client, json } = ctx
-    // Why: this command renders no usage numbers, so skip the forced provider
-    // refresh — it is one serial network round-trip per managed account.
-    const result = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false
+    // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
+    const response = await client.call<AccountsListSnapshot>('accounts.list', {
+      refreshUsage: false,
+      ...(json ? { refreshStaleUsage: true } : {})
     })
-    printResult(result, json, (snapshot) =>
+    // Why separate: Antigravity accounts live in their own native vault, not in the
+    // accounts.list snapshot, and an older host simply has none to show.
+    const antigravity = await readAntigravityAccountsForList(ctx)
+    const result = antigravity ? { ...response.result, antigravity } : response.result
+    printResult({ ...response, result }, json, (snapshot) =>
       [
         formatAccountsBlock('Claude', snapshot.claude),
         formatAccountsBlock('Codex', snapshot.codex),
         ...(snapshot.opencode ? [formatDataAccounts('OpenCode', snapshot.opencode)] : []),
-        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : [])
+        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : []),
+        ...(snapshot.antigravity ? [formatAntigravityAccounts(snapshot.antigravity)] : [])
       ].join('\n\n')
     )
   },
   'account select': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account select')
-    await mutateDataAccount(ctx, 'select')
+    await selectAgentAccount(ctx)
   },
   'account rm': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account rm')
-    await mutateDataAccount(ctx, 'remove')
+    await removeAgentAccount(ctx)
   }
 }

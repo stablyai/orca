@@ -1,27 +1,27 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from '../../../../shared/agent-session-journal-types'
-import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session-thread-goal'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND,
+  agentSessionThreadGoalReport
+} from '../../../../shared/agent-session/agent-session-thread-goal-report'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {
   goal: AgentJournalThreadGoal | null
   pending: boolean
-  /** False where only the agent's own `/goal` changes the goal: Orca sends it `/goal clear`, and
-   *  the agent has no pause. */
+  /** False for agent-owned /goal: clear uses a command and pause is unavailable. */
   hostChanges: boolean
   /** Resolves false when the change was refused or not sent; the error surfaces separately. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
-
-const CLEAR_GOAL_COMMAND = '/goal clear'
 
 /** Null unless the host advertises goal changes or goal reports for this session. */
 export function useStructuredAgentSessionThreadGoal(args: {
@@ -34,31 +34,18 @@ export function useStructuredAgentSessionThreadGoal(args: {
   send: (text: string) => boolean | 'queued'
 }): StructuredAgentSessionThreadGoal | null {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
-  const [pending, setPending] = useState(false)
-  const pendingRef = useRef(false)
-  const report = support ?? reported
-  // The loaded window reaches the live head, so a goal row in it is newer than the host's
-  // whole-journal answer; that answer covers only rows older than the window.
-  const floor =
-    report?.contextFloor && (!journalEpoch || report.contextFloor.epoch === journalEpoch)
-      ? report.contextFloor.sequence
-      : 0
-  const loaded = useMemo(
-    () => currentAgentSessionThreadGoal(journalItems, floor),
-    [journalItems, floor]
+  const [pendingCount, setPendingCount] = useState(0)
+  const report = useMemo(
+    () => agentSessionThreadGoalReport({ journalItems, support, reported, journalEpoch }),
+    [journalItems, support, reported, journalEpoch]
   )
-  const goal = loaded === undefined ? (report?.current ?? null) : loaded
   const hostChanges = support !== undefined
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {
       if (!hostChanges) {
-        return next.kind === 'clear' && send(CLEAR_GOAL_COMMAND) !== false
+        return next.kind === 'clear' && send(AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND) !== false
       }
-      if (pendingRef.current) {
-        return false
-      }
-      pendingRef.current = true
-      setPending(true)
+      setPendingCount((count) => count + 1)
       try {
         const result = await mutate<AgentSessionThreadGoalResult>(
           'agentSession.threadGoal',
@@ -67,14 +54,13 @@ export function useStructuredAgentSessionThreadGoal(args: {
         )
         return result !== null
       } finally {
-        pendingRef.current = false
-        setPending(false)
+        setPendingCount((count) => count - 1)
       }
     },
     [hostChanges, mutate, send]
   )
-  if (report === undefined || (!hostChanges && goal === null)) {
+  if (report === null) {
     return null
   }
-  return { goal, pending, hostChanges, change }
+  return { goal: report.goal, pending: pendingCount > 0, hostChanges, change }
 }

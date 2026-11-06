@@ -2,10 +2,10 @@ import os from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { RuntimeStore } from '../../runtime-store-contract'
 import { STATUS_METHODS } from './status'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
-// Why mocked: the friendly-name lookup is the one path that spawns `scutil`; the test decides when it lands.
+// Control scutil completion to test the in-flight friendly-name lookup.
 const runProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
+const SCUTIL = '/usr/sbin/scutil'
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
 describe('status.get', () => {
@@ -24,22 +25,23 @@ describe('status.get', () => {
   })
 
   it('waits for the machine-name lookup instead of publishing the bare hostname', async () => {
-    // Why darwin: only macOS has a lookup to wait for; elsewhere the hostname is the detected name.
+    // Only macOS waits for a friendly-name lookup; other platforms already have hostname.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     let finishLookup: ((value: unknown) => void) | undefined
-    runProcessMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishLookup = resolve
-        })
+    // Hold only scutil; the hardware probe that shares this mock fails fast.
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      spec.program === SCUTIL
+        ? new Promise((resolve) => {
+            finishLookup = resolve
+          })
+        : Promise.resolve({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only `getSettings` off the store during construction and status.
-    const runtime = new OrcaRuntimeService({ getSettings: () => ({}) } as RuntimeStore)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
     expect(finishLookup).toBeTypeOf('function')
     expect(runtime.readMachineName()).toBe(normalizeMachineName(os.hostname()))
 
     // The call is issued while the lookup is still in flight; the answer must carry what it returns.
-    const pending = STATUS_METHODS[0].handler(undefined, { runtime })
+    const pending = STATUS_METHODS[0].handler({}, { runtime })
     finishLookup?.({
       code: 0,
       signal: null,

@@ -174,8 +174,7 @@ function applyToMainModel(command: LayoutCommand): LayoutApplyReply {
   state.model = applied.model
   state.seq += 1
   const seq = state.seq
-  // Main publishes the operation's records, in every workspace it changed (a move changes two),
-  // before it replies.
+  // Publish changed records in every affected workspace before reply; moves touch two.
   const keys = new Set([...Object.keys(model.workspaces), ...Object.keys(applied.model.workspaces)])
   emit({
     type: 'records',
@@ -307,8 +306,13 @@ export function runtimeRpcClientWithLayoutApply(actual: RpcClientModule): RpcCli
     }
     return actual.callRuntimeRpc<TResult>(target, method, params, options)
   }
-  return { ...actual, callRuntimeRpc }
+  const client = { ...actual, callRuntimeRpc }
+  // resetModules reloads this fixture but retains the mock; expose the instance the client actually answers through.
+  Object.defineProperty(client, ANSWERING_TRANSPORT, { value: layoutApplyTestTransport })
+  return client
 }
+
+export const ANSWERING_TRANSPORT = 'layoutApplyTestTransport'
 
 type LayoutClientModule = typeof LayoutClient
 
@@ -327,8 +331,7 @@ export function runtimeLayoutClientWithTestFrames(actual: LayoutClientModule): L
     }
     const sink: FrameSink = { onFrame, onPosition }
     state.sinks.add(sink)
-    // Every flush of the window's frames must show what the full build shows; a test's own
-    // installed check keeps reporting it.
+    // Installed checks compare every frame flush with full-build behavior.
     const previousCheck = layoutFrameApplyObserver()
     const installedCheck = previousCheck ?? throwLayoutFrameApplyErrors
     observeLayoutFrameApply(installedCheck)

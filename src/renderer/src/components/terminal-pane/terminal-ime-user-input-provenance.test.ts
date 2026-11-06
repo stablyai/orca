@@ -1,15 +1,9 @@
 // @vitest-environment happy-dom
-// IME and Hangul commits bypass xterm's key path and enter through `terminal.input`. Main records
-// a run's first user input from xterm's user-input signal, so every commit route must carry it.
+// IME commits bypass xterm’s key path; every terminal.input route must signal user input so main records the run’s first interaction.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { IDisposable } from '@xterm/xterm'
-import type { PtyTransport } from './pty-transport-types'
-import {
-  installTerminalImeCompositionRoute,
-  XTERM_COMPOSITION_SESSION_END_EVENT,
-  XTERM_COMPOSITION_SESSION_START_EVENT
-} from './terminal-ime-composition-route'
+
 import { IPAD_DESKTOP_MODE_UA, pretendIosWeb } from './terminal-ios-hangul-preedit-fixture'
 import { installTerminalPaneInputHandling } from './terminal-pane-pane-input'
 import { subscribeToTerminalInputData } from './terminal-user-input-signal'
@@ -144,30 +138,6 @@ describe('IME and Hangul commits reach the PTY as user input', () => {
     await typeJamo('ㅏ', '하', true)
     await typeJamo('ㄴ', '한', true)
     await typeJamo('ㄱ', 'ㄱ', false)
-
-    expect(forwarded).toEqual([{ data: '한', wasUserInput: true }])
-  })
-
-  it('marks a composition the route delivers after a pane switch as user input', () => {
-    const { terminal, forwarded } = openPane()
-    const transport: Pick<PtyTransport, 'getPtyId'> = { getPtyId: () => 'pty-1' }
-    disposables.push(
-      installTerminalImeCompositionRoute({
-        terminalElement: terminal.element!,
-        terminal,
-        capturedTransport: transport,
-        getCurrentTransport: () => transport
-      })
-    )
-    const session = (type: string, data?: string): CustomEvent =>
-      new CustomEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        detail: { id: 1, data, dataPendingReconciliation: false }
-      })
-
-    terminal.element!.dispatchEvent(session(XTERM_COMPOSITION_SESSION_START_EVENT))
-    terminal.element!.dispatchEvent(session(XTERM_COMPOSITION_SESSION_END_EVENT, '한'))
 
     expect(forwarded).toEqual([{ data: '한', wasUserInput: true }])
   })

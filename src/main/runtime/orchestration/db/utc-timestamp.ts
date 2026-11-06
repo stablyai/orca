@@ -9,8 +9,13 @@ export function exposeUtcTimestamp(timestamp: string | null): string | null {
   return `${timestamp.replace(' ', 'T')}Z`
 }
 
+/** SQLite's datetime('now') spelling, so stored deadlines compare against its timestamps. */
+export function toSqliteUtcTimestamp(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ')
+}
+
 export function exposeMessageTimestamps(message: MessageRow): MessageRow {
-  // Why: SQLite stores UTC as timezone-less space format for SQL ordering, but RPC/CLI consumers need an explicit offset.
+  // RPC/CLI consumers need an explicit UTC offset on SQLite's timezone-less timestamps.
   return {
     ...message,
     created_at: exposeUtcTimestamp(message.created_at) ?? message.created_at,

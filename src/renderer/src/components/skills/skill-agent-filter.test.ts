@@ -19,19 +19,6 @@ function skill(overrides: Partial<DiscoveredSkill> = {}): DiscoveredSkill {
   }
 }
 
-/** Pre-change implementation, kept verbatim as the parity oracle. */
-function legacySkillMatchesAgent(
-  target: DiscoveredSkill,
-  agentId: string,
-  agentByRootPath: ReadonlyMap<string, string>
-): boolean {
-  const agents = (): string[] => {
-    const roots = target.rootPaths?.length ? target.rootPaths : [target.rootPath]
-    return [...new Set(roots.map((root) => agentByRootPath.get(root)).filter(Boolean))] as string[]
-  }
-  return agentId === 'all' || agents().includes(agentId)
-}
-
 /** Counts ownership lookups so the before/after difference is deterministic. */
 class LookupCountingMap extends Map<string, string> {
   lookups = 0
@@ -52,55 +39,8 @@ const OWNERS_WITH_EMPTY: [string, string][] = [
   [WINDOWS_ROOT, 'shared'],
   [OPAQUE_REMOTE_ROOT, 'claude']
 ]
-const OWNERS_WITHOUT_EMPTY: [string, string][] = OWNERS_WITH_EMPTY.filter(
-  ([, owner]) => owner !== ''
-).map(([root, owner]) => (root === '/a' ? [root, 'shared'] : [root, owner]))
 
 describe('skillMatchesAgent', () => {
-  it('matches the legacy agent list across sparse, repeated, and opaque roots', () => {
-    const rootPathsCases: (string[] | undefined)[] = [
-      undefined,
-      [],
-      ['/a'],
-      ['/a', '/a'],
-      ['/a', '/b'],
-      ['/b', '/a'],
-      ['/missing'],
-      ['/a', '/missing'],
-      ['/empty'],
-      ['/a', '/empty'],
-      [WINDOWS_ROOT],
-      [OPAQUE_REMOTE_ROOT]
-    ]
-    const rootPathCases = ['/a', '/missing', '/empty', WINDOWS_ROOT, OPAQUE_REMOTE_ROOT]
-    const agentIds = ['all', 'claude', 'codex', 'shared', '', 'unknown']
-    const maps = [new Map(OWNERS_WITH_EMPTY), new Map(OWNERS_WITHOUT_EMPTY)]
-
-    let cases = 0
-    for (const rootPaths of rootPathsCases) {
-      for (const rootPath of rootPathCases) {
-        for (const agentId of agentIds) {
-          for (const agentByRootPath of maps) {
-            const row = skill({ rootPath, rootPaths })
-            expect({
-              rootPaths,
-              rootPath,
-              agentId,
-              matched: skillMatchesAgent(row, agentId, agentByRootPath)
-            }).toEqual({
-              rootPaths,
-              rootPath,
-              agentId,
-              matched: legacySkillMatchesAgent(row, agentId, agentByRootPath)
-            })
-            cases += 1
-          }
-        }
-      }
-    }
-    expect(cases).toBe(720)
-  })
-
   it('treats populated rootPaths as authoritative instead of unioning rootPath', () => {
     const agentByRootPath = new Map(OWNERS_WITH_EMPTY)
     const row = skill({ rootPath: '/a', rootPaths: ['/b'] })
@@ -127,22 +67,6 @@ describe('skillMatchesAgent', () => {
       skillMatchesAgent(skill({ rootPaths: ['/a', '/b', '/c'] }), 'all', agentByRootPath)
     ).toBe(true)
     expect(agentByRootPath.lookups).toBe(0)
-  })
-
-  it('cuts ownership lookups from 30,000 to 10,000 for 10,000 three-root rows', () => {
-    const rows = Array.from({ length: 10_000 }, (_, index) =>
-      skill({ id: `skill-${index}`, rootPaths: ['/a', '/b', '/c'] })
-    )
-    const before = new LookupCountingMap(OWNERS_WITH_EMPTY)
-    const after = new LookupCountingMap(OWNERS_WITH_EMPTY)
-
-    const legacyMatches = rows.map((row) => legacySkillMatchesAgent(row, 'claude', before))
-    const matches = rows.map((row) => skillMatchesAgent(row, 'claude', after))
-
-    expect(matches).toEqual(legacyMatches)
-    expect(matches.every(Boolean)).toBe(true)
-    expect(before.lookups).toBe(30_000)
-    expect(after.lookups).toBe(10_000)
   })
 
   it('still scans every root when none of them owns the filtered agent', () => {

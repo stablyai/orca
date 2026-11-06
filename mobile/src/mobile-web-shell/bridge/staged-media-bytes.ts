@@ -2,14 +2,7 @@ import { BRIDGE_MEDIA_READ_MAX_BYTES, type BridgeMediaItem } from './bridge-medi
 import type { NativeVerbs } from './use-native-verbs'
 import { MobileImageBase64Accumulator } from '../../session/mobile-image-base64-accumulator'
 
-/**
- * Reading the bytes behind a staged media handle, and giving the handle back.
- *
- * Shared by the two page seams that pick: the media picker's library and Files arms, and the
- * clipboard's image read. A picked image reaches 18 MiB raw against an 8 MiB reply ceiling, so the
- * verbs hand over a handle and the bytes follow a chunk at a time; this is that loop, in one place
- * because two copies of it are two different answers to what `eof` means.
- */
+// Share chunked media reads across picker and clipboard; 18 MiB raw images exceed the 8 MiB reply ceiling and must stay behind handles until read.
 
 function decodeBase64(value: string): Uint8Array {
   const binary = atob(value)
@@ -20,13 +13,7 @@ function decodeBase64(value: string): Uint8Array {
   return bytes
 }
 
-/**
- * Every chunk of one staged item, concatenated as bytes and encoded once.
- *
- * Bytes and not strings: each chunk is base64 on its own, so only the last one may end on a partial
- * group, and a reader that joined the text would fold that padding into the middle of the file. The
- * cap the shell enforces is the same one asked for here, so a read never fails for being too large.
- */
+// Join decoded bytes, then encode once; concatenated base64 chunks can put padding inside the file. Ask within the shell’s own chunk cap.
 export async function readStagedMediaItem(
   verbs: NativeVerbs,
   item: BridgeMediaItem
@@ -34,8 +21,7 @@ export async function readStagedMediaItem(
   const accumulator = new MobileImageBase64Accumulator()
   let offset = 0
   for (;;) {
-    // At least one byte, because an empty staged item still has to be read once to hear `eof`, and
-    // the shell's schema refuses a zero-length read.
+    // Even empty items need one read to learn eof; the schema refuses zero-length requests.
     const length = Math.max(1, Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, item.byteLength - offset))
     const chunk = await verbs.readMedia(item.handle, offset, length)
     const bytes = decodeBase64(chunk.base64)
@@ -45,8 +31,7 @@ export async function readStagedMediaItem(
       break
     }
     if (bytes.byteLength === 0) {
-      // Not `eof` and no bytes is a shell that would never finish. Named here rather than left to
-      // spin, because the loop has no other exit.
+      // No bytes without eof cannot progress; fail rather than loop forever.
       throw new Error(`the shell answered no bytes for ${item.handle} and did not report the end`)
     }
   }
@@ -58,8 +43,7 @@ export async function readStagedMediaItem(
   return accumulator.finish()
 }
 
-/** Best effort, and deliberately quiet: this runs in a `finally`, where a throw would replace the
- *  refusal that brought us here with a complaint about cleaning up after it. */
+// Keep finally cleanup quiet so it cannot replace the original read refusal.
 export async function releaseStagedMedia(verbs: NativeVerbs, handle: string): Promise<void> {
   try {
     await verbs.releaseMedia(handle)
@@ -68,12 +52,7 @@ export async function releaseStagedMedia(verbs: NativeVerbs, handle: string): Pr
   }
 }
 
-/**
- * Gives back every handle a pick answered, whatever became of the read.
- *
- * `multiple: false` is what a page asks for and not what a shell promises, so a caller taking the
- * first of several would hold the rest against the eight-handle cap until the TTL.
- */
+// Release every returned handle, even when multiple:false was requested; extra items otherwise consume the eight-handle cap until expiry.
 export async function releaseAllStagedMedia(
   verbs: NativeVerbs,
   items: readonly BridgeMediaItem[]

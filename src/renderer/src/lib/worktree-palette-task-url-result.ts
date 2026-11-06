@@ -1,6 +1,6 @@
 import type { PaletteSearchResult, PaletteSupportingText } from './worktree-palette-search'
 import type { Worktree } from '../../../shared/worktree/types'
-import { createRecognizedPaletteRank } from './palette-match/palette-document'
+import { createRecognizedPaletteRank } from '../../../shared/palette-match/palette-document'
 
 const ACCESSIBILITY_LABELS: Record<PaletteSupportingText['labelKind'], string> = {
   comment: 'Workspace comment',

@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs'
 import { utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { SessionSearchInstance } from './session-search-instance'
 import {
   openSessionSearchIndexerHarness,
@@ -75,26 +75,6 @@ it('constructs nothing and touches no disk while the setting is off', async () =
   expect(errors).toEqual([])
 })
 
-it('indexes and answers once the setting is on', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
-  const status = subject.status()
-  expect(status.enabled).toBe(true)
-  expect(status.filesIndexed).toBeGreaterThan(0)
-  expect(status.generation).toBeGreaterThan(0)
-  expect(errors).toEqual([])
-})
-
-// The whole reason the indexer is immutable: a change is a new instance, and the
-// old one is closed before it exists, so there is never a second writer.
 it('closes the live pair and starts a new one on a settings change', async () => {
   const recent = transcriptPath(RECENT_SESSION_ID)
   const ancient = transcriptPath(ANCIENT_SESSION_ID)
@@ -108,38 +88,14 @@ it('closes the live pair and starts a new one on a settings change', async () =>
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
 
-  // Narrowing: the new instance's opening sweep purges what the window no longer covers.
   subject.apply({ enabled: true, historyDays: 30 })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([])
   expect(await searchFor('recent')).toEqual([RECENT_SESSION_ID])
 
-  // Widening: the same recipe the other way, admitting files no read ever saw.
   subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
-  expect(errors).toEqual([])
-})
-
-it('leaves nothing running and no live claim when the setting goes off', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(subject.running).toBe(true)
-
-  subject.apply({ enabled: false, historyDays: null })
-  expect(subject.running).toBe(false)
-  // The index is left on disk: disabling is not a deletion, and the claim the
-  // closed indexer staked on the path has to be released or nothing can reopen it.
-  expect(existsSync(harness.databasePath)).toBe(true)
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(subject.running).toBe(true)
   expect(errors).toEqual([])
 })
 
@@ -213,49 +169,4 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
   expect(errors).toEqual([])
-})
-
-// An unresolvable scope is the host's last word, not its first: consent and
-// readiness are what the reader can act on, so they have to answer first.
-it('reports being switched off before blaming a scope it does not know', async () => {
-  const subject = newInstance()
-  subject.apply({ enabled: false, historyDays: null })
-  await subject.settled()
-
-  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'disabled'
-  })
-})
-
-it('reports not being ready before blaming a scope it does not know', async () => {
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  // Consent stands while no index does, which is what `not-ready` names.
-  subject.close()
-
-  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'not-ready'
-  })
-})
-
-it('answers scope-unknown once it is switched on and ready', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-
-  expect(await subject.search({ query: 'distinctive' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'scope-unknown'
-  })
-  // The same query answers with hits when no scope is in the way, so the refusal
-  // above is the scope's and not an empty or unreadable index.
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 })

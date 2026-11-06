@@ -1,6 +1,4 @@
-// Puts one pinned release of a managed runtime on disk: reuses a whole copy, else downloads, unpacks,
-// verifies and starts it in a staging folder, then publishes it by rename. The caller owns the
-// lifecycle (one install at a time, cancel, status); `commit` marks the point a cancel can't undo.
+// Verify/start in staging, then publish by rename; commit precedes cleanup so later failures cannot undo installation.
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -27,16 +25,14 @@ const FREE_SPACE_MARGIN_BYTES = 256 * 1024 * 1024
 const PROGRESS_INTERVAL_MS = 250
 
 export type RuntimeReleaseInstall = {
-  /** Names the agent in log lines. */
   agent: string
   runtime: Pick<ManagedRuntime, 'label' | 'validate'>
-  /** The folder that holds only this runtime's releases. */
   root: string
   pin: ManagedRuntimePin
   fetcher?: MainHttpClient['fetch']
   signal: AbortSignal
   publish: (patch: Partial<ManagedRuntimeOperation>) => void
-  /** Called right after the release is in place, before any cleanup that may still fail. */
+  /** Mark committed immediately after publication, before fallible cleanup. */
   commit: () => void
 }
 
@@ -59,7 +55,7 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       await validate(input, folder)
       signal.throwIfAborted()
       if (!resolveInstalledRuntimeRelease(root, pin).release?.current) {
-        // Whole members without a valid receipt read as damaged; rewriting it ends that loop.
+        // Complete members without a valid receipt need repair to escape damaged status.
         await rm(join(folder, RUNTIME_RELEASE_RECEIPT), { force: true })
         await writeRuntimeReleaseReceipt(folder, pin)
       }
@@ -68,7 +64,6 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     }
     publish({ phase: 'downloading' })
   }
-  // Bookkeeping only: a host that can't report free space still installs.
   const space = await statfs(root).catch((error: unknown) => {
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
@@ -114,7 +109,6 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()
-    // A damaged copy moves into staging, which is deleted below or reclaimed on the next start.
     if (existsSync(folder)) {
       await rename(folder, join(staging, 'damaged'))
     }
@@ -125,7 +119,6 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-/** The sentence a failed install shows; `deadline` is the install's overall time limit. */
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {
   const message = error instanceof Error ? error.message : String(error)
   if (deadline.aborted) {

@@ -56,13 +56,13 @@ describe('orca file CLI handlers', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
-  it('prints group help with file commands', async () => {
+  it('prints file group help without contacting the runtime', async () => {
     await main(['file', '--help'], '/tmp/repo')
 
     const output = vi.mocked(console.log).mock.calls[0][0]
-    expect(output).toContain('open')
-    expect(output).toContain('diff')
+    expect(output).toContain('Usage: orca file <command> [options]')
     expect(output).toContain('open-changed')
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('opens a positional path in the inferred current worktree', async () => {
@@ -177,7 +177,6 @@ describe('orca file CLI handlers', () => {
     process.exitCode = undefined
   })
 
-  // Why: an older host still answers a PDF with opened:false (STA-9113); that must not read as success.
   it('fails an unopened file open with ok:false in --json mode', async () => {
     queueFixtures(
       callMock,
@@ -520,7 +519,7 @@ describe('orca file CLI handlers', () => {
       '/tmp/elsewhere'
     )
 
-    // Why: an older host answers a binary edit open with opened:false, so focus carries to the next open.
+    // Declined binary opens must leave focus available for the next successful open.
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
       relativePath: 'assets/logo.png',

@@ -18,15 +18,20 @@ import {
 } from './workspace-review-facts'
 import { WorkspaceRowsSnapshotSchema, type WorkspaceRow } from './workspace-rows'
 import {
+  parseWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
+import {
   ProjectSectionCatalogSchema,
   type ServedProjectSections
 } from '../project-section-catalog-schema'
 
 /** One installed feed, typed per domain; an entity this build cannot parse is left out. */
 export type SidebarFeedDomains = {
-  workspaces: ReadonlyMap<string, WorkspaceRow>
-  activity: ReadonlyMap<string, WorkspaceActivityFacts>
-  review: ReadonlyMap<string, WorkspaceReviewFact>
+  /** Workspace facts are keyed by row identity: the same id on two hosts is two workspaces. */
+  workspaces: ReadonlyMap<HostScopedWorktreeKey, WorkspaceRow>
+  activity: ReadonlyMap<HostScopedWorktreeKey, WorkspaceActivityFacts>
+  review: ReadonlyMap<HostScopedWorktreeKey, WorkspaceReviewFact>
   creations: ReadonlyMap<string, WorkspaceCreation>
   pairedServerHosts: ReadonlyMap<
     string,
@@ -39,36 +44,90 @@ export type SidebarFeedDomains = {
   desktop: DesktopSidebarFacts | null
   /** Every host's repos, project groups and projects, in header order; null from a host that predates it. */
   projectCatalog: ServedProjectSections | null
-  retention: SidebarRetention | null
+  /** Retained rows by identity; an entry that is not one (a bare id) keeps nothing. */
+  retention: SidebarFeedRetention | null
 }
 
-const entitySchemas = {
-  workspaces: WorkspaceRowsSnapshotSchema.shape.rows.valueType,
-  activity: WorkspaceActivityFactsSnapshotSchema.shape.facts.valueType,
-  review: WorkspaceReviewFactsSnapshotSchema.shape.facts.valueType,
-  creations: WorkspaceCreationsSnapshotSchema.shape.creations.valueType,
-  pairedServerHosts: PairedServerRowsSnapshotSchema.shape.servers.element.pick({
-    freshness: true,
-    host: true
-  }),
-  pairedServerRows: PairedServerRowsSnapshotSchema.shape.servers.element.shape.rows.element,
-  repoIcons: z.string()
+export type SidebarFeedRetention = Omit<SidebarRetention, 'retainedIds'> & {
+  retainedIds: readonly HostScopedWorktreeKey[]
 }
 
-function readDomain<Schema extends z.ZodType>(
+function readRetention(retention: SidebarRetention | null): SidebarFeedRetention | null {
+  return retention
+    ? {
+        ...retention,
+        retainedIds: retention.retainedIds.flatMap((id) => parseWorktreeHostIdentity(id) ?? [])
+      }
+    : null
+}
+
+type EntityParser<Entity> = (value: unknown) => { entity: Entity } | null
+
+/** Cache parses by raw object identity; unchanged installed entities retain both raw and parsed objects. */
+function entityParser<Schema extends z.ZodType>(schema: Schema): EntityParser<z.infer<Schema>> {
+  const parsedByRaw = new WeakMap<object, { entity: z.infer<Schema> } | null>()
+  return (value) => {
+    const remembered =
+      typeof value === 'object' && value !== null ? parsedByRaw.get(value) : undefined
+    if (remembered !== undefined) {
+      return remembered
+    }
+    const parsed = schema.safeParse(value)
+    const read = parsed.success ? { entity: parsed.data } : null
+    if (typeof value === 'object' && value !== null) {
+      parsedByRaw.set(value, read)
+    }
+    return read
+  }
+}
+
+const entityParsers = {
+  workspaces: entityParser(WorkspaceRowsSnapshotSchema.shape.rows.valueType),
+  activity: entityParser(WorkspaceActivityFactsSnapshotSchema.shape.facts.valueType),
+  review: entityParser(WorkspaceReviewFactsSnapshotSchema.shape.facts.valueType),
+  creations: entityParser(WorkspaceCreationsSnapshotSchema.shape.creations.valueType),
+  pairedServerHosts: entityParser(
+    PairedServerRowsSnapshotSchema.shape.servers.element.pick({
+      freshness: true,
+      host: true
+    })
+  ),
+  pairedServerRows: entityParser(
+    PairedServerRowsSnapshotSchema.shape.servers.element.shape.rows.element
+  ),
+  repoIcons: entityParser(z.string())
+}
+
+function readKeyedDomain<Entity, Key extends string>(
   installed: InstalledSidebarInputs,
   name: string,
-  schema: Schema
-): Map<string, z.infer<Schema>> {
-  const entities = new Map<string, z.infer<Schema>>()
-  for (const [key, value] of installed.domains.get(name) ?? []) {
-    const parsed = schema.safeParse(value)
-    if (parsed.success) {
-      entities.set(key, parsed.data)
+  parse: EntityParser<Entity>,
+  keyOf: (key: string) => Key | null
+): Map<Key, Entity> {
+  const entities = new Map<Key, Entity>()
+  for (const [rawKey, value] of installed.domains.get(name) ?? []) {
+    const key = keyOf(rawKey)
+    const read = key === null ? null : parse(value)
+    if (key !== null && read) {
+      entities.set(key, read.entity)
     }
   }
   return entities
 }
+
+const readDomain = <Entity>(
+  installed: InstalledSidebarInputs,
+  name: string,
+  parse: EntityParser<Entity>
+): Map<string, Entity> => readKeyedDomain(installed, name, parse, (key) => key)
+
+// A key that is not a row identity (a bare id) is not one of this build's workspace entities.
+const readWorkspaceDomain = <Entity>(
+  installed: InstalledSidebarInputs,
+  name: string,
+  parse: EntityParser<Entity>
+): Map<HostScopedWorktreeKey, Entity> =>
+  readKeyedDomain(installed, name, parse, parseWorktreeHostIdentity)
 
 /** An install and what was read off it, for the next read to reuse. */
 export type SidebarFeedRead = { installed: InstalledSidebarInputs; domains: SidebarFeedDomains }
@@ -78,7 +137,7 @@ export function readSidebarFeedDomains(
   installed: InstalledSidebarInputs,
   previous?: SidebarFeedRead
 ): SidebarFeedDomains {
-  // A batch leaves a domain it did not touch as the same map, so its entities keep their identity.
+  // Untouched domains retain map/entity identity across batch installs.
   const unchanged = (name: string): SidebarFeedDomains | undefined =>
     previous && installed.domains.get(name) === previous.installed.domains.get(name)
       ? previous.domains
@@ -99,24 +158,26 @@ export function readSidebarFeedDomains(
   return {
     workspaces:
       unchanged('workspaces')?.workspaces ??
-      readDomain(installed, 'workspaces', entitySchemas.workspaces),
+      readWorkspaceDomain(installed, 'workspaces', entityParsers.workspaces),
     activity:
-      unchanged('activity')?.activity ?? readDomain(installed, 'activity', entitySchemas.activity),
-    review: unchanged('review')?.review ?? readDomain(installed, 'review', entitySchemas.review),
+      unchanged('activity')?.activity ??
+      readWorkspaceDomain(installed, 'activity', entityParsers.activity),
+    review:
+      unchanged('review')?.review ?? readWorkspaceDomain(installed, 'review', entityParsers.review),
     creations:
       unchanged('creations')?.creations ??
-      readDomain(installed, 'creations', entitySchemas.creations),
+      readDomain(installed, 'creations', entityParsers.creations),
     pairedServerHosts:
       unchanged('pairedServerHosts')?.pairedServerHosts ??
-      readDomain(installed, 'pairedServerHosts', entitySchemas.pairedServerHosts),
+      readDomain(installed, 'pairedServerHosts', entityParsers.pairedServerHosts),
     pairedServerRows:
       unchanged('pairedServerRows')?.pairedServerRows ??
-      readDomain(installed, 'pairedServerRows', entitySchemas.pairedServerRows),
+      readDomain(installed, 'pairedServerRows', entityParsers.pairedServerRows),
     repoIcons:
       unchanged('repoIcons')?.repoIcons ??
-      readDomain(installed, 'repoIcons', entitySchemas.repoIcons),
+      readDomain(installed, 'repoIcons', entityParsers.repoIcons),
     desktop: desktop.success ? desktop.data : null,
     projectCatalog,
-    retention: temporal.success ? temporal.data.retention : null
+    retention: temporal.success ? readRetention(temporal.data.retention) : null
   }
 }

@@ -2,13 +2,9 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from './sidebar-inputs-switch'
 import {
   getWorkspaceCleanupInactivityReasons,
   type WorkspaceCleanupCandidate
-} from './workspace-cleanup'
+} from './workspace-cleanup/workspace-cleanup'
 
-/**
- * When the user last used a workspace, for "last active" readers (cleanup, the jump palette).
- * Switch on, terminal start and exit no longer write the Recent stamp, so a later visit counts:
- * a workspace you work in with plain shells is never idle.
- */
+/** With the switch on, visits count because terminal start/exit no longer advance Recent; plain-shell work must not appear idle. */
 export function getWorkspaceLastActiveAt(
   lastActivityAt: number,
   lastVisitedAt: number | undefined

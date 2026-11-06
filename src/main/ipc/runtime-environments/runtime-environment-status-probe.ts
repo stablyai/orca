@@ -1,15 +1,18 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getPreferredPairedRuntimeConnection,
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { getRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
-import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import {
+  isRuntimeEnvironmentManuallyDisconnected,
+  runtimeEnvironmentManualDisconnectReason
+} from './runtime-environment-manual-disconnect'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 import { attachRemoteControlDiagnostics } from './runtime-environment-status-diagnostics'
 import { withTailscaleHintForResponse } from './runtime-environment-tailscale-response'
@@ -29,7 +32,7 @@ export async function getRuntimeEnvironmentStatus(
       ok: false,
       error: {
         code: 'runtime_manually_disconnected',
-        message: 'Runtime environment is manually disconnected.'
+        message: runtimeEnvironmentManualDisconnectReason(environment.id)
       }
     }
   }
@@ -40,7 +43,7 @@ export async function getRuntimeEnvironmentStatus(
   })
   // A retired request must not publish old status or borrow its replacement's diagnostics.
   if (getRuntimeEnvironmentCapabilityIncarnation(environment.id) !== incarnation) {
-    // Why follow once: a re-pair this probe set off retired its owner; the successor answers it.
+    // Follow one repair started by this probe; the successor owner verifies the new pairing.
     return followRepair && repairedSameServer(userDataPath, environment)
       ? getRuntimeEnvironmentStatus(userDataPath, environment.id, timeoutMs, options, false)
       : runtimeEnvironmentChangedFailure(environment, 'status.get')
@@ -55,10 +58,7 @@ export async function getRuntimeEnvironmentStatus(
   )
 }
 
-/**
- * A new pairing for the same server managed over SSH, under the host key it pinned: what a re-pair
- * stores. Any other replacement (another host, key or kind) stays a changed environment.
- */
+/** Follow only SSH-managed repairs under the same pinned host key; other replacements remain changed. */
 function repairedSameServer(userDataPath: string, before: KnownRuntimeEnvironment): boolean {
   try {
     const after = resolveEnvironment(userDataPath, before.id)

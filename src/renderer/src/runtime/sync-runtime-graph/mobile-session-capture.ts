@@ -9,7 +9,7 @@ import {
   findRegisteredTerminalTab,
   type RegisteredTerminalTab
 } from '../mounted-terminal-tab-registry'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function narrowRecordByKeys<T>(
   source: Record<string, T> | undefined,
@@ -26,24 +26,6 @@ export function narrowRecordByKeys<T>(
     }
     narrowed ??= new Map<string, T>()
     narrowed.set(key, value)
-  }
-  return narrowed ?? EMPTY_NARROWED_BY_KEY
-}
-
-export function narrowMapByKeys<T>(
-  source: ReadonlyMap<string, T>,
-  keys: readonly string[]
-): ReadonlyMap<string, T> {
-  if (source.size === 0 || keys.length === 0) {
-    return EMPTY_NARROWED_BY_KEY
-  }
-  let narrowed: Map<string, T> | null = null
-  for (const key of keys) {
-    if (!source.has(key)) {
-      continue
-    }
-    narrowed ??= new Map<string, T>()
-    narrowed.set(key, source.get(key) as T)
   }
   return narrowed ?? EMPTY_NARROWED_BY_KEY
 }
@@ -156,6 +138,7 @@ export function canReuseMobileSessionSnapshot(
   next: MobileSessionWorktreeInputs
 ): boolean {
   return (
+    narrowedEntriesEqual(previous.hostTabIds, next.hostTabIds) &&
     previous.worktreeId === next.worktreeId &&
     previous.worktreeInstanceId === next.worktreeInstanceId &&
     previous.terminalTabs === next.terminalTabs &&

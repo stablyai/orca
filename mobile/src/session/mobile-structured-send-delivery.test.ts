@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../src/shared/agent-session/requests/structured-agent-session-send-evidence'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
@@ -14,7 +15,6 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
-  // The host's row draws it in place, as not sent, with the reason under it; the composer stays empty.
   it.each([
     ['a sign-in rejection', 'Sign in to Grok with `grok login`.', { kind: 'notSignedIn' as const }],
     ['a content rejection', 'Claude does not support .bmp', undefined],
@@ -30,13 +30,16 @@ describe('mobileStructuredSendDelivery', () => {
     })
   })
 
-  it('reports transport and host uncertainty on this send', () => {
+  it('distinguishes transport doubt from an admitted unknown ordinary message', () => {
     expect(mobileStructuredSendDelivery({ status: 'unknown' })).toEqual({
       outcome: 'unknown',
       error: null
     })
+    expect(
+      mobileStructuredSendDelivery(accepted('unknown', STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING))
+    ).toEqual({ outcome: 'unknown', error: null })
     expect(mobileStructuredSendDelivery(accepted('unknown'))).toEqual({
-      outcome: 'unknown',
+      outcome: 'accepted',
       error: null
     })
   })
@@ -134,7 +137,14 @@ describe('mobileStructuredSendDelivery', () => {
     ['agent_session_operation_expired', 'Operation expired'],
     ['agent_session_operation_conflict', 'Operation conflict']
   ] as const)('reports the current %s refusal', (code, message) => {
-    expect(mobileStructuredSendDelivery({ status: 'refused', code, message })).toEqual({
+    expect(
+      mobileStructuredSendDelivery({
+        status: 'refused',
+        code,
+        message,
+        failure: { kind: 'refused', code }
+      })
+    ).toEqual({
       outcome: 'rejected',
       error: message
     })
@@ -145,7 +155,8 @@ describe('mobileStructuredSendDelivery', () => {
       mobileStructuredSendDelivery({
         status: 'refused',
         code: 'agent_session_operation_unknown',
-        message: 'Outcome unknown'
+        message: 'Outcome unknown',
+        failure: { kind: 'refused', code: 'agent_session_operation_unknown' }
       })
     ).toEqual({ outcome: 'unknown', error: null })
   })
@@ -154,7 +165,8 @@ describe('mobileStructuredSendDelivery', () => {
     expect(
       mobileStructuredSendDelivery({
         status: 'failed',
-        message: 'Your message was not sent. Send it again.'
+        message: 'Your message was not sent. Send it again.',
+        failure: { kind: 'failed' }
       })
     ).toEqual({ outcome: 'rejected', error: 'Your message was not sent. Send it again.' })
   })

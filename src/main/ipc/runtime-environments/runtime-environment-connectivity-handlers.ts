@@ -1,42 +1,44 @@
+import {
+  manuallyDisconnectedResponse,
+  runtimeEnvironmentCallFailure
+} from './runtime-environment-call-failure'
+import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
   removeEnvironment,
   resolveEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+  type PublicKnownRuntimeEnvironment,
+  type RuntimeEnvironmentRemoval
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   connectThroughOwningService,
   removeThroughOwningService
 } from './runtime-environment-host-service-ops'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
 import {
   closeRemoteRuntimeRequestConnection,
-  getRuntimeEnvironmentStatusSnapshots,
-  retryRemoteRuntimeSharedControlConnectionNow
+  getRuntimeEnvironmentStatusSnapshots
 } from './runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentManualDisconnect,
-  isRuntimeEnvironmentManuallyDisconnected,
-  RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+  isRuntimeEnvironmentManuallyDisconnected
 } from './runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
-import { withWslOrcadAccountEnv } from '../../wsl/wsl-orcad-account-env'
+import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
@@ -46,22 +48,12 @@ import {
 import {
   observeWslOrcadHostResponse,
   wslOrcadHostSupports
-} from '../../wsl/wsl-orcad-host-environments'
-import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
-
-function manuallyDisconnectedResponse(
-  environment: ReturnType<typeof resolveEnvironment>
-): RuntimeRpcResponse<never> {
-  return {
-    id: 'runtime.manualDisconnect',
-    ok: false,
-    error: {
-      code: 'runtime_manually_disconnected',
-      message: RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-    },
-    _meta: { runtimeId: environment.runtimeId }
-  }
-}
+} from '../../wsl/orcad/wsl-orcad-host-environments'
+import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
+import {
+  isHostSpawnFencedForWslMoveUndo,
+  wslMoveUndoSpawnFencedResponse
+} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 
@@ -76,6 +68,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   getUserDataPath,
   invalidateTransport
 }: ConnectivityHandlerOptions): void {
+  ipcMain.handle('runtimeEnvironments:desktopCreatedChatIds', () =>
+    desktopChatCreationHistory(getUserDataPath()).sessionIds()
+  )
   ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
     getRuntimeEnvironmentStatusSnapshots()
   )
@@ -92,7 +87,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { name: string; pairingCode: string }
     ): { environment: PublicKnownRuntimeEnvironment } => {
-      // Why refuse, not refresh: nothing here proves the code works before it would replace one that does.
+      // An unverified code must not replace a working pairing.
       const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
@@ -120,9 +115,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     (
       _event,
       args: { selector: string }
-    ):
-      | { removed: PublicKnownRuntimeEnvironment }
-      | Promise<{ removed: PublicKnownRuntimeEnvironment }> => {
+    ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
@@ -133,10 +126,19 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       assertWslHostReachable(environment)
       const ownedRemoval = removeThroughOwningService(environment)
       if (ownedRemoval) {
-        return ownedRemoval.then(() => ({ removed: redactRuntimeEnvironment(environment) }))
+        // A WSL host whose server Remove couldn't prove stopped stays listed; say so (E11).
+        return ownedRemoval.then((serverStop) => ({
+          removed: redactRuntimeEnvironment(environment),
+          serverStop
+        }))
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
-      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store)
+      void retireRemovedRuntimeEnvironment(
+        removed.id,
+        invalidateTransport,
+        store,
+        getUserDataPath()
+      )
       closeLegacySelectorTransport(args.selector, removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
@@ -151,7 +153,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const runtimeLayer = { userDataPath: getUserDataPath(), invalidateTransport }
       disconnectRuntimeEnvironmentForUser(environment.id, runtimeLayer)
       closeLegacySelectorTransport(args.selector, environment.id)
-      // Why: otherwise Settings keeps showing the managed host's SSH connection as live (#30085).
+      // Also clear the managed host SSH connection shown in Settings (#30085).
       await disconnectManagedHostOfEnvironmentForUser(environment, runtimeLayer)
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
@@ -174,20 +176,14 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       })
     }
   )
-  ipcMain.handle(
-    'runtimeEnvironments:retryControlConnection',
-    (_event, args: { selector: string }): void => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        retryRemoteRuntimeSharedControlConnectionNow(environment.id)
-      }
-    }
-  )
 }
 
-export function registerRuntimeEnvironmentPassiveHandlers(getUserDataPath: () => string): void {
+export function registerRuntimeEnvironmentPassiveHandlers(
+  getUserDataPath: () => string,
+  recordAnswer?: RecordRuntimeEnvironmentAnswer
+): void {
   registerPassiveStatusHandler(getUserDataPath)
-  registerPassiveCallHandler(getUserDataPath)
+  registerPassiveCallHandler(getUserDataPath, recordAnswer)
 }
 
 function closeLegacySelectorTransport(selector: string, environmentId: string): void {
@@ -222,26 +218,16 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   )
 }
 
-function runtimeEnvironmentCallFailure(
+type RecordRuntimeEnvironmentAnswer = (
   environment: ReturnType<typeof resolveEnvironment>,
   method: string,
-  error: unknown
-): RuntimeRpcFailure | null {
-  if (
-    !(error instanceof RemoteRuntimeClientError) &&
-    !(error instanceof RuntimeRpcCallQueueOverloadError)
-  ) {
-    return null
-  }
-  return {
-    id: method,
-    ok: false,
-    error: { code: error.code, message: error.message },
-    _meta: { runtimeId: environment.runtimeId }
-  }
-}
+  response: RuntimeRpcResponse<unknown>
+) => void
 
-function registerPassiveCallHandler(getUserDataPath: () => string): void {
+function registerPassiveCallHandler(
+  getUserDataPath: () => string,
+  recordAnswer?: RecordRuntimeEnvironmentAnswer
+): void {
   ipcMain.handle(
     'runtimeEnvironments:call',
     async (
@@ -259,7 +245,15 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
-      // Why here: every renderer call to a paired host passes this one handler.
+      if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
+        return wslMoveUndoSpawnFencedResponse(environment, args.method)
+      }
+      void desktopChatCreationHistory(getUserDataPath()).recordCreate(
+        environment.id,
+        args.method,
+        args.params
+      )
+      // Every renderer request to a paired host passes this account environment boundary.
       const accounts = await withWslOrcadAccountEnv({
         environmentId: environment.id,
         method: args.method,
@@ -297,6 +291,7 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
         throw error
       }
       observeWslOrcadHostResponse(environment.id, args.method, response)
+      recordAnswer?.(environment, args.method, response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response

@@ -1,25 +1,41 @@
 import type { ConnectionState } from '../../transport/types'
-import type { BridgeConnectionSnapshot } from './bridge-envelope'
+import { BridgeClientNotReadyError } from './bridge-client-errors'
+import type {
+  BridgeConnectionPathSource,
+  BridgeConnectionSnapshot
+} from './bridge-connection-snapshot'
 
-/** Why a `state` frame did not land. `unprimed` is a frame that beat `init`, `stale` one that lost to it. */
 export type BridgeSnapshotOutcome = 'applied' | 'stale' | 'unprimed'
 
-/**
- * What the page's synchronous `RpcClient` getters read.
- *
- * Screens read `getState()` during render, so the answer has to already be here when the first one
- * mounts: `init` primes it, every `state` refreshes it, and nothing is ever derived or guessed. A
- * cache that answered `connecting` because it had not heard yet would move a golden.
- */
+// Prime from init before screens render synchronous RpcClient getters; guessing connecting before the first snapshot would change replay behavior.
 export class BridgeConnectionCache {
   private held: BridgeConnectionSnapshot | null = null
   private readonly listeners = new Set<(state: ConnectionState) => void>()
+  private readonly pathListeners = new Set<() => void>()
 
   read(): BridgeConnectionSnapshot | null {
     return this.held
   }
 
-  /** From `init`. Re-priming with the same state is not a transition, so no listener hears one. */
+  // Getters run only after init primed the cache; reading earlier is a page bug, not a disconnect.
+  require(): BridgeConnectionSnapshot {
+    if (this.held === null) {
+      throw new BridgeClientNotReadyError()
+    }
+    return this.held
+  }
+
+  // Older shells send no path; relay with nothing pending is what pages assumed before they did.
+  pathSource(): BridgeConnectionPathSource {
+    return {
+      getActivePath: () => this.require().activePath ?? 'relay',
+      getPendingPath: () => this.require().pendingPath ?? null,
+      getRelayHostReachability: () => this.require().relayHostReachability ?? 'connecting',
+      onConnectionPathChange: (listener) => this.onPathChange(listener)
+    }
+  }
+
+  // Repriming identical state is not a transition and must notify nobody.
   prime(snapshot: BridgeConnectionSnapshot): void {
     const changed = this.held?.state !== snapshot.state
     this.held = snapshot
@@ -28,15 +44,34 @@ export class BridgeConnectionCache {
     }
   }
 
-  /**
-   * From `state`, one frame per transition on the shell's side, so every accepted one is fanned out.
-   *
-   * A snapshot whose generation went backwards is refused: the shell was rebuilt over a newer
-   * client and the page missed the `init` that would have said so, which makes what the page holds
-   * newer than what just arrived. Applying it would walk the cache backwards and leave every getter
-   * answering for a client that no longer exists.
-   */
+  // Reject backward generations: a client rebuild may publish older state before its init arrives, which would otherwise roll getters back to a dead client.
   apply(snapshot: BridgeConnectionSnapshot): BridgeSnapshotOutcome {
+    const outcome = this.hold(snapshot)
+    if (outcome === 'applied') {
+      this.fanOut(snapshot.state)
+    }
+    return outcome
+  }
+
+  // A path-only change is not a transition: state listeners would read it as one and re-run.
+  applyPath(snapshot: BridgeConnectionSnapshot): BridgeSnapshotOutcome {
+    const outcome = this.hold(snapshot)
+    if (outcome === 'applied') {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+    return outcome
+  }
+
+  onPathChange(listener: () => void): () => void {
+    this.pathListeners.add(listener)
+    return () => {
+      this.pathListeners.delete(listener)
+    }
+  }
+
+  private hold(snapshot: BridgeConnectionSnapshot): BridgeSnapshotOutcome {
     const previous = this.held
     if (previous === null) {
       return 'unprimed'
@@ -49,7 +84,6 @@ export class BridgeConnectionCache {
       return 'stale'
     }
     this.held = snapshot
-    this.fanOut(snapshot.state)
     return 'applied'
   }
 
@@ -60,12 +94,7 @@ export class BridgeConnectionCache {
     }
   }
 
-  /**
-   * The page said goodbye. Every native client publishes `disconnected` when it closes and keeps
-   * answering its last snapshot afterwards, and the screens above this one are written to that: a
-   * getter that threw here, or a listener that never heard the transition, would leave a closing
-   * page rendering a dot that is still connected.
-   */
+  // Close publishes disconnected but retains readable snapshots like native clients; throwing getters or missing transitions would leave the closing page connected.
   close(): void {
     const held = this.held
     if (held !== null && held.state !== 'disconnected') {
@@ -73,10 +102,10 @@ export class BridgeConnectionCache {
       this.fanOut('disconnected')
     }
     this.listeners.clear()
+    this.pathListeners.clear()
   }
 
-  // Walked in place: a listener that unsubscribes a sibling during the fan-out is what a `Set`
-  // iterator is specified to survive.
+  // Set iteration tolerates listeners removing siblings during fan-out; avoid a copy.
   private fanOut(state: ConnectionState): void {
     for (const listener of this.listeners) {
       listener(state)

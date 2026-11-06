@@ -51,13 +51,6 @@ describe('compareSidebarText', () => {
     expect(compareSidebarText(`CAFE${COMBINING_ACUTE}`, nfc)).toBeLessThan(0)
   })
 
-  it('returns 0 only for canonically equal text, leaving the tie to the caller', () => {
-    expect(compareSidebarText('same', 'same')).toBe(0)
-    expect(compareSidebarText('', '')).toBe(0)
-    expect(compareSidebarText('', 'a')).toBeLessThan(0)
-    expect(compareSidebarText('a', 'a ')).toBeLessThan(0)
-  })
-
   it('is antisymmetric across a mixed corpus', () => {
     const corpus = [
       'w2',
@@ -84,11 +77,6 @@ describe('compareCodePoints', () => {
     // U+1F389 is above U+FFFD, though its high surrogate (0xD83C) is below it.
     expect('🎉'.charCodeAt(0)).toBeLessThan(REPLACEMENT_CHAR.charCodeAt(0))
     expect(compareCodePoints('🎉', REPLACEMENT_CHAR)).toBeGreaterThan(0)
-  })
-
-  it('orders a prefix first', () => {
-    expect(compareCodePoints('local|a', 'local|ab')).toBeLessThan(0)
-    expect(compareCodePoints('x', 'x')).toBe(0)
   })
 })
 

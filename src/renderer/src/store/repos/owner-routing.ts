@@ -1,6 +1,6 @@
 import type { AppState } from '../types'
 import { FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
+import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc

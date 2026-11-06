@@ -215,7 +215,7 @@ describe('legacy compatibility after explicit takeover', () => {
       ok: true,
       result: { run: { coordinator_handle: CURRENT_COORDINATOR_HANDLE } }
     })
-    // Why: the pane key is routing state the receipt withholds; prove the binding on the row.
+    // The receipt withholds routing pane keys; verify the stored binding instead.
     expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBe(
       CURRENT_COORDINATOR_PANE
     )
@@ -573,8 +573,7 @@ const COORDINATOR_ALIAS_HANDLE = 'term_legacy_coord_alias'
 describe('injected dispatch from a legacy-adopted coordinator', () => {
   it('refuses an alias of the coordinator pane when only dispatch authority resolves the caller', async () => {
     const harness = createHarness()
-    // The legacy coordinator is reachable only through the window-graph leaf, so the record-backed
-    // resolver returns null for both its handle and the alias for the same pane.
+    // Graph-only legacy coordinators have no record-backed handle or pane alias.
     vi.spyOn(harness.runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === WORKER_HANDLE
         ? WORKER_PANE

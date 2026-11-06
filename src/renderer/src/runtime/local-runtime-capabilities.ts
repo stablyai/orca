@@ -45,15 +45,7 @@ export function readLocalRuntimeCapabilitiesOrUnknown(): readonly RuntimeCapabil
   return observation.state === 'known' ? observation.capabilities : null
 }
 
-/** Like `readLocalRuntimeCapabilitiesOrUnknown`, but probes the local runtime when no answer
- *  has landed yet, so a caller that can wait never reads "not asked yet" as "unsupported"
- *  (#19154: that reads a structured-native-chat create as a bare terminal).
- *
- *  The renderer boot chain calls this once, ungated, so the answer is normally already cached
- *  by the time any launch route is resolved — including for the readers that are synchronous
- *  and cannot await. Awaiting it at a route decision is the backstop for the residual window
- *  and for re-probing after a failed one. Still `null` after an actually failed probe, and
- *  never rejects. */
+/** Probe unknown local capabilities before awaited routing decisions so unasked hosts do not fall back to bare terminals (#19154). Ungated boot normally seeds synchronous readers; this closes residual startup/failed-probe gaps. Failed probes retain null and never reject. */
 export async function ensureLocalRuntimeCapabilities(): Promise<
   readonly RuntimeCapability[] | null
 > {
@@ -106,10 +98,11 @@ export function refreshLocalRuntimeCapabilities(): Promise<readonly RuntimeCapab
       return capabilities
     })
     .catch(() => {
-      // Stays unknown rather than becoming an empty (== unsupported) list: a failed probe
-      // is not evidence about the host.
-      publish({ state: 'unavailable' })
-      return []
+      // A failed probe cannot revoke capabilities already declared by this local runtime.
+      if (observation.state !== 'known') {
+        publish({ state: 'unavailable' })
+      }
+      return readLocalRuntimeCapabilitiesOrUnknown() ?? []
     })
     .finally(() => {
       refreshPromise = null

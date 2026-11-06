@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { grantDirAclAsync, isPermissionError } from '../win32-utils'
+import { grantDirAclAsync } from '../windows/windows-directory-acl'
+import { isPermissionError } from '../filesystem/permission-errors'
 import { renameOverLockedTargetAsync } from './locked-executable-rename'
 
 type ExistingScript = { exists: false } | { exists: true; content: Buffer | null }
@@ -61,7 +62,7 @@ async function writeScriptWithAclRetry(
   }
 }
 
-// Why: refresh must not block Electron's main thread or create state for an absent CLI.
+// Refresh asynchronously without creating state for an absent CLI.
 export async function refreshManagedScriptIfPresent(
   scriptPath: string,
   content: string | Buffer,

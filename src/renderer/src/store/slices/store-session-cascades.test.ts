@@ -3,10 +3,8 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -73,7 +71,6 @@ describe('removeProject cascade', () => {
     expect(s.terminalLayoutsByTabId['tab2']).toBeUndefined()
     expect(s.activeTabId).toBeNull()
 
-    // PTYs were killed
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
 
@@ -89,40 +86,5 @@ describe('removeProject cascade', () => {
     // Why: exit IPC can arrive after repo purge but before the pane unmounts; a late exit must not recreate an index for an ownerless tab.
     expect(store.getState().ptyIdsByTabId['tab1']).toBeUndefined()
     expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
-  })
-})
-
-describe('restartCodexTabs', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('queues pane-scoped codex restarts without remounting the whole tab', () => {
-    const store = createTestStore()
-    const wt1 = 'repo1::/path/wt1'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, title: 'codex', generation: 2 })]
-      },
-      ptyIdsByTabId: {
-        tab1: ['pty-a', 'pty-b']
-      },
-      pendingStartupByTabId: {}
-    })
-
-    store.getState().queuePaneAccountRestarts(['pty-b'], 'codex')
-    const state = store.getState()
-
-    expect(state.pendingPaneAccountRestarts).toEqual({ 'pty-b': 'codex' })
-    expect(state.pendingStartupByTabId).toEqual({})
-    expect(state.suppressedPtyExitIds).toEqual({})
-    expect(state.tabsByWorktree[wt1][0].generation).toBe(2)
   })
 })

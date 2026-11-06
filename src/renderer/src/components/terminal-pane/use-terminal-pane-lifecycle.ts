@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { applyTerminalAppearance } from './terminal-appearance'
+import { useThemeBackgroundStore } from '@/store/theme-background'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import {
   applyTerminalScrollbackRowsToMountedPanes,
@@ -17,7 +18,6 @@ import { useTerminalPaneMountLifecycle } from './use-terminal-pane-mount-lifecyc
 import { useTerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
-/** Coordinates mount, visibility, and live appearance effects for terminal panes. */
 export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): void {
   const refs = useTerminalPaneLifecycleRefs()
   useTerminalPaneMountLifecycle(deps, refs)
@@ -90,6 +90,8 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     return () => window.removeEventListener('focus', onWindowFocus)
   }, [deps.isActive, deps.isVisible, deps.managerRef, deps.panePtyBindingsRef])
 
+  // Why: a theme image arrives after plugin themes load, so the single-paint switch must re-run then.
+  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
@@ -100,7 +102,6 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       manager,
       currentSettings,
       systemPrefersDarkRef.current,
-      deps.paneFontSizesRef.current,
       deps.paneTransportsRef.current,
       deps.effectiveMacOptionAsAltRef.current,
       deps.paneMode2031Ref.current,
@@ -108,11 +109,11 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     )
   }, [
     deps.settings,
+    themeBackgroundActive,
     deps.systemPrefersDark,
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,
     deps.settingsRef,
-    deps.paneFontSizesRef,
     deps.paneTransportsRef,
     deps.effectiveMacOptionAsAltRef,
     deps.paneMode2031Ref,

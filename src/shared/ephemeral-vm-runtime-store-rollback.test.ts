@@ -13,7 +13,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getEphemeralVmRuntimeFeatureStorePath,
-  featureIdentity,
   restoreRuntimeFeatureList,
   MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES
 } from './ephemeral-vm-runtime-feature-store'
@@ -302,13 +301,6 @@ describe('runtime feature restoration scaling', () => {
       createdAt: runtime.createdAt,
       recipeCheckoutMode: 'provisioned-root' as const
     }))
-    for (const runtime of runtimes) {
-      expect(
-        features.find((entry) => featureIdentity(entry) === featureIdentity(runtime))
-      ).toBeDefined()
-    }
-    expect(reads).toBe(500_500)
-    reads = 0
     const restored = restoreRuntimeFeatureList(runtimes, features)
     expect(reads).toBe(1000)
     expect(restored.map((runtime) => runtime.id)).toEqual(runtimes.map((runtime) => runtime.id))

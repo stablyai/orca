@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -16,26 +20,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
-// Direct-SSH sibling of remote-hidden-output-restore-unavailable-banner.repro.test.ts.
-//
-// Reported by a WSL2 user driving remote Coder workspaces over direct SSH:
-//   "[Orca skipped hidden terminal output because main recovery was unavailable.]"
-//   multiple times a day (v1.4.190).
-//
-// Topology modeled: a direct-SSH PTY carries an "ssh:<target>@@<relayPtyId>" id,
-// so isRemoteRuntimePtyId() is FALSE and canUseHiddenOutputSnapshot() routes
-// recovery through window.api.pty.getMainBufferSnapshot. That handler serializes
-// main's model of a stream whose bytes crossed the relay, and it answers null
-// whenever the snapshot cannot be produced in time (ownership settle deadline,
-// provider acquisition timeout, post-gap provider snapshot requirement).
-//
-// Per docs/reference/ssh-execution-boundary.md a null from a remote execution
-// host is `unverifiable`, never proof the bytes are gone — the same rule the
-// "remote:" path already honours via the retry/re-arm budget.
-//
-// Repro command:
-//   pnpm exec vitest run --config config/vitest.config.ts \
-//     src/renderer/src/components/terminal-pane/direct-ssh-hidden-output-restore-unavailable-banner.test.ts
+// Direct-SSH null snapshots are unverifiable, not lost output; exercise main-buffer recovery with bounded retries like remote-runtime panes.
 
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
@@ -122,11 +107,8 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
   }
 })
 
-// ── Scenario identities ─────────────────────────────────────────────────────
-// Real direct-SSH app PTY id shape (shared/ssh-pty-id.ts).
 const SSH_PTY_ID = 'ssh:coder-ws@@pty-1'
-// Overflows the renderer's hidden background queue (2MB lossy cap), dropping the
-// backlog and latching main-model restore.
+// Overflow the 2MB hidden queue to require main-model restore.
 const HIDDEN_BYTES = 'x'.repeat(2 * 1024 * 1024 + 1)
 const LIVE_AGENT_CHUNK = 'LIVE_AGENT_CHUNK\r\n'
 const HOST_SNAPSHOT_MARKER = 'HOST_SNAPSHOT_HIDDEN_AGENT_CONTENT'
@@ -161,6 +143,7 @@ function stubMainBufferSnapshot(
 
 async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(SSH_PTY_ID)
   const capturedDataCallback: {
     current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -175,7 +158,11 @@ async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = connectPanePty(pane as never, manager as never, deps as never)
+  const disposable = connectPanePty(
+    pane as never,
+    manager as never,
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
   return {
@@ -276,7 +263,6 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     driveHiddenBacklogThenReveal(drive)
     await flushAsyncTicks(20)
 
-    // The 750ms foreground deadline elapses while main is still serializing.
     vi.advanceTimersByTime(750)
     vi.advanceTimersByTime(0)
     await flushAsyncTicks(10)
@@ -322,9 +308,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     drive.disposable.dispose()
   })
 
-  // The re-arm budget bounds one stall; live bytes are not evidence the host can
-  // answer again. Continuous output on the SAME ssh: id must not re-open recovery
-  // or refresh the budget, or the bounded re-arm becomes a permanent ~2s repaint loop.
+  // Live bytes do not prove snapshot recovery is available; continuous output must not refresh a spent re-arm budget.
   it('[invariant] continuous live output on a silent SSH host cannot refresh the re-arm budget into a repaint loop', async () => {
     const getMainBufferSnapshot = stubMainBufferSnapshot(async () => null)
     const drive = await connectHiddenDirectSshPane()
@@ -361,9 +345,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     drive.disposable.dispose()
   })
 
-  // The re-arm budget bounds ONE stall. It only clears on a successful snapshot or
-  // a PTY change, so without an explicit reset at the banner a single long outage
-  // leaves a long-lived SSH pane permanently at zero tolerance.
+  // Reset spent tolerance after its banner so one long outage cannot permanently disable later recovery episodes.
   it('[invariant] a spent re-arm budget must not leave the SSH pane at zero tolerance for its next hidden episode', async () => {
     const revivedSnapshot = createDeferred<HostSnapshot>()
     let hostIsSilent = true
@@ -378,8 +360,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     }
     expect(drive.writtenChunks().filter((data) => data.includes(BANNER_FRAGMENT))).toHaveLength(1)
 
-    // Second episode on the SAME ssh: id: the host is alive again but its snapshot
-    // lands just past the 750ms foreground deadline.
+    // The same PTY recovers, but its next snapshot still arrives after the foreground deadline.
     hostIsSilent = false
     let seq = HIDDEN_BYTES.length + LIVE_AGENT_CHUNK.length
     ;(drive.deps.isVisibleRef as { current: boolean }).current = false

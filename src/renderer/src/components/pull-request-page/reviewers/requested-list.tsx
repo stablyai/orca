@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
 import { translate } from '@/i18n/i18n'
-import type { getGitHubPRReviewerRows } from '@/components/github-pr-reviewer-display'
+import type { getGitHubPRReviewerRows } from '../../../../../shared/github/pr-reviewer-display'
 
 export function ReviewerRequestedList({
   reviewers,

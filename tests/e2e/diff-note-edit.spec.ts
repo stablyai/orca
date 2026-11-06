@@ -12,8 +12,7 @@ test.describe('Diff note edit', () => {
     const seededBody = 'edit-me note'
     const editedBody = 'edited note from the inline card'
 
-    // Why: create a real modified-file diff so Monaco mounts the saved-note
-    // view zone on the same local surface that wires updateDiffComment.
+    // Use a real modified-file diff so Monaco mounts the local saved-note zone.
     const { relativePath } = await orcaPage.evaluate(async (wId) => {
       const store = window.__store
       if (!store) {
@@ -42,14 +41,22 @@ test.describe('Diff note edit', () => {
         if (!store) {
           throw new Error('window.__store is not available')
         }
-        return store.getState().addDiffComment({
-          worktreeId: wId,
-          filePath: rel,
-          source: 'diff',
-          lineNumber: 1,
-          body,
-          side: 'modified'
-        })
+        // The seeded worktree is this app's own (local) copy.
+        return store.getState().addDiffComment(
+          {
+            kind: 'worktree',
+            worktreeId: wId,
+            authority: { endpoint: { kind: 'self' }, at: 'local' }
+          },
+          {
+            worktreeId: wId,
+            filePath: rel,
+            source: 'diff',
+            lineNumber: 1,
+            body,
+            side: 'modified'
+          }
+        )
       },
       { wId: worktreeId, rel: relativePath, body: seededBody }
     )

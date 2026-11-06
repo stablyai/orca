@@ -26,14 +26,14 @@ function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
 }
 
-/** The desktop holds `recent` and nothing collapsed; the first of each write is lost in transit. */
+// Lose the first attempt of each write to exercise replay against the desktop’s recent sort and expanded state.
 function desktop() {
   const client = new FakeSession('connected')
   const lost = new Set<string>()
-  const writes: string[] = []
-  client.sendRequest.mockImplementation(async (method: string) => {
+  const writes: { method: string; params: unknown }[] = []
+  client.sendRequest.mockImplementation(async (method: string, params: unknown) => {
     if (method === 'ui.set' || method === 'ui.setCollapsed') {
-      writes.push(method)
+      writes.push({ method, params })
       if (!lost.has(method)) {
         lost.add(method)
         throw new Error('client_disconnected')
@@ -51,9 +51,8 @@ function desktop() {
   return { client, writes }
 }
 
-// The feed's own reads are not under test; it only replaces the poll, as on a switched-on page.
 const SIDEBAR_FEED = { refresh: () => {}, changed: () => {}, onInstalled: () => () => {} }
-// Stable across renders, as the screen's own are: each is a dependency of the refresh lifecycle.
+// Keep callbacks stable as in the screen; refresh lifecycle depends on their identities.
 const NO_CAPABILITIES: string[] = []
 const fetchRepoMetadata = async (): Promise<void> => {}
 
@@ -65,9 +64,13 @@ afterEach(() => {
 })
 
 async function mountScreen(client: FakeSession) {
-  const held: { view?: ReturnType<typeof useHostViewSettings> } = {}
+  const held: {
+    view?: ReturnType<typeof useHostViewSettings>
+    state?: ReturnType<typeof useHostScreenState>
+  } = {}
   function Probe({ connState }: { connState: ConnectionState }): null {
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
+    held.state = state
     state.clientRef.current = client
     const view = useHostViewSettings({ client, connState, state })
     held.view = view
@@ -89,6 +92,7 @@ async function mountScreen(client: FakeSession) {
   })
   return {
     view: () => held.view!,
+    state: () => held.state!,
     connect: async (connState: ConnectionState) => {
       await act(async () => {
         renderer!.update(createElement(Probe, { connState }))
@@ -110,7 +114,19 @@ describe('Workspace options changed while the connection drops', () => {
     await screen.connect('reconnecting')
     await screen.connect('connected')
 
-    expect(writes).toEqual(['ui.set', 'ui.setCollapsed', 'ui.set', 'ui.setCollapsed'])
+    expect(writes).toEqual([
+      { method: 'ui.set', params: expect.objectContaining({ sortBy: 'name' }) },
+      {
+        method: 'ui.setCollapsed',
+        params: expect.objectContaining({ key: 'repo:orca', collapsed: true })
+      },
+      { method: 'ui.set', params: expect.objectContaining({ sortBy: 'name' }) },
+      {
+        method: 'ui.setCollapsed',
+        params: expect.objectContaining({ key: 'repo:orca', collapsed: true })
+      }
+    ])
+    expect(screen.state().view).toMatchObject({ sortBy: 'name', collapsedGroups: ['repo:orca'] })
     expect(screen.view().pendingViewChanges.pending).toEqual([])
   })
 })

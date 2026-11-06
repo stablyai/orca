@@ -16,8 +16,7 @@ type PtyExitDelivery = {
   sidecars: readonly ((code: number, context: { hadPrimary: boolean }) => void)[]
 }
 
-// Why scoped to one delivery: consumers read it synchronously while main's label is in hand, so
-// nothing is left behind to expire or to mislabel a later exit of the same id.
+// Scope labels to synchronous delivery so no stale record can misclassify a later same-ID exit.
 const replacedExitsInDelivery = new Set<string>()
 
 /** Whether the exit being delivered hands the pane to a replacement rather than ending it. */
@@ -48,13 +47,11 @@ function deliverClassifiedPtyExit(delivery: PtyExitDelivery): void {
       try {
         delivery.primary(delivery.code)
       } finally {
-        // Why: ownership is final even when cleanup throws; a duplicate exit
-        // must not become a new pre-handler event for a future mount.
+        // Exit ownership is final despite cleanup throws; duplicates cannot become pre-handler state for a later mount.
         consumePreHandlerPtyState(delivery.ptyId)
       }
     } else if (delivery.replacedByRestart) {
-      // Why: a buffered exit would read as this pane's death to a mount mid-restart; discarding
-      // also stops that mount reattaching the dead id, so it spawns by pane and gets the replacement.
+      // Discard restart exits and old bindings so mid-restart mounts attach by pane to the replacement, not the dead PTY.
       discardPreHandlerPtyState(delivery.ptyId)
     } else {
       bufferPreHandlerPtyExit(delivery.ptyId, delivery.code, delivery.incarnationId)

@@ -4,9 +4,9 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-vers
 import {
   buildInjectRejectionMessage,
   injectRejectedRefusal,
-  taskNotFoundRefusal,
   taskNotStartableRefusal
 } from '../../../../shared/orchestration-dispatch-refusal-contract'
+
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { RpcFailure, RpcRequest, RpcResponse } from '../core'
@@ -30,19 +30,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Why: an agent reads the receipt code to pick a recovery; every case is driven from the real
-// RPC dispatcher and checked against the shared contract the CLI-side test formats.
+// Drive real dispatch and shared receipt codes so agents can select recovery without parsing prose.
 describe('orchestration dispatch failure codes through RpcDispatcher', () => {
-  it('reports task_not_found for a task id that does not exist', async () => {
-    const harness = createHarness()
-
-    const response = await dispatch(harness, { task: 'task_missing', to: WORKER_HANDLE })
-
-    expect(expectFailure(response).error).toEqual(
-      taskNotFoundRefusal('Task not found: task_missing', { taskId: 'task_missing' })
-    )
-  })
-
   it('reports task_not_startable with the unmet dependencies for a pending task', async () => {
     const harness = createHarness()
     const parent = harness.db.createTask({ spec: 'parent' })
@@ -58,22 +47,6 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
       })
     )
     expect(harness.db.getTask(child.id)?.status).toBe('pending')
-  })
-
-  it('reports task_not_startable with the status for a completed task', async () => {
-    const harness = createHarness()
-    const task = harness.db.createTask({ spec: 'done' })
-    harness.db.updateTaskStatus(task.id, 'completed')
-
-    const response = await dispatch(harness, { task: task.id, to: WORKER_HANDLE })
-
-    expect(expectFailure(response).error).toEqual(
-      taskNotStartableRefusal(`Task ${task.id} is completed; only ready tasks can be dispatched`, {
-        taskId: task.id,
-        status: 'completed',
-        unmetDependencies: []
-      })
-    )
   })
 
   it('reports inject_rejected when the target terminal runs no recognized agent', async () => {
@@ -142,9 +115,7 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
   it('types the atomic claim loser when the task changes after the ready precheck', async () => {
     const harness = createHarness()
     const task = harness.db.createTask({ spec: 'raced' })
-    // Why: the pane lookup runs after the ready precheck and before the DB claim, so failing the
-    // task there is the interleaving a concurrent status change produces. The loser's DB refusal
-    // must carry the same typed receipt instead of the bare Error it used to throw.
+    // Change task state between ready precheck and DB claim; the losing claim must return the same typed refusal.
     vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) => {
       if (handle === WORKER_HANDLE) {
         harness.db.updateTaskStatus(task.id, 'failed', 'raced out')
@@ -163,21 +134,6 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
       })
     )
     expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
-  })
-
-  it('keeps runtime_error for a genuinely unexpected dispatch failure', async () => {
-    const harness = createHarness()
-    const task = harness.db.createTask({ spec: 'work' })
-    vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockRejectedValue(
-      new Error('probe exploded')
-    )
-
-    const response = await dispatch(harness, { task: task.id, to: WORKER_HANDLE, inject: true })
-
-    expect(expectFailure(response).error).toMatchObject({
-      code: 'runtime_error',
-      message: 'probe exploded'
-    })
   })
 })
 

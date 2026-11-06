@@ -8,8 +8,8 @@ import {
   ConductorDoneIcon,
   ConductorProgressIcon,
   ConductorReviewIcon
-} from '../../workspace-status-icons'
-import { getWorkspaceStatusVisualMeta } from '../../workspace-status'
+} from '../../workspace-status/presentation/workspace-status-icons'
+import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
 import { COLLECTION_GROUP_META } from '../../worktree-list-collections'
 
 const PR_GROUP_META: Record<

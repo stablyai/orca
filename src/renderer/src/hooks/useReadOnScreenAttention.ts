@@ -10,7 +10,6 @@ import {
   subscribeViewReportPresenceSignals
 } from './client-workspace-view-report'
 
-/** Reads what is on screen: acknowledges the visible agents and reads the visible tabs' markers. */
 export function useReadOnScreenAttention(): void {
   useEffect(
     () =>
@@ -19,7 +18,6 @@ export function useReadOnScreenAttention(): void {
           ? null
           : async () => window.api?.notifications?.getDesktopAwayState?.(),
         subscribeStructuredViews: subscribeStructuredAttentionViews,
-        // Switch point: the owning hosts raise the unread flag, so they learn what is on screen.
         ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
           ? {
               subscribePresenceSignals: subscribeViewReportPresenceSignals,

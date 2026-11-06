@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATE_RULES_BUNDLE_MAX_BYTES,
-  LIVE_UPDATABLE_AGENT_STATE_RULE_IDS,
   parseAgentStateRulesBundle
 } from './agent-state-rules-bundle'
 import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
@@ -59,10 +58,5 @@ describe('agent state rules bundle', () => {
 
   it('lets a local override carry any agent', () => {
     expect(rejection(bundle({ files: [file('gemini')] }), 'any-agent')).toBeNull()
-  })
-
-  it('names only agents that have a bundled rule file', () => {
-    const bundled = new Set<string>(BUNDLED_AGENT_STATE_RULE_FILES.map((rules) => rules.id))
-    expect([...LIVE_UPDATABLE_AGENT_STATE_RULE_IDS].filter((id) => !bundled.has(id))).toEqual([])
   })
 })

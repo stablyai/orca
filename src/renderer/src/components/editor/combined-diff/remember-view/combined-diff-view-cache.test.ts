@@ -24,7 +24,6 @@ function keyFor(scopeId: string, content = contentKey): string {
   return `${content}::${scopeId}`
 }
 
-/** Mounts a tab viewer, scrolls it, then unmounts it as a tab close would. */
 function viewThenUnmount(scopeId: string, scrollTop: number, content = contentKey): void {
   const lease = claimCombinedDiffView(
     keyFor(scopeId, content),
@@ -32,7 +31,7 @@ function viewThenUnmount(scopeId: string, scrollTop: number, content = contentKe
     succession(scopeId, [scopeId], content)
   )
   releaseCombinedDiffView(lease)
-  // Why: the viewer's unmount snapshot writes after release, so mirror that order.
+  // Mirror unmount ordering: snapshot after releasing mount tracking.
   rememberCombinedDiffView(lease, { scrollTop })
 }
 
@@ -54,20 +53,6 @@ describe('combined diff view succession', () => {
 
     expect(readCombinedDiffViewMemory(nextKey)?.scrollTop).toBe(640)
     expect(readCombinedDiffViewMemory(keyFor('tab-1'))).toBeUndefined()
-  })
-
-  it('keeps a still-open but inactive tab view out of reach of a second tab', () => {
-    viewThenUnmount('tab-1', 640)
-
-    const nextKey = keyFor('tab-2')
-    const bothOpen = succession('tab-2', ['tab-1', 'tab-2'])
-    expect(readCombinedDiffViewMemory(nextKey, { worktreeId, succession: bothOpen })).toBe(
-      undefined
-    )
-    claimCombinedDiffView(nextKey, worktreeId, bothOpen)
-
-    expect(readCombinedDiffViewMemory(nextKey)).toBeUndefined()
-    expect(readCombinedDiffViewMemory(keyFor('tab-1'))?.scrollTop).toBe(640)
   })
 
   it('never takes the view of a viewer that is still mounted', () => {

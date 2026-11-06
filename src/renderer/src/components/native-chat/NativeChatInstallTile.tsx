@@ -1,10 +1,9 @@
 import { TriangleAlert } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { cn } from '@/lib/utils'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 
-/** The agent's mark in a tile; a failed install swaps it for an amber warning. */
 export function NativeChatInstallTile(props: {
   agent: AgentType
   failed: boolean

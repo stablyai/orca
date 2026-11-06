@@ -1,8 +1,4 @@
-/**
- * Event invalidation has one blast-radius rule: a scoped event touches its own
- * entry, an unscoped one touches its authority, and neither ever touches
- * another authority's rows.
- */
+/** Scoped events invalidate one entry, unscoped events their authority, and neither crosses authority boundaries. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -125,8 +121,7 @@ describe('automation host invalidation', () => {
     const onInvalidated = vi.fn()
     const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
 
-    // A create is the first thing that ever addresses its host: dropping the key
-    // for want of a stale entry is how the new row never appears.
+    // Report unseen create keys too or their first row will never be fetched.
     invalidation.handle({ authority: RUNTIME, selector: { kind: 'ssh', targetId: 'never-seen' } })
     await Promise.resolve()
 

@@ -1,9 +1,6 @@
-// The window's frame-apply check for one test's life: after every flush, the store must show what
-// the full build (the window's view and facts read back through its save and the Loader) shows
-// for the same cache and the store as the flush found it. Mirrors main's model check.
+// After each window frame flush, compare store slices with the full save/Loader build using identical cache/view/facts, like main’s model check.
 
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import { isDrawnGroupLayoutHeld, isDrawnTabHeld } from './layout-owner-drawn-tab-holds'
 import { isTabPaneTreeHeld } from './layout-owner-pane-intents'
 import {
   observeLayoutFrameApply,
@@ -68,11 +65,7 @@ function recordsOf(state: AppState, keys: readonly string[]): Record<string, unk
   }
 }
 
-/**
- * Empty when the flush left the store as the full build of its workspaces leaves it. A workspace
- * the flush built in full ran the reference itself (and a second run mints other ids for a new
- * page), so a flush that built one in full is checked on its other workspaces' records.
- */
+/** Check only workspaces not fully built by the flush: full builds already ran the reference, and replay can mint different page IDs. */
 export function layoutFrameApplyErrors({
   before,
   after,
@@ -80,6 +73,7 @@ export function layoutFrameApplyErrors({
   changed,
   fullBuilt,
   rowFieldsTaken,
+  held,
   selectTakenMovedTabs
 }: LayoutFrameApplyObservation): string[] {
   const keys = changed.filter((key) => key in cache && !fullBuilt.includes(key))
@@ -92,7 +86,7 @@ export function layoutFrameApplyErrors({
     ...fullLayoutFrameBuildPatch(before, cache, keys, {
       keepsTerminalLayout: isTabPaneTreeHeld,
       newRowFields: (tabId) => rowFieldsTaken.get(tabId) ?? null,
-      held: { isTabHeld: isDrawnTabHeld, isGroupLayoutHeld: isDrawnGroupLayoutHeld }
+      held
     })
   })
   const whole = fullBuilt.length === 0
@@ -105,7 +99,6 @@ export function layoutFrameApplyErrors({
   )
 }
 
-/** For a shared transport with no test of its own to report to: the flush itself fails. */
 export function throwLayoutFrameApplyErrors(observation: LayoutFrameApplyObservation): void {
   const errors = layoutFrameApplyErrors(observation)
   if (errors.length > 0) {
@@ -117,7 +110,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-/** The first path where the store and the full build differ, with both values there. */
 function firstDifference(path: string, shown: unknown, built: unknown): string {
   if (isObject(shown) && isObject(built)) {
     for (const key of new Set([...Object.keys(shown), ...Object.keys(built)])) {
@@ -130,13 +122,11 @@ function firstDifference(path: string, shown: unknown, built: unknown): string {
 }
 
 export function installLayoutFrameApplyCheck(): {
-  /** Every mismatch found, flush by flush. */
   failures: string[]
   /** Workspaces built in full and from the store's view, in flush order. */
   fullBuilt: string[]
   workspaceBuilt: string[]
   checked: () => number
-  /** Forgets the builds so far, such as startup's. */
   forgetBuilds: () => void
   uninstall: () => void
 } {

@@ -1,23 +1,28 @@
 import type { QuickSubmitPreparationInput } from './quick-submit-input-contract'
 
 import { useCallback } from 'react'
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import {
-  getSetupConfig,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider
 } from '@/lib/new-workspace'
+import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import {
+  deriveWorkspaceSetupState,
+  readWorkspaceSetupInspection,
+  getComposerSetupInspectionCommit
+} from '@/lib/workspace-setup-preparation'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
 export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
   const {
     branchAutoNameRef,
+    branchIntent,
     branchNameOverridePreservesNameEdits,
     checkedHooksContextKey,
     commitHookCheckIfCurrent,
@@ -77,30 +82,21 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         selectedRepoHookContextKey &&
         checkedHooksContextKey !== selectedRepoHookContextKey
       ) {
-        let hookCheck: HookCheckResult
-        try {
-          const hookCheckSettlement = await settleComposerSubmit(
-            loadHookCheckForRepo(repoId),
-            isSubmissionCancelled
-          )
-          if (hookCheckSettlement.status === 'cancelled') {
-            return null
-          }
-          hookCheck = hookCheckSettlement.value
-        } catch {
-          hookCheck = { hasHooks: false, hooks: null, mayNeedUpdate: false }
-        }
-        if (!commitHookCheckIfCurrent(selectedRepoHookContextKey, hookCheck.hooks)) {
+        const outcome = await readWorkspaceSetupInspection(
+          () => loadHookCheckForRepo(repoId),
+          isSubmissionCancelled
+        )
+        const commit = getComposerSetupInspectionCommit(outcome, 'submit')
+        if (!commit || !commitHookCheckIfCurrent(selectedRepoHookContextKey, commit.hooks)) {
           return null
         }
-        submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
-        submitResolvedSetupDecision =
-          setupDecision ??
-          (!submitSetupConfig || setupPolicy === 'ask'
-            ? null
-            : setupPolicy === 'run-by-default'
-              ? 'run'
-              : 'skip')
+        const submitSetup = deriveWorkspaceSetupState(
+          selectedRepo,
+          getSetupConfig(selectedRepo, commit.hooks),
+          setupDecision
+        )
+        submitSetupConfig = submitSetup.setupConfig
+        submitResolvedSetupDecision = submitSetup.resolvedSetupDecision
       }
 
       if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
@@ -194,6 +190,11 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         effectiveBranchNameOverride,
+        branchIntent:
+          smartGitHubResolution.kind === 'none' &&
+          (effectiveBranchNameOverride || branchIntent === 'create-new')
+            ? branchIntent
+            : undefined,
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
@@ -202,6 +203,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     },
     [
       branchNameOverridePreservesNameEdits,
+      branchIntent,
       checkedHooksContextKey,
       commitHookCheckIfCurrent,
       enableIssueAutomation,

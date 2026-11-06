@@ -5,13 +5,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 import type { ReactNode } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
-import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../shared/tab-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-attention-capabilities'
 import {
-  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
@@ -201,7 +201,7 @@ beforeEach(() => {
   transport.bridge.mockReset()
   transport.bridge.mockImplementation(
     async ({ method, params }: { method: string; params?: { address?: string } }) => {
-      if (method === 'orchestration.partyLocation' && transport.olderLookup) {
+      if (method.startsWith('orchestration.party') && transport.olderLookup) {
         return {
           id: 'reply',
           ok: false,
@@ -220,7 +220,7 @@ beforeEach(() => {
                 ? []
                 : [AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY]
             }
-          : method === 'orchestration.partyLocation'
+          : method === 'orchestration.partyOpen'
             ? {
                 location:
                   params?.address === 'term-sender'
@@ -278,7 +278,7 @@ it.each([false, true])(
     for (const link of links) {
       await act(async () => fireEvent.click(link))
       expect(transport.bridge).toHaveBeenCalledWith(
-        expect.objectContaining({ selector: 'server-1', method: 'orchestration.partyLocation' })
+        expect.objectContaining({ selector: 'server-1', method: 'orchestration.partyOpen' })
       )
       expect(transport.bridge).toHaveBeenCalledWith(
         expect.objectContaining({ selector: 'server-1', method: 'session.tabs.activate' })
@@ -290,22 +290,6 @@ it.each([false, true])(
     stopLocal()
   }
 )
-
-it('keeps recorded CLI labels and focuses the exact remote pane from both surfaces', async () => {
-  seed(false, true)
-  await mount()
-  for (const link of screen.getAllByRole('button', { name: 'Recorded sender' })) {
-    await act(async () => fireEvent.click(link))
-    expect(transport.focusRenderer).toHaveBeenLastCalledWith('term-current', 'server-1')
-    expect(transport.bridge).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'server-1',
-        method: 'terminal.focus',
-        params: { terminal: 'term-current', navigation: 'host' }
-      })
-    )
-  }
-})
 
 it('keeps older-host direct-root names and both clicks on the stamped host when the workspace is local', async () => {
   seed()

@@ -55,9 +55,7 @@ export type BrowserOverlayViewport = {
 
 export const EMPTY_BROWSER_ANNOTATIONS: BrowserPageAnnotation[] = []
 
-// Footprint of PendingBrowserAnnotationCard (measured at 352x237), rounded up. The height is only
-// the fallback until the card has measured itself; the width is fixed by the card's CSS, and its
-// rendered width is squeezed by the side it sits on, so measuring it would feed back into the pick.
+// Use fixed CSS width to avoid feedback from side-dependent squeezing; fallback height lasts only until the card measures itself.
 const PENDING_ANNOTATION_CARD_HEIGHT = 240
 const PENDING_ANNOTATION_CARD_WIDTH = 352
 // PopoverContent's sideOffset (10) plus its collisionPadding (12).
@@ -80,14 +78,7 @@ export function createBrowserAnnotationPayload(
 // Preference order: a later side is only reached when every earlier one is too tight.
 const BROWSER_OVERLAY_SIDES = ['bottom', 'top', 'right', 'left'] as const
 
-/**
- * Side of the target whose free band can hold the card.
- *
- * Why every side and not just below/above: Radix shifts a popover back along its own axis when
- * the named side cannot hold it, so naming a side that does not fit lands the card *on* the
- * target instead of beside it. A tall target, or a short pane, leaves neither vertical band deep
- * enough — the horizontal ones usually still are.
- */
+/** Try all sides: Radix shifts a card back over its target if the chosen free band cannot hold it. */
 function pickBrowserOverlaySide(
   space: Record<BrowserOverlaySide, number>,
   cardHeight: number
@@ -101,10 +92,7 @@ function pickBrowserOverlaySide(
     left: space.left / horizontal
   }
   const fitting = BROWSER_OVERLAY_SIDES.find((side) => room[side] >= 1)
-  // No band fits, so overlap is unavoidable and Radix still flips and shifts to keep the card
-  // on screen — the deeper vertical band only makes it overlap least. Letting it cover part of
-  // the target beats the alternatives (anchoring to the target rect, or turning collision
-  // handling off), which both park ~95% of the composer outside the pane.
+  // When nothing fits, choose the deeper vertical band and let Radix keep the card on screen rather than disabling collisions.
   return fitting ?? (room.bottom >= room.top ? 'bottom' : 'top')
 }
 

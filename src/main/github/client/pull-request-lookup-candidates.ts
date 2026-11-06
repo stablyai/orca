@@ -5,7 +5,6 @@ import {
   resolveGitHubApiRepositoryCandidates,
   type GitHubApiRepository
 } from '../github-api-repository'
-// resolvePrWorkItemSource list semantics.
 export async function resolvePullRequestLookupCandidates(
   repoPath: string,
   preference: IssueSourcePreference | undefined,

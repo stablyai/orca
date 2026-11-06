@@ -26,8 +26,7 @@ export function useConnectionPathStatus(hostId: string | undefined): {
   )
 }
 
-// Both inputs classifyConnection needs about a relay recovery, read from one
-// subscription so a screen cannot render half of the escalation.
+// Read relay recovery inputs from one subscription so screens cannot render half an escalation.
 export function useRelayRecoveryStatus(hostId: string | undefined): {
   pendingPath: MobileConnectionPath | null
   pairingRejected: boolean
@@ -59,3 +58,15 @@ function useHostMetric<T>(
   }, [context, hostId])
   return hostId ? read(context, hostId) : fallback
 }
+
+// The inputs a screen header gives classifyConnection beside the client state, re-read on host state and path
+// changes, so a view under that header shows the same steady verdict.
+export function useHostConnectionInputs(hostId: string | undefined) {
+  return {
+    reconnectAttempts: useReconnectAttempt(hostId),
+    lastConnectedAt: useLastConnectedAt(hostId),
+    ...useRelayRecoveryStatus(hostId)
+  }
+}
+
+export type HostConnectionInputs = ReturnType<typeof useHostConnectionInputs>

@@ -7,18 +7,12 @@ import {
   type ReactElement
 } from 'react'
 
-/** How the page schedules one frame. `requestAnimationFrame` on a document, a fake in a test. */
 export type PageFrameScheduler = {
   readonly requestFrame: (callback: () => void) => number
   readonly cancelFrame: (handle: number) => void
 }
 
-/**
- * Calls `report` once the browser has painted the commit this was scheduled from, and answers with
- * the cancel for the frame still owed. Two frames, not one: an effect runs with the DOM mutated and
- * the frame not yet painted, so the first callback scheduled from it can still run ahead of that
- * paint. Being early uncovers the view over a tree nothing has drawn.
- */
+// Wait two animation frames: the first callback can precede the committed DOM’s paint, uncovering an undrawn tree. Return cancellation for any report still owed.
 export function reportAfterFirstPaint(
   scheduler: PageFrameScheduler,
   report: () => void
@@ -30,8 +24,7 @@ export function reportAfterFirstPaint(
       report()
     })
   })
-  // Answers whether it took a report back, which is the only thing that frees a caller's latch: a
-  // report already delivered is not one the next screen gets to spend again.
+  // Free the latch only if cancellation reclaimed an undelivered report; a delivered report cannot be spent twice.
   return () => {
     if (settled) {
       return false
@@ -42,20 +35,12 @@ export function reportAfterFirstPaint(
   }
 }
 
-/**
- * How a route screen says it committed. Defaulted to nothing: these screens also render natively
- * and in unit trees, where no shell is holding a frame over them.
- */
+// Default to no report for native/unit trees, which have no shell cover to release.
 const RouteScreenPaintContext = createContext<RouteScreenPaintReporter>(() => () => undefined)
 
-/** Reports one screen's commit and answers with the take-back for the frame it is still owed. */
 export type RouteScreenPaintReporter = () => () => void
 
-/**
- * The page's one reporter. Once per document, because the shell latches the first frame — but only
- * a report actually posted spends that one, so a screen unmounted or replaced before its frame
- * landed leaves the cover up for whichever screen the document settles on.
- */
+// Report once per document only after posting; cancelled/replaced screens leave that opportunity to the screen that ultimately paints.
 export function createRouteScreenPaintReporter(
   scheduler: PageFrameScheduler,
   post: () => void
@@ -66,8 +51,7 @@ export function createRouteScreenPaintReporter(
     if (posted) {
       return () => undefined
     }
-    // The newest commit is the one the view is about to show, so it takes over the frame an
-    // earlier screen is still owed.
+    // Newest commit takes over a pending report; the earlier screen may remain mounted underneath.
     owed?.()
     const cancel = reportAfterFirstPaint(scheduler, () => {
       owed = null
@@ -90,20 +74,14 @@ export function RouteScreenPaintProvider({
   )
 }
 
-/**
- * The screen behind a deferred route, reporting the commit that drew it. Applied where the route
- * manifest resolves the chunk, because the wrapper above the router commits with the suspense
- * fallback while that chunk is still arriving, and a report scheduled there uncovers the shell's
- * view over an empty body.
- */
+// Report at resolved route chunks, not the wrapper above suspense, whose empty fallback commit would uncover a blank body.
 export function withRouteScreenPaintReport(module: {
   readonly default: ComponentType<Record<string, unknown>>
 }): { default: ComponentType<Record<string, unknown>> } {
   const Screen = module.default
   function RouteScreenPaintReport(props: Record<string, unknown>): ReactElement {
     const report = useContext(RouteScreenPaintContext)
-    // Returned as the cleanup: a route swapped out before its frame lands would otherwise uncover
-    // the view on the way out, over the fallback of whatever replaced it.
+    // Cancel on route replacement before its frame; stale cleanup must not uncover the new fallback.
     useEffect(() => report(), [report])
     return <Screen {...props} />
   }

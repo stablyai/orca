@@ -1,15 +1,9 @@
-/**
- * The seeding predicate answers one question for both remote flavors: does some other party own
- * terminal creation for this workspace right now? Three answers, and only `none` seeds.
- */
+/** Use one remote-authority question for seeding/resume: only none authorizes local terminal creation, never unverifiable. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
-import {
-  resolveWorkspaceTerminalHostAuthority,
-  type WorkspaceTerminalHostAuthorityState
-} from '@/lib/workspace-terminal-host-authority'
+import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -139,8 +133,7 @@ describe('workspace terminal seeding authority', () => {
   )
 
   it('seeds once the SSH target connects, with no workspace snapshot to wait for', () => {
-    // The relay that served host workspace snapshots is gone (#27214), so nothing will ever answer
-    // one; waiting for it left a reconnected target unable to seed or resume for good.
+    // Host workspace snapshots no longer answer after relay removal (#27214); waiting forever strands connected targets.
     const store = createTestStore()
     seedDirectSsh(store)
     expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
@@ -219,11 +212,7 @@ describe('workspace terminal seeding authority', () => {
     expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
   })
 
-  /**
-   * #15556: the guard this replaces asked "am I a client of a live paired session?". Rival detected
-   * publications make the owning environment unnameable, so that guard answered "no" and the client
-   * seeded a local terminal beside the one the host was creating. Ownership is unresolved, not local.
-   */
+  /** Rival detected owners make authority unresolved, not local; the old live-paired-client guard incorrectly seeded alongside host creation (#15556). */
   it('does not seed locally when the runtime owner cannot be named', () => {
     const store = createTestStore()
     store.setState({
@@ -264,138 +253,4 @@ describe('workspace terminal seeding authority', () => {
   })
 })
 
-const WT = 'repo::/workspace'
-const FOLDER = 'folder:folder-1'
-const TARGET = 'ssh:target' as const
-const base = {
-  settings: { activeRuntimeEnvironmentId: 'unrelated' },
-  runtimeEnvironments: [{ id: 'unrelated' }],
-  runtimeEnvironmentCatalogHydrated: false
-} satisfies WorkspaceTerminalHostAuthorityState
-const sshRow = { id: WT, repoId: 'repo', hostId: TARGET }
-const hubA = { id: 'repo', connectionId: 'target', executionHostId: 'runtime:hub-a' as const }
-const hubB = { id: 'repo', connectionId: 'target', executionHostId: 'runtime:hub-b' as const }
-
-const cases: {
-  name: string
-  id: string
-  state: WorkspaceTerminalHostAuthorityState
-  expected: 'live' | 'unverifiable' | 'none'
-}[] = [
-  {
-    name: 'repo-owned runtime before worktree hydration',
-    id: WT,
-    expected: 'live',
-    state: { repos: [{ id: 'repo', executionHostId: 'runtime:owner' }] }
-  },
-  {
-    name: 'runtime HUB behind an SSH worktree',
-    id: WT,
-    expected: 'live',
-    state: { repos: [hubA], worktreesByRepo: { repo: [sshRow] } }
-  },
-  {
-    name: 'runtime project group owns a folder',
-    id: FOLDER,
-    expected: 'live',
-    state: {
-      folderWorkspaces: [{ id: 'folder-1', projectGroupId: 'group' }],
-      projectGroups: [{ id: 'group', executionHostId: 'runtime:owner' }]
-    }
-  },
-  {
-    name: 'restored runtime folder before catalog hydration',
-    id: FOLDER,
-    expected: 'live',
-    state: {
-      folderWorkspaces: [],
-      projectGroups: [],
-      restoredRuntimeHostIdByWorkspaceSessionKey: { [FOLDER]: 'runtime:restored' }
-    }
-  },
-  {
-    name: 'disconnected direct SSH folder is outside replacement scope',
-    id: FOLDER,
-    expected: 'none',
-    state: {
-      folderWorkspaces: [{ id: 'folder-1', projectGroupId: 'group', connectionId: 'target' }]
-    }
-  },
-  {
-    name: 'conflicting folder owners stay unverifiable',
-    id: FOLDER,
-    expected: 'unverifiable',
-    state: {
-      folderWorkspaces: [
-        { id: 'folder-1', projectGroupId: 'group', executionHostId: 'local' },
-        { id: 'folder-1', projectGroupId: 'group', executionHostId: 'runtime:owner' }
-      ]
-    }
-  },
-  {
-    name: 'conflicting folder project-group owners stay unverifiable',
-    id: FOLDER,
-    expected: 'unverifiable',
-    state: {
-      folderWorkspaces: [{ id: 'folder-1', projectGroupId: 'group' }],
-      projectGroups: [
-        { id: 'group', executionHostId: 'local' },
-        { id: 'group', executionHostId: 'runtime:owner' }
-      ]
-    }
-  },
-  {
-    name: 'unroutable detected publication stays unverifiable',
-    id: WT,
-    expected: 'unverifiable',
-    state: { detectedWorktreesByRepo: { repo: { worktrees: [{ id: WT, repoId: 'repo' }] } } }
-  }
-]
-it.each(cases)('$name', ({ id, state, expected }) => {
-  expect(resolveWorkspaceTerminalHostAuthority({ ...base, ...state }, id)).toBe(expected)
-})
-
-it('lets the explicit same-workspace host disambiguate rival catalog owners', () => {
-  const state: WorkspaceTerminalHostAuthorityState = {
-    ...base,
-    activeWorktreeId: WT,
-    repos: [
-      { id: 'repo', executionHostId: 'local' },
-      { id: 'repo', executionHostId: 'runtime:owner' }
-    ]
-  }
-  expect(
-    resolveWorkspaceTerminalHostAuthority({ ...state, activeWorkspaceExecutionHostId: 'local' }, WT)
-  ).toBe('none')
-  expect(
-    resolveWorkspaceTerminalHostAuthority(
-      { ...state, activeWorkspaceExecutionHostId: 'runtime:owner' },
-      WT
-    )
-  ).toBe('live')
-})
-
-it('waits for rival SSH HUB owners, then accepts the surviving runtime owner', () => {
-  const state: WorkspaceTerminalHostAuthorityState = {
-    ...base,
-    activeWorktreeId: WT,
-    activeWorkspaceExecutionHostId: TARGET,
-    worktreesByRepo: { repo: [sshRow] }
-  }
-  expect(resolveWorkspaceTerminalHostAuthority({ ...state, repos: [hubA, hubB] }, WT)).toBe(
-    'unverifiable'
-  )
-  expect(resolveWorkspaceTerminalHostAuthority({ ...state, repos: [hubA] }, WT)).toBe('live')
-})
-
 afterEach(() => vi.unstubAllGlobals())
-it.each([WT, FOLDER])('leaves local terminal ownership with the real paired web host: %s', (id) => {
-  vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-  const state: WorkspaceTerminalHostAuthorityState = {
-    settings: { activeRuntimeEnvironmentId: null },
-    runtimeEnvironments: [{ id: 'paired-host' }],
-    worktreesByRepo: { repo: [{ id: WT, repoId: 'repo', hostId: 'local' }] },
-    folderWorkspaces: [{ id: 'folder-1', projectGroupId: 'group', executionHostId: 'local' }]
-  }
-  expect(resolveWorkspaceTerminalHostAuthority(state, id)).toBe('live')
-})

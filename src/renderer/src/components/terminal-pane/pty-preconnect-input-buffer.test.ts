@@ -182,8 +182,7 @@ describe('createPtyPreconnectInputBuffer', () => {
   })
 
   it('settles retained acknowledged input when the spawn is abandoned before connect', async () => {
-    // Regression: an abandoned deferred spawn never reaches connect(), so nothing
-    // drained the buffer and a paste awaiting sendInputAccepted hung forever.
+    // Abandoned deferred spawns never connect; disposal must settle buffered accepted writes instead of hanging paste.
     const buffer = createPtyPreconnectInputBuffer()
     const pastePending = buffer.enqueueAccepted('pasted text', 'driving')
     let settled = false

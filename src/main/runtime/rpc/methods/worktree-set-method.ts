@@ -1,6 +1,6 @@
+import { WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
-import { WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 import { defineMethod } from '../core'
 
 export const WORKTREE_SET_METHOD = defineMethod({
@@ -8,8 +8,20 @@ export const WORKTREE_SET_METHOD = defineMethod({
   permission: 'workspace',
   params: WorktreeSet,
   handler: async (params, { runtime }) => {
+    const acknowledgement =
+      params.acknowledgeAttention === true && params.isUnread === false
+        ? await runtime
+            .prepareWorkspaceAttentionAcknowledgement(params.worktree)
+            .catch((error: unknown) => {
+              console.warn('[notifications] Could not capture workspace read boundary', error)
+              return undefined
+            })
+        : undefined
     const worktree = await runtime.updateManagedWorktreeMeta(params.worktree, {
       displayName: params.displayName,
+      ...(params.firstAgentMessageRenameError === null
+        ? { firstAgentMessageRenameError: null }
+        : {}),
       ...(params.displayName !== undefined
         ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
         : {}),
@@ -47,15 +59,22 @@ export const WORKTREE_SET_METHOD = defineMethod({
       collectionIds: params.collectionIds,
       pushTarget: params.pushTarget,
       diffComments: params.diffComments,
+      ...(params.diffCommentsBase !== undefined
+        ? { diffCommentsBase: params.diffCommentsBase }
+        : {}),
       mobileDiffReview: params.mobileDiffReview,
       lineage:
-        params.parentWorktree || params.noParent === true
+        params.parentWorktree || params.crossStoreParent || params.noParent === true
           ? {
               parentWorktree: params.parentWorktree,
+              ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
               noParent: params.noParent === true
             }
           : undefined
     })
+    if (acknowledgement) {
+      runtime.acknowledgeNotificationAttention(acknowledgement)
+    }
     const warning = getWorkspaceStatusWarning(
       params.workspaceStatus,
       () => runtime.getUIState().workspaceStatuses
