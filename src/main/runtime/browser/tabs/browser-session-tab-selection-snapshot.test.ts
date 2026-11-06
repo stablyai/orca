@@ -57,6 +57,25 @@ describe('applyBrowserSessionTabSelection', () => {
     expect(snapshot.tabs.find((tab) => tab.id === 'page-new')?.isActive).toBe(true)
   })
 
+  it('selects the owning group when a host switch targets an existing page in another group', () => {
+    const before = makeSnapshot()
+    before.tabGroups = [
+      { id: 'group-left', tabOrder: ['terminal-tab'], activeTabId: 'terminal-tab' },
+      { id: 'group-right', tabOrder: ['page-new'], activeTabId: 'page-new' }
+    ]
+
+    const { snapshot } = applyBrowserSessionTabSelection({
+      snapshot: before,
+      tabId: 'page-new',
+      focusesHost: true
+    })
+
+    expect(snapshot.activeGroupId).toBe('group-right')
+    expect(snapshot.activeTabId).toBe('page-new')
+    expect(snapshot.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual(['page-new'])
+    expect(snapshot.tabGroups?.[0]?.activeTabId).toBe('terminal-tab')
+  })
+
   it('leaves every shared selection alone for a caller-addressed create', () => {
     const before = makeSnapshot()
     const { snapshot } = select({ focusesHost: false })
