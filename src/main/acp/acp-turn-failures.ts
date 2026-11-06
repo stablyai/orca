@@ -64,18 +64,6 @@ export function mergeAcpTurnFailureEvidence(
   }
 }
 
-/** A prompt the agent refused outright, in the words a send's rejection uses. */
-export function acpPromptRefusalFact(
-  refusal: string,
-  notSignedIn: boolean
-): SubmissionRejectionFact {
-  const detail = providerDiagnostic(refusal, 'person')
-  return agentSessionFailureFact(
-    notSignedIn ? 'notSignedIn' : 'providerRejected',
-    detail ? { detail } : {}
-  )
-}
-
 /** Agents report their own refusals as errors too; only these causes make a failure the provider's. */
 export function acpProviderFailed(evidence: AcpTurnFailureEvidence): boolean {
   return (

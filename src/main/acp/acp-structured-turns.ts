@@ -13,12 +13,11 @@ import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { acpWithdrawnSteer } from './acp-model-command'
 import { acpCompactPrompt } from './acp-compaction-turn'
 import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
-import { acpPromptRefusalFact } from './acp-turn-failures'
+import { acpPromptRejection } from './acp-turn-failures'
 import type { ContentBlock } from './generated/acp-protocol.generated'
 
 export type AcpDispatchSettlement = { clientMessageId: string } & (
@@ -53,6 +52,8 @@ export class AcpStructuredTurns {
   private stopAt: number | null = null
   // Steers still preparing their controls; they hold their place like queued steers.
   private reservedSteers = 0
+  // Counts Stops: finish() clears stopAt before a waiting steer can see it.
+  private withdrawals = 0
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {}
 
@@ -134,7 +135,8 @@ export class AcpStructuredTurns {
 
   /** A steer whose controls must run as a prompt first: answers ahead of it are cancelled as they
    *  start, as for any newer steer, and it waits for idle before preparing. */
-  async reserveSteer(signal?: AbortSignal): Promise<void> {
+  async reserveSteer(signal?: AbortSignal): Promise<'stopped' | 'ended' | null> {
+    const withdrawals = this.withdrawals
     this.reservedSteers += 1
     try {
       this.cancelForSteer()
@@ -143,9 +145,8 @@ export class AcpStructuredTurns {
       this.reservedSteers -= 1
     }
     // A Stop or teardown while it waited withdraws it like any held steer: nothing more is sent.
-    if (this.stopAt !== null || this.ended) {
-      throw acpWithdrawnSteer(this.deps.agentName, this.ended)
-    }
+    const stopped = this.withdrawals !== withdrawals
+    return this.ended ? 'ended' : stopped ? 'stopped' : null
   }
 
   dispatch(send: Send): void {
@@ -196,6 +197,7 @@ export class AcpStructuredTurns {
   }
 
   private withdrawSteers(): boolean {
+    this.withdrawals += 1
     const withdrawn = this.steers.splice(0)
     for (const send of withdrawn) {
       this.reject(
@@ -281,8 +283,8 @@ export class AcpStructuredTurns {
     // Also retires the proof of a model the agent turned out not to have.
     const noModel = this.deps.modelRefusal?.(error)
     if (refusal !== null) {
-      const notSignedIn = lane.translator.authenticationRequired(error)
-      this.reject(send.clientMessageId, noModel ?? acpPromptRefusalFact(refusal, notSignedIn))
+      const signedOut = lane.translator.authenticationRequired(error)
+      this.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
     }
