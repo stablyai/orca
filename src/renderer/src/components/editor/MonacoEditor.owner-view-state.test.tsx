@@ -26,7 +26,9 @@ vi.mock('@/store', () => {
     useAppStore: Object.assign(
       (selector: (state: AppState) => unknown) => useStore(getStore(), selector),
       {
-        getState: () => getStore().getState()
+        getState: () => getStore().getState(),
+        getInitialState: () => getStore().getInitialState(),
+        subscribe: (listener: () => void) => getStore().subscribe(listener)
       }
     )
   }
