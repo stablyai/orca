@@ -41,6 +41,7 @@ export function agentLaunchSettingsRollbackUpdates(
     'agentDefaultArgs',
     'agentLaunchChoices',
     'agentPermissionOverrides',
+    'agentPermissionGuardSkip',
     'agentDefaultEnv'
   ] as const
   const changed = new Set(fields.flatMap((field) => Object.keys(updates[field] ?? {})))

@@ -117,3 +117,46 @@ describe('host launch settings form', () => {
     })
   })
 })
+
+describe("skipping Claude Code's built-in refusals", () => {
+  const typedHost = (choice: 'full-access' | 'ask') =>
+    projectAgentLaunchSettings({
+      agentPermissionDefault: choice,
+      agentPermissionGuardSkip: {},
+      agentDefaultArgs: {}
+    })
+  const openClaudePermissions = async (choice: 'full-access' | 'ask') => {
+    transport.read.mockResolvedValue(typedHost(choice))
+    transport.mutate.mockResolvedValue(typedHost(choice))
+    render(pane(21))
+    const [claudeRow] = await screen.findAllByRole('button', { name: 'Expand agent settings' })
+    if (!claudeRow) {
+      throw new Error('missing agent row')
+    }
+    fireEvent.click(claudeRow)
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Claude permissions' }), {
+      key: 'ArrowDown'
+    })
+  }
+  const optIn = () => screen.queryByRole('menuitemcheckbox')
+
+  it('offers the opt-in under Full access and sends it off by default', async () => {
+    await openClaudePermissions('full-access')
+    const checkbox = await screen.findByRole('menuitemcheckbox')
+    expect(checkbox.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(checkbox)
+    await waitFor(() => expect(transport.mutate).toHaveBeenCalled())
+    expect(transport.mutate.mock.calls[0]?.[1]).toEqual({
+      type: 'permission-guard-skip',
+      agent: 'claude',
+      enabled: true
+    })
+  })
+
+  // Claude Code ignores the variable in any other mode, so there is nothing to offer there.
+  it('hides the opt-in under Ask', async () => {
+    await openClaudePermissions('ask')
+    await screen.findByRole('menuitemradio', { name: /Full access/ })
+    expect(optIn()).toBeNull()
+  })
+})

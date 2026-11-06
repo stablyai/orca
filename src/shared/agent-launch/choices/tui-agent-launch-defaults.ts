@@ -6,13 +6,16 @@ import {
 import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from '../../global-settings-types'
 import { isTuiAgent } from '../catalog/tui-agent-config'
+import {
+  agentPermissionGuardSkipEnv,
+  normalizeAgentPermissionGuardSkip
+} from '../permissions/agent-permission-guard-skip'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from '../permissions/tui-agent-permissions'
 import {
   readLaunchPermissionChoice,
   type AgentPermissionChoice,
   agentPermissionEnv,
   hasTypedAgentPermission,
-  PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
   sanitizeAgentPermissionUpdates
 } from '../permissions/tui-agent-permission-choice'
@@ -39,6 +42,7 @@ export type AgentLaunchProfileSettings = Partial<
     | 'agentLaunchChoices'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
+    | 'agentPermissionGuardSkip'
     | 'terminalWindowsShell'
   >
 >
@@ -163,6 +167,11 @@ export function sanitizeAgentLaunchProfileUpdates(
   if ('agentLaunchChoices' in updates) {
     target.agentLaunchChoices = normalizeAgentLaunchChoices(updates.agentLaunchChoices)
   }
+  if ('agentPermissionGuardSkip' in updates) {
+    target.agentPermissionGuardSkip = normalizeAgentPermissionGuardSkip(
+      updates.agentPermissionGuardSkip
+    )
+  }
   sanitizeAgentPermissionUpdates(target, updates)
 }
 
@@ -255,57 +264,13 @@ export function resolveTuiAgentLaunchEnv(
     }
     return Object.fromEntries(entries)
   }
-  const added = Object.entries(
-    agentPermissionEnv(agent, resolveAgentPermission(agent, settings).choice)
-  ).filter(([name]) => !own?.some(([key]) => permissionEnvNameMatches(key, name, platform)))
+  const choice = resolveAgentPermission(agent, settings).choice
+  // Orca's entries stay out of `visitBaseEntry`, so a settings write never stores them as the user's.
+  const added = Object.entries({
+    ...agentPermissionEnv(agent, choice),
+    ...agentPermissionGuardSkipEnv(agent, choice, settings)
+  }).filter(([name]) => !own?.some(([key]) => permissionEnvNameMatches(key, name, platform)))
   return Object.fromEntries(added.length ? [...added, ...(own ?? [])] : (own ?? []))
-}
-
-/** Publish composed args/env for older clients that infer permission from text; explicit keys prevent fallback to their built-in defaults. */
-export function composeAgentLaunchProfile(
-  settings: AgentLaunchProfileSettings,
-  platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform()
-): Required<Pick<AgentLaunchProfileSettings, 'agentDefaultArgs' | 'agentDefaultEnv'>> {
-  if (!hasTypedAgentPermission(settings) && settings.agentLaunchChoices === undefined) {
-    return {
-      agentDefaultArgs: { ...settings.agentDefaultArgs },
-      agentDefaultEnv: { ...settings.agentDefaultEnv }
-    }
-  }
-  const argAgents = new Set([
-    ...Object.keys(settings.agentDefaultArgs ?? {}),
-    ...Object.keys(settings.agentLaunchChoices ?? {}),
-    ...PERMISSION_CHOICE_AGENTS
-  ])
-  const envAgents = new Set([
-    ...Object.keys(settings.agentDefaultEnv ?? {}),
-    ...PERMISSION_CHOICE_AGENTS.filter(
-      (agent) => Object.keys(agentPermissionEnv(agent, 'full-access')).length > 0
-    )
-  ])
-  return {
-    agentDefaultArgs: Object.fromEntries(
-      [...argAgents].map((agent) => [
-        agent,
-        resolveTuiAgentLaunchArgs(
-          agent,
-          settings,
-          undefined,
-          resolveStartupShell(
-            platform ?? agentPermissionHostPlatform(),
-            resolveLocalWindowsAgentStartupShell({
-              platform: platform ?? agentPermissionHostPlatform(),
-              isRemote: false,
-              terminalWindowsShell: settings.terminalWindowsShell
-            })
-          )
-        )
-      ])
-    ),
-    agentDefaultEnv: Object.fromEntries(
-      [...envAgents].map((agent) => [agent, resolveTuiAgentLaunchEnv(agent, settings, platform)])
-    )
-  }
 }
 
 /** Resume only the recorded recipe; defaults would grant bypass to unrecorded manual launches that never used it. */

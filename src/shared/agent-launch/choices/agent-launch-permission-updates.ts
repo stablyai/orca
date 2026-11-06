@@ -14,8 +14,8 @@ import type {
   AgentLaunchSettingsMutation,
   AgentLaunchSettingsSource
 } from './agent-launch-settings'
+import { composeAgentLaunchProfile } from './agent-launch-legacy-publication'
 import {
-  composeAgentLaunchProfile,
   normalizeTuiAgentArgsRecord,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv

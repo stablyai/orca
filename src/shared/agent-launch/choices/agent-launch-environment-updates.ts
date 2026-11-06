@@ -7,6 +7,7 @@ import type {
   AgentLaunchSettingsSource
 } from './agent-launch-settings'
 import { resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
+import { withoutAgentPermissionGuardSkipEnv } from '../permissions/agent-permission-guard-skip'
 import {
   agentPermissionEnv,
   applyAgentPermissionOverrides,
@@ -78,8 +79,12 @@ export function agentEnvironmentMutationUpdates(
   >,
   platform: NodeJS.Platform
 ): AgentLaunchSettingsSource {
-  // Edits the env the terminal gets, so removing Goose's published bypass entry means own.
-  const env = { ...resolveTuiAgentLaunchEnv(mutation.agent, settings, platform) }
+  // Edits the env the terminal gets, so removing Goose's published bypass entry means own. Orca's
+  // guard-skip entry is never published, so it must not be stored here as one of the user's either.
+  const env = withoutAgentPermissionGuardSkipEnv(
+    resolveTuiAgentLaunchEnv(mutation.agent, settings, platform),
+    platform
+  )
   // Windows environment names are case insensitive on the execution host.
   for (const name of Object.keys(env)) {
     if (

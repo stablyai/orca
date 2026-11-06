@@ -16,6 +16,7 @@ const launchSettings = new Set([
   'agentDefaultEnv',
   'agentPermissionDefault',
   'agentPermissionOverrides',
+  'agentPermissionGuardSkip',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
   'terminalWindowsShell',

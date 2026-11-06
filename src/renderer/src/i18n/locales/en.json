@@ -1020,7 +1020,9 @@
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
-      "sameAsChoice": "Same as {{agent}} · {{choice}}"
+      "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "permissionGuardSkip": "Also skip Claude Code’s built-in refusals",
+      "permissionGuardSkipExplanation": "Claude Code refuses a few commands even with Full access. This removes those refusals too."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",

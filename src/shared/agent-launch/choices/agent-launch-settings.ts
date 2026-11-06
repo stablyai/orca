@@ -13,8 +13,8 @@ import {
   buildAgentAvailabilitySettingsUpdate,
   normalizeDisabledTuiAgents
 } from '../catalog/tui-agent-selection'
+import { composeAgentLaunchProfile } from './agent-launch-legacy-publication'
 import {
-  composeAgentLaunchProfile,
   normalizeTuiAgentArgsRecord,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -23,6 +23,11 @@ import {
   hasTypedAgentPermission,
   type AgentPermissionChoice
 } from '../permissions/tui-agent-permission-choice'
+import {
+  agentSupportsPermissionGuardSkip,
+  applyAgentPermissionGuardSkip,
+  normalizeAgentPermissionGuardSkip
+} from '../permissions/agent-permission-guard-skip'
 import { liftAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
 import {
   legacyArgumentsUpdates,
@@ -52,6 +57,7 @@ export type AgentLaunchSettingsSource = Partial<
     | 'agentDefaultEnv'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
+    | 'agentPermissionGuardSkip'
     | 'nativeChatPermissionMode'
     | 'terminalWindowsShell'
   >
@@ -75,6 +81,9 @@ export type AgentLaunchSettings = {
     overrides: Partial<Record<TuiAgent, AgentPermissionChoice>>
     userArgs: Partial<Record<TuiAgent, string>>
   }
+  /** Agents opted in to dropping Claude Code's built-in refusals under Full access. Always sent by
+   *  hosts that have the opt-in, so its absence is what hides the control on older ones. */
+  agentPermissionGuardSkip?: Partial<Record<TuiAgent, true>>
 }
 
 export type AgentLaunchSettingsMutation =
@@ -104,6 +113,8 @@ export type AgentLaunchSettingsMutation =
   | { type: 'launch-choices'; agent: TuiAgent; patch?: AgentChoicePatch; userArgs?: string }
   | { type: 'environment-set'; agent: TuiAgent; name: string; value: string }
   | { type: 'environment-remove'; agent: TuiAgent; name: string }
+  /** Claude-family only, and inert unless that agent's permission resolves to Full access. */
+  | { type: 'permission-guard-skip'; agent: TuiAgent; enabled: boolean }
 
 export function projectAgentLaunchSettings(
   settings: AgentLaunchSettingsSource,
@@ -150,6 +161,9 @@ export function projectAgentLaunchSettings(
       : {}),
     ...(hasTypedAgentPermission(settings)
       ? {
+          agentPermissionGuardSkip: normalizeAgentPermissionGuardSkip(
+            settings.agentPermissionGuardSkip
+          ),
           agentPermission: {
             default: settings.agentPermissionDefault ?? 'own',
             overrides: { ...settings.agentPermissionOverrides },
@@ -198,6 +212,11 @@ export function agentLaunchSettingsMutationUpdates(
         throw new Error('This host stores permissions in launch arguments')
       }
       return permissionUpdates(settings, mutation)
+    case 'permission-guard-skip':
+      if (!agentSupportsPermissionGuardSkip(mutation.agent)) {
+        throw new Error('This agent has no built-in refusals to skip')
+      }
+      return applyAgentPermissionGuardSkip(settings, mutation.agent, mutation.enabled)
     case 'permissions': {
       const typed = hasTypedAgentPermission(settings)
       const terminal = (args: Parameters<typeof applyAgentPermissionMode>[0]) =>
