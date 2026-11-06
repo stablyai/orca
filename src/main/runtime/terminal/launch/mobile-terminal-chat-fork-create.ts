@@ -168,6 +168,9 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           afterDesktopTabId,
           targetGroupId,
           viewMode: 'terminal',
+          ...(opts.terminalColorQueryReplies
+            ? { terminalColorQueryReplies: opts.terminalColorQueryReplies }
+            : {}),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           presentation: 'background',
           signal: opts.signal

@@ -14,8 +14,11 @@ import {
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { windowBackdropActive } from '@/lib/window-backdrop'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { composeActiveTerminalTheme } from './appearance/terminal-appearance'
 import { resolvePaneKeyboardProtocolAgent } from './input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -147,9 +150,28 @@ export function createTerminalPaneManagerOptions(
         executionHostId: owner?.executionHostId ?? UNRESOLVED_OWNER_HOST_ID,
         tuiAgent: knownTuiAgent
       }
+      const backdropActive = windowBackdropActive()
+      const initialAppearance = currentSettings
+        ? resolveEffectiveTerminalAppearance(currentSettings)
+        : null
+      const initialTheme =
+        currentSettings && initialAppearance
+          ? composeActiveTerminalTheme(
+              initialAppearance.theme,
+              backdropActive
+                ? { ...currentSettings, terminalBackgroundOpacity: 0 }
+                : currentSettings
+            )
+          : null
+      const allowTransparency =
+        backdropActive ||
+        (currentSettings?.terminalBackgroundOpacity !== undefined &&
+          currentSettings.terminalBackgroundOpacity < 1)
       return {
         ...buildWindowsPtyCompatibilityOptions(ptyBackendContext),
         ...buildTerminalKeyboardProtocolOptions(ptyBackendContext),
+        ...(initialTheme ? { theme: initialTheme } : {}),
+        ...(allowTransparency ? { allowTransparency: true } : {}),
         fontSize: currentSettings?.terminalFontSize ?? 14,
         fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
         fontWeight: terminalFontWeights.fontWeight,

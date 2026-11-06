@@ -222,6 +222,7 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.rename',
   'terminal.send',
   'terminal.setDisplayMode',
+  'terminal.setViewerColors',
   'terminal.subscribe',
   'terminal.unsubscribe',
   'terminal.updateViewport',

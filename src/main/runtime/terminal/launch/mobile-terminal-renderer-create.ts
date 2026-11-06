@@ -118,6 +118,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           },
           createMutation: { clientIdentity, id: opts.clientMutationId },
           viewMode: opts.viewMode,
+          ...(opts.terminalColorQueryReplies
+            ? { terminalColorQueryReplies: opts.terminalColorQueryReplies }
+            : {}),
           targetGroupId: opts.targetGroupId,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           signal: opts.signal
@@ -140,6 +143,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
+          ...(opts.terminalColorQueryReplies
+            ? { terminalColorQueryReplies: opts.terminalColorQueryReplies }
+            : {}),
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
             () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
@@ -268,6 +274,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,
+            ...(opts.terminalColorQueryReplies
+              ? { terminalColorQueryReplies: opts.terminalColorQueryReplies }
+              : {}),
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
             launchConfig: startupCommand.launchConfig,

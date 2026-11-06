@@ -65,6 +65,9 @@ export function mountTerminalWebDocument(
 ): TerminalWebDocument {
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)
+  if (start.backgroundColor) {
+    host.style.background = start.backgroundColor
+  }
   host.innerHTML = TERMINAL_DOCUMENT_MARKUP
   const viewport = pageViewport(host)
   const started = startDocumentOrGiveTheHostBack(host, receive, start, viewport)

@@ -16,6 +16,7 @@ import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
 import { isStructuredAgentSessionIdFor } from '../agent-session/structured-agent-session-create'
 import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
+import { TerminalColorQueryReplyColorsParam } from './terminal-unary-params'
 
 const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
 
@@ -106,6 +107,9 @@ export const AgentLaunchFields = z.object({
   /** Forward the launching user’s chat default when host settings belong to someone else (e.g. relayed phone).
    * Explicit surface overrides it; feasibility still decides. Outside replay identity; old hosts use their own default. */
   nativeChatDefault: z.boolean().optional(),
+  /** Paired launcher foreground/background for OSC 10/11 and CSI ?996n replies on newly spawned PTYs.
+   * View-only, outside replay identity; older hosts strip it and answer with their own viewer colors. */
+  terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
   /** Explicit terminal runs CLI; proven-unsupported chat refuses before creation. Inside replay identity; unknown
    * values refuse. Clients must gate on agent.launch.surface.v1 because older hosts strip this field. */
   surface: z.enum(AGENT_LAUNCH_SURFACES).optional()

@@ -1,5 +1,7 @@
 import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { resolveEffectiveMobileTerminalTheme } from './resolve-mobile-terminal-theme'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
 import type {
@@ -32,7 +34,7 @@ export function useTerminalWebViewController(
   transport: TerminalWebViewTransport
 ) {
   const {
-    terminalTheme,
+    terminalTheme: rawTerminalTheme,
     interactionActive = true,
     textScale = 1,
     onWebReady,
@@ -54,6 +56,11 @@ export function useTerminalWebViewController(
     onCellBoxChange
   } = props
   const { coalesce, pingsOnForegroundRecovery, post } = transport
+  const colorScheme = useMobileColorScheme()
+  const terminalTheme = useMemo(
+    () => resolveEffectiveMobileTerminalTheme(rawTerminalTheme, colorScheme),
+    [rawTerminalTheme, colorScheme]
+  )
   const isWebReadyRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)

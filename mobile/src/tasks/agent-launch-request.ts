@@ -14,6 +14,8 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import { getMobileViewerColorQueryReplies } from '../terminal/resolve-mobile-terminal-theme'
+import { getMobileColorScheme } from '../theme/mobile-theme'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
@@ -49,6 +51,7 @@ export function agentLaunchCreateParams(
   return {
     agent,
     ...(operationId ? { operationId } : {}),
+    terminalColorQueryReplies: getMobileViewerColorQueryReplies(getMobileColorScheme()),
     target: { kind: 'create-worktree', create: withoutReservedAgentCreateFields(create) }
   }
 }
@@ -73,6 +76,7 @@ export function agentLaunchExistingParams(args: {
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.surface ? { surface: args.surface } : {}),
     operationId: args.operationId,
+    terminalColorQueryReplies: getMobileViewerColorQueryReplies(getMobileColorScheme()),
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.sessionOptions ? { sessionOptions: { ...args.sessionOptions } } : {}),

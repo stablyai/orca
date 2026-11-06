@@ -28,7 +28,12 @@ export type TerminalDocumentErrorReporter = (
 
 export type TerminalDocumentHostFrame = string | Record<string, unknown> | undefined
 
-export type TerminalDocumentStart = { textScale: number; shown: boolean }
+export type TerminalDocumentStart = {
+  textScale: number
+  shown: boolean
+  backgroundColor?: string
+  foregroundColor?: string
+}
 
 export type TerminalDocumentHostSeams = {
   postToHost: (message: Record<string, unknown>) => void
@@ -67,6 +72,8 @@ declare global {
     __engineErrors?: string[]
     __orcaTerminalTextScale?: unknown
     __orcaTerminalShown?: unknown
+    __orcaTerminalInitialBg?: unknown
+    __orcaTerminalInitialFg?: unknown
   }
   const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
 }
@@ -131,10 +138,17 @@ export function windowHasEngine() {
 }
 
 export function windowStart(): TerminalDocumentStart {
+  if (typeof window === 'undefined') {
+    return { textScale: 1, shown: true }
+  }
   const scale = window.__orcaTerminalTextScale
+  const bg = window.__orcaTerminalInitialBg
+  const fg = window.__orcaTerminalInitialFg
   return {
     textScale: typeof scale === 'number' && scale > 0 ? scale : 1,
-    shown: window.__orcaTerminalShown !== false
+    shown: window.__orcaTerminalShown !== false,
+    ...(typeof bg === 'string' && bg.length > 0 ? { backgroundColor: bg } : {}),
+    ...(typeof fg === 'string' && fg.length > 0 ? { foregroundColor: fg } : {})
   }
 }
 
