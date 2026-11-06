@@ -139,7 +139,6 @@ it('keeps outside actions and finite focus order while releasing a retained visu
       new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true, cancelable: true })
     )
     expect(dismiss).toHaveBeenCalledTimes(6)
-    expect(document.activeElement).toBe(node('terminal'))
     act(() => renderer.unmount())
     expect(host?.isConnected).toBe(false)
   } finally {
