@@ -154,18 +154,29 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   runtime.setRecipeWorkspaceRemoval({
     owns: (params) => ownsRecipeWorkspaceRemoval(app.getPath('userData'), params),
     remove: (params) =>
-      removeRecipeWorkspace(app.getPath('userData'), params, {
-        call: (environmentId, method, payload) =>
-          callRuntimeEnvironment(
-            getRuntimeEnvironmentRegistryRoot(),
-            `id:${environmentId}`,
-            method,
-            payload,
-            600_000
-          ),
-        cleanup: (runtimeId) =>
-          cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), runtimeId)
-      })
+      runtime.removeRecipeWorkspaceVm(
+        params.worktree.slice('id:'.length),
+        params.hostId ?? '',
+        params.force === true,
+        (orderDestroy) =>
+          removeRecipeWorkspace(
+            app.getPath('userData'),
+            params,
+            {
+              call: (environmentId, method, payload) =>
+                callRuntimeEnvironment(
+                  getRuntimeEnvironmentRegistryRoot(),
+                  `id:${environmentId}`,
+                  method,
+                  payload,
+                  600_000
+                ),
+              cleanup: (runtimeId) =>
+                cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), runtimeId)
+            },
+            orderDestroy
+          )
+      )
   })
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.

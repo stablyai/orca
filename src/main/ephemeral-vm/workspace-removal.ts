@@ -36,7 +36,9 @@ export async function removeRecipeWorkspace(
       params: unknown
     ) => Promise<RuntimeRpcResponse<unknown>>
     cleanup: (runtimeId: string) => Promise<{ status: string; cleanupLastError?: string }>
-  }
+  },
+  /** Orders the destroy behind the workspace's in-flight VM wake or suspend. */
+  orderDestroy: <T>(destroy: () => Promise<T>) => Promise<T> = (destroy) => destroy()
 ): Promise<{ removed: true }> {
   const runtime =
     params.hostId &&
@@ -70,7 +72,7 @@ export async function removeRecipeWorkspace(
       )
     }
   }
-  const cleaned = await ports.cleanup(runtime.id)
+  const cleaned = await orderDestroy(() => ports.cleanup(runtime.id))
   if (cleaned.status !== 'cleaned') {
     throw new Error(
       cleaned.cleanupLastError ?? 'Environment destroy failed. Retry removal to finish cleanup.'

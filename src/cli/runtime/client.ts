@@ -157,6 +157,7 @@ export class RuntimeClient {
       userDataPath: this.userDataPath,
       requestTimeoutMs: this.requestTimeoutMs,
       environmentSelector: this.remote ? this.environmentSelector : null,
+      requestSelection: options?.requestSelection,
       createOwner: () => new RuntimeClient(this.userDataPath, this.requestTimeoutMs, null, null)
     })
     if (ownedRemoval) {

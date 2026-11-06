@@ -30,6 +30,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     advertisedUnserved: [SKILL_INSTALL_CAPABILITY]
   },
   {
+    wiring: 'runtime.setRecipeWorkspaceRemoval',
+    missingOn: 'orcad',
+    reason:
+      'Recipe VMs are provisioned from the desktop; orcad holds none, so it has none to destroy.'
+  },
+  {
     wiring: 'registerSshHandlers',
     missingOn: 'orcad',
     reason: 'orcad has no SSH stack; its SSH target methods refuse with an accurate message.',

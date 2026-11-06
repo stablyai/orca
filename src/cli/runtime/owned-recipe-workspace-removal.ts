@@ -5,7 +5,7 @@ import { WorktreeRemove } from '../../shared/rpc-contract/worktree-params'
 import { WORKTREE_RECIPE_REMOVAL_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeClient } from './client'
-import { RuntimeClientError, type RuntimeRpcSuccess } from './types'
+import { RuntimeClientError, type RuntimeCallOptions, type RuntimeRpcSuccess } from './types'
 
 export async function removeOwnedRecipeWorkspace<TResult>(args: {
   method: string
@@ -13,6 +13,7 @@ export async function removeOwnedRecipeWorkspace<TResult>(args: {
   userDataPath: string
   requestTimeoutMs: number
   environmentSelector: string | null
+  requestSelection?: RuntimeCallOptions['requestSelection']
   createOwner: () => RuntimeClient
 }): Promise<RuntimeRpcSuccess<TResult> | undefined> {
   if (args.environmentSelector && args.method === 'worktree.rm') {
@@ -35,7 +36,11 @@ export async function removeOwnedRecipeWorkspace<TResult>(args: {
           'Update Orca on the provisioning host before removing a recipe workspace.'
         )
       }
-      return owner.call<TResult>(args.method, { ...removal, hostId }, { timeoutMs: 600_000 })
+      // The owner's own status picks the request shape, so --delete-branch survives its capabilities.
+      const selected = args.requestSelection?.paramsForStatus(status.result)
+      args.requestSelection?.onDispatch?.()
+      const request = selected ? WorktreeRemove.parse(selected) : removal
+      return owner.call<TResult>(args.method, { ...request, hostId }, { timeoutMs: 600_000 })
     }
   }
   return undefined
