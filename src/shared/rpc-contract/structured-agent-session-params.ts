@@ -335,7 +335,11 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = OptionsParams.extend({ cursor: JournalCursor.optional() }).strict()
+export const SubscribeParams = OptionsParams.extend({
+  cursor: JournalCursor.optional(),
+  // Not strict: this host ignores flags a newer client adds, so they need no host capability of their own.
+  capabilities: z.object({ textAppend: z.literal(1).optional() }).optional()
+}).strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })

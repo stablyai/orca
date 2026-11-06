@@ -76,7 +76,7 @@ export function useMobileStructuredAgentSession(
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
-    useMobileStructuredAgentState(stateArgs)
+    useMobileStructuredAgentState({ ...stateArgs, textAppend: hostSupport?.textAppend })
 
   const mutate = useMobileStructuredAgentMutate({
     client,
