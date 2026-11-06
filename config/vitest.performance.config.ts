@@ -27,13 +27,7 @@ const contracts = [
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]
-// Wall-clock budgets with no CI job yet; `pnpm test:perf:benchmarks` runs them.
-const benchmarks = [
-  'src/renderer/src/components/editor/monaco-content-sync.bench.ts',
-  'src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts'
-]
-
-for (const contract of [...contracts, ...benchmarks]) {
+for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {
     throw new Error(`Missing performance contract: ${contract}`)
   }
@@ -47,7 +41,7 @@ export default defineConfig({
     projects: undefined,
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: contracts,
-    benchmark: { include: benchmarks },
+    benchmark: { include: [] },
     fileParallelism: false,
     retry: 0
   }

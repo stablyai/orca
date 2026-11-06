@@ -11,7 +11,11 @@ import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
-import { performDiscardPreparedWorktree } from './worktree-preparation-discard'
+import {
+  runStandalonePreparation,
+  type WorktreePreparationOperation
+} from './worktree-preparation-operation'
+import { discardPreparedWorktree } from './worktree-preparation-discard'
 import {
   lockWorktreePreparation,
   verifyWorktreePreparationLock,
@@ -35,14 +39,30 @@ async function isAbsent(worktreePath: string, options: GitWorktreeExecOptions): 
   }
 }
 
-export function addLockedWorktreePreparation(
+export async function addLockedWorktreePreparation(
   repoPath: string,
   worktreePath: string,
   baseRef: string,
   lockReason: string,
-  options: GitWorktreeExecOptions
+  options: GitWorktreeExecOptions,
+  operation?: WorktreePreparationOperation
 ): Promise<string> {
+  if (!operation) {
+    return runStandalonePreparation(options, (owned) =>
+      owned.withMaintenancePaused(() =>
+        addLockedWorktreePreparation(
+          repoPath,
+          worktreePath,
+          baseRef,
+          lockReason,
+          owned.executionOptions(),
+          owned
+        )
+      )
+    )
+  }
   const add = async (lockArgs: string[]): Promise<void> => {
+    options.signal?.throwIfAborted()
     try {
       await gitExecFileAsync(
         [
@@ -64,7 +84,9 @@ export function addLockedWorktreePreparation(
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
     async (capabilities) => {
+      options.signal?.throwIfAborted()
       const initiallyAbsent = await isAbsent(worktreePath, options)
+      options.signal?.throwIfAborted()
       return capabilities.runWithFallback(
         'worktree-add-lock-reason',
         async () => {
@@ -72,20 +94,22 @@ export function addLockedWorktreePreparation(
           try {
             await add(['--lock', '--reason', lockReason])
             added = true
-            return await verifyWorktreePreparationLock(worktreePath, lockReason, options)
+            const lockPath = await verifyWorktreePreparationLock(worktreePath, lockReason, options)
+            operation.setDiscard((cleanupOptions) =>
+              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+            )
+            return lockPath
           } catch (error) {
+            operation.setDiscard()
             // A canceled add can leave its marker; a pre-existing checkout is never ours to remove.
             if (
               (added || initiallyAbsent) &&
               !isUnsupportedWorktreeAddLockReasonError(error) &&
               !(error instanceof WorktreePreparationLockOwnershipError)
             ) {
-              await performDiscardPreparedWorktree(
-                repoPath,
-                worktreePath,
-                options,
-                lockReason
-              ).catch(() => {})
+              operation.setDiscard((cleanupOptions) =>
+                discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+              )
             }
             throw error
           }
@@ -95,19 +119,30 @@ export function addLockedWorktreePreparation(
           try {
             await add([])
             added = true
-            return await lockWorktreePreparation(worktreePath, lockReason, options)
+            const lockPath = await lockWorktreePreparation(
+              worktreePath,
+              lockReason,
+              options,
+              operation
+            )
+            operation.setDiscard((cleanupOptions) =>
+              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+            )
+            return lockPath
           } catch (error) {
+            operation.setDiscard()
             if (
               added &&
               initiallyAbsent &&
               !(error instanceof WorktreePreparationLockOwnershipError)
             ) {
               // Single force reclaims our unlocked add while preserving any competing lock.
-              await performDiscardPreparedWorktree(repoPath, worktreePath, {
-                ...options,
-                signal: undefined,
-                timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-              }).catch(() => {})
+              operation.setDiscard((cleanupOptions) =>
+                discardPreparedWorktree(repoPath, worktreePath, {
+                  ...cleanupOptions,
+                  timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
+                })
+              )
             }
             throw error
           }

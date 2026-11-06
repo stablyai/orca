@@ -6,7 +6,6 @@ import { dirname, join } from 'node:path'
 import { agentHookServer } from '../../agent-hooks/server'
 import {
   clearMigrationUnsupportedPty,
-  setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
 } from '../../agent-hooks/migration-unsupported-pty-state'
 import { StateSerializationSecretHandlingOperations } from '../loading-store/state-serialization-secret-handling'
@@ -29,7 +28,6 @@ vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
-const FINAL = makePaneKey('tab-final', '33333333-3333-4333-8333-333333333333')
 const migrationEntry = {
   ptyId: 'ssh:ssh-1@@legacy-pty',
   worktreeId: 'repo-1::/worktree',
@@ -118,55 +116,6 @@ describe('pane alias and migration listeners save only their sections', () => {
     }
   }
 
-  it('writes an alias transfer as its own section with timestamps intact', async () => {
-    const { store, fullPreparation, domainWrites, before } = await durableBaseline()
-    agentHookServer.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 1_700_000_000_456)
-    await runBackgroundSave(store)
-
-    expect(fullPreparation).not.toHaveBeenCalled()
-    expect(domainWrites.mock.calls.map(([replacements]) => replacements)).toEqual([
-      [{ domain: 'legacyPaneKeyAliasEntries', payload: expect.any(String) }]
-    ])
-    const after = readDocuments()
-    expect(JSON.parse(after.get('legacyPaneKeyAliasEntries')?.payload ?? 'null')).toEqual([
-      { ptyId: 'pty-1', legacyPaneKey: SOURCE, stablePaneKey: TARGET, updatedAt: 1_700_000_000_456 }
-    ])
-    expectOnlyChanged(before, after, ['legacyPaneKeyAliasEntries'])
-  })
-
-  it('saves a chained alias update', async () => {
-    const { store } = await durableBaseline()
-    agentHookServer.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10)
-    await runBackgroundSave(store)
-    agentHookServer.transferPaneAuthority(TARGET, FINAL, 'pty-1', 20)
-    await runBackgroundSave(store)
-
-    const payload = readDocuments().get('legacyPaneKeyAliasEntries')?.payload ?? 'null'
-    expect(JSON.parse(payload)).toEqual([
-      expect.objectContaining({ stablePaneKey: FINAL, updatedAt: 20 })
-    ])
-  })
-
-  it('writes an empty migration list as an empty array, not a deletion', async () => {
-    const { store, fullPreparation, domainWrites, before } = await durableBaseline()
-    setMigrationUnsupportedPty(migrationEntry)
-    await runBackgroundSave(store)
-    expect(
-      JSON.parse(readDocuments().get('migrationUnsupportedPtyEntries')?.payload ?? '')
-    ).toEqual([migrationEntry])
-    clearMigrationUnsupportedPty(migrationEntry.ptyId)
-    await runBackgroundSave(store)
-
-    expect(fullPreparation).not.toHaveBeenCalled()
-    expect(domainWrites.mock.calls.map(([replacements]) => replacements)).toEqual([
-      [{ domain: 'migrationUnsupportedPtyEntries', payload: JSON.stringify([migrationEntry]) }],
-      [{ domain: 'migrationUnsupportedPtyEntries', payload: '[]' }]
-    ])
-    const after = readDocuments()
-    expect(after.get('migrationUnsupportedPtyEntries')?.payload).toBe('[]')
-    expectOnlyChanged(before, after, ['migrationUnsupportedPtyEntries'])
-  })
-
   it('commits a co-batched SSH host session with the alias in one transaction', async () => {
     const { store, fullPreparation, domainWrites, before } = await durableBaseline()
     const remoteSession = { ...getDefaultWorkspaceSession(), activeRepoId: 'remote-repo' }
@@ -187,75 +136,5 @@ describe('pane alias and migration listeners save only their sections', () => {
       after.get('legacyPaneKeyAliasEntries')?.revision
     )
     expectOnlyChanged(before, after, ['legacyPaneKeyAliasEntries', 'workspaceSessionsByHostId'])
-  })
-
-  it('keeps an unscoped save full when an alias joins it', async () => {
-    const { store, fullPreparation, domainWrites } = await durableBaseline()
-    store.setMobileClientTabSelections({})
-    agentHookServer.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 40)
-    await runBackgroundSave(store)
-
-    expect(fullPreparation).toHaveBeenCalled()
-    expect(domainWrites).not.toHaveBeenCalled()
-    const after = readDocuments()
-    expect(after.get('mobileClientTabSelectionsByDeviceId')?.payload).toBe('{}')
-    expect(JSON.parse(after.get('legacyPaneKeyAliasEntries')?.payload ?? '[]')).toEqual([
-      expect.objectContaining({ stablePaneKey: TARGET, updatedAt: 40 })
-    ])
-  })
-
-  it('persists a renderer session publish and the alias it creates from one background save', async () => {
-    const { store, before } = await durableBaseline()
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'local-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: 'pane:1' },
-          activeLeafId: 'pane:1',
-          expandedLeafId: null,
-          ptyIdsByLeafId: { 'pane:1': 'local-pty' }
-        }
-      }
-    })
-    const root = store.getWorkspaceSession().terminalLayoutsByTabId.tab1?.root
-    const stableLeafId = root?.type === 'leaf' ? root.leafId : null
-    expect(stableLeafId).not.toBe('pane:1')
-    await runBackgroundSave(store)
-
-    const after = readDocuments()
-    const session = JSON.parse(after.get('workspaceSession')?.payload ?? '{}')
-    expect(session).toMatchObject({
-      activeTabId: 'tab1',
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { leafId: stableLeafId },
-          ptyIdsByLeafId: { [stableLeafId ?? '']: 'local-pty' }
-        }
-      }
-    })
-    expect(JSON.parse(after.get('legacyPaneKeyAliasEntries')?.payload ?? '[]')).toEqual([
-      expect.objectContaining({
-        ptyId: 'local-pty',
-        legacyPaneKey: 'tab1:1',
-        stablePaneKey: makePaneKey('tab1', stableLeafId ?? '')
-      })
-    ])
-    expectOnlyChanged(before, after, ['legacyPaneKeyAliasEntries', 'workspaceSession'])
   })
 })

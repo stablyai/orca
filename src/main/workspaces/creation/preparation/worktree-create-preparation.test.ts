@@ -330,7 +330,12 @@ describe('worktree create preparation registry', () => {
     releaseWorktreeCreatePreparationsForRepo(store, repo)
     await flushBackgroundWork()
 
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, armedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      armedPath,
+      expect.objectContaining({ signal: undefined }),
+      expect.any(String)
+    )
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
       stalePath,
@@ -361,7 +366,7 @@ describe('worktree create preparation registry', () => {
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
       mocks.prepareCheckout.mock.calls[0]?.[1],
-      {},
+      expect.objectContaining({ signal: undefined }),
       expect.any(String)
     )
   })
@@ -386,7 +391,8 @@ describe('worktree create preparation registry', () => {
       'refs/remotes/origin/main',
       expect.any(String),
       { ...options, signal: expect.any(AbortSignal) },
-      undefined
+      undefined,
+      expect.anything()
     )
     expect(mocks.finalize).toHaveBeenCalledWith(
       repo.path,

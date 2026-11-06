@@ -74,7 +74,8 @@ export function useNativeChatTranscriptWindow({
     [slots.length, revealIndex]
   )
   // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
-  const encodedItemKeys = JSON.stringify(slots.map(nativeChatSlotKey))
+  // Encoded only when the slots change: scroll and range renders reuse it.
+  const encodedItemKeys = useMemo(() => JSON.stringify(slots.map(nativeChatSlotKey)), [slots])
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,

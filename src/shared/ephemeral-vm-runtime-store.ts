@@ -52,6 +52,20 @@ export function listEphemeralVmRuntimes(userDataPath: string): EphemeralVmRuntim
   return readEphemeralVmRuntimeStore(userDataPath).store.runtimes
 }
 
+/** The live recipe VM behind a workspace, if it has one its recipe can suspend and resume. */
+export function findWorkspaceEphemeralVmRuntime(
+  userDataPath: string,
+  workspaceId: string
+): (EphemeralVmRuntimeRecord & { repoId: string }) | undefined {
+  const runtime = listEphemeralVmRuntimes(userDataPath).find(
+    (entry) =>
+      entry.workspaceId === workspaceId &&
+      entry.status !== 'cleaned' &&
+      entry.status !== 'cleanup_pending'
+  )
+  return runtime?.repoId ? { ...runtime, repoId: runtime.repoId } : undefined
+}
+
 export function upsertEphemeralVmRuntime(
   userDataPath: string,
   record: EphemeralVmRuntimeRecord
