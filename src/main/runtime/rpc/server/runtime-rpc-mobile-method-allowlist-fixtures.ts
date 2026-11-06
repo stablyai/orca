@@ -118,6 +118,8 @@ export function createMobileRpcSurfaceRuntime() {
     .mockResolvedValue({ ok: true, id: 'comment-1' })
   const runtime = {
     configureNotificationDismissalStore: () => {},
+    cleanupSubscriptionsForConnection: () => {},
+    onClientDisconnected: () => {},
     getRuntimeId: () => 'test-runtime',
     getStartedAt: () => 1,
     machineNameReady: async () => undefined,

@@ -12,6 +12,7 @@ import { ChevronDown } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { NAV_BAR_BUTTON_SIZE } from './NavBarButton'
 
 export const NAV_BAR_HEIGHT = 52
 
@@ -158,6 +159,7 @@ const styles = themedStyleSheet(() => ({
   side: {
     flex: 1,
     flexBasis: 0,
+    minWidth: 2 * NAV_BAR_BUTTON_SIZE + spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
