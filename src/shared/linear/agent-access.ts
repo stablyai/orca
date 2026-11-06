@@ -190,6 +190,7 @@ export type LinearCreateRequest = {
   dueDate?: string
   labels?: string[]
   projectInput?: string
+  cycle?: string | null
   parentInput?: string
   parentCurrent?: boolean
   workspaceId?: string
@@ -208,6 +209,7 @@ export type LinearSaveIssueRequest = LinearWriteTargetRequest & {
   dueDate?: string | null
   labels?: string[]
   project?: string | null
+  cycle?: string | null
   parentId?: string | null
   writeId?: string
 }

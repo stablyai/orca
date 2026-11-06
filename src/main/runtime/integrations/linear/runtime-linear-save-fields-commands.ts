@@ -1,3 +1,4 @@
+import { resolveIssueCycle } from '../../../linear/issue-cycle-resolution'
 import type { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/linear-issue-lookups'
 import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
 import type { LinearCreateFieldIntent } from './linear-create-field-intent'
@@ -51,6 +52,9 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
     if (fields.dueDate !== undefined && (issue.dueDate ?? null) !== fields.dueDate) {
       return false
     }
+    if (fields.cycleId !== undefined && (issue.cycle?.id ?? null) !== fields.cycleId) {
+      return false
+    }
     if (fields.projectId !== undefined && (issue.project?.id ?? null) !== fields.projectId) {
       return false
     }
@@ -67,6 +71,7 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
       dueDate?: string
       labels?: string[]
       projectInput?: string
+      cycle?: string | null
     },
     team: { id: string; workspaceId: string },
     signal?: AbortSignal
@@ -110,6 +115,11 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
         signal
       )
       fields.labelIds = labels.map((label) => label.id)
+    }
+    if (params.cycle !== undefined) {
+      fields.cycleId = await this.readLinearWriteLookup(() =>
+        resolveIssueCycle(params.cycle!, team.id, team.workspaceId, signal)
+      )
     }
     if (params.projectInput) {
       const project = await this.resolveLinearCreateProject(params.projectInput, team, signal)

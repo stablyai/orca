@@ -229,6 +229,9 @@ export class RuntimeLinearDedupeCommands extends RuntimeLinearCommentLookupComma
     if (intent.dueDate !== undefined && (issue.dueDate ?? null) !== intent.dueDate) {
       return false
     }
+    if (intent.cycleId !== undefined && (issue.cycle?.id ?? null) !== intent.cycleId) {
+      return false
+    }
     if (intent.projectId !== undefined && (issue.project?.id ?? null) !== intent.projectId) {
       return false
     }
