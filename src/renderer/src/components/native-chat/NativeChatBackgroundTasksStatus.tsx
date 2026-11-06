@@ -24,6 +24,7 @@ import {
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import { backgroundTaskGroupLabel, buildBackgroundTaskGroups } from './background-task-roster'
 import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
+import { useNativeChatChildNavigation } from './native-chat-child-navigation'
 
 /** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
 const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
@@ -74,22 +75,37 @@ function BackgroundTaskRow(props: {
   onStop: (taskId: string) => void
 }): React.JSX.Element {
   const { row, now } = props
+  const navigation = useNativeChatChildNavigation()
   const Icon = KIND_ICONS[row.kind]
   const meta = backgroundTaskRowMeta(row, now)
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
+  const content = (
+    <AgentChildRowContent
+      row={row}
+      now={now}
+      leadClassName="font-medium text-foreground"
+      trailClassName="text-muted-foreground"
+      separator=" · "
+      dotTitle={null}
+    />
+  )
+  const providerId = row.kind === 'agent' ? row.providerId : undefined
   return (
     <>
       <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
         <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
         {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
-        <AgentChildRowContent
-          row={row}
-          now={now}
-          leadClassName="font-medium text-foreground"
-          trailClassName="text-muted-foreground"
-          separator=" · "
-          dotTitle={null}
-        />
+        {navigation && providerId !== undefined ? (
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left enabled:hover:bg-accent enabled:focus-visible:ring-2 enabled:focus-visible:ring-ring disabled:cursor-default"
+            onClick={() => navigation.open({ agentId: providerId, label: agentChildRowName(row) })}
+          >
+            {content}
+          </button>
+        ) : (
+          content
+        )}
         {meta ? (
           <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
             {meta}
