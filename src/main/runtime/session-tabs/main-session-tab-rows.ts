@@ -160,7 +160,7 @@ export function withMainSessionTabRows(
   // Keep each window selection if main still lists it in that group; otherwise retain main's groups/selection.
   let tabGroups: RuntimeMobileSessionTabGroup[] = placement.groups.map((group) => {
     const shown = !mainRetiredSelection ? windowGroups.get(group.id)?.activeTabId : undefined
-    return shown ? { ...group, activeTabId: shown } : group
+    return shown !== undefined ? { ...group, activeTabId: shown } : group
   })
   const activeGroupIndex = (activeRow: Row | undefined): number => {
     const byRow = activeRow
@@ -200,7 +200,7 @@ export function withMainSessionTabRows(
         activeTabType: windowActive.type
       }
     : {
-        activeGroupId: activeGroup?.id ?? projected.activeGroupId,
+        activeGroupId: navigation.activeGroupId,
         activeTabId: navigation.activeTabId,
         activeTabType: navigation.activeTabType
       }
@@ -209,7 +209,7 @@ export function withMainSessionTabRows(
   return normalizeMobileSessionTabSelection({
     ...stamps,
     ...selection,
-    ...(tabGroups.length > 0 ? { tabGroups } : {}),
+    ...(tabGroups.length > 0 || published.tabGroups !== undefined ? { tabGroups } : {}),
     ...(projected.tabGroupLayout
       ? { tabGroupLayout: projected.tabGroupLayout }
       : tabGroups.length > 0 && published.tabGroupLayout

@@ -70,7 +70,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       existing?.tabGroups,
       preservedTabs
     )
-    let activeGroupId = snapshot.activeGroupId ?? existing?.activeGroupId ?? null
+    let activeGroupId =
+      snapshot.tabGroups !== undefined
+        ? snapshot.activeGroupId
+        : (snapshot.activeGroupId ?? existing?.activeGroupId ?? null)
     if (snapshot.tabGroups === undefined && snapshot.activeTabId) {
       const selectedId =
         activeTab?.id === snapshot.activeTabId && activeTab.type === 'terminal'

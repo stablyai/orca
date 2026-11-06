@@ -279,11 +279,9 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
           : `headless-hydrated:${Date.now().toString(36)}`,
         snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: pickRestoredActiveGroupId(
-          nextTabGroups,
-          [navigationActiveGroupId],
-          activeTopLevelId
-        ),
+        activeGroupId: hasCurrentNavigation
+          ? currentNavigation.activeGroupId
+          : pickRestoredActiveGroupId(nextTabGroups, [navigationActiveGroupId], activeTopLevelId),
         activeTabId: existing?.activeTabId ?? mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
         tabGroups: nextTabGroups,

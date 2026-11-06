@@ -1,3 +1,5 @@
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { selectMobileSessionTab } from '../../session-tabs/mobile-session-tab-selection'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
@@ -155,7 +157,11 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     if (snapshot.publicationEpoch.includes(':headless-merge:')) {
       return false
     }
-    if (this.authoritativeWindowId !== null && this.graphStatus === 'ready') {
+    if (
+      this.authoritativeWindowId !== null &&
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphStatus === 'ready'
+    ) {
       return false
     }
     return this.shouldMaterializeHeadlessMobileSessionTab(snapshot, tab)
@@ -176,18 +182,21 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       activeTab,
       snapshot.tabGroups
     )
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      activeGroupId:
-        tabGroups.find((group) => group.tabOrder.includes(activeTab.parentTabId))?.id ??
-        snapshot.activeGroupId,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: activeTab.id,
-      activeTabType: 'terminal',
-      tabGroups,
-      tabs
-    }
+    const nextSnapshot = selectMobileSessionTab(
+      {
+        ...snapshot,
+        activeGroupId:
+          tabGroups.find((group) => group.tabOrder.includes(activeTab.parentTabId))?.id ??
+          snapshot.activeGroupId,
+        publicationEpoch: `headless:${Date.now().toString(36)}`,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        activeTabId: activeTab.id,
+        activeTabType: 'terminal',
+        tabGroups,
+        tabs
+      },
+      activeTab
+    )
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
@@ -219,10 +228,18 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         ...session.activeTabIdByWorktree,
         [worktreeId]: tab.parentTabId
       },
-      tabGroups: {
-        ...session.tabGroups,
-        [worktreeId]: (snapshot.tabGroups ?? []).map((group) => ({ ...group, worktreeId }))
-      },
+      ...(session.tabGroups?.[worktreeId]
+        ? {
+            tabGroups: {
+              ...session.tabGroups,
+              [worktreeId]: session.tabGroups[worktreeId].map((group) =>
+                group.id === snapshot.activeGroupId
+                  ? { ...group, activeTabId: tab.parentTabId }
+                  : group
+              )
+            }
+          }
+        : {}),
       ...(snapshot.activeGroupId
         ? {
             activeGroupIdByWorktree: {

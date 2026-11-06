@@ -296,4 +296,70 @@ describe('active-tab selection performance contract', () => {
     expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
     expect(identityReads[1]).toBeLessThanOrEqual(10 * identityReads[0]!)
   })
+  it('bounds actual native retirement and shared delivery work at N and 10N', async () => {
+    vi.useFakeTimers()
+    const reads: number[] = []
+    for (const count of [50, 500]) {
+      const { runtime } = createRuntimeFixture(false)
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+      const rows = Array.from({ length: count }, (_, index) => ({
+        type: 'agent-session' as const,
+        id: `agent-session:scale-${index}`,
+        sessionId: `scale-${index}`,
+        agent: 'codex' as const,
+        title: 'Chat',
+        isActive: index === count - 1
+      }))
+      runtime.syncWindowGraph(0, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: WT,
+            publicationEpoch: 'headless:retirement-scale',
+            snapshotVersion: 10,
+            activeGroupId: `g-${count - 1}`,
+            activeTabId: `agent-session:scale-${count - 1}`,
+            activeTabType: 'agent-session',
+            tabGroups: rows.map((row, index) => ({
+              id: `g-${index}`,
+              activeTabId: row.id,
+              tabOrder: [row.id]
+            })),
+            tabs: rows
+          }
+        ]
+      })
+      await vi.runAllTimersAsync()
+      const stored = runtime.mobileSessionTabsByWorktree.get(WT)!
+      const meter = countedIdentities(stored.tabs)
+      const other = 'other::/tmp/retirement-scale'
+      const unaffected = frame(count, 1, other)
+      const otherMeter = countedIdentities(unaffected.tabs)
+      runtime.mobileSessionTabsByWorktree.set(other, unaffected)
+      const seen: string[] = []
+      const off = runtime.onMobileSessionTabsChanged((snapshot) =>
+        seen.push(snapshot.activeTabId ?? 'null')
+      )
+      meter.reset()
+      expect(
+        runtime.retireStructuredAgentSessionTabFromSnapshot(
+          `scale-${count - 1}`,
+          `agent-session:scale-${count - 1}`,
+          WT
+        )
+      ).toBe(true)
+      await vi.runAllTimersAsync()
+      reads.push(meter.reads())
+      expect(meter.reads()).toBeGreaterThan(0)
+      expect(otherMeter.reads()).toBe(0)
+      expect(runtime.mobileSessionTabsByWorktree.get(other)).toBe(unaffected)
+      expect(seen).toEqual(['agent-session:scale-0'])
+      expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(
+        'agent-session:scale-0'
+      )
+      off()
+    }
+    expect(reads[1]).toBeLessThanOrEqual(10 * reads[0]!)
+  })
 })

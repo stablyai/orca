@@ -1,3 +1,6 @@
+import { withOpenedServeBrowserTab } from '../../../src/main/runtime/serve-browser-tab-layout'
+import { applyPtyBinding } from '../../../src/main/persistence/loading-store/pty-binding-session-update'
+import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
@@ -39,7 +42,11 @@ async function publish(runtime: OrcaRuntimeService, id: string, activate = true)
   })
 }
 
-function rendererFrame(selected: string, version: number): RuntimeMobileSessionTabsSnapshot {
+function rendererFrame(
+  selected: string,
+  version: number,
+  simulatorOnlyGroup = false
+): RuntimeMobileSessionTabsSnapshot {
   const chats = [A, B, C].map((id, index) => ({
     id: `window-${index}`,
     entityId: id.slice('agent-session:'.length),
@@ -54,7 +61,13 @@ function rendererFrame(selected: string, version: number): RuntimeMobileSessionT
   }))
   const unified = [
     ...chats,
-    { ...chats[0]!, id: 'sim-tab', entityId: 'simulator', contentType: 'simulator' as const }
+    {
+      ...chats[0]!,
+      id: 'sim-tab',
+      entityId: 'simulator',
+      contentType: 'simulator' as const,
+      groupId: simulatorOnlyGroup ? 'sim-only' : 'g'
+    }
   ]
   const snapshot = buildMobileSessionTabSnapshots(
     makeState({
@@ -66,15 +79,26 @@ function rendererFrame(selected: string, version: number): RuntimeMobileSessionT
             worktreeId: WT,
             activeTabId: unified.find((tab) =>
               tab.contentType === 'agent-session'
-                ? `agent-session:${tab.entityId}` === selected
-                : tab.id === selected
+                ? `agent-session:${tab.entityId}` === (simulatorOnlyGroup ? A : selected)
+                : !simulatorOnlyGroup && tab.id === selected
             )!.id,
-            tabOrder: unified.map((tab) => tab.id),
+            tabOrder: unified.filter((tab) => tab.groupId === 'g').map((tab) => tab.id),
             recentTabIds: []
-          }
+          },
+          ...(simulatorOnlyGroup
+            ? [
+                {
+                  id: 'sim-only',
+                  worktreeId: WT,
+                  activeTabId: 'sim-tab',
+                  tabOrder: ['sim-tab'],
+                  recentTabIds: []
+                }
+              ]
+            : [])
         ]
       },
-      activeGroupIdByWorktree: { [WT]: 'g' }
+      activeGroupIdByWorktree: { [WT]: simulatorOnlyGroup ? 'sim-only' : 'g' }
     }),
     false
   )[0]!
@@ -286,8 +310,12 @@ describe('host active-tab publication', () => {
     expectSelection(await list(runtime), C)
   })
 
-  it('resolves main-layout composition from group navigation even with no renderer chat row', () => {
-    const frame = rendererFrame(B, 10)
+  it.each([
+    [B, false],
+    ['sim-tab', false],
+    ['sim-tab', true]
+  ] as const)('resolves main-layout group selection %s (omitted group=%s)', (selected, omitted) => {
+    const frame = rendererFrame(selected, 10, omitted)
     const chat = {
       type: 'agent-session' as const,
       id: A,
@@ -313,26 +341,36 @@ describe('host active-tab publication', () => {
         { ...projected, tabs: [chat, { ...chat, id: B, sessionId: 'chat-b', isActive: false }] },
         () => false
       ),
-      B
+      selected === B ? B : null
     )
   })
-  it('publishes no active recipient when the desktop selects an unpublished simulator', async () => {
-    const runtime = createRuntime()
-    await publish(runtime, A)
-    const frame = rendererFrame('sim-tab', 10)
-    expect(frame.tabGroups?.[0]?.activeTabId).toBeNull()
-    accept(runtime, frame)
-    expectSelection(await list(runtime), null)
-    expect((await list(runtime)).tabGroups?.[0]?.activeTabId).toBeNull()
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [],
-      unchangedMobileSessionWorktrees: [WT]
-    })
-    await publish(runtime, B, false)
-    expectSelection(await list(runtime), null)
-  })
+  it.each([false, true])(
+    'publishes no active recipient for an unpublished simulator (own group=%s)',
+    async (ownGroup) => {
+      const runtime = createRuntime()
+      await publish(runtime, A)
+      const frame = rendererFrame('sim-tab', 10, ownGroup)
+      if (ownGroup) {
+        expect(frame.tabGroups?.some((group) => group.id === frame.activeGroupId)).toBe(false)
+      } else {
+        expect(frame.tabGroups?.[0]?.activeTabId).toBeNull()
+      }
+      accept(runtime, frame)
+      expectSelection(await list(runtime), null)
+      expect(
+        (await list(runtime)).tabGroups?.find((group) => group.id === frame.activeGroupId)
+          ?.activeTabId ?? null
+      ).toBeNull()
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [],
+        unchangedMobileSessionWorktrees: [WT]
+      })
+      await publish(runtime, B, false)
+      expectSelection(await list(runtime), null)
+    }
+  )
 
   it.each([false, true])(
     'retains legacy pending navigation with existing snapshot=%s until passive materialization',
@@ -438,23 +476,294 @@ describe('host active-tab publication', () => {
     expectSelection(await list(runtime), B)
   })
 
-  it('activates the owning split group for headless terminal activation and untargeted creation', async () => {
-    const { runtime, runtimeStore, getSession, setSession } = createRuntimeFixture(false)
-    const ids = ['serve-active']
-    const controller = {
-      spawn: committingSpawn(runtime, async () => {
-        const id = `serve-created-${ids.length}`
-        ids.push(id)
-        return { id }
-      }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => ids.map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
+  it.each([false, true])(
+    'persists headless host activation and creation without replacing saved desktop groups (ready=%s)',
+    async (ready) => {
+      const { runtime, runtimeStore, getSession, setSession } = createRuntimeFixture(false)
+      const ids = ready ? ['serve-active'] : []
+      runtimeStore.persistPtyBinding = vi.fn(async (input) => {
+        const args = typeof input === 'function' ? input() : input
+        if (!args) {
+          return false
+        }
+        applyPtyBinding(args, getSession(), args.worktreeId, `${args.tabId}:${args.leafId}`)
+        return true
+      })
+      const controller: RuntimePtyController = {
+        spawn: committingSpawn(runtime, async () => {
+          const id = `serve-created-${ids.length}`
+          ids.push(id)
+          return { id }
+        }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        listProcesses: async () => ids.map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
+      }
+      runtime.setPtyController(controller)
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+      if (ready) {
+        runtime.registerPty('serve-active', WT, null, {
+          tabId: 'serve-tab',
+          leafId: HEADLESS_LEAF_ID
+        })
+      }
+      const created = await runtime.createMobileSessionTerminal(`id:${WT}`, { activate: false })
+      const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+      runtime.syncWindowGraph(0, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            ...snapshot,
+            publicationEpoch: 'headless:split-activation',
+            snapshotVersion: 10,
+            activeGroupId: 'right',
+            activeTabId: created.tab.id,
+            activeTabType: 'terminal',
+            tabGroups: [
+              { id: 'left', activeTabId: 'serve-tab', tabOrder: ['serve-tab'] },
+              {
+                id: 'right',
+                activeTabId: created.tab.parentTabId,
+                tabOrder: [created.tab.parentTabId]
+              }
+            ],
+            tabs: snapshot.tabs.map((tab) => ({ ...tab, isActive: tab.id === created.tab.id }))
+          }
+        ]
+      })
+      const groups = runtime.mobileSessionTabsByWorktree.get(WT)!.tabGroups!
+      setSession({
+        ...getSession()!,
+        tabGroups: {
+          [WT]: groups.map((group) => ({
+            ...group,
+            worktreeId: WT,
+            tabOrder:
+              group.id === 'right'
+                ? [...group.tabOrder, 'chat-window', 'sim-window']
+                : group.tabOrder
+          }))
+        },
+        unifiedTabs: {
+          [WT]: [
+            {
+              id: 'chat-window',
+              entityId: 'chat-a',
+              contentType: 'agent-session',
+              groupId: 'right',
+              worktreeId: WT,
+              label: 'Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'sim-window',
+              entityId: 'simulator',
+              contentType: 'simulator',
+              groupId: 'right',
+              worktreeId: WT,
+              label: 'Simulator',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 1
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: 'right' }
+      })
+      expect((await list(runtime)).activeGroupId).toBe('right')
+      expect((await list(runtime)).activeTabId).toBe(created.tab.id)
+      const target = (await list(runtime)).tabs.find(
+        (tab) => tab.id === `serve-tab::${HEADLESS_LEAF_ID}`
+      )
+      expect(target?.type).toBe('terminal')
+      expect(target?.type === 'terminal' && target.status === 'ready').toBe(ready)
+      const savedRight = getSession().tabGroups![WT]!.find((group) => group.id === 'right')
+      const activated = await runtime.activateMobileSessionTab(
+        `id:${WT}`,
+        'serve-tab',
+        HEADLESS_LEAF_ID,
+        { navigation: 'host' }
+      )
+      expect(activated.activeGroupId).toBe('left')
+      expect(activated.activeTabId).toBe(`serve-tab::${HEADLESS_LEAF_ID}`)
+      expect(getSession().tabGroups![WT]!.find((group) => group.id === 'right')).toEqual(savedRight)
+      expect(getSession().unifiedTabs![WT]!.map((tab) => tab.id)).toEqual([
+        'chat-window',
+        'sim-window'
+      ])
+      const restored = new OrcaRuntimeService(runtimeStore)
+      restored.setPtyController(controller)
+      const restoredSelection = await list(restored)
+      expect(restoredSelection.activeGroupId).toBe('left')
+      expect(restoredSelection.activeTabId).toBe(`serve-tab::${HEADLESS_LEAF_ID}`)
+      await runtime.activateMobileSessionTab(
+        `id:${WT}`,
+        created.tab.parentTabId,
+        created.tab.leafId,
+        { navigation: 'host' }
+      )
+      const another = await runtime.createMobileSessionTerminal(`id:${WT}`, { activate: true })
+      const result = await list(runtime)
+      expect(result.activeTabId).toBe(another.tab.id)
+      expect(result.activeGroupId).toBe(
+        result.tabGroups?.find((group) => group.tabOrder.includes(another.tab.parentTabId))?.id
+      )
     }
-    runtime.setPtyController(controller)
+  )
+
+  it.each([B, C, null])(
+    'retires a native lifetime without replacing unrelated navigation %s',
+    async (selected) => {
+      vi.useFakeTimers()
+      const { runtime } = createRuntimeFixture(false)
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+      await publish(runtime, A)
+      await publish(runtime, B)
+      const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+      runtime.syncWindowGraph(0, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            ...snapshot,
+            publicationEpoch: 'headless:retirement',
+            snapshotVersion: 20,
+            activeGroupId: 'closing',
+            activeTabId: selected === B ? B : null,
+            activeTabType: selected === B ? 'agent-session' : null,
+            tabGroups: [
+              { id: 'closing', activeTabId: selected, tabOrder: [B, C] },
+              { id: 'replacement', activeTabId: A, tabOrder: [A] }
+            ],
+            tabs: snapshot.tabs
+              .filter((tab) => tab.type === 'agent-session')
+              .map((tab) => ({ ...tab, isActive: selected === B && tab.id === B }))
+          }
+        ]
+      })
+      const seen: RuntimeMobileSessionTabsResult[] = []
+      runtime.onMobileSessionTabsChanged((snapshot) => seen.push(snapshot))
+      expect(runtime.retireStructuredAgentSessionTabFromSnapshot('chat-b', B, WT)).toBe(true)
+      await vi.runAllTimersAsync()
+      expectSelection(await list(runtime), selected === B ? A : null)
+      expectSelection(seen.at(-1), selected === B ? A : null)
+      if (selected === B) {
+        expect((await list(runtime)).activeGroupId).toBe('replacement')
+      }
+      await publish(runtime, C, false)
+      expectSelection(await list(runtime), selected === B ? A : selected === C ? C : null)
+    }
+  )
+
+  it('publishes replacement navigation after a public offscreen selected-browser close', async () => {
+    vi.useFakeTimers()
+    const { runtime, setSession } = createRuntimeFixture(false)
+    let saved = getDefaultWorkspaceSession()
+    for (const pageId of ['page-a', 'page-b']) {
+      saved = withOpenedServeBrowserTab('local', saved, {
+        worktreeId: WT,
+        pageId,
+        url: 'https://example.com/',
+        title: pageId
+      })!
+    }
+    setSession({
+      ...saved,
+      tabGroups: {
+        [WT]: [
+          { id: 'replacement', worktreeId: WT, activeTabId: 'page-a', tabOrder: ['page-a'] },
+          { id: 'closing', worktreeId: WT, activeTabId: 'page-b', tabOrder: ['page-b'] }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'closing' }
+    })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(async () => ({ browserPageId: 'unused' })),
+      closeTab: vi.fn(async () => {}),
+      ownsTab: () => true
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Saved unstarted pages require only this bridge inventory.
+    runtime.setAgentBrowserBridge({ tabList: () => ({ tabs: [] }) } as never)
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-    const created = await runtime.createMobileSessionTerminal(`id:${WT}`, { activate: false })
+    expect((await list(runtime)).activeTabId).toBe('page-b')
+    const seen: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((snapshot) => seen.push(snapshot))
+    await runtime.closeMobileSessionTab(`id:${WT}`, 'page-b')
+    await vi.runAllTimersAsync()
+    const result = await list(runtime)
+    expect(result.activeTabId).toBe('page-a')
+    expect(result.activeTabType).toBe('browser')
+    expect(result.activeGroupId).toBe('replacement')
+    expect(result.tabs.map((tab) => [tab.id, tab.isActive])).toEqual([['page-a', true]])
+    expect(seen.at(-1)?.activeTabId).toBe('page-a')
+  })
+
+  it('restores the actual headless editor-close replacement after cold hydration', async () => {
+    const { runtime, runtimeStore, getSession, setSession } = createRuntimeFixture(false)
+    setSession({
+      ...getSession(),
+      openFilesByWorktree: {
+        [WT]: [
+          {
+            filePath: '/qa/notes.ts',
+            relativePath: 'notes.ts',
+            language: 'typescript',
+            worktreeId: WT
+          }
+        ]
+      },
+      unifiedTabs: {
+        [WT]: [
+          {
+            id: 'editor-window',
+            entityId: '/qa/notes.ts',
+            contentType: 'editor',
+            groupId: 'editor',
+            worktreeId: WT,
+            label: 'notes.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [WT]: [
+          { id: 'terminal', worktreeId: WT, activeTabId: 'serve-tab', tabOrder: ['serve-tab'] },
+          {
+            id: 'editor',
+            worktreeId: WT,
+            activeTabId: 'editor-window',
+            tabOrder: ['editor-window']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'editor' },
+      activeTabIdByWorktree: { [WT]: 'editor-window' },
+      activeTabTypeByWorktree: { [WT]: 'editor' },
+      activeFileIdByWorktree: { [WT]: '/qa/notes.ts' }
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    expect((await list(runtime)).activeTabId).toBe('editor-window')
+    await runtime.closeMobileSessionTab(`id:${WT}`, 'editor-window')
+    expect((await list(runtime)).activeTabId).toBe(`serve-tab::${HEADLESS_LEAF_ID}`)
+    const restored = new OrcaRuntimeService(runtimeStore)
+    expect((await list(restored)).activeTabId).toBe(`serve-tab::${HEADLESS_LEAF_ID}`)
+    expect((await list(restored)).activeGroupId).toBe('terminal')
+  })
+
+  it('reorders headless membership while retaining an explicit null selection', async () => {
+    const { runtime } = createRuntimeFixture(false)
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await publish(runtime, A, false)
+    await publish(runtime, B, false)
     const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
     runtime.syncWindowGraph(0, {
       tabs: [],
@@ -462,53 +771,24 @@ describe('host active-tab publication', () => {
       mobileSessionTabs: [
         {
           ...snapshot,
-          publicationEpoch: 'headless:split-activation',
-          snapshotVersion: 10,
-          activeGroupId: 'right',
-          activeTabId: created.tab.id,
-          activeTabType: 'terminal',
-          tabGroups: [
-            { id: 'left', activeTabId: 'serve-tab', tabOrder: ['serve-tab'] },
-            {
-              id: 'right',
-              activeTabId: created.tab.parentTabId,
-              tabOrder: [created.tab.parentTabId]
-            }
-          ],
-          tabs: snapshot.tabs.map((tab) => ({ ...tab, isActive: tab.id === created.tab.id }))
+          publicationEpoch: 'headless:reorder',
+          snapshotVersion: 30,
+          activeGroupId: 'g',
+          activeTabId: null,
+          activeTabType: null,
+          tabGroups: [{ id: 'g', activeTabId: null, tabOrder: [A, B, 'serve-tab'] }],
+          tabs: snapshot.tabs.map((tab) => ({ ...tab, isActive: false }))
         }
       ]
     })
-    const groups = runtime.mobileSessionTabsByWorktree.get(WT)!.tabGroups!
-    setSession({
-      ...getSession()!,
-      tabGroups: { [WT]: groups.map((group) => ({ ...group, worktreeId: WT })) },
-      activeGroupIdByWorktree: { [WT]: 'right' }
+    await runtime.moveMobileSessionTab(`id:${WT}`, {
+      kind: 'reorder',
+      tabId: A,
+      targetGroupId: 'g',
+      tabOrder: [B, A, 'serve-tab']
     })
-    const activated = await runtime.activateMobileSessionTab(
-      `id:${WT}`,
-      'serve-tab',
-      HEADLESS_LEAF_ID,
-      { navigation: 'host' }
-    )
-    expect(activated.activeGroupId).toBe('left')
-    expect(activated.activeTabId).toBe(`serve-tab::${HEADLESS_LEAF_ID}`)
-    const restored = new OrcaRuntimeService(runtimeStore)
-    restored.setPtyController(controller)
-    const restoredSelection = await list(restored)
-    expect(restoredSelection.activeGroupId).toBe('left')
-    expect(restoredSelection.activeTabId).toBe(`serve-tab::${HEADLESS_LEAF_ID}`)
-    await runtime.activateMobileSessionTab(
-      `id:${WT}`,
-      created.tab.parentTabId,
-      created.tab.leafId,
-      { navigation: 'host' }
-    )
-    const another = await runtime.createMobileSessionTerminal(`id:${WT}`, { activate: true })
     const result = await list(runtime)
-    expect(result.activeTabId).toBe(another.tab.id)
-    expect(result.activeGroupId).toBe(
-      result.tabGroups?.find((group) => group.tabOrder.includes(another.tab.parentTabId))?.id
-    )
+    expectSelection(result, null)
+    expect(result.tabGroups?.[0]?.tabOrder).toEqual([B, A, 'serve-tab'])
   })
 })

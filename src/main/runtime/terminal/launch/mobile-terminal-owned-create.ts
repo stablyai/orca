@@ -286,6 +286,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
+    if (activate && this.shouldPersistHeadlessMobileSessionActivation(stored, tab)) {
+      this.persistHeadlessTerminalActiveLeaf(worktreeId, tab, stored)
+    }
     const result = this.toMobileSessionTabsResult(stored)
     this.createMobileSessionTabsDelivery()(result, ++this.mobileSessionTabsChangeSequence)
     const created = result.tabs.find((candidate) => candidate.id === tab.id)
