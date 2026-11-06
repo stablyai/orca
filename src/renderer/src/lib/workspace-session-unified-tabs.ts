@@ -66,22 +66,36 @@ function buildPersistedGroupsForWorktree(
     .filter((group) => group.tabOrder.length > 0)
 }
 
+type UnifiedTabSnapshot = Pick<
+  WorkspaceSessionSnapshot,
+  'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
+>
+
 export function buildPersistedUnifiedTabSessionData(
-  snapshot: Pick<
-    WorkspaceSessionSnapshot,
-    'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
-  > &
-    Partial<Pick<WorkspaceSessionSnapshot, 'openFiles'>>
+  snapshot: UnifiedTabSnapshot & Partial<Pick<WorkspaceSessionSnapshot, 'openFiles'>>
 ): PersistedUnifiedTabSessionData {
-  const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
-  const tabGroups: WorkspaceSessionState['tabGroups'] = {}
-  const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
-  const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
   const { sourceTabs, sourceGroups } = editorPlacementsInContentOwners(
     snapshot.openFiles,
     snapshot.unifiedTabsByWorktree,
     snapshot.groupsByWorktree
   )
+  return buildUnifiedTabSessionData({
+    ...snapshot,
+    unifiedTabsByWorktree: sourceTabs,
+    groupsByWorktree: sourceGroups
+  })
+}
+
+/** Live layout readback retains transient placement; only persistence transfers views to owners. */
+export function buildUnifiedTabSessionData(
+  snapshot: UnifiedTabSnapshot
+): PersistedUnifiedTabSessionData {
+  const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
+  const tabGroups: WorkspaceSessionState['tabGroups'] = {}
+  const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
+  const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
+  const sourceTabs = snapshot.unifiedTabsByWorktree
+  const sourceGroups = snapshot.groupsByWorktree
   const sourceLayouts = snapshot.layoutByWorktree ?? {}
   const sourceActiveGroups = snapshot.activeGroupIdByWorktree ?? {}
   const worktreeIds = new Set([

@@ -18,7 +18,7 @@ import {
   buildPersistedBrowserTabsByWorktree
 } from '@/lib/workspace-session-browser-tabs'
 import { buildEditorSessionData } from '@/lib/workspace-session'
-import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
+import { buildUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
 import type { AppState } from './types'
 
 export type LayoutFrameStoreViewState = Pick<
@@ -87,7 +87,7 @@ export function layoutViewAndFactsOfStore(
   const groupsByWorktree = pickKeys(state.groupsByWorktree, keys)
   const layoutByWorktree = pickKeys(state.layoutByWorktree, keys)
   const activeGroupIdByWorktree = pickKeys(state.activeGroupIdByWorktree, keys)
-  const tabBar = buildPersistedUnifiedTabSessionData({
+  const tabBar = buildUnifiedTabSessionData({
     unifiedTabsByWorktree,
     groupsByWorktree,
     layoutByWorktree,

@@ -6,6 +6,14 @@ import {
   makeProjectGroup
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import type { OpenFile } from './editor'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
+import { editorTabContent } from './editor/tabs/editor-tab-open-through-layout-owner'
+import { isEditorTabContentType } from './editor/tabs/editor-tab-content-type'
 
 export const EDITOR_OWNER = 'repo1::/repo'
 export const EDITOR_PLACEMENT = 'folder:feature'
@@ -16,7 +24,7 @@ export function seedEditorPlacementConsumers(
 ) {
   useAppStore.setState(useAppStore.getInitialState(), true)
   const file = makeOpenFile({
-    id: 'content',
+    id: overrides.mode === 'edit' ? (overrides.filePath ?? '/repo/notes.md') : 'content',
     filePath: '/repo/notes.md',
     relativePath: 'notes.md',
     worktreeId: EDITOR_OWNER,
@@ -64,11 +72,10 @@ export function seedEditorPlacementConsumers(
     ],
     projectGroups: [makeProjectGroup()],
     runtimeEnvironmentCatalogHydrated: true,
-    settings: {
-      ...useAppStore.getState().settings,
+    settings: createGlobalSettingsFixture({
       editorAutoSave: false,
       editorPreviewTabsEnabled: false
-    },
+    }),
     openFiles: [file],
     unifiedTabsByWorktree: { [EDITOR_PLACEMENT]: placed, [EDITOR_OWNER]: owned },
     groupsByWorktree: { [EDITOR_PLACEMENT]: groups(placed), [EDITOR_OWNER]: groups(owned) },
@@ -88,4 +95,69 @@ export function seedEditorPlacementConsumers(
     }
   })
   return file
+}
+
+/** Live views are opened after main starts; restart persistence intentionally omits these placements. */
+export async function drawEditorPlacementConsumers() {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return drawTabsFromMain(useAppStore)
+  }
+  const seeded = useAppStore.getState()
+  useAppStore.setState({
+    openFiles: [],
+    activeFileId: null,
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
+    layoutByWorktree: {},
+    activeGroupIdByWorktree: {},
+    tabBarOrderByWorktree: {}
+  })
+  const main = await drawTabsFromMain(useAppStore)
+  const tabs = Object.values(seeded.unifiedTabsByWorktree).flat()
+  const settlements = tabs.map((tab) =>
+    beginPendingTab(tab.id, tab.worktreeId, tab.entityId, { kind: 'open', groupId: tab.groupId })
+  )
+  useAppStore.setState({
+    openFiles: seeded.openFiles,
+    unifiedTabsByWorktree: Object.fromEntries(
+      Object.keys(seeded.unifiedTabsByWorktree).map((key) => [key, []])
+    )
+  })
+  try {
+    for (const tab of tabs) {
+      const file = seeded.openFiles.find((entry) => entry.id === tab.entityId)
+      if (!file || !isEditorTabContentType(tab.contentType)) {
+        throw new Error('Expected an editor placement fixture')
+      }
+      const reply = await layoutApplyTestTransport.call({
+        command: {
+          type: 'openEditorTab',
+          workspace: tab.worktreeId,
+          tabId: tab.id,
+          fileId: tab.entityId,
+          contentType: tab.contentType,
+          groupId: tab.groupId,
+          ...editorTabContent(file, tab.worktreeId),
+          ...newGroupSplitOf(seeded, tab.worktreeId, tab.groupId, tab.id)
+        }
+      })
+      if (!reply.ok || reply.result.tabId !== tab.id) {
+        throw new Error('Main did not open the requested fixture placement')
+      }
+      await main.settle()
+    }
+    const group = seeded.groupsByWorktree[EDITOR_PLACEMENT]?.find(
+      (entry) => entry.id === seeded.activeGroupIdByWorktree[EDITOR_PLACEMENT]
+    )
+    if (group?.activeTabId) {
+      useAppStore.getState().activateTab(group.activeTabId)
+    }
+    await main.settle()
+    return main
+  } catch (error) {
+    main.close()
+    throw error
+  } finally {
+    settlements.forEach((settle, index) => settle(tabs[index]!.id))
+  }
 }

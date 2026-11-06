@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -288,7 +289,7 @@ it('retires a placement intent deleted during content publication without creati
 it('dirty SSH edit tab survives restart round trip (no drop, no duplicate on reopen)', async () => {
   useAppStore.setState((state): Partial<AppState> => ({
     activeWorktreeId: CHILD,
-    activeWorkspaceKey: CHILD,
+    activeWorkspaceKey: worktreeWorkspaceKey(CHILD),
     activeWorkspaceExecutionHostId: 'ssh:builder',
     repos: state.repos.map((repo) => ({
       ...repo,

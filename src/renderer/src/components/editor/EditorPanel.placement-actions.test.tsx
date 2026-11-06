@@ -2,14 +2,12 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import {
   EDITOR_OWNER,
   EDITOR_PLACEMENT,
-  seedEditorPlacementConsumers
+  seedEditorPlacementConsumers,
+  drawEditorPlacementConsumers
 } from '@/store/slices/editor-placement-consumers.test-fixture'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
@@ -63,7 +61,7 @@ it.each(['Open', 'Rich', 'Markdown preview'])(
   '%s from a child diff opens the result in the invoking folder group',
   async (action) => {
     const file = seedEditorPlacementConsumers()
-    main = await drawTabsFromMain(useAppStore)
+    main = await drawEditorPlacementConsumers()
     const screen = render(<EditorPanel activeFileId={file.id} activeViewStateId="x-source-tab" />)
     fireEvent.click(screen.getByText(action))
     await main.settle()
@@ -92,7 +90,7 @@ it('opens an HTML side preview beside its invoking folder group', async () => {
     relativePath: 'index.html',
     language: 'html'
   })
-  main = await drawTabsFromMain(useAppStore)
+  main = await drawEditorPlacementConsumers()
   const screen = render(<EditorPanel activeFileId={file.id} activeViewStateId="x-source-tab" />)
   fireEvent.click(screen.getByText('Side preview'))
   await main.settle()
@@ -136,7 +134,7 @@ it('places an SSH document preview in the folder while its document location ret
       ]
     ])
   }))
-  main = await drawTabsFromMain(useAppStore)
+  main = await drawEditorPlacementConsumers()
   const screen = render(<EditorPanel activeFileId={file.id} activeViewStateId="x-source-tab" />)
   fireEvent.click(screen.getByText('Side preview'))
   await main.settle()

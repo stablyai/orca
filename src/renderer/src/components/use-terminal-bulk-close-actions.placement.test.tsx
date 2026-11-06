@@ -2,14 +2,12 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import {
   EDITOR_OWNER,
   EDITOR_PLACEMENT,
-  seedEditorPlacementConsumers
+  seedEditorPlacementConsumers,
+  drawEditorPlacementConsumers
 } from '@/store/slices/editor-placement-consumers.test-fixture'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 import { useTerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
@@ -64,7 +62,7 @@ function mountCloseActions() {
 
 it('close-all removes folder placements while retaining child content, drafts and its own tab', async () => {
   const file = seedEditorPlacementConsumers({ mode: 'edit' })
-  main = await drawTabsFromMain(useAppStore)
+  main = await drawEditorPlacementConsumers()
   useAppStore.getState().setEditorDraft(file.id, 'unsaved text')
   useAppStore.getState().markFileDirty(file.id, true)
   const hook = mountCloseActions()
@@ -83,7 +81,7 @@ it('close-all removes folder placements while retaining child content, drafts an
 
 it('confirms only the final dirty placement, keeps its tab through Save, and spares a later sibling', async () => {
   const file = seedEditorPlacementConsumers({ mode: 'edit' }, false)
-  main = await drawTabsFromMain(useAppStore)
+  main = await drawEditorPlacementConsumers()
   useAppStore.getState().setEditorDraft(file.id, 'unsaved text')
   useAppStore.getState().markFileDirty(file.id, true)
   const hook = mountCloseActions()
@@ -121,7 +119,7 @@ it('confirms only the final dirty placement, keeps its tab through Save, and spa
 
 it('does not discard a shared dirty record when another view opens during confirmation', async () => {
   const file = seedEditorPlacementConsumers({ mode: 'edit' }, false)
-  main = await drawTabsFromMain(useAppStore)
+  main = await drawEditorPlacementConsumers()
   useAppStore.getState().setEditorDraft(file.id, 'keep these edits')
   useAppStore.getState().markFileDirty(file.id, true)
   const hook = mountCloseActions()
@@ -155,9 +153,20 @@ it.each([3, 30])(
     const source = useAppStore.getState().unifiedTabsByWorktree[EDITOR_PLACEMENT]![0]!
     const views = Array.from({ length: count }, (_, index) => ({
       ...source,
-      id: `folder-view-${index}`
+      id: `folder-view-${index}`,
+      entityId: `folder-content-${index}`
     }))
+    const file = useAppStore.getState().openFiles[0]!
     useAppStore.setState({
+      openFiles: [
+        file,
+        ...views.map((view, index) => ({
+          ...file,
+          id: view.entityId,
+          filePath: `/repo/file-${index}.md`,
+          relativePath: `file-${index}.md`
+        }))
+      ],
       unifiedTabsByWorktree: {
         ...useAppStore.getState().unifiedTabsByWorktree,
         [EDITOR_PLACEMENT]: views
@@ -182,7 +191,7 @@ it.each([3, 30])(
         [EDITOR_PLACEMENT]: 'x-source'
       }
     })
-    main = await drawTabsFromMain(useAppStore)
+    main = await drawEditorPlacementConsumers()
     let historyUpdates = 0
     const unsubscribe = useAppStore.subscribe((state, previous) => {
       if (
@@ -207,7 +216,7 @@ it.each([3, 30])(
 
 it('retains placement order across browser, terminal and agent openings', async () => {
   seedEditorPlacementConsumers()
-  main = await drawTabsFromMain(useAppStore)
+  main = await drawEditorPlacementConsumers()
   useAppStore.getState().createBrowserTab(EDITOR_PLACEMENT, 'https://example.com')
   await main.settle()
   const browserId = useAppStore.getState().browserTabsByWorktree[EDITOR_PLACEMENT]![0]!.id

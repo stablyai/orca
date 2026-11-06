@@ -2,14 +2,12 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import {
   EDITOR_OWNER,
   EDITOR_PLACEMENT,
-  seedEditorPlacementConsumers
+  seedEditorPlacementConsumers,
+  drawEditorPlacementConsumers
 } from '@/store/slices/editor-placement-consumers.test-fixture'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
@@ -67,7 +65,7 @@ it.each(['edit', 'branch', 'commit'] as const)(
       relativePath: 'All Changes',
       diffSource: 'combined-all'
     })
-    main = await drawTabsFromMain(useAppStore)
+    main = await drawEditorPlacementConsumers()
     const hook = renderHook(() =>
       useCombinedDiffSectionActions({
         activeGroupId: 'y-group',
@@ -112,7 +110,7 @@ it.each(['combined-all', 'combined-branch'] as const)(
       diffSource: 'combined-branch',
       combinedAlternate: { source: alternate }
     })
-    main = await drawTabsFromMain(useAppStore)
+    main = await drawEditorPlacementConsumers()
     const hook = renderHook(() =>
       useCombinedDiffSectionActions({
         activeGroupId: 'y-group',
