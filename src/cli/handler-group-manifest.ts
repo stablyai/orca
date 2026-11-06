@@ -4,6 +4,7 @@ import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { HOST_HANDLER_GROUPS } from './host-handler-groups'
 
 export type HandlerGroup = {
   name: string
@@ -250,36 +251,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     keys: ['agent-context'],
     load: async () => (await import('./handlers/introspection.js')).INTROSPECTION_HANDLERS
   },
-  {
-    name: 'environment',
-    keys: [
-      'host name',
-      'host list',
-      'environment add',
-      'environment list',
-      'environment show',
-      'environment rm'
-    ],
-    load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
-  },
-  {
-    name: 'managed-server',
-    keys: [
-      'environment status',
-      'environment update',
-      'environment rollback',
-      'environment recover',
-      'environment stop',
-      'environment cancel-stop',
-      'environment forget'
-    ],
-    load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
-  },
-  {
-    name: 'vm',
-    keys: ['vm recipe doctor'],
-    load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
-  },
+  ...HOST_HANDLER_GROUPS,
   {
     name: 'skill-sharing',
     keys: ['skills installed', 'skills share'],
