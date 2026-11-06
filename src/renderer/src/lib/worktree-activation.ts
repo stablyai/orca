@@ -53,6 +53,7 @@ export type ActivateAndRevealResult = {
   /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
   primaryTabId: string | null
+  startupAccepted?: boolean
 }
 
 const canInspectAgentActivationInventory = (): boolean =>
@@ -293,11 +294,10 @@ export function activateAndRevealWorktree(
     }
   }
 
-  if (
+  const startupAccepted =
     opts?.notifyHostRuntime !== false &&
     !opts?.backendStartupTerminalSpawned &&
-    opts?.providesInitialSurface !== true
-  ) {
+    opts?.providesInitialSurface !== true &&
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       ...(opts && 'runtimeEnvironmentId' in opts
         ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
@@ -305,9 +305,8 @@ export function activateAndRevealWorktree(
       startup: opts?.startup,
       agent: opts?.agent
     })
-  }
 
-  return { primaryTabId }
+  return { primaryTabId, ...(startupAccepted ? { startupAccepted } : {}) }
 }
 
 /** Dispatch sidebar IDs through folder/worktree entry points; folder routing enforces missing/unmounted/disconnected path guards (#10716). */

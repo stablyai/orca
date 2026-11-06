@@ -1,3 +1,8 @@
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import {
+  registeredAgentStartupLaunchToken,
+  registerAgentStartupTerminalBinding
+} from '@/lib/agent-startup-tab-binding'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
@@ -5,7 +10,10 @@ import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest
 } from '@/runtime/agent-session-create-request'
-import { rebindPendingAgentStartupPrompt } from '@/lib/agent-startup-delayed-delivery'
+import {
+  rebindPendingAgentStartupPrompt,
+  retireAgentStartupPromptForTerminal
+} from '@/lib/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,
@@ -17,10 +25,7 @@ import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import {
-  getRuntimeEnvironmentStatus,
-  runtimeEnvironmentSupportsCapability
-} from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { remoteRestoreSpawnIntentParams } from '../../runtime/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
@@ -324,6 +329,15 @@ export function createRemoteRuntimePtyTransport(
     }
     const boundPtyId = remotePtyId
     const boundEpoch = lifecycleEpoch
+    if (tabId && boundPtyId) {
+      startupDeliveryLaunchToken =
+        registeredAgentStartupLaunchToken(
+          useAppStore.getState(),
+          startupDeliveryTabId ?? tabId,
+          leafId,
+          boundPtyId
+        ) ?? startupDeliveryLaunchToken
+    }
     if (worktreeId && startupDeliveryTabId && startupDeliveryLaunchToken && boundPtyId) {
       rebindPendingAgentStartupPrompt({
         worktreeId,
@@ -2342,6 +2356,9 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function retireRemoteTerminalId(exitCode?: number): void {
+    if (remotePtyId) {
+      retireAgentStartupPromptForTerminal(remotePtyId)
+    }
     discardPendingInput()
     recovery.cancel()
     resetRecoveryReplacementPolicy()
@@ -3128,6 +3145,9 @@ export function createRemoteRuntimePtyTransport(
           terminalEnded = true
           clearPendingViewportClaim()
           emitRecoveryState()
+          if (subscribedPtyId) {
+            retireAgentStartupPromptForTerminal(subscribedPtyId)
+          }
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
@@ -3573,7 +3593,9 @@ export function createRemoteRuntimePtyTransport(
       }
       const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
       const promptStatus = freshLaunch
-        ? await getRuntimeEnvironmentStatus(createEnvironmentId).catch(() => null)
+        ? lastVerifiedRuntimeStatus(
+            useAppStore.getState().runtimeStatusByEnvironmentId.get(createEnvironmentId)
+          )
         : null
       const promptPlatform = authoritativeHostPlatform ?? promptStatus?.hostPlatform
       let promptPlan =
@@ -3816,13 +3838,25 @@ export function createRemoteRuntimePtyTransport(
           created.disposition !== undefined && createdTerminal.tabId
             ? toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(createdTerminal.tabId))
             : tabId
+        registerAgentStartupTerminalBinding({
+          tabId: deliveryTabId,
+          leafId,
+          ptyId: remotePtyId,
+          launchToken: launchTokenToSend,
+          agent: launchAgentToSend,
+          launchConfig: createdTerminal.launchConfig ?? launchConfigToSend
+        })
         startupDeliveryTabId = deliveryTabId
         void deliverCreatedWebRuntimeAgentSessionPrompt(
           { outcome: { status: 'created' }, hostTabId: createdTerminal.tabId },
           {
             agent: launchAgentToSend,
             rendererTabId: deliveryTabId,
-            startupDelivery: { worktreeId, launchToken: launchTokenToSend },
+            startupDelivery: {
+              worktreeId,
+              launchToken: launchTokenToSend,
+              environmentId: createEnvironmentId
+            },
             ...hostedAgentPromptDelivery(
               promptPlan,
               freshLaunch.prompt,

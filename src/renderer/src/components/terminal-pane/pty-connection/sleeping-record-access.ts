@@ -1,3 +1,4 @@
+import { registeredAgentStartupLaunchToken } from '@/lib/agent-startup-tab-binding'
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
 import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { useAppStore } from '@/store/index'
@@ -67,7 +68,16 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   session.launchToken =
     session.paneStartup?.launchConfig || session.paneStartup?.freshAgentLaunch
       ? (session.paneStartup.launchToken ?? createBrowserUuid())
-      : undefined
+      : session.runtimeEnvironmentId && !session.paneStartup
+        ? registeredAgentStartupLaunchToken(
+            useAppStore.getState(),
+            session.deps.tabId,
+            session.pane.leafId,
+            useAppStore.getState().terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[
+              session.pane.leafId
+            ] ?? ''
+          )
+        : undefined
   session.startupDraftAgent =
     session.paneStartup?.launchAgent ?? session.paneStartup?.initialAgentStatus?.agent
   session.startupDraftAgentConfig = session.startupDraftAgent
@@ -158,6 +168,8 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const persistedLaunchAgent = recognizeAgentProcessFromCommandLine(
       effectiveLaunchConfig.agentCommand
     )?.agent
+    const effectiveToken = metadata?.launchToken ?? session.launchToken
+    const registered = useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
     useAppStore.getState().registerAgentLaunchConfig(session.cacheKey, effectiveLaunchConfig, {
       agentType:
         metadata?.launchAgent ??
@@ -168,7 +180,10 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         ? { launchToken: metadata?.launchToken ?? session.launchToken }
         : {}),
       tabId: session.deps.tabId,
-      leafId: session.pane.leafId
+      leafId: session.pane.leafId,
+      ...(registered?.identity.launchToken === effectiveToken && registered?.identity.terminalHandle
+        ? { terminalHandle: registered.identity.terminalHandle }
+        : {})
     })
   }
   session.clearRegisteredStartupLaunchConfig = (expected = session.paneStartup): void => {

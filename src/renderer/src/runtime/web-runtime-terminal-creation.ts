@@ -48,7 +48,7 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
   args: {
     agent: TuiAgent
     rendererTabId?: string
-    startupDelivery?: { worktreeId: string; launchToken: string }
+    startupDelivery?: { worktreeId: string; launchToken: string; environmentId: string }
     beforePaste?: () => boolean
     launchPty?: Promise<string | null>
     promptAfterReady?: string

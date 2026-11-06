@@ -204,7 +204,13 @@ beforeEach(() => {
     setup: undefined
   })
   mocks.updateWorktreeMeta.mockResolvedValue(undefined)
-  mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
+  mocks.activateAndRevealWorktree.mockImplementation(() =>
+    (mocks.store.repos as { executionHostId?: string }[]).some((repo) =>
+      repo.executionHostId?.startsWith('runtime:')
+    )
+      ? { primaryTabId: null, startupAccepted: true }
+      : { primaryTabId: 'tab-1' }
+  )
   mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
   mocks.store = {
     repos: [

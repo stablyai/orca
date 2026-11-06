@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
+  directWorkItemFailureReporter,
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
   unavailableAgentErrorMessage,
@@ -28,6 +29,7 @@ import {
 } from '@/lib/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-types'
 import {
+  directWorkItemStartupAccepted,
   beginDirectWorkItemStructuredLaunch,
   finishDirectWorkItemPrompt
 } from '@/lib/launch-work-item-direct-agent-routing'
@@ -44,11 +46,7 @@ export async function launchWorkItemDirect(
   args = captureDirectWorkItemLaunchArgs(args)
   let agentArgs = args.agentArgs
   let creationAccepted = false
-  const reportFailure = (message: string): false => {
-    toast.error(message)
-    args.onFailureNotified?.()
-    return false
-  }
+  const reportFailure = directWorkItemFailureReporter(args.onFailureNotified)
   try {
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -286,8 +284,10 @@ export async function launchWorkItemDirect(
     const primaryTabId = activation.primaryTabId
     if (context.target.kind === 'environment') {
       // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
-      const startupSeeded = Boolean(primaryTabId && startupPlan?.launchToken && !startupPlanFailed)
-      return startupSeeded || reportFailure(workspaceActivationErrorMessage())
+      return (
+        directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
+        reportFailure(workspaceActivationErrorMessage())
+      )
     }
     const completed = finishDirectWorkItemPrompt({
       primaryTabId,

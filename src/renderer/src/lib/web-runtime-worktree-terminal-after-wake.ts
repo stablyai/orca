@@ -27,18 +27,18 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     /** The caller knows an unlisted workspace is empty: it just created it, or the host never answers. */
     unknownHostCountIsEmpty?: boolean
   }
-): void {
+): boolean {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   if (!worktree) {
-    return
+    return false
   }
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    return
+    return false
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
@@ -51,26 +51,26 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         (isWebTerminalSurfaceTabId(tab.id) || tabHasLivePty(state.ptyIdsByTabId, tab.id))
     )
   ) {
-    return
+    return false
   }
 
   if (!launchAgent) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
     if (hasLivePty) {
-      return
+      return false
     }
 
     const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
     if (hasMirroredHostTabs) {
       // Why: the host session still owns these tabs — wait for the mirror to repopulate PTY handles instead of duplicating a terminal.
-      return
+      return false
     }
 
     const hostTerminalTabCount =
       getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) ??
       (opts?.unknownHostCountIsEmpty ? 0 : null)
     if (hostTerminalTabCount !== null && hostTerminalTabCount > 0) {
-      return
+      return false
     }
     if (hostTerminalTabCount === null && !opts?.startup) {
       // Unlisted hosts cannot answer yet; their first real list seeds emptiness. Keep the capability gate until all supported hosts advertise it.
@@ -91,7 +91,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         .catch((error) => {
           console.error('web runtime terminal after wake failed', worktreeId, error)
         })
-      return
+      return false
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
@@ -102,15 +102,15 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           Object.hasOwn(state.tabsByWorktree, worktreeId)
         )
       ) {
-        return
+        return false
       }
     } else if (renderableTabCount === 0) {
-      return
+      return false
     }
   }
 
   if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
-    return
+    return false
   }
 
   const startup = opts?.startup
@@ -167,4 +167,5 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     .finally(() => {
       endWebRuntimeWakeTerminalRespawn(worktreeId)
     })
+  return true
 }

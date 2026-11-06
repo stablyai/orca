@@ -1,3 +1,4 @@
+import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -109,6 +110,15 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       }
       // Publish the tab identity first so a late layout callback cannot leave a tab and pane split.
       session.syncPanePtyLayoutBinding(ptyId)
+    }
+    if (session.paneStartup?.freshAgentLaunch && session.launchToken) {
+      registerAgentStartupTerminalBinding({
+        tabId: session.deps.tabId,
+        leafId,
+        ptyId,
+        launchToken: session.launchToken,
+        agent: session.paneStartup.launchAgent
+      })
     }
     if (session.paneStartup && !session.startupPtyBound) {
       // Settles the captured one-shot startup only after this pane owns a concrete PTY.

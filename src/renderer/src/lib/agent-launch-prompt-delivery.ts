@@ -34,6 +34,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   timeoutMs?: number
   beforePaste?: () => boolean
   claimFirstWrite?: () => boolean
+  onDeliveryFailure?: () => void
   onTimeout?: () => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
@@ -91,13 +92,21 @@ export function deliverLaunchPromptToAgentTab(args: {
   }).then(
     (delivered) => {
       if (seeded && !delivered && !deliversViaNativePrefill) {
-        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+        if (args.onDeliveryFailure) {
+          args.onDeliveryFailure()
+        } else {
+          useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+        }
       }
       return delivered || deliversViaNativePrefill
     },
     (error) => {
       if (seeded && !deliversViaNativePrefill) {
-        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+        if (args.onDeliveryFailure) {
+          args.onDeliveryFailure()
+        } else {
+          useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+        }
       }
       throw error
     }
@@ -112,4 +121,25 @@ export function notifyAgentLaunchPromptNotSent(agent: TuiAgent): void {
       { value0: structuredAgentLabel(agent) }
     )
   )
+}
+
+export function settleAgentLaunchPromptFailure(args: {
+  tabId: string
+  agent: TuiAgent
+  content: string
+  submit: boolean
+}): void {
+  const state = useAppStore.getState()
+  if (args.submit) {
+    state.markNativeChatLaunchPromptFailed(args.tabId)
+  }
+  // Retain unsent text even for agents without a transcript renderer.
+  if (!state.nativeChatLaunchDraftByTabId[args.tabId]) {
+    state.seedNativeChatLaunchDraft({
+      tabId: args.tabId,
+      agent: args.agent,
+      text: args.content,
+      createdAt: Date.now()
+    })
+  }
 }

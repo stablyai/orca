@@ -1,3 +1,4 @@
+import { createTerminalStreamFixtures } from './remote-runtime-pty-transport-stream-fixtures'
 import { ExplicitEnsure } from '../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/web-runtime-terminal-creation'
@@ -7,22 +8,23 @@ const delivery = vi.hoisted(() =>
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: delivery
 }))
-const appStore = vi.hoisted(() => ({
-  getState: vi.fn(() => {
-    throw new Error('These transport fixtures must not read app-store ownership')
-  })
+const appStore = vi.hoisted(() => {
+  const state = {
+    runtimeStatusByEnvironmentId: new Map(),
+    registerAgentLaunchConfig: vi.fn(),
+    agentLaunchConfigByPaneKey: {}
+  }
+  return { getState: vi.fn(() => state) }
+})
+vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
+  refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => undefined)
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
 
-afterEach(() => {
-  expect(appStore.getState).not.toHaveBeenCalled()
-})
-
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
-  decodeTerminalStreamJson,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
@@ -117,22 +119,10 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   function latestRemoteSubscribePayload(): { streamId: number } {
-    const send = unsubscribe?.sendBinary as unknown as
-      | { mock: { calls: [Uint8Array<ArrayBufferLike>][] } }
-      | undefined
-    const frames =
-      send?.mock.calls
-        .map((call) => decodeTerminalStreamFrame(call[0]))
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe) ?? []
-    const frame = frames.at(-1)
-    if (!frame) {
-      throw new Error('missing remote terminal subscribe frame')
-    }
-    const payload = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
-    if (!payload) {
-      throw new Error('invalid remote terminal subscribe frame')
-    }
-    return payload
+    return createTerminalStreamFixtures({
+      getCallbacks: () => subscriptionCallbacks,
+      sendBinary: vi.mocked(unsubscribe!.sendBinary)
+    }).latestSubscribePayload()
   }
 
   it('round-trips a strict saved ensure and its actual refused shell result', async () => {
@@ -586,8 +576,15 @@ describe('createRemoteRuntimePtyTransport', () => {
       await import('../../../../main/opencode/opencode-model-startup-plan')
     const { resolveAgentStartupPlanInputs } =
       await import('../../../../shared/agent-launch/startup/agent-startup-plan-inputs')
+    let statusAnswered = false
     runtimeCall.mockImplementation(
       async (args: { method?: string; params?: Record<string, unknown> }) => {
+        if (args.method === 'status.get') {
+          if (statusAnswered) {
+            return await new Promise(() => {})
+          }
+          statusAnswered = true
+        }
         const response = await original(args)
         if (args.method === 'terminal.createAgentSession') {
           const params = args.params!
@@ -619,6 +616,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             ...response,
             result: {
               ...response.result,
+              disposition: 'created',
               terminal: { ...response.result.terminal, tabId: 'host-adopted' }
             }
           }
@@ -670,7 +668,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       { outcome: { status: 'created' }, hostTabId: 'host-adopted' },
       expect.objectContaining({
         agent: 'codex',
-        rendererTabId: 'tab-1',
+        rendererTabId: 'web-terminal-host-adopted',
         promptAfterReady: 'ship it',
         submitPrompt: false,
         forcePromptPaste: true

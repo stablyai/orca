@@ -357,3 +357,34 @@ it.each(['dialog', 'saved-action'] as const)(
     transport.disconnect()
   }
 )
+
+it('accepts a paired work-item handoff with no immediate renderer tab', async () => {
+  mocks.store.repos = [{ id: 'repo-1', path: '/repo', executionHostId: 'runtime:host' }]
+  mocks.store.runtimeDetectedAgents = { host: ['codex'] }
+  mocks.store.runtimeStatusByEnvironmentId = new Map([
+    ['host', { status: { runtimeId: 'rt', hostPlatform: 'linux' } }]
+  ])
+  mocks.store.ensureRuntimeDetectedAgents = vi.fn(async () => ['codex'])
+  mocks.store.settings = {
+    defaultTuiAgent: 'codex',
+    disabledTuiAgents: [],
+    nativeChatProviders: {}
+  }
+  hostMocks.callRuntimeRpc.mockImplementation(async (_target, method) =>
+    method === 'settings.getAgentLaunch'
+      ? {
+          settings: {
+            defaultTuiAgent: 'codex',
+            disabledTuiAgents: [],
+            agentCmdOverrides: {},
+            agentDefaultArgs: {}
+          }
+        }
+      : { agents: ['codex'] }
+  )
+  vi.spyOn(inventory, 'loadProjectLaunchContext').mockResolvedValue(undefined)
+  mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null, startupAccepted: true })
+  const completed = await launch({ agentOverride: 'codex' })
+  expect(mocks.toastError.mock.calls).toEqual([])
+  expect(completed).toBe(true)
+})

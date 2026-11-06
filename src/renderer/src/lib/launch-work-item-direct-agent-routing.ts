@@ -207,3 +207,14 @@ export function finishDirectWorkItemPrompt(args: {
   }
   return true
 }
+
+export function directWorkItemStartupAccepted(
+  activation: { primaryTabId: string | null; startupAccepted?: boolean },
+  plan: ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan'],
+  planFailed: boolean
+): boolean {
+  return (
+    Boolean(activation.primaryTabId && plan?.launchToken && !planFailed) ||
+    activation.startupAccepted === true
+  )
+}

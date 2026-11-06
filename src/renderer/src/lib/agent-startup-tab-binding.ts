@@ -1,4 +1,6 @@
-import type { useAppStore } from '@/store'
+import { pendingAgentStartupDeliveries } from './agent-startup-delivery-guards'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -64,5 +66,120 @@ export function hasRegisteredStartupLaunch(
 ): boolean {
   return Object.values(state.agentLaunchConfigByPaneKey ?? {}).some(
     (entry) => entry.identity.tabId === tabId && entry.identity.launchToken === launchToken
+  )
+}
+
+/** Only a concrete binding to the registered terminal may recover a consumed startup's identity. */
+export function registeredAgentStartupLaunchToken(
+  state: AppStoreSnapshot,
+  tabId: string,
+  leafId: string | undefined,
+  ptyId: string
+): string | undefined {
+  if (!leafId) {
+    return undefined
+  }
+  const entry = state.agentLaunchConfigByPaneKey[`${tabId}:${leafId}`]
+  return entry?.identity.tabId === tabId &&
+    entry.identity.leafId === leafId &&
+    entry.identity.terminalHandle === (parseRemoteRuntimePtyId(ptyId)?.handle ?? ptyId)
+    ? entry.identity.launchToken
+    : undefined
+}
+
+export function subscribeAgentStartupBindings(flush: () => void): () => void {
+  const initial = useAppStore.getState()
+  let tabs = initial.tabsByWorktree
+  let pending = initial.pendingStartupByTabId
+  let configs = initial.agentLaunchConfigByPaneKey
+  let ptys = initial.ptyIdsByTabId
+  let layouts = initial.terminalLayoutsByTabId
+  return useAppStore.subscribe((state) => {
+    if (
+      state.tabsByWorktree === tabs &&
+      state.pendingStartupByTabId === pending &&
+      state.agentLaunchConfigByPaneKey === configs &&
+      state.ptyIdsByTabId === ptys &&
+      state.terminalLayoutsByTabId === layouts
+    ) {
+      return
+    }
+    tabs = state.tabsByWorktree
+    pending = state.pendingStartupByTabId
+    configs = state.agentLaunchConfigByPaneKey
+    ptys = state.ptyIdsByTabId
+    layouts = state.terminalLayoutsByTabId
+    flush()
+  })
+}
+
+export function registerAgentStartupTerminalBinding(args: {
+  tabId: string
+  leafId?: string
+  ptyId: string
+  launchToken: string
+  agent?: NonNullable<Parameters<AppStoreSnapshot['registerAgentLaunchConfig']>[2]>['agentType']
+  launchConfig?: Parameters<AppStoreSnapshot['registerAgentLaunchConfig']>[1]
+}): void {
+  if (!args.leafId) {
+    return
+  }
+  const state = useAppStore.getState()
+  const paneKey = `${args.tabId}:${args.leafId}`
+  const registered = state.agentLaunchConfigByPaneKey[paneKey]
+  const terminalHandle = parseRemoteRuntimePtyId(args.ptyId)?.handle ?? args.ptyId
+  if (
+    registered?.identity.launchToken === args.launchToken &&
+    registered.identity.terminalHandle === terminalHandle
+  ) {
+    return
+  }
+  state.registerAgentLaunchConfig(
+    paneKey,
+    args.launchConfig ?? registered?.launchConfig ?? { agentArgs: '', agentEnv: {} },
+    {
+      tabId: args.tabId,
+      leafId: args.leafId,
+      launchToken: args.launchToken,
+      terminalHandle,
+      agentType: args.agent
+    }
+  )
+}
+
+export function scheduleStaleStartupRecheck(
+  key: string,
+  staleStartupRecheckTimers: Map<string, ReturnType<typeof globalThis.setTimeout>>,
+  flushPendingAgentStartupDeliveries: () => void,
+  stopPendingAgentStartupSubscriptionIfIdle: () => void
+): void {
+  if (staleStartupRecheckTimers.has(key)) {
+    return
+  }
+  staleStartupRecheckTimers.set(
+    key,
+    globalThis.setTimeout(() => {
+      staleStartupRecheckTimers.delete(key)
+      const delivery = pendingAgentStartupDeliveries.get(key)
+      if (!delivery) {
+        stopPendingAgentStartupSubscriptionIfIdle()
+        return
+      }
+      const state = useAppStore.getState()
+      if ('prompt' in delivery) {
+        flushPendingAgentStartupDeliveries()
+        return
+      }
+      const queuedLaunchToken = getPendingStartupLaunchToken(state, delivery.tabId)
+      if (
+        queuedLaunchToken === undefined &&
+        !hasRegisteredStartupLaunch(state, delivery.tabId, delivery.launchToken)
+      ) {
+        pendingAgentStartupDeliveries.delete(key)
+      } else {
+        flushPendingAgentStartupDeliveries()
+      }
+      stopPendingAgentStartupSubscriptionIfIdle()
+    }, 1000)
   )
 }
