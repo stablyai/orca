@@ -116,6 +116,9 @@ describe('ExternalChromiumBrowserProcess', () => {
       getBrowserHostLeaseRegistry: () => {
         throw new Error('No browser host lease registry')
       },
+      getBrowserHostRequestRegistry: () => {
+        throw new Error('No browser host request registry')
+      },
       getRuntimeBrowserPageRegistry: () => {
         throw new Error('No runtime browser page registry')
       },

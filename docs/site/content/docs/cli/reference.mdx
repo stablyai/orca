@@ -215,6 +215,15 @@ By default, `terminal read` returns the accumulated output stream with terminal 
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
 
+## Chats
+
+```bash
+orca chat rename --session <sessionId> --name "Release notes" --json
+orca chat rename --name "Migrate auth"
+```
+
+Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
+
 ## Files
 
 ```bash

@@ -209,6 +209,71 @@ describe('environmentForwardChecks', () => {
     }
   )
 
+  it('never calls a server that proved the saved key replaced, whatever key it publishes (#37766)', async () => {
+    const readPublishedKey = vi.fn(async () => 'new-login-key')
+    const unpaired: OrcadTunnelIdentity = { verdict: 'unpaired', detail: 'token refused' }
+    const checks = await environmentForwardChecks(
+      {
+        resolveRemotePort: async () => 6_768,
+        verifyIdentity: async () => unpaired,
+        readPublishedKey
+      },
+      input
+    )
+    await expect(checks.verify(46_768)).resolves.toEqual(unpaired)
+    expect(readPublishedKey).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { published: 'new-login-key', replaced: true },
+    { published: 'pinned-key', replaced: false },
+    { published: null, replaced: false }
+  ])(
+    'tells a pairing to a replaced server ($published) apart from a taken port (#37766)',
+    async ({ published, replaced }) => {
+      const paired = {
+        ...input.environment,
+        id: 'env-dev box',
+        name: 'dev box',
+        preferredEndpointId: 'tunnel',
+        endpoints: [
+          {
+            id: 'tunnel',
+            kind: 'websocket' as const,
+            label: 'SSH tunnel',
+            endpoint: 'ws://127.0.0.1:46768',
+            deviceToken: 'token',
+            publicKeyB64: 'pinned-key'
+          }
+        ]
+      }
+      const readPublishedKey = vi.fn(async () => published)
+      const checks = await environmentForwardChecks(
+        {
+          resolveRemotePort: async () => 6_770,
+          verifyIdentity: async () => FOREIGN,
+          readPublishedKey
+        },
+        { ...input, environment: paired }
+      )
+      const state = setup([], 0)
+      const result = forwardToVerifiedOrcad({ ...state.args, ...checks })
+      if (replaced) {
+        await expect(result).rejects.toBeInstanceOf(OrcadManagedIdentityError)
+        await expect(result).rejects.toThrow(
+          /dev box is not the Orca server this desktop paired with/
+        )
+        await expect(result).rejects.toThrow(
+          /orca environment forget --environment 'env-dev box' --yes.*Connect on the SSH host/
+        )
+        await expect(result).rejects.not.toThrow(/another Orca/)
+      } else {
+        await expect(result).rejects.toThrow(/remote port 6770.*another Orca/)
+      }
+      expect(readPublishedKey).toHaveBeenCalledWith({ ...input, environment: paired })
+    }
+  )
+
   it('still re-reads the port when the wake itself fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.resolveContext.mockRejectedValueOnce(new Error('exec lost'))

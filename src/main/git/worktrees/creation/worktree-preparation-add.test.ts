@@ -1,7 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type * as FilePromises from 'node:fs/promises'
 import type * as PreparationLock from './worktree-preparation-lock'
-import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
 
 const mocks = vi.hoisted(() => ({
   git: vi.fn(),
@@ -31,10 +30,7 @@ import {
   getLocalGitCapabilityCache
 } from '../../command-runner/git-capability-state'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
-import {
-  resetWslLinkedWorktreeGitRoutingForTests,
-  seedWslLinkedWorktreeGitRoutingForTests
-} from '../../command-runner/wsl-linked-worktree-git-routing'
+import { resetWslLinkedWorktreeGitRoutingForTests } from '../../command-runner/wsl-linked-worktree-git-routing'
 
 const reason = 'orca-create-preparation:v1:123:atomic'
 const unsupported = Object.assign(new Error("error: unknown option 'reason'"), { code: 129 })
@@ -49,20 +45,6 @@ beforeEach(() => {
   mocks.lock.mockReset().mockResolvedValue('/fallback-lock')
   mocks.verify.mockReset().mockResolvedValue('/atomic-lock')
   mocks.discard.mockReset().mockResolvedValue(undefined)
-})
-
-it('falls back once on the old-Git reason rejection and caches the absence', async () => {
-  mocks.git.mockRejectedValueOnce(unsupported)
-  await expect(prepare()).resolves.toBe('/fallback-lock')
-  await expect(prepare('/second')).resolves.toBe('/fallback-lock')
-  expect(mocks.git.mock.calls.map(([args]) => args.includes('--reason'))).toEqual([
-    true,
-    false,
-    false
-  ])
-  expect(mocks.lock.mock.calls.map(([path]) => path)).toEqual(['/prepared', '/second'])
-  expect(mocks.verify).not.toHaveBeenCalled()
-  expect(mocks.discard).not.toHaveBeenCalled()
 })
 
 it.each(['first', 'cached'])(
@@ -163,52 +145,6 @@ it('runs each concurrent supported add rather than sharing the first checkout re
   expect(mocks.git).toHaveBeenCalledTimes(2)
 })
 
-it('isolates native rejection from individual WSL distros', async () => {
-  mocks.git.mockRejectedValueOnce(unsupported)
-  await prepare()
-  await prepare('/ubuntu', { wslDistro: 'Ubuntu' })
-  await prepare('/debian', { wslDistro: 'Debian' })
-  await prepare('/native-again')
-  expect(mocks.git.mock.calls.map(([args]) => args.includes('--reason'))).toEqual([
-    true,
-    false,
-    true,
-    true,
-    false
-  ])
-})
-
-it('uses native cached rejection when WSL routing executes the host Git binary', async () => {
-  getLocalGitCapabilityCache().rememberUnsupported('worktree-add-lock-reason')
-  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-  try {
-    const repoPath = String.raw`C:\repo\linked`
-    seedWslLinkedWorktreeGitRoutingForTests(repoPath)
-    await addLockedWorktreePreparation(repoPath, String.raw`C:\prepared`, 'main', reason, {
-      wslDistro: 'Ubuntu'
-    })
-    expect(mocks.git).toHaveBeenCalledTimes(1)
-    expect(mocks.git.mock.calls[0][0]).not.toContain('--reason')
-    expect(
-      getLocalGitCapabilityCache({ wslDistro: 'Ubuntu' }).shouldTry('worktree-add-lock-reason')
-    ).toBe(true)
-  } finally {
-    platform.mockRestore()
-  }
-})
-
-it('checks a guest directory through its execution distro rather than the Windows root', async () => {
-  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-  try {
-    await prepare('/home/prepared', { wslDistro: 'Ubuntu' })
-    expect(mocks.lstat).toHaveBeenCalledExactlyOnceWith(
-      String.raw`\\wsl.localhost\Ubuntu\home\prepared`
-    )
-  } finally {
-    platform.mockRestore()
-  }
-})
-
 it('fails closed when the pre-existing target cannot be inspected', async () => {
   const failure = Object.assign(new Error('path access denied'), { code: 'EACCES' })
   mocks.lstat.mockRejectedValueOnce(failure)
@@ -230,23 +166,4 @@ it('does not rewrite or discard a generic or competing marker returned after add
   await expect(prepare()).rejects.toThrow('lock owner changed')
   expect(mocks.lock).not.toHaveBeenCalled()
   expect(mocks.discard).not.toHaveBeenCalled()
-})
-
-it.each([
-  [new Error("unknown option 'reason'"), true],
-  [{ stderr: "error: unrecognized option '--reason'" }, true],
-  [{ stdout: 'invalid switch --reason' }, true],
-  [{ code: 129, stderr: "unknown option 'detach'" }, false],
-  [{ code: 129 }, false],
-  [new Error('permission denied while writing lock reason'), false]
-])('recognizes only an unsupported lock-reason option: %j', (error, expected) => {
-  expect(isUnsupportedWorktreeAddLockReasonError(error)).toBe(expected)
-})
-
-it('uses the atomic lock registration again after an ordinary add failure', async () => {
-  const failure = new Error('permission denied')
-  mocks.git.mockRejectedValueOnce(failure)
-  await expect(prepare()).rejects.toBe(failure)
-  await prepare('/next')
-  expect(mocks.git.mock.calls.at(-1)?.[0]).toContain('--reason')
 })

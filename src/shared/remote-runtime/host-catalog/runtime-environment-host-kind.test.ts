@@ -7,11 +7,20 @@ const wsl = { kind: 'wsl' as const, distro: 'Ubuntu', localPort: 1, remotePort: 
 describe('classifyRuntimeEnvironmentHost', () => {
   it.each([
     ['no deployment', {}],
-    ['a null deployment', { orcadDeployment: null }],
-    ['an SSH link saved without its kind', { orcadDeployment: tunnel }],
-    ['an SSH link', { orcadDeployment: { kind: 'ssh' as const, ...tunnel } }]
+    ['a null deployment', { orcadDeployment: null }]
   ])('treats %s as a network host', (_name, environment) => {
     expect(classifyRuntimeEnvironmentHost(environment)).toEqual({ kind: 'network', environment })
+  })
+
+  it.each([
+    ['an SSH link saved without its kind', { orcadDeployment: tunnel }],
+    ['an SSH link', { orcadDeployment: { kind: 'ssh' as const, ...tunnel } }],
+    [
+      'SSH access to a paired server',
+      { sshAccess: { ...tunnel, endpointId: 'tunnel', previousPreferredEndpointId: 'lan' } }
+    ]
+  ])('treats %s as an SSH-tunneled host (#37766)', (_name, environment) => {
+    expect(classifyRuntimeEnvironmentHost(environment)).toEqual({ kind: 'ssh', environment })
   })
 
   it('treats a WSL deployment as a WSL host and hands back its link', () => {

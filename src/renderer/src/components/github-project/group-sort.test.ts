@@ -36,7 +36,8 @@ const numberField: GitHubProjectField = {
 function makeRow(
   id: string,
   position: number,
-  values: GitHubProjectRow['fieldValuesByFieldId']
+  values: GitHubProjectRow['fieldValuesByFieldId'],
+  parentIssue: GitHubProjectRow['content']['parentIssue'] = null
 ): GitHubProjectRow {
   return {
     id,
@@ -52,7 +53,7 @@ function makeRow(
       repository: 'acme/repo',
       assignees: [],
       labels: [],
-      parentIssue: null,
+      parentIssue,
       issueType: null
     },
     fieldValuesByFieldId: values,
@@ -181,6 +182,37 @@ describe('groupRows', () => {
     const groups = groupRows(makeTable(view, rows), rows)
 
     expect(groups.map((group) => group.label)).toEqual(['-10', '-2', '1', '2', '8', '10'])
+  })
+
+  it('groups by Parent issue from row content, since GitHub returns no field value for it', () => {
+    const parentField: GitHubProjectField = {
+      kind: 'field',
+      id: 'F_parent',
+      name: 'Parent issue',
+      dataType: 'PARENT_ISSUE'
+    }
+    const view = { ...makeView(parentField), groupByFields: [parentField] }
+    const parent = (repo: string, number: number) => ({
+      number,
+      title: `Parent ${number}`,
+      url: `https://github.com/${repo}/issues/${number}`
+    })
+    const rows = [
+      makeRow('a1', 0, {}, parent('acme/repo', 101)),
+      makeRow('b', 1, {}, parent('acme/repo', 9)),
+      makeRow('orphan', 2, {}),
+      makeRow('a2', 3, {}, parent('acme/repo', 101)),
+      makeRow('other-repo', 4, {}, parent('acme/other', 101))
+    ]
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => [group.label, group.rows.map((r) => r.id)])).toEqual([
+      ['#9', ['b']],
+      ['#101', ['a1', 'a2']],
+      ['#101', ['other-repo']],
+      ['No Parent issue', ['orphan']]
+    ])
   })
 })
 

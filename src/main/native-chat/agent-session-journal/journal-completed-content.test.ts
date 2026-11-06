@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { AcpToolTimeline } from '../../acp/acp-tool-timeline'
+import { AcpItemOwnership } from '../../acp/acp-item-ownership'
 import { PiRpcMessages } from '../../pi/rpc-messages'
 import { PiRpcContextUsage } from '../../pi/rpc-context-usage'
 import { JsonlRpcTimelineLane } from '../../jsonl-rpc/timeline-lane'
@@ -108,7 +109,7 @@ it.each(['acp', 'pi'] as const)(
       onFailed
     })
     cleanups.push(() => lane.dispose())
-    const acp = new AcpToolTimeline(),
+    const acp = new AcpToolTimeline(new AcpItemOwnership()),
       pi = new PiRpcMessages(GENERATION, new PiRpcContextUsage())
     const size = (agent === 'acp' ? 9 : 2) * 1024 * 1024
     const input = { text: 'i'.repeat(size) },

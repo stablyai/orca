@@ -82,6 +82,7 @@ export async function writeTerminalArtifactFile(
         const committed = await statLocalTerminalArtifact(grant.absolutePath)
         grant.statIdentity = terminalFileStatIdentity(committed.stats)
         grant.contentDigest = committed.contentDigest
+        grant.contentBlocks = committed.contentBlocks
         grants.refreshTerminalFileGrant(grant)
         return { ok: true }
       } finally {
