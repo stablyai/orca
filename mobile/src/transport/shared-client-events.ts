@@ -59,7 +59,9 @@ export function subscribeSharedClientEvents(
       )
     } catch (error) {
       // A page bridge throws when it can't open a stream; later subscribers must retry the wire.
-      streams.delete(client)
+      if (streams.get(client) === stream) {
+        streams.delete(client)
+      }
       throw error
     }
     if (streams.get(client) === stream) {

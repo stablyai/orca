@@ -81,7 +81,7 @@ class MobileNativeChatFollowUpPreference {
           }
         })
         .catch(() => {
-          // Keep this host's last answer until a ready snapshot repairs the gap.
+          // Keep this host's last answer until a change event, or the next connection's ready, repairs it.
         })
     }
     read()
