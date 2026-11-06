@@ -119,7 +119,8 @@ test('SQLite candidate retains a remote automation run across serve restart', as
       'automation.runNow',
       { id: automation.result.automation.id }
     )
-    expect(['dispatching', 'dispatched']).toContain(run.result.run.status)
+    // Run now acknowledges the saved pending row; dispatch to the missing host happens detached.
+    expect(run.result.run.status).toBe('pending')
 
     const beforeRestart = await host.client.call<{ runs: { id: string }[] }>('automation.runs', {
       automationId: automation.result.automation.id
