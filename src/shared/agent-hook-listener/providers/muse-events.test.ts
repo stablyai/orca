@@ -189,6 +189,37 @@ describe('Muse hook events', () => {
     expect(normalizeAndAccept(state, 'muse', leadStop)?.payload.state).toBe('done')
   })
 
+  // Muse 1.4.14 workflow trace: the lead stops before the workflow ends, then Muse wakes it in a run of its own.
+  it('holds a launched workflow until the wake run stops, even if the log never settles it', () => {
+    writeFileSync(sessionLogPath(), '')
+    normalizeAndAccept(state, 'muse', {
+      ...main,
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'go'
+    })
+    normalizeAndAccept(state, 'muse', {
+      ...main,
+      hook_event_name: 'PostToolUse',
+      tool_name: 'workflow',
+      tool_response: JSON.stringify({
+        status: 'launched',
+        taskId: '01a1b2fe-77e2-7da1-93d0-ceb6bd204242'
+      })
+    })
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
+    })
+    const woken = normalizeAndAccept(state, 'muse', {
+      ...main,
+      turn_id: '01a1b2ff-1f9e-7260-9e9f-b888eaa025be',
+      hook_event_name: 'Stop',
+      stop_hook_active: false,
+      last_assistant_message: 'Workflow finished.'
+    })
+    expect(woken?.payload.state).toBe('done')
+  })
+
   it('reports a request_user_input question from the session log until it settles', () => {
     const logPath = sessionLogPath()
     const body = { ...main, hook_event_name: 'UserPromptSubmit', prompt: 'ask my favorite color' }

@@ -5,13 +5,19 @@ import {
 } from '../../agent-status/contracts/agent-status-types'
 import {
   agentChildWorkLiveness,
-  type AgentChildWorkLiveness
+  type AgentChildWorkLiveness,
+  type AgentChildWorkLivenessCandidate
 } from '../../agent-status/child-work/agent-status-child-work-liveness'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus
 } from '../../agent-status/lifecycle/agent-lead-status-fold'
-import { createMuseSessionLogState, readMusePendingUserInput } from '../../muse-session-log'
+import {
+  createMuseSessionLogState,
+  readMusePendingUserInput,
+  readMuseRunningWorkflows,
+  recordMuseWorkflowLaunch
+} from '../../muse-session-log'
 import type { HookListenerState, MusePaneState } from '../listener-state'
 import {
   resolvePrompt,
@@ -48,14 +54,32 @@ function readChildSessionId(hookPayload: Record<string, unknown>): string | unde
   return readString(hookPayload, 'child_session_id') ?? readString(hookPayload, 'session_id')
 }
 
-/** Spawned children outlive the main agent's turn; Muse wakes the main agent when they finish. */
+/** Spawned children and workflows outlive the main agent's turn; Muse wakes the main agent when they finish. */
 function museChildWorkLiveness(pane: MusePaneState, now: number): AgentChildWorkLiveness {
   for (const [childSessionId, lastHookAt] of pane.runningChildren) {
     if (now - lastHookAt >= CHILD_INACTIVITY_LIMIT_MS) {
       pane.runningChildren.delete(childSessionId)
     }
   }
-  return agentChildWorkLiveness(Array.from(pane.runningChildren.keys(), () => ({ kind: 'agent' })))
+  const work: AgentChildWorkLivenessCandidate[] = Array.from(pane.runningChildren.keys(), () => ({
+    kind: 'agent'
+  }))
+  // Best effort: a workflow's end is only in Muse's undocumented session log.
+  const workflows = pane.log
+    ? readMuseRunningWorkflows(pane.log, now, CHILD_INACTIVITY_LIMIT_MS)
+    : 0
+  for (let i = 0; i < workflows; i++) {
+    work.push({ kind: 'workflow' })
+  }
+  return agentChildWorkLiveness(work)
+}
+
+/** Workflow agents run as spawned children, so their hooks show the workflow is still active. */
+function noteChildActivity(pane: MusePaneState, childSessionId: string, now: number): void {
+  pane.runningChildren.set(childSessionId, now)
+  for (const workflow of pane.log?.workflows.values() ?? []) {
+    workflow.lastActivityAt = now
+  }
 }
 
 export function hasMuseSessionLog(state: HookListenerState, paneKey: string): boolean {
@@ -79,7 +103,7 @@ export function normalizeMuseEvent(
     if (childSessionId) {
       pane.childSessionIds.add(childSessionId)
       if (BACKGROUND_SUBAGENT_ID.test(readString(hookPayload, 'subagent_id') ?? '')) {
-        pane.runningChildren.set(childSessionId, Date.now())
+        noteChildActivity(pane, childSessionId, Date.now())
       }
     }
     return null
@@ -94,17 +118,35 @@ export function normalizeMuseEvent(
   if (isChildSessionEvent(pane, hookPayload)) {
     const childSessionId = readString(hookPayload, 'session_id')
     if (childSessionId && pane.runningChildren.has(childSessionId)) {
-      pane.runningChildren.set(childSessionId, Date.now())
+      noteChildActivity(pane, childSessionId, Date.now())
     }
     return null
   }
   if (eventName === 'Interrupt' || eventName === 'SessionStart' || eventName === 'SessionEnd') {
     // Why: the user stopped or replaced the session; the transcript poll's replay of a held Stop then reaches done.
     pane.runningChildren.clear()
+    pane.log?.workflows.clear()
   }
   const sessionId = readString(hookPayload, 'session_id')
   if (sessionId && pane.log?.sessionId !== sessionId) {
     pane.log = createMuseSessionLogState(sessionId)
+  }
+  const turnId = readString(hookPayload, 'turn_id')
+  if (eventName === 'UserPromptSubmit') {
+    pane.promptedTurnId = turnId
+  } else if (
+    eventName === 'PostToolUse' &&
+    pane.log &&
+    readString(hookPayload, 'tool_name') === 'workflow'
+  ) {
+    recordMuseWorkflowLaunch(pane.log, hookPayload.tool_response, turnId, Date.now())
+  } else if (eventName === 'Stop' && pane.log && turnId && turnId !== pane.promptedTurnId) {
+    // Why: Muse wakes the lead in a run of its own once background work ends; that run's Stop settles earlier launches.
+    for (const [taskId, workflow] of pane.log.workflows) {
+      if (workflow.launchTurnId !== turnId) {
+        pane.log.workflows.delete(taskId)
+      }
+    }
   }
 
   const toolName = readString(hookPayload, 'tool_name')
@@ -148,7 +190,7 @@ export function normalizeMuseEvent(
 
   if (stateName === 'working' && pane.log) {
     // Muse emits no request_user_input hook; only the session log proves its wait.
-    const pendingInput = readMusePendingUserInput(pane.log, readString(hookPayload, 'turn_id'))
+    const pendingInput = readMusePendingUserInput(pane.log, turnId)
     if (pendingInput) {
       stateName = 'waiting'
       toolEventName = 'PreToolUse'
@@ -170,7 +212,7 @@ export function normalizeMuseEvent(
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
   const now = Date.now()
-  // Why: lead verdicts never retire background subagents; only their own end, inactivity or the session's does.
+  // Why: lead verdicts never retire background subagents or workflows; only their own end, inactivity or the session's does.
   const resolution = foldAgentLeadStatus({
     leadState: stateName,
     childWorkLiveness: stateName === 'done' ? museChildWorkLiveness(pane, now) : null
@@ -198,6 +240,7 @@ export function normalizeMuseEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted,
+    ...(resolution.workingMode ? { workingMode: resolution.workingMode } : {}),
     // Published only while held, so unheld rows keep their existing interrupt handling.
     ...(heldOpen ? { mainAgent: pane.mainAgent } : {})
   })

@@ -104,6 +104,8 @@ export type MusePaneState = {
   childSessionIds: Set<string>
   /** Spawned subagents between SubagentStart and SubagentStop, by child session id, with their last hook time. */
   runningChildren: Map<string, number>
+  /** Lead run started by the user's prompt; other runs are Muse waking the lead after background work. */
+  promptedTurnId?: string
   /** Main-agent status as last derived, so restatements keep its clock. */
   mainAgent?: AgentMainAgentStatus
   log?: MuseSessionLogState
