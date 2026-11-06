@@ -6,9 +6,11 @@ import {
   terminalWriteText,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -56,7 +58,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 

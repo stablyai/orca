@@ -3,10 +3,11 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
-  unregisterPtyDataHandlers
+  unregisterPtyDataHandlers,
+  type PtyDataHandlerShutdownSnapshot
 } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
-import type { PtyDataHandlerShutdownSnapshot } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
-import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+
+import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import {
   clearCommittedPtyShutdownSettlements,
   hasCommittedPtyShutdownSettlement,

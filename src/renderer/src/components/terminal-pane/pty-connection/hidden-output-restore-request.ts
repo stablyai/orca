@@ -9,7 +9,7 @@ import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
 } from '../hidden-output-restore-scheduler'
-import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
+import { resolveHiddenRestoreScrollbackRows } from '../snapshots/terminal-hidden-restore-scrollback'
 
 import {
   HIDDEN_OUTPUT_RESTORE_MAX_LOOP_ITERATIONS,

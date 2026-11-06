@@ -14,7 +14,7 @@ import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
-import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
+import { useTerminalContainerFitSync } from './viewport/use-terminal-container-fit-sync'
 import { handleTerminalProgrammaticTextPaste } from './input/paste/terminal-programmatic-text-paste'
 import {
   hideTerminalVisibility,
