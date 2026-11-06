@@ -30,7 +30,6 @@ import {
 } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { projectRuntimeMobileSessionTitle } from './runtime-mobile-session-title-projection'
-import { frameLaunchAttested } from '../../terminal/launch/attested-launch-config'
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -271,7 +270,8 @@ export function projectRuntimeMobileSessionTabs(
       )
     const { projectedTurnCompletedAt, ...clientAgentStatus } = frameAgentStatus(
       projectedAgentStatus.agentStatus,
-      snapshot.worktree
+      snapshot.worktree,
+      terminalPty
     )
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
@@ -295,7 +295,6 @@ export function projectRuntimeMobileSessionTabs(
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
-      ...frameLaunchAttested(terminalPty, clientAgentStatus.agentStatus?.agentType),
       ...clientAgentStatus,
       ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
       ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),

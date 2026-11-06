@@ -26,11 +26,23 @@ import {
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
 import {
+  retirePaneLaunchNote,
+  retiresLaunch
+} from '../../store/slices/agent-status/agent-status-launch-config'
+import {
   agentStatusEntryEqual,
   isAgentStatusFresh,
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
+
+type MirroredAgentStatusPatch = Pick<
+  WebSessionTabsSyncState,
+  'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+> &
+  Partial<
+    Pick<WebSessionTabsSyncState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
+  >
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -42,7 +54,7 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): MirroredAgentStatusPatch | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -181,8 +193,13 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = true
   }
 
+  let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
   for (const [paneKey, entry] of nextByPaneKey) {
     const existing = nextAgentStatusByPaneKey[paneKey]
+    // The host's retirement of this pane's launch ends the client's copies of its note.
+    if (retiresLaunch(existing, entry)) {
+      retirement = { ...retirement, ...retirePaneLaunchNote({ ...state, ...retirement }, paneKey) }
+    }
     if (
       agentStatusEntryEqual(existing, entry) &&
       existing?.firstStateStartedAt === entry.firstStateStartedAt
@@ -232,7 +249,8 @@ export function buildMirroredAgentStatusPatch(
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
-    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
+    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch,
+    ...retirement
   }
 }
 

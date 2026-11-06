@@ -1,6 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
-import { daemonLaunchNoteOf } from '../launch/attested-launch-config'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
@@ -14,9 +13,10 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
 
   /** Keep main's admitted launch in the daemon, which outlives main. */
   protected armDaemonLaunchNote(ptyId: string, pty: RuntimePtyWorktreeRecord): void {
-    const note = daemonLaunchNoteOf(pty)
-    if (note) {
-      this.ptyController?.setLaunchNote?.(ptyId, { arm: note })
+    if (pty.launchToken && pty.launchConfig) {
+      this.ptyController?.setLaunchNote?.(ptyId, {
+        arm: { launchToken: pty.launchToken, launchConfig: pty.launchConfig }
+      })
     }
   }
 

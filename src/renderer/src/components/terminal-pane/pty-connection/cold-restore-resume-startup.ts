@@ -78,9 +78,11 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
         ? sleepingRecord
         : undefined
-    const launchConfig =
-      (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-      matchingSleepingRecord?.launchConfig
+    // A live invocation takes the one decision's answer, none included; only without one does the
+    // saved record of the same conversation stand on its own.
+    const launchConfig = entry
+      ? state.getAgentLaunchConfigForStatusEntry(entry)
+      : matchingSleepingRecord?.launchConfig
     // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
     // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
     // copy, while a folder's own record carries its connection.

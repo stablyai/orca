@@ -74,9 +74,12 @@ export function resolveAgentAccountRestartResumeStartup(
   ) {
     return null
   }
-  const launchConfig =
-    (entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-    (sleeping?.agent === agent ? sleeping.launchConfig : undefined)
+  // A live invocation takes the one decision's answer, none included.
+  const launchConfig = entry
+    ? state.getAgentLaunchConfigForStatusEntry(entry)
+    : sleeping?.agent === agent
+      ? sleeping.launchConfig
+      : undefined
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
   const startupPlan = buildAgentResumeStartupPlan({
     agent,

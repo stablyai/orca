@@ -31,7 +31,7 @@ import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pan
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
-import { ownerLaunchAttested, recordNoteForInvocation } from './agent-status-launch-config'
+import { invocationLaunchConfig, ownerLaunchAttested } from './agent-status-launch-config'
 import {
   canReuseStatusProviderSession,
   statusRetainsResumableIdentity
@@ -195,17 +195,16 @@ export function buildAgentStatusLiveEntry(
     { agentType: identity.agentType, state: payload.state },
     providerSession
   )
-  // The launch owner's word (local main's note-or-null, or a paired host's frame fact) decides
-  // whether the pane's note still belongs to the running invocation; an OSC update says nothing.
+  // Local main's note-or-null or a paired host's frame fact; an OSC update says nothing.
   const launchAttested = ownerLaunchAttested(metadata?.launchConfig, existing, identity.agentType)
-  const launchConfigSource =
-    metadata?.launchConfig ??
-    matchedRegistryLaunchConfig ??
-    recordNoteForInvocation(state.sleepingAgentSessionsByPaneKey[paneKey], {
-      agentType: identity.agentType,
-      providerSession,
-      launchAttested
-    })
+  const launchConfigSource = invocationLaunchConfig({
+    statement: metadata?.launchConfig,
+    launchAttested,
+    registry: matchedRegistryLaunchConfig,
+    record: state.sleepingAgentSessionsByPaneKey[paneKey],
+    agentType: identity.agentType,
+    providerSession
+  })
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus

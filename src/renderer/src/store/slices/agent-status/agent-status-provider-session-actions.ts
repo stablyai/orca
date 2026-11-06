@@ -19,7 +19,11 @@ import {
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
+import {
+  invocationLaunchConfig,
+  ownerLaunchAttested,
+  registryEntryMatchesStatus
+} from './agent-status-launch-config'
 import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import { agentVerdictFields } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
@@ -90,9 +94,14 @@ export function createAgentStatusProviderSessionActions(
           // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
           const preservesQuitOrigin =
             existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'
-          // Why not the earlier record's note: a typed resume of this conversation never ran that launch.
-          const launchConfig =
-            metadata?.launchConfig ?? (registryMatches ? registryEntry?.launchConfig : undefined)
+          const launchConfig = invocationLaunchConfig({
+            statement: metadata?.launchConfig,
+            launchAttested: ownerLaunchAttested(metadata?.launchConfig, existingStatus, agent),
+            registry: registryMatches ? registryEntry?.launchConfig : undefined,
+            record: existingRecord,
+            agentType: agent,
+            providerSession
+          })
           const record: SleepingAgentSessionRecord = {
             paneKey,
             ...(tabId ? { tabId } : {}),
