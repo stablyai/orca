@@ -3895,7 +3895,8 @@
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields",
       "loading": "Loading project…",
-      "noMatches": "No project items match."
+      "noMatches": "No project items match.",
+      "linkedPullRequestsOverflow": "+{{count}} more"
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",
