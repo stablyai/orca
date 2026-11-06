@@ -18,6 +18,7 @@ import {
   type JournalSqlKeyedSet
 } from './journal-sql-keyed-values'
 import { JournalSqlScalars } from './journal-sql-scalars'
+import { journalSqlPauseKey } from './journal-sql-pause-marks'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 
 export type JournalSqlFactsDeps = {
@@ -110,6 +111,7 @@ export function sqlJournalInputOrderFacts(deps: JournalSqlFactsDeps): JournalInp
 
 export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInputCardFacts {
   const { context } = deps
+  const cells = new JournalSqlScalars(context.scope, 'cards')
   const current = deps.map<string, QueuedMessageRow>('cards.current')
   const overlays = deps.map<string, QueuedMessageRow>('cards.overlays')
   const unintroduced = deps.set<string>('cards.unintroduced')
@@ -118,7 +120,7 @@ export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInpu
   let overlayRows: readonly QueuedMessageRow[] = []
   const facts: Omit<
     JournalInputCardFacts,
-    'history' | 'currentRevision' | 'initialized' | 'pauseKey' | 'floor' | 'pauses' | 'failed'
+    'history' | 'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
   > = {
     current,
     indexed: deps.map('cards.indexed'),
@@ -146,24 +148,28 @@ export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInpu
     set overlayRows(rows: readonly QueuedMessageRow[]) {
       overlayRows = rows
     },
-    // Decoded marks are new objects each command, so equality is by stored value.
+    get pauseKey() {
+      return cells.get<readonly unknown[]>('pauseKey', [])
+    },
+    set pauseKey(inputs: readonly unknown[]) {
+      cells.set('pauseKey', inputs.map(journalSqlPauseKey))
+    },
     pauseKeyMatches(this: Pick<JournalInputCardFacts, 'pauseKey'>, inputs: readonly unknown[]) {
-      return JSON.stringify(inputs) === JSON.stringify(this.pauseKey)
+      return JSON.stringify(inputs.map(journalSqlPauseKey)) === JSON.stringify(this.pauseKey)
     }
   }
   const scalars: Pick<
     JournalInputCardFacts,
-    'history' | 'currentRevision' | 'initialized' | 'pauseKey' | 'floor' | 'pauses' | 'failed'
+    'history' | 'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
   > = {
     history: true,
     currentRevision: 0,
     initialized: false,
-    pauseKey: [],
     floor: null,
     pauses: [],
     failed: false
   }
-  return new JournalSqlScalars(context.scope, 'cards').define(facts, scalars)
+  return cells.define(facts, scalars)
 }
 
 export function sqlJournalInputObservationFacts(

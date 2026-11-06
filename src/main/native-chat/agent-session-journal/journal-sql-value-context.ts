@@ -1,78 +1,95 @@
+import { JournalSqlValueReader } from './journal-sql-value-reader'
+import { journalSqlIndexScope } from './journal-sql-index-values'
+import { clearJournalSqlCollection } from './journal-sql-keyed-values'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalEntryChange } from './journal-transition-collections'
 import {
-  decodeJournalSqlValue,
   encodeJournalSqlValue,
   journalSqlLocationKey,
-  readJournalSqlReferencePath,
   type JournalSqlValueLocation
 } from './journal-sql-value-codec'
 import { JournalSqlValueObjects } from './journal-sql-value-objects'
 import { JournalSqlValueReferences } from './journal-sql-value-references'
+import type { JournalSqlItemValues } from './journal-sql-item-values'
 
 /** One command owns these objects; SAVEPOINT rollback discards the context, never adopts a mirror. */
 export class JournalSqlValueContext {
+  changed?: (collection: string, key: string) => void
   private readonly objects = new JournalSqlValueObjects((location) => this.touch(location))
-  private readonly loaded = new Map<string, unknown>()
+  private readonly reader: JournalSqlValueReader
   private readonly pending = new Map<
     string,
     { location: JournalSqlValueLocation; reinsert: boolean }
   >()
+  private readonly accessed = new Set<string>()
+  private readonly collections = new Set<string>()
 
   private readonly references: JournalSqlValueReferences
-  constructor(readonly scope: JournalSqlScope) {
-    this.references = new JournalSqlValueReferences(scope, (location) => {
-      const node = this.objects.tracked.get(journalSqlLocationKey(location))
-      return (
-        node &&
-        encodeJournalSqlValue(node.raw, node.location, (object) =>
-          this.objects.locations.get(object)
+  constructor(
+    readonly scope: JournalSqlScope,
+    readonly items?: JournalSqlItemValues
+  ) {
+    this.reader = new JournalSqlValueReader(scope, this.objects, items)
+    this.references = new JournalSqlValueReferences(
+      scope,
+      (location) => {
+        const node = this.objects.tracked.get(journalSqlLocationKey(location))
+        return (
+          node &&
+          encodeJournalSqlValue(node.raw, node.location, (object) =>
+            this.objects.locations.get(object)
+          )
         )
-      )
-    })
+      },
+      (location, encoded) => {
+        const node = this.objects.tracked.get(journalSqlLocationKey(location))
+        return location.collection === 'items' && this.items
+          ? this.items.store(
+              location,
+              encoded,
+              node?.raw,
+              false,
+              0,
+              !!node && !this.objects.dirty.has(node)
+            )
+          : encoded
+      },
+      (location) => {
+        if (location.collection === 'items') {
+          this.items?.forget(location)
+        }
+      }
+    )
   }
 
   indexScope(): JournalSqlScope {
-    return this.scope.withIndexValues({
-      encode: (value, name, key) => {
-        const collection = `@index:${name}`
-        this.collection(collection)
-        this.write(collection, JSON.stringify(key), value)
-        const row = this.header(collection, JSON.stringify(key))!
-        return JSON.stringify({
-          collection,
-          key: JSON.stringify(key),
-          incarnation: Number(row.incarnation),
-          path: []
-        })
-      },
-      decode: <T>(json: string): T => {
-        const location: JournalSqlValueLocation = JSON.parse(json)
-        const value = this.load(location)
-        this.objects.observe(value, location)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: index procedures decode the typed values they captured in their own collection.
-        return value as T
-      },
-      forget: (name, key) => {
-        const collection = `@index:${name}`
-        if (key === undefined) {
-          this.clear(collection)
-        } else {
-          this.delete(collection, JSON.stringify(key))
-        }
-      }
-    })
+    return journalSqlIndexScope(this)
+  }
+
+  readReference(location: JournalSqlValueLocation): unknown {
+    const value = this.reader.load(location)
+    this.objects.observe(value, location)
+    return value
   }
 
   collection(name: string): void {
+    if (this.collections.has(name)) {
+      return
+    }
     this.scope.db
       .prepare(`INSERT OR IGNORE INTO journal_proj_collections
       (session_id, generation, collection) VALUES (?, ?, ?)`)
       .run(...this.scope.prefix, name)
+    this.collections.add(name)
+  }
+
+  access(collection: string): void {
+    this.accessed.add(collection)
   }
 
   size(collection: string): number {
+    this.access(collection)
     const row = this.scope.db
       .prepare(`SELECT size FROM journal_proj_collections
       WHERE session_id=? AND generation=? AND collection=?`)
@@ -84,6 +101,7 @@ export class JournalSqlValueContext {
   }
 
   header(collection: string, key: string): SqliteRow | undefined {
+    this.access(collection)
     const row = this.scope.db
       .prepare(`SELECT ordinal, incarnation FROM journal_proj_values
       WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
@@ -91,19 +109,22 @@ export class JournalSqlValueContext {
     return row && this.scope.examined(row)
   }
 
-  read<V>(collection: string, key: string): V | undefined {
+  read<V>(collection: string, key: string, observe = true): V | undefined {
     const row = this.header(collection, key)
     if (!row) {
       return undefined
     }
     const location = { collection, key, incarnation: Number(row.incarnation), path: [] }
-    const value = this.load(location)
-    this.objects.observe(value, location)
+    const value = this.reader.load(location)
+    if (observe) {
+      this.objects.observe(value, location)
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each typed keyed view owns the values written under its collection name.
     return value as V
   }
 
   write(collection: string, key: string, value: unknown): void {
+    this.collection(collection)
     const before = this.header(collection, key)
     const previous = before && {
       collection,
@@ -113,7 +134,7 @@ export class JournalSqlValueContext {
     }
     const source =
       typeof value === 'object' && value !== null ? this.objects.locations.get(value) : undefined
-    const same = previous && source && this.load(previous) === this.load(source)
+    const same = previous && source && this.reader.load(previous) === this.reader.load(source)
     const counters = this.scope.db
       .prepare(`UPDATE journal_proj_collections SET
       size=size+?, next_ordinal=next_ordinal+?, next_incarnation=next_incarnation+?
@@ -155,11 +176,19 @@ export class JournalSqlValueContext {
         key,
         Number(before?.ordinal ?? counters.next_ordinal),
         location.incarnation,
-        encoded.json
+        location.collection === 'items' && this.items
+          ? this.items.store(
+              location,
+              encoded.json,
+              value,
+              true,
+              Number(before?.ordinal ?? counters.next_ordinal)
+            )
+          : encoded.json
       )
     this.references.replace(location, encoded.refs)
-    const stored = source ? this.load(source) : this.objects.track(value, location)
-    this.loaded.set(journalSqlLocationKey(location), stored)
+    const stored = source ? this.reader.load(source) : this.objects.track(value, location)
+    this.reader.loaded.set(journalSqlLocationKey(location), stored)
     this.objects.observe(stored, location)
     if (typeof stored === 'object' && stored !== null) {
       const owned = this.objects.locations.get(stored)
@@ -191,19 +220,15 @@ export class JournalSqlValueContext {
       .prepare(`UPDATE journal_proj_collections SET size=size-1
       WHERE session_id=? AND generation=? AND collection=?`)
       .run(...this.scope.prefix, collection)
+    if (collection === 'items') {
+      this.items?.delete(key)
+    }
     this.touch(location, false, true)
     return true
   }
 
   clear(collection: string): void {
-    const rows = this.scope.db
-      .prepare(`SELECT entry_key FROM journal_proj_values
-      WHERE session_id=? AND generation=? AND collection=? ORDER BY ordinal`)
-      .all(...this.scope.prefix, collection)
-    for (const row of rows) {
-      this.scope.examined(row)
-      this.delete(collection, String(row.entry_key))
-    }
+    clearJournalSqlCollection(this, collection)
   }
 
   flush(): void {
@@ -214,17 +239,24 @@ export class JournalSqlValueContext {
 
   untracked = (_key: string, value: unknown): unknown => this.objects.untracked(value)
 
+  input<T>(value: T): T {
+    return this.objects.input(value)
+  }
+
   changes(reset = false): JournalEntryChange[] {
-    const changes = [...this.pending.values()].map(({ location, reinsert }) => {
-      const present = !!this.header(location.collection, location.key)
-      return {
-        path: location.collection,
-        key: JSON.parse(location.key),
-        deleted: !present,
-        reinsert,
-        value: this.read(location.collection, location.key)
-      }
-    })
+    const entries = [...this.pending.values()]
+    const changes = [...this.accessed]
+      .flatMap((collection) => entries.filter((entry) => entry.location.collection === collection))
+      .map(({ location, reinsert }) => {
+        const present = !!this.header(location.collection, location.key)
+        return {
+          path: location.collection,
+          key: JSON.parse(location.key),
+          deleted: !present,
+          reinsert,
+          value: this.read(location.collection, location.key)
+        }
+      })
     if (reset) {
       this.pending.clear()
     }
@@ -232,46 +264,13 @@ export class JournalSqlValueContext {
   }
 
   private touch(location: JournalSqlValueLocation, reinsert = false, deleted = false): void {
+    this.changed?.(location.collection, location.key)
     const key = JSON.stringify([location.collection, location.key])
     if (reinsert) {
       this.pending.delete(key)
     }
     const before = this.pending.get(key)
     this.pending.set(key, { location, reinsert: deleted ? false : reinsert || !!before?.reinsert })
-  }
-
-  private load(location: JournalSqlValueLocation, json?: unknown): unknown {
-    const key = journalSqlLocationKey(location)
-    if (!this.loaded.has(key)) {
-      let encoded = json
-      if (encoded === undefined) {
-        const row = this.scope.db
-          .prepare(`SELECT value_json FROM journal_proj_values
-          WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?
-          UNION ALL SELECT value_json FROM journal_proj_value_snapshots
-          WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=? LIMIT 1`)
-          .get(
-            ...this.scope.prefix,
-            location.collection,
-            location.key,
-            location.incarnation,
-            ...this.scope.prefix,
-            location.collection,
-            location.key,
-            location.incarnation
-          )
-        if (!row) {
-          throw new Error('Missing journal projection object incarnation')
-        }
-        this.scope.examined(row)
-        encoded = row.value_json
-      }
-      const value = decodeJournalSqlValue(this.scope.decode(encoded), (ref) => this.load(ref))
-      const reference =
-        typeof value === 'object' && value !== null && this.objects.locations.has(value)
-      this.loaded.set(key, reference ? value : this.objects.track(value, { ...location, path: [] }))
-    }
-    return readJournalSqlReferencePath(this.loaded.get(key), location.path)
   }
 
   private flushLocation(location: JournalSqlValueLocation): void {
@@ -282,30 +281,38 @@ export class JournalSqlValueContext {
     const encoded = encodeJournalSqlValue(node.raw, node.location, (object) =>
       this.objects.locations.get(object)
     )
+    const header =
+      location.collection === 'items' && this.items
+        ? this.header(location.collection, location.key)
+        : undefined
+    const json =
+      location.collection === 'items' && this.items
+        ? this.items.store(
+            location,
+            encoded.json,
+            node.raw,
+            Number(header?.incarnation) === location.incarnation,
+            Number(header?.ordinal ?? 0)
+          )
+        : encoded.json
     const updated = this.scope.db
       .prepare(`UPDATE journal_proj_values SET value_json=?
       WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-      .run(
-        encoded.json,
-        ...this.scope.prefix,
-        location.collection,
-        location.key,
-        location.incarnation
-      )
+      .run(json, ...this.scope.prefix, location.collection, location.key, location.incarnation)
     if (!updated.changes) {
       const snapshot = this.scope.db
         .prepare(`UPDATE journal_proj_value_snapshots SET value_json=?
         WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-        .run(
-          encoded.json,
-          ...this.scope.prefix,
-          location.collection,
-          location.key,
-          location.incarnation
-        )
+        .run(json, ...this.scope.prefix, location.collection, location.key, location.incarnation)
       if (!snapshot.changes) {
+        if (location.collection === 'items') {
+          this.items?.forget(location)
+        }
         return
       }
+    } else {
+      // A write through an alias changes its source's query columns even without a source read.
+      this.changed?.(location.collection, location.key)
     }
     this.references.replace(location, encoded.refs)
   }

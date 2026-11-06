@@ -15,6 +15,16 @@ import {
 } from './journal-outcome-codec'
 import type { JournalOutcomeSource } from './journal-outcome-format'
 import type Database from '../../sqlite/sync-database'
+import type { JournalEntryChange } from './journal-transition-collections'
+
+export type JournalOutcomeTransition = {
+  state: JournalReducerState
+  input: <V>(value: V) => V
+  changes: (reset?: boolean) => JournalEntryChange[]
+  untracked: (key: string, value: unknown) => unknown
+  flush?: () => void
+  recorded?: (generation: number, sequence: number) => void
+}
 
 // The key index orders each key's records newest first, so a range seek past the last key read lands
 // on the next key's newest record: one indexed seek per key, whatever its revisions number.
@@ -68,8 +78,23 @@ export function persistJournalOutcomeRows(
   upgradeNative = false,
   finish?: (state: JournalReducerState) => void
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
-  let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
+  persistJournalOutcomeTransition(db, transition, source, rows, savedAt, upgradeNative, finish)
+  return { state: transition.state, adopt: transition.adopt }
+}
+
+/** Both storage homes use the same admission, per-row encoder and preserved key ordinals. */
+export function persistJournalOutcomeTransition(
+  db: Database.Database,
+  transition: JournalOutcomeTransition,
+  source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
+  rows: readonly JournalRow[],
+  savedAt?: number,
+  upgradeNative = false,
+  finish?: (state: JournalReducerState) => void
+): void {
+  const state = transition.state
+  let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   journalInputOrder(transition.state).introduceOverlays(transition.state)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
@@ -84,6 +109,7 @@ export function persistJournalOutcomeRows(
     if (row === rows.at(-1)) {
       finish?.(transition.state)
     }
+    transition.flush?.()
     const changes = transition
       .changes(true)
       .filter(
@@ -136,8 +162,8 @@ export function persistJournalOutcomeRows(
         Number(value.deleted)
       )
     }
+    transition.recorded?.(source.generation, row.seq)
   }
-  return { state: transition.state, adopt: transition.adopt }
 }
 
 function appended(seq: number, index: number): string {

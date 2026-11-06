@@ -7,7 +7,7 @@ export type JournalSqlValueLocation = {
 
 export type JournalSqlValueReference = { path: string[]; source: JournalSqlValueLocation }
 export type EncodedJournalSqlValue = { json: string; refs: JournalSqlValueReference[] }
-type StoredValue = { data: [] | [unknown]; refs: JournalSqlValueReference[] }
+export type StoredJournalSqlValue = { data: [] | [unknown]; refs: JournalSqlValueReference[] }
 
 export function journalSqlLocationKey(value: JournalSqlValueLocation): string {
   return JSON.stringify([value.collection, value.key, value.incarnation])
@@ -20,7 +20,7 @@ export function encodeJournalSqlValue(
 ): EncodedJournalSqlValue {
   const refs: JournalSqlValueReference[] = []
   const paths = new WeakMap<object, string[]>()
-  const stored: StoredValue = { data: value === undefined ? [] : [value], refs }
+  const stored: StoredJournalSqlValue = { data: value === undefined ? [] : [value], refs }
   paths.set(stored.data, [])
   const json = JSON.stringify(stored, function (key, child: unknown) {
     if (key === '' || this === stored || !paths.has(this)) {
@@ -42,7 +42,7 @@ export function encodeJournalSqlValue(
 }
 
 export function decodeJournalSqlValue(
-  value: StoredValue,
+  value: StoredJournalSqlValue,
   resolve: (location: JournalSqlValueLocation) => unknown
 ): unknown {
   let result = value.data[0]

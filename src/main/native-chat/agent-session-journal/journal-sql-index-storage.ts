@@ -1,4 +1,7 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   JournalIndexStorageFactory,
   JournalNewestTurnStorage,
@@ -61,7 +64,7 @@ class JournalSqlSubmissionIndex implements JournalSubmissionStorage {
 export type JournalSqlIndexStorageOptions = {
   context: JournalSqlValueContext
   /** Population-sized collections with their own projection (items) and the item-range queries. */
-  collections: Record<string, () => JournalKeyedMap<unknown, unknown>>
+  collections: { items?: () => JournalKeyedMap<string, AgentJournalRenderItem> }
   stateQueries: JournalStateQueries
 }
 
@@ -84,7 +87,7 @@ export function sqlJournalIndexStorage(
   return {
     stateQueries: () => options.stateQueries,
     map: <K, V>(name: string, key?: string | number): JournalKeyedMap<K, V> => {
-      const special = key === undefined ? options.collections[name] : undefined
+      const special = key === undefined && name === 'items' ? options.collections.items : undefined
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a projection collection is registered under the reducer field name whose types it stores.
       return special ? (special() as JournalKeyedMap<K, V>) : map<K, V>(name, key)
     },

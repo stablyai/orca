@@ -8,13 +8,26 @@ export function journalSqlEntryKey(key: unknown): string {
   return JSON.stringify(key)
 }
 
+export function clearJournalSqlCollection(
+  context: JournalSqlValueContext,
+  collection: string
+): void {
+  const { scope } = context
+  const rows = scope.db
+    .prepare(`SELECT entry_key FROM journal_proj_values
+    WHERE session_id=? AND generation=? AND collection=? ORDER BY ordinal`)
+    .all(...scope.prefix, collection)
+  for (const row of rows) {
+    scope.examined(row)
+    context.delete(collection, String(row.entry_key))
+  }
+}
+
 export class JournalSqlKeyedMap<K, V> implements JournalKeyedMap<K, V> {
   constructor(
     private readonly context: JournalSqlValueContext,
     readonly collection: string
-  ) {
-    context.collection(collection)
-  }
+  ) {}
 
   get size(): number {
     return this.context.size(this.collection)

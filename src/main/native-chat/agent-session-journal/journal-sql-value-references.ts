@@ -10,7 +10,12 @@ export class JournalSqlValueReferences {
     private readonly scope: JournalSqlScope,
     private readonly detached: (
       location: JournalSqlValueLocation
-    ) => EncodedJournalSqlValue | undefined
+    ) => EncodedJournalSqlValue | undefined,
+    private readonly payload: (location: JournalSqlValueLocation, json: string) => string = (
+      _location,
+      json
+    ) => json,
+    private readonly forget: (location: JournalSqlValueLocation) => void = () => undefined
   ) {}
 
   retain(location: JournalSqlValueLocation): void {
@@ -88,7 +93,7 @@ export class JournalSqlValueReferences {
         location.collection,
         location.key,
         location.incarnation,
-        encoded.json
+        this.payload(location, encoded.json)
       )
     this.replace(location, encoded.refs)
   }
@@ -120,6 +125,7 @@ export class JournalSqlValueReferences {
   drop(location: JournalSqlValueLocation): void {
     const previous = this.references(location)
     this.removeReferences(location)
+    this.forget(location)
     this.prune(previous)
   }
 
@@ -134,6 +140,7 @@ export class JournalSqlValueReferences {
         WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
         .run(...this.scope.prefix, location.collection, location.key, location.incarnation)
       if (removed.changes) {
+        this.forget(location)
         locations.push(...this.references(location))
         this.removeReferences(location)
       }
