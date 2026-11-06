@@ -123,6 +123,9 @@ export function useNativeChatTurnOpenedPullRequests(
             answered.set(id, null)
           }
         } else if (capability === 'unknown') {
+          if (cancelled) {
+            return
+          }
           due.forEach(failed)
         } else {
           for (const id of due) {
@@ -135,6 +138,10 @@ export function useNativeChatTurnOpenedPullRequests(
               // The host answered without that output, so it is gone; the head is all there is.
               answered.set(id, payload?.head ?? null)
             } catch {
+              // A run the chat has moved past leaves the retry state to the run that replaced it.
+              if (cancelled) {
+                return
+              }
               failed(id)
             }
           }

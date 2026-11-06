@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatToolCallBlock } from '../native-chat-types'
 import {
   nativeChatTurnOpenedPullRequests,
-  pullRequestsOpenedBy
+  pullRequestsOpenedBy,
+  type NativeChatOpenedPullRequestsCache
 } from './native-chat-opened-pull-requests'
 
 // What `gh pr create` prints: a progress line on stderr, then the new pull request's URL alone.
@@ -202,7 +203,7 @@ describe('nativeChatTurnOpenedPullRequests', () => {
   })
 
   it('rescans only rows it has not seen, so a streaming reply stays cheap', () => {
-    const cache = new WeakMap()
+    const cache: NativeChatOpenedPullRequestsCache = new WeakMap()
     const old = bashTurn({ command: 'gh pr create --fill' }, GH_CREATE_OUTPUT)
     nativeChatTurnOpenedPullRequests([old], ['t1'], { cache })
     Object.defineProperty(old, 'blocks', {
@@ -219,5 +220,56 @@ describe('nativeChatTurnOpenedPullRequests', () => {
     }
     const again = nativeChatTurnOpenedPullRequests([old, streaming], ['t1', 't1'], { cache })
     expect(again.byTurn.get('t1')?.map(({ number }) => number)).toEqual([38712])
+  })
+})
+
+describe('PowerShell create commands', () => {
+  const opened = (command: unknown): number[] => openedIn(bashTurn({ command }, GH_CREATE_OUTPUT))
+
+  it('never reads text PowerShell prints as a create', () => {
+    expect(
+      opened('pwsh -Command \'Write-Output "`"; gh pr create; `""; Get-Content pr-url.txt\'')
+    ).toEqual([])
+    // A backtick inside single quotes is literal, so the next quote still closes the string.
+    expect(
+      opened([
+        'pwsh',
+        '-Command',
+        "Write-Output '`'; Write-Output '; gh pr create;'; Get-Content u.txt"
+      ])
+    ).toEqual([])
+    expect(
+      opened([
+        'pwsh',
+        '-Command',
+        '$body = @\'\r\nsay "hi" then gh pr create\r\n\'@\r\nWrite-Output $body'
+      ])
+    ).toEqual([])
+  })
+
+  it('keeps a real create through PowerShell quoting', () => {
+    expect(
+      opened(
+        "pwsh -Command 'gh pr edit 3 --body ''Run `pnpm test`''; gh pr create --title ''x'' --fill'"
+      )
+    ).toEqual([38712])
+    expect(opened(['pwsh', '-Command', "gh pr create --title 'it''s done' --fill"])).toEqual([
+      38712
+    ])
+    expect(
+      opened('powershell.exe -ExecutionPolicy "Bypass" -Command \'gh pr create --fill\'')
+    ).toEqual([38712])
+  })
+
+  it('keeps the evidence that disqualifies a create, and reads nothing it cannot lex', () => {
+    expect(
+      opened([
+        'pwsh',
+        '-Command',
+        "gh pr create --fill; Write-Output 'https://github.com/stablyai/orca/pull/38712'"
+      ])
+    ).toEqual([])
+    expect(opened("pwsh -Command 'gh pr create --fill; Write-Output \"oops'")).toEqual([])
+    expect(opened("pwsh -Foo -Command 'gh pr create --fill'")).toEqual([])
   })
 })

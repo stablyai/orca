@@ -1,7 +1,7 @@
 import { parseGitHubIssueOrPRLink, type RepoSlug } from '../../github/links'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../new-workspace/gitlab-links'
 import type { NativeChatMessage } from '../native-chat-types'
-import { nativeChatFullCommand } from './native-chat-tool-input-text'
+import { nativeChatToolCallScript } from './native-chat-tool-call-script'
 import { pairToolBlocks } from './native-chat-tool-pairs'
 
 export type NativeChatOpenedPullRequest =
@@ -34,80 +34,6 @@ const COMMAND_SEPARATOR = /&&|\|\||[;|\n]/u
 const LISTS_CHANGE_REQUESTS =
   /\b(?:gh\s+(?:pr\s+(?:list|status)|search\s+prs|api)|glab\s+(?:mr\s+list|api))\b/u
 const URL_LINE = /^[ \t]*(https?:\/\/\S+)[ \t]*$/gmu
-const SHELL_PROGRAM = /^(?:ba|z|k|da|fi)?sh(?:\.exe)?$/u
-const SHELL_SCRIPT_FLAG = /^-[a-zA-Z]*c$/u
-
-function argvCommand(input: unknown): readonly string[] | null {
-  let value = input
-  if (typeof value === 'string') {
-    try {
-      value = JSON.parse(value)
-    } catch {
-      return null
-    }
-  }
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return null
-  }
-  const argv =
-    'command' in value && Array.isArray(value.command)
-      ? value.command
-      : 'cmd' in value
-        ? value.cmd
-        : null
-  return Array.isArray(argv) && argv.every((part) => typeof part === 'string') ? argv : null
-}
-
-// Codex on Windows runs `"C:\\…\\pwsh.exe" -Command 'script'`; cmd.exe takes `/c script`.
-// PowerShell options before `-Command` may take a value (`-ExecutionPolicy Bypass`).
-const WINDOWS_SHELL_WRAPPER =
-  /^\s*(?:"([^"]+)"|(\S+))\s+(?:-(?!Command\b|c\b)\w+(?:\s+(?![-'"])\S+)?\s+)*(?:-Command|-c|\/d\s+\/s\s+\/c|\/s\s+\/c|\/c)\s+([\s\S]+)$/iu
-const WINDOWS_SHELL_PROGRAM = /^(?:pwsh|powershell|cmd)(?:\.exe)?$/iu
-const POWERSHELL_PROGRAM = /^(?:pwsh|powershell)(?:\.exe)?$/iu
-// PowerShell escapes with a backtick, so `` `" `` is a literal quote, not one that opens text.
-const POWERSHELL_ESCAPE = /`[\s\S]/gu
-
-function programName(path: string): string {
-  return path.split(/[\\/]/).at(-1) ?? ''
-}
-
-/** A PowerShell script read with POSIX quoting: escaped characters can no longer open or close text. */
-function powershellCode(script: string): string {
-  return script.replace(POWERSHELL_ESCAPE, '_')
-}
-
-/** The script inside a PowerShell or cmd wrapper, in its own quoting undone. */
-function unwrapWindowsShell(command: string): string | null {
-  const match = WINDOWS_SHELL_WRAPPER.exec(command)
-  const program = programName(match?.[1] ?? match?.[2] ?? '')
-  if (!match || !WINDOWS_SHELL_PROGRAM.test(program)) {
-    return null
-  }
-  let script = match[3]!.trim()
-  if (script.length >= 2 && script.startsWith("'") && script.endsWith("'")) {
-    script = script.slice(1, -1).replaceAll("''", "'")
-  } else if (script.length >= 2 && script.startsWith('"') && script.endsWith('"')) {
-    script = script.slice(1, -1)
-  }
-  return POWERSHELL_PROGRAM.test(program) ? powershellCode(script) : script
-}
-
-/** The script a tool call ran. An argv `[sh, -lc, script]` keeps its script whole; joining it would
- *  leave the create command after the wrapper instead of at a command start. */
-function commandScript(input: unknown): string | null {
-  const argv = argvCommand(input)
-  const program = programName(argv?.[0] ?? '')
-  if (
-    argv?.length === 3 &&
-    (SHELL_PROGRAM.test(program) || WINDOWS_SHELL_PROGRAM.test(program)) &&
-    (SHELL_SCRIPT_FLAG.test(argv[1]) || /^(?:-Command|\/c)$/iu.test(argv[1]))
-  ) {
-    return POWERSHELL_PROGRAM.test(program) ? powershellCode(argv[2]) : argv[2]
-  }
-  const command = nativeChatFullCommand(input)
-  return command === null ? null : (unwrapWindowsShell(command) ?? command)
-}
-
 function createCount(code: string): number {
   return CREATE_RUNS.reduce((count, { run }) => count + [...code.matchAll(run)].length, 0)
 }
@@ -258,7 +184,7 @@ function messageEvidence(
     if (!call || !result || call.state === 'running') {
       continue
     }
-    const script = commandScript(call.input)
+    const script = nativeChatToolCallScript(call.name, call.input)
     if (!script) {
       continue
     }
