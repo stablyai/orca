@@ -10,7 +10,7 @@
 import type { LegacyRelayBridgeAttachResult } from '../../../../../../shared/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from '../pty-transport-types'
 import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/remote-runtime-terminal-multiplexer-types'
-import { SSH_SESSION_EXPIRED_ERROR } from '../../pty-connection/pty-connect-limits'
+import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-verdict'
 import {
   legacyRelayBridgedPane,
   onLegacyRelayBridgedPanesChanged

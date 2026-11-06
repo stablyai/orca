@@ -8457,8 +8457,8 @@
           "editingPrefix": "正在编辑",
           "reconnectOnLaunch": "启动时重新连接",
           "reconnectOnLaunchHelp": "关闭后，Orca 启动时会让此主机及通过它访问的 Orca 服务器保持断开，直到你手动连接。",
-          "allowRemoteCliControl": "允许此主机的 orca CLI 控制 Orca",
-          "allowRemoteCliControlHelp": "新主机默认开启。允许在此主机上运行的 orca 命令打开并操作此桌面上的 Orca 浏览器标签页，但仅限此主机的工作区，且仅在主机连接期间；并允许此主机上由旧版 Orca 启动的终端为其自身受监督的工作运行编排命令（check、inbox、send、ask、reply）。它们无法读取你的文件、剪贴板或 Cookie。关闭时，它们只能访问此主机自身的 Orca 服务器。",
+          "allowRemoteCliControl": "允许此主机控制其工作区中的 Orca 浏览器标签页",
+          "allowRemoteCliControlHelp": "新主机默认开启。此主机上的智能体和 orca 命令可以打开、读取和使用此桌面上的 Orca 浏览器标签页，但仅限此主机的工作区，且仅在主机连接期间。它控制的标签页会显示其名称。此主机上由旧版 Orca 启动的终端也需要开启此项才能运行 orca 编排命令。它无法读取你的文件、剪贴板或 Cookie。",
           "addHost": "添加主机"
         },
         "TasksPane": {
@@ -21983,7 +21983,8 @@
     "rowActions": "{{name}} 的操作"
   },
   "browserTab": {
-    "agentDriving": "智能体正在使用此页面"
+    "agentDriving": "智能体正在使用此页面",
+    "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
     "math": {
@@ -22964,5 +22965,14 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 发行版 {{distro}} 已停止，因此 Orca 没有启动此终端。请启动该发行版后重试。",
     "terminalUnverifiable": "Orca 无法确认 WSL 发行版 {{distro}} 是否正在运行，因此没有启动此终端。请启动该发行版后重试。"
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} 正在控制一个浏览器标签页",
+    "description": "此 SSH 主机上的智能体可以打开并使用其工作区中的 Orca 浏览器标签页。它控制的标签页会显示其名称。你可以在“设置 > SSH”中更改此项。",
+    "stop": "停止",
+    "disallow": "不允许",
+    "stopped": "在 Orca 重启之前，{{host}} 将不再控制浏览器标签页。",
+    "disallowed": "{{host}} 已无法控制浏览器标签页。可在“设置 > SSH”中重新开启。",
+    "failed": "无法停止 {{host}}。请在“设置 > SSH”中关闭其浏览器控制。"
   }
 }

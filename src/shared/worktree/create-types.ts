@@ -50,6 +50,15 @@ export type SetupDecision = 'inherit' | 'run' | 'skip'
 /** The created worktree's shared setup commands, when they differ from what the client approved. */
 export type SetupTrustMismatch = { contentHash: string; scriptContent: string }
 
+/** Run a created worktree's setup and default-tab commands the user approved after its create skipped them. */
+export type RunApprovedWorktreeSetupArgs = { worktreeId: string; approvedSetupHash: string }
+
+export type RunApprovedWorktreeSetupResult =
+  // `unsupported`: the client's host predates the operation.
+  | { status: 'started' | 'not_configured' | 'unsupported' }
+  // The content changed again since the prompt; nothing ran.
+  | { status: 'mismatch'; setupTrustMismatch: SetupTrustMismatch }
+
 export type WorktreeCreateTimingPhase = {
   phase: string
   startedAtMs: number

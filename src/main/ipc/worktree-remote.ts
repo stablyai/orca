@@ -64,7 +64,10 @@ import {
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
 } from '../workspace-hooks/effective-hook-config'
-import { checkCreatedWorktreeSetupTrust } from '../workspace-hooks/created-worktree-setup-trust'
+import {
+  checkCreatedWorktreeSetupTrust,
+  defaultTabsWithoutCommands
+} from '../workspace-hooks/created-worktree-setup-trust'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
@@ -1744,7 +1747,9 @@ async function performLocalWorktreeCreate(
     // Only the approved content may run; the client re-prompts with the branch's.
     const setupDecision = setupTrustMismatch ? 'skip' : args.setupDecision
     try {
-      defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, setupDecision)
+      const launch = getDefaultTabsLaunch(createdYamlHooks, repo, setupDecision)
+      // Approving the branch's commands opens the command tabs later.
+      defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
     } catch (error) {
       // Unapproved target-branch tab commands may create tabs but must not execute.
       console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)

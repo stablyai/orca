@@ -8455,8 +8455,8 @@
           "editingPrefix": "편집 중",
           "reconnectOnLaunch": "시작 시 다시 연결",
           "reconnectOnLaunchHelp": "끄면 Orca가 시작될 때 이 호스트와 이 호스트를 통해 연결되는 Orca 서버를 직접 연결할 때까지 연결하지 않습니다.",
-          "allowRemoteCliControl": "이 호스트의 orca CLI가 Orca를 제어하도록 허용",
-          "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다.",
+          "allowRemoteCliControl": "이 호스트가 작업 공간의 Orca 브라우저 탭을 제어하도록 허용",
+          "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트의 에이전트와 orca 명령은 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 읽고 사용할 수 있습니다. 제어 중인 탭에는 호스트 이름이 표시됩니다. 이 호스트에서 이전 버전의 Orca가 시작한 터미널에서 orca 오케스트레이션 명령을 실행하려면 이 설정도 켜져 있어야 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다.",
           "addHost": "호스트 추가",
           "proxyConnectionReuse": "프록시 연결 하나를 재사용",
           "proxyConnectionReuseHelp": "느린 ProxyCommand 또는 ProxyJump 호스트를 통한 연결이 빨라집니다. ssh_config가 호스트별 Match 또는 %h 규칙에 의존하지 않는 경우에만 사용하세요."
@@ -21932,7 +21932,8 @@
     "rowActions": "{{name}}에 대한 작업"
   },
   "browserTab": {
-    "agentDriving": "에이전트가 이 페이지를 사용 중입니다"
+    "agentDriving": "에이전트가 이 페이지를 사용 중입니다",
+    "controlledByHost": "{{host}}에서 제어 중"
   },
   "quitAndStopAllSessions": {
     "title": "완전히 종료",
@@ -22961,5 +22962,14 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}}에서 브라우저 탭을 제어하고 있습니다",
+    "description": "이 SSH 호스트의 에이전트는 해당 작업 공간의 Orca 브라우저 탭을 열고 사용할 수 있습니다. 제어 중인 탭에는 호스트 이름이 표시됩니다. 설정 > SSH에서 변경할 수 있습니다.",
+    "stop": "중지",
+    "disallow": "허용 안 함",
+    "stopped": "Orca를 다시 시작할 때까지 {{host}}에서 브라우저 탭을 제어하지 않습니다.",
+    "disallowed": "{{host}}에서 더 이상 브라우저 탭을 제어할 수 없습니다. 설정 > SSH에서 다시 켤 수 있습니다.",
+    "failed": "{{host}}을(를) 중지하지 못했습니다. 설정 > SSH에서 브라우저 제어를 끄세요."
   }
 }

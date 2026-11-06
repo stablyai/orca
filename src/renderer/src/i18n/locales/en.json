@@ -9437,8 +9437,8 @@
           "proxyConnectionReuseHelp": "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules.",
           "reconnectOnLaunch": "Reconnect on launch",
           "reconnectOnLaunchHelp": "When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.",
-          "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
-          "allowRemoteCliControlHelp": "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server.",
+          "allowRemoteCliControl": "Allow this host to control Orca browser tabs in its workspaces",
+          "allowRemoteCliControlHelp": "On by default for new hosts. Agents and orca commands on this host can open, read and use Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected. Tabs it controls show its name. Terminals started on this host by an older Orca also need this on to run orca orchestration commands. It cannot read your files, clipboard or cookies.",
           "editTitle": "Edit SSH host",
           "addTitle": "Add SSH host",
           "editDescription": "Update connection details for this machine. Changes apply on next connect.",
@@ -22436,7 +22436,14 @@
   },
   "worktree": {
     "setupTrust": {
-      "createdBranchSkipped": "Setup didn't run: this branch's orca.yaml setup commands differ from the ones you approved."
+      "createdBranchSkipped": "Setup didn't run: this workspace's branch has different orca.yaml setup commands than the ones you approved.",
+      "runFailed": "Could not start setup.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "reviewAction": "Review setup",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersBody": "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>.",
+      "branchSetupScript": "Branch's setup script"
     },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
@@ -23184,7 +23191,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "An agent is using this page"
+    "agentDriving": "An agent is using this page",
+    "controlledByHost": "Controlled by {{host}}"
   },
   "nativeChat": {
     "math": {
@@ -24119,5 +24127,14 @@
     "discussionAction": "Join the discussion",
     "checkAction": "Check compatibility",
     "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} is controlling a browser tab",
+    "description": "Agents on this SSH host can open and use Orca browser tabs in its workspaces. Tabs it controls show its name. You can change this in Settings > SSH.",
+    "stop": "Stop",
+    "disallow": "Don’t allow",
+    "stopped": "{{host}} stopped controlling browser tabs until Orca restarts.",
+    "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
+    "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
   }
 }
