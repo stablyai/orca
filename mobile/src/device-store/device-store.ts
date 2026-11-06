@@ -187,12 +187,17 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
         const index = indexes[table]
         // Distinct keys touch distinct files, so their native reads and decrypts can overlap.
         const rows = deviceStoreRows(roots, hostId, table, Array.from(new Set(keys)))
-        let reads: Awaited<ReturnType<typeof readDeviceStoreRow>>[]
-        try {
-          reads = await Promise.all(rows.map((row) => readDeviceStoreRow(fs, cryptoKey, row)))
-        } catch {
-          // Unreadable is not absent: report unavailable and delete nothing.
-          return { status: 'unavailable' } as const
+        // Settle every row before releasing the queue, so no draft recovery outlives this task.
+        const settled = await Promise.allSettled(
+          rows.map((row) => readDeviceStoreRow(fs, cryptoKey, row))
+        )
+        const reads: Awaited<ReturnType<typeof readDeviceStoreRow>>[] = []
+        for (const outcome of settled) {
+          if (outcome.status === 'rejected') {
+            // Unreadable is not absent: report unavailable and delete nothing.
+            return { status: 'unavailable' } as const
+          }
+          reads.push(outcome.value)
         }
         const byKey = new Map<string, string | null>()
         rows.forEach((row, at) => {

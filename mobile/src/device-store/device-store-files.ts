@@ -97,6 +97,10 @@ export async function writeDeviceStoreRow(
     await fs.delete(row.uri)
     return
   }
+  // A lone .tmp left by a crash is the only copy until upkeep promotes it; keep it before reusing the name.
+  if (await fs.fileExists(tmpUri)) {
+    await promoteLoneDraftTmp(fs, tmpUri)
+  }
   await fs.writeBytes(tmpUri, sealed)
   await fs.delete(row.uri)
   await fs.moveFile(tmpUri, row.uri)
