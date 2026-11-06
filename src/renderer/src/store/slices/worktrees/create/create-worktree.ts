@@ -210,9 +210,18 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
-      // Refuses the whole create (older Orca, unconfirmed parent) rather than create it unnested.
+      // A picked parent refuses the whole create (older Orca, unconfirmed parent) rather than create it
+      // unnested; the active folder fallback keeps its old behaviour there: create unnested and warn.
       const crossStoreParent = parent.crossStoreParentRow
-        ? await buildCrossStoreParentRef(get(), target, parent.crossStoreParentRow)
+        ? await buildCrossStoreParentRef(get(), target, parent.crossStoreParentRow).catch(
+            (error: unknown) => {
+              if (!parent.crossStoreParentIsActiveFolder) {
+                throw error
+              }
+              warnParentDroppedOnce()
+              return undefined
+            }
+          )
         : undefined
       if (
         target.kind === 'environment' &&

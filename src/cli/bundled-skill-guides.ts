@@ -3988,8 +3988,10 @@ const ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN = [
 const ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN = [
   "# Placement and remote execution",
   "",
-  "Folder workspaces are valid. `new-child` and `new-top-level` make Git worktrees",
-  "and do not apply to folders; never `git init` a user's folder.",
+  "Folder workspaces are valid. `new-child` and `new-top-level` make Git worktrees,",
+  "never in a folder project; never `git init` a user's folder. From a multi-repo",
+  "folder workspace, `new-child` nests under the folder and needs `--repo` naming",
+  "the Git repo to create the worktree in.",
   "",
   "Local `current`, `new-child` and `new-top-level` stay in the caller's project;",
   "`new-child` also uses the caller's workspace as its parent. Omit `--repo` for",
