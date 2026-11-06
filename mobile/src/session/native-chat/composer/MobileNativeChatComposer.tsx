@@ -11,13 +11,13 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
 import { Keyboard, type TextInput, View } from 'react-native'
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
-import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
+import { MobileNativeChatComposerSuggestions } from './MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
@@ -155,6 +155,9 @@ export function MobileNativeChatComposer({
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
+  const groupRef = useRef<View>(null)
+  const lowerRegion = useMobileNativeChatLowerRegion()
+  const menuWasShown = useRef(false)
   const [focused, setFocused] = useState(false)
   const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
   const request = sessionOptions?.controller.optionPickerRequest
@@ -170,7 +173,6 @@ export function MobileNativeChatComposer({
     onAttachPastedText: structured?.onAttachPastedText
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
-  const menuAnchorRef = useRef<View>(null)
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
@@ -287,17 +289,23 @@ export function MobileNativeChatComposer({
     }
   }
 
+  useLayoutEffect(() => {
+    lowerRegion?.layoutChanged()
+    const shown = menu.rows.length > 0
+    if (shown !== menuWasShown.current && focused) {
+      lowerRegion?.reveal(groupRef.current, shown ? 'menu' : 'edit')
+    }
+    menuWasShown.current = shown
+  })
+
   return (
-    <View ref={menuAnchorRef}>
-      {menu.rows.length > 0 ? (
-        <MobileNativeChatComposerMenuLayer anchorRef={menuAnchorRef}>
-          <MobileNativeChatComposerMenu
-            rows={menu.rows}
-            onPick={menu.pick}
-            nestedScrollEnabled={editSession ? true : undefined}
-          />
-        </MobileNativeChatComposerMenuLayer>
-      ) : null}
+    <View ref={groupRef} testID="native-chat-composer-group">
+      <MobileNativeChatComposerSuggestions
+        anchorRef={groupRef}
+        rows={menu.rows}
+        onPick={menu.pick}
+        nestedScrollEnabled={editSession ? true : undefined}
+      />
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         {goal.strip}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">

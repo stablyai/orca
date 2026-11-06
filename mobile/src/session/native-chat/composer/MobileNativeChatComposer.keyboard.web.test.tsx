@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type * as ReactNative from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock('./MobileNativeChatComposerField', () => import('./MobileNativeChatComposerField.web'))
@@ -116,6 +117,47 @@ describe('mobile composer modifier submit in the paired web page', () => {
       input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }))
     })
   }
+
+  it('resets the lower reading position on a chat switch while keeping the focused field', async () => {
+    const renderSurface = (scopeKey: string) =>
+      root.render(
+        <MobileNativeChatLowerRegion scopeKey={scopeKey}>
+          <textarea defaultValue="retained draft" />
+        </MobileNativeChatLowerRegion>
+      )
+    await act(async () => renderSurface('chat-a'))
+    const viewport = container.querySelector<HTMLElement>(
+      '[data-testid="native-chat-lower-scroll"]'
+    )!
+    const input = field()
+    Object.defineProperties(viewport, {
+      clientHeight: { value: 100 },
+      scrollHeight: { value: 350 }
+    })
+    vi.spyOn(viewport, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 0, 300, 100)
+    )
+    vi.spyOn(input, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 320 - viewport.scrollTop, 300, 30)
+    )
+    await act(async () => {
+      input.focus()
+      window.dispatchEvent(new Event('resize'))
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+    expect(viewport.scrollTop).toBe(250)
+    await act(async () => {
+      viewport.scrollTop = 140
+      viewport.dispatchEvent(new Event('scroll'))
+      viewport.dispatchEvent(new Event('scrollend'))
+    })
+    await act(async () => renderSurface('chat-b'))
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    expect(viewport.scrollTop).toBe(250)
+    expect(field()).toBe(input)
+    expect(document.activeElement).toBe(input)
+    expect(input.value).toBe('retained draft')
+  })
 
   it.each([true, false])(
     'sends raw text with alternate intent, retaining focus on accepted:%s',

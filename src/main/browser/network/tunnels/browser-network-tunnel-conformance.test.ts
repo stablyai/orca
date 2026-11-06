@@ -12,6 +12,8 @@ import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
+  type BrowserNetworkTunnelFlowControl,
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
@@ -176,6 +178,43 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
+  it('carries a fully grown window.v2 window of 1 KiB frames in both directions', async () => {
+    const tunnel = createConformanceTunnel(BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL)
+    const { duplex, destination } = await openStream(tunnel)
+    const consumer = consumeDuplex(duplex, { autoSettle: false })
+    const windowBytes = BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL.streamWindowBytes
+    const frames = windowBytes / 1024
+    const sendWindow = async (): Promise<void> => {
+      for (let index = 0; index < frames; index += 1) {
+        await writeChunk(duplex, new Uint8Array(1024).fill(index))
+        destination.emit('data', new Uint8Array(1024).fill(index))
+      }
+      await settle()
+    }
+
+    // One window of settled traffic grows both receive windows from the legacy size to the maximum.
+    await sendWindow()
+    for (let round = 0; consumer.byteLength() < windowBytes && round < 16; round += 1) {
+      consumer.settleAll()
+      await settle()
+    }
+    consumer.settleAll()
+    await settle()
+
+    // The grown window then carries a full window of tiny frames with nothing settled.
+    destination.autoSettleWrites = false
+    await sendWindow()
+    expect(totalBytes(destination.written)).toBe(2 * windowBytes)
+    expect(consumer.byteLength()).toBe(2 * windowBytes)
+    expect(tunnel.closures).toEqual([])
+    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
+
+    destination.settleWrites()
+    consumer.settleAll()
+    await settle()
+    await teardown(tunnel)
+  })
+
   it('releases retained bytes still queued for a stream the client abandons', async () => {
     const tunnel = createConformanceTunnel()
     const stalled = await openStream(tunnel, 'stalled.internal')
@@ -324,7 +363,7 @@ function createAggregateBudgetProbe(): AggregateBudgetProbe {
   }
 }
 
-function createConformanceTunnel(): ConformanceTunnel {
+function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
@@ -357,6 +396,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       tunnel.client.handleBinary(bytes)
       return true
     },
+    flowControl,
     onClose: tunnel.onSessionClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
@@ -368,6 +408,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       return true
     },
     outboundMemory: lease,
+    flowControl,
     onClosed: (error) => tunnel.closures.push(error)
   })
   return tunnel

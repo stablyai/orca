@@ -1,3 +1,5 @@
+import type { RefObject } from 'react'
+import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
@@ -9,6 +11,22 @@ import { COMPOSER_MENU_MAX_HEIGHT } from './mobile-native-chat-composer-menu-siz
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
 
 const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
+
+export function MobileNativeChatComposerSuggestions({
+  anchorRef,
+  ...props
+}: {
+  anchorRef: RefObject<View | null>
+  rows: readonly ComposerMenuRow[]
+  onPick: (row: ComposerMenuRow) => void
+  nestedScrollEnabled?: boolean
+}) {
+  return props.rows.length > 0 ? (
+    <MobileNativeChatComposerMenuLayer anchorRef={anchorRef}>
+      <MobileNativeChatComposerMenu {...props} />
+    </MobileNativeChatComposerMenuLayer>
+  ) : null
+}
 
 export function MobileNativeChatComposerMenu({
   rows,
