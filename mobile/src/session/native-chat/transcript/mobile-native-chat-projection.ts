@@ -174,6 +174,6 @@ export function projectMobileNativeChatMessages(
     images,
     kinds,
     units,
-    rows: unchanged ? previous.rows : units.flatMap((unit) => unit.rows)
+    rows: previous && unchanged ? previous.rows : units.flatMap((unit) => unit.rows)
   }
 }
