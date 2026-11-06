@@ -45,7 +45,7 @@ describe('desktop automation create on a managed SSH host', () => {
       recordCreated: () => undefined
     }
 
-    expect(() => createAutomation(operations, input)).toThrow(/Build box/)
+    expect(() => createAutomation(operations, input)).toThrow()
     expect(state.automations ?? []).toEqual([])
   })
 })

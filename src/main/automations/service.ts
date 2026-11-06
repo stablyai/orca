@@ -66,8 +66,6 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
-  /** Desktop only: moves a managed SSH host's row to its Orca server; true once moved. */
-  handOffManagedHost: ((automation: Automation) => Promise<boolean>) | null = null
 
   constructor(
     store: Store,
@@ -252,12 +250,6 @@ export class AutomationService {
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
     const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
-    if (
-      refusal?.errorCode === 'managedHostServer' &&
-      (await this.handOffManagedHost?.(automation))
-    ) {
-      return
-    }
     if (refusal?.errorCode === 'wslMoveOwnedByHost') {
       await this.runs.advanceNextRun(automation.id, now)
       return
