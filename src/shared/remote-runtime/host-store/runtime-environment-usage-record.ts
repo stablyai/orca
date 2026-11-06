@@ -1,6 +1,6 @@
-import { markEnvironmentUsed } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { markEnvironmentUsed } from './runtime-environment-store'
 
-/** Subscription callbacks cannot reject to a caller; usage writes must tolerate removed or unreadable environments. */
+/** Last-used bookkeeping must never fail a reply that already arrived: read-only stores and removed environments skip it. */
 export function recordRuntimeEnvironmentUsage(
   userDataPath: string,
   selector: string,
