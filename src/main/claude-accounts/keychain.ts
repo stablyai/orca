@@ -24,6 +24,10 @@ export async function readActiveClaudeKeychainCredentialsStrict(
 const KEYCHAIN_ACCOUNT_PATTERN = /^[a-zA-Z0-9._-]+$/
 const CLAUDE_CODE_FALLBACK_USER = 'claude-code-user'
 
+export function claudeKeychainAccount(): string {
+  return getKeychainUser()
+}
+
 function getKeychainUser(): string {
   // Match Claude 2.1+ fallback naming for invalid usernames, including SSO email addresses.
   let user: string

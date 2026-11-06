@@ -12,7 +12,11 @@ function normalizeFolder(path: string): string {
 /** The host's Claude folders and logins as main read them at the switch; WSL guests' are never read. */
 export type ClaudeHostFolders = Pick<
   ClaudeRateLimitAccountsState,
-  'accounts' | 'systemDefaultHome' | 'systemDefaultEmail' | 'systemDefaultOrganizationUuid'
+  | 'accounts'
+  | 'systemDefaultHome'
+  | 'systemDefaultEmail'
+  | 'systemDefaultOrganizationUuid'
+  | 'paneAssignments'
 >
 
 /** Where a pane's Claude keeps its config, read from its transcript path. */

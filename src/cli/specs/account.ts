@@ -1,4 +1,4 @@
-import { LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
+import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
 
 // Terminal login lets headless hosts manage accounts without the desktop login UI.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
@@ -64,6 +64,43 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Deletes the credentials Orca saved for that account (and, for OpenCode and Devin, the conversation data in its profile). Stop its running agents first. System credentials are never removed.',
       'Select another Antigravity account before removing the one in use.'
+    ]
+  },
+  {
+    path: ['account', 'auto-switch'],
+    summary: 'Turn automatic Claude account switching before a usage limit on or off',
+    usage:
+      'orca account auto-switch --agent claude (--on | --off) [--environment <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'on', 'off'],
+    notes: [
+      'Writes the host setting behind Settings › Accounts › Claude › "Switch accounts before a usage limit" (accounts.setClaudeAutoSwitch). Default off.',
+      'With --environment the setting is written on that paired Orca server, whose accounts the switch then rotates.',
+      'Lines: 5-hour window 95 %, weekly and Fable-weekly windows 90 %; the switch applies to the next Claude started.'
+    ],
+    examples: [
+      'orca account auto-switch --agent claude --on',
+      'orca account auto-switch --agent claude --on --environment build-box'
+    ]
+  },
+  {
+    path: ['account', 'token-refresh'],
+    summary: 'Refresh access tokens for idle managed Claude accounts',
+    usage:
+      'orca account token-refresh --agent claude (--on | --off | --status | --now <email|id>) [--force] [--environment <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'on', 'off', 'status', 'now', 'force'],
+    notes: [
+      'Writes claudeAccountTokenRefresh (accounts.setClaudeAccountTokenRefresh). Default off. On: an idle account refreshes its access token the way Claude Code does, then usage retries once.',
+      'Refreshes are serialized, capped per usage poll, and back off together when the token endpoint returns 429.',
+      'A live Claude session for that account is left alone. invalid_grant is lapsed and is not retried.',
+      '--status reads accounts.list and does not change the setting. It prints last refresh, next retry, lapsed, queue position, and backoff level.',
+      '--now refreshes one account on the runtime that holds it. --force skips the backoff wait. A live session is still left alone.',
+      'With --environment the setting is written on that paired Orca server.'
+    ],
+    examples: [
+      'orca account token-refresh --agent claude --status',
+      'orca account token-refresh --agent claude --now ada@example.com',
+      'orca account token-refresh --agent claude --off',
+      'orca account token-refresh --agent claude --on --environment build-box'
     ]
   }
 ]

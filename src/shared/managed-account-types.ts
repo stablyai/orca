@@ -128,6 +128,27 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultHome?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+  /** Whether this host switches accounts before a usage limit; absent from older hosts. */
+  autoSwitchEnabled?: boolean
+  /** Whether idle Claude accounts refresh their own access tokens. Absent from older hosts. */
+  tokenRefresh?: 'on' | 'off'
+  /** In-memory refresh book for this process. Absent from older hosts. */
+  tokenRefreshAccounts?: {
+    accountId: string
+    lastRefreshAt: number | null
+    nextRetryAt: number | null
+    lapsed: boolean
+    /** 1-based place among accounts still waiting. Absent on older hosts. */
+    queuePosition?: number | null
+    /** Shared endpoint backoff step. Absent on older hosts. */
+    backoffLevel?: number
+  }[]
+  /** Live sessions billed to each account. Absent from older hosts. */
+  assignedSessions?: { accountId: string; count: number }[]
+  /** Every live pane and the account it bills. */
+  paneAccounts?: ClaudePaneAccountSnapshot[]
+  /** Panes whose billed account differs from the folder they were spawned in. */
+  paneAssignments?: { ptyId: string; accountId: string }[]
 }
 
 /** A Claude switch made over runtime RPC, e.g. from the phone. */
@@ -136,6 +157,45 @@ export type ClaudeAccountSelectionChange = {
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
 }
+
+/** One-shot refresh. The access token stays on the runtime. */
+export type ClaudeTokenRefreshNowResult = {
+  accountId: string
+  email?: string
+  outcome: 'ok' | 'skipped' | 'failed' | 'lapsed'
+  reason?: string
+}
+
+/** One live Claude pane and the account its next request bills. */
+export type ClaudePaneAccountSnapshot = {
+  ptyId: string
+  paneKey: string | null
+  accountId: string
+  /** Email local-part, or `local@domain` when two accounts share a local-part. */
+  label: string
+  email: string
+}
+
+/** Pushed when a pane's billed account changes, including when the pane is gone (`accountId` null). */
+export type ClaudePaneAssignedEvent = {
+  ptyId: string
+  paneKey: string | null
+  accountId: string | null
+  label: string
+  email: string
+}
+
+/** Orca moved Claude to another account before a usage limit, so running sessions can follow. */
+export type ClaudeAutoSwitchedEvent = {
+  /** The accounts at the switch, so following it waits on no read another switch could overtake. */
+  accounts: ClaudeManagedAccountSummary[]
+  fromAccountId: string
+  toAccountId: string
+  target: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+} & Pick<
+  ClaudeRateLimitAccountsState,
+  'systemDefaultHome' | 'systemDefaultEmail' | 'systemDefaultOrganizationUuid' | 'paneAssignments'
+>
 
 export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null

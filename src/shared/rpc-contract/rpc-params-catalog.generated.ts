@@ -58,12 +58,15 @@ import {
   HostAccountSignInStartParams,
   HostAccountSignInWaitParams,
   ListAccountsParams,
+  RefreshClaudeAccountTokenNowParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
   SelectAccountParams,
   SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
-  SelectDataAccountParams
+  SelectDataAccountParams,
+  SetClaudeAccountTokenRefreshParams,
+  SetClaudeAutoSwitchParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
@@ -773,6 +776,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.minimaxCredentialsStatus': null,
   'accounts.minimaxSaveApiKey': UsageCredentialApiKeyParams,
   'accounts.minimaxSaveSessionCookie': UsageCredentialSessionCookieParams,
+  'accounts.refreshClaudeAccountTokenNow': RefreshClaudeAccountTokenNowParams,
   'accounts.removeClaude': RemoveAccountParams,
   'accounts.removeCodex': RemoveAccountParams,
   'accounts.removeData': RemoveDataAccountParams,
@@ -780,6 +784,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.selectData': SelectDataAccountParams,
+  'accounts.setClaudeAccountTokenRefresh': SetClaudeAccountTokenRefreshParams,
+  'accounts.setClaudeAutoSwitch': SetClaudeAutoSwitchParams,
   'accounts.setHostLaunchEnv': HostAccountLaunchEnvParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,

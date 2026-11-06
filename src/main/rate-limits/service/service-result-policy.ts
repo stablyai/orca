@@ -54,6 +54,10 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     if (fresh.status === 'unavailable') {
       return fresh
     }
+    // A rejected refresh token is terminal: keep the sign-in failure, not the last good window.
+    if (fresh.usageMetadata?.failureKind === 'lapsed') {
+      return fresh
+    }
 
     if (!previous) {
       return fresh

@@ -1,4 +1,6 @@
 import { fetchManagedAccountUsage } from '../claude-fetcher'
+import { beginClaudeOAuthRefreshCycle } from '../claude-oauth-refresh'
+import { orderInactiveClaudeRefreshAccounts } from '../claude-oauth-refresh-state'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
@@ -19,6 +21,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (accounts.length === 0) {
       return
     }
+    beginClaudeOAuthRefreshCycle()
+    const orderedAccounts = orderInactiveClaudeRefreshAccounts(accounts, null)
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
@@ -29,7 +33,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     this.pushToRenderer()
 
     try {
-      for (const account of accounts) {
+      for (const account of orderedAccounts) {
         if (
           signal.aborted ||
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||

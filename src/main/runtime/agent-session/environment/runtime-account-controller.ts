@@ -1,6 +1,7 @@
 import type { ClaudeAccountService } from '../../../claude-accounts/service'
 import { hasAppEnvironment } from '../../../../shared/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
+import { dataAccountsSnapshot, streamDataAccountsSnapshot } from './runtime-account-data-snapshot'
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
@@ -135,34 +136,15 @@ export class RuntimeAccountController {
   getStreamSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
-      ...this.streamDataAccountsSnapshot(),
+      ...streamDataAccountsSnapshot(),
       claude: claudeAccounts.listAccounts(),
       codex: codexAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
     }
   }
 
-  private streamDataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
-    const snapshot: Pick<AccountsSnapshot, 'opencode' | 'devin'> = {}
-    if (hasAppEnvironment()) {
-      const service = getManagedDataAccountService()
-      for (const provider of ['opencode', 'devin'] as const) {
-        try {
-          snapshot[provider] = service.list(provider)
-        } catch {
-          // Optional unavailable evidence must not swallow another provider's committed change.
-        }
-      }
-    }
-    return snapshot
-  }
-
   dataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
-    if (!hasAppEnvironment()) {
-      return {}
-    }
-    const service = getManagedDataAccountService()
-    return { opencode: service.list('opencode'), devin: service.list('devin') }
+    return dataAccountsSnapshot()
   }
 
   addDataFromHome(
@@ -226,6 +208,14 @@ export class RuntimeAccountController {
       after: { state: after, accountId: selectedClaudeAccountId(after, target) }
     })
     return after
+  }
+
+  setClaudeAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.requireServices().claudeAccounts.setAutoSwitch(enabled)
+  }
+
+  setClaudeAccountTokenRefresh(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.requireServices().claudeAccounts.setTokenRefresh(enabled)
   }
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {
@@ -309,7 +299,7 @@ export class RuntimeAccountController {
       : () => {}
     const unsubscribeUsage = services.rateLimits.onStateChange((rateLimits) => {
       listener({
-        ...this.streamDataAccountsSnapshot(),
+        ...streamDataAccountsSnapshot(),
         claude: services.claudeAccounts.listAccounts(),
         codex: services.codexAccounts.listAccounts(),
         rateLimits

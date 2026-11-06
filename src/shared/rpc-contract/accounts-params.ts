@@ -31,6 +31,15 @@ export const CodexSelectionTarget = z.discriminatedUnion('runtime', [
     .strict()
 ])
 
+export const SetClaudeAutoSwitchParams = z.object({ enabled: z.boolean() })
+
+export const SetClaudeAccountTokenRefreshParams = z.object({ enabled: z.boolean() })
+
+export const RefreshClaudeAccountTokenNowParams = z.object({
+  account: z.string().trim().min(1),
+  force: z.boolean().optional()
+})
+
 export const SelectAccountParams = z.object({
   accountId: z
     .union([z.string().min(1, 'Missing accountId'), z.null()])
