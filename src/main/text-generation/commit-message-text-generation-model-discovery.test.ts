@@ -599,12 +599,13 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
             default_reasoning_level: 'high',
             visibility: 'list',
             model_messages: { instructions_template: 'x'.repeat(5 * 1024 * 1024) }
-          },
-          { slug: 'hidden-model', display_name: 'Hidden model', visibility: 'hide' }
+          }
         ]
       })
     )
-    for (let offset = 0; offset < catalog.length; offset += 65537) {
+    const unicodeSplit = catalog.indexOf('🌊') + 1
+    child.stdout.emit('data', catalog.subarray(0, unicodeSplit))
+    for (let offset = unicodeSplit; offset < catalog.length; offset += 65537) {
       child.stdout.emit('data', catalog.subarray(offset, offset + 65537))
     }
     child.emit('close', 0)

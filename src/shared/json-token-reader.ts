@@ -2,7 +2,7 @@ import parser, { type Token } from 'stream-json/core/parser.js'
 import exec from 'stream-chain/exec.js'
 import { none } from 'stream-chain/defs.js'
 
-/** Bounds token batches while preserving caller-owned UTF-8 decoding. */
+/** Bounds token batches and retained scalars; callers own UTF-8 decoding. */
 export function createJsonTokenReader(
   consume: (token: Token) => void,
   batchCodeUnits = 64 * 1024,

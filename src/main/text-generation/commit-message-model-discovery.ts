@@ -83,6 +83,7 @@ export async function discoverModelsLocal(
   return attempt.result
 }
 
+/** Keep Codex home locks until subprocess teardown, even when output is rejected. */
 async function discoverModelsOnce(
   input: DiscoverModelsLocalInput,
   spec: AgentModelProbeSpec,
