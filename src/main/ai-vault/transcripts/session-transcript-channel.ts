@@ -69,7 +69,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
 
   async drain(): Promise<void> {
     if (this.start?.indexing) {
-      await Promise.all(this.readers.map((reader) => reader.drain?.()))
+      await Promise.all(this.readers.flatMap((reader) => (reader.drain ? [reader.drain()] : [])))
     }
   }
 
