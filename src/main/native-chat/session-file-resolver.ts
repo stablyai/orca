@@ -303,5 +303,6 @@ async function findHostSessionFile(
       throw error
     }
   }
+  signal?.throwIfAborted()
   return hit
 }

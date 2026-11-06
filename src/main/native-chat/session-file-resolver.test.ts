@@ -79,6 +79,22 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBe(join(claudeProjectsDir, '-Users-ada-repo', 'sess-dup.jsonl'))
   })
 
+  it('falls back to every bucket when the cwd hint is too long to name one', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-long-cwd-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const target = join(claudeProjectsDir, '-old', 'sess-long-cwd.jsonl')
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', 'sess-long-cwd', {
+        claudeProjectsDir,
+        cwd: `/work/${'segment/'.repeat(40)}repo`,
+        strictErrors: true
+      })
+    ).resolves.toBe(target)
+  })
+
   it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
     const root = await makeRoot('orca-native-chat-resolve-grok-')
     const grokSessionsDir = join(root, 'grok-sessions')

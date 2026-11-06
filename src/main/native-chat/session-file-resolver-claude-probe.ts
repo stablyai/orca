@@ -32,6 +32,7 @@ async function isEntry(
   options.signal?.throwIfAborted()
   try {
     const info = await lstat(path)
+    options.signal?.throwIfAborted()
     return kind === 'file' ? info.isFile() : info.isDirectory()
   } catch (error) {
     options.signal?.throwIfAborted()
@@ -55,12 +56,14 @@ export async function findClaudeSessionFile(
     return null
   }
   const fileName = `${sessionId}.jsonl`
-  const preferred = options.cwd?.trim() ? encodeClaudeProjectPaths(options.cwd.trim()) : []
+  // Encode the cwd as given, like Claude does; a hint that can't name a bucket (too long) only falls back.
+  const preferred = options.cwd?.trim() ? encodeClaudeProjectPaths(options.cwd) : []
+  const hintOptions = { signal: options.signal }
   for (const bucket of preferred) {
     const bucketDir = join(projectsDir, bucket)
     if (
-      (await isEntry(bucketDir, 'directory', options)) &&
-      (await isEntry(join(bucketDir, fileName), 'file', options))
+      (await isEntry(bucketDir, 'directory', hintOptions)) &&
+      (await isEntry(join(bucketDir, fileName), 'file', hintOptions))
     ) {
       return join(bucketDir, fileName)
     }
@@ -78,7 +81,8 @@ export async function findClaudeSessionFile(
     return null
   }
   for (const bucket of buckets) {
-    if (!bucket.isDirectory() || preferred.includes(bucket.name)) {
+    // Hinted buckets are probed again so their real I/O errors still surface under strictErrors.
+    if (!bucket.isDirectory()) {
       continue
     }
     const candidate = join(projectsDir, bucket.name, fileName)
