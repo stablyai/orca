@@ -93,7 +93,13 @@ describe('runSourceControlAgentActionStart', () => {
             placementWorkspaceId: 'folder:feature',
             initialCwd: '/folder/repo',
             recoveryContext,
-            launchChoice: { agent: 'codex', route: 'terminal-tui', executionHostId: 'ssh:box' }
+            recipe: { agentId: 'codex', surface: 'chat', agentArgs: '--model gpt-5' },
+            launchChoice: {
+              agent: 'codex',
+              route: 'structured-native-chat',
+              requestedSurface: 'chat',
+              executionHostId: 'ssh:box'
+            }
           })
         )
       ).resolves.toBe(true)
@@ -102,7 +108,9 @@ describe('runSourceControlAgentActionStart', () => {
           worktreeId: 'folder:feature',
           groupId: 'folder-group',
           initialCwd: '/folder/repo',
-          selectedExecutionHostId: 'ssh:box'
+          selectedExecutionHostId: 'ssh:box',
+          requestedSurface: 'terminal',
+          agentArgs: '--model gpt-5'
         })
       )
       expect(mocks.mutationInFlight).toHaveBeenCalledWith(recoveryContext)

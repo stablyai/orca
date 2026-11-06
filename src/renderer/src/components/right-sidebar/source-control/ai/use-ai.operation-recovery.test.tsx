@@ -84,7 +84,8 @@ describe('AI operation recovery composer', () => {
         executionHostId: 'local',
         actionId: 'fixCommitFailure',
         basePrompt: 'fix this commit',
-        getLaunchActionRecipe: () => sourceControlActionRecipeEntry({ agentId: null }),
+        getLaunchActionRecipe: () =>
+          sourceControlActionRecipeEntry({ agentId: 'codex', surface: 'chat' }),
         getStoreState: useAppStore.getState,
         copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
       })
@@ -94,7 +95,8 @@ describe('AI operation recovery composer', () => {
         worktreeId: 'folder:feature',
         groupId: 'folder-group',
         initialCwd: '/folder/repo',
-        selectedExecutionHostId: 'local'
+        selectedExecutionHostId: 'local',
+        requestedSurface: 'terminal'
       })
     )
     expect(detectAgents).toHaveBeenCalledOnce()

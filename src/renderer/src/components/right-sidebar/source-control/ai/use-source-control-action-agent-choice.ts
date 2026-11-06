@@ -41,6 +41,7 @@ export function useSourceControlActionAgentChoice(args: {
   recipe: SelectedSourceControlActionRecipe
   /** This open's deliberate pick; absent replays the saved recipe. */
   livePick: AgentLaunchSurface | undefined
+  terminalOnly?: boolean
 }) {
   const { recipe } = args
   const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
@@ -57,8 +58,9 @@ export function useSourceControlActionAgentChoice(args: {
     wakeOnOpen: true
   })
   const { detectedIds, detectionFailed, needsServerUpdate } = observation.detection
-  const detectedAgents =
-    observation.model.state === 'settled'
+  const detectedAgents = args.terminalOnly
+    ? (detectedIds ?? NO_AGENTS)
+    : observation.model.state === 'settled'
       ? [
           ...new Set(
             observation.model.rows
@@ -78,15 +80,18 @@ export function useSourceControlActionAgentChoice(args: {
           detectedAgents: detectedIds ?? NO_AGENTS,
           disabledAgents,
           chosenOpensAsChat: (agent) =>
+            !args.terminalOnly &&
             observation.model.state === 'settled' &&
             observation.model.rows.some((row) => row.kind === 'chat' && row.agent === agent)
         })
   const savedSurface = recipe.agentId === selectedAgent ? recipe.surface : undefined
-  const liveSurface = args.livePick ?? savedSurface
+  const liveSurface = args.terminalOnly ? 'terminal' : (args.livePick ?? savedSurface)
   const selection = observation.selectionFor(
     selectedAgent,
-    args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined),
-    savedSurface === 'chat' ? 'chat' : undefined
+    args.terminalOnly
+      ? 'terminal'
+      : (args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined)),
+    !args.terminalOnly && savedSurface === 'chat' ? 'chat' : undefined
   )
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
     isTuiAgentEnabled(agent, disabledAgents)

@@ -166,6 +166,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
 
   // A saved or default agent may open as a chat without its CLI.
   const opensAsChat = (agent: TuiAgent): boolean =>
+    !placementWorkspaceId &&
     agentChoiceMayOpenAsChat(
       useAppStore.getState(),
       agent,
@@ -209,6 +210,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     ...(initialCwd ? { initialCwd } : {}),
     prompt: commandInput,
     ...projection,
+    ...(placementWorkspaceId ? { requestedSurface: 'terminal' as const } : {}),
     ...(executionHostId ? { selectedExecutionHostId: executionHostId } : {}),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,

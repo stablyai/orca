@@ -85,7 +85,8 @@ export function useSourceControlAgentActionDialog({
     repoId,
     repo,
     recipe,
-    livePick
+    livePick,
+    terminalOnly: Boolean(placementWorkspaceId)
   })
   const launchAgentScope = useMemo(
     () =>

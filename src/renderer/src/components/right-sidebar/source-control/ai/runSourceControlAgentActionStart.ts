@@ -146,7 +146,7 @@ export async function runSourceControlAgentActionStart({
     launchRecipe,
     selectedAgent,
     { renderedPrompt: trimmedCommandInput, settings },
-    launchChoice
+    placementWorkspaceId ? { ...launchChoice, requestedSurface: 'terminal' } : launchChoice
   )
   const {
     commandInput: _prompt,
