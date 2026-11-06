@@ -713,7 +713,9 @@
         "cb4d287238": "Nombre del servidor",
         "3affe7de3a": "Pega una URL de emparejamiento de un servidor Orca accesible desde este navegador.",
         "e3bcd082ac": "Conectar con Orca",
-        "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace."
+        "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace.",
+        "replaceSavedServer": "Este enlace se conecta a un servidor distinto de \"{{name}}\" ({{endpoint}}). Conéctate solo si confías en la dirección de abajo.",
+        "keepSavedServer": "Mantener servidor guardado"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución.",
@@ -2555,7 +2557,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Necesita revisión",
         "7698af5263": "Mío",
         "94f0339621": "Asignado a mí",
         "c2268a9982": "Todo",
@@ -2652,6 +2653,8 @@
         "loadGitHubWorkFailed": "No se pudo cargar el trabajo de GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Mis tareas pendientes",
         "startWorkspaceFromMr": "Iniciar espacio de trabajo desde MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espacio de trabajo desde issue {{number}}",
@@ -11565,7 +11568,7 @@
             "terminalRun": "Ejecutar comandos en tus terminales, incluso SSH"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo.",
-          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red y ejecutar otros programas.",
+          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red, ejecutar otros programas y controlar Orca, incluidas tus terminales y agentes.",
           "uiWarning": "Ejecuta el código del autor dentro de Orca para dibujar su vista. Orca muestra a qué puede acceder y pregunta antes de activarlo."
         },
         "PluginConsentProvenance": {
@@ -19064,6 +19067,9 @@
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",
+        "previewQueue": "Poner en cola",
+        "previewSteer": "Enviar ahora",
+        "previewSteerQueued": "Enviar el siguiente ahora",
         "alternateQueueHint": "{{shortcut}} para poner en cola",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",

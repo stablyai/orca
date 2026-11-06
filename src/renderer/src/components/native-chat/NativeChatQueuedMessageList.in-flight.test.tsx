@@ -1,6 +1,14 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -93,4 +101,38 @@ it('a slow Clear all greys Clear all, Resume and every card until the host answe
   )
   expect(screen.getAllByRole('listitem')).toHaveLength(2)
   expect(toast.error).toHaveBeenCalledExactlyOnceWith('Could not delete')
+})
+
+it('offers the head-card steer only while a press would send it', async () => {
+  const answer = Promise.withResolvers<null>()
+  const mutate = vi.fn(
+    async (..._call: [string, string, Record<string, unknown>]) => answer.promise
+  )
+  const write = vi.fn()
+  const { result } = renderHook(() =>
+    useStructuredAgentSessionQueuedMessages({
+      admit: () => ({ target: { kind: 'local' }, write, mutate: async () => null }),
+      capturePresentation: () => () => true,
+      enabled: true,
+      queuedMessages: [waitingDraft('a', 1)],
+      queuePause: null,
+      submissions: [],
+      hasPendingPrompt: false,
+      isWorking: true,
+      composerScopeKey: undefined,
+      mutate,
+      editTransport: { target: { kind: 'local' }, sessionId: 'session', capable: false, write }
+    })
+  )
+  act(() => {
+    expect(result.current.steerHead?.()).toBe(true)
+  })
+  // While that steer is on its way the composer offers none, so a held Cmd previews no dead steer.
+  expect(result.current.steerHead).toBeUndefined()
+  await act(async () => answer.resolve(null))
+  expect(mutate).toHaveBeenCalledExactlyOnceWith(
+    'agentSession.queuedMessageSend',
+    'agentSession.queuedMessageSend',
+    { messageId: 'a' }
+  )
 })

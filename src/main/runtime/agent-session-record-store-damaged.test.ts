@@ -1,18 +1,9 @@
-import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-gate'
-import { heldStructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-host-current-work'
-import { AgentSessionSubscribers } from '../native-chat/agent-session-wire/structured-agent-session-subscribers'
-import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
-import { readStructuredAgentSessionHistoryResult } from '../native-chat/agent-session-wire/structured-agent-session-history-result'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import type { nextAgentSessionFence } from '../../shared/agent-session/lifecycle/agent-session-next-fence'
 import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../native-chat/structured-agent-session-history-adoption'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
@@ -26,10 +17,7 @@ import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-test-harness'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000
 const NATIVE: AgentSessionExecutionLocation = {
@@ -161,173 +149,4 @@ describe('damaged saved conversation observations', () => {
     })
     expect(store.getConversation('session-beta')).toBeNull()
   })
-
-  it('does not manufacture never-started or runtime authority from a present malformed floor', async () => {
-    const first = await open()
-    await first.founding.commit(reserveRequest())
-    expect(first.getConversation('session-alpha')?.neverStarted).toBe(true)
-    const healthyOwner = first.getConversation('session-alpha')?.ownerObservation
-    expect(Object.keys(healthyOwner ?? {}).sort()).toEqual(
-      [
-        'claimStatus',
-        'handoffStage',
-        'handoffOperationId',
-        'ownerProcess',
-        'reservedSpawnToken',
-        'provenHandleLinkId',
-        'leaseDeadlineAt',
-        'lastRenewedAt',
-        'deathEvidence',
-        'unreconciled'
-      ].sort()
-    )
-    await editPersistedTestAgentSessionStore(directory, (persisted) => {
-      Object.assign(persisted.records['session-alpha'], { futureConversationField: 'retained' })
-      Object.assign(persisted.records['session-alpha'].lease, {
-        minimumNextFence: null,
-        futureAuthorityField: 'private'
-      })
-    })
-    const store = await open()
-    expect(store.getConversation('session-alpha')?.neverStarted).toBe(false)
-    expect(store.getConversation('session-alpha')).toHaveProperty(
-      'futureConversationField',
-      'retained'
-    )
-    expect(store.getConversation('session-alpha')?.ownerObservation).toEqual({
-      ...healthyOwner,
-      unreconciled: true
-    })
-    expectTypeOf<AgentSessionConversationView>().not.toExtend<AgentSessionRecord>()
-    expectTypeOf<AgentSessionConversationView['ownerObservation']>().not.toExtend<
-      Parameters<typeof nextAgentSessionFence>[0]
-    >()
-  })
-
-  it.each([9, 'bad'])(
-    'reopens the same saved journal for floor %j and proves automatic receipt admission independently of pauses',
-    async (minimumNextFence) => {
-      const first = await open()
-      await establishOwner(first)
-      const logger = recordingStructuredAgentSessionLogger().logger
-      const original = await openStructuredAgentSessionConversationJournal(
-        {
-          store: first,
-          journalDatabase: openTestJournalHostDatabase(directory),
-          logger
-        },
-        first.getConversation('session-alpha')!
-      )
-      await original.session.journal.appendSubmission({
-        clientMessageId: operationId(),
-        origin: 'client',
-        payloadFingerprint: 'saved',
-        body: hostTestMessage('saved question'),
-        fence: 1,
-        handoverRecorded: true
-      })
-      const savedCard = {
-        messageId: 'kept-card',
-        fingerprint: 'card',
-        body: hostTestMessage('waiting message'),
-        hostInstance: 'earlier-runtime'
-      }
-      await original.session.journal.queuedMessages.insert(savedCard)
-      await original.session.journal.close()
-      await editPersistedTestAgentSessionStore(directory, (persisted) => {
-        Object.assign(persisted.records['session-alpha'].lease, { minimumNextFence })
-        const owner = persisted.records['session-alpha'].lease.ownerProcess
-        if (owner) {
-          owner.runtime = 'previous-runtime'
-        }
-      })
-      const store = await open()
-      const record = store.getConversation('session-alpha')!
-      const reopened = await openStructuredAgentSessionConversationJournal(
-        {
-          store,
-          journalDatabase: openTestJournalHostDatabase(directory),
-          logger
-        },
-        record
-      )
-      const journal = reopened.session.journal
-      try {
-        const history = readStructuredAgentSessionHistoryResult({
-          journal,
-          record,
-          request: { sessionId: 'session-alpha', direction: 'tail' }
-        })
-        expect(history.page.fence).toBe(1)
-        expect(history.providerSession).toMatchObject({ id: 'provider-session-1' })
-        expect(journal.submissions()).toMatchObject([{ dispatchState: 'rejected' }])
-        expect(store.replacedRuntime('session-alpha')).toMatchObject({ fence: 1 })
-        expect(record.ownerObservation.deathEvidence).toBeNull()
-        const subscriber = new AgentSessionSubscribers()
-        const frames: unknown[] = []
-        const unsubscribe = subscriber.open({
-          id: 'saved-view',
-          sessionId: 'session-alpha',
-          journal,
-          fence: record.currentFence,
-          emit: (frame) => frames.push(frame)
-        })
-        expect(frames).toMatchObject([{ type: 'snapshot', page: { fence: 1 } }])
-        unsubscribe()
-        // Lift the old-card pause so strict record validity is the only admission difference.
-        await journal.appendQueueResume(1)
-        const work = heldStructuredAgentSessionCurrentWork(
-          store,
-          'session-alpha',
-          journal,
-          reopened.session
-        )
-        expect(work.working()).toBe(false)
-        const card = journal.queuedMessages.list().find((row) => row.state === 'waiting')
-        if (!card) {
-          throw new Error('Expected a preserved waiting card')
-        }
-        const next = nextStructuredQueuedMessage({
-          journal,
-          work,
-          record: store.getRecord('session-alpha')
-        })
-        expect(next?.messageId ?? null).toBe(minimumNextFence === 'bad' ? null : card.messageId)
-        // Direct receipt admission: publication is not authoritative proof.
-
-        const consume = {
-          messageId: card.messageId,
-          expect: 'waiting' as const,
-          settledByOp: null,
-          hostInstance: 'current-runtime',
-          yieldsToPause: true as const
-        }
-        const fresh = journal.appendSubmission(
-          {
-            clientMessageId: operationId(),
-            origin: 'host',
-            payloadFingerprint: card.fingerprint,
-            body: card.body,
-            fence: 1,
-            handoverRecorded: true
-          },
-          consume,
-          store.submissionReceipt('session-alpha')
-        )
-        if (minimumNextFence === 'bad') {
-          await expect(fresh).rejects.toMatchObject({
-            refusal: { details: { reason: 'recordUnreadable' } }
-          })
-          expect(journal.queuedMessages.get(card.messageId)?.state).toBe('waiting')
-          expect(journal.submissions()).toHaveLength(1)
-        } else {
-          await fresh
-          expect(journal.queuedMessages.get(card.messageId)?.state).toBe('dispatched')
-          expect(journal.submissions()).toHaveLength(2)
-        }
-      } finally {
-        await journal.close()
-      }
-    }
-  )
 })

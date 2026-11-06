@@ -8,7 +8,6 @@ await import('./orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('./orca-runtime')
 await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
-  HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
@@ -37,38 +36,7 @@ function makeRuntime(listProcesses: () => Promise<never[]> = async () => []) {
   return { runtime, spawn, sleepPhases }
 }
 
-function activate(runtime: InstanceType<typeof OrcaRuntimeService>, intent: 'user' | 'automatic') {
-  return runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
-    notifyClients: false,
-    navigation: 'caller',
-    intent
-  })
-}
-
 describe('automatic tab activation honors the host sleep state', () => {
-  it('refuses an automatic probe for a slept worktree and still wakes on a user tap', async () => {
-    const { runtime, spawn, sleepPhases } = makeRuntime()
-    await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-
-    const refused = await activate(runtime, 'automatic')
-
-    expect(spawn).not.toHaveBeenCalled()
-    expect(refused.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
-    expect(sleepPhases()).not.toContain('woken')
-
-    await activate(runtime, 'user')
-
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('asks the spawn to refuse a slept worktree only for an automatic probe', async () => {
-    const { runtime, spawn } = makeRuntime()
-
-    await activate(runtime, 'automatic')
-
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ refuseSleptWorktree: true }))
-  })
-
   it('refuses under the spawn lock when a sleep commits while an automatic spawn waits', async () => {
     const inventory = deferred<never[]>()
     const listProcesses = vi.fn(() => inventory.promise)

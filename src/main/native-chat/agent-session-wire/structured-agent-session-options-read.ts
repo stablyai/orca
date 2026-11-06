@@ -1,3 +1,4 @@
+import { readAcpForkSupport } from '../../acp/acp-fork-support'
 import { supportsSessionAccountUsage } from '../../../shared/agent-session/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
@@ -239,6 +240,12 @@ export async function readStructuredAgentSessionOptions(
   return {
     ...options,
     ...recovery,
+    forkSupport:
+      capabilities?.fork === 'checkpoint'
+        ? 'supported'
+        : capabilities?.fork === 'tip'
+          ? (live?.forkSupport ?? readAcpForkSupport(agent))
+          : 'unsupported',
     ...(supportsSessionAccountUsage(record) ? { accountUsage: true as const } : {}),
     ...(live?.effortFixed
       ? {
