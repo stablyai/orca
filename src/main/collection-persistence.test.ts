@@ -2,14 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { GitWorktreeInfo } from '../shared/worktree/types'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../shared/worktree/host-qualified-identity'
-import { mergeWorktree } from './ipc/worktree-metadata-merge'
 import {
   createStore,
   makeRepo,
@@ -81,19 +79,17 @@ describe('Store collections', () => {
   it('sets worktree membership with dedupe and unknown-id pruning', async () => {
     const store = await createStore()
     const approvals = store.createCollection({ name: 'Approve PRs' })
-    const meta = store.setWorktreeCollectionIds(localTarget('repo-api::/wt/ptal'), [
-      approvals.id,
-      approvals.id,
-      'not-a-collection'
-    ])
+    const meta = store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), {
+      collectionIds: [approvals.id, approvals.id, 'not-a-collection']
+    })
     expect(meta.collectionIds).toEqual([approvals.id])
   })
 
   it('clears membership to undefined, never []', async () => {
     const store = await createStore()
     const approvals = store.createCollection({ name: 'Approve PRs' })
-    store.setWorktreeCollectionIds(localTarget('repo-api::/wt/ptal'), [approvals.id])
-    const cleared = store.setWorktreeCollectionIds(localTarget('repo-api::/wt/ptal'), [])
+    store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [approvals.id] })
+    const cleared = store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [] })
     expect(cleared.collectionIds).toBeUndefined()
     expect('collectionIds' in cleared).toBe(false)
   })
@@ -102,7 +98,9 @@ describe('Store collections', () => {
     const store = await createStore()
     const approvals = store.createCollection({ name: 'Approve PRs' })
     const billing = store.createCollection({ name: 'Billing migration' })
-    store.setWorktreeCollectionIds(localTarget('repo-api::/wt/shared'), [approvals.id, billing.id])
+    store.setWorktreeMeta(localTarget('repo-api::/wt/shared'), {
+      collectionIds: [approvals.id, billing.id]
+    })
     store.flush()
 
     const reloaded = await createStore()
@@ -117,8 +115,12 @@ describe('Store collections', () => {
     const store = await createStore()
     const approvals = store.createCollection({ name: 'Approve PRs' })
     const billing = store.createCollection({ name: 'Billing migration' })
-    store.setWorktreeCollectionIds(localTarget('repo-api::/wt/both'), [approvals.id, billing.id])
-    store.setWorktreeCollectionIds(localTarget('repo-api::/wt/only-approvals'), [approvals.id])
+    store.setWorktreeMeta(localTarget('repo-api::/wt/both'), {
+      collectionIds: [approvals.id, billing.id]
+    })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/only-approvals'), {
+      collectionIds: [approvals.id]
+    })
 
     expect(store.deleteCollection(approvals.id)).toBe(true)
     expect(store.deleteCollection(approvals.id)).toBe(false)
@@ -130,7 +132,7 @@ describe('Store collections', () => {
   it('prunes dangling membership ids on load', async () => {
     const store = await createStore()
     const approvals = store.createCollection({ name: 'Approve PRs' })
-    store.setWorktreeCollectionIds(localTarget('repo-api::/wt/ptal'), [approvals.id])
+    store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [approvals.id] })
     store.flush()
 
     const raw = readDataFile()
@@ -144,7 +146,7 @@ describe('Store collections', () => {
   it('removes an on-disk empty membership array on load', async () => {
     const store = await createStore()
     const approvals = store.createCollection({ name: 'Approve PRs' })
-    store.setWorktreeCollectionIds(localTarget('repo-api::/wt/ptal'), [approvals.id])
+    store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [approvals.id] })
     store.flush()
 
     const raw = readDataFile()
@@ -155,49 +157,5 @@ describe('Store collections', () => {
     expect(reloaded.getWorktreeMeta('repo-api::/wt/ptal')?.collectionIds).toBeUndefined()
     reloaded.flush()
     expect('collectionIds' in readDataFile().worktreeMeta['repo-api::/wt/ptal']).toBe(false)
-  })
-
-  it('loads pre-collection data files without changes', async () => {
-    const store = await createStore()
-    store.createCollection({ name: 'temp' })
-    store.flush()
-    const raw = readDataFile() as Record<string, unknown>
-    delete raw.collections
-    writeDataFile(raw)
-
-    const reloaded = await createStore()
-    expect(reloaded.getCollections()).toEqual([])
-  })
-})
-
-describe('mergeWorktree collection threading', () => {
-  const git: GitWorktreeInfo = {
-    path: '/wt/ptal',
-    head: 'abc123',
-    branch: 'refs/heads/ptal-age-only',
-    isBare: false,
-    isMainWorktree: false
-  }
-
-  it('carries meta.collectionIds onto the merged worktree', () => {
-    const merged = mergeWorktree('repo-api', git, {
-      displayName: 'ptal',
-      comment: '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      collectionIds: ['c1', 'c2']
-    })
-    expect(merged.collectionIds).toEqual(['c1', 'c2'])
-  })
-
-  it('omits the key entirely when meta has none', () => {
-    const merged = mergeWorktree('repo-api', git, undefined)
-    expect('collectionIds' in merged).toBe(false)
   })
 })

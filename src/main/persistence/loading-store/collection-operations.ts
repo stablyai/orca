@@ -3,15 +3,12 @@ import {
   createCollection,
   getNextCollectionOrder,
   normalizeCollectionName,
-  removeCollectionId,
   sortCollectionsByOrder
 } from '../../../shared/collections'
-import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { MetadataLineageOperations } from './metadata-lineage-operations'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
+import { pruneCollectionMemberships } from './worktree-collection-membership'
 
 type CollectionOperationsRuntime = Pick<StoreRuntimeState, 'state'>
 
@@ -19,19 +16,14 @@ const collectionOperationsContext = Symbol('CollectionOperations')
 type CollectionOperationsContext = {
   runtime: CollectionOperationsRuntime
   scheduling: WriteSchedulingOperations
-  metadata: MetadataLineageOperations
 }
 
 /** Named, purely-visual sidebar sections grouping worktrees across repos. */
 export class CollectionOperations {
   readonly [collectionOperationsContext]: CollectionOperationsContext
 
-  constructor(
-    runtime: CollectionOperationsRuntime,
-    scheduling: WriteSchedulingOperations,
-    metadata: MetadataLineageOperations
-  ) {
-    this[collectionOperationsContext] = { runtime, scheduling, metadata }
+  constructor(runtime: CollectionOperationsRuntime, scheduling: WriteSchedulingOperations) {
+    this[collectionOperationsContext] = { runtime, scheduling }
   }
 
   getCollections(): Collection[] {
@@ -84,29 +76,8 @@ export class CollectionOperations {
       return false
     }
     // Why: purely-visual grouping — deleting a collection strips memberships, never worktrees.
-    for (const meta of Object.values(state.worktreeMeta)) {
-      if (!meta.collectionIds?.includes(collectionId)) {
-        continue
-      }
-      const next = removeCollectionId(meta.collectionIds, collectionId)
-      if (next) {
-        meta.collectionIds = next
-      } else {
-        delete meta.collectionIds
-      }
-    }
+    pruneCollectionMemberships(state)
     scheduleSave(this[collectionOperationsContext].scheduling)
     return true
-  }
-
-  setWorktreeCollectionIds(
-    target: HostWorktreeTarget,
-    collectionIds: readonly string[] | undefined
-  ): WorktreeMeta {
-    // Why: route through setWorktreeMeta so every membership writer shares its
-    // normalize-and-prune chokepoint; [] collapses to "no memberships".
-    return this[collectionOperationsContext].metadata.setWorktreeMeta(target, {
-      collectionIds: [...(collectionIds ?? [])]
-    })
   }
 }

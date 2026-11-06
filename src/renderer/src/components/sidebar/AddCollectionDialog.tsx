@@ -42,6 +42,14 @@ function collectionWorktreeName(collectionName: string): string {
   return slug || 'workstream'
 }
 
+function toggleId(current: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  const next = new Set(current)
+  if (!next.delete(id)) {
+    next.add(id)
+  }
+  return next
+}
+
 export function AddCollectionDialog({
   open,
   onOpenChange,
@@ -85,8 +93,7 @@ export function AddCollectionDialog({
     [submitting, onOpenChange]
   )
 
-  // Why: every repo lists — empty and master-only repos are exactly the ones
-  // you start a fresh worktree in.
+  // Why: list every repo; empty and main-only repos are the ones you start a fresh worktree in.
   const repoGroups: RepoGroup[] = useMemo(
     () =>
       repos.map((repo) => ({
@@ -103,30 +110,6 @@ export function AddCollectionDialog({
   const isAddMode = collection !== null
   const selectionCount = selectedWorktreeIds.size + newWorktreeRepoIds.size
   const canSubmit = !submitting && (isAddMode ? selectionCount > 0 : trimmedName.length > 0)
-
-  const toggleWorktree = useCallback((worktreeId: string) => {
-    setSelectedWorktreeIds((current) => {
-      const next = new Set(current)
-      if (next.has(worktreeId)) {
-        next.delete(worktreeId)
-      } else {
-        next.add(worktreeId)
-      }
-      return next
-    })
-  }, [])
-
-  const toggleNewWorktreeRepo = useCallback((repoId: string) => {
-    setNewWorktreeRepoIds((current) => {
-      const next = new Set(current)
-      if (next.has(repoId)) {
-        next.delete(repoId)
-      } else {
-        next.add(repoId)
-      }
-      return next
-    })
-  }, [])
 
   const fileMembership = useCallback(
     async (collectionId: string, collectionName: string) => {
@@ -190,8 +173,7 @@ export function AddCollectionDialog({
         } else {
           const created = await createCollection(trimmedName)
           if (!created) {
-            // Why: the store returns null on transport failure; closing here
-            // would swallow the error with no collection and no feedback.
+            // Why: null means transport failure; closing would swallow it silently.
             toast.error(
               translate(
                 'auto.components.sidebar.AddCollectionDialog.createFailed',
@@ -218,8 +200,7 @@ export function AddCollectionDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         ref={handleDialogContentRef}
-        // Why: the grid's min-content tracks otherwise blow out past max-width on
-        // long unbreakable worktree names (same guard as AddRepoDialogChrome).
+        // Why: long unbreakable names would blow the grid past max-width (as AddRepoDialogChrome).
         className="min-w-0 max-w-md overflow-hidden sm:max-w-md [&>*]:min-w-0"
       >
         <DialogHeader>
@@ -291,7 +272,9 @@ export function AddCollectionDialog({
                     <label className="flex h-8 cursor-pointer items-center gap-2.5 pl-8 pr-3 transition-colors hover:bg-accent/50">
                       <Checkbox
                         checked={newWorktreeRepoIds.has(group.repo.id)}
-                        onCheckedChange={() => toggleNewWorktreeRepo(group.repo.id)}
+                        onCheckedChange={() =>
+                          setNewWorktreeRepoIds((current) => toggleId(current, group.repo.id))
+                        }
                       />
                       <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                         <Plus className="size-3.5" />
@@ -308,7 +291,9 @@ export function AddCollectionDialog({
                       >
                         <Checkbox
                           checked={selectedWorktreeIds.has(worktree.id)}
-                          onCheckedChange={() => toggleWorktree(worktree.id)}
+                          onCheckedChange={() =>
+                            setSelectedWorktreeIds((current) => toggleId(current, worktree.id))
+                          }
                         />
                         <span className="min-w-0 truncate text-[13px]">{worktree.displayName}</span>
                         {worktree.isMainWorktree ? (

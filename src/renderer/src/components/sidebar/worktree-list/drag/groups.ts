@@ -26,8 +26,7 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     ) {
       continue
     }
-    // Why: collection rows are duplicates — reordering them would commit global
-    // manualOrder writes against the wrong neighbors.
+    // Why: reordering collection duplicates would write manualOrder against the wrong neighbors.
     if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }

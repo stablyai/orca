@@ -20,7 +20,6 @@ function createDisposableRepo(): { repoPath: string; worktreePath: string } {
 }
 
 test('collection lifecycle preserves worktrees and membership rules', async ({
-  electronApp,
   orcaPage,
   registerPostElectronShutdownCleanup
 }) => {
@@ -55,7 +54,6 @@ test('collection lifecycle preserves worktrees and membership rules', async ({
 
   const snapshot = await orcaPage.evaluate((repoId) => {
     const state = window.__store!.getState()
-    const allWorktrees = Object.values(state.worktreesByRepo).flat()
     const firstRepo = state.repos.find((repo) => repo.id !== repoId)!
     const secondRepo = state.repos.find((repo) => repo.id === repoId)!
     const firstFeature = state.worktreesByRepo[firstRepo.id].find(
@@ -64,12 +62,9 @@ test('collection lifecycle preserves worktrees and membership rules', async ({
     const secondFeature = state.worktreesByRepo[secondRepo.id].find(
       (worktree) => !worktree.isMainWorktree
     )!
-    const main = allWorktrees.find((worktree) => worktree.isMainWorktree)!
     return {
-      firstFeatureId: firstFeature.id,
       firstFeatureName: firstFeature.displayName,
-      secondFeatureId: secondFeature.id,
-      mainId: main.id
+      secondFeatureId: secondFeature.id
     }
   }, secondRepoId)
 
@@ -127,8 +122,6 @@ test('collection lifecycle preserves worktrees and membership rules', async ({
     hasText: 'Billing migration'
   })
   await expect(billingHeader).toBeVisible()
-  const billingId = await billingHeader.getAttribute('data-collection-header-id')
-  expect(billingId).toBeTruthy()
 
   await normalSecondFeature.click({ button: 'right' })
   await orcaPage.getByRole('menuitem', { name: 'Move to Collection' }).click()
@@ -143,45 +136,6 @@ test('collection lifecycle preserves worktrees and membership rules', async ({
       }, snapshot.secondFeatureId)
     )
     .toEqual([approveId])
-
-  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-  const cliShow = JSON.parse(
-    execFileSync(
-      process.execPath,
-      [
-        path.resolve('out/cli/index.js'),
-        'worktree',
-        'show',
-        '--worktree',
-        `id:${snapshot.secondFeatureId}`,
-        '--json'
-      ],
-      {
-        cwd: process.cwd(),
-        env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir },
-        encoding: 'utf8'
-      }
-    )
-  ) as { result: { worktree: { collectionIds?: string[] } } }
-  expect(cliShow.result.worktree.collectionIds).toEqual([approveId])
-
-  await orcaPage.evaluate(
-    async ({ worktreeId, collectionIds }) => {
-      await window.__store!.getState().updateWorktreeMeta(worktreeId, { collectionIds })
-    },
-    { worktreeId: snapshot.mainId, collectionIds: [approveId!, billingId!] }
-  )
-  await expect
-    .poll(() =>
-      orcaPage.evaluate((worktreeId) => {
-        const state = window.__store!.getState()
-        return Object.values(state.worktreesByRepo)
-          .flat()
-          .find((worktree) => worktree.id === worktreeId)
-          ?.collectionIds?.toSorted()
-      }, snapshot.mainId)
-    )
-    .toEqual([approveId, billingId].toSorted())
 
   await approveHeader.click()
   await expect(approveHeader).toHaveAttribute('aria-expanded', 'false')

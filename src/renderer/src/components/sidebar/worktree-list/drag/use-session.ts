@@ -60,8 +60,7 @@ export function useWorktreeDragSession(args: {
     () =>
       rows
         .filter((row): row is WorktreeItemRow => row.type === 'item')
-        // Why: collection rows duplicate natural rows and never reorder, so
-        // including them would repeat ids in the expanded lineage drag set.
+        // Why: collection duplicates would repeat ids in the expanded lineage drag set.
         .filter(
           (row) =>
             !isCollectionSectionKey(row.sectionKey) &&

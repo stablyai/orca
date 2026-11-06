@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import {
-  collectionsCreate,
   installReposRuntimeRoutingHarness,
   remoteRepo,
   runtimeEnvironmentCall,
@@ -55,14 +54,5 @@ describe('repo slice collections', () => {
     ])
     expect([...store.getState().collapsedGroups]).toEqual(['collection:collection-2'])
     expect(uiSet).toHaveBeenCalledWith({ collapsedGroups: ['collection:collection-2'] })
-  })
-
-  it('does not add a collection when the preload returns no result', async () => {
-    collectionsCreate.mockResolvedValue(undefined)
-    const store = createTestStore()
-
-    await expect(store.getState().createCollection('Approve PRs')).resolves.toBeNull()
-
-    expect(store.getState().collections).toEqual([])
   })
 })

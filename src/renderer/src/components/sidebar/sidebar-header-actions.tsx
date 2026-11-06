@@ -121,8 +121,6 @@ export function SidebarHeaderActions({
 }): React.JSX.Element {
   return (
     <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
-      {/* Why only options swap: the activity view portals its own options button into this slot
-          (SidebarHeader), and keeping Add project means no header button shifts between views. */}
       <div ref={activityOptionsTarget} className="flex size-6 shrink-0 items-center">
         {agentsViewActive ? null : (
           <SidebarWorkspaceOptionsMenu

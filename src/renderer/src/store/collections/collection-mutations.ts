@@ -78,9 +78,7 @@ export function createCollectionMutationActions(
                 )
               ).deleted
         if (deleted) {
-          // Why: memberships were stripped server-side; mirror locally so rows
-          // vanish without waiting for the next worktree refresh. Computed before
-          // set() so the updater stays a pure state transform.
+          // Why: mirror the server-side strip now; computed outside set() so the updater stays pure.
           const collectionGroupPrefix = `collection:${collectionId}`
           const state = get()
           const nextWorktreesByRepo = Object.fromEntries(

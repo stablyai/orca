@@ -22,18 +22,16 @@ export function useWorktreeCollectionActions(worktree: Worktree) {
     () => sortedCollections.filter((entry) => !worktree.collectionIds?.includes(entry.id)),
     [sortedCollections, worktree.collectionIds]
   )
-  // Why: a feature worktree lives in exactly one workstream, so the gesture is
-  // a move; only the primary checkout (shared infrastructure) may sit in many.
+  // Why: a feature worktree lives in one workstream (move); only the primary checkout sits in many.
   const exclusiveCollectionMembership = !worktree.isMainWorktree
 
   const handleAddToCollection = useCallback(
-    (collectionId: string) => {
-      void updateWorktreeMeta(worktree.id, {
+    (collectionId: string) =>
+      updateWorktreeMeta(worktree.id, {
         collectionIds: assignCollectionMembership(worktree.collectionIds, collectionId, {
           exclusive: exclusiveCollectionMembership
         })
-      })
-    },
+      }),
     [updateWorktreeMeta, worktree.id, worktree.collectionIds, exclusiveCollectionMembership]
   )
   const handleRemoveFromCollection = useCallback(
@@ -48,20 +46,10 @@ export function useWorktreeCollectionActions(worktree: Worktree) {
     async (name: string) => {
       const created = await createCollection(name)
       if (created) {
-        await updateWorktreeMeta(worktree.id, {
-          collectionIds: assignCollectionMembership(worktree.collectionIds, created.id, {
-            exclusive: exclusiveCollectionMembership
-          })
-        })
+        await handleAddToCollection(created.id)
       }
     },
-    [
-      createCollection,
-      updateWorktreeMeta,
-      worktree.id,
-      worktree.collectionIds,
-      exclusiveCollectionMembership
-    ]
+    [createCollection, handleAddToCollection]
   )
 
   return {

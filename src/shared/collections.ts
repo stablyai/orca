@@ -71,50 +71,21 @@ export function getNextCollectionOrder(collections: readonly Collection[]): numb
   return max + 1
 }
 
-/** Canonical membership form: a deduped id array, or undefined when empty.
- *  [] is never persisted so pre-collection records stay byte-identical. */
-export function normalizeCollectionIds(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined
-  }
-  const ids: string[] = []
-  const seen = new Set<string>()
-  for (const id of value) {
-    if (typeof id !== 'string' || id.length === 0 || seen.has(id)) {
-      continue
-    }
-    seen.add(id)
-    ids.push(id)
-  }
-  return ids.length > 0 ? ids : undefined
-}
-
-export function addCollectionId(
-  ids: readonly string[] | undefined,
-  collectionId: string
-): string[] {
-  if (!ids || ids.length === 0) {
-    return [collectionId]
-  }
-  return ids.includes(collectionId) ? [...ids] : [...ids, collectionId]
-}
-
-/** Membership after an add/move gesture. Exclusive membership (feature
- *  worktrees) replaces every existing membership — a worktree lives in one
- *  workstream. Non-exclusive (main worktrees) appends: the primary checkout is
- *  shared infrastructure and may sit in every collection. */
+/** Membership after an add/move gesture: exclusive (feature worktrees) moves; non-exclusive
+ *  (main worktrees, shared infrastructure) appends. */
 export function assignCollectionMembership(
   ids: readonly string[] | undefined,
   collectionId: string,
   options: { exclusive: boolean }
 ): string[] {
-  return options.exclusive ? [collectionId] : addCollectionId(ids, collectionId)
+  if (options.exclusive || !ids) {
+    return [collectionId]
+  }
+  return ids.includes(collectionId) ? [...ids] : [...ids, collectionId]
 }
 
-/** Data-layer guard for amended D1: a feature worktree keeps only its most
- *  recent membership (last id wins — every gesture appends the new home last),
- *  while main worktrees may keep many. [] passes through untouched so the
- *  "remove from every collection" blanking contract survives. */
+/** Data-layer guard: a feature worktree keeps only its last membership, main worktrees keep many;
+ *  [] passes through so "remove from every collection" still blanks. */
 export function clampExclusiveCollectionMembership(
   ids: readonly string[],
   isMainWorktree: boolean
@@ -123,30 +94,4 @@ export function clampExclusiveCollectionMembership(
     return [...ids]
   }
   return [ids.at(-1)!]
-}
-
-export function removeCollectionId(
-  ids: readonly string[] | undefined,
-  collectionId: string
-): string[] | undefined {
-  if (!ids) {
-    return undefined
-  }
-  const next = ids.filter((id) => id !== collectionId)
-  return next.length > 0 ? next : undefined
-}
-
-export function isInCollection(ids: readonly string[] | undefined, collectionId: string): boolean {
-  return ids?.includes(collectionId) ?? false
-}
-
-export function pruneMissingCollectionIds(
-  ids: readonly string[] | undefined,
-  existingCollectionIds: ReadonlySet<string>
-): string[] | undefined {
-  if (!ids) {
-    return undefined
-  }
-  const next = ids.filter((id) => existingCollectionIds.has(id))
-  return next.length > 0 ? next : undefined
 }

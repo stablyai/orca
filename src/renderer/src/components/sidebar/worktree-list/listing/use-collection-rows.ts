@@ -6,9 +6,7 @@ import { buildCollectionRows } from '../../worktree-list-collections'
 
 const EMPTY_COLLECTIONS: readonly Collection[] = []
 
-// Why: collections are additive sections above EVERY grouping mode (like the
-// Pinned section, they are orthogonal to Group by); the list below stays
-// byte-identical (COLLECTIONS R9/D2).
+// Why: collections are additive sections above every grouping mode, like Pinned.
 export function useCollectionRows(
   args: Omit<Parameters<typeof buildCollectionRows>[0], 'collections'>
 ): Row[] {

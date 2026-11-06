@@ -11,22 +11,12 @@ export const COLLECTION_GROUP_META = {
   icon: Layers
 } as const
 
-export function getCollectionHeaderKey(collectionId: string): string {
-  return `collection:${collectionId}`
-}
-
-export function getCollectionRepoHeaderKey(collectionId: string, repoId: string): string {
-  return `collection:${collectionId}:repo:${repoId}`
-}
-
-/** Collection rows are visual duplicates of project-list rows; reorder and
- *  preference machinery must skip them. */
+/** Collection rows duplicate project-list rows; reorder and preference machinery must skip them. */
 export function isCollectionSectionKey(sectionKey: string | undefined): boolean {
   return sectionKey?.startsWith('collection:') === true
 }
 
-/** Pinned stays the topmost sidebar section; collection sections slot between
- *  it and the untouched project list. */
+/** Pinned stays topmost; collection sections slot between it and the untouched project list. */
 export function insertCollectionRowsAfterPinned(
   builtRows: readonly Row[],
   collectionRows: readonly Row[]
@@ -45,10 +35,8 @@ export function insertCollectionRowsAfterPinned(
   return [...builtRows.slice(0, pinnedEnd), ...collectionRows, ...builtRows.slice(pinnedEnd)]
 }
 
-/** Additive sidebar sections: one block per collection, its member worktrees
- *  grouped under repo sub-headers. Rows are namespaced per collection because
- *  the same worktree may render in several collections and in the normal
- *  project list below (many-to-many membership, purely visual). */
+/** One block per collection, members grouped under repo sub-headers. Row keys are namespaced
+ *  because a worktree may render in several collections and in the project list below. */
 export function buildCollectionRows(input: {
   collections: readonly Collection[]
   worktrees: readonly Worktree[]
@@ -80,7 +68,7 @@ export function buildCollectionRows(input: {
     for (const list of byRepo.values()) {
       memberCount += list.length
     }
-    const headerKey = getCollectionHeaderKey(collection.id)
+    const headerKey = `collection:${collection.id}`
     // Why: an empty collection still shows its header so it stays discoverable and deletable.
     rows.push({
       type: 'header',
@@ -102,7 +90,7 @@ export function buildCollectionRows(input: {
     for (const repoId of repoIds) {
       const repo = repoMap.get(repoId)
       const members = byRepo.get(repoId) ?? []
-      const repoHeaderKey = getCollectionRepoHeaderKey(collection.id, repoId)
+      const repoHeaderKey = `${headerKey}:repo:${repoId}`
       rows.push({
         type: 'header',
         key: repoHeaderKey,

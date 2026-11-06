@@ -1,6 +1,4 @@
-/** A named, purely-visual sidebar section grouping worktrees across repos.
- *  Many-to-many with worktrees via WorktreeMeta.collectionIds; references
- *  existing checkouts only — never creates folders on disk. */
+/** A named, purely-visual sidebar section grouping worktrees across repos via collectionIds. */
 export type Collection = {
   id: string
   name: string

@@ -181,8 +181,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
-  // Why: [] is the blanking contract — "remove from every collection"; the
-  // store collapses it to an absent key.
+  // Why: [] blanks membership ("remove from every collection"); the store drops the key.
   collectionIds: z.array(z.string()).optional(),
   pushTarget: z
     .object({

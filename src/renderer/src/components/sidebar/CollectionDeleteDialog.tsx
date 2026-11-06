@@ -28,8 +28,7 @@ export function CollectionDeleteDialog({
   const [wasOpen, setWasOpen] = useState(open)
   const mountedRef = useRef(true)
 
-  // Why: the parent keeps this mounted; if a close races the confirm's finally,
-  // a stale `deleting` would dead-lock the buttons on the next open.
+  // Why: the parent keeps this mounted, so a stale `deleting` would lock the buttons on reopen.
   if (open !== wasOpen) {
     setWasOpen(open)
     if (open) {

@@ -88,8 +88,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     persisted.pushTarget = undefined
   }
   if (persisted.collectionIds !== undefined) {
-    // Why: amended D1 is a data invariant at this boundary — no RPC/CLI/web
-    // caller can file a feature worktree into several collections.
+    // Why: no RPC/CLI/web caller may file a feature worktree into several collections.
     persisted.collectionIds = clampExclusiveCollectionMembership(
       persisted.collectionIds,
       worktree.isMainWorktree

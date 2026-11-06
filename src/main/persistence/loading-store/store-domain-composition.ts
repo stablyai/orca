@@ -145,7 +145,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   )
   const metadata = new MetadataLineageOperations(runtime, scheduling, sessions)
   const projects = new ProjectCollectionOperations(runtime, repos, scheduling, metadata)
-  const collections = new CollectionOperations(runtime, scheduling, metadata)
+  const collections = new CollectionOperations(runtime, scheduling)
   const automations = new AutomationPersistence(runtime, flushBarriers, preferences)
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const remoteLayoutSnapshots = new RemoteLayoutSnapshotPersistence(runtime, scheduling)

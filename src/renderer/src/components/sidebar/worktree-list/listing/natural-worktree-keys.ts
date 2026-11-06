@@ -8,8 +8,7 @@ type NaturalWorktreeKeyRow = { type: string } & Partial<{
   worktree: { id: string; hostId?: ExecutionHostId }
 }>
 
-/** Pinned duplicates have no separate natural drag slot, and a collection row is the same kind of
- * duplicate; avoid allocating arrays per row during rebuilds.
+/** Pinned duplicates have no separate natural drag slot; avoid allocating arrays per row during rebuilds.
  * Keyed by host identity so a pinned card is not mistaken for its natural twin on another host. */
 export function getNaturalWorktreeKeys(rows: readonly NaturalWorktreeKeyRow[]): Set<string> {
   const keys = new Set<string>()

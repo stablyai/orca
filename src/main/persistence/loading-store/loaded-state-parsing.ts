@@ -8,7 +8,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
-import { pruneLoadedCollectionMemberships } from './worktree-collection-membership'
+import { pruneCollectionMemberships } from './worktree-collection-membership'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
@@ -210,7 +210,7 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
-    if (pruneLoadedCollectionMemberships(result)) {
+    if (pruneCollectionMemberships(result)) {
       this.runtime.loadNeedsSave = true
     }
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)

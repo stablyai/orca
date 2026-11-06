@@ -50,7 +50,7 @@ export function getWorktreeDragUnitGroups(
     ) {
       continue
     }
-    // Why: collection rows are duplicates of project-list rows; see TECH-7345.
+    // Why: collection rows are duplicates of project-list rows.
     if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }

@@ -45,7 +45,7 @@ export function WorktreeCollectionMenuItems({
           {addableCollections.map((collection) => (
             <DropdownMenuItem
               key={collection.id}
-              onSelect={() => handleAddToCollection(collection.id)}
+              onSelect={() => void handleAddToCollection(collection.id)}
             >
               <span className="max-w-48 truncate">{collection.name}</span>
             </DropdownMenuItem>

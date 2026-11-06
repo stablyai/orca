@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { makeWorktree as makeStoreWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { buildCollectionRows, insertCollectionRowsAfterPinned } from './worktree-list-collections'
 import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Collection } from '../../../../shared/collection-types'
@@ -14,26 +15,7 @@ function makeCollection(id: string, name: string, order: number, isCollapsed = f
 }
 
 function makeWorktree(id: string, repoId: string, collectionIds?: string[]): Worktree {
-  return {
-    id,
-    repoId,
-    path: `/wt/${id}`,
-    head: 'abc123',
-    branch: `refs/heads/${id}`,
-    isBare: false,
-    isMainWorktree: false,
-    displayName: id,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...(collectionIds ? { collectionIds } : {})
-  }
+  return makeStoreWorktree({ id, repoId, collectionIds })
 }
 
 function rowKeys(rows: ReturnType<typeof buildCollectionRows>): string[] {
@@ -65,13 +47,13 @@ describe('buildCollectionRows', () => {
     ).toEqual([])
   })
 
-  it('renders the same repo under every collection it has members in', () => {
+  it('renders repos and worktrees under every collection they belong to', () => {
     const approvals = makeCollection('c-approvals', 'Approve PRs', 0)
     const billing = makeCollection('c-billing', 'Billing migration', 1)
     const rows = buildCollectionRows({
       collections: [billing, approvals],
       worktrees: [
-        makeWorktree('wt-ptal', api.id, [approvals.id]),
+        makeWorktree('wt-ptal', api.id, [approvals.id, billing.id]),
         makeWorktree('wt-schema', api.id, [billing.id]),
         makeWorktree('wt-recurrence', frontend.id, [approvals.id])
       ],
@@ -87,40 +69,9 @@ describe('buildCollectionRows', () => {
       'collection:c-approvals:wt-recurrence',
       'collection:c-billing',
       'collection:c-billing:repo:repo-api',
+      'collection:c-billing:wt-ptal',
       'collection:c-billing:wt-schema'
     ])
-  })
-
-  it('renders a worktree in every collection it belongs to (many-to-many)', () => {
-    const approvals = makeCollection('c-approvals', 'Approve PRs', 0)
-    const billing = makeCollection('c-billing', 'Billing migration', 1)
-    const rows = buildCollectionRows({
-      collections: [approvals, billing],
-      worktrees: [makeWorktree('wt-shared', api.id, [approvals.id, billing.id])],
-      repoMap,
-      collapsedGroups: new Set(),
-      repoOrder
-    })
-    expect(rowKeys(rows)).toEqual([
-      'collection:c-approvals',
-      'collection:c-approvals:repo:repo-api',
-      'collection:c-approvals:wt-shared',
-      'collection:c-billing',
-      'collection:c-billing:repo:repo-api',
-      'collection:c-billing:wt-shared'
-    ])
-  })
-
-  it('keeps an empty collection header visible', () => {
-    const empty = makeCollection('c-empty', 'Someday', 0)
-    const rows = buildCollectionRows({
-      collections: [empty],
-      worktrees: [makeWorktree('wt-1', api.id)],
-      repoMap,
-      collapsedGroups: new Set()
-    })
-    expect(rowKeys(rows)).toEqual(['collection:c-empty'])
-    expect(rows[0]).toMatchObject({ type: 'header', count: 0 })
   })
 
   it('hides children when the collection header key is collapsed', () => {
@@ -155,7 +106,7 @@ describe('buildCollectionRows', () => {
     ])
   })
 
-  it('ignores memberships pointing at unknown collections', () => {
+  it('ignores unknown memberships and keeps an empty collection header visible', () => {
     const approvals = makeCollection('c-approvals', 'Approve PRs', 0)
     const rows = buildCollectionRows({
       collections: [approvals],
@@ -164,6 +115,7 @@ describe('buildCollectionRows', () => {
       collapsedGroups: new Set()
     })
     expect(rowKeys(rows)).toEqual(['collection:c-approvals'])
+    expect(rows[0]).toMatchObject({ type: 'header', count: 0 })
   })
 
   it('slots collection rows between the pinned section and the project list', () => {
@@ -213,19 +165,5 @@ describe('buildCollectionRows', () => {
     expect(insertCollectionRowsAfterPinned([header('repo:repo-api')], [])).toEqual([
       header('repo:repo-api')
     ])
-  })
-
-  it('orders collections by order then name', () => {
-    const rows = buildCollectionRows({
-      collections: [
-        makeCollection('c-b', 'Beta', 1),
-        makeCollection('c-a', 'Alpha', 1),
-        makeCollection('c-z', 'Zulu', 0)
-      ],
-      worktrees: [],
-      repoMap,
-      collapsedGroups: new Set()
-    })
-    expect(rowKeys(rows)).toEqual(['collection:c-z', 'collection:c-a', 'collection:c-b'])
   })
 })

@@ -51,4 +51,22 @@ describe('mergeWorktree identity projection', () => {
 
     expect(worktree.displayNameMode).toBe('fixed')
   })
+
+  it('carries collection membership onto the merged worktree', () => {
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      collectionIds: ['c1', 'c2']
+    })
+
+    expect(worktree.collectionIds).toEqual(['c1', 'c2'])
+  })
 })
