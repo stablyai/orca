@@ -34,5 +34,5 @@ export function closeMobileSessionTabInStore(
     return true
   }
 
-  return store.closeUnifiedTab(tabId) !== null
+  return false
 }

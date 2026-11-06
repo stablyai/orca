@@ -175,6 +175,8 @@ it.each(['file', 'tab'] as const)(
     expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
     expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
     expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, requestedId)).toBe(false)
+    expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, childTab.id)).toBe(false)
+    expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
   }
 )
 
