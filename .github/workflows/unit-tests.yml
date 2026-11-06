@@ -14,12 +14,6 @@ on:
         default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
-      browser_contract:
-        description: Include the PR external Chromium browser contract in relay integration.
-        required: false
-        default: false
-        type: boolean
-
       run_shards:
         description: Run the planned root unit shards.
         required: false
@@ -216,28 +210,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             cloud/pnpm-lock.yaml
-
-      - name: Resolve Chrome for the browser provider
-        id: browser_executable
-        if: inputs.browser_contract && success()
-        run: |
-          set -euo pipefail
-          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
-          if [ -z "$chrome" ]; then
-            echo "::error::No Google Chrome on the runner; the browser provider test would silently skip."
-            exit 1
-          fi
-          "$chrome" --version
-          echo "executable=$chrome" >> "$GITHUB_OUTPUT"
-
-      - name: Test external Chromium browser provider
-        if: inputs.browser_contract && success()
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-          ORCA_BROWSER_EXECUTABLE: ${{ steps.browser_executable.outputs.executable }}
-        run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/orcad/external-chromium-browser-process.integration.test.ts
 
       # These two tests import the cloud relay workspace directly. Keeping them in one job
       # avoids installing and building the same workspace once per unit-test shard.

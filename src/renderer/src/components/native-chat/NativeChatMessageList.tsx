@@ -8,7 +8,10 @@ import { useNativeChatRowTypography } from './use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { nativeChatScrollsToLatestOnSend } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import {
+  nativeChatScrollsToLatestOnSend,
+  nativeChatShowsTurnDiffSummary
+} from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
@@ -153,7 +156,12 @@ export function NativeChatMessageList({
     latestTurn
   )
   const { messages: rows, turnKeys, liveTurnKey } = turnRows
-  const turnDiffs = useNativeChatTurnDiffs(turnRows, subagentRowsInOrder, subagentSections.pathOf)
+  const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
+  const turnDiffs = useNativeChatTurnDiffs(
+    showTurnDiffs ? turnRows : null,
+    subagentRowsInOrder,
+    subagentSections.pathOf
+  )
   // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
   const thinking = useMemo(
     () => isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),

@@ -135,7 +135,7 @@ export function formatCheckRunAge(facts: CheckRunTimeFacts, nowMs: number): stri
   if (facts.whenMs === null) {
     return null
   }
-  // Beside a running status an age would read as when it ran; show how long it has been running instead.
+  // Beside a running icon an age would read as when it ran; show how long it has been running instead.
   return facts.running ? formatElapsed(nowMs - facts.whenMs) : formatAge(nowMs - facts.whenMs)
 }
 
@@ -172,7 +172,7 @@ export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Ele
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        {/* Rows narrower than this keep main's layout (name, status, link); wider ones give up the duration before the age. */}
+        {/* Rows narrower than this keep only the icon, name and link; wider ones give up the duration before the age. */}
         <span className="hidden min-w-0 items-center overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground tabular-nums @[19rem]:flex">
           {facts.fixedText && (
             <span className="min-w-0 truncate">

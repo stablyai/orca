@@ -87,6 +87,12 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
           ) : (
             // A GitHub task's read-only box, centred on the item's first line.
             <View
+              // ARIA props, which react-native-web reads too; a read-only box takes no keyboard stop.
+              accessible
+              focusable={false}
+              role="checkbox"
+              aria-checked={Boolean(item.checked)}
+              aria-disabled
               style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
             >
               {item.checked ? (
@@ -289,9 +295,13 @@ function renderBlock(
           selectable
           style={[
             styles.heading,
-            node.depth <= 2 ? styles.headingLarge : null,
+            node.depth === 1 ? styles.headingTitle : node.depth === 2 ? styles.headingLarge : null,
             scaledMarkdownText(
-              node.depth <= 2 ? styles.headingLarge : styles.heading,
+              node.depth === 1
+                ? styles.headingTitle
+                : node.depth === 2
+                  ? styles.headingLarge
+                  : styles.heading,
               ctx.textScale
             ),
             ctx.tone.text
