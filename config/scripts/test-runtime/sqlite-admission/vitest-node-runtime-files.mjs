@@ -3,7 +3,6 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
-  'src/main/linear/linear-request-recovery.test.ts',
   'src/main/linear/linear-issue-detail-deadline.test.ts',
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
@@ -27,8 +26,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
-  // Launches process.execPath as orcad's pinned runtime to measure V8 address-space reservations.
-  'src/main/managed-server/install/orcad-remote-launch-address-space.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
@@ -125,7 +122,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/git/command-runner/worker-exec-file.test.ts',
   'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
   'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',
-  'src/main/git/worktrees/sparse-checkout/worktree-sparse-checkout.test.ts',
   'src/main/runtime/workspaces/removal/runtime-failed-local-worktree-removal.test.ts',
   'src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.test.ts',
   'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',

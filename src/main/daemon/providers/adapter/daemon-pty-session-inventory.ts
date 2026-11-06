@@ -56,7 +56,8 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
                 ...(session.pid ? { rootProcessId: session.pid } : {}),
                 // Spawn cwd remains authoritative until the daemon reports live cwd.
                 cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
-                title: 'shell',
+                // The listing carries no title; attach seeds the live one from the daemon snapshot.
+                title: '',
                 ...(session.foregroundProcess
                   ? { foregroundProcess: session.foregroundProcess }
                   : {}),

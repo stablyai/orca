@@ -7,8 +7,16 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 // electron-updater compares `minimumSystemVersion` with os.release(), the Darwin version.
+// Only whole-major floors map exactly: Darwin minors drift from macOS minors (12.6 and 12.7 both
+// report Darwin 21.6), so a 15.4 floor truncated to 24.0.0 would offer the update to macOS 15.0.
 export function darwinVersionForMacos(macosVersion) {
-  const major = Number.parseInt(String(macosVersion).split('.')[0] ?? '', 10)
+  const match = /^(\d+)(?:\.0){0,2}$/.exec(String(macosVersion).trim())
+  if (!match) {
+    throw new Error(
+      `LSMinimumSystemVersion ${macosVersion} has no exact Darwin floor; add a verified mapping before shipping it`
+    )
+  }
+  const major = Number.parseInt(match[1], 10)
   if (major >= 11 && major <= 15) {
     return `${major + 9}.0.0`
   }
