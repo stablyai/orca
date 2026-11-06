@@ -121,7 +121,7 @@ export function VoiceSpeechModelSection({
                   }
                 }}
                 className={`group flex items-center gap-2.5 py-2.5 ${
-                  isRetired || (!isCloud && !isReady && !isDownloading) ? 'opacity-50' : ''
+                  !isCloud && !isReady && !isDownloading ? 'opacity-50' : ''
                 }`}
               >
                 <span className="flex size-4 shrink-0 items-center justify-center">
@@ -133,7 +133,7 @@ export function VoiceSpeechModelSection({
                     <Cloud className="size-3.5 text-muted-foreground" />
                   ) : null}
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className={`min-w-0 flex-1 ${isRetired ? 'opacity-50' : ''}`}>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">{manifest.label}</span>
                     {!isCloud && (
