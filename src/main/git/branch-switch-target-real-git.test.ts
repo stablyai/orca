@@ -146,13 +146,18 @@ it('probes the resolved local name when a remote checkout lands with a hook fail
   await remote('team/upstream')
   await mkdir(join(directory, '.git', 'hooks-test'))
   const hook = join(directory, '.git', 'hooks-test', 'post-checkout')
-  await writeFile(hook, '#!/bin/sh\necho "hook failed" >&2\nexit 1\n')
+  await writeFile(hook, '#!/bin/sh\necho "hook failed" >&2\necho logout >&2\nexit 1\n')
   await chmod(hook, 0o755)
   await git('config', 'core.hooksPath', '.git/hooks-test')
   const recorded = vi.fn()
   await expect(
     switchTo({ kind: 'remote', name: 'team/upstream/topic' }, null, recorded)
-  ).rejects.toBeInstanceOf(BranchSwitchLandedWithWarningError)
+  ).rejects.toThrow(
+    new BranchSwitchLandedWithWarningError(
+      'Switched to topic, but git reported an error: hook failed',
+      'topic'
+    )
+  )
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('topic')
   expect(recorded).toHaveBeenCalledOnce()
 })

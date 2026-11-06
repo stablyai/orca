@@ -52,7 +52,8 @@ function gitFailureLine(stderr: string): string | null {
   const lines = stderr
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && !GIT_CHECKOUT_PROGRESS.test(line))
+    // WSL git runs in an interactive login shell, which writes `logout` to stderr as it exits.
+    .filter((line) => line && line !== 'logout' && !GIT_CHECKOUT_PROGRESS.test(line))
   return lines.find((line) => /^(error|fatal):/.test(line)) ?? lines.at(-1) ?? null
 }
 
