@@ -112,7 +112,7 @@ export function MacosUpdateRequirementDialog({
               <p>
                 {translate(
                   'macosUpdateRequirement.whyIntro',
-                  'We updated Electron, the foundation Orca runs on, to bring:'
+                  'We updated parts of Orca’s foundation, like Electron and the on-device speech engine, to bring:'
                 )}
               </p>
               <ul className="list-disc space-y-2 pl-4">

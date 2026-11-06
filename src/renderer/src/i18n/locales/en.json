@@ -24046,7 +24046,7 @@
     "unsupportedDescription": "Apple doesn’t support macOS {{macos}} on this Mac.",
     "unknownDescription": "We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.",
     "whyTitle": "Why is this changing?",
-    "whyIntro": "We updated Electron, the foundation Orca runs on, to bring:",
+    "whyIntro": "We updated parts of Orca’s foundation, like Electron and the on-device speech engine, to bring:",
     "whySecurity": "Ongoing security fixes from Electron and Chromium.",
     "whyPerformance": "Faster startup and more efficient native API calls.",
     "whySystemApis": "Support for current macOS notification APIs and secure Keychain storage.",
