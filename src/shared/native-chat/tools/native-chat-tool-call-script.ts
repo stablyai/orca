@@ -15,8 +15,8 @@ const POWERSHELL_PROGRAM = /^(?:pwsh|powershell)(?:\.exe)?$/iu
 const CMD_PROGRAM = /^cmd(?:\.exe)?$/iu
 const CMD_FLAG = /^\/[ds]$/iu
 // Node's Windows shell form, in cmd's own quoting: `C:\Windows\System32\cmd.exe /d /s /c "script"`,
-// the whole line, its script one quoted string.
-const CMD_WRAPPER = /^(?:\/d\s+)?(?:\/s\s+)?\/c\s+"([\s\S]*)"$/iu
+// the whole line. cmd escapes no quote, so only a script holding none is surely one quoted string.
+const CMD_WRAPPER = /^(?:\/d\s+)?(?:\/s\s+)?\/c\s+"([^"]*)"$/iu
 
 function programName(path: string): string {
   return path.split(/[\\/]/).at(-1) ?? ''

@@ -305,7 +305,8 @@ describe('PowerShell create commands', () => {
       "# example; pwsh -Command 'gh pr create --fill'\ncat pr-url.txt",
       "ls # note; pwsh -Command 'gh pr create --fill'",
       "cat <<'EOF'\npwsh -Command 'gh pr create --fill'\nEOF",
-      'C:\\Windows\\System32\\cmd.exe /d /s /c "echo done" && echo "gh pr create"'
+      'C:\\Windows\\System32\\cmd.exe /d /s /c "echo done" && echo "gh pr create"',
+      'cmd.exe /d /s /c "echo done" && echo "; gh pr create --fill" && cat "pr-url.txt"'
     ]) {
       expect(opened(command)).toEqual([])
     }
@@ -327,6 +328,27 @@ describe('PowerShell create commands', () => {
         ]
       })
     ).toEqual([38712])
+    // A launch line followed by more statements is a script, not one launch.
+    expect(
+      openedIn({
+        id: 'm2',
+        role: 'assistant',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'tool-call',
+            name: 'PowerShell',
+            input: {
+              command:
+                "pwsh -Command 'Write-Output ok'\nWrite-Output '; gh pr create --fill'\nGet-Content pr-url.txt"
+            },
+            callId: 'c2'
+          },
+          { type: 'tool-result', output: GH_CREATE_OUTPUT, callId: 'c2' }
+        ]
+      })
+    ).toEqual([])
   })
 
   it('keeps the evidence that disqualifies a create, and reads nothing it cannot lex', () => {

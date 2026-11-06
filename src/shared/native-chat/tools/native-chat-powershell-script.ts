@@ -145,6 +145,10 @@ export function powershellWords(command: string): string[] | null {
   let index = 0
   while (index < command.length) {
     const char = command[index]!
+    if (char === '\n' || char === '\r') {
+      // A bare line break ends a statement, so the line is more than one command.
+      return null
+    }
     if (/\s/u.test(char)) {
       if (word !== null) {
         words.push(word)
