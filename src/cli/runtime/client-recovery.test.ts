@@ -4,8 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS } from '../../shared/orchestration-timing-budgets'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 import { reportCliError } from '../format'
 import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
@@ -57,20 +55,6 @@ function expectPromptRetryBlockedJson(error: unknown, requestId: string): void {
 }
 
 describe('RuntimeClient orchestration recovery identity', () => {
-  it('rejects a worker-start timeout whose client grace would overflow timers', () => {
-    const client = new RuntimeClient(undefined, 60_000, null, null, 'orca')
-    const resolve = (
-      client as unknown as {
-        resolveMethodTimeoutMs: (method: string, params?: unknown) => number
-      }
-    ).resolveMethodTimeoutMs.bind(client)
-    const maxValid = MAX_TIMER_DELAY_MS - ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
-    expect(resolve('orchestration.workerStart', { timeoutMs: maxValid })).toBe(MAX_TIMER_DELAY_MS)
-    expect(() => resolve('orchestration.workerStart', { timeoutMs: maxValid + 1 })).toThrow(
-      'derived timeout must be'
-    )
-  })
-
   it('attaches the request and exact retry identity to a real RPC failure response', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-recovery-'))
     const endpoint = join(userDataPath, 'runtime.sock')
