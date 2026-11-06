@@ -21888,6 +21888,98 @@
       ]
     },
     {
+      "id": "session-startup-reopens-with-last-strip",
+      "operation": "session.startup",
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "action": "host-tabs",
+          "id": "host-lists-three",
+          "args": {
+            "tabs": ["tab-a", "tab-b", "tab-x"]
+          }
+        },
+        {
+          "checkpoint": "live"
+        },
+        {
+          "action": "leave",
+          "id": "leave"
+        },
+        {
+          "action": "mount",
+          "id": "reopen",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "reopened-with-last-strip"
+        },
+        {
+          "action": "host-tabs",
+          "id": "host-closed-x",
+          "args": {
+            "tabs": ["tab-a", "tab-b"]
+          }
+        },
+        {
+          "checkpoint": "snapshot-replaced-strip"
+        },
+        {
+          "action": "leave",
+          "id": "leave-again"
+        },
+        {
+          "action": "mount",
+          "id": "reopen-again",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "closed-tab-stays-gone"
+        },
+        {
+          "action": "switch-worktree",
+          "id": "switch-to-wt-2",
+          "args": {
+            "worktree": "wt-2"
+          }
+        },
+        {
+          "checkpoint": "next-worktree-starts-empty"
+        },
+        {
+          "action": "leave",
+          "id": "leave-wt-2"
+        },
+        {
+          "action": "mount",
+          "id": "reopen-wt-2",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "next-worktree-never-took-the-last-strip"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        }
+      ]
+    },
+    {
       "id": "session-startup-keeps-terminals-visible-on-reconnect",
       "operation": "session.startup",
       "family": "session.startup",
