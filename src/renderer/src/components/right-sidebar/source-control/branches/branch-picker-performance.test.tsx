@@ -129,12 +129,12 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     .mockResolvedValueOnce({
       current: 'branch-0',
       branches,
-      worktreePaths: new Proxy(
+      worktreePaths: new Proxy<Record<string, string>>(
         Object.fromEntries(branches.map((name, n) => [name, `/workspace/${n}`])),
         {
           get(target, key) {
             branchVisits++
-            return Reflect.get(target, key)
+            return typeof key === 'string' ? target[key] : undefined
           }
         }
       )
@@ -156,7 +156,7 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     container.querySelector<HTMLButtonElement>(selector)?.click()
   }
   try {
-    await act(async () => root.render(<BranchPicker {...props} />))
+    await act(async () => root.render(<BranchPicker {...props} context={{ ...props.context }} />))
     expect(counts.builds).toBe(0)
     expect(workspaceVisits).toBe(0)
     await act(async () => click('[data-open]'))
@@ -168,24 +168,41 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     expect(container.textContent).toContain('Keep typing')
     counts.renders = 0
     await act(async () =>
-      root.render(<BranchPicker {...props} agentHint={<p>Unrelated update</p>} />)
+      root.render(
+        <BranchPicker
+          {...props}
+          context={{ ...props.context }}
+          agentHint={<p>Unrelated update</p>}
+        />
+      )
     )
     expect(counts.renders).toBe(0)
     expect(counts.builds).toBe(1)
     const next = makeWorkspaces()
-    await act(async () => root.render(<BranchPicker {...props} workspaces={next} />))
+    await act(async () =>
+      root.render(<BranchPicker {...props} context={{ ...props.context }} workspaces={next} />)
+    )
     expect(counts.builds).toBe(2)
     expect(workspaceVisits).toBe(size * 2)
     expect(branchVisits).toBe(size * 2)
     counts.renders = 0
-    await act(async () => root.render(<BranchPicker {...props} workspaces={next} />))
+    await act(async () =>
+      root.render(<BranchPicker {...props} context={{ ...props.context }} workspaces={next} />)
+    )
     expect(counts.renders).toBe(0)
     expect(counts.builds).toBe(2)
     expect(counts.iterations).toBe(0)
     await act(async () => vi.advanceTimersByTimeAsync(200))
     counts.renders = 0
     await act(async () =>
-      root.render(<BranchPicker {...props} workspaces={next} agentHint={<p>Another update</p>} />)
+      root.render(
+        <BranchPicker
+          {...props}
+          context={{ ...props.context }}
+          workspaces={next}
+          agentHint={<p>Another update</p>}
+        />
+      )
     )
     expect(counts.renders).toBe(0)
     let resolveStale: ((value: unknown) => void) | undefined
@@ -223,7 +240,11 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     expect(counts.iterations).toBe(0)
     expect(branchVisits).toBe(size * 2)
     await act(async () => click('[data-close]'))
-    await act(async () => root.render(<BranchPicker {...props} workspaces={makeWorkspaces()} />))
+    await act(async () =>
+      root.render(
+        <BranchPicker {...props} context={{ ...props.context }} workspaces={makeWorkspaces()} />
+      )
+    )
     expect(counts.builds).toBe(2)
     expect(workspaceVisits).toBe(size * 2)
     expect(branchVisits).toBe(size * 2)
