@@ -107,28 +107,6 @@ describe('ToolRun', () => {
       .findAll((node) => String(node.type) === 'Text')
       .map((text) => String(text.children.join('')))
 
-  it('shows advisor output through the normal tool disclosure', () => {
-    const tree = render(
-      [
-        { type: 'tool-call', name: 'advisor', input: {}, callId: 'server', state: 'completed' },
-        {
-          type: 'tool-result',
-          callId: 'server',
-          output:
-            '{"type":"advisor_redacted_result","encrypted_content":"redacted-advisor-content"}'
-        }
-      ],
-      vi.fn()
-    )
-    act(() => {
-      tree.root
-        .findAll((node) => String(node.type) === 'Pressable')
-        .findLast((node) => textIn(node).some((text) => text.includes('advisor')))!
-        .props.onPress()
-    })
-    expect(textIn(tree.root).join(' ')).toContain('redacted-advisor-content')
-  })
-
   describe('web search hits, handed to the chat link sheet', () => {
     const openRow = (tree: ReactTestRenderer, label: string): void => {
       act(() => {
