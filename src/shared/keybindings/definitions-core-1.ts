@@ -17,8 +17,11 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'settings', 'preferences'],
-    // Leave Cmd/Ctrl+, to terminal apps such as Codex unless the user opts in.
-    defaultBindings: platformBindings([]),
+    defaultBindings: {
+      darwin: ['Mod+Comma'],
+      linux: [],
+      win32: []
+    },
     conflictGroup: 'menu'
   },
   {
