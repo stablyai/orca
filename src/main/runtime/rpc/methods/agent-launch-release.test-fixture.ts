@@ -70,7 +70,9 @@ export function hostRuntime(run?: SetupRun, options: AgentLaunchRuntimeStubOptio
   return Object.assign(runtimeStub(options), {
     getSetupRun: vi.fn((_worktreeId: string) => run),
     pasteStartupDraftWhenReady: vi.fn((_handle: string, _draft: unknown) => {}),
-    deliverStartupFollowup: vi.fn(async (_handle: string, _followup: unknown) => true),
+    deliverStartupFollowup: vi.fn(
+      async (_handle: string, _followup: unknown, _options?: unknown) => true
+    ),
     selectCreatedMobileSessionTabForClient: vi.fn(() => true)
   })
 }

@@ -11,7 +11,7 @@ export type AgentLaunchFingerprintInput = {
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
     | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
   /** An accepted launch's message id names the message its chat founds, so it is identity too. */
-  prompt?: { text: string; delivery: string; clientMessageId?: string }
+  prompt?: { text?: string; delivery: string; clientMessageId?: string }
   sessionOptions?: Readonly<Record<string, string>>
   chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
