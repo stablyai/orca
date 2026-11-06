@@ -8,6 +8,9 @@ import { HostBottomBar } from './host-bottom-bar'
 import { HostConnectionStatus, HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
 import { HostWorkspaceList } from './host-workspace-list'
+import { MobileProjectHeader } from './MobileProjectHeader'
+import { MobileProjectList } from './MobileProjectList'
+import { hasCategorizedProjects } from './mobile-project-navigation'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenView({ controller }: { controller: HostScreenController }) {
@@ -20,6 +23,8 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
     [listRef]
   )
   const collapsingTitle = useCollapsingTitle(scrollTo)
+  const projectNavigation =
+    !controller.embedded && hasCategorizedProjects(controller.displayWorktrees)
   if (controller.state.error) {
     return (
       <View style={styles.centered}>
@@ -31,22 +36,30 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.topChromeSafeArea} edges={['top']}>
-        <HostScreenHeader controller={controller} collapsingTitle={collapsingTitle} />
+        {projectNavigation ? (
+          <MobileProjectHeader controller={controller} />
+        ) : (
+          <HostScreenHeader controller={controller} collapsingTitle={collapsingTitle} />
+        )}
       </SafeAreaView>
-      <HostWorkspaceList
-        controller={controller}
-        bottomBarHeight={bottomBarHeight}
-        pageTitle={{
-          element: (
-            <PageTitle
-              title={controller.hostDisplay.title}
-              subtitle={<HostConnectionStatus controller={controller} />}
-              onLayout={collapsingTitle.onTitleLayout}
-            />
-          ),
-          collapsing: collapsingTitle
-        }}
-      />
+      {projectNavigation ? (
+        <MobileProjectList controller={controller} bottomBarHeight={bottomBarHeight} />
+      ) : (
+        <HostWorkspaceList
+          controller={controller}
+          bottomBarHeight={bottomBarHeight}
+          pageTitle={{
+            element: (
+              <PageTitle
+                title={controller.hostDisplay.title}
+                subtitle={<HostConnectionStatus controller={controller} />}
+                onLayout={collapsingTitle.onTitleLayout}
+              />
+            ),
+            collapsing: collapsingTitle
+          }}
+        />
+      )}
       <HostBottomBar controller={controller} onCoveredHeightChange={setBottomBarHeight} />
       <HostScreenOverlays controller={controller} />
     </View>

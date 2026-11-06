@@ -39,6 +39,11 @@ export function buildStreamUnsubscribe(
   params: unknown,
   requestId?: string
 ): { method: string; params: Record<string, unknown> } | null {
+  if (method === 'session.tabs.subscribeAll') {
+    return requestId
+      ? { method: 'session.tabs.unsubscribeAll', params: { subscriptionId: requestId } }
+      : null
+  }
   if (!params || typeof params !== 'object') {
     return null
   }
