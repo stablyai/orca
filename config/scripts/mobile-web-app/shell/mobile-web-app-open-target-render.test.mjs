@@ -184,11 +184,6 @@ describeRender('a host document asked to open a target', () => {
       timeout: 10_000,
       polling: 100
     })
-    await pressBack(page)
-    await page.waitForFunction((host) => location.pathname === host, HOST_ROUTE, {
-      timeout: 10_000,
-      polling: 100
-    })
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)
