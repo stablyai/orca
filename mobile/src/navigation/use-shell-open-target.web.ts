@@ -115,7 +115,14 @@ export function useShellOpenTarget(): StackRouterFactory {
   useEffect(() => {
     const report = createRefusalReporter()
     let applied = spliced.current
-    let stopWaiting: (() => void) | null = null
+    // A route update can land before the root navigator is ready; Expo Router refuses to route until then.
+    let waiting: string | null = null
+    const stopWaiting = navigation.addListener('ready', () => {
+      if (waiting !== null) {
+        router.push(waiting)
+        waiting = null
+      }
+    })
     const open = (target: string): void => {
       if (!isThisHost(client, target)) {
         console.warn('[page-bridge] open-target-refused', { target })
@@ -129,17 +136,11 @@ export function useShellOpenTarget(): StackRouterFactory {
       if (decodedPathnameOf(target) === store.getRouteInfo().pathname) {
         return
       }
-      // A route update can land before the root navigator is ready; Expo Router refuses to route until then.
       if (navigation.isReady()) {
         router.push(target)
-        return
+      } else {
+        waiting = target
       }
-      stopWaiting?.()
-      stopWaiting = navigation.addListener('ready', () => {
-        stopWaiting?.()
-        stopWaiting = null
-        router.push(target)
-      })
     }
     // Clear on every arrival so a lost acknowledgement is repaired, but open each value once so a replayed init cannot push it again.
     const receive = (route: BridgeInitRoute | null): void => {
@@ -158,7 +159,7 @@ export function useShellOpenTarget(): StackRouterFactory {
     const unsubscribe = client.onRouteUpdate(receive)
     return () => {
       unsubscribe()
-      stopWaiting?.()
+      stopWaiting()
     }
   }, [client, navigation, router])
 
