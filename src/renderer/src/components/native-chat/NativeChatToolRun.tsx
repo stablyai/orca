@@ -1,4 +1,3 @@
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from './NativeChatExpandable'
@@ -60,7 +59,6 @@ export function NativeChatToolRun({
   activeTurnIsWorking,
   trailing,
   disclosureId,
-  onLinkClick,
   asides,
   runtimeContext
 }: {
@@ -86,7 +84,6 @@ export function NativeChatToolRun({
   trailing?: boolean
   /** Remember disclosure by message id outside the windowed row’s lifetime. */
   disclosureId?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
   asides?: NativeChatToolRunAsides
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
@@ -180,7 +177,6 @@ export function NativeChatToolRun({
       {hasAskCall ? (
         <NativeChatAwaitingInputRow
           subject={askSubject}
-          onLinkClick={onLinkClick}
           pending={askIsActive}
           disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
           // A grouped ask here still names only its count.
@@ -259,7 +255,6 @@ export function NativeChatToolRun({
             revealedDiff={revealedDiff}
             onRevealDiff={revealDiff}
             disclosureId={disclosureId}
-            onLinkClick={onLinkClick}
           />
         </NativeChatToolRunMembers>
       </NativeChatExpandable>

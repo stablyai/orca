@@ -86,7 +86,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from '../../agent-session/records/agent-session-record-store-test-harness'
-import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { setAgentLaunchRecordStore } from './agent-launch.test-fixture'
 import { RuntimeWorktreeLineageController } from '../../workspaces/lineage/runtime-worktree-lineage-controller'
 import * as createdWorkspaceLaunch from '../../../agent-launch/agent-launch-created-workspace'

@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import {
   buildExecutionHostAgentStartupPlan,

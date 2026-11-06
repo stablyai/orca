@@ -1,8 +1,8 @@
 import { vi } from 'vitest'
-import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
-import * as legacy from '../../native-chat/agent-session-journal/journal-queue-import'
-import * as fold from '../../native-chat/agent-session-journal/journal-queue-fold'
-import * as stored from '../../native-chat/agent-session-journal/queued-message-stored-row'
+import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/input-order/journal-input-card-index'
+import * as legacy from '../../native-chat/agent-session-journal/queued-messages/journal-queue-import'
+import * as fold from '../../native-chat/agent-session-journal/queued-messages/journal-queue-fold'
+import * as stored from '../../native-chat/agent-session-journal/queued-messages/queued-message-stored-row'
 
 export const emptyLegacyCounts = () => ({
   decodedRows: 0,

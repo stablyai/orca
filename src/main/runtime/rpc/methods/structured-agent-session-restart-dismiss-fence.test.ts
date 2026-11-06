@@ -12,11 +12,11 @@ import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/deskt
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/structured-agent-registry'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { interruptedRestart } from '../../../native-chat/agent-session-wire/structured-agent-session-restart-interruption-test-harness'
-import { HOST_TEST_NOW as NOW } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { interruptedRestart } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-restart-interruption-test-harness'
+import { HOST_TEST_NOW as NOW } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { call, clearStructuredHostStub } from './structured-agent-session-rpc.test-fixture'
 
 afterEach(() => {
@@ -41,7 +41,13 @@ const NO_METHODS = {} as StructuredAgentSessionAdapter
 const declaring = (definition: typeof CLAUDE_STRUCTURED_AGENT) => ({
   definition: {
     ...definition,
-    capabilities: { ...definition.capabilities, compact: false, threadGoal: false, rewind: false }
+    capabilities: {
+      ...definition.capabilities,
+      compact: false,
+      threadGoal: false,
+      rewind: false,
+      fork: undefined
+    }
   },
   adapter: NO_METHODS
 })

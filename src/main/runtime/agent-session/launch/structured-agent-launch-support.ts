@@ -16,8 +16,8 @@ import {
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
 } from '../../../native-chat/structured-agent-session-create-support'
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommandSettings

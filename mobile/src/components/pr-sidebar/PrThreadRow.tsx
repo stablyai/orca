@@ -24,7 +24,7 @@ import { canEditComment, isResolvableComment } from '../../session/pr-comment-ac
 import { ConfirmModal } from '../ConfirmModal'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../ActionSheetModal'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrThreadCode } from './PrThreadCode'
@@ -192,7 +192,7 @@ export function PrThreadRow({
             autoFocus
           />
         ) : (
-          <CommentMarkdown content={root.body} />
+          <PrMarkdown content={root.body} url={root.url} />
         )}
         {lastReply ? (
           <View style={styles.reply}>

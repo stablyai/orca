@@ -15,7 +15,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { SubprocessHandle } from '../daemon/sessions/session-subprocess-handle'
 import { TerminalHost } from '../daemon/terminal-host/terminal-host'
 import { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 
 const TEST_TIMEOUT_MS = 15_000
 const REQUEST_TIMEOUT_MS = 5_000

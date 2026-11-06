@@ -4,13 +4,14 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { CancelParams } from '../../shared/rpc-contract/structured-agent-session-params'
 import { acpLaunchSpecFor } from './acp-launch-specs'
-import { waitFor } from './acp-structured-adapter.test-support'
+import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 import { message, openHostRig, stop } from './acp-structured-host.test-support'
 
 let opened: Awaited<ReturnType<typeof openHostRig>> | undefined
@@ -119,3 +120,67 @@ it.each(['Stop', 'close'] as const)(
     )
   }
 )
+
+const ownPermission = (toolCallId: string) => ({
+  sessionId: PROVIDER_SESSION,
+  toolCall: { toolCallId, title: 'orca worktree set --unread' },
+  options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }]
+})
+
+async function pendingCard(host: Awaited<ReturnType<typeof fixture>>['host']) {
+  return waitFor(async () => {
+    await host.flushStreamedEvents(SESSION)
+    const found = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items.find(
+      (row) => row.body.kind === 'approval'
+    )
+    expect(found?.body).toMatchObject({ resolution: { state: 'pending' } })
+    return found!
+  })
+}
+
+it('keeps OMP own permission answerable after the held message fails', async () => {
+  const { rig, host, send, fence } = await fixture()
+  await send('first')
+  await rig.frame('session/prompt')
+  await rig.settle()
+  const { agent } = rig.child()
+  const asked = agent.request('own-turn', 'session/request_permission', ownPermission('own-call'))
+  const card = await pendingCard(host)
+  agent.on('session/prompt', (frame) => agent.fail(frame, -32603, 'model unavailable'))
+  await vi.advanceTimersByTimeAsync(1_000)
+  await waitFor(async () => {
+    await host.flushStreamedEvents(SESSION)
+    const turns = (
+      await host.history({ sessionId: SESSION, direction: 'tail' })
+    ).page.items.flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+    expect(turns).toMatchObject([{ state: 'completed' }])
+  })
+  expect((await pendingCard(host)).itemId).toBe(card.itemId)
+  await rig.adapter.answerPrompt({
+    sessionId: SESSION,
+    itemId: card.itemId,
+    kind: 'approval',
+    response: { kind: 'option', optionId: 'allow' },
+    fence: fence(),
+    commit: async () => {}
+  })
+  expect(await asked).toMatchObject({
+    result: { outcome: { outcome: 'selected', optionId: 'allow' } }
+  })
+})
+
+it('Cancel on a card from OMP own work, with no message running, cancels that request', async () => {
+  const { rig, host } = await fixture()
+  const asked = rig
+    .child()
+    .agent.request('own-cancel', 'session/request_permission', ownPermission('own-cancel'))
+  const card = await pendingCard(host)
+  const fields = { prompt: { itemId: card.itemId, expectedRevision: card.revision } }
+  // Clients send exactly this over RPC, so it must pass the wire schema.
+  const params = CancelParams.parse({
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
+  expect(await host.cancel(CALLER, params)).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(await asked).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
+})

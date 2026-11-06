@@ -10,8 +10,8 @@ import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-add
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { closeStructuredAgentSessionChild } from '../../../agent-session/structured-agent-session-close'
-import { restoreJournal } from '../../../../native-chat/agent-session-journal/journal-open'
-import { OrcaRuntimeRpcServer } from '../../../runtime-rpc'
+import { restoreJournal } from '../../../../native-chat/agent-session-journal/replay/journal-open'
+import { OrcaRuntimeRpcServer } from '../../../rpc/server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {

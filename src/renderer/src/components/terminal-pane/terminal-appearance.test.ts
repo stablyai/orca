@@ -165,7 +165,6 @@ describe('applyTerminalAppearance theme assignment', () => {
       settings,
       true,
       new Map(),
-      new Map(),
       'false',
       new Map(),
       new Map()
@@ -439,16 +438,7 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
         setPaneInlineImagesEnabled: vi.fn(),
         setPaneStyleOptions: vi.fn()
       } as unknown as PaneManager
-      applyTerminalAppearance(
-        manager,
-        settings,
-        true,
-        new Map(),
-        new Map(),
-        'false',
-        new Map(),
-        new Map()
-      )
+      applyTerminalAppearance(manager, settings, true, new Map(), 'false', new Map(), new Map())
       expect(publishMock).toHaveBeenCalledTimes(1)
     } finally {
       delete (globalThis as { window?: unknown }).window

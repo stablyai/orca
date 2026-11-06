@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
-import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/database/journal-host-database'
 import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
@@ -19,7 +19,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { dispatch } from '../../src/cli/dispatch'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
-import { fingerprintAuthenticatedPairingCredential } from '../../src/main/runtime/device-principal'
+import { fingerprintAuthenticatedPairingCredential } from '../../src/main/runtime/rpc/server/pairing/device-principal'
 import { syncFederatedDispatch } from '../../src/main/runtime/orchestration/federation-sync'
 import { prepareFederatedAttachmentAuthority } from '../../src/main/runtime/rpc/methods/orchestration/federation/federation-attachment-authority'
 import { readOrchestrationCompatibilityEvidence } from '../../src/shared/orchestration-compatibility-evidence'
@@ -33,9 +33,12 @@ import {
 } from '../../src/main/runtime/rpc/orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 afterEach(async () => {
   const remaining = await releaseAgentSessionRecordStore()
   remaining?.journalDatabase.close()

@@ -18,20 +18,21 @@ import type {
   RuntimeTerminalRead
 } from '../../../../shared/runtime-terminal-contracts'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
-import type { RuntimeProviderSnapshotReadOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
+import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
 import type {
-  DriverState,
   ApplyLayoutResult,
   PtyLayoutTarget,
   LayoutQueueEntry,
   PtyLayoutState
-} from '../../orca-runtime-core'
+} from '../layout/terminal-layout-state'
 
 import { RuntimeTerminalDriverController } from './runtime-terminal-driver-controller'
 import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 
 import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
 import { RemoteDesktopTerminalFloor } from '../../remote-desktop-terminal-floor'
@@ -84,6 +85,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     session: WorkspaceSessionState
   ): void
   declare protected readonly accounts: RuntimeAccountController
+  declare protected readonly getPairedDeviceNameFn: (pairedDeviceId: string) => string | null
   abstract retireRuntimeOwnedBrowserSessionTab(worktreeId: string, browserPageId: string): boolean
   protected abstract resolveEmulatorWorkspaceId(selector: string): Promise<string>
   protected abstract resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string>
@@ -188,6 +190,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveBrowserWorkspace: (selector) =>
         resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector),
       getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this),
+      getBrowserHostRequestRegistry: () => getBrowserHostRequestRegistry(this),
+      getPairedDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),
       getRuntimeBrowserPageRegistry: () => getRuntimeBrowserPageRegistry(this),
       resolveBrowserNetworkExecutionHost: (worktree) =>
         this.resolveBrowserNetworkExecutionHostForWorktree(worktree),

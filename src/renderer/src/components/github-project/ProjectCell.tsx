@@ -1,5 +1,9 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
+import {
+  projectContentField,
+  projectContentFieldLabel
+} from '../../../../shared/github/project-content-field'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import type {
   GitHubIssueType,
@@ -43,6 +47,7 @@ export default function ProjectCell({
   sourceHost,
   sourceTarget
 }: Props): React.JSX.Element {
+  const contentValue = projectContentField(row.content, field.dataType)
   const value = row.fieldValuesByFieldId[field.id]
   const editableValue = editable && row.itemType !== 'REDACTED'
   if (field.dataType === 'TITLE') {
@@ -84,28 +89,29 @@ export default function ProjectCell({
   if (field.dataType === 'REPOSITORY') {
     return (
       <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
-        {row.content.repository ?? ''}
+        {contentValue ? projectContentFieldLabel(contentValue) : ''}
       </span>
     )
   }
   if (field.dataType === 'PARENT_ISSUE') {
     return (
       <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
-        {row.content.parentIssue ? `#${row.content.parentIssue.number}` : ''}
+        {contentValue ? projectContentFieldLabel(contentValue) : ''}
       </span>
     )
   }
   if (field.dataType === 'LINKED_PULL_REQUESTS') {
-    const linked = row.content.linkedPullRequests
+    const linked = contentValue?.kind === 'linked' ? contentValue.linked : null
     if (!linked) {
       return <span className="text-xs text-muted-foreground" />
     }
-    const labels = linked.pullRequests.map((pr) => `#${pr.number}`)
     const overflow = linked.totalCount - linked.pullRequests.length
     // Only the numbers truncate, so "+N more" stays visible in narrow columns.
     return (
       <span className="flex min-w-0 items-center gap-1 self-center text-xs text-muted-foreground">
-        <span className="truncate">{labels.join(', ')}</span>
+        <span className="truncate">
+          {contentValue ? projectContentFieldLabel(contentValue) : ''}
+        </span>
         {overflow > 0 ? (
           <>
             {' '}
@@ -122,13 +128,12 @@ export default function ProjectCell({
     )
   }
   if (field.dataType === 'SUB_ISSUES_PROGRESS') {
-    const progress = row.content.subIssuesProgress
-    if (!progress || progress.total === 0) {
+    if (!contentValue) {
       return <span className="text-xs text-muted-foreground" />
     }
     return (
       <span className="min-w-0 self-center truncate text-xs text-muted-foreground">
-        {progress.completed}/{progress.total} ({progress.percentCompleted}%)
+        {projectContentFieldLabel(contentValue)}
       </span>
     )
   }

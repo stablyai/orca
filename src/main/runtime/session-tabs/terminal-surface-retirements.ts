@@ -134,6 +134,14 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
     }
     // One repo epoch may cover many exits; preserve surfaces rebound to other PTYs/incarnations.
     const removableRetiredSurfaces = [...staged.accepted, ...staged.unpersisted]
+    if (removableRetiredSurfaces.length > 0) {
+      console.info(
+        `[runtime] exit of pty ${ptyId} retires ${removableRetiredSurfaces.length} terminal surface(s) (${staged.kept.length} kept):`,
+        removableRetiredSurfaces.map(
+          (surface) => `${surface.worktreeId} ${surface.parentTabId}:${surface.leafId}`
+        )
+      )
+    }
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       // Exit itself attests retirement even if the renderer already removed persistence; withholding proof strands mirrors on quiet workspaces.
       const retirementProofs = terminalHandle

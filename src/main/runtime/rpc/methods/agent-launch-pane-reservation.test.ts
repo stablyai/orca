@@ -1,4 +1,4 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Caller-reserved pane identity crosses the wire; placement stays client-owned, and the returned paneKey identifies the actual pane after replay or fallback. */
 

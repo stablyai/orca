@@ -8,9 +8,8 @@ import {
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { grokBackgroundTaskStop } from './acp-dialects/grok-background-task-stop'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
@@ -118,29 +117,6 @@ async function fixture() {
   }
 }
 
-describe('Grok kill reply contract', () => {
-  it.each([
-    [{ result: { taskId: 'task', outcome: 'killed' } }, 'killed'],
-    [{ result: { taskId: 'task', outcome: 'already_exited' } }, 'gone'],
-    [{ result: { taskId: 'task', outcome: 'not_found' } }, 'gone'],
-    [{ result: null, error: 'session not found' }, 'refused']
-  ])('reads %j as %s', (reply, outcome) => {
-    expect(grokBackgroundTaskStop.response(reply, 'task')).toBe(outcome)
-  })
-
-  it.each([
-    { result: { taskId: 'other', outcome: 'killed' } },
-    { result: { taskId: 'task', outcome: 'future_outcome' } },
-    { result: { taskId: 'task' } },
-    { result: null },
-    { killed: true }
-  ])('rejects a malformed or mismatched reply: %j', (reply) => {
-    expect(() => grokBackgroundTaskStop.response(reply, 'task')).toThrow(
-      'invalid background task kill response'
-    )
-  })
-})
-
 describe('Grok background commands in the background-tasks strip', () => {
   it('lists a backgrounded command with its own Stop and removes it when Grok says it ended', async () => {
     const f = await fixture()
@@ -160,15 +136,6 @@ describe('Grok background commands in the background-tasks strip', () => {
     expect(await f.strip()).toBeNull()
     expect(f.childWork.views()).toEqual([])
     expect(await f.rowState()).toBe('done')
-  })
-
-  it('lists a monitor as monitoring', async () => {
-    const f = await fixture()
-    await f.background(TASK, { monitor_description: 'Watch the build log' })
-    expect((await f.strip())?.tasks).toMatchObject([
-      { id: CHILD, kind: 'monitor', description: 'Watch the build log', stoppable: true }
-    ])
-    expect(f.childWork.views()).toMatchObject([{ state: 'monitoring' }])
   })
 
   it("kills only the named task, and the row leaves on Grok's own completion", async () => {

@@ -10,10 +10,8 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalSummary
 } from '../../../../shared/runtime-terminal-contracts'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

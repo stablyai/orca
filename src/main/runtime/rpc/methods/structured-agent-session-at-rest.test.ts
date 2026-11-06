@@ -14,19 +14,20 @@ import {
 import {
   hostTestAttachParams,
   hostTestMessage,
-  hostTestOperationId
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+  hostTestOperationId,
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as REST_TEST_THREAD
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   foundRestTestChat,
   REST_TEST_CALLER as CALLER,
-  REST_TEST_SESSION as SESSION,
-  REST_TEST_THREAD,
   restTestSend
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
 import { editPersistedTestAgentSessionStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcResponse } from '../core'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import {
   CLIENT,

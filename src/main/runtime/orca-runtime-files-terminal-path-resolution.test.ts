@@ -1,5 +1,7 @@
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
+import { homedir } from 'node:os'
+import { resolveRuntimePath } from '../../shared/cross-platform-path'
 import { resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
 import {
   createRuntimeFileCommands,
@@ -325,6 +327,39 @@ describe('RuntimeFileCommands', () => {
       const result = await commands.resolveTerminalPath('id:wt-1', 'src/missing.ts')
 
       expect(result).toMatchObject({ relativePath: 'src/missing.ts', exists: false })
+    })
+
+    // Why: paired clients send `~/…` unexpanded, so the host's own home must answer it.
+    it('expands ~/ against the host home and routes it to the sibling workspace holding it', async () => {
+      const siblingPath = resolveRuntimePath(homedir(), 'work/project-rh')
+      const filePath = resolveRuntimePath(siblingPath, 'guides/presentation.mp4')
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: { id: 'wt-b', repoId: 'repo-1', path: siblingPath },
+        executionHostId: 'local',
+        relativePath: 'guides/presentation.mp4'
+      }))
+      const { commands } = createRuntimeFileCommands({
+        path: resolveRuntimePath(homedir(), 'work/project'),
+        resolveKnownWorkspaceFileTarget
+      })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath(
+        'id:wt-1',
+        '~/work/project-rh/guides/presentation.mp4',
+        null,
+        'client-a',
+        null,
+        true
+      )
+
+      expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(filePath, 'local')
+      expect(result).toMatchObject({
+        worktree: 'wt-b',
+        relativePath: 'guides/presentation.mp4',
+        absolutePath: filePath,
+        exists: true
+      })
     })
 
     it('does not expand ~/ on a remote worktree (home is unknown)', async () => {

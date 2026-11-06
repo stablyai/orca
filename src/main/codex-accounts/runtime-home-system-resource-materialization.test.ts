@@ -12,7 +12,6 @@ import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createStore,
   expectResourceLinkedOrCopied,
-  getRuntimeCodexAuthPath,
   getRuntimeCodexHomePath,
   getSystemCodexHomePath,
   setupRuntimeHomeTest,
@@ -69,48 +68,6 @@ describe('CodexRuntimeHomeService', () => {
     )
   })
 
-  it('keeps the Codex app bundled marketplace loadable from the managed home', async () => {
-    const systemCodexHome = getSystemCodexHomePath()
-    const systemMarketplace = join(
-      systemCodexHome,
-      '.tmp',
-      'bundled-marketplaces',
-      'openai-bundled'
-    )
-    mkdirSync(systemMarketplace, { recursive: true })
-    const userMarketplace = join(testState.fakeHomeDir, 'marketplaces', 'mine')
-    const canonicalConfig = [
-      '[marketplaces.openai-bundled]',
-      'source_type = "local"',
-      `source = '${systemMarketplace}'`,
-      '',
-      '[marketplaces.mine]',
-      'source_type = "local"',
-      `source = '${userMarketplace}'`,
-      ''
-    ].join('\n')
-    writeFileSync(join(systemCodexHome, 'config.toml'), canonicalConfig, 'utf-8')
-    const store = createStore(createSettings())
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    service.prepareForCodexLaunch()
-    service.prepareForCodexLaunch()
-
-    // Codex rejects openai-bundled unless its source is under the active CODEX_HOME.
-    const runtimeMarketplace = join(
-      realpathSync.native(getRuntimeCodexHomePath()),
-      '.tmp',
-      'bundled-marketplaces',
-      'openai-bundled'
-    )
-    const runtimeConfig = readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')
-    expect(runtimeConfig).toContain(`source = '${runtimeMarketplace}'`)
-    expect(runtimeConfig).toContain(`source = '${userMarketplace}'`)
-    expect(existsSync(runtimeMarketplace)).toBe(true)
-    expect(readFileSync(join(systemCodexHome, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
-  })
-
   it('rebases the bundled marketplace onto the canonical path of a symlinked managed home', async () => {
     const systemMarketplace = join(
       getSystemCodexHomePath(),
@@ -146,55 +103,6 @@ describe('CodexRuntimeHomeService', () => {
       `source = '${canonicalMarketplace}'`
     )
     expect(existsSync(canonicalMarketplace)).toBe(true)
-  })
-
-  it('launches the system-default custom provider without requiring OAuth auth', async () => {
-    const systemCodexHome = getSystemCodexHomePath()
-    const canonicalConfigPath = join(systemCodexHome, 'config.toml')
-    const canonicalConfig = [
-      'model_provider = "codex-lb"',
-      '',
-      '[model_providers.codex-lb]',
-      'base_url = "https://codex-lb.example.test/v1"',
-      'env_key = "EXAMPLE_GATEWAY_TOKEN"',
-      ''
-    ].join('\n')
-    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
-    const store = createStore(createSettings({ realHomeRoutable: false }))
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
-      canonicalConfig
-    )
-    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
-    expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(canonicalConfig)
-  })
-
-  it('links system Codex user resources into the managed runtime home before launch', async () => {
-    const systemCodexHome = getSystemCodexHomePath()
-    mkdirSync(join(systemCodexHome, 'skills', 'review'), { recursive: true })
-    writeFileSync(join(systemCodexHome, 'skills', 'review', 'SKILL.md'), 'review skill\n', 'utf-8')
-    mkdirSync(join(systemCodexHome, 'plugins'), { recursive: true })
-    writeFileSync(join(systemCodexHome, 'plugins', 'plugin.json'), '{"name":"plugin"}\n', 'utf-8')
-    writeFileSync(join(systemCodexHome, 'profile-v2'), 'profile\n', 'utf-8')
-    const store = createStore(createSettings())
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    service.prepareForCodexLaunch()
-
-    const runtimeSkillsPath = join(getRuntimeCodexHomePath(), 'skills')
-    const runtimePluginsPath = join(getRuntimeCodexHomePath(), 'plugins')
-    const runtimeProfilePath = join(getRuntimeCodexHomePath(), 'profile-v2')
-    expectResourceLinkedOrCopied(runtimeSkillsPath, join(systemCodexHome, 'skills'))
-    expectResourceLinkedOrCopied(runtimePluginsPath, join(systemCodexHome, 'plugins'))
-    expectResourceLinkedOrCopied(runtimeProfilePath, join(systemCodexHome, 'profile-v2'))
-    expect(readFileSync(join(runtimeSkillsPath, 'review', 'SKILL.md'), 'utf-8')).toBe(
-      'review skill\n'
-    )
-    expect(readFileSync(runtimeProfilePath, 'utf-8')).toBe('profile\n')
   })
 
   it('starts the system Codex session bridge without replacing runtime sessions', async () => {

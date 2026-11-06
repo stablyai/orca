@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   recordPtySurface,
@@ -9,11 +9,13 @@ import {
 } from '../surface/pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
 import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placement'
-import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from '../../orca-runtime-core'
+import { ownerSurfacing } from './terminal-presentation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
 import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
+// Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
+const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
 export type TerminalSplitOptions = {
   direction?: 'horizontal' | 'vertical'

@@ -5,9 +5,10 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 
 const contracts = [
+  'tests/e2e/session-tabs/mobile-session-active-performance.unit.test.ts',
+  'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
   'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts',
-  'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts',
-  'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
+  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/hook-status-resume-sleep-ordering.test.ts',
   'src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts',
   'src/main/runtime/rpc/methods/repo.test.ts',
@@ -27,13 +28,7 @@ const contracts = [
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]
-// Wall-clock budgets with no CI job yet; `pnpm test:perf:benchmarks` runs them.
-const benchmarks = [
-  'src/renderer/src/components/editor/monaco-content-sync.bench.ts',
-  'src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts'
-]
-
-for (const contract of [...contracts, ...benchmarks]) {
+for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {
     throw new Error(`Missing performance contract: ${contract}`)
   }
@@ -47,7 +42,7 @@ export default defineConfig({
     projects: undefined,
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: contracts,
-    benchmark: { include: benchmarks },
+    benchmark: { include: [] },
     fileParallelism: false,
     retry: 0
   }

@@ -256,6 +256,8 @@ export type PtyTransport = {
   getRuntimeEnvironmentId?: () => string | null
   /** Execution host captured at spawn; nested SSH differs from its outer runtime owner. */
   getExecutionHostId?: () => ExecutionHostId | null
+  /** Notifies when the execution host is learned or changes after bind, e.g. from attach metadata. */
+  onExecutionHostChange?: (listener: () => void) => () => void
   /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
   getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null

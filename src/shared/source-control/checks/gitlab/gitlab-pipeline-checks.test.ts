@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { gitLabPipelineJobsToPRChecks } from './gitlab-pipeline-checks'
+import {
+  getGitLabPipelineNotLatestCommitSha,
+  gitLabPipelineJobsToPRChecks
+} from './gitlab-pipeline-checks'
 import type { GitLabPipelineJob } from '../../../gitlab-types'
 
 describe('gitLabPipelineJobsToPRChecks', () => {
@@ -11,7 +14,9 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         stage: 'test',
         status: 'failed',
         webUrl: 'https://gitlab.com/acme/orca/-/jobs/1',
-        duration: 12
+        duration: 12,
+        startedAt: '2026-11-05T10:00:00Z',
+        finishedAt: '2026-11-05T10:00:12Z'
       },
       {
         id: 2,
@@ -45,6 +50,8 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         status: 'completed',
         conclusion: 'failure',
         url: 'https://gitlab.com/acme/orca/-/jobs/1',
+        startedAt: '2026-11-05T10:00:00Z',
+        completedAt: '2026-11-05T10:00:12Z',
         gitlabJobId: 1
       },
       {
@@ -85,5 +92,40 @@ describe('gitLabPipelineJobsToPRChecks', () => {
     for (const check of checks) {
       expect(check).not.toHaveProperty('gitlabJobId')
     }
+  })
+})
+
+describe('getGitLabPipelineNotLatestCommitSha', () => {
+  const head = 'b'.repeat(40)
+  const older = 'a'.repeat(40)
+  const pipeline = { id: 7, status: 'failed' }
+
+  it('names the commit a branch or detached MR pipeline ran on once the head moves past it', () => {
+    expect(
+      getGitLabPipelineNotLatestCommitSha({ ...pipeline, sha: older, ref: 'feature' }, head)
+    ).toBe(older)
+    expect(
+      getGitLabPipelineNotLatestCommitSha(
+        { ...pipeline, sha: older, ref: 'refs/merge-requests/7/head' },
+        head
+      )
+    ).toBe(older)
+    expect(
+      getGitLabPipelineNotLatestCommitSha({ ...pipeline, sha: head, ref: 'feature' }, head)
+    ).toBeUndefined()
+  })
+
+  it('claims nothing for merge-commit pipelines or when either commit is unknown', () => {
+    for (const ref of ['refs/merge-requests/7/merge', 'refs/merge-requests/7/train']) {
+      expect(
+        getGitLabPipelineNotLatestCommitSha({ ...pipeline, sha: older, ref }, head)
+      ).toBeUndefined()
+    }
+    expect(
+      getGitLabPipelineNotLatestCommitSha({ ...pipeline, ref: 'feature' }, head)
+    ).toBeUndefined()
+    expect(
+      getGitLabPipelineNotLatestCommitSha({ ...pipeline, sha: older, ref: 'feature' }, undefined)
+    ).toBeUndefined()
   })
 })

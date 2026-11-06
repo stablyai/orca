@@ -1,7 +1,7 @@
 /** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

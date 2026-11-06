@@ -1,4 +1,5 @@
 import { callHostRoute } from '@/runtime/host-route-call'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { hostRouteForAuthority, runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
@@ -140,6 +141,19 @@ async function opensInPlace(environmentId: string): Promise<boolean> {
   }
 }
 
+export function isHostWorkspaceRoot(
+  file: HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null
+): boolean {
+  return file?.kind === 'host' && file.isDirectory && file.absolutePath === file.worktreePath
+}
+
+/** A host-resolved workspace root, such as `~/proj` from a paired pane, switches to it like an absolute root link. */
+export function revealHostWorkspaceRoot(file: HostWorkspaceFile): void {
+  if (isHostWorkspaceRoot(file)) {
+    activateAndRevealWorkspace(file.worktreeId, { executionHostId: file.executionHostId })
+  }
+}
+
 /** For paired paths outside the source workspace, ask the server for an owning workspace or a file grant; only paths the host lacks fall to this computer. Null when inapplicable; rejects when neither can open. */
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
@@ -173,8 +187,8 @@ export async function resolveHostWorkspaceFile(
       },
       { timeoutMs: 15_000 }
     )
-  // Why the holder: a hover needs only a stat (a grant hashes the file); a download reads the holding
-  // workspace's file, which a grant can't hand to the default app; and an HTML page already previews
+  // Why the holder: a hover needs only a stat (a grant hashes the file); a download pages the holding
+  // workspace's file without a grant's per-page checks; and an HTML page already previews
   // in the clicked workspace, with its relative assets served from the holder.
   const resolved =
     !source.existenceOnly &&
@@ -200,7 +214,8 @@ export async function resolveHostWorkspaceFile(
       // Why: hosts grant files, not folders; the folder is still the host's, never this computer's.
       throw new HostFileRefusal(`${absolutePath} is a folder outside every workspace on its host`)
     }
-    if (source.hostFileOnly) {
+    // Why: a `~` path names the host's home, never this computer's.
+    if (source.hostFileOnly || /^~[\\/]/.test(absolutePath)) {
       throw new HostFileRefusal(`File not found on its host: ${absolutePath}`)
     }
     return statClientLocalFile(environmentId, absolutePath)

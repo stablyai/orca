@@ -14,7 +14,13 @@ import type {
   WorkspaceStatus,
   Worktree
 } from './types'
-import type { WorkspaceLineage, WorktreeLineage, WorktreeLineageWarning } from './lineage-types'
+import type {
+  CrossStoreParentRef,
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './lineage-types'
 import type {
   PerforceCopyCreateSummary,
   WorkspaceCopyStreamChoice
@@ -125,6 +131,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** A parent in another Orca store, named by that store's verified installationId (buildCrossStoreParentRef). */
+  crossStoreParent?: CrossStoreParentRef
   /** Folder projects in a Perforce stream workspace: make the workspace a Perforce copy
    *  (`<root>.wt/<name>` with its own client) instead of sharing the project folder. */
   perforceCopy?: { stream?: WorkspaceCopyStreamChoice }
@@ -178,6 +186,8 @@ export type CreateWorktreeResult = {
   }
   lineage?: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store; older hosts never write one. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   /** Set when the workspace was made as a Perforce copy; additive, older hosts omit it. */
   perforceCopy?: PerforceCopyCreateSummary

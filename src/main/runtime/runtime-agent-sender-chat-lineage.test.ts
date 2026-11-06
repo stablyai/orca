@@ -16,7 +16,7 @@ import {
   AGENT_SESSION_PREDECESSOR_IDS,
   agentSessionPredecessorWorkForTest
 } from './agent-session-record-lineage'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 const unissued = (): never => {

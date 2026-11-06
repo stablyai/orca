@@ -36,6 +36,8 @@ type NativeProcessInfo = {
 
 /** Pids with a handle open on each path; null where a path could not be queried. */
 type PathUsersQuery = (paths: string[]) => Promise<(number[] | null)[]>
+/** node-addon-api's default OnError hands the callback an Error (e.g. bad_alloc) instead of rows. */
+type NativeProcessSnapshot = NativeProcessInfo[] | Error | undefined
 
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
@@ -47,10 +49,7 @@ type WindowsProcessTreeModule = {
   supportedProcessDataFlags?: number
   getProcessCreationTime?: (pid: number) => number | undefined
   getProcessIdsUsingPaths?: PathUsersQuery
-  getAllProcesses: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags?: number
-  ) => void
+  getAllProcesses: (callback: (processes: NativeProcessSnapshot) => void, flags?: number) => void
 }
 
 const requireFromMain = createRequire(__filename)
@@ -67,10 +66,7 @@ let requireNative: NativeRequire = requireFromMain
 type WindowsProcessTreeAddon = {
   getProcessCreationTime?: (pid: number) => number | undefined
   getProcessIdsUsingPaths?: PathUsersQuery
-  getProcessList: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags: number
-  ) => void
+  getProcessList: (callback: (processes: NativeProcessSnapshot) => void, flags: number) => void
   supportedProcessDataFlags?: number
 }
 
@@ -242,7 +238,8 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
         clearTimeout(deadline)
         // Only this read's callback proves its outstanding native work drained.
         unreturnedReads.delete(readId)
-        if (!processes) {
+        // A throw here escapes the addon's callback loop and kills the host (#33350).
+        if (!Array.isArray(processes)) {
           reject(new Error('windows process table returned no snapshot'))
           return
         }

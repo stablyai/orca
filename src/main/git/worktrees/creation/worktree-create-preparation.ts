@@ -1,6 +1,5 @@
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
 import type {
   AddWorktreeOptions,
@@ -19,13 +18,12 @@ import {
   trackSameNameRemoteBase
 } from './worktree-add'
 import { bumpWorktreeScanGeneration as notifyPreparedWorktreeMutation } from '../catalog/worktree-scan-cache'
-import {
-  gitCleanupOptions,
-  performDiscardPreparedWorktree,
-  removeFailedFinalization
-} from './worktree-preparation-discard'
+import { gitCleanupOptions, removeFailedFinalization } from './worktree-preparation-discard'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
-import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
+import {
+  runStandalonePreparation,
+  type WorktreePreparationOperation
+} from './worktree-preparation-operation'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
@@ -44,62 +42,71 @@ export async function prepareWorktreeCreateCheckout(
   baseBranch: string,
   lockReason: string,
   options: GitWorktreeExecOptions = {},
-  beforeMaterialization?: Promise<void>
+  beforeMaterialization?: Promise<void>,
+  operation?: WorktreePreparationOperation
 ): Promise<void> {
+  if (!operation) {
+    return runStandalonePreparation(options, (owned) =>
+      prepareWorktreeCreateCheckout(
+        repoPath,
+        worktreePath,
+        baseBranch,
+        lockReason,
+        options,
+        beforeMaterialization,
+        owned
+      )
+    )
+  }
+  options = operation.executionOptions()
   // Observe early rejection while registration runs; awaiting still reports the original error.
   void beforeMaterialization?.catch(() => {})
   try {
-    await withRepoRefMaintenancePaused('worktree-prepare', () =>
+    await operation.withMaintenancePaused(() =>
       runWithGitReadCacheInvalidation(async () => {
         // Overlaps preparation; never rejects.
         const checkoutWorkersArgs = checkoutWorkersGitArgs(repoPath, options)
         const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
           hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
         )
-        let lockPath: string | undefined
-        try {
-          lockPath = await addLockedWorktreePreparation(
-            repoPath,
-            worktreePath,
-            effectiveBase,
-            lockReason,
-            {
-              ...options,
-              timeout: resolveWorktreeAddTimeoutMs()
-            }
-          )
+        options.signal?.throwIfAborted()
+        const lockPath = await addLockedWorktreePreparation(
+          repoPath,
+          worktreePath,
+          effectiveBase,
+          lockReason,
+          {
+            ...options,
+            timeout: resolveWorktreeAddTimeoutMs()
+          },
+          operation
+        )
+        await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
+        let materializationBase = effectiveBase
+        if (beforeMaterialization) {
+          await operation.waitForMaterialization(beforeMaterialization)
           await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
-          let materializationBase = effectiveBase
-          if (beforeMaterialization) {
-            await waitForPromiseWithSignal(beforeMaterialization, options.signal)
-            await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
-            const { stdout } = await gitExecFileAsync(
-              ['rev-parse', '--verify', `${effectiveBase}^{commit}`],
-              gitExecOptions(repoPath, options)
-            )
-            materializationBase = stdout.trim()
-            await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
-          }
-          // Materialize with reset to defer user post-checkout hooks until submission.
-          await gitExecFileAsync(
-            [
-              ...(await checkoutWorkersArgs),
-              ...windowsLongPathGitArgs(worktreePath),
-              'reset',
-              '--hard',
-              materializationBase
-            ],
-            { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          const { stdout } = await gitExecFileAsync(
+            ['rev-parse', '--verify', `${effectiveBase}^{commit}`],
+            gitExecOptions(repoPath, options)
           )
+          materializationBase = stdout.trim()
           await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
-        } catch (error) {
-          if (lockPath !== undefined && !(error instanceof WorktreePreparationLockOwnershipError)) {
-            await performDiscardPreparedWorktree(repoPath, worktreePath, options, lockReason).catch(
-              () => {}
-            )
-          }
-          throw error
         }
+        const workers = await checkoutWorkersArgs
+        options.signal?.throwIfAborted()
+        // Materialize with reset to defer user post-checkout hooks until submission.
+        await gitExecFileAsync(
+          [
+            ...workers,
+            ...windowsLongPathGitArgs(worktreePath),
+            'reset',
+            '--hard',
+            materializationBase
+          ],
+          { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+        )
+        await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
       })
     )
   } finally {
@@ -107,20 +114,7 @@ export async function prepareWorktreeCreateCheckout(
   }
 }
 
-export async function discardPreparedWorktree(
-  repoPath: string,
-  worktreePath: string,
-  options: GitWorktreeExecOptions = {},
-  expectedLockReason: string
-): Promise<void> {
-  try {
-    await runWithGitReadCacheInvalidation(() =>
-      performDiscardPreparedWorktree(repoPath, worktreePath, options, expectedLockReason)
-    )
-  } finally {
-    notifyPreparedWorktreeMutation(repoPath)
-  }
-}
+export { discardPreparedWorktree } from './worktree-preparation-discard'
 
 export async function unlockPreparedWorktree(
   repoPath: string,

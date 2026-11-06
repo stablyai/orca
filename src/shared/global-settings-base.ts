@@ -18,6 +18,7 @@ import type { PerforceGlobalSettings } from './perforce/perforce-settings'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
 import type { EditorSaveSettings } from './editor-save-settings'
+import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -39,4 +40,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   EditorSaveSettings &
-  BrowserPasswordsGlobalSettings
+  BrowserPasswordsGlobalSettings &
+  NestedWorkerDepthSettings

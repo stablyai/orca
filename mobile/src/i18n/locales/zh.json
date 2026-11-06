@@ -189,6 +189,11 @@
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根据上一次响应的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
       "file": "文件",
@@ -220,10 +225,22 @@
       "clipboardRejected": "剪贴板拒绝接收该文本。",
       "copyFailed": "复制失败",
       "copyMessage": "复制消息",
-      "selectText": "选择文本"
+      "selectText": "选择文本",
+      "rewind": "回溯到此处"
     },
     "nativeChatImageViewer": {
-      "closeImage": "关闭图片"
+      "closeImage": "关闭图片",
+      "imageActions": "图片操作",
+      "copyImage": "拷贝图片",
+      "saveImage": "存储图片",
+      "share": "共享…",
+      "imageCopied": "已拷贝图片",
+      "imageSaved": "已存储图片",
+      "copyFailed": "无法拷贝图片",
+      "saveFailed": "无法存储图片",
+      "shareFailed": "无法共享图片",
+      "photosAccessDenied": "请在“设置”中允许 Orca 添加照片",
+      "imageTooLarge": "图片过大"
     },
     "nativeChatProse": {
       "attachedImage": "附件图片",
@@ -282,7 +299,9 @@
       "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
       "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
       "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。"
+      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。",
+      "signIn": "登录",
+      "signInHint": "在运行此聊天的电脑上打开终端"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -291,6 +310,13 @@
       "remote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
       "unnamedServer": "远程服务器",
       "update": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。"
+    },
+    "interruptedContinue": {
+      "failed": "无法继续此聊天。请重试，或发送一条消息。",
+      "explanation": "继续后，智能体会先检查其上一步是否已完成。"
+    },
+    "sendError": {
+      "dismiss": "关闭"
     },
     "permission": {
       "needsAccessTo": "需要访问： ",
@@ -513,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}} 已达到使用上限。",
       "reachedNamed": "{{agent}} 已达到{{window}}上限。",
-      "resetsAt": "将在 {{when}} 重置。",
       "theAgent": "智能体",
       "windowCredits": "额外用量",
       "windowSession": "会话",
       "windowWeekly": "每周",
-      "windowWeeklyModel": "模型每周"
+      "windowWeeklyModel": "模型每周",
+      "switchAccount": "切换账号",
+      "autoContinueCancelFailed": "无法取消自动继续。请重试。",
+      "autoContinueCancel": "不要继续",
+      "statusResetAt": "已于 {{time}} 重置",
+      "statusResetsAt": "将于 {{time}} 重置",
+      "statusContinuesShortly": "Orca 即将继续",
+      "statusContinuesThen": "届时 Orca 将继续",
+      "statusWontContinue": "Orca 不会自动继续"
     },
     "useImageUpload": {
       "attachFailed": "添加失败",
@@ -547,9 +580,52 @@
       "byteSize": "{{size}} 字节",
       "saveUpdate": "保存功能将在手机更新中提供。",
       "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新连接…",
+      "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
+      "server": "服务器",
+      "unavailable": "无法从手机访问 {{hostName}}。请在你的电脑上打开它的一个项目。"
+    },
+    "goal": {
+      "chip": "目标",
+      "exitMode": "退出目标模式",
+      "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
+      "pursuing": "正在追求目标",
+      "set": "目标已设定",
+      "paused": "目标已暂停",
+      "blocked": "目标受阻",
+      "limited": "目标受限",
+      "clear": "清除目标",
+      "expand": "显示完整目标",
+      "collapse": "隐藏完整目标",
+      "attachmentsUnsupported": "在设定目标之前删除附件。",
+      "pause": "暂停",
+      "resume": "继续"
+    },
+    "rewind": {
+      "title": "回溯到此处？",
+      "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便您编辑并重新发送。磁盘上的文件更改会保留。",
+      "confirm": "回溯",
+      "unsupported": "此聊天无法返回到更早的消息。",
+      "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
+      "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+      "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
+      "invalidTarget": "对话无法返回到此消息。未做任何更改。",
+      "historyLimit": "此对话过长，无法回溯。未做任何更改。",
+      "providerRefused": "智能体无法返回到此消息。",
+      "proofMismatch": "智能体的历史记录与此聊天不匹配。请在继续前检查对话。",
+      "outcomeUnknown": "Orca 无法确认对话是否已返回到更早的消息。它会在发送您的下一条消息前进行检查。",
+      "refused": "Orca 无法返回到此消息。请在继续前检查对话。",
+      "unavailable": "请等待聊天完成连接。",
+      "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。您的消息已回到输入框中，Orca 会在发送您的下一条消息前检查对话。",
+      "timeout": "返回到此消息后聊天未更新。请重新打开以查看最新内容。",
+      "pending": "请等待对话回溯到更早的消息。"
     }
   },
   "common": {
+    "details": "详情",
+    "hideDetails": "隐藏详情",
     "back": "返回",
     "cancel": "取消",
     "close": "关闭",
@@ -747,8 +823,8 @@
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
       "repairHint": "轻点以重新与桌面配对",
+      "sameNetworkOnlyHint": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对",
       "unlockHint": "解锁手机后，轻点重试",
-      "updateDesktopHint": "更新桌面端 Orca 并登录，即可随时随地连接",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃"
     },
     "hostDiagnosticsLink": {
@@ -776,7 +852,16 @@
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
-      "openImage": "打开图片"
+      "openImage": "打开图片",
+      "wrapLines": "自动换行",
+      "disableLineWrap": "关闭自动换行"
+    },
+    "markdownCallout": {
+      "note": "备注",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
@@ -1205,6 +1290,10 @@
       "previewFile": "预览文件 {{name}}",
       "retryLoading": "重试加载 {{path}}",
       "unavailable": "移动端不可用"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "复制名称",
+      "copyRelativePath": "复制相对路径"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",
@@ -1767,13 +1856,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "来自 {{sender}}",
-      "fromMore": "来自 {{sender}} 及其他 {{count}} 个智能体",
-      "fromUnnamed": "来自智能体",
-      "messageFrom": "来自 {{sender}} 的消息",
-      "messageFromMore": "来自 {{sender}} 及其他 {{count}} 个智能体的消息",
-      "messageFromUnnamed": "来自智能体的消息",
-      "unnamedSender": "一个智能体"
+      "unnamedSender": "一个智能体",
+      "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "创建终端失败",
@@ -1798,6 +1882,7 @@
       "countWorkflows_one": "{{count}} 个工作流程",
       "countWorkflows_other": "{{count}} 个工作流程",
       "detailsUnavailable": "此会话的任务详细信息不可用。",
+      "outputFile": "输出：{{value0}}",
       "groupAgents": "智能体",
       "groupMonitors": "监控",
       "groupShell": "Shell",
@@ -1960,6 +2045,8 @@
       "managedAccountEnvOverride": "此次 Claude 启动设置了自己的 Anthropic 登录变量。请移除这些变量以使用受管理的 Claude 账户。",
       "managedAccountUnsupported": "虽然已在 WSL 中添加 Claude 账户，但 Claude 聊天仍需使用 Windows 中的 Claude 账户。",
       "modelUnavailable": "{{agent}} 无法使用 {{detail}}。请选择其他模型并重新发送。",
+      "modelUnavailableUpdate": "{{agent}} 无法使用 {{detail}}。请将 {{agent}} 更新到 {{minimumVersion}} 或更高版本，以便重启后继续使用；或者选择其他模型并重新发送。",
+      "modelNotSelected": "{{agent}} 没有选择模型。请检查模型选择和 {{agent}} 登录状态，然后重新发送。",
       "noTurnToStop": "{{agent}} 没有正在运行的轮次可停止。",
       "notDelivered": "此消息未送达。",
       "notDeliveredSendAgain": "此消息未送达。请重新发送以继续。",
@@ -2141,8 +2228,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "排队消息中不能保存命令。",
-      "editing": "正在编辑消息",
-      "editingAttributed": "正在编辑消息 · {{attribution}}"
+      "editing": "正在编辑消息"
     },
     "quickCommandEditorForm": {
       "action": "操作",
@@ -3203,7 +3289,8 @@
       "moreFields_one": "+{{count}} 个字段",
       "moreFields_other": "+{{count}} 个字段",
       "noItems": "没有项目条目",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "另有 {{count}} 个"
     },
     "githubProjectPickers": {
       "add": "添加",
