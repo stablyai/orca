@@ -125,12 +125,10 @@ export function resolveToolState(
   // Extractor metadata distinguishes absent updates from explicitly unpreviewable input.
   const clearsUnpreviewableInput =
     update.hasToolInputField === true && update.toolInput === undefined
-  const clearsUnidentifiedTool =
-    update.hasToolUpdate === true &&
-    update.toolName === undefined &&
-    update.hasToolInputField === true
+  const clearsUnidentifiedTool = update.hasToolUpdate === true && update.toolName === undefined
   const toolName = clearsUnidentifiedTool ? undefined : (update.toolName ?? previous.toolName)
   const toolInput =
+    clearsUnidentifiedTool ||
     clearsUnpreviewableInput ||
     (update.toolName !== undefined &&
       update.toolName !== previous.toolName &&
