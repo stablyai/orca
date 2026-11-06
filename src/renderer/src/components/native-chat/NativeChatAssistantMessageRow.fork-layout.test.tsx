@@ -146,3 +146,27 @@ it('keeps the hover row the same on an older turn when unknown support resolves 
     checking.map((child) => child.split(':')[0]).map((tag, index) => (index === 1 ? 'SPAN' : tag))
   )
 })
+
+it('gives an image-only action holder Fork without Copy or its context-menu target', () => {
+  const request = vi.fn()
+  const { container } = render(
+    <MessageRow
+      message={{
+        id: 'a-image',
+        role: 'assistant',
+        timestamp: 0,
+        source: 'transcript',
+        blocks: [{ type: 'image-ref', url: 'https://example.test/picture.png' }]
+      }}
+      expandSignal={false}
+      onScrollMessageToTop={vi.fn()}
+      endsResponse
+      fork={forkAction({ request })}
+    />
+  )
+
+  fireEvent.click(forkButton())
+  expect(request).toHaveBeenCalledWith('a-image')
+  expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
+  expect(container.querySelector('[data-native-chat-message-id]')).toBeNull()
+})

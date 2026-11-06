@@ -105,7 +105,7 @@ describe('transcript slots', () => {
     expect(working.find((slot) => slot.message.id === 'a')?.activeTurnIsWorking).toBe(true)
   })
 
-  it("keeps a turn's actions on its text when an image-only reply lands after it", () => {
+  it("keeps a turn's actions on its text, or on its image while folding hides the text", () => {
     const image: NativeChatMessage = {
       id: 'a-image',
       role: 'assistant',
@@ -113,18 +113,24 @@ describe('transcript slots', () => {
       timestamp: 1,
       source: 'transcript'
     }
-    const slots = build(
-      [
-        text('A', 'Show the picture', 'user'),
-        text('a-text', 'Here is the picture.'),
-        text('B', 'Inspect it next', 'user'),
-        image
-      ],
-      { turnKeys: ['A', 'A', 'B', 'A'] }
-    )
-    expect(slots.filter((slot) => slot.endsResponse).map((slot) => slot.message.id)).toEqual([
-      'a-text'
-    ])
+    const messages = [
+      text('A', 'Show the picture', 'user'),
+      text('a-text', 'Here is the picture.'),
+      text('B', 'Inspect it next', 'user'),
+      image
+    ]
+    const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
+    const holder = (expandedTurnKeys: ReadonlySet<string>) =>
+      build(messages, {
+        turnKeys: ['A', 'A', 'B', 'A'],
+        turnStatuses: { active: null, completedByTurn: { A: settled } },
+        expandedTurnKeys
+      })
+        .filter((slot) => slot.endsResponse)
+        .map((slot) => slot.message.id)
+
+    expect(holder(new Set())).toEqual(['a-image'])
+    expect(holder(new Set(['A']))).toEqual(['a-text'])
   })
 
   it('keeps a message whose only content is a turn status under it', () => {

@@ -50,17 +50,17 @@ export function NativeChatAssistantMessageRow({
     runtimeContext,
     fork
   } = props
-  const { prose } = content
+  const { prose, hasImages } = content
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
-  // The same words slot construction gives the turn's response actions to.
+  // The same words slot construction chooses the turn's action holder by; Copy needs them.
   const words = nativeChatAgentRowWords(message)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
-  // a turn they belong to its last words, even with tools or thoughts after them.
+  // a turn they belong to its holder, which may draw only images when folding hid its words.
   const showControls =
     !isSystem &&
-    words.length > 0 &&
-    (endsResponse ?? !continuesTurn) &&
+    (endsResponse ?? (words.length > 0 && !continuesTurn)) &&
+    (words.length > 0 || hasImages) &&
     activeTurnIsWorking !== true
   // Fixed by the row's own kind, never by support or eligibility, so the row's actions never shift.
   const holdsForkSlot =
@@ -76,8 +76,8 @@ export function NativeChatAssistantMessageRow({
   return (
     <div
       ref={rowRef}
-      // The context menu offers Copy message only where the hover controls offer it.
-      data-native-chat-message-id={showControls ? message.id : undefined}
+      // The context menu offers Copy message only where the hover controls offer Copy.
+      data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',

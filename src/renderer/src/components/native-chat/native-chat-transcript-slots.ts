@@ -36,7 +36,10 @@ import {
 } from './native-chat-subagent-section-slots'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from './native-chat-transcript-work-runs'
-import { nativeChatAgentRowWords } from './native-chat-message-row-words'
+import {
+  nativeChatAgentRowHasImages,
+  nativeChatAgentRowWords
+} from './native-chat-message-row-words'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -65,8 +68,9 @@ export type NativeChatMessageSlot = {
   turnFolds: boolean
   /** The agent's next row in the same turn follows directly, so the two sit close. */
   continuesTurn?: boolean
-  /** In a turn: whether this is its last drawn prose, which holds the turn's response actions even
-   *  when tools or thoughts follow it. Absent outside a turn and in subagent sections. */
+  /** In a turn: whether this row holds its response actions, even when tools or thoughts follow:
+   *  the last drawn response with words, else the last with images. Absent outside a turn and in
+   *  subagent sections. */
   endsResponse?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** A closed roster list hides child sections regardless of their individual expansion state. */
@@ -220,24 +224,31 @@ export function buildNativeChatTranscriptSlots(
   }
   sectionSlots.openBefore(pending, undefined, 0)
   const drawn = nativeChatTranscriptWorkRuns(slots, typography)
-  // The same words win collapsed and expanded: folding hides tools, never a turn's last words. An
-  // image-only reply has none, so it never takes the actions from text before it.
+  // One action holder per turn: its last drawn response with words, else (when folding hid them)
+  // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()
+  const lastImageByTurn = new Map<string, NativeChatMessageSlot>()
   for (const slot of drawn) {
     if (slot.kind !== 'message' || slot.depth !== 0 || slot.turnKey === undefined) {
       continue
     }
     slot.endsResponse = false
-    if (
-      slot.drawsMessage &&
-      slot.message.role === 'assistant' &&
-      nativeChatAgentRowWords(slot.message).length > 0
-    ) {
+    if (!slot.drawsMessage || slot.message.role !== 'assistant') {
+      continue
+    }
+    if (nativeChatAgentRowWords(slot.message).length > 0) {
       lastWordsByTurn.set(slot.turnKey, slot)
+    } else if (nativeChatAgentRowHasImages(slot.message)) {
+      lastImageByTurn.set(slot.turnKey, slot)
     }
   }
   for (const slot of lastWordsByTurn.values()) {
     slot.endsResponse = true
+  }
+  for (const [turnKey, slot] of lastImageByTurn) {
+    if (!lastWordsByTurn.has(turnKey)) {
+      slot.endsResponse = true
+    }
   }
   for (let index = 0; index < drawn.length - 1; index += 1) {
     const slot = drawn[index]!
