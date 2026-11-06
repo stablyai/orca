@@ -16,6 +16,7 @@ test('a paired terminal link to a video outside every workspace plays it', async
   testRepoPath
 }, testInfo) => {
   test.skip(process.platform === 'win32', 'The host grants terminal paths under /tmp')
+  // Launches and pairs a second Electron client, then streams video through it; loaded CI needs the headroom.
   test.setTimeout(240_000)
   const videoPath = `/tmp/orca-granted-${randomBytes(4).toString('hex')}.mp4`
   copyFileSync(path.join(process.cwd(), 'docs/site/public/docs/videos/tab-split.mp4'), videoPath)
