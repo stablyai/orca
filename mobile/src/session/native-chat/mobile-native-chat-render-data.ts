@@ -17,7 +17,7 @@ import {
   type NativeChatMessage
 } from '../../../../src/shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
 import { orderNativeChatDisplayMessages } from '../../../../src/shared/native-chat/transcript/native-chat-message-order'
 import { translate } from '../../i18n/mobile-i18n'
 
