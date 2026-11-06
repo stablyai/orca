@@ -4,6 +4,19 @@ const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupp
 
 export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
   {
+    // Same-path files on two hosts must keep separate Monaco models, and each tab reads from its captured owner.
+    id: 'editor.host-model-identity',
+    specs: ['tests/e2e/editor-model-host-isolation.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      (file.startsWith('src/renderer/src/components/editor/model-lifetime/identity/') ||
+        [
+          'src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts',
+          'src/renderer/src/lib/editor-file-operation-owner.ts',
+          'src/renderer/src/lib/editor-file-operation-provenance.ts'
+        ].includes(file))
+  },
+  {
     // Image, PDF and media viewers read orca-media grants; the PDF reloads exercise remint and range reads.
     id: 'editor.byte-range-preview',
     specs: [
