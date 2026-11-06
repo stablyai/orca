@@ -6,6 +6,7 @@ import type {
   GitHubProjectTable,
   GitHubProjectView
 } from '../../../../shared/github/project-types'
+import { normalizeLinkedPullRequests } from '../../../../main/github/project-view/project-view-field-normalization'
 import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
 
 const singleSelectField: GitHubProjectField = {
@@ -375,7 +376,10 @@ it('sorts linked PRs by their first number and treats count-only metadata as an 
       totalCount: numbers.length
     }
   }
-  rows[2].content.linkedPullRequests = { pullRequests: [], totalCount: 3 }
+  rows[2].content.linkedPullRequests = normalizeLinkedPullRequests({
+    __typename: 'ProjectV2ItemFieldPullRequestValue',
+    pullRequests: { nodes: [null, {}], totalCount: 3 }
+  })
   for (const [direction, expected] of [
     ['ASC', ['two-high', 'two-low', 'ten', 'count-only', 'absent']],
     ['DESC', ['ten', 'two-high', 'two-low', 'count-only', 'absent']]

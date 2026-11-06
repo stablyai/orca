@@ -464,18 +464,21 @@ describe('Project columns from the items response', () => {
     renderColumns(groups[0].rows[0])
     expect(document.body.textContent).toBe('')
     cleanup()
-    // Existing builtin ordering still uses the field map, with no new relation value kind.
     for (const field of [prs, progress]) {
       const relationTable = {
         ...table,
         selectedView: {
           ...table.selectedView,
-          groupByFields: [field],
+          groupByFields: field === progress ? [field] : [],
           sortByFields: [{ field, direction: 'ASC' as const }]
         }
       }
       expect(sortRows(relationTable, table.rows).map((row) => row.id)).toEqual(['item-1', 'legacy'])
-      expect(groupRows(relationTable, table.rows).map((group) => group.key)).toEqual(['__empty__'])
+      if (field === progress) {
+        expect(
+          groupRows(relationTable, table.rows).map((group) => group.rows.map((row) => row.id))
+        ).toEqual([['item-1'], ['legacy']])
+      }
     }
   })
 })

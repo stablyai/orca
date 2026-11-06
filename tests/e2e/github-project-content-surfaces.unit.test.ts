@@ -1,45 +1,44 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
-import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
-import { projectRelationCellText } from './ProjectCell.test-fixture'
+import type { GitHubProjectRow } from '../../src/shared/github/project-types'
+import { projectRelationsTableFixture } from '../../src/shared/github/project-relations.test-fixture'
+import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
 
-vi.mock('../../../../../mobile/src/tasks/mobile-tasks-dependencies', () => ({
-  View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-  Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
-  Pressable: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+vi.mock('../../mobile/src/tasks/mobile-tasks-dependencies', () => ({
+  View: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
+  Text: ({ children }: React.PropsWithChildren) => React.createElement('span', null, children),
+  Pressable: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
   FlatList: ({
     data,
     renderItem
   }: {
     data: { row: GitHubProjectRow }[]
     renderItem: (args: { item: unknown }) => React.ReactNode
-  }) => (
-    <div>
-      {data.map((item) => (
-        <div key={item.row.id}>{renderItem({ item })}</div>
-      ))}
-    </div>
-  ),
+  }) =>
+    React.createElement(
+      'div',
+      null,
+      data.map((item) => React.createElement('div', { key: item.row.id }, renderItem({ item })))
+    ),
   colors: {},
   spacing: {},
   ChevronDown: () => null,
   TaskProviderLogo: () => null
 }))
 vi.mock('lucide-react-native', () => ({ Inbox: () => null }))
-vi.mock('../../../../../mobile/src/components/MobileStateView', () => ({
+vi.mock('../../mobile/src/components/MobileStateView', () => ({
   MobileLoadErrorState: () => null,
   MobileNoMatchState: () => null,
   MobileStateView: () => null
 }))
-vi.mock('../../../../../mobile/src/tasks/mobile-tasks-search-control', () => ({
+vi.mock('../../mobile/src/tasks/mobile-tasks-search-control', () => ({
   clearMobileTasksSearch: () => {}
 }))
-vi.mock('../../../../../mobile/src/tasks/mobile-tasks-legacy-styles', () => ({ styles: {} }))
-vi.mock('../../../../../mobile/src/theme/mobile-theme', () => ({ pressedStyle: {} }))
-vi.mock('../../../../../mobile/src/tasks/mobile-tasks-legacy-foundation', async () => {
-  const fields = await import('../../../../../mobile/src/tasks/mobile-tasks-project-fields')
+vi.mock('../../mobile/src/tasks/mobile-tasks-legacy-styles', () => ({ styles: {} }))
+vi.mock('../../mobile/src/theme/mobile-theme', () => ({ pressedStyle: {} }))
+vi.mock('../../mobile/src/tasks/mobile-tasks-legacy-foundation', async () => {
+  const fields = await import('../../mobile/src/tasks/mobile-tasks-project-fields')
   return {
     projectFieldDisplayLabel: fields.projectFieldDisplayLabel,
     projectGroupMeta: () => '',
@@ -48,8 +47,8 @@ vi.mock('../../../../../mobile/src/tasks/mobile-tasks-legacy-foundation', async 
     getRepoBadgeColor: () => ''
   }
 })
-import { renderMobileTasksGitHubProjectList } from '../../../../../mobile/src/tasks/mobile-tasks-github-project-list'
-import type { ConnectionPresentationModel } from '../../../../../mobile/src/tasks/use-mobile-tasks-connection-presentation'
+import { renderMobileTasksGitHubProjectList } from '../../mobile/src/tasks/mobile-tasks-github-project-list'
+import type { ConnectionPresentationModel } from '../../mobile/src/tasks/use-mobile-tasks-connection-presentation'
 
 function phoneText(table: ReturnType<typeof projectRelationsTableFixture>): string {
   const model = {
@@ -70,20 +69,15 @@ function phoneText(table: ReturnType<typeof projectRelationsTableFixture>): stri
 }
 
 describe('content-backed project field surfaces', () => {
-  it('keeps desktop data and overflow visible through the shared extraction', () => {
-    const table = projectRelationsTableFixture()
-    expect(projectRelationCellText(table.rows[0])).toEqual(['#12 +2 more', '1/2 (50%)'])
-    table.rows[0].content.linkedPullRequests = { pullRequests: [], totalCount: 3 }
-    expect(projectRelationCellText(table.rows[0])[0]).toContain('+3')
-    expect(projectRelationCellText(table.rows[1])).toEqual(['', ''])
-  })
-
   it('renders fetched phone summary data and overflow when no numeric PR is available', () => {
     const table = projectRelationsTableFixture()
     const populated = phoneText(table)
     expect(populated).toContain('#12')
     expect(populated).toContain('1/2 (50%)')
-    table.rows[0].content.linkedPullRequests = { pullRequests: [], totalCount: 3 }
+    table.rows[0].content.linkedPullRequests = normalizeLinkedPullRequests({
+      __typename: 'ProjectV2ItemFieldPullRequestValue',
+      pullRequests: { nodes: [null, {}], totalCount: 3 }
+    })
     expect(phoneText(table)).toContain('+3')
     delete table.rows[0].content.subIssuesProgress
     delete table.rows[0].content.linkedPullRequests

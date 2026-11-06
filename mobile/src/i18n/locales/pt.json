@@ -3364,7 +3364,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "Nenhum item no projeto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} mais"
     },
     "githubProjectPickers": {
       "add": "Adicionar",
