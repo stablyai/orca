@@ -1,14 +1,26 @@
 import type { IpcRenderer } from 'electron'
-import type { PreloadApi } from './api-types'
+import type {
+  ClaudeUsageProviderApi,
+  CodexUsageApi,
+  MuseUsageApi,
+  OpenCodeUsageApi
+} from './api/agent-usage-api'
 
-type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
-type UsageProviderApi = PreloadApi[UsageProviderApiKey]
+// Provider-specific extras (Claude's getStatsCache) are added by each bridge.
+type UsageProviderApiByKey = {
+  claudeUsage: ClaudeUsageProviderApi
+  codexUsage: CodexUsageApi
+  openCodeUsage: OpenCodeUsageApi
+  museUsage: MuseUsageApi
+}
+type UsageProviderApiKey = keyof UsageProviderApiByKey
+type UsageProviderApi = UsageProviderApiByKey[UsageProviderApiKey]
 type UsageRangeArgs = { scope: string; range: string }
 
 export function createUsageProviderApi<Key extends UsageProviderApiKey>(
   ipc: Pick<IpcRenderer, 'invoke'>,
   prefix: Key
-): PreloadApi[Key]
+): UsageProviderApiByKey[Key]
 export function createUsageProviderApi(
   ipc: Pick<IpcRenderer, 'invoke'>,
   prefix: UsageProviderApiKey

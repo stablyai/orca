@@ -67,6 +67,8 @@ type UsageTrackingPaneShellProps = {
       onRefresh: () => void | Promise<void>
       headerAction?: ReactNode
       children: ReactNode
+      /** Unfiltered, so it stays visible when filters match no data. */
+      titleAccessory?: ReactNode
     }
 )
 
@@ -93,7 +95,10 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
     <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
+            {props.titleAccessory}
+          </div>
           <p className="mt-1 text-xs text-muted-foreground">{props.status}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">

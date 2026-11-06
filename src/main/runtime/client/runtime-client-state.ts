@@ -26,6 +26,8 @@ import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/na
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { Automation } from '../../../shared/automations-types'
+import type { ClaudeStatsCacheHome } from '../../../shared/claude-usage-types'
+import { readHostClaudeStatsCaches } from '../../claude-usage/claude-stats-cache'
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
@@ -162,6 +164,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getStatsSummary(): StatsSummary | null {
     return this.stats?.getSummary() ?? null
+  }
+
+  // Hosts keep no opt-in of their own; the caller's usage-tracking setting gates the request.
+  getClaudeStatsCache(): Promise<ClaudeStatsCacheHome[]> {
+    return readHostClaudeStatsCaches()
   }
 
   getMemorySnapshot(): Promise<MemorySnapshot> {

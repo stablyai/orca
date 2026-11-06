@@ -1,4 +1,8 @@
-import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../../shared/claude-usage-types'
+import type {
+  ClaudeStatsCacheHome,
+  ClaudeUsageBreakdownKind,
+  ClaudeUsageSnapshot
+} from '../../shared/claude-usage-types'
 import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../shared/codex-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -39,7 +43,11 @@ export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKi
   ) => Promise<Snapshot['recentSessions']>
 }
 
-export type ClaudeUsageApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBreakdownKind>
+export type ClaudeUsageProviderApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBreakdownKind>
+
+export type ClaudeUsageApi = ClaudeUsageProviderApi & {
+  getStatsCache: () => Promise<ClaudeStatsCacheHome[]>
+}
 
 export type CodexUsageApi = UsageProviderApi<CodexUsageSnapshot, CodexUsageBreakdownKind>
 
