@@ -62,6 +62,7 @@ export function useBranchPicker(options: BranchPickerOptions) {
     }
     let stale = false
     setError(null)
+    setExistingBranch(null)
     setQuery('')
     void listRuntimeGitBranches(route)
       .then((result) => {
