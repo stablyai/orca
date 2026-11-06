@@ -1,24 +1,24 @@
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import { appendNormalizedToTailBuffer } from '../../terminal-tail-buffer'
-import { normalizeTerminalChunk } from '../../terminal-ansi-normalization'
-import { observeTerminalCommandPaint } from '../../terminal-command-paint'
+import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
+import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+import { observeTerminalCommandPaint } from '../input/terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
   buildPreview,
   tailStateMatches
-} from '../../terminal-tail-state'
+} from './tail/terminal-tail-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
-} from '../../terminal-wait-tail-state'
+} from '../wait/terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
@@ -41,7 +41,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
-  protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
+  protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   protected abstract recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
@@ -130,7 +130,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
     let ptyNormalized: ReturnType<typeof normalizeTerminalChunk> | null = null
     if (pty) {
-      pty.connected = true
+      this.terminalIdentity.setPtyConnected(pty, true)
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
@@ -170,7 +170,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         paneKey: this.makeRuntimePaneKey(leaf),
         surfaceRecordedAtGraphSequence: this.graphSequence
       })
-      leaf.connected = true
+      this.terminalIdentity.updateLeafConnected(leaf, true)
       leaf.writable = this.graphStatus === 'ready'
       leaf.lastOutputAt = at
       if (

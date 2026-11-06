@@ -1,6 +1,6 @@
 import { verifyWorkerStartCardScenario } from './worker-start-card-scenario.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -212,7 +212,7 @@ it.each([
     const warn = vi.spyOn(console, 'warn').mockImplementation((message) => {
       if (
         scenario === 'logging-throws' &&
-        message === '[orchestration] recording a started worker in its caller chat failed'
+        message === '[orchestration] recording a started agent in its caller chat failed'
       ) {
         throw new Error('logger failed')
       }
@@ -326,7 +326,7 @@ it.each([
     ) {
       await eventually(() =>
         expect(warn).toHaveBeenCalledWith(
-          '[orchestration] recording a started worker in its caller chat failed',
+          '[orchestration] recording a started agent in its caller chat failed',
           expect.any(Error)
         )
       )

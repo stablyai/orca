@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { hasRegisteredRuntimeTerminalTab } from '../../runtime/mounted-terminal-tab-registry'
 import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/terminal-parked-tab-watchers'
 import { canAdmitTerminalTabsForStartup } from './background-terminal-worktree-mount'

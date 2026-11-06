@@ -1,13 +1,7 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
-import {
-  BottomDrawer,
-  View,
-  Text,
-  colors,
-  PickerModal,
-  ActivityIndicator
-} from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { View, Text, colors, PickerModal, ActivityIndicator } from './mobile-tasks-dependencies'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'

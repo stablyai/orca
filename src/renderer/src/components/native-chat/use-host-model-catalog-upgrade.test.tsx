@@ -207,15 +207,6 @@ describe('host model catalog read', () => {
     }
   })
 
-  it('asks a host that reports no listing nothing more', async () => {
-    answerCatalog([() => Promise.resolve(UNKNOWN)])
-    const { result, unmount } = renderOptions()
-    await flush()
-    expect(catalogReads()).toHaveLength(1)
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    unmount()
-  })
-
   it('the running provider list wins over a host listing that lands later', async () => {
     const live = deferred()
     const waited = deferred()

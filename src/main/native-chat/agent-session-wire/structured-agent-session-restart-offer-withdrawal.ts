@@ -1,7 +1,7 @@
 // Compare accepted messages to the saved cursor across handle closes; persist independent proven starts.
 // Reads/replays and the offer’s own continuation/start never withdraw it.
 
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -34,7 +34,7 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
     const accepted =
       taken !== undefined &&
       (session.journal.cursor().epoch !== taken.epoch ||
-        session.journal.submissions().some(
+        session.journal.inputOrder.acceptedInputsAfter(taken.sequence).some(
           (submission) =>
             (submission.acceptedSequence ?? 0) > taken.sequence &&
             // Own queued/rejected continuations allow retry; handover may have delivered despite no answer.

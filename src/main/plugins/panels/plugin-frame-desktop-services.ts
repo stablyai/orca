@@ -9,7 +9,7 @@ import type { PluginDesktopFrameServices } from '../workers/plugin-host-method-b
 import { PluginHostCallError, type PluginHostCallScope } from '../workers/plugin-host-call-scope'
 import { markPluginSavedFileAsDownloaded } from './plugin-save-as-download-mark'
 import { confirmPluginExternalOpen } from './plugin-external-open-consent'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { translateMain } from '../../i18n/main-i18n'
 import { blockedPluginSaveAsExtension } from '../../../shared/plugins/frames/plugin-save-as-extensions'
 

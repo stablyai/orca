@@ -39,6 +39,7 @@ type ReviewerRequestArgs = {
     options: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
 }
 
 export async function requestPRReviewers({
@@ -58,7 +59,8 @@ export async function requestPRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   requestedLogins?: string[]
   reviewerInput: string
@@ -163,6 +165,8 @@ export async function requestPRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }
 
@@ -180,7 +184,8 @@ export async function removePRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   reviewersToRemove: string[]
 }): Promise<void> {
@@ -276,5 +281,7 @@ export async function removePRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }

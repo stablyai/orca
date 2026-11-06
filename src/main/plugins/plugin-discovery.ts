@@ -126,7 +126,9 @@ async function readManifestDir(
       isDev
     }
   }
-  const artifacts = await validateDeclaredPluginArtifacts(rootDir, manifest)
+  const artifacts = await validateDeclaredPluginArtifacts(rootDir, manifest, {
+    allowCaseMismatch: !isDev
+  })
   if (!artifacts.ok) {
     return {
       pluginKey,

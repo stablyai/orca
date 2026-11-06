@@ -1,5 +1,4 @@
 import { useId } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveLine } from '../../../../shared/native-chat/transcript/native-chat-live-line'
@@ -29,13 +28,9 @@ function statusLabel(key: Extract<NativeChatActiveTurnLabel, { source: 'status' 
 
 /** Keep the clock in the turn bar; this tail shows activity or discloses open reasoning. */
 export function NativeChatTurnActivityLine({
-  line,
-  onLinkClick,
-  allowFileUriLinks
+  line
 }: {
   line: NativeChatLiveLine
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }): React.JSX.Element {
   const resolved = describeNativeChatActiveTurnLabel(line)
   const label = resolved.source === 'activity' ? resolved.text : statusLabel(resolved.key)
@@ -77,13 +72,7 @@ export function NativeChatTurnActivityLine({
       </div>
       {reasoning ? (
         <CollapsibleContent>
-          <NativeChatReasoningBody
-            rowKey={disclosureKey}
-            markdown={reasoning.markdown}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
-            streaming
-          />
+          <NativeChatReasoningBody rowKey={disclosureKey} markdown={reasoning.markdown} streaming />
         </CollapsibleContent>
       ) : null}
     </Collapsible>

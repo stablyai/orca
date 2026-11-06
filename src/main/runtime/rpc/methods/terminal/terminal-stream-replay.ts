@@ -1,4 +1,4 @@
-import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
+import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
@@ -8,7 +8,7 @@ import {
   measureTerminalStreamByteLength,
   terminalStreamByteLength
 } from '../../terminal-stream-byte-length'
-import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 
 export function appendPendingMultiplexOutput(

@@ -80,6 +80,10 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
+        if (envelope.ok) {
+          // Board rows are partial and unversioned: they can only ask task records to verify.
+          get().githubTaskCache.observeProject(envelope.data, target)
+        }
         // Bounded waits may overlap stronger requests; late non-OK results must not overwrite their newer data/errors.
         if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
           return envelope

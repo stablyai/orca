@@ -10,32 +10,19 @@ import { optionsOf } from '../../../../../shared/plugins/declarative/testing/tes
 import { isControlValue } from '../../../../../shared/plugins/declarative/testing/testing-value-controls'
 import type {
   PluginShotAct,
-  PluginShotActResult,
-  PluginShotQuery
+  PluginShotActResult
 } from '../../../../../shared/plugins/view/plugin-shot-acts'
-import type {
-  PluginDeclarativeActTarget,
-  PluginDeclarativeDrawnProps
-} from '../declarative/plugin-declarative-act-targets'
-import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panel-act-driver'
+import type { PluginDeclarativeActTarget } from '../declarative/plugin-declarative-act-targets'
+import {
+  callbackId,
+  runPluginPanelDataAct,
+  type PluginPanelActContext,
+  type PluginPanelActDeps
+} from './plugin-view-data-acts'
 
-export type PluginPanelActDeps = {
-  driver: PluginPanelActDriver
-  targetOf(props: PluginDeclarativeDrawnProps): PluginDeclarativeActTarget | null
-  /** Resolves once the panel has drawn what the last act caused. */
-  settle(): Promise<void>
-}
+export type { PluginPanelActDeps } from './plugin-view-data-acts'
 
 const NOT_RUN = 'not run: an earlier action failed'
-
-function callbackId(value: unknown): string | null {
-  return typeof value === 'object' &&
-    value !== null &&
-    '$callback' in value &&
-    typeof value.$callback === 'string'
-    ? value.$callback
-    : null
-}
 
 const TAKES = {
   type: { types: ['Input', 'Textarea'], words: 'an Input or Textarea' },
@@ -52,103 +39,120 @@ function expectTaken(element: TestElement, verb: keyof typeof TAKES): void {
   }
 }
 
-/** Runs each act on what Orca draws, as the test kit's verbs do; stops at the first failure. */
-export async function runPluginPanelActs(
-  acts: readonly PluginShotAct[],
-  { driver, targetOf, settle }: PluginPanelActDeps
-): Promise<PluginShotActResult[]> {
+function createActContext({
+  driver,
+  targetOf,
+  expansionOf,
+  settle
+}: PluginPanelActDeps): PluginPanelActContext {
   const valueOf = (element: TestElement) => {
     const value = targetOf(element.props)?.value()
     return isControlValue(value) ? value : ''
   }
   const elements = (): TestElement[] => visibleElements(listElements(driver.tree()), valueOf)
-  const resolve = (query: PluginShotQuery, verb: string): TestElement => {
-    const found = innermost(elements().filter((element) => matchesQuery(element, query)))[0]
-    if (!found) {
-      throw new Error(`${verb}: nothing in the panel matches { ${describeQuery(query)} }`)
+  return {
+    elements,
+    settle,
+    expansionOf,
+    resolve: (query, verb) => {
+      const found = innermost(elements().filter((element) => matchesQuery(element, query)))[0]
+      if (!found) {
+        throw new Error(`${verb}: nothing in the panel matches { ${describeQuery(query)} }`)
+      }
+      if (found.disabled) {
+        throw new Error(`${verb}: the ${found.type} is disabled`)
+      }
+      return found
+    },
+    editable: (element, verb) => {
+      const target = targetOf(element.props)
+      if (!target) {
+        throw new Error(`${verb}: the ${element.type} is not on screen`)
+      }
+      if (target.readOnly()) {
+        throw new Error(`${verb}: the ${element.type} is read-only (a value and no onChange)`)
+      }
+      return target
+    },
+    change: (target: PluginDeclarativeActTarget, next, verb) => {
+      if (!target.change(next)) {
+        throw new Error(`${verb}: the control does not take ${JSON.stringify(next)}`)
+      }
+    },
+    send: async (callback, args, missing) => {
+      if (callback === null) {
+        throw new Error(missing)
+      }
+      driver.send(callback, args)
+      await settle()
     }
-    if (found.disabled) {
-      throw new Error(`${verb}: the ${found.type} is disabled`)
-    }
-    return found
   }
-  const editable = (element: TestElement, verb: string): PluginDeclarativeActTarget => {
-    const target = targetOf(element.props)
-    if (!target) {
-      throw new Error(`${verb}: the ${element.type} is not on screen`)
-    }
-    if (target.readOnly()) {
-      throw new Error(`${verb}: the ${element.type} is read-only (a value and no onChange)`)
-    }
-    return target
-  }
-  const change = (target: PluginDeclarativeActTarget, next: unknown, verb: string): void => {
-    if (!target.change(next)) {
-      throw new Error(`${verb}: the control does not take ${JSON.stringify(next)}`)
-    }
-  }
-  const send = async (callback: string | null, args: string[], missing: string) => {
-    if (callback === null) {
-      throw new Error(missing)
-    }
-    driver.send(callback, args)
-    await settle()
-  }
+}
 
-  const run = async (act: PluginShotAct): Promise<void> => {
-    if ('press' in act) {
-      const element = resolve(act.press, 'press')
-      const onPress = callbackId(element.props.onPress)
-      // Acts are not a person's input: a Link's href stays unopened and no gesture is granted.
+async function runFormAct(act: PluginShotAct, context: PluginPanelActContext): Promise<boolean> {
+  const { resolve, editable, change, send, settle } = context
+  if ('press' in act) {
+    const element = resolve(act.press, 'press')
+    // Acts are not a person's input: a Link's href stays unopened and no gesture is granted.
+    await send(
+      callbackId(element.props.onPress),
+      [],
+      element.type === 'Link' && typeof element.props.href === 'string'
+        ? "press: --act does not open a Link's href; only a person's click does"
+        : `press: the ${element.type} has no onPress`
+    )
+    return true
+  }
+  if ('type' in act) {
+    const element = resolve(act.type, 'type')
+    expectTaken(element, 'type')
+    const target = editable(element, 'type')
+    let value = act.replace ? '' : String(target.value())
+    if (act.replace) {
+      change(target, value, 'type')
+    }
+    for (const character of act.text) {
+      value += character
+      change(target, value, 'type')
+    }
+    await settle()
+    if (act.submit) {
       await send(
-        onPress,
-        [],
-        element.type === 'Link' && typeof element.props.href === 'string'
-          ? "press: --act does not open a Link's href; only a person's click does"
-          : `press: the ${element.type} has no onPress`
+        callbackId(element.props.onSubmit),
+        [String(target.value())],
+        `type: the ${element.type} has no onSubmit`
       )
-      return
     }
-    if ('type' in act) {
-      const element = resolve(act.type, 'type')
-      expectTaken(element, 'type')
-      const target = editable(element, 'type')
-      let value = act.replace ? '' : String(target.value())
-      if (act.replace) {
-        change(target, value, 'type')
-      }
-      for (const character of act.text) {
-        value += character
-        change(target, value, 'type')
-      }
-      await settle()
-      if (act.submit) {
-        await send(
-          callbackId(element.props.onSubmit),
-          [String(target.value())],
-          `type: the ${element.type} has no onSubmit`
-        )
-      }
-      return
+    return true
+  }
+  if ('select' in act) {
+    const element = resolve(act.select, 'select')
+    expectTaken(element, 'select')
+    const option = optionsOf(element, context.elements()).find((entry) => entry.value === act.value)
+    if (!option || option.disabled) {
+      throw new Error(`select: the ${element.type} has no enabled option "${act.value}"`)
     }
-    if ('select' in act) {
-      const element = resolve(act.select, 'select')
-      expectTaken(element, 'select')
-      const option = optionsOf(element, elements()).find((entry) => entry.value === act.value)
-      if (!option || option.disabled) {
-        throw new Error(`select: the ${element.type} has no enabled option "${act.value}"`)
-      }
-      change(editable(element, 'select'), act.value, 'select')
-      await settle()
-      return
-    }
+    change(editable(element, 'select'), act.value, 'select')
+    await settle()
+    return true
+  }
+  if ('toggle' in act) {
     const element = resolve(act.toggle, 'toggle')
     expectTaken(element, 'toggle')
     const target = editable(element, 'toggle')
     change(target, target.value() !== true, 'toggle')
     await settle()
+    return true
   }
+  return false
+}
 
+/** Runs each act on what Orca draws, as the test kit's verbs do; stops at the first failure. */
+export async function runPluginPanelActs(
+  acts: readonly PluginShotAct[],
+  deps: PluginPanelActDeps
+): Promise<PluginShotActResult[]> {
+  const context = createActContext(deps)
   const results: PluginShotActResult[] = []
   for (const act of acts) {
     if (results.some((result) => !result.ok)) {
@@ -156,7 +160,9 @@ export async function runPluginPanelActs(
       continue
     }
     try {
-      await run(act)
+      if (!(await runFormAct(act, context))) {
+        await runPluginPanelDataAct(act, context)
+      }
       results.push({ ok: true })
     } catch (error) {
       results.push({ ok: false, error: error instanceof Error ? error.message : String(error) })

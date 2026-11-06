@@ -203,6 +203,98 @@ describe('worktree.create with a startup agent', () => {
   })
 })
 
+describe('worktree explicit acknowledgement RPC', () => {
+  it.each([false, true])(
+    'publishes a captured read only after metadata succeeds: %s',
+    async (fails) => {
+      const acknowledgement = {
+        reads: [{ sessionId: 'session-1', observedCursor: { epoch: 'journal-1', sequence: 5 } }]
+      }
+      const publish = vi.fn()
+      let captured = false
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every runtime method this request reaches.
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        prepareWorkspaceAttentionAcknowledgement: async () => {
+          captured = true
+          return acknowledgement
+        },
+        updateManagedWorktreeMeta: async () => {
+          expect(captured).toBe(true)
+          expect(publish).not.toHaveBeenCalled()
+          if (fails) {
+            throw new Error('metadata write failed')
+          }
+          return { id: 'wt-1' }
+        },
+        acknowledgeNotificationAttention: publish
+      } as unknown as OrcaRuntimeService
+
+      const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+        id: 'req-read',
+        authToken: 'tok',
+        method: 'worktree.set',
+        params: { worktree: 'id:wt-1', isUnread: false, acknowledgeAttention: true }
+      })
+
+      expect(response).toMatchObject({ ok: !fails })
+      if (fails) {
+        expect(publish).not.toHaveBeenCalled()
+      } else {
+        expect(publish).toHaveBeenCalledExactlyOnceWith(acknowledgement)
+      }
+    }
+  )
+
+  it('persists the explicit read when notification cursor collection fails', async () => {
+    const updateManagedWorktreeMeta = vi.fn(async () => ({ id: 'wt-1' }))
+    const publish = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request reaches only the supplied runtime methods.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prepareWorkspaceAttentionAcknowledgement: async () => {
+        throw new Error('journal_read_only')
+      },
+      updateManagedWorktreeMeta,
+      acknowledgeNotificationAttention: publish
+    } as unknown as OrcaRuntimeService
+    const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+      id: 'req-read',
+      authToken: 'tok',
+      method: 'worktree.set',
+      params: { worktree: 'id:wt-1', isUnread: false, acknowledgeAttention: true }
+    })
+    expect(response).toMatchObject({ ok: true })
+    expect(updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ isUnread: false })
+    )
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('keeps ordinary unread metadata writes independent of notification acknowledgement', async () => {
+    const prepare = vi.fn()
+    const publish = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every runtime method this request reaches.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prepareWorkspaceAttentionAcknowledgement: prepare,
+      updateManagedWorktreeMeta: async () => ({ id: 'wt-1' }),
+      acknowledgeNotificationAttention: publish
+    } as unknown as OrcaRuntimeService
+    const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+      id: 'req-metadata',
+      authToken: 'tok',
+      method: 'worktree.set',
+      params: { worktree: 'id:wt-1', isUnread: false }
+    })
+
+    expect(response).toMatchObject({ ok: true })
+    expect(prepare).not.toHaveBeenCalled()
+    expect(publish).not.toHaveBeenCalled()
+  })
+})
+
 describe('worktree GitHub PR suppression RPC', () => {
   it('forwards suppression writes to host-owned metadata persistence', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every runtime member reached by the requests in this suite.

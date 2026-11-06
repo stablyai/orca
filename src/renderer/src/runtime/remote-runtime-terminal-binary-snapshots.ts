@@ -1,10 +1,10 @@
-import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../shared/terminal-mode-reset-profiles'
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamText,
   type TerminalStreamFrame
-} from '../../../shared/terminal-stream-protocol'
-import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
+import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { recordE2eRemoteTerminalInitialSnapshotTruncated } from './remote-runtime-terminal-e2e-control'
 import { RemoteRuntimeTerminalResponseController } from './remote-runtime-terminal-response-controller'
 import {

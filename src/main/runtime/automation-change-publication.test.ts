@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -15,11 +15,12 @@ import type { AutomationsChangedPayload } from '../../shared/runtime-client-even
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
 import type { AutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
 import { AutomationService } from '../automations/service'
-import { Store, initDataPath } from '../persistence'
+import { Store } from '../persistence/loading-store/store'
+import { initDataPath } from '../persistence/loading-store/user-data-path'
 import { OrcaRuntimeService } from './orca-runtime'
-import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
+import * as worktreeChangeInvalidators from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { _resetTerminalModelQueryAuthorityForTest } from './terminal-model-query-authority'
-import { _resetTerminalViewAttributesForTest } from './terminal-view-attribute-store'
+import { _resetTerminalViewAttributesForTest } from './terminal/view/terminal-view-attribute-store'
 
 const testState = { dir: '' }
 let registrationSpy:

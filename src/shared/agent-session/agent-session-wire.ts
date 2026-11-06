@@ -7,7 +7,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
-import type { AgentChildWorkView } from '../agent-status-child-work-view'
+import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -15,7 +15,7 @@ import type {
 
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalResetReason,
@@ -23,7 +23,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from './journal/agent-session-journal-types'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
@@ -83,7 +83,8 @@ export type AgentSessionHistoryPage = {
   removedItemIds: string[]
   /** Include overlapping submissions so uncertain bubbles retain their dispatch state. */
   submissions: AgentJournalSubmission[]
-  /** Return the next same-direction request cursor; keep the request cursor on empty pages. */
+  /** Return the next same-direction request cursor. An empty page keeps the request cursor, except
+   *  that an `after` page moves past newer writes that saved no history. */
   window: {
     oldest: AgentJournalCursor | null
     newest: AgentJournalCursor | null
@@ -189,6 +190,11 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
+  usageLimitContinue?: {
+    turnItemId: string
+    resetsAt: number
+    state: 'scheduled' | 'cancelled' | 'failed' | 'off'
+  }
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string
@@ -208,6 +214,8 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
+  /** Current child's reported execution model, independent of the next-turn selection. */
+  reportedModel?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
@@ -363,6 +371,8 @@ export type AgentSessionModelOption = {
   /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
   declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
+  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
+  chatEfforts?: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
   /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
@@ -418,6 +428,8 @@ export type AgentSessionSlashCommand = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<issue-url>`. */
   argumentHint?: string
+  /** The provider's own built-in command, not a user command or skill of the same name. */
+  builtin?: true
   /** The skill file the provider selects this skill by; two skills may share a name. */
   path?: string
 }

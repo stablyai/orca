@@ -9,9 +9,9 @@ import {
   type FakeConnection,
   PROVIDER_SESSION_ID
 } from '../../claude/structured/claude-structured-session-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { structuredClaudeLifecycleEvent } from '../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,

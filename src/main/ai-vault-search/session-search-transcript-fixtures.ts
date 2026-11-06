@@ -3,7 +3,7 @@ import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   type SessionParseStats
-} from '../ai-vault/session-scanner-parse-cache'
+} from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
 export const CLAUDE_SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'

@@ -10,6 +10,10 @@ declare module 'orca' {
     label: string
     align?: 'start' | 'center' | 'end'
     width?: 'auto' | 'xs' | 'sm' | 'md' | 'lg'
+    /** An `auto` column's floor (`xs` 4rem, `sm` 6rem, `md` 9rem), so it keeps room when narrow. */
+    minWidth?: 'auto' | 'xs' | 'sm' | 'md'
+    /** Drop the column while the table is narrower than `sm` (360px) or `md` (480px). */
+    hideBelow?: 'sm' | 'md'
     sortable?: boolean
   }
   /** How a relative time reads: `long` "5 minutes ago", `short` "5m ago", `duration` "5m". */

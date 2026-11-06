@@ -1,7 +1,10 @@
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
-import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
+import {
+  noteWslDistroWoken,
+  noteWslDistrosRunning
+} from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,

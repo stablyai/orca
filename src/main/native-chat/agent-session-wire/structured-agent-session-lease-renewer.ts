@@ -3,7 +3,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import {
   AGENT_SESSION_LEASE_TTL_MS,
   type AgentSessionRecordStore
-} from '../../runtime/agent-session-record-store'
+} from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const RENEW_INTERVAL_MS = Math.floor(AGENT_SESSION_LEASE_TTL_MS / 3)

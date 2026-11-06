@@ -8,7 +8,7 @@ import {
   pinnedNodeRuntimeAsset,
   type NodeRuntimeTarget
 } from '../../../shared/node-runtime-pin'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,

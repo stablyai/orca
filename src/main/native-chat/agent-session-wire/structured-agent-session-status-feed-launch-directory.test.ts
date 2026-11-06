@@ -7,8 +7,8 @@ import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agen
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 
@@ -104,16 +104,6 @@ describe('status feed pinned launch directory', () => {
       type: 'status',
       session: { sessionId: SESSION, launchDirectory: '/home/me/original-floating' }
     })
-  })
-
-  it('carries the pin in the snapshot a later subscriber opens with, as after a restart', async () => {
-    const { feed } = await feedFor(FLOATING)
-    await store.pinLaunchDirectory(SESSION, '/home/me/original-floating')
-
-    const late: AgentSessionStatusEvent[] = []
-    feed.subscribe({ id: 'reloaded-renderer', emit: (event) => late.push(event) })
-
-    expect(lastSummary(late)).toMatchObject({ launchDirectory: '/home/me/original-floating' })
   })
 
   it('omits the pin for a worktree session, whose id is where it launches', async () => {

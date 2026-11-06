@@ -7,6 +7,7 @@ import {
 import type { PluginMarketplaceGitSource } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import type { PluginFilterKind } from '@/components/plugins/list/plugin-list-filter'
 
 type PluginPreviewRequest = { marketplaceSourceId: string; pluginKey: string }
 /** Opens one plugin's update review, or the Updates list when several wait; never approves. */
@@ -21,7 +22,23 @@ export const usePluginPreviewRequestStore = create<{
   link: PluginInstallLink | null
   catalogToAdd: PluginCatalogToAdd | null
   updateReview: PluginUpdateReviewRequest | null
-}>()(() => ({ request: null, link: null, catalogToAdd: null, updateReview: null }))
+  /** A plugin kind to browse, e.g. "themes"; the plugin manager opens its list filtered to it. */
+  browseKind: PluginFilterKind | null
+}>()(() => ({
+  request: null,
+  link: null,
+  catalogToAdd: null,
+  updateReview: null,
+  browseKind: null
+}))
+
+/** Opens Settings → Plugins listing one kind of plugin, installed and not. */
+export function requestPluginBrowse(browseKind: PluginFilterKind): void {
+  usePluginPreviewRequestStore.setState({ browseKind })
+  const state = useAppStore.getState()
+  state.openSettingsTarget({ pane: 'plugins', repoId: null })
+  state.openSettingsPage()
+}
 
 export function requestPluginPreview(request: PluginPreviewRequest): void {
   usePluginPreviewRequestStore.setState({ request })

@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-live-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatTurnBarRows } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
@@ -20,7 +20,7 @@ import {
   nativeChatRowContentMetrics
 } from './native-chat-row-height-estimate'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
-import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
+import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import {
   NO_NATIVE_CHAT_SUBAGENT_CHOICES,
   NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
@@ -205,6 +205,7 @@ export function buildNativeChatTranscriptSlots(
             hasReceipt: receipt !== undefined,
             hasStatus: status !== undefined,
             hasTurnDiff: turnDiff !== undefined,
+            turnDiffFileCount: turnDiff?.files.length,
             folded
           },
           typography

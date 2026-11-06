@@ -25,7 +25,7 @@ import {
   saveWorkspaceToken,
   getWorkspaceTokenProtection
 } from './linear-token-store'
-import { CredentialDecryptionError } from '../integration-credential-file'
+import { CredentialDecryptionError } from '../credentials/integration-credential-file'
 import type {
   LinearConnectionStatus,
   LinearViewer,

@@ -5,7 +5,7 @@ import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger
 } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 
 type WorkingAtStopInput = Parameters<typeof structuredAgentSessionWorkingAtStop>[0]

@@ -12,7 +12,7 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {

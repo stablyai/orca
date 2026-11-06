@@ -10,10 +10,10 @@ import {
   hostTestAttachParams,
   hostTestOperationId
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AgentSessionRecoveryCapsule } from '../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
 import { startOrcadWithLifecycle, stopOrcadStructuredAgentSessions } from './orcad-lifecycle'
 
-vi.mock('../runtime/structured-agent-session-runtime', () => ({
+vi.mock('../runtime/agent-session/structured-agent-session-runtime', () => ({
   stopStructuredAgentSessionRuntime: async (options: { trigger: 'quit' }) => {
     await hostTestState().host.flushAllStreamedEvents(options)
   }

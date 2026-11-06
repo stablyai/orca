@@ -4,6 +4,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { usePluginDeclarativeHostValue } from './plugin-declarative-host-value'
+import { usePluginDeclarativeActExpansion } from './plugin-declarative-act-targets'
 import type { PluginDeclarativeEmit } from './PluginDeclarativeControls'
 import { PluginDeclarativeIconGlyph } from './plugin-declarative-icons'
 import { visibleTreeRows, type PluginDeclarativeTreeRow } from './plugin-declarative-tree-rows'
@@ -35,6 +36,7 @@ export function PluginDeclarativeTree({
     defaultValue: props.defaultSelected,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onSelect?.$callback,
     send: (callback, key, edit) => emit(callback, [{ key }], { edit })
   })
@@ -50,22 +52,25 @@ export function PluginDeclarativeTree({
       elements.current.get(row.item.key)?.focus()
     }
   }
-  const toggle = (row: ItemRow, open: boolean): void => {
-    if (!row.expandable || row.expanded === open) {
-      return
-    }
+  const setExpanded = (key: string, open: boolean): void => {
     setOpenItems((previous) => {
       const keys = new Set(previous.keys)
       if (open) {
-        keys.add(row.item.key)
+        keys.add(key)
       } else {
-        keys.delete(row.item.key)
+        keys.delete(key)
       }
       return { ...previous, keys }
     })
     const callback = props.onToggle?.$callback
     if (callback) {
-      emit(callback, [{ key: row.item.key, expanded: open }])
+      emit(callback, [{ key, expanded: open }])
+    }
+  }
+  usePluginDeclarativeActExpansion(props, { expanded: () => expanded, set: setExpanded })
+  const toggle = (row: ItemRow, open: boolean): void => {
+    if (row.expandable && row.expanded !== open) {
+      setExpanded(row.item.key, open)
     }
   }
   const select = (row: ItemRow): void => {

@@ -8,7 +8,7 @@ const { checkIgnoredPathsMock } = vi.hoisted(() => ({
   checkIgnoredPathsMock: vi.fn<(worktreePath: string, paths: string[]) => Promise<string[]>>()
 }))
 
-vi.mock('./check-ignored-paths', () => ({
+vi.mock('./source-control/check-ignored-paths', () => ({
   checkIgnoredPaths: checkIgnoredPathsMock
 }))
 

@@ -8,7 +8,7 @@ import * as liveTurn from '../../../shared/agent-session/view/structured-agent-s
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../agent-session-record-store-test-harness'
+} from '../agent-session/records/agent-session-record-store-test-harness'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

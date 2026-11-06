@@ -1,7 +1,7 @@
 import {
   unresolvedNativeChatRowIds,
   newestNativeChatUserTurnKey
-} from '../../native-chat-live-turn-membership'
+} from './native-chat-live-turn-membership'
 // Share desktop/mobile keys anchored on the opening user entry or provider-resumed turn record.
 // Explicit conversation/missing-turn scopes own no turn; legacy hosts fall back to journal order, then position.
 

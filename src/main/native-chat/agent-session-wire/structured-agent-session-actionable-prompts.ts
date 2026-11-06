@@ -45,7 +45,7 @@ export function reusePromptProjection(
     if (
       delta.ok &&
       delta.cursor.sequence === cursor.sequence &&
-      delta.rows.at(-1)?.seq === cursor.sequence &&
+      delta.through === cursor.sequence &&
       delta.rows.every((row, index) =>
         row.kind === 'outcome'
           ? row.submissionIds.length === 0 && !row.itemIds.some(outcomeTouches)

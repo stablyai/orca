@@ -3,8 +3,8 @@ import {
   selectWritableAgentSessionRecord,
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
-} from '../../agent-session-store-state'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+} from '../records/agent-session-store-state'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionOperationKey,
   agentSessionOperationExpiry,

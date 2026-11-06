@@ -24,7 +24,8 @@ import { seedPersisted } from './testing-persisted'
 
 export { stored, type StoredValue } from './testing-persisted'
 import { createPanelActions, type Target } from './testing-panel-actions'
-import { visibleElements } from './testing-visibility'
+import { activeTab, visibleElements } from './testing-visibility'
+import { summarizeElements } from './testing-summary'
 
 export type PanelIssue = { kind: 'plugin' | 'refused'; message: string; stack?: string }
 type Stored = { version: number; value: unknown }
@@ -242,6 +243,22 @@ export async function mountPanel(
     find: (query: TestQuery): TestElement | null => findAll(query)[0] ?? null,
     findAll,
     tree: (): TreeSnapshot | string | null => (shown.tree ? snapshotTree(shown.tree) : null),
+    /** The validated tree exactly as Orca draws it (handlers as `{ $callback }`), for replay. */
+    drawnTree: (): PluginDeclarativeNode | null => shown.tree,
+    /** One line per thing a person notices first: headings, callouts, empty states, table sizes. */
+    summary: (): string[] => {
+      const all = listElements(shown.tree)
+      const visible = elements()
+      const tabs = new Map(
+        visible
+          .filter((element) => element.type === 'Tabs')
+          .map((tabsElement) => [
+            tabsElement.path,
+            activeTab(tabsElement, all, controls.valueOf(tabsElement))?.label ?? ''
+          ])
+      )
+      return summarizeElements(visible, tabs)
+    },
     get persisted(): PersistedState {
       const read = (scope: 'plugin' | 'workspace') =>
         Object.fromEntries([...storage[scope]].map(([key, entry]) => [key, entry.value]))

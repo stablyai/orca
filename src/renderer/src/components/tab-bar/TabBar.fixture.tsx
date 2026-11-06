@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
 

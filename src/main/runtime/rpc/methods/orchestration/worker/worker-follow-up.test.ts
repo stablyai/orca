@@ -37,6 +37,23 @@ describe('a follow-up to a finished terminal worker', () => {
       body
     })
 
+  it('records the current invocation hash when the existing worker is reused for a follow-up', async () => {
+    h.setup()
+    const authority = h.runtime.getOrchestrationDispatchAuthority('term_worker')!
+    vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockReturnValue({
+      ...authority,
+      launchTokenHash: 'bound-invocation-hash'
+    })
+    const { dispatchId } = await h.startSettledWorker()
+    await send(dispatchId, 'continue this same agent')
+    const next = getFollowUpDispatch(h.db, dispatchId)
+    expect(next).toBeDefined()
+    expect(next?.launch_token_hash).toBe('bound-invocation-hash')
+    expect(next?.process_incarnation).toBe(authority.processIncarnation)
+    expect(next?.assignee_pane_key).toBe(authority.paneKey)
+    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
+  })
+
   it('starts no second worker while it cannot tell whether the first still runs', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
@@ -406,6 +423,66 @@ describe('a follow-up to a finished terminal worker', () => {
         expect.objectContaining({ role: 'agent', id: 'term_worker' })
       ])
     })
+  })
+
+  it('lists the finished worker without the terminal its follow-up took over', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    await send(dispatchId, 'and the docs')
+    const followUpId = getFollowUpDispatch(h.db, dispatchId)!.id
+    expect(h.db.getWorkerTerminalResourceByOwner(followUpId)?.terminal_handle).toBe('term_worker')
+
+    await expect(h.call('orchestration.workerList', { run: h.activeRunId })).resolves.toMatchObject(
+      {
+        workers: expect.arrayContaining([
+          expect.objectContaining({
+            dispatchId,
+            agentTerminalHandle: null,
+            terminalState: null,
+            projection: expect.objectContaining({
+              // Nothing proves the original's process ended, so liveness stays unverifiable.
+              liveness: { verdict: 'unverifiable', reason: 'missing_status' },
+              nextAction: expect.objectContaining({ kind: 'none' })
+            })
+          }),
+          expect.objectContaining({
+            dispatchId: followUpId,
+            agentTerminalHandle: 'term_worker',
+            terminalState: 'active'
+          })
+        ]),
+        counts: { active: 1 }
+      }
+    )
+
+    // A -> B -> C, then C's release: neither earlier row claims the terminal.
+    const b = getFollowUpDispatch(h.db, dispatchId)!
+    h.settle(b.task_id, b.id, 'succeeded')
+    await send(b.id, 'and the tests')
+    const c = getFollowUpDispatch(h.db, b.id)!
+    h.settle(c.task_id, c.id, 'succeeded')
+    await expect(h.call('orchestration.workerRelease', { dispatch: c.id })).resolves.toMatchObject({
+      state: 'released'
+    })
+    const handedOn = (id: string) =>
+      expect.objectContaining({ dispatchId: id, agentTerminalHandle: null, terminalState: null })
+    await expect(h.call('orchestration.workerList', { run: h.activeRunId })).resolves.toMatchObject(
+      {
+        workers: [
+          expect.objectContaining({
+            dispatchId: c.id,
+            agentTerminalHandle: 'term_worker',
+            terminalState: 'released'
+          }),
+          handedOn(b.id),
+          handedOn(dispatchId)
+        ],
+        counts: { released: 1 }
+      }
+    )
+    await expect(
+      h.call('orchestration.workerList', { run: h.activeRunId, terminalState: 'retained' })
+    ).resolves.toMatchObject({ workers: [] })
   })
 
   it('takes mail for a working worker even when its report settles the Dispatch in the same turn', async () => {

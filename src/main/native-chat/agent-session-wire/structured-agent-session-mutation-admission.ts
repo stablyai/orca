@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Validate fingerprints centrally. Prepare ledger replays without admitting writes; first runs
 // prepare ownership before lease admission, while command-receipt plans use their own admission.
 
@@ -24,7 +24,7 @@ import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
 } from '../../runtime/agent-session/ownership/agent-session-operation-admission'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   classifyJournalOpenFailure,
   journalOpenRefusal

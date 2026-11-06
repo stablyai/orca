@@ -19,7 +19,7 @@ import type {
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 import {
   createMemoryNativeChatComposerDraftStorage,

@@ -3,12 +3,12 @@ import {
   type LegacyPrerequisites
 } from '../../structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
-import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/structured-agent-session-options-write-owner'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
 import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
 import type {
   SelectionOperation,
   SelectionOutcome
-} from '../../../../../shared/structured-agent-session-selection-operations'
+} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
@@ -100,10 +100,23 @@ export function holdStructuredAgentSessionLaunchOption(
   if (state.selection.seedPending) {
     return null
   }
-  const model = picker
-    ? (structuredAgentSessionOptionPicks(picker, { [id]: encoded })[0]?.modelId ?? null)
-    : (state.selection.seed?.model ?? null)
-  const operation = selectionController(state).issue(id, encoded, model)
+  // A resumed conversation already has turns: its value picks keep the remembered new-chat model.
+  const pick = picker
+    ? structuredAgentSessionOptionPicks(
+        picker,
+        { [id]: encoded },
+        state.intent.params.resumeFrom !== undefined
+      )[0]
+    : undefined
+  const model = picker ? (pick?.modelId ?? null) : (state.selection.seed?.model ?? null)
+  const operation = selectionController(state).issue(
+    id,
+    encoded,
+    model,
+    undefined,
+    undefined,
+    pick?.adoptModelAsLaunchDefault === false ? false : undefined
+  )
   const receipt = receipts.get(state)
   if (receipt) {
     void applyStructuredLaunchHeldOptions(state, receipt, false)
@@ -201,10 +214,10 @@ export function holdStructuredLaunchCreatePicks(state: StructuredLaunchState): v
 
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
-  options: Readonly<Record<string, string>>
+  outcome: SelectionOutcome
 ): void {
   for (const operation of createHeld.get(state) ?? []) {
-    selectionController(state).settle(operation, { kind: 'accepted', options })
+    selectionController(state).settle(operation, outcome)
   }
   createHeld.delete(state)
 }

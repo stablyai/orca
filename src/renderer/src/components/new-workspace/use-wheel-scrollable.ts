@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
+import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 
 /** Manually scroll portaled panes with a nonpassive listener because Radix Dialog blocks their wheel defaults; CommandList carries the same shim. */
 export function useWheelScrollable<T extends HTMLElement>(): {
@@ -19,12 +20,7 @@ export function useWheelScrollable<T extends HTMLElement>(): {
       if (node.scrollHeight <= node.clientHeight) {
         return
       }
-      const delta =
-        event.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? event.deltaY * 16
-          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? event.deltaY * node.clientHeight
-            : event.deltaY
+      const delta = getWheelScrollDeltaY(event, node.clientHeight)
       const max = node.scrollHeight - node.clientHeight
       const next = Math.max(0, Math.min(max, node.scrollTop + delta))
       if (next === node.scrollTop) {

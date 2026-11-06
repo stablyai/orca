@@ -1,4 +1,4 @@
-import { acquiredAccountAcrossLease } from '../../../../shared/agent-session-acquired-account'
+import { acquiredAccountAcrossLease } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 /** Pure transitions applied by the store in one durable transaction.
  * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
 
@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleBelongsTo } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
-import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import type {
   AgentSessionLease,
   AgentSessionProcessIdentity,

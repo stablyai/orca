@@ -4,16 +4,16 @@ import {
   type RuntimeSshAccessLinkRequest,
   type RuntimeSshAccessUnlinkRequest
 } from '../../shared/runtime-ssh-access'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { assertRuntimeEnvironmentNotReconciling } from '../../shared/runtime-environment-reconciliation-record'
-import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { assertRuntimeEnvironmentNotReconciling } from '../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
+import { redactRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   cancelRuntimeEnvironmentSshAccessLink,
   completeRuntimeEnvironmentSshAccessUnlink,
   linkVerifiedRuntimeEnvironmentSshAccess,
   prepareRuntimeEnvironmentSshAccessLink,
   prepareRuntimeEnvironmentSshAccessUnlink
-} from '../../shared/runtime-environment-ssh-access-store'
+} from '../../shared/remote-runtime/host-store/runtime-environment-ssh-access-store'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
 import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'

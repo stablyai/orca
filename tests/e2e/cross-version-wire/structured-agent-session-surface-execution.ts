@@ -120,8 +120,8 @@ export async function expectDeclaredSurfaceExecutes(
   hostCalls: ReturnType<typeof structuredHostStub>,
   clientCapabilities: readonly string[]
 ): Promise<void> {
-  const retirement = vi.fn()
-  const runtime = runtimeStub({ retireStructuredAttention: retirement })
+  const retirement = vi.fn<OrcaRuntimeService['acknowledgeNotificationAttention']>()
+  const runtime = runtimeStub({ acknowledgeNotificationAttention: retirement })
   for (const { method, hostMethod, result, clientCapability } of STRUCTURED_CALLS) {
     const atRestCreate =
       method === 'agentSession.create' &&
@@ -186,7 +186,19 @@ export async function expectDeclaredSurfaceExecutes(
       })
     }
     if (method === 'agentSession.acknowledgeAttention') {
-      expect(retirement).toHaveBeenCalledExactlyOnceWith(ATTENTION_READ)
+      expect(retirement).toHaveBeenCalledExactlyOnceWith({
+        reads: [
+          {
+            ...ATTENTION_READ,
+            scope: {
+              executionHostId: 'local',
+              wslDistro: null,
+              workspaceId: WORKSPACE,
+              workspaceKind: 'git-worktree'
+            }
+          }
+        ]
+      })
     }
     for (const reply of replies) {
       expect(

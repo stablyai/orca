@@ -18,11 +18,12 @@ import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
-  getUsageBarState,
-  getWindowResetLabel,
-  hasActiveProviderUsage,
-  UsageBar
+  getOtherUsageProviders,
+  hasActiveProviderUsage
 } from '../components/AccountUsage'
+import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
+import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
@@ -34,6 +35,7 @@ import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { subscribeAccountsSnapshots } from './accounts-snapshot-stream'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -144,24 +146,11 @@ export function MobileAccountsScreen() {
     if (!client || connState !== 'connected') {
       return
     }
-    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'error') {
-        void refresh()
-        return
-      }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
-        try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
-        } catch {
-          rejectInvalidSnapshot()
-        }
-      }
+    return subscribeAccountsSnapshots(client, {
+      onSnapshot: acceptSnapshot,
+      onInvalidSnapshot: rejectInvalidSnapshot,
+      onStreamError: () => void refresh()
     })
-    return unsubscribe
   }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
@@ -201,7 +190,7 @@ export function MobileAccountsScreen() {
     [client, refresh, snapshot, t]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
+  const renderProviderSection = (provider: ProviderKey) => {
     if (!snapshot) {
       return null
     }
@@ -211,15 +200,17 @@ export function MobileAccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
-    const activeSessionBar = getUsageBarState(activeUsage, 'session')
-    const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     const switchBlocked = busyAccountId !== null || resettingCodex || connState !== 'connected'
     const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
     return (
       <View>
-        <SectionHeader title={title} icon={<Icon size={14} />} first={provider === 'claude'} />
+        <SectionHeader
+          title={getProviderDisplayName(provider)}
+          icon={<Icon size={14} />}
+          first={provider === 'claude'}
+        />
         <ListGroup style={styles.group}>
           {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
           <ListRow
@@ -229,22 +220,7 @@ export function MobileAccountsScreen() {
             detail={
               // Show system-default login usage for users without managed accounts.
               activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageRow}>
-                  <UsageBar
-                    label={t('accounts.screen.sessionWindow', '5h')}
-                    usedPercent={activeSessionBar.usedPercent}
-                    unavailable={activeSessionBar.unavailable}
-                    loading={activeSessionBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
-                  />
-                  <UsageBar
-                    label={t('accounts.screen.weeklyWindow', '7d')}
-                    usedPercent={activeWeeklyBar.usedPercent}
-                    unavailable={activeWeeklyBar.unavailable}
-                    loading={activeWeeklyBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
-                  />
-                </View>
+                <ProviderUsageWindows limits={activeUsage} now={now} showEmptyWindows />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
@@ -260,30 +236,18 @@ export function MobileAccountsScreen() {
             const isFetching =
               (isActive && usage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
-            const sessionBar = getUsageBarState(usage, 'session', isFetching)
-            const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
             return (
               <ListRow
                 key={account.id}
                 title={account.email}
                 detail={
                   <>
-                    <View style={styles.usageRow}>
-                      <UsageBar
-                        label={t('accounts.screen.sessionWindow', '5h')}
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                        resetText={getWindowResetLabel(usage, 'session', now)}
-                      />
-                      <UsageBar
-                        label={t('accounts.screen.weeklyWindow', '7d')}
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                        resetText={getWindowResetLabel(usage, 'weekly', now)}
-                      />
-                    </View>
+                    <ProviderUsageWindows
+                      limits={usage}
+                      now={now}
+                      isFetching={isFetching}
+                      showEmptyWindows
+                    />
                     {usage?.error ? (
                       <Text style={styles.errorText} numberOfLines={1}>
                         {usage.error}
@@ -311,6 +275,38 @@ export function MobileAccountsScreen() {
               onPress={confirmCodexReset}
             />
           ) : null}
+        </ListGroup>
+      </View>
+    )
+  }
+
+  // Every other provider desktop shows usage for; usage only, since accounts are managed on desktop.
+  const renderOtherProviders = () => {
+    const providers = snapshot ? getOtherUsageProviders(snapshot) : []
+    if (providers.length === 0) {
+      return null
+    }
+    return (
+      <View>
+        <SectionHeader title={t('accounts.screen.otherAgents', 'Other agents')} />
+        <ListGroup style={styles.group}>
+          {providers.map((limits) => (
+            <ListRow
+              key={limits.provider}
+              title={getProviderDisplayName(limits.provider)}
+              leading={<MobileAgentIcon agentId={limits.provider} size={16} />}
+              detail={
+                <>
+                  <ProviderUsageWindows limits={limits} now={now} />
+                  {limits.error ? (
+                    <Text style={styles.errorText} numberOfLines={1}>
+                      {limits.error}
+                    </Text>
+                  ) : null}
+                </>
+              }
+            />
+          ))}
         </ListGroup>
       </View>
     )
@@ -356,8 +352,9 @@ export function MobileAccountsScreen() {
           />
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            {renderProviderSection('claude')}
+            {renderProviderSection('codex')}
+            {renderOtherProviders()}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

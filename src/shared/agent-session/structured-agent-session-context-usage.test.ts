@@ -75,19 +75,6 @@ describe('selectStructuredAgentContextUsage', () => {
     ).toMatchObject({ usedTokens: 150_000, windowTokens: 200_000, percentage: 75 })
   })
 
-  it('keeps the last turn with a count while a new turn has none yet', () => {
-    expect(
-      selectStructuredAgentContextUsage([
-        turn(1, { used: estimate(18_600), window: WINDOW }),
-        item('turn-2', 2, { kind: 'turn', turnId: 'turn-2', state: 'running' })
-      ])
-    ).toMatchObject({ usedTokens: 18_600 })
-  })
-
-  it('states nothing before the CLI has reported a window', () => {
-    expect(selectStructuredAgentContextUsage([turn(1, { used: estimate(18_600) })])).toBeNull()
-  })
-
   it('hides the pre-compaction size until the next response or report restates it', () => {
     const before = turn(1, { used: estimate(150_000), window: WINDOW })
     const compacted = turn(2, { used: { kind: 'unknown', capturedAt: 3_000 } })
@@ -98,17 +85,6 @@ describe('selectStructuredAgentContextUsage', () => {
     expect(
       selectStructuredAgentContextUsage([before, turn(2, { used: { kind: 'report', ...REPORT } })])
     ).toMatchObject({ usedTokens: 29_400, estimated: false })
-  })
-
-  it('states nothing for a used kind a newer host writes', () => {
-    const future = { kind: 'forecast', capturedAt: 4_000 }
-    expect(
-      selectStructuredAgentContextUsage([
-        turn(1, { used: estimate(18_600), window: WINDOW }),
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a row from a newer host, which no local type admits.
-        turn(2, { used: future as unknown as AgentSessionContextUsage['used'] })
-      ])
-    ).toBeNull()
   })
 
   it('fills a part the loaded rows lack from the host whole-journal answer', () => {

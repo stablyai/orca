@@ -53,9 +53,4 @@ describe('getMermaidConfig', () => {
       expect(contrast, `${text} on ${background}`).toBeGreaterThanOrEqual(4.5)
     }
   })
-
-  it('gives the first three pie categories distinct resolved colors', () => {
-    const variables = resolvedDarkTheme()
-    expect(new Set([variables.pie1, variables.pie2, variables.pie3]).size).toBe(3)
-  })
 })

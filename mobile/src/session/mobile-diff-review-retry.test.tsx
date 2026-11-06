@@ -17,6 +17,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  ChevronsUpDown: 'Icon',
   CircleAlert: 'Icon',
   FileText: 'Icon',
   ListChecks: 'Icon',
@@ -24,6 +25,8 @@ vi.mock('lucide-react-native', () => ({
   WifiOff: 'Icon'
 }))
 vi.mock('../components/MobileDiffReviewLine', () => ({ MobileDiffReviewLine: () => null }))
+vi.mock('react-native-gesture-handler', () => ({ Gesture: {}, GestureDetector: () => null }))
+vi.mock('../components/pr-sidebar/PRCommentsSection', () => ({ CommentGroupView: () => null }))
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(),
   notificationAsync: vi.fn(),
@@ -68,22 +71,28 @@ function ReviewWhileUnreachable({
     name: 'review',
     initialFilter: 'all',
     initialTarget: null,
+    commitOid: null,
     onOpenSession: () => {},
     onReconnect
   })
   return createElement(MobileDiffReviewBody, {
-    activeHunkIndex: controller.activeHunkIndex,
     commentsByLine: controller.commentsByLine,
     currentItem: controller.currentItem,
     diffState: controller.diffState,
     filteredCount: controller.filteredQueue.length,
-    listRef: controller.listRef,
     screenState: controller.screenState,
     staleCommentIds: controller.staleCommentIds,
-    onAddNote: controller.openComposer,
+    threadsByLine: new Map(),
+    threadActions: undefined,
+    selectedRange: null,
+    onPickLines: () => {},
+    scrollToLine: null,
+    onScrolledToLine: () => {},
     onEditNote: controller.openEditComposer,
     onRetry: controller.retryAction ?? undefined,
-    offline: connState !== 'connected'
+    offline: connState !== 'connected',
+    filter: controller.filter,
+    onBack: () => {}
   })
 }
 

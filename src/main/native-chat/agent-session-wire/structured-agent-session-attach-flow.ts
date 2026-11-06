@@ -1,4 +1,3 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -18,7 +17,7 @@ import type {
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
   attachJournal,
@@ -28,7 +27,7 @@ import {
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord
@@ -81,7 +80,6 @@ export type AttachFlowInput = {
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
-  launchAccountRecipe?: (record: AgentSessionRecord) => Promise<ClaudeAccountRecipe | undefined>
   launchPermissionMode?: (
     record: AgentSessionRecord
   ) => Promise<AgentChatPermissionChoice | undefined>
@@ -288,6 +286,9 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
+  const view = attached.journal.publicRead()
+  const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
+  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
   return {
     ok: true,
     replayed,
@@ -296,10 +297,12 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      page: withPublishedWork(
-        readAgentSessionHydrationPage(attached.journal, fence),
-        heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-      ),
+      get page() {
+        return (page ??= withPublishedWork(
+          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.currentSnapshot()),
+          work
+        ))
+      },
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

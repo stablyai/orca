@@ -1,12 +1,12 @@
+import { markStructuredAgentSessionLaunchCancelledSilently } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { TerminalTab } from '../../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import {
   getStructuredAgentSessionLaunchOwner,
-  markStructuredAgentSessionLaunchCancelledSilently,
   shouldRetainStructuredAgentSessionLaunchTab,
   structuredLaunchStates
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createLocalTmuxManagedPtyResolver } from './local-tmux-managed-pty'
+import {
+  createLocalHookPaneRootResolver,
+  createLocalPtyInventoryReader,
+  createLocalTmuxManagedPtyResolver
+} from './local-tmux-managed-pty'
 import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 const row: PtyProcessInfo = {
@@ -15,52 +19,44 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('authenticated local tmux root resolution', () => {
-  it('shares inventory captures and accepts only the current daemon binding', async () => {
-    const listProcesses = vi.fn(async () => [row])
-    const resolve = createLocalTmuxManagedPtyResolver({ getPtyId: () => 'pty', listProcesses })
-    const [first, second] = await Promise.all([resolve('pane'), resolve('pane')])
-    expect(first).toEqual({
-      pid: 123,
-      incarnation: 'generation',
-      scope: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'folder:workspace',
-        workspaceKind: 'folder'
-      }
-    })
-    expect(second).toEqual(first)
-    expect(listProcesses).toHaveBeenCalledTimes(1)
-  })
   it('refuses a binding changed during capture and excludes WSL roots from a native probe', async () => {
     let binding = 'pty'
-    const resolve = createLocalTmuxManagedPtyResolver({
-      getPtyId: () => binding,
-      listProcesses: async () => {
-        binding = 'replacement'
-        return [row]
-      }
-    })
+    const resolve = createLocalTmuxManagedPtyResolver(
+      createLocalPtyInventoryReader({
+        getPtyId: () => binding,
+        listProcesses: async () => {
+          binding = 'replacement'
+          return [row]
+        }
+      })
+    )
     expect(await resolve('pane')).toBeNull()
-    const wsl = createLocalTmuxManagedPtyResolver({
-      getPtyId: () => 'pty',
-      listProcesses: async () => [{ ...row, wslDistro: 'Ubuntu-24.04' }]
-    })
+    const wsl = createLocalTmuxManagedPtyResolver(
+      createLocalPtyInventoryReader({
+        getPtyId: () => 'pty',
+        listProcesses: async () => [{ ...row, wslDistro: 'Ubuntu-24.04' }]
+      })
+    )
     expect(await wsl('pane')).toBeNull()
   })
-  it('refreshes expired inventory instead of assigning a reused PID to the old incarnation', async () => {
+
+  it('re-reads a snapshot that predates a pane’s PTY once, not on every miss', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1000)
-    const listProcesses = vi
-      .fn()
-      .mockResolvedValueOnce([row])
-      .mockResolvedValueOnce([{ ...row, incarnationId: 'replacement' }])
-    const resolve = createLocalTmuxManagedPtyResolver({ getPtyId: () => 'pty', listProcesses })
-    expect((await resolve('pane'))?.incarnation).toBe('generation')
-    vi.setSystemTime(1999)
-    expect((await resolve('pane'))?.incarnation).toBe('generation')
-    expect(listProcesses).toHaveBeenCalledTimes(1)
-    vi.setSystemTime(2000)
-    expect((await resolve('pane'))?.incarnation).toBe('replacement')
+    const listProcesses = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([row])
+    const resolve = createLocalHookPaneRootResolver(
+      createLocalPtyInventoryReader({
+        getPtyId: (paneKey) => (paneKey === 'pane' ? 'pty' : 'gone'),
+        listProcesses
+      })
+    )
+    expect(await resolve('pane', undefined)).toBeNull()
+    vi.setSystemTime(1500)
+    // The PTY spawned after the cached snapshot: a cached miss is not an answer.
+    expect(await resolve('pane', undefined)).toEqual({ pid: 123, incarnation: 'generation' })
+    expect(listProcesses).toHaveBeenCalledTimes(2)
+    vi.setSystemTime(1600)
+    expect(await resolve('gone', undefined)).toBeNull()
+    expect(listProcesses).toHaveBeenCalledTimes(2)
   })
 })

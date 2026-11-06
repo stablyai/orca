@@ -8,7 +8,7 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -26,7 +26,12 @@ export type StructuredAgentSessionHandedOptions = {
 /** Per-child reports and a handed-over turn awaiting its first model evidence. */
 const childRuns = new WeakMap<
   StructuredAgentSessionProviderChild,
-  { reported?: RanOptions; owed?: StructuredAgentSessionHandedOptions; permission?: string | null }
+  {
+    reported?: RanOptions
+    reportedModel?: string
+    owed?: StructuredAgentSessionHandedOptions
+    permission?: string | null
+  }
 >()
 
 function currentChild(context: RanOptionsContext, sessionId: string, fence: number) {
@@ -34,10 +39,10 @@ function currentChild(context: RanOptionsContext, sessionId: string, fence: numb
   return child?.fence === fence ? child : null
 }
 
-export function structuredAgentSessionChildRan(
+export function structuredAgentSessionRuntimeModel(
   child: StructuredAgentSessionProviderChild
-): RanOptions | undefined {
-  return childRuns.get(child)?.reported
+): string | undefined {
+  return child.phase === 'ready' ? childRuns.get(child)?.reportedModel : undefined
 }
 
 /** The current child's startup report or applied evidence; never saved intent or send authority. */
@@ -48,17 +53,20 @@ export function structuredAgentSessionRuntimePermission(
   return child?.phase === 'ready' && mode !== undefined ? { fence: child.fence, mode } : null
 }
 
-export function noteStructuredAgentSessionRuntimePermission(
+export function noteStructuredAgentSessionRuntimeOptions(
   child: StructuredAgentSessionProviderChild,
   reported: AgentSessionOptionsResult['current'],
   initial = false
 ): void {
   const previous = childRuns.get(child)
+  if (!initial || previous?.reportedModel === undefined) {
+    childRuns.set(child, { ...previous, reportedModel: reported.reportedModel ?? reported.model })
+  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)
   ) {
-    childRuns.set(child, { ...previous, permission: reported.reportedPermissionMode })
+    childRuns.set(child, { ...childRuns.get(child), permission: reported.reportedPermissionMode })
   }
 }
 

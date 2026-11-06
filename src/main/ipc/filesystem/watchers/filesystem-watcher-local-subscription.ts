@@ -1,7 +1,8 @@
 import type { WebContents } from 'electron'
-import { beginWatcherInstall } from '../../watcher-removal-gate'
-import type { LocalWatcherInstallToken } from './filesystem-watcher-lifecycle-state'
+import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
+
 import {
+  type LocalWatcherInstallToken,
   WATCHER_TEARDOWN_GRACE_MS,
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'

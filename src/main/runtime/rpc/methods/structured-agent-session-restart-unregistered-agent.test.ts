@@ -22,11 +22,11 @@ import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { AgentSessionRecoveryCapsule } from '../../agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../agent-session/records/agent-session-recovery-capsule'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import { call, clearStructuredHostStub } from './structured-agent-session-rpc.test-fixture'
 
 const NOW = 1_800_000_000_000

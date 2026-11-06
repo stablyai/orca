@@ -25,7 +25,7 @@ import {
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
-} from '../../runtime/agent-session-conversation-command-record'
+} from '../../runtime/agent-session/records/agent-session-conversation-command-record'
 
 export function conversationCommandFailure(
   failure: AgentSessionFailureFact | undefined,
@@ -41,6 +41,8 @@ export function conversationCommandFailure(
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
+  /** /compact only: free text that steers the summary. */
+  instructions?: string
   /** Only /compact queues: the drain delivers provider messages; /clear needs host-side execution. */
   delivery?: 'queue-if-active'
   userSend?: true

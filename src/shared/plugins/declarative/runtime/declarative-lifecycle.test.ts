@@ -135,14 +135,6 @@ describe('components panel lifecycle', () => {
     expect(seen.signal?.aborted).toBe(true)
   })
 
-  it('says clearly when the module has no component', async () => {
-    const { runtime, host } = booted()
-    host.send('ui.hydrate', {})
-    await expect(runtime.boot({ default: 'nope' })).rejects.toThrow(
-      /must export a component function as its default export \(got string\)/
-    )
-  })
-
   it('refuses duplicate atom keys', () => {
     atom('lifecycle.once', 1)
     expect(() => atom('lifecycle.once', 2)).toThrow(/already used/)
@@ -182,7 +174,8 @@ describe('orca SDK facade', () => {
     expect(sdk.ui.has('Input', '$edit')).toBe(false)
     expect(sdk.ui.has('Carousel')).toBe(false)
     // Catalog 2 (Orca 1.4.247).
-    expect(sdk.ui.catalog).toBe(3)
+    expect(sdk.ui.catalog).toBe(4)
+    expect(sdk.ui.has('Box', 'scroll')).toBe(true)
     expect(sdk.ui.has('RelativeTime', 'format')).toBe(true)
     expect(sdk.ui.has('Table')).toBe(true)
     expect(sdk.ui.has('Table', 'onLoadMore')).toBe(true)

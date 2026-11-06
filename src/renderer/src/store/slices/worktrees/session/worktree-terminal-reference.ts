@@ -12,12 +12,12 @@ import {
   getWorkspaceAttachmentObservedOrigin,
   resolveWorkspaceReferenceObservationOwner
 } from '@/lib/workspace-attachment-observed-origin'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments'
-import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachmentOriginKey,
   mergeWorkspaceAttachmentOrigins
-} from '../../../../../../shared/workspace-attachment-origins'
+} from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'

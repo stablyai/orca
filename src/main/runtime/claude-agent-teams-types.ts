@@ -6,7 +6,7 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit
 } from '../../shared/runtime-types'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 
 export type AgentTeamsTmuxCompatRequest = {
   teamId: string

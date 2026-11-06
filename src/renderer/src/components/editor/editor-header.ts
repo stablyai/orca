@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { getEditorDisplayLabel } from './editor-labels'
 import { translate } from '@/i18n/i18n'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'

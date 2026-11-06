@@ -1,5 +1,3 @@
-// Save compares body fingerprints without changing card identity/order; edit leases block automatic delivery.
-
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -21,6 +19,7 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { mutateQueued } from './structured-agent-session-queued-mutations'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
+// Save compares body fingerprints without changing card identity/order; edit leases block automatic delivery.
 
 /** Editing sends nothing and needs no send admission; compare-and-set handles same-ID retries. */
 export function updateQueuedStructuredAgentMessage(
@@ -45,6 +44,9 @@ export function updateQueuedStructuredAgentMessage(
         fields,
         queuedImageCards !== false
       )
+      if (decision.status === 'unchanged') {
+        return { ok: true, value: await queued.update(fields) }
+      }
       if (decision.status !== 'ready') {
         return { ok: true, value: decision }
       }
@@ -62,7 +64,7 @@ export function updateQueuedStructuredAgentMessage(
         return { ok: true, value: await queued.update(fields) }
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
-          return agentSessionAttachmentExpiredRefusal()
+          return agentSessionAttachmentExpiredRefusal(error)
         }
         throw error
       }

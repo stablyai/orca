@@ -4,7 +4,7 @@ import { renewAgentSessionLease } from './agent-session-lease-transitions'
 import {
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
-} from '../../agent-session-store-state'
+} from '../records/agent-session-store-state'
 
 export type AgentSessionLeaseRenewal = {
   sessionId: string

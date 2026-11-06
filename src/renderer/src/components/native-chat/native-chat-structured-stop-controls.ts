@@ -1,4 +1,4 @@
-import { agentStopDisplayStatus } from '../../../../shared/agent-stop-display-status'
+import { agentStopDisplayStatus } from '../../../../shared/agent-status/lifecycle/agent-stop-display-status'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 
@@ -38,5 +38,20 @@ export function nativeChatStructuredStopControls(
       steerHead: stopping ? undefined : controller.queuedMessages.steerHead,
       afterStop: stopping ? (controller.sendsQueue ? 'queue' : 'send') : undefined
     }
+  }
+}
+
+type Session = ReturnType<typeof useStructuredAgentSession>
+
+/** Cancel the shown prompt at its revision; the host routes a card with no running turn. */
+export function cancelStructuredPrompt(
+  controller: Pick<Session, 'cancel' | 'turnId'>,
+  prompt: Session['prompts'][number] | null
+): void {
+  if (prompt) {
+    void controller.cancel(controller.turnId ?? undefined, {
+      itemId: prompt.itemId,
+      expectedRevision: prompt.revision
+    })
   }
 }

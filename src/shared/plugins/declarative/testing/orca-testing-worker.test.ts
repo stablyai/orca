@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { exportedTypeShape, runtimeShape } from '../../authoring/plugin-author-typings.test-fixture'
+import { afterEach, describe, expect, it } from 'vitest'
 import { agentStatusChangedPayloadSchema } from '../../events/plugin-events'
+import { terminalSendHookPayloadSchema } from '../../events/plugin-hook-payloads'
 import { atom, read, set } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
 import { host as panelHost, plugin } from '../runtime/orca-module'
@@ -19,6 +19,12 @@ type Orca = {
     post(event: string, payload?: unknown): void
   }
   storage: { set(key: string, value: unknown): Promise<void> }
+}
+
+type HookedOrca = Orca & {
+  hooks: {
+    on(hook: string, handler: (event: unknown, next: (e: unknown) => unknown) => unknown): unknown
+  }
 }
 
 let panel: TestPanel | null = null
@@ -129,13 +135,44 @@ describe('mountWorker', () => {
     ).rejects.toThrow(/registered undeclared command other/)
   })
 
-  it('hands activate the same shape of orca object as Orca does', async () => {
-    let captured: unknown
-    await mountWorker(
-      { default: (orca: unknown) => (captured = orca) },
-      { events: [], commands: [] }
+  it('fires hooks as Orca would and returns what the chain decided', async () => {
+    const mounted = await mountWorker(
+      {
+        default(orca: HookedOrca) {
+          orca.hooks.on('terminal.send', (event, next) => {
+            const { text } = terminalSendHookPayloadSchema.parse(event)
+            if (text.includes('rm -rf')) {
+              return { deny: 'blocked' }
+            }
+            if (text === 'boom') {
+              throw new Error('hook failed')
+            }
+            return next({ ...terminalSendHookPayloadSchema.parse(event), text: text.trim() })
+          })
+        }
+      },
+      { events: [], commands: [], hooks: ['terminal.send'] }
     )
-    expect(runtimeShape(captured)).toEqual(exportedTypeShape('orca/worker', 'OrcaWorkerApi').shape)
+    const send = (text: string) => ({ terminalId: 't', text, enter: true, inputKind: 'driving' })
+    await expect(mounted.hooks.fire('terminal.send', send(' ls '))).resolves.toEqual({
+      kind: 'continue',
+      event: send('ls')
+    })
+    await expect(mounted.hooks.fire('terminal.send', send('rm -rf /'))).resolves.toEqual({
+      kind: 'deny',
+      reason: 'blocked'
+    })
+    await expect(mounted.hooks.fire('terminal.send', send('boom'))).resolves.toEqual({
+      kind: 'continue',
+      event: send('boom')
+    })
+    expect(mounted.logs.at(-1)).toMatch(/hook terminal\.send skipped after \d+ms: hook failed/)
+    await expect(mounted.hooks.fire('terminal.send', { text: 1 })).rejects.toThrow(
+      /not one Orca sends/
+    )
+    await expect(mounted.hooks.fire('workspace.create.after', {})).rejects.toThrow(
+      /not in contributes.hooks/
+    )
   })
 })
 
@@ -195,32 +232,5 @@ describe('a panel and its worker on one host', () => {
       JSON.stringify([{ asked: { n: 1 } }, 'from the stub', 'unknown_method'])
     )
     await worker.deactivate()
-  })
-})
-
-describe('RelativeTime in the test kit', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('reads as Orca draws it now, in a node and in a Table cell', async () => {
-    // Only Date is faked: the kit settles on real macrotasks.
-    vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 12), toFake: ['Date'] })
-    const at = Date.UTC(2026, 10, 1, 12) - 5 * 60_000
-    panel = await mount(() =>
-      h(
-        'Stack',
-        null,
-        h('Text', null, 'Started ', h('RelativeTime', { at })),
-        h('Table', {
-          label: 'Agents',
-          columns: [{ key: 'since', label: 'Since' }],
-          rows: [{ key: 'a', cells: { since: { type: 'relative', at, format: 'duration' } } }]
-        })
-      )
-    )
-    expect(panel.find({ role: 'time' })?.text).toBe('5m ago')
-    expect(panel.find({ role: 'grid' })?.text).toBe('5m')
-    expect(panel.warnings).toEqual([])
   })
 })

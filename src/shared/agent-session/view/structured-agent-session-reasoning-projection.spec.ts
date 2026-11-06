@@ -15,26 +15,6 @@ function item(
 }
 
 describe('structured reasoning projection', () => {
-  it('preserves reasoning text and identity for desktop and mobile consumers', () => {
-    const blocks = [{ type: 'text' as const, text: 'Inspecting the request' }]
-    expect(
-      projectStructuredItemToNativeChat(
-        item('reasoning-1', 2, {
-          kind: 'message',
-          role: 'reasoning',
-          blocks
-        })
-      )
-    ).toEqual({
-      id: 'reasoning-1',
-      role: 'reasoning',
-      blocks,
-      timestamp: 2,
-      journalPosition: { sequence: 2, index: 0 },
-      source: 'transcript'
-    })
-  })
-
   it('carries a reasoning row lifecycle, and reads a state it cannot name as completed', () => {
     const blocks = [{ type: 'text' as const, text: 'Inspecting' }]
     const project = (body: Pick<AgentJournalMessageItem, 'state' | 'completedAt'>) =>

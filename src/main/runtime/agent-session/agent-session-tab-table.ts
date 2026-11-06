@@ -6,7 +6,7 @@ import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/
 import {
   hasAgentSessionConversation,
   type AgentSessionStoreState
-} from '../agent-session-store-state'
+} from './records/agent-session-store-state'
 
 /** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
 export class AgentSessionTabTable {

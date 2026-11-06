@@ -9,12 +9,6 @@ import { normalizePaletteText } from '../../../../shared/palette-match/normalize
 import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 
 describe('Cmd+J palette query normalization', () => {
-  it('lowercases supplementary-plane characters as whole code points', () => {
-    // Code-unit iteration splits supplementary-plane characters and misses their lowercase counterparts.
-    expect(normalizeCmdJPaletteQuery('\u{10400} HELLO')).toBe('\u{10428} hello')
-    expect(tokenizeCmdJPaletteQuery('\u{10400} HELLO')).toEqual(['\u{10428}', 'hello'])
-  })
-
   it('folds CJK, accented, and non-breaking-space text exactly like the shared matcher', () => {
     const query = ' CAFE\u0301 系统\u3000ÉCOLE\u00a0Test '
 

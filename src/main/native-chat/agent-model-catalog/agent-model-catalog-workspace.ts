@@ -1,6 +1,6 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome

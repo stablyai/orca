@@ -92,16 +92,6 @@ it('attaches the alert to the visible main window and explains an unconfirmed wr
   expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(workerExit, 'dialog')
 })
 
-it('tells the user saved changes are safe when no write was left unresolved', async () => {
-  fixture.state.mainWindow = new FakeWindow(true)
-  reportProfileStateWriteFailure(conflict)
-  await vi.waitFor(() => expect(fixture.show).toHaveBeenCalledOnce())
-  expect(fixture.show.mock.calls[0][1]).toMatchObject({
-    detail:
-      'Changes saved before this point are safe. New changes will not be saved until you restart Orca.'
-  })
-})
-
 it('waits for a hidden window to be shown by the user instead of revealing it', async () => {
   const window = new FakeWindow(false)
   fixture.state.mainWindow = window

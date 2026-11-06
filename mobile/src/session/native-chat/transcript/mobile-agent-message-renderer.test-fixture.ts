@@ -29,7 +29,10 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 400, height: 800 })
   }
 })
-vi.mock('../../../components/AgentStateDot', () => ({ AgentStateDot: 'AgentStateDot' }))
+vi.mock('../../../components/AgentStateDot', () => ({
+  AgentStateDot: 'AgentStateDot',
+  AGENT_STATE_DOT_SIZE: 10
+}))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   AlertCircle: 'AlertCircle',
@@ -40,6 +43,7 @@ vi.mock('lucide-react-native', () => ({
   Brain: 'Brain',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
   ChevronRight: 'ChevronRight',
   Copy: 'Copy',
   Eye: 'Eye',

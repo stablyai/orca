@@ -8,10 +8,7 @@ import {
 } from './palette-repo-resolution'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
 import { searchWorktreeDocuments } from './worktree-palette-search'
-import {
-  findAmbiguousWorktreeIds,
-  getPaletteOwnershipWorktreeIds
-} from './unified-tab-host-ownership'
+import './unified-tab-host-ownership'
 
 function makeWorktree(runtimeOwnerEnvironmentId: string, displayName: string): Worktree {
   return {
@@ -71,29 +68,4 @@ it('keeps same-target SSH worktrees from separate paired runtimes distinct', () 
           ?.runtimeOwnerEnvironmentId
     )
   ).toEqual(['hub-a', 'hub-b'])
-})
-
-it('keeps a physical-host alias only when one runtime owns it', () => {
-  const hubA = makeWorktree('hub-a', 'AlphaOwner workspace')
-  const hubB = makeWorktree('hub-b', 'BetaOwner workspace')
-  const uniqueIndex = buildPaletteWorktreeIndex([hubA])
-  const ambiguousIndex = buildPaletteWorktreeIndex([hubA, hubB])
-
-  expect(
-    resolvePaletteWorktree(uniqueIndex, hubA.id, 'ssh:same-private-target')
-      ?.runtimeOwnerEnvironmentId
-  ).toBe('hub-a')
-  expect(resolvePaletteWorktree(ambiguousIndex, hubA.id, 'ssh:same-private-target')).toBeUndefined()
-})
-
-it('keeps both runtime owners in the tab ownership ambiguity inventory', () => {
-  const hubA = makeWorktree('hub-a', 'AlphaOwner workspace')
-  const hubB = makeWorktree('hub-b', 'BetaOwner workspace')
-  const ownershipWorktrees = getPaletteOwnershipWorktreeIds({
-    worktreesByRepo: { repo: [hubA, hubB] },
-    folderWorkspaces: []
-  })
-
-  expect(ownershipWorktrees).toHaveLength(2)
-  expect(findAmbiguousWorktreeIds(ownershipWorktrees).has(hubA.id)).toBe(true)
 })

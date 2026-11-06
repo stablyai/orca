@@ -30,14 +30,18 @@ export type OrchestrationFleetAttentionFacts = {
   }
 }
 
-const ACTION_CATEGORIES = new Set<OrchestrationFleetAttentionCategory>([
+const ACTION_CATEGORIES = new Set<string>([
   'guidance',
   'input',
   'approval',
   'failure',
   'interruption',
   'unverifiable'
-])
+] satisfies OrchestrationFleetAttentionCategory[])
+
+export function isActionableOrchestrationFleetAttention(category: string): boolean {
+  return ACTION_CATEGORIES.has(category)
+}
 
 export function projectOrchestrationFleetAttention(
   facts: OrchestrationFleetAttentionFacts

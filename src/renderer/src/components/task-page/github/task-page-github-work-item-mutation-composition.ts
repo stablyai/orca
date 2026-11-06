@@ -1,3 +1,4 @@
+import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
 import type { ParsedTaskQuery } from '../../../../../shared/task-query'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -95,7 +96,9 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
   item: GitHubWorkItem,
   sourceScope: string | null
 ): GitHubWorkItem {
-  const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, sourceScope)
+  const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, sourceScope).filter(
+    (op) => !op.settleAccepted
+  )
   let merged: GitHubWorkItem = { ...item }
 
   // Hold confirmed whole-field values after pending clears until matching search adoption or newer intent.
@@ -141,7 +144,7 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
         : { ...merged, reviewRequests: composed }
   }
 
-  return merged
+  return projectPRCheckOwner(item, merged)
 }
 
 export function recomputeSoftHideForItem(args: {

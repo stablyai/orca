@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -8,7 +8,7 @@ import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
-import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifecycle'
@@ -17,7 +17,7 @@ import {
   hookLaneTitleTurnEndEvidence
 } from '@/hooks/agent-hook-turn-end-ownership'
 import { absorbBurstBellForHookOwnedIdle } from './agent-task-complete-notify'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'

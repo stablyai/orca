@@ -1,13 +1,13 @@
 // Target claims preserve environment identity so interrupted deploys resume the same registration.
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { randomUUID } from 'node:crypto'
-import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/runtime-environment-reconciliation-record'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ORCAD_MANAGED_REMOTE_PORT,
   type OrcadManagedDeferral,
@@ -37,7 +37,7 @@ import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { findCollidingEnvironmentName } from '../../../shared/runtime-environment-name-collision'
+import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import {
   isForceableOrcadDeferral,

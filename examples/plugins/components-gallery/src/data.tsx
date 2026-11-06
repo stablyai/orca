@@ -42,8 +42,9 @@ export function DataTab() {
       <Table
         label="Files"
         columns={[
-          { key: 'name', label: 'Name', sortable: true },
-          { key: 'kind', label: 'Kind', width: 'sm' },
+          { key: 'name', label: 'Name', sortable: true, minWidth: 'sm' },
+          // Secondary: drops out when the sidebar is narrow.
+          { key: 'kind', label: 'Kind', width: 'sm', hideBelow: 'sm' },
           { key: 'size', label: 'Bytes', width: 'sm', align: 'end', sortable: true }
         ]}
         rows={rows}

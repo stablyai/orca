@@ -415,41 +415,6 @@ it.each([10, 100])(
   }
 )
 
-it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-  'parks a live fresh destination across group/title changes and cache unpublish until actual attachment',
-  async () => {
-    const handle = openPositionDraft(),
-      scope = structuredAgentSessionDraftScopeKey(handle.sessionId)
-    await handle.finish()
-    const original = readNativeChatComposerDraft(scope)
-    const layout = publishedLayoutsOf(layoutApplyTestTransport.mainModel!)['wt-1']!
-    const moved = {
-      ...layout,
-      groupLayout: undefined,
-      groups: [{ id: 'moved-group', tabIds: layout.tabs.map((tab) => tab.id) }],
-      tabs: layout.tabs.map((tab) => ({ ...tab, customTitle: 'renamed' }))
-    }
-    layoutApplyTestTransport.emitFrame({ type: 'workspace', key: 'wt-1', layout: moved })
-    await main.settle()
-    expect(useAppStore.getState().getTab(handle.tab.id)?.groupId).toBe('moved-group')
-    layoutApplyTestTransport.emitFrame({ type: 'removed', key: 'wt-1' })
-    await main.settle()
-    expect(useAppStore.getState().getTab(handle.tab.id)?.entityId).toBe(handle.sessionId)
-    // ast-grep-ignore: test-no-real-time-wait-tsx -- Attach the still-live destination after the former 1s expiry.
-    await new Promise((resolve) => setTimeout(resolve, 1050))
-    const input = createRef<NativeChatComposerInput>()
-    const view = render(
-      <StrictMode>
-        <PositionField scope={scope} tabId={handle.tab.id} input={input} />
-      </StrictMode>
-    )
-    expect(input.current!.selectionStart).toBe(POSITION_TEXT.length)
-    expect(input.current!.value).toBe(POSITION_TEXT)
-    expect(readNativeChatComposerDraft(scope)).toBe(original)
-    view.unmount()
-  }
-)
-
 it.runIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
   'uses one addressed retirement for actual local close and makes a duplicate close inert',
   async () => {

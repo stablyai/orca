@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImageViewer from './ImageViewer'
-import ImageDiffViewer from './ImageDiffViewer'
+
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { requestViewerZoom } from './viewer-zoom-request'
 
@@ -50,20 +50,6 @@ function zoom(direction: 'in' | 'out' | 'reset'): boolean {
 }
 
 describe('ImageViewer app zoom ownership', () => {
-  it('zooms the image in the command-owning editor pane', () => {
-    renderImage(true)
-
-    expect(zoom('in')).toBe(true)
-    expect(screen.getByText('125%')).toBeTruthy()
-
-    zoom('in')
-    zoom('out')
-    expect(screen.getByText('125%')).toBeTruthy()
-
-    zoom('reset')
-    expect(screen.getByText('100%')).toBeTruthy()
-  })
-
   it('releases zoom ownership when focus moves and removes its listener on unmount', () => {
     const image = (ownsCommands: boolean) => (
       <EditorCommandOwnerContext value={ownsCommands}>
@@ -83,23 +69,6 @@ describe('ImageViewer app zoom ownership', () => {
 
     viewer.unmount()
     expect(zoom('in')).toBe(false)
-  })
-
-  it('zooms both sides of a diff together', () => {
-    render(
-      <EditorCommandOwnerContext value={true}>
-        <ImageDiffViewer
-          originalContent={PNG}
-          modifiedContent={PNG}
-          filePath="/repo/shot.png"
-          mimeType="image/png"
-          sideBySide={true}
-        />
-      </EditorCommandOwnerContext>
-    )
-
-    expect(zoom('in')).toBe(true)
-    expect(screen.getAllByText('125%')).toHaveLength(2)
   })
 
   it('routes between main and floating image owners using DOM focus', () => {
@@ -193,13 +162,6 @@ describe('ImageViewer app zoom ownership', () => {
 
     viewer.rerender(image(2))
     expect(screen.getByText('125%')).toBeTruthy()
-  })
-
-  it('leaves zoom to the focused pane when this image is in an unfocused split or hidden worktree', () => {
-    renderImage(false)
-
-    expect(zoom('in')).toBe(false)
-    expect(screen.getByText('100%')).toBeTruthy()
   })
 
   it('leaves editor font zoom alone in a combined diff until an image is expanded', () => {

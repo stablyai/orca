@@ -5,7 +5,7 @@ import type { AgentSessionOrcaStopCause } from '../../../shared/agent-session/li
 import {
   listAgentSessionConversations,
   type AgentSessionStoreState
-} from '../agent-session-store-state'
+} from './records/agent-session-store-state'
 
 export type AgentSessionReplacedRuntime = {
   /** The highest fence a replaced runtime granted; every lower fence was granted before it. */

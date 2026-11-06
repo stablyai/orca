@@ -1,7 +1,7 @@
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionAdmissionModels } from '../../agent-session-record-options'
+import type { AgentSessionAdmissionModels } from '../records/agent-session-record-options'
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
@@ -41,8 +41,8 @@ import {
   selectWritableAgentSessionRecord,
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
-} from '../../agent-session-store-state'
-import { agentSessionRecordIdentityFields } from '../../agent-session-record-founding'
+} from '../records/agent-session-store-state'
+import { agentSessionRecordIdentityFields } from '../records/agent-session-record-founding'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -69,6 +69,8 @@ export type AgentSessionReserveRequest = {
   surfaceTabId?: string
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  /** Only an adopting create is named before its first message. */
+  conversationName?: string
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */

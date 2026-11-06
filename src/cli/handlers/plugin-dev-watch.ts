@@ -17,6 +17,7 @@ import { writeStdoutLine } from '../stdout-line'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 import { CLI_BOOLEAN_FLAGS } from '../../shared/cli-argument-boundary'
 import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
+import { pluginDevWatchConfirmFor } from '../plugin-dev-watch/plugin-dev-watch-approval'
 import {
   pluginDevWatchShotPanel,
   type PluginDevWatchShotHost
@@ -107,8 +108,16 @@ function bindShotHost(
       if ('notShown' in shot) {
         return { notShown: shot.notShown }
       }
-      const { path: file, width, height, settled, errors } = shot
-      return { panelId, path: file, width, height, settled, errors }
+      const { path: file, width, height, settled, errors, pendingRequests } = shot
+      return {
+        panelId,
+        path: file,
+        width,
+        height,
+        settled,
+        errors,
+        ...(pendingRequests === undefined ? {} : { pendingRequests })
+      }
     }
   }
 }
@@ -133,10 +142,11 @@ export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): Plugi
     ...(check ? { check: () => checkPluginDevFolder(path) } : {}),
     ...(shotDir ? { shot: bindShotHost(ctx, shotDir, shotPanel) } : {}),
     refreshTypes: () => refreshDevTypes(ctx, path),
-    devLoad: () =>
+    devLoad: (approvalFingerprint) =>
       callPlugins<DevLoadResult>(ctx, 'plugins.devLoad', {
         path,
-        approvalFingerprint: typeof approve === 'string' ? approve : undefined
+        approvalFingerprint:
+          approvalFingerprint ?? (typeof approve === 'string' ? approve : undefined)
       }),
     list: () => pollHost<PluginHostListEntry[]>(ctx, 'plugins.list'),
     logs: (pluginKey, after) =>
@@ -170,7 +180,8 @@ export const PLUGIN_DEV_WATCH_HANDLERS: Record<string, CommandHandler> = {
       wait: waitUnlessAborted,
       onInterrupt: onPluginDevWatchInterrupt,
       exitNow: (code) => process.exit(code),
-      isConnectionLost: (error) => error instanceof PluginHostUnreachableError
+      isConnectionLost: (error) => error instanceof PluginHostUnreachableError,
+      confirm: pluginDevWatchConfirmFor(ctx.json)
     })
   }
 }

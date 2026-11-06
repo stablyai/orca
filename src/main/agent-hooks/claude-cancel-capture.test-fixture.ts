@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { AGENT_INTERRUPT_SETTLE_MS } from '../../shared/agent-interrupt-intent'
+import { AGENT_INTERRUPT_SETTLE_MS } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
 
 const capturedHook = z.object({
   kind: z.literal('hook'),

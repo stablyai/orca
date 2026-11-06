@@ -5,7 +5,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { getActiveWorktreeContext } from './helpers/markdown-editor-fixture'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { parseIpynb } from '../../src/renderer/src/components/editor/ipynb-parse'
+import { parseIpynb } from '../../src/renderer/src/components/editor/notebook/document/ipynb-parse'
 
 const FIRST = { id: 'first', source: 'print("original")' }
 const SECOND = { id: 'second', source: 'print("other")' }

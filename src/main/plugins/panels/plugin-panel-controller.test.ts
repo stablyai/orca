@@ -249,3 +249,34 @@ describe('PluginPanelController declarative panels', () => {
     expect(entry?.html).not.toContain('MODULE')
   })
 })
+
+describe('PluginPanelController isolated-only editors', () => {
+  it('never puts their entry in the srcdoc fallback, and still serves an any-frame editor', async () => {
+    const plugin = await createPlugin()
+    await writeFile(join(plugin.rootDir, 'editor.html'), '<main>EDITOR</main>')
+    const editor = { id: 'draw', title: 'Draw', extensions: ['.draw'], filenames: [] }
+    const withEditors: ValidDiscoveredPlugin = {
+      ...plugin,
+      manifest: {
+        ...plugin.manifest,
+        contributes: {
+          ...plugin.manifest.contributes,
+          customEditors: [
+            { ...editor, entry: 'editor.html', frame: 'isolated' },
+            { ...editor, id: 'any', entry: 'editor.html' }
+          ]
+        }
+      }
+    }
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => withEditors,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      log: () => vi.fn()
+    })
+    const isolated = await controller.openCustomEditor('renderer:1', plugin.pluginKey, 'draw')
+    expect(isolated?.html).not.toContain('EDITOR')
+    const any = await controller.openCustomEditor('renderer:1', plugin.pluginKey, 'any')
+    expect(any?.html).toContain('EDITOR')
+  })
+})

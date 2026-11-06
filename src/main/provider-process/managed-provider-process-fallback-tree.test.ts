@@ -2,7 +2,7 @@ import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-chi
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 // The real fallback teardown; only the primitives that touch the OS are faked.
@@ -11,9 +11,13 @@ const os = vi.hoisted(() => ({
   capture: vi.fn(async (): Promise<DescendantSnapshot | null> => null),
   verifySnapshot: vi.fn(async () => 'exited' as const)
 }))
-vi.mock('../windows-process-tree-kill', () => ({ terminateWindowsProcessTree: os.taskkill }))
-vi.mock('../pty-descendant-termination', () => ({ captureDescendantSnapshot: os.capture }))
-vi.mock('../pty-descendant-exit-verification', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
+  terminateWindowsProcessTree: os.taskkill
+}))
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  captureDescendantSnapshot: os.capture
+}))
+vi.mock('../pty/process-retirement/pty-descendant-exit-verification', () => ({
   terminateDescendantSnapshotWithVerdict: os.verifySnapshot
 }))
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({

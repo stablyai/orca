@@ -1,29 +1,28 @@
-/** What the structured mailbox lane needs from a chat host: session reads and admission-checked sends. */
+import type { OrchestrationDb } from './db'
+import type { OrchestrationCliCommand } from './cli-command'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
+import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
+import type { SenderSnapshotResolver } from './agent-message-sender'
+/** What the structured mailbox lane needs from a chat host: ordinary sends, and reads of what became of them. */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredPointerSubmission } from './structured-pointer-operation-id'
-import type { StructuredDispatchState } from './structured-session-pointer-delivery'
+import type { StructuredSendAnswer } from '../../native-chat/agent-session-wire/structured-agent-session-queued-send-answer'
 
 export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
-  | { kind: 'held' }
-  /** The chat's queue took it, as it takes a person's message. */
+  /** The chat's queue took it, as it takes a person's message sent while the agent works. */
   | { kind: 'queued' }
+  /** Sent at once; `pending` is still waiting on the agent's answer. */
+  | { kind: 'sent'; state: 'accepted' | 'pending' | 'rejected' | 'unknown' }
+  /** Refused before anything was recorded (for example a full queue); nothing to observe. */
+  | { kind: 'refused' }
   | { kind: 'unattached' }
   /** A check took or a waiter claimed its mail before admission; nothing ran. */
   | { kind: 'obsolete' }
 
-export type StructuredPointerSessionFacts = {
-  /** Current-context sends, oldest first: what the lane's own sends settled as. */
-  submissions: readonly StructuredPointerSubmission[]
-}
+/** What became of one earlier send, as the chat's host answers it without replaying it. */
+export type StructuredMailSendState = StructuredSendAnswer
 
 export type StructuredMailboxPointerHost = {
-  /** `null` when the session cannot be read. */
-  readSessionFacts: (sessionId: string) => Promise<StructuredPointerSessionFacts | null>
-  hasActionablePromptNow: (sessionId: string) => boolean | null
-  /** False for a conversation the idle sweep closed: it runs no turn. */
-  isWorkingNow: (sessionId: string) => boolean
   send: (input: {
     sessionId: string
     dispatchId: string | null
@@ -31,12 +30,34 @@ export type StructuredMailboxPointerHost = {
     expectedRuntimeFence: number
     /** Names its senders as `from`. */
     body: AgentJournalMessageItem
-    /** Hold rather than steer when a turn is running at admission. */
-    holdWhileWorking: boolean
-    /** Rechecked at admission: the batch may have been consumed while the send waited. */
+    /** Rechecked at admission: the mail may have been taken, or its owner changed, while the send waited. */
     stillOwed: () => boolean
   }) => Promise<StructuredPointerSendOutcome>
+  observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
+  /** Have the chat's queue look again: a card it passed over may be decidable now. */
+  wakeQueue: (sessionId: string) => void
+  /** Delete a card still waiting in the queue; false when it could not be deleted now. */
+  withdraw: (sessionId: string, operationId: string) => Promise<boolean>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
-  currentContextClearOperationId: (sessionId: string) => string | undefined
+  /** Coalesced journal publications of a session; returns the unsubscribe. */
+  watchJournal: (sessionId: string, onActivity: () => void) => () => void
+}
+
+export type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
+  getDb: () => OrchestrationDb | null
+  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
+  /** Resolve dispatch or direct-worker mail to its session; null delegates to the PTY lane. */
+  resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  redeliver?: (mailboxHandle: string) => void
+  /** Whether nothing can own the mailbox again; read from the database unless a test supplies it. */
+  mailboxEnded?: (mailboxHandle: string) => boolean
+  /** Why no chat resolves a mailbox; read from the database unless a test supplies it. */
+  unresolvedCustody?: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
+  /** The CLI name the recipient runs, for the reply line and the oversized-message pointer. */
+  getCliCommand: () => OrchestrationCliCommand
+  /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
+  senderSnapshotReader?: () => SenderSnapshotResolver
+  senderSnapshot: SenderSnapshotResolver
+  host: StructuredMailboxPointerHost
 }

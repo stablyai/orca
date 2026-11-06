@@ -2,21 +2,21 @@
  * Reuse worker readiness and sendTerminalAgentPrompt for serialized, generation-fenced bracketed paste and per-agent Enter timing across local, WSL and SSH. */
 
 import { randomUUID } from 'node:crypto'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
-import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
+import { isAgentPromptStalledError } from '../../terminal/input/agent-prompt-submission-verification'
 import {
   waitForLaunchedAgentComposer,
   type TerminalReadinessCreation,
   type LaunchedAgentReadinessRuntime
-} from '../../launched-agent-composer-readiness'
+} from '../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
+import { assertAgentPromptRequestActive } from '../../terminal/input/agent-prompt-signals'
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime,
   type UnprovableHostPolicy
-} from '../../launched-agent-write-guard'
+} from '../../terminal/wait/launched-agent-write-guard'
 
 /** The same budget orchestration gives a worker to reach its composer before dispatching to it. */
 const AGENT_READY_TIMEOUT_MS = 60_000

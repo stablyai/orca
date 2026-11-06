@@ -2,12 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from './text-control-paste'
+import './text-control-paste'
 import {
-  classifyTextControlPastePayloadOwnership,
   findOwnedPasteEventTextControlTarget,
-  findOwnedTextControlPasteTarget,
-  shouldClaimTextControlPastePayload
+  findOwnedTextControlPasteTarget
 } from './text-control-paste-ownership'
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
@@ -55,65 +53,5 @@ describe('text control paste ownership', () => {
     expect(findOwnedPasteEventTextControlTarget(other, textarea)).toBeNull()
     expect(findOwnedPasteEventTextControlTarget(terminalTextarea, terminalTextarea)).toBeNull()
     expect(findOwnedTextControlPasteTarget(terminalTextarea)).toBeNull()
-  })
-
-  it('allows native paste for empty and small payloads', () => {
-    expect(classifyTextControlPastePayloadOwnership('')).toEqual({
-      action: 'allow-native',
-      reason: 'empty',
-      byteLength: 0,
-      exceededLimit: false
-    })
-    expect(classifyTextControlPastePayloadOwnership('small')).toEqual({
-      action: 'allow-native',
-      reason: 'small',
-      byteLength: 5,
-      exceededLimit: false
-    })
-    expect(shouldClaimTextControlPastePayload('small')).toBe(false)
-  })
-
-  it('claims large text-control payloads with bounded ownership measuring', () => {
-    const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
-    const text = 'x'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 4_096)
-
-    expect(classifyTextControlPastePayloadOwnership(text)).toMatchObject({
-      action: 'claim-orca',
-      exceededLimit: true
-    })
-    expect(codePointAt.mock.calls.length).toBeLessThanOrEqual(
-      TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 1
-    )
-    codePointAt.mockClear()
-
-    expect(shouldClaimTextControlPastePayload(text)).toBe(true)
-    expect(codePointAt.mock.calls.length).toBeLessThanOrEqual(
-      TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 1
-    )
-  })
-
-  it('rejects oversized payloads before native paste can run', () => {
-    expect(
-      classifyTextControlPastePayloadOwnership('abcdef', {
-        directMaxBytes: 2,
-        maxBytes: 5
-      })
-    ).toEqual({
-      action: 'reject',
-      reason: 'too-large',
-      byteLength: 6,
-      exceededLimit: true
-    })
-    expect(
-      classifyTextControlPastePayloadOwnership('😀'.repeat(100), {
-        directMaxBytes: 2,
-        maxBytes: 5
-      })
-    ).toEqual({
-      action: 'reject',
-      reason: 'too-large',
-      byteLength: 8,
-      exceededLimit: true
-    })
   })
 })

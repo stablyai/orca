@@ -97,7 +97,6 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       .resolveLaunch({
         identity: launchIdentity,
         spawnToken: input.spawnToken,
-        ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
         ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
       })
       .catch((error: unknown) => {

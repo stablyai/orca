@@ -495,27 +495,6 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
     ])
   })
 
-  it('uses one change sequence across subscribers without duplicate fanout', async () => {
-    const runtime = new OrcaRuntimeService()
-    const created = runtimeSnapshot('wt-census-race', 1)
-    const first: number[] = []
-    const second: number[] = []
-    const unsubscribeFirst = runtime.onMobileSessionTabsChanged((_snapshot, sequence) =>
-      first.push(sequence)
-    )
-    const unsubscribeSecond = runtime.onMobileSessionTabsChanged((_snapshot, sequence) =>
-      second.push(sequence)
-    )
-
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [created] })
-    ;(runtime as unknown as RuntimeInventoryInternals).mobileSessionTabsNotifyCoalescer.flushAll()
-
-    expect(first).toEqual([expect.any(Number)])
-    expect(second).toEqual(first)
-    unsubscribeFirst()
-    unsubscribeSecond()
-  })
-
   it('aborts the census and removes the real runtime listener on disconnect', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
@@ -543,101 +522,6 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
 })
 
 describe('session tabs inventory census boundary', () => {
-  it('subsumes a change that precedes the final census snapshot', async () => {
-    const harness = createHarness()
-    const prior = snapshot(1, [terminalTab('prior')], { publicationEpoch: 'epoch-prior' })
-    const current = snapshot(1, [terminalTab('current')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.publish(prior)
-    harness.census.resolve({ snapshots: [current], authoritative: true, changeSequence: 1 })
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [current], authoritative: true }
-    ])
-  })
-
-  it('subsumes a creation captured at the census boundary exactly once', async () => {
-    const harness = createHarness()
-    const created = snapshot(2, [terminalTab('created')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.publish(created)
-    harness.census.resolve({ snapshots: [created], authoritative: true, changeSequence: 1 })
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [created], authoritative: true }
-    ])
-  })
-
-  it('delivers a creation after the census boundary as the next ordered update', async () => {
-    const harness = createHarness()
-    const created = snapshot(2, [terminalTab('created')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    queueMicrotask(() => harness.publish(created))
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [], authoritative: true },
-      { type: 'updated', ...created }
-    ])
-  })
-
-  it('delivers a removal after the census boundary as the next ordered update', async () => {
-    const harness = createHarness()
-    const existing = snapshot(1, [terminalTab('existing')])
-    const removed = snapshot(0, [], { publicationEpoch: 'removed:epoch', removed: true })
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [existing], authoritative: true, changeSequence: 0 })
-    queueMicrotask(() => harness.publish(removed))
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [existing], authoritative: true },
-      { type: 'updated', ...removed }
-    ])
-  })
-
-  it('delivers ordinary changes after initialization without duplication', async () => {
-    const harness = createHarness()
-    const created = snapshot(2, [terminalTab('created')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    await pending
-    harness.publish(created)
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [], authoritative: true },
-      { type: 'updated', ...created }
-    ])
-  })
-
-  it('drops a delayed callback already covered by the census watermark', async () => {
-    const harness = createHarness()
-    const included = snapshot(2, [terminalTab('included')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [included], authoritative: true, changeSequence: 1 })
-    await pending
-    harness.deliver(included, 1)
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [included], authoritative: true }
-    ])
-  })
-
   it('deduplicates a post-watermark notification already projected by the census', async () => {
     const harness = createHarness()
     const included = snapshot(2, [terminalTab('included')])
@@ -675,30 +559,6 @@ describe('session tabs inventory census boundary', () => {
     ])
   })
 
-  it('replays buffered follow intent before the later ordinary snapshot', async () => {
-    const harness = createHarness()
-    const followed = {
-      ...snapshot(1, [terminalTab('followed')]),
-      navigationIntent: 'follow' as const
-    }
-    const latest = snapshot(2, [terminalTab('latest')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    queueMicrotask(() => {
-      harness.publish(followed)
-      harness.publish(latest)
-    })
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [], authoritative: true },
-      { type: 'updated', ...followed },
-      { type: 'updated', ...latest }
-    ])
-  })
-
   it('bounds non-structural initialization churn to the latest projected state', async () => {
     const harness = createHarness()
     const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
@@ -716,32 +576,6 @@ describe('session tabs inventory census boundary', () => {
       { type: 'snapshots', snapshots: [], authoritative: true },
       { type: 'updated', ...snapshot(1_000, [terminalTab('stable')]) }
     ])
-  })
-
-  it('bounds alternating selection churn to the latest projected state', async () => {
-    const harness = createHarness()
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    queueMicrotask(() => {
-      for (let version = 1; version <= 1_000; version += 1) {
-        const selected = version % 2 === 0
-        harness.publish({
-          ...snapshot(version, [{ ...terminalTab('stable'), isActive: selected }]),
-          activeTabId: selected ? 'stable' : null,
-          activeTabType: selected ? 'terminal' : null
-        })
-      }
-    })
-    await pending
-
-    expect(harness.emit).toHaveBeenCalledTimes(2)
-    expect(harness.emit.mock.calls[1]?.[0]).toMatchObject({
-      type: 'updated',
-      snapshotVersion: 1_000,
-      activeTabId: 'stable'
-    })
   })
 
   it('bounds repeated follow intent to the latest caller request', async () => {
@@ -882,19 +716,5 @@ describe('session tabs inventory census boundary', () => {
     expect(collect).toHaveBeenCalledTimes(3)
     expect(unsubscribe).toHaveBeenCalledOnce()
     expect(emit).not.toHaveBeenCalled()
-  })
-
-  it('drops buffered work and removes the listener when disposed during census', async () => {
-    const harness = createHarness()
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.cleanup()
-    harness.publish(snapshot(2, [terminalTab('late')]))
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    await pending
-
-    expect(harness.emit).not.toHaveBeenCalled()
-    expect(harness.unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

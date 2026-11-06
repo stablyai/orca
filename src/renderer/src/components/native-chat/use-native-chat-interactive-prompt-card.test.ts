@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const { useAppStore } = await import('../../store')

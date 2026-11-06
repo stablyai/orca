@@ -58,3 +58,15 @@ function useHostMetric<T>(
   }, [context, hostId])
   return hostId ? read(context, hostId) : fallback
 }
+
+// The inputs a screen header gives classifyConnection beside the client state, re-read on host state and path
+// changes, so a view under that header shows the same steady verdict.
+export function useHostConnectionInputs(hostId: string | undefined) {
+  return {
+    reconnectAttempts: useReconnectAttempt(hostId),
+    lastConnectedAt: useLastConnectedAt(hostId),
+    ...useRelayRecoveryStatus(hostId)
+  }
+}
+
+export type HostConnectionInputs = ReturnType<typeof useHostConnectionInputs>

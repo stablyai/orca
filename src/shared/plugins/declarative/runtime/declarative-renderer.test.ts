@@ -335,6 +335,8 @@ describe('declarative runtime', () => {
       'ui.ack',
       'ui.event',
       'ui.hydrate',
+      'ui.restore',
+      'ui.snapshot',
       'ui.visibility'
     ])
     runtime.dispose()

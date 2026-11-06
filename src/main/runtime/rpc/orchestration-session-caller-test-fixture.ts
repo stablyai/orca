@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { vi } from 'vitest'
 import type {
   AgentSessionLease,
@@ -13,8 +13,9 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
+import type { TerminalIdentityReadContext } from '../terminal/query/terminal-identity-read-context'
 import { OrchestrationDb } from '../orchestration/db'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
@@ -53,8 +54,17 @@ export function sessionRecord(
   }
 }
 
+class SessionCallerRuntime extends OrcaRuntimeService {
+  public override getPaneKeyForTerminalHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null {
+    return super.getPaneKeyForTerminalHandle(handle, context)
+  }
+}
+
 export type SessionCallerHarness = {
-  runtime: OrcaRuntimeService
+  runtime: SessionCallerRuntime
   db: OrchestrationDb
   dispatcher: RpcDispatcher
   records: Map<string, AgentSessionRecord>
@@ -73,7 +83,7 @@ export function createSessionCallerHarness(
   })
 ): SessionCallerHarness {
   const db = new OrchestrationDb(':memory:')
-  const runtime = new OrcaRuntimeService()
+  const runtime = new SessionCallerRuntime()
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>

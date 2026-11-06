@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   capturePluginPanelPng,
   compositeBitmap,
+  looksBlank,
   pluginPanelCaptureRect,
   PLUGIN_SHOT_MAX_PNG_BYTES,
   settlePluginFrameGuest,
@@ -16,6 +17,8 @@ function image(size: { width: number; height: number }, png = Buffer.from('png')
     isEmpty: () => size.width === 0,
     getSize: () => size,
     resize: resized,
+    // A drawn panel: more than a background and a border.
+    toBitmap: () => Buffer.from([1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]),
     toPNG: () => png
   } as unknown as NativeImage
 }
@@ -56,7 +59,10 @@ describe('capturePluginPanelPng', () => {
   it('captures the rect and scales a HiDPI image to one pixel per point', async () => {
     const target = contents()
     const shot = await capturePluginPanelPng(target, { x: 900, y: 40, width: 360, height: 700 })
-    expect(target.capturePage).toHaveBeenCalledWith({ x: 900, y: 40, width: 360, height: 700 })
+    expect(target.capturePage).toHaveBeenCalledWith(
+      { x: 900, y: 40, width: 360, height: 700 },
+      { stayHidden: true }
+    )
     expect(shot).toMatchObject({ width: 360, height: 700 })
     expect(shot.png.toString()).toBe('png')
   })
@@ -156,5 +162,61 @@ describe('capturePluginPanelPng with an html guest', () => {
     expect(guest.capturePage).toHaveBeenCalledWith()
     expect(fromBitmap).toHaveBeenCalledOnce()
     expect(shot).toEqual({ png: Buffer.from('png-7'), width: 20, height: 10 })
+  })
+})
+
+describe('capturePluginPanelPng retries a bare-background capture', () => {
+  function solidImage(size: { width: number; height: number }, colors: number[]): NativeImage {
+    const bitmap = Buffer.alloc(size.width * size.height * 4)
+    for (let pixel = 0; pixel < size.width * size.height; pixel += 1) {
+      bitmap.writeUInt32LE(colors[pixel % colors.length], pixel * 4)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: capture reads only these NativeImage members.
+    return {
+      isEmpty: () => false,
+      getSize: () => size,
+      resize: () => solidImage(size, colors),
+      toBitmap: () => bitmap,
+      toPNG: () => Buffer.from(`png-${colors.length}`)
+    } as unknown as NativeImage
+  }
+
+  it('recaptures until the panel has drawn, then stops', async () => {
+    const size = { width: 4, height: 4 }
+    const shots = [solidImage(size, [1]), solidImage(size, [1, 2]), solidImage(size, [1, 2, 3])]
+    const host = contents({
+      capturePage: vi.fn(async () => shots.shift() ?? solidImage(size, [9]))
+    })
+    const wait = vi.fn(async () => undefined)
+    const shot = await capturePluginPanelPng(host, { x: 0, y: 0, ...size }, undefined, wait)
+    expect(host.capturePage).toHaveBeenCalledTimes(3)
+    expect(wait).toHaveBeenCalledTimes(2)
+    expect(shot.png).toEqual(Buffer.from('png-3'))
+  })
+
+  it('gives up after its retries and returns the last capture of a truly plain panel', async () => {
+    const size = { width: 2, height: 2 }
+    const host = contents({ capturePage: vi.fn(async () => solidImage(size, [5])) })
+    const shot = await capturePluginPanelPng(
+      host,
+      { x: 0, y: 0, ...size },
+      undefined,
+      async () => {}
+    )
+    expect(host.capturePage).toHaveBeenCalledTimes(9)
+    expect(shot.png).toEqual(Buffer.from('png-1'))
+  })
+})
+
+describe('looksBlank', () => {
+  it('is true for one or two colors and false from three', () => {
+    const pixels = (...values: number[]) => {
+      const bitmap = Buffer.alloc(values.length * 4)
+      values.forEach((value, index) => bitmap.writeUInt32LE(value, index * 4))
+      return bitmap
+    }
+    expect(looksBlank(pixels(7, 7, 7))).toBe(true)
+    expect(looksBlank(pixels(7, 8, 7))).toBe(true)
+    expect(looksBlank(pixels(7, 8, 9))).toBe(false)
   })
 })

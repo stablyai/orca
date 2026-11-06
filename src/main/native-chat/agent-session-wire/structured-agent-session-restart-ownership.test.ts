@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
-} from '../../runtime/agent-session-recovery-capsule'
+} from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'

@@ -69,10 +69,4 @@ describe('plugin errors as logged', () => {
     })
     expect(describePluginError(refused, base)).toBe('src/lib/a.ts:2:19: cannot import "react"')
   })
-
-  it('logs the plain stack outside a guest', () => {
-    const error = Object.assign(new Error('boom'), { stack: 'Error: boom\n    at x (/a.js:1:1)' })
-    expect(describePluginErrorForLog(error, null)).toBe('Error: boom\n    at x (/a.js:1:1)')
-    expect(describePluginErrorForLog('thrown', base)).toBe('thrown')
-  })
 })

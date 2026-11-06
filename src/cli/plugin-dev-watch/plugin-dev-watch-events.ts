@@ -1,6 +1,7 @@
 import type { PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
 import { formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
 import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
+import { formatPluginEditorCheck } from '../plugin-authoring/plugin-editor-check'
 import { PLUGIN_DEV_WATCH_SHOOTABLE, type PluginDevWatchShot } from './plugin-dev-watch-shot'
 
 /** `missing`: the host lists no plugin for the folder (for example, its id changed). */
@@ -120,11 +121,17 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
           ? [`  in Orca: ${pluginStatusPhrase(event.pluginStatus, event.pluginError)}`]
           : []),
         ...event.invalid.map((error) => `  invalid: ${error}`),
-        ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`)
+        ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`),
+        ...event.editors.flatMap(formatPluginEditorCheck).map((line) => `  ${line}`)
       ].join('\n')
     case 'shot':
       return [
         `shot ${event.path} (${event.width}x${event.height})${event.settled ? '' : ', not finished drawing'}`,
+        ...(event.pendingRequests
+          ? [
+              `  note: ${event.pendingRequests} host call(s) were still unanswered; the panel may show its loading state`
+            ]
+          : []),
         ...event.errors.map((error) => `  error: ${error}`)
       ].join('\n')
     case 'shot_skipped':

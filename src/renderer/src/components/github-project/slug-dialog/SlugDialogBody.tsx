@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
+import { gitHubSlugApiForTarget } from '@/runtime/github-slug-owner-api'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
@@ -28,11 +28,13 @@ export function SlugDialogBody({
 }): React.JSX.Element {
   const { owner, repo, host, number, type, cacheKey } = projectOrigin
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
-  const projectViewCache = useAppStore((s) => s.projectViewCache)
+  const table = useGitHubTaskProjectTable(
+    useAppStore((s) => s.projectViewCache[cacheKey]?.data ?? null),
+    sourceTarget
+  )
 
   // Read Project rows reactively so optimistic table edits also update the open dialog.
   const row = useMemo(() => {
-    const table = projectViewCache[cacheKey]?.data
     if (!table) {
       return null
     }
@@ -43,7 +45,7 @@ export function SlugDialogBody({
           r.content.repository?.toLowerCase() === `${owner}/${repo}`.toLowerCase()
       ) ?? null
     )
-  }, [projectViewCache, cacheKey, owner, repo, number])
+  }, [table, owner, repo, number])
 
   const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
@@ -56,24 +58,15 @@ export function SlugDialogBody({
     setLoading(true)
     setError(null)
     setDetails(null)
-    const target = sourceTarget
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<ProjectWorkItemDetailsBySlugResult>(
-            target,
-            'github.project.workItemDetailsBySlug',
-            { owner, repo, host, number, type },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.projectWorkItemDetailsBySlug({
-            owner,
-            repo,
-            host,
-            number,
-            type,
-            // Opening an item is a click (E9).
-            wakeWslDistro: true
-          })
+    const request = gitHubSlugApiForTarget(sourceTarget).projectWorkItemDetailsBySlug({
+      owner,
+      repo,
+      host,
+      number,
+      type,
+      // Opening an item is a click (E9).
+      wakeWslDistro: true
+    })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {

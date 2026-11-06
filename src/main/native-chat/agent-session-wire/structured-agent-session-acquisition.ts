@@ -45,7 +45,6 @@ export async function acquireOwner(
       throw new AgentSessionPreSpawnError(error)
     }
     const permissionMode = await input.launchPermissionMode?.(record)
-    const accountRecipe = await input.launchAccountRecipe?.(record)
     try {
       await input.assertNoTerminalWriter?.(record)
     } catch (error) {
@@ -65,7 +64,6 @@ export async function acquireOwner(
       // Retry the existing reservation instead of spawning a second child.
       spawnToken,
       ...(permissionMode ? { permissionMode } : {}),
-      ...(accountRecipe ? { accountRecipe } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
       ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
       ...(input.startupOptions ? { startupOptions: input.startupOptions } : {}),

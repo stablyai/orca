@@ -1,7 +1,7 @@
 // Persist the default surface independently from per-agent overrides.
 
 import type { GlobalSettings } from '../global-settings-types'
-import type { TuiAgent } from '../tui-agent'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentDefaultSurface } from './native-chat-appearance-settings'
 

@@ -23,6 +23,8 @@ type BannerProps = {
   wslHostUnavailable?: WslHostUnavailableReason | null
   /** The pane's managed server refuses this desktop and pairing again over SSH failed. */
   pairingRefused?: boolean
+  /** Opens Settings on the pane's server when its host now runs another server: Forget, then Connect. */
+  onOpenReplacedServerSettings?: (() => void) | null
   /** Main refused because the SSH host is waiting for the user to sign in; it resumes after. */
   awaitingSignIn?: boolean
 }
@@ -45,10 +47,34 @@ export function TerminalRemoteRuntimeReconnectBanner({
   tailscaleHost = null,
   wslHostUnavailable = null,
   pairingRefused = false,
+  onOpenReplacedServerSettings = null,
   awaitingSignIn = false
 }: BannerProps): React.JSX.Element {
   if (wslHostUnavailable) {
     return <WslHostUnavailableBanner reason={wslHostUnavailable} />
+  }
+  if (pairingRefused && onOpenReplacedServerSettings) {
+    return (
+      <RemoteRuntimeRecoveryCard
+        icon="stopped"
+        data={{ 'data-terminal-remote-runtime-reconnect-banner': 'server-replaced' }}
+        title={translate(
+          'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverReplacedTitle',
+          'This host runs a different Orca server'
+        )}
+        body={translate(
+          'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverReplacedBody',
+          'Orca connects to the host as a different SSH user, or its server was reinstalled, so reconnecting can’t restore this terminal. Forget this server in Settings, then connect the SSH host to pair with its current server.'
+        )}
+        action={{
+          label: translate(
+            'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverReplacedButton',
+            'Open server settings'
+          ),
+          onClick: onOpenReplacedServerSettings
+        }}
+      />
+    )
   }
   if (pairingRefused) {
     return (

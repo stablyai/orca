@@ -1,6 +1,6 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
-import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
+import { codexStreamingJournalItem } from '../../codex/structured/items/codex-structured-item-translation'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -10,7 +10,7 @@ import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
 } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

@@ -5,9 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -46,6 +47,7 @@ let generation = 0
 let exitOnStart = false
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let frames: AgentSessionSubscribeEvent[] = []
+const starts = structuredAgentSessionHeldStarts(() => host)
 
 function exitBeforeProof(): Promise<void> {
   return host.handleAdapterEvent({
@@ -105,6 +107,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   generation = 0
   frames = []
+  starts.clear()
   exitOnStart = false
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)
@@ -112,9 +115,10 @@ beforeEach(async () => {
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
+    // The adapter answers its never-proved opens with its own child's exit.
+    adapter: starts.wrap({
       open: () => new Promise(() => {}),
-      acquire: vi.fn(async ({ fence, spawnToken }) => {
+      acquire: starts.held(async ({ fence, spawnToken }) => {
         const child = {
           process: {
             hostId: 'local',
@@ -150,7 +154,7 @@ beforeEach(async () => {
       cancelTurn: vi.fn(async () => ({ cancelled: true })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
-    },
+    }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,

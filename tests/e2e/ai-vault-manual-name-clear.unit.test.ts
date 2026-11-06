@@ -12,7 +12,10 @@ import {
 } from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AiVaultListResult, AiVaultSession } from '../../src/shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   projectStructuredAiVaultSessions,
   OPENS_EVERY_STRUCTURED_CHAT
@@ -21,7 +24,7 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../src/main/runtime/agent-session-record-store-test-harness'
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   openTestJournalHostDatabase,
@@ -42,9 +45,9 @@ import {
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
-} from '../../src/renderer/src/components/right-sidebar/ai-vault-session-refresh'
-import { aiVaultSessionRowResumeGating } from '../../src/renderer/src/components/right-sidebar/ai-vault-session-resume'
-import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components/right-sidebar/use-ai-vault-session-display-title'
+} from '../../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
+import { aiVaultSessionRowResumeGating } from '../../src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume'
+import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components/right-sidebar/ai-vault/session-list/use-ai-vault-session-display-title'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('@/store', async () => {

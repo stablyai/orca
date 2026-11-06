@@ -13,7 +13,7 @@ import {
   splitPublishedLayout
 } from './workspace-layout-records'
 import { GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 
 function published(): PublishedWorkspaceLayout {
   const { layout } = loadWorkspaceLayoutWithoutReport(
