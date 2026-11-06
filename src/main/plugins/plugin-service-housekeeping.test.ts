@@ -9,6 +9,7 @@ import type {
   WatcherProcessHooks
 } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import { pluginDevChangeCount, pluginFrameContentRevision } from './plugin-dev-revision'
+import { PluginDevWatcher } from './plugin-dev-watcher'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 
 vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process', () => ({
@@ -150,4 +151,25 @@ it('catches up a missing root when it appears without changing another frame', a
   expect(revision(healthy)).toBe(healthyRevision)
   native(missing).callback(null, [{ type: 'update', path: join(missing, 'asset.js') }])
   expect(pluginDevChangeCount(missing)).toBe(1)
+})
+
+it('ignores binding checks that finish after disposal and leaves no timers', async () => {
+  const pending = Promise.withResolvers<boolean | null>()
+  const check = vi.spyOn(PluginDevWatcher.prototype, 'checkRootBindings')
+  check.mockReturnValue(pending.promise)
+  const refresh = vi.fn()
+  housekeeping.sync({ ...options, refresh })
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(check).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(60_000)
+  // Why: a slow check per root coalesces instead of stacking a second one.
+  expect(check).toHaveBeenCalledTimes(2)
+  const failedRevision = revision(failing)
+  housekeeping.dispose()
+  pending.resolve(true)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(refresh).not.toHaveBeenCalled()
+  expect(revision(failing)).toBe(failedRevision)
+  expect(vi.getTimerCount()).toBe(0)
+  check.mockRestore()
 })
