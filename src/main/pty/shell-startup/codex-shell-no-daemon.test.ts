@@ -236,7 +236,15 @@ describe('codex wrapper --no-daemon rule', () => {
           ['0', undefined, undefined, '<unset>', '0'],
           ['1', '', undefined, '', '0'],
           ['1', '10.0.0.1 5000 10.0.0.2 22', undefined, '10.0.0.1 5000 10.0.0.2 22', '0'],
-          ['1', undefined, '/dev/ttys004', '<unset>', '0']
+          ['1', undefined, '/dev/ttys004', '<unset>', '0'],
+          // Pane-level marker from a remote-viewer Codex launch.
+          [
+            '0',
+            CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+            undefined,
+            CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+            '0'
+          ]
         ].filter(([, inherited]) => !isPowerShell(shell) || inherited !== '')
       )(
         'routes manual copies for remote=%s without marking the parent shell',
@@ -253,8 +261,13 @@ describe('codex wrapper --no-daemon rule', () => {
             ...(inheritedTty ? { SSH_TTY: inheritedTty } : {})
           })
           expect(result.status, result.stderr).toBe(Number(exitCode))
+          // Codex keeps the marker for OSC 52, but blanks it for the commands it runs.
+          const clearMarker =
+            expected === CODEX_REMOTE_VIEWER_SSH_CONNECTION
+              ? "-c|shell_environment_policy.set.SSH_CONNECTION=''|"
+              : ''
           expect(lines(result.stdout)).toEqual([
-            `ARGV|--no-daemon|clipboard|ssh=${expected}`,
+            `ARGV|--no-daemon|${clearMarker}clipboard|ssh=${expected}`,
             `ARGV|shell|ssh=${inherited ?? '<unset>'}`
           ])
         }

@@ -906,7 +906,6 @@ jobs:
       download_selection_plan: ${{ needs.unit_plan.outputs.selection_planned == 'true' }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
-      browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Keep advisory evidence sibling to tests and outside verify.needs; reusable-workflow dependency otherwise added ~36s after last shard.
   unit_selection_evidence:

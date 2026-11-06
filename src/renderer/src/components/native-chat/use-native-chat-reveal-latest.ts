@@ -58,6 +58,8 @@ export type NativeChatMessageListHandle = {
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
   /** What the row drawing this message copies from its hover button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
+  /** Open a subagent's activity where it sits in the conversation and bring it into view. */
+  revealSubagent: (agentId: string) => void
 }
 
 /** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
@@ -90,12 +92,15 @@ function alwaysAtEnd(): boolean {
   return true
 }
 
+function ignoreSubagent(): void {}
+
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
   revealLatest: NativeChatMessageListHandle['revealLatest'],
   revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
   slots: readonly NativeChatTranscriptSlot[] = [],
-  readerAtEnd: NativeChatMessageListHandle['readerAtEnd'] = alwaysAtEnd
+  readerAtEnd: NativeChatMessageListHandle['readerAtEnd'] = alwaysAtEnd,
+  revealSubagent: NativeChatMessageListHandle['revealSubagent'] = ignoreSubagent
 ): void {
   useImperativeHandle(
     ref,
@@ -103,8 +108,9 @@ export function useNativeChatMessageListHandle(
       revealLatest,
       readerAtEnd,
       revealFindMatch,
-      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
+      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId),
+      revealSubagent
     }),
-    [readerAtEnd, revealLatest, revealFindMatch, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, revealSubagent, slots]
   )
 }
