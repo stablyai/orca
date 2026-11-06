@@ -101,12 +101,16 @@ export function renderMobileWebAppRouteManifest(routes) {
   const entryLines = routes.map(({ key, module }) => {
     // Layout can commit behind pending screen chunk, so it cannot signal paint.
     // Closure-only manifest entries lack keys and are never loaded; wrapping their screens is optional.
-    const resolved = key?.endsWith('/_layout.tsx')
+    const layout = key?.endsWith('/_layout.tsx')
+    const resolved = layout
       ? `import(${JSON.stringify(module)})`
       : `import(${JSON.stringify(module)}).then(withRouteScreenPaintReport)`
-    return `  [${JSON.stringify(key)}]: { default: lazy(() => ${resolved}) }`
+    // The page preloads the routes its first pathname needs; a layout covers its directory.
+    const screen = key && !layout ? routePathnameFromKey(key) : null
+    const scope = layout ? { layout: key.slice(1, -'/_layout.tsx'.length) } : screen && { screen }
+    return `  [${JSON.stringify(key)}]: bootRoute(() => ${resolved}, ${JSON.stringify(scope)})`
   })
-  return `import { lazy } from "react"
+  return `import { bootRoute } from "./web-entry/boot-route-preload"
 import { withRouteScreenPaintReport } from "./src/mobile-web-shell/bridge/page-first-paint"
 const modules = {
 ${entryLines.join(',\n')}

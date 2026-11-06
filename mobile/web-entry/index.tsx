@@ -39,6 +39,7 @@ import { RpcClientProvider } from '../src/transport/client-context.web'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
+import { preloadBootRoutes } from './boot-route-preload'
 
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
@@ -168,8 +169,10 @@ bootstrapShellPage({
         refreshPageTerminalSettings(current.storage, current.storageOversize)
       }
     })
-    // Activation settles to English on failure, so the page always mounts.
-    void settleLatest(() => uiLocaleActivation).then(() =>
+    // Mount with the route's chunks loaded: a boot Suspense fallback holds the finished screen back 300 ms.
+    const bootRoutes = preloadBootRoutes(window.location.pathname)
+    // Activation settles to English on failure and preloads settle either way, so the page always mounts.
+    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes]).then(() =>
       createRoot(container).render(
         // Catch outside ExpoRoot so route-resolution/import failures cannot bypass the page boundary.
         <PageFaultBoundary
