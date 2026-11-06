@@ -423,55 +423,22 @@
       "id": "native-chat.transcript-consumed-boundary",
       "title": "Transcript replacement remains visible when it races message publication",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "native-chat",
       "layer": "host-file-reader-and-renderer",
       "surfaces": ["native chat live transcript"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local"],
-      "coverageNotes": "Real local JSONL files exercise the shared host reader with Claude records; hidden Electron proof traverses actual host IPC and chat rendering. No physical remote or Windows/Linux deployment claim.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1662 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Real local JSONL files exercise the shared host reader with Claude records; hidden Electron proof traverses actual host IPC and chat rendering. No physical remote or Windows/Linux deployment claim.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/37524761640"],
       "invariant": "A retained transcript cursor fingerprint contains only bytes actually consumed at that cursor. A larger in-place rewrite during publication must be delivered, and subsequent ordinary appends arrive once. Closing or failing a test leaves no active watcher.",
       "oracle": "Synchronous larger rewrites during append, initial snapshot and replacement snapshot callbacks deliver new exactly once, followed by followup exactly once. A 4 MiB read retains an independent 64-byte backing allocation. Hidden Electron reproduces the same ordering at snapshot IPC publication and asserts the new rendered text replaces the old conversation.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/transcript-watch-inplace-drain-race.test.ts src/main/native-chat/transcript-file-version.test.ts src/main/native-chat/transcript-watch.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e tests/e2e/native-chat-inplace-drain-race.spec.ts --workers=1"
-      ],
-      "testFiles": [
-        "src/main/native-chat/transcript-watch-inplace-drain-race.test.ts",
-        "src/main/native-chat/transcript-file-version.test.ts",
-        "src/main/native-chat/transcript-watch.test.ts",
-        "tests/e2e/native-chat-inplace-drain-race.spec.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/native-chat/transcript-watch-inplace-drain-race.test.ts",
-          "assertions": ["delivers a larger rewrite while publishing a completed %s"]
-        },
-        {
-          "file": "src/main/native-chat/transcript-file-version.test.ts",
-          "assertions": ["owns only the final 64 bytes of a large read"]
-        },
-        {
-          "file": "tests/e2e/native-chat-inplace-drain-race.spec.ts",
-          "assertions": [
-            "renders a larger transcript rewrite during snapshot publication, then ordinary appends"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-10-06",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/transcript-watch-inplace-drain-race.test.ts src/main/native-chat/transcript-file-version.test.ts src/main/native-chat/transcript-watch.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 2.85,
-          "summary": "32 tests in three files pass, including all three publication modes, replacement sizes, partial records and watcher teardown."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "Focused local unit command; CI/platform soak not established."
@@ -489,6 +456,7 @@
         "evidence": "At most 64 owned, unpooled bytes per cursor. Fingerprint capture reuses already-read chunks and removes the post-publication filesystem read; no new timers, polls or subprocesses."
       },
       "knownGaps": [
+        "Audit1662 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Physical SSH/WSL/runtime hosts and native Linux/Windows remain unverified.",
         "This gate targets rewrites during publication, not atomic snapshots of arbitrary concurrent multi-chunk file overwrites."
       ],
@@ -1562,149 +1530,22 @@
       "id": "agent-session.structured-send-at-most-once",
       "title": "One structured-send attempt dispatches once; a later Send is a new message",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "agent-session-runtime",
       "layer": "shared-host-renderer-and-mobile-unit",
       "surfaces": ["desktop native chat", "mobile native chat", "structured agent-session RPC"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "ssh", "remote-runtime", "mobile"],
-      "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["local", "mobile"],
-      "coverageNotes": "Audit1474 removes the full renderer session-hook suite. Supplied-state projection, mock transport/settings forwarding and assembled shared-owner policy alarms are retired; no equivalent replacement coverage is claimed. The option admission assertion reference was already stale. Reduced selectors have no fresh focused run; historical execution evidence retains its original scope. Audit1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic host and direct/Relay transport tests cover per-operation duplicate protection, caller changes, missing host journal rows, acknowledgement loss, and expiry. Mobile tests cover new-action identity, remount, storage refusal, current attachment paths, and capability changes; renderer tests cover one request per send and the bounded hand-back. Live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised. The test-value audit removes the mock send-bridge suite: skills/options/attachment forwarding and accepted/unknown/queued/rejected callback policy no longer have that isolated alarm. Remaining send/draft tests are not claimed as equivalent coverage. Historical run commands and counts are preserved as historical records; a narrowed selector is not a new passed run. Audit1294 removes mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx. Its mock-only request/capability/private-state/copy alarms are intentionally lost. Remaining tests are not equivalent replacement coverage. Narrowed commands require fresh parent-owned validation; no new runtime, platform or physical mobile evidence is claimed. Audit1302: src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts: Direct performSend composition seeds real journal outcomes but adapter dispatch is never reachable from performSend at all (owner lines90\u2013159: delivery runs separately). Thus both never-redispatch claims are unexercised; caller ledgers are not constructed and supplied acceptance callbacks never execute. Remaining assertions copy seeded unknown state or count one queued row. Lose isolated submission replay/dedup characterization; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/session/mobile-structured-send-delivery.test.ts, mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1308: src/renderer/src/lib/launch-structured-agent-session.test.ts removed. Unresolvable probe retries, exhausted selector refusal and unknown-outcome create-envelope mock alarms disappear. No equivalent replacement coverage is claimed. Audit1315 removes/narrows mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1334 removes/narrows mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts, mobile/src/session/use-mobile-structured-agent-session-send.test.tsx, mobile/src/session/use-mobile-structured-agent-session.test.tsx, mobile/src/transport/mobile-relay-rpc-session.test.ts, mobile/src/transport/stable-logical-rpc-client.test.ts, mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx, mobile/src/mobile-web-shell/bridge-host-init.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1659 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1474 removes the full renderer session-hook suite. Supplied-state projection, mock transport/settings forwarding and assembled shared-owner policy alarms are retired; no equivalent replacement coverage is claimed. The option admission assertion reference was already stale. Reduced selectors have no fresh focused run; historical execution evidence retains its original scope. Audit1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic host and direct/Relay transport tests cover per-operation duplicate protection, caller changes, missing host journal rows, acknowledgement loss, and expiry. Mobile tests cover new-action identity, remount, storage refusal, current attachment paths, and capability changes; renderer tests cover one request per send and the bounded hand-back. Live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised. The test-value audit removes the mock send-bridge suite: skills/options/attachment forwarding and accepted/unknown/queued/rejected callback policy no longer have that isolated alarm. Remaining send/draft tests are not claimed as equivalent coverage. Historical run commands and counts are preserved as historical records; a narrowed selector is not a new passed run. Audit1294 removes mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx. Its mock-only request/capability/private-state/copy alarms are intentionally lost. Remaining tests are not equivalent replacement coverage. Narrowed commands require fresh parent-owned validation; no new runtime, platform or physical mobile evidence is claimed. Audit1302: src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts: Direct performSend composition seeds real journal outcomes but adapter dispatch is never reachable from performSend at all (owner lines90–159: delivery runs separately). Thus both never-redispatch claims are unexercised; caller ledgers are not constructed and supplied acceptance callbacks never execute. Remaining assertions copy seeded unknown state or count one queued row. Lose isolated submission replay/dedup characterization; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/session/mobile-structured-send-delivery.test.ts, mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1308: src/renderer/src/lib/launch-structured-agent-session.test.ts removed. Unresolvable probe retries, exhausted selector refusal and unknown-outcome create-envelope mock alarms disappear. No equivalent replacement coverage is claimed. Audit1315 removes/narrows mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1334 removes/narrows mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts, mobile/src/session/use-mobile-structured-agent-session-send.test.tsx, mobile/src/session/use-mobile-structured-agent-session.test.tsx, mobile/src/transport/mobile-relay-rpc-session.test.ts, mobile/src/transport/stable-logical-rpc-client.test.ts, mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx, mobile/src/mobile-web-shell/bridge-host-init.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/20133"],
       "invariant": "One structured-send operation id causes at most one provider dispatch. Each user Send on phone or desktop is a new action with a fresh id and one request; neither automatically resends an ambiguous action. The host retains the original action's outcome, and a later phone Send remains possible with equal text, after remount, or when phone storage fails. Repeated transmission of the same operation remains protected by host deduplication.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
-      ],
-      "testFiles": [
-        "src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts",
-        "src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts",
-        "src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts",
-        "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
-        "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
-        "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
-        "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-        "mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts",
-        "mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts",
-        "mobile/src/session/mobile-structured-send-new-action.test.ts",
-        "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session.test.tsx",
-        "mobile/src/transport/mobile-relay-rpc-session.test.ts",
-        "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts",
-        "mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx",
-        "mobile/src/mobile-web-shell/page-storage-keys.test.ts",
-        "mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts",
-        "mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx",
-        "mobile/src/mobile-web-shell/bridge-host-init.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
-          "assertions": [
-            "never redelivers after admission survives without its journal submission",
-            "fails closed when a legacy pending row survives without its submission",
-            "never reruns an admission-only send after the caller changes",
-            "reuses a pending send admission after the client refreshes its fence",
-            "settles a submission write failure as rejected before provider dispatch"
-          ]
-        },
-        {
-          "file": "src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts",
-          "assertions": ["replays the original row after the caller identity changes"]
-        },
-        {
-          "file": "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
-          "assertions": [
-            "keeps a chat's model its CLI stopped listing, and sends on it and its effort",
-            "a later Send owns a new id even when the earlier host answer was %s",
-            "shows a recovered unknown once and a new Send and reply without replay",
-            "leaves a recorded rejection to its row, with no banner and nothing handed back, for %s",
-            "does not replay an old action after remount",
-            "uses newly uploaded attachment paths for a new action with the same image",
-            "does not infer omitted captured skills from the live composer draft",
-            "a later Send is independent after a %s refusal",
-            "a new Send goes through after a stale-fence refusal"
-          ]
-        },
-        {
-          "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
-          "assertions": [
-            "never sends a message twice when its card already waits after a restart",
-            "admits a recorded send that never landed under the same id",
-            "never sends again a message that may have reached the agent"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
-          "assertions": [
-            "marks a written request unknown when another request triggers auth recovery"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": [
-            "makes before break, rejects in-flight work, and replays subscriptions",
-            "keeps replies that commit before cutover and carries viewport state into replay",
-            "suspends one physical session and replays subscriptions on foreground replacement",
-            "reports requests the suspended session never sent as suspended, and written ones as ambiguous",
-            "preserves delivery ambiguity without replaying a mutation after relay replacement",
-            "lets the physical close settle in-flight requests on close, keeping pre-write failures definite",
-            "preserves a committed response when logical close wins the callback race",
-            "publishes the replacement dial phases while the client is suspended",
-            "forwards a reconnecting phase published by the dialing session itself",
-            "names a relay dial started from reconnecting without disturbing the state",
-            "publishes recovery-path changes and keeps Relay pending between failed dials",
-            "does not revive a stale recovery path after a connection later drops",
-            "drops the pending path when the previous session recovers mid-dial",
-            "never downgrades a live session while a make-before-break replacement dials",
-            "restores disconnected when a dial it was narrating fails",
-            "outlives the flat bound when the relay cell holds the dial",
-            "closes a replacement that fails authentication and preserves the active session",
-            "drops a stream event that lands after the caller unsubscribed"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
-          "assertions": [
-            "releases stream listeners on failure even when close follows it",
-            "connects when an older runtime rejects capability negotiation",
-            "connects when the relay never answers capability negotiation",
-            "rejects a mismatched outer credential version and closes the physical link",
-            "routes terminal and browser binary streams after confirmation",
-            "keeps the configured connect default for omitted options and honors explicit timeouts",
-            "rejects pending RPC work when the physical link fails",
-            "releases requests waiting on a failed session once it is retired, unsent",
-            "keeps a synchronous pre-write relay failure definite",
-            "marks in-flight requests delivery-unknown when the session closes",
-            "marks a relay RPC timeout delivery-unknown",
-            "sends a server workspace call as the same top-level executionHost frame as before the envelope",
-            "merges an envelope under the transport fields on requests, subscribes and unsubscribes",
-            "carries captured GitHub authority through the production relay physical await without replay"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-          "assertions": [
-            "gives back at once, as unconfirmed, a send whose request threw, and never sends it again"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-11-05",
-          "runner": "local",
-          "platform": "linux",
-          "result": "passed",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-          "durationSeconds": 9.682,
-          "summary": "97 focused tests passed on isolated Xvfb. Deterministic fixtures; no live provider, physical mobile, mixed-version deployment or cross-platform claim. Audit1474 reduced selector."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 45,
         "scope": "Historical pre-audit selector budget; changed selectors have no new runtime measurement. Unchanged receipts remain scoped to their own commands. New focused Linux selector completed once; historical p95 target is unchanged and not measured by this execution. New focused Linux selector completed once; historical p95 target is unchanged and not measured by this execution."
@@ -1726,6 +1567,7 @@
         "Add live physical-mobile and remote-runtime interruption evidence before claiming full provider coverage."
       ],
       "knownGaps": [
+        "Audit1659 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Audit1474 retired complete execution receipt; original fields unchanged: {\"date\":\"2026-11-04\",\"runner\":\"local\",\"platform\":\"linux\",\"result\":\"passed\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm --config.verifyDepsBeforeRun=false test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx --maxWorkers=2\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx\",\"durationSeconds\":11.53,\"summary\":\"Test Files  8 passed (8); Tests  142 passed (142). Focused unit selector; native adapters remain mocked where present. Single local execution, not a p95 or cross-platform measurement. Source head 574edb34b8e5448541e7a69aac098958d91ffb06.\"}",
         "Audit1474 removes the full renderer session-hook suite. Supplied-state projection, mock transport/settings forwarding and assembled shared-owner policy alarms are retired; no equivalent replacement coverage is claimed. The option admission assertion reference was already stale. Reduced selectors have no fresh focused run; historical execution evidence retains its original scope.",
         "Phone composer drafts remain in memory: killing the app between Send and host recording loses that text, as before.",
