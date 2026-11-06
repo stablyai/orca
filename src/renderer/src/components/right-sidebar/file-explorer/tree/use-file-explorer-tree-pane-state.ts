@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor'

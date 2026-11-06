@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'

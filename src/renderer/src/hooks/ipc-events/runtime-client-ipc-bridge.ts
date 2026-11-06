@@ -1,5 +1,5 @@
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
-import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
@@ -14,6 +14,7 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { hostsBrowserPagesFor } from '@/runtime/browser-client-host-request-answer'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -269,7 +270,8 @@ export function registerRuntimeClientIpcBridge(
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
             sync: runtimeClientEventsSync.sync
           })
-        }
+        },
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
       )
       return subscription
     },

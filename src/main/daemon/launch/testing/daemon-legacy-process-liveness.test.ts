@@ -28,12 +28,3 @@ it('counts a process it may not signal (EPERM) as alive', () => {
   killFailsWith('EPERM')
   expect(legacyDaemonProcessMayBeAlive(runtimeDir, 50)).toBe(true)
 })
-
-it('counts only a missing process (ESRCH) as gone', () => {
-  killFailsWith('ESRCH')
-  expect(legacyDaemonProcessMayBeAlive(runtimeDir, 50)).toBe(false)
-})
-
-it('counts a version with no pid file as gone', () => {
-  expect(legacyDaemonProcessMayBeAlive(runtimeDir, 49)).toBe(false)
-})

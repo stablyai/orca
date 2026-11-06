@@ -2,7 +2,7 @@ import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 const WORKTREE_PATH = '/tmp/worktree-a'

@@ -26,7 +26,9 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
 // Main's resume banner has its own tests (main-pane-resume-banner.test.ts).

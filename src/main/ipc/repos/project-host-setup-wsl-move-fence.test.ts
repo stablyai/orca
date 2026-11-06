@@ -13,9 +13,9 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { RuntimeProjectHostSetupController } from '../../runtime/runtime-project-host-setup-controller'
-import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
-import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
+import { RuntimeProjectHostSetupController } from '../../runtime/repositories/runtime-project-host-setup-controller'
+import { RuntimeRepositoryIssueCommand } from '../../runtime/repositories/runtime-repository-issue-command'
+import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
 import * as issueCommandFile from '../../workspace-hooks/issue-command-file'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
 

@@ -107,6 +107,9 @@ export type AiVaultSessionSubagentInfo = {
   status: AiVaultSubagentRunStatus | null
 }
 
+/** Where a title came from: the session's own name (a rename or provider-generated), or a stand-in such as its first prompt. */
+export type AiVaultSessionTitleKind = 'named' | 'fallback'
+
 export type AiVaultSession = {
   /** Recorded account home; null proves System default, absent means unknown. */
   accountHome?: AgentSessionAccountHome | null
@@ -117,6 +120,8 @@ export type AiVaultSession = {
   agent: AiVaultAgent
   sessionId: string
   title: string
+  /** Claude and Codex only: whether `title` is the session's own name or a stand-in; absent means unclassified. */
+  titleKind?: AiVaultSessionTitleKind
   cwd: string | null
   /** Host-proven spellings of `cwd` for matching scopes and resume targets; launch paths remain separate. */
   cwdAliases?: string[]

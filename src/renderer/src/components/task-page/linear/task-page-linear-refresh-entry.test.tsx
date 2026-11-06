@@ -8,7 +8,7 @@ import {
 } from './task-page-linear-refresh-test-fixtures'
 import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-publication'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import LinearItemDrawer from '../../LinearItemDrawer'
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'

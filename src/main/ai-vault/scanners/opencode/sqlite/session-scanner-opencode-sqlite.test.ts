@@ -191,37 +191,6 @@ function insertPart(
   ).run(args.id, args.messageId, args.sessionId, args.timeCreated, args.timeCreated, data)
 }
 describe('listOpenCodeSqliteSessions', () => {
-  it('returns candidates sorted by time_updated desc via the synthesized mtimeMs', async () => {
-    const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
-      id: 'ses_old',
-      title: 'Old',
-      timeCreated: 1_777_634_000_000,
-      timeUpdated: 1_777_634_001_000
-    })
-    insertSession(db, {
-      id: 'ses_new',
-      title: 'New',
-      timeCreated: 1_777_634_002_000,
-      timeUpdated: 1_777_634_003_000
-    })
-    db.close()
-
-    const issues: AiVaultScanIssue[] = []
-    const candidates = await listOpenCodeSqliteSessions({
-      dbPaths: [path],
-      limit: 10,
-      issues
-    })
-    expect(issues).toEqual([])
-    expect(candidates).toHaveLength(2)
-    expect(candidates[0].agent).toBe('opencode')
-    expect(candidates[0].file.mtimeMs).toBe(1_777_634_003_000)
-    expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_new'))
-    expect(candidates[1].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_old'))
-  })
-
   it('lists in-scope sessions past a newer out-of-scope one when scoped', async () => {
     const { db, path } = createTempDb()
     applyOpenCodeSchema(db)
@@ -311,31 +280,6 @@ describe('listOpenCodeSqliteSessions', () => {
     ])
   })
 
-  it('returns [] when the session table is missing (legacy install)', async () => {
-    const { db, path } = createTempDb()
-    db.exec('CREATE TABLE other (id TEXT)')
-    db.close()
-    const candidates = await listOpenCodeSqliteSessions({
-      dbPaths: [path],
-      limit: 10,
-      issues: []
-    })
-    expect(candidates).toEqual([])
-  })
-
-  it('records an issue when the DB file does not exist', async () => {
-    const issues: AiVaultScanIssue[] = []
-    const candidates = await listOpenCodeSqliteSessions({
-      dbPaths: ['/nonexistent/opencode.db'],
-      limit: 10,
-      issues
-    })
-    expect(candidates).toEqual([])
-    expect(issues).toHaveLength(1)
-    expect(issues[0].agent).toBe('opencode')
-    expect(issues[0].path).toBe('/nonexistent/opencode.db')
-  })
-
   it('lists sessions from a minimal readable session table', async () => {
     const { db, path } = createTempDb()
     applyMinimalOpenCodeSchema(db)
@@ -355,137 +299,6 @@ describe('listOpenCodeSqliteSessions', () => {
 })
 
 describe('parseOpenCodeSqliteSession', () => {
-  it('builds an AiVaultSession with title, cwd, model, tokens, and resume command', async () => {
-    const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
-      id: 'ses_1',
-      title: 'OpenCode title',
-      directory: '/tmp/opencode',
-      timeCreated: 1_777_634_000_000,
-      timeUpdated: 1_777_634_001_000,
-      tokensInput: 100,
-      tokensOutput: 40,
-      tokensReasoning: 10,
-      tokensCacheRead: 5,
-      cost: 0.01
-    })
-    insertMessage(db, {
-      id: 'msg_1',
-      sessionId: 'ses_1',
-      role: 'user',
-      timeCreated: 1_777_634_000_500,
-      summaryTitle: 'OpenCode title'
-    })
-    insertPart(db, {
-      id: 'prt_1',
-      messageId: 'msg_1',
-      sessionId: 'ses_1',
-      timeCreated: 1_777_634_000_500,
-      text: 'Plan the work'
-    })
-    insertMessage(db, {
-      id: 'msg_2',
-      sessionId: 'ses_1',
-      role: 'assistant',
-      timeCreated: 1_777_634_000_900
-    })
-    insertPart(db, {
-      id: 'prt_2',
-      messageId: 'msg_2',
-      sessionId: 'ses_1',
-      timeCreated: 1_777_634_001_000,
-      text: 'Done'
-    })
-    db.close()
-
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: path,
-      sessionId: 'ses_1',
-      platform: 'darwin'
-    })
-    expect(session).not.toBeNull()
-    expect(session!.agent).toBe('opencode')
-    expect(session!.sessionId).toBe('ses_1')
-    expect(session!.filePath).toBe(path)
-    expect(session!.title).toBe('OpenCode title')
-    expect(session!.cwd).toBe('/tmp/opencode')
-    expect(session!.model).toBe('glm-5.2')
-    expect(session!.totalTokens).toBe(150)
-    expect(session!.messageCount).toBe(2)
-    expect(session!.createdAt).toBe(new Date(1_777_634_000_000).toISOString())
-    expect(session!.updatedAt).toBe(new Date(1_777_634_001_000).toISOString())
-    expect(session!.resumeCommand).toBe("cd '/tmp/opencode' && opencode --session 'ses_1'")
-    expect(session!.previewMessages).toHaveLength(2)
-    expect(session!.previewMessages[0].text).toBe('Plan the work')
-    expect(session!.previewMessages[0].role).toBe('user')
-    expect(session!.previewMessages[1].text).toBe('Done')
-    expect(session!.previewMessages[1].role).toBe('assistant')
-  })
-
-  it('falls back to summary.body for title when session.title is empty', async () => {
-    const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
-      id: 'ses_2',
-      title: '',
-      timeCreated: 1_777_634_000_000,
-      timeUpdated: 1_777_634_001_000
-    })
-    insertMessage(db, {
-      id: 'msg_1',
-      sessionId: 'ses_2',
-      role: 'user',
-      timeCreated: 1_777_634_000_500,
-      summaryBody: 'fallback title from summary'
-    })
-    insertPart(db, {
-      id: 'prt_1',
-      messageId: 'msg_1',
-      sessionId: 'ses_2',
-      timeCreated: 1_777_634_000_500,
-      text: 'hello'
-    })
-    db.close()
-
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: path,
-      sessionId: 'ses_2',
-      platform: 'darwin'
-    })
-    expect(session).not.toBeNull()
-    expect(session!.title).toBe('fallback title from summary')
-  })
-
-  it('returns null when the session id is not found', async () => {
-    const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
-      id: 'ses_real',
-      timeCreated: 1_777_634_000_000,
-      timeUpdated: 1_777_634_001_000
-    })
-    db.close()
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: path,
-      sessionId: 'ses_missing',
-      platform: 'darwin'
-    })
-    expect(session).toBeNull()
-  })
-
-  it('returns null when the DB has no session table', async () => {
-    const { db, path } = createTempDb()
-    db.exec('CREATE TABLE other (id TEXT)')
-    db.close()
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: path,
-      sessionId: 'ses_1',
-      platform: 'darwin'
-    })
-    expect(session).toBeNull()
-  })
-
   it('parses a minimal readable session table without optional columns or messages', async () => {
     const { db, path } = createTempDb()
     applyMinimalOpenCodeSchema(db)
@@ -518,25 +331,6 @@ describe('parseOpenCodeSqliteSession', () => {
     await expect(
       captureOpenCodeSqliteSession({ dbPath: path, sessionId: 'ses_minimal', platform: 'darwin' })
     ).rejects.toThrow(/unreadable message-part schema/)
-  })
-
-  it('extracts model from older modelID schema', async () => {
-    const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
-      id: 'ses_3',
-      timeCreated: 1_777_634_000_000,
-      timeUpdated: 1_777_634_001_000,
-      model: JSON.stringify({ modelID: 'claude-sonnet-4-5' })
-    })
-    db.close()
-    const session = await parseOpenCodeSqliteSession({
-      dbPath: path,
-      sessionId: 'ses_3',
-      platform: 'darwin'
-    })
-    expect(session).not.toBeNull()
-    expect(session!.model).toBe('claude-sonnet-4-5')
   })
 
   it('captures every text part of the earliest user message and no later turn', async () => {

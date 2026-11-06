@@ -1,3 +1,4 @@
+import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
 import { defineMethod, type RpcContext } from '../../../core'
@@ -8,7 +9,7 @@ import { withWorkerStartNext } from '../receipt-next'
 import {
   decideWorkerStartMode,
   readWorkerStartModeSettings
-} from '../../orchestration-worker-start-mode'
+} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
@@ -180,6 +181,7 @@ export async function startWorker(
       orchestrationMutation,
       callerSession: orchestrationCaller
     })
+    await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
   }
   const receipt = await startLocalWorker({
@@ -196,5 +198,6 @@ export async function startWorker(
     helperCreator,
     followUp
   })
+  await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
   return withRun(withWorkerStartNext(receipt))
 }

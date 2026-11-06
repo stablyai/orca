@@ -8,6 +8,7 @@
     "./scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts",
     "./scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts",
     "./scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts",
+    "./scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts",
     "./scripts/test-runtime/environment/vitest-bun-node-builtins.ts",
     "./scripts/test-runtime/dom/vitest-dom-setup.ts",
     "./scripts/test-runtime/dom/happy-dom-offscreen-canvas.ts",
@@ -35,7 +36,9 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
-  "exclude": ["../src/main/runtime/structured-chat-coordinator-mail.test.ts"],
+  "exclude": [
+    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

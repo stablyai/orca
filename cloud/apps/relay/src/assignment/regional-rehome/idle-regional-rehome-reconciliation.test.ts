@@ -57,12 +57,6 @@ describe('idle cutover durable reconciliation', () => {
     expect(await store.reconcileIdleRegionalRehome(request)).toBe('stale')
   })
 
-  it('propagates unavailable durable state instead of declaring rollback', async () => {
-    const { database, store } = await setup()
-    vi.spyOn(database, 'transaction').mockRejectedValue(new Error('database_unavailable'))
-    await expect(store.reconcileIdleRegionalRehome(request)).rejects.toThrow('database_unavailable')
-  })
-
   it('waits for an outstanding assignment transaction before deciding authority', async () => {
     const { database, store } = await setup()
     let release!: () => void

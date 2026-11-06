@@ -15,6 +15,8 @@ import {
   type LinearViewMode
 } from '../../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
+import type { GitLabMRInvolvement } from '../../../../shared/gitlab-types'
+import type { GitHubPRStateChip, GitHubPRWhoChip } from './github/task-page-pr-chips'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 
@@ -60,6 +62,21 @@ export const getGitLabMRFilters = createLocalizedCatalog(
   ]
 )
 
+// Who the MR list is narrowed to, chosen alongside its state; null lists everyone's.
+export const getGitLabMRInvolvementFilters = createLocalizedCatalog(
+  (): { id: GitLabMRInvolvement | null; label: string }[] => [
+    {
+      id: null,
+      label: translate('auto.components.TaskPage.gitlabInvolvementEveryone', 'Everyone')
+    },
+    { id: 'authored', label: translate('auto.components.TaskPage.7698af5263', 'Mine') },
+    {
+      id: 'reviewing',
+      label: translate('auto.components.TaskPage.gitlabInvolvementReviewing', 'Reviewing')
+    }
+  ]
+)
+
 export const getGitLabIssueFilters = createLocalizedCatalog(
   (): { id: GitLabIssueFilter; label: string }[] => [
     { id: 'opened', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
@@ -70,7 +87,7 @@ export const getGitLabIssueFilters = createLocalizedCatalog(
   ]
 )
 
-const getIssueTaskQueryPresets = createLocalizedCatalog((): TaskQueryPreset[] => [
+export const getIssueTaskQueryPresets = createLocalizedCatalog((): TaskQueryPreset[] => [
   {
     id: 'issues',
     label: translate('auto.components.TaskPage.606a85c774', 'Open'),
@@ -83,27 +100,29 @@ const getIssueTaskQueryPresets = createLocalizedCatalog((): TaskQueryPreset[] =>
   }
 ])
 
-const getPRTaskQueryPresets = createLocalizedCatalog((): TaskQueryPreset[] => [
-  {
-    id: 'prs',
-    label: translate('auto.components.TaskPage.606a85c774', 'Open'),
-    query: getTaskPresetQuery('prs')
-  },
-  {
-    id: 'my-prs',
-    label: translate('auto.components.TaskPage.7698af5263', 'Mine'),
-    query: getTaskPresetQuery('my-prs')
-  },
-  {
-    id: 'review',
-    label: translate('auto.components.TaskPage.524f095d55', 'Needs review'),
-    query: getTaskPresetQuery('review')
-  }
-])
+export const getGitHubPRStateChips = createLocalizedCatalog(
+  (): { id: GitHubPRStateChip; label: string }[] => [
+    { id: 'open', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
+    { id: 'merged', label: translate('auto.components.TaskPage.37a82eaaf8', 'Merged') },
+    { id: 'closed', label: translate('auto.components.TaskPage.d09bf34db7', 'Closed') },
+    { id: 'all', label: translate('auto.components.TaskPage.c2268a9982', 'All') }
+  ]
+)
 
-export function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
-  return kind === 'prs' ? getPRTaskQueryPresets() : getIssueTaskQueryPresets()
-}
+// Same who choices and labels as GitLab MRs.
+export const getGitHubPRWhoChips = createLocalizedCatalog(
+  (): { id: GitHubPRWhoChip; label: string }[] => [
+    {
+      id: 'everyone',
+      label: translate('auto.components.TaskPage.gitlabInvolvementEveryone', 'Everyone')
+    },
+    { id: 'mine', label: translate('auto.components.TaskPage.7698af5263', 'Mine') },
+    {
+      id: 'reviewing',
+      label: translate('auto.components.TaskPage.gitlabInvolvementReviewing', 'Reviewing')
+    }
+  ]
+)
 
 export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
   {

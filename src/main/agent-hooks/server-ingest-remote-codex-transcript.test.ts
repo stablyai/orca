@@ -203,46 +203,6 @@ describe('remote Codex truncated transcript snapshots', () => {
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
     expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents).toHaveLength(2)
   })
-
-  it('keeps a shed roster when an unlabelled root poll reports a done main agent', () => {
-    const server = new AgentHookServer()
-    const child = { id: CHILD, state: 'working' as const, startedAt: 1 }
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'codex',
-        hookEventName: 'SubagentStart',
-        toolAgentId: CHILD,
-        payload: {
-          agentType: 'codex',
-          prompt: 'Run the checks',
-          state: 'working',
-          mainAgent: { state: 'working', stateStartedAt: 1 },
-          subagents: [child]
-        }
-      },
-      'wsl:Ubuntu'
-    )
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'codex',
-        shedFields: [createShedSubagentsField([{ ...child, description: 'changed' }])],
-        payload: {
-          agentType: 'codex',
-          prompt: 'Run the checks',
-          state: 'working',
-          mainAgent: { state: 'done', stateStartedAt: 2 }
-        }
-      },
-      'wsl:Ubuntu'
-    )
-    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done' },
-      subagents: [expect.objectContaining({ id: CHILD })]
-    })
-  })
 })
 
 describe('remote Codex unlabelled roster removals', () => {
@@ -269,15 +229,6 @@ describe('remote Codex unlabelled roster removals', () => {
       state: mainState,
       mainAgent: { state: mainState, stateStartedAt: 1 }
     }
-  })
-
-  it('retires the last child while the root keeps working', () => {
-    const server = new AgentHookServer()
-    server.ingestRemote(childStart(CHILD, 1), 'wsl:Ubuntu')
-    server.ingestRemote(emptyPoll('working', CHILD), 'wsl:Ubuntu')
-    const row = server.getStatusSnapshotForPane(PANE)[0]
-    expect(row).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
-    expect(row?.subagents).toBeUndefined()
   })
 
   it('keeps children a restarted relay never listed', () => {

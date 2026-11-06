@@ -8,5 +8,6 @@ export const AgentSessionFailureFactSchema = z.object({
   argumentProblem: z
     .object({ agent: z.string(), option: z.string(), problem: z.string() })
     .optional(),
-  requestTimeout: z.looseObject({}).optional()
+  requestTimeout: z.looseObject({}).optional(),
+  agentUpdate: z.string().max(64).optional()
 })

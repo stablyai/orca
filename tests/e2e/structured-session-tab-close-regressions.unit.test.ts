@@ -1,5 +1,5 @@
-import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { partialRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 // @vitest-environment happy-dom
@@ -9,7 +9,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-ty
 import type * as RuntimeRpcClient from '../../src/renderer/src/runtime/runtime-rpc-client'
 import type * as RuntimeLayoutClient from '../../src/renderer/src/runtime/runtime-layout-client'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { useAppStore } from '../../src/renderer/src/store'
 import { applyStructuredSessionTabSnapshots } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/inventory-generation-fence'

@@ -51,11 +51,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [`${COMPONENTS}floating-terminal/`]
   ),
   featureRoute(
-    'feature.dictation',
-    ['voice-microphone-selection'],
-    [`${COMPONENTS}dictation/`, 'src/main/speech/']
-  ),
-  featureRoute(
     'feature.ai-vault',
     ['ai-vault-panel-search', 'ai-vault-session-delete'],
     [
@@ -91,6 +86,16 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [`${COMPONENTS}task-page/jira/`, 'src/main/jira/', 'src/main/ipc/jira/', 'src/shared/jira/']
   ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
+  featureRoute(
+    'feature.github-projects',
+    ['github-project-board'],
+    [
+      `${COMPONENTS}github-project/`,
+      'src/renderer/src/store/github/project-',
+      'src/main/github/project-view/',
+      'src/main/ipc/source-control/github-project-view-handlers.ts'
+    ]
+  ),
   featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],

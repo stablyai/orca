@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { projectOrchestrationFleet } from '../../../../../../shared/orchestration-fleet-projection'
 import {
   applyFederatedFleetObservations,

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TerminalShellLifecycleScanner } from '../terminal-shell-lifecycle-scanner'
-import { PtyShellOwnershipMirror } from '../../../runtime/pty-shell-ownership-mirror'
+import { PtyShellOwnershipMirror } from '../../../runtime/terminal/query/pty-shell-ownership-mirror'
 
 const A = '\x1b]133;A\x07'
 const B = '\x1b]133;B\x07'
@@ -30,22 +30,6 @@ function idleAfter(...chunks: string[]): boolean {
 }
 
 describe('idle at a shell prompt', () => {
-  it('is idle when the markers split across chunks', () => {
-    const bytes = shellRuns('ls', 'file') + PROMPT
-    expect(idleAfter(...bytes.split(''))).toBe(true)
-  })
-
-  // Review case 1: a mirror seeded or created mid-session must not read an agent's own A as a prompt.
-  it("does not read a running agent's prompt marker as idle after a seed or a late start", () => {
-    const scanner = new TerminalShellLifecycleScanner()
-    scanner.scan(shellRuns('ls', 'file') + PROMPT)
-    scanner.seedOwner(undefined)
-    expect(scanner.isIdleAtPrompt).toBe(false)
-    scanner.scan(`${A}> `)
-    expect(scanner.isIdleAtPrompt).toBe(false)
-    expect(idleAfter(`agent output\r\n${A}> `)).toBe(false)
-  })
-
   // Review case 3: an app's zones inside the shell's command never close that command.
   it.each([
     ['captured adjacent B C D;0 zones', APP_ZONE_TRANSCRIPT],

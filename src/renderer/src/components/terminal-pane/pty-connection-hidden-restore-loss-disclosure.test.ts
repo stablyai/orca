@@ -16,7 +16,7 @@ import {
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
 } from './pty-connection-test-deps'
-import type { PtyDataMeta } from './pty-dispatcher'
+import type { PtyDataMeta } from './pty-transport/delivery/pty-dispatcher'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -55,7 +55,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -82,7 +82,7 @@ vi.mock('./cache-timer-seeding', () => ({
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -94,7 +94,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -105,7 +105,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -118,7 +118,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getEagerPtyBufferHandle: vi.fn(() => undefined)
 }))

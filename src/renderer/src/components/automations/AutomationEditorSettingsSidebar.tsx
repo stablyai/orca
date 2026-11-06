@@ -1,6 +1,6 @@
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
-import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
+import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { translate } from '@/i18n/i18n'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

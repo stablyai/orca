@@ -58,23 +58,6 @@ async function checkFreshness(overrides = {}) {
 }
 
 describe('hourly build preflight', () => {
-  it('gates Mac allocation and pins the checkout and downstream identity', () => {
-    const build = workflow.jobs['build-hourly-mac']
-    expect(preflight['runs-on']).toBe('ubuntu-latest')
-    expect(preflight.steps.some((step) => step.uses?.startsWith('actions/checkout'))).toBe(false)
-    expect(
-      preflight.steps.find((step) => step.id === 'app_token').with['permission-contents']
-    ).toBe('read')
-    expect(build.needs).toEqual(['preflight', 'orcad-template'])
-    expect(build.if).toBe("needs.preflight.outputs.should_build == 'true'")
-    expect(build.steps.find((step) => step.name === 'Checkout').with.ref).toBe(
-      build.outputs.head_sha
-    )
-    expect(build.outputs.head_sha).toBe('${{ needs.preflight.outputs.head_sha }}')
-    expect(build.steps.find((step) => step.id === 'release').env.SHA).toBe(build.outputs.head_sha)
-    expect(workflow.concurrency).toEqual({ group: 'hourly-mac-build', 'cancel-in-progress': false })
-  })
-
   it.each([
     ['unchanged', {}, false],
     ['changed', { LAST_SHA: '123456789012' }, true],

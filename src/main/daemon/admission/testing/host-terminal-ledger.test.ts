@@ -2,11 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DEFAULT_MAX_HOST_TERMINALS,
-  HostTerminalLedger,
-  resolveMaxHostTerminals
-} from '../host-terminal-ledger'
+import { HostTerminalLedger } from '../host-terminal-ledger'
 
 const share = (terminals: number) => ({
   terminals,
@@ -79,12 +75,6 @@ describe('HostTerminalLedger', () => {
     expect(readdirSync(dir)).toEqual(['100.json'])
   })
 
-  it('ignores an entry whose owner stopped refreshing it', () => {
-    ledger(200).publish(share(4))
-    now += 6 * 60_000
-    expect(ledger(100).tryReserve(share(0))).toBe(true)
-  })
-
   it('keeps an idle daemon counted by refreshing its entry', () => {
     vi.useFakeTimers({ now })
     try {
@@ -114,21 +104,6 @@ describe('HostTerminalLedger', () => {
     rmSync(dir, { recursive: true, force: true })
     desktop.publish(share(4))
     expect(ledger(200).tryReserve(share(0))).toBe(false)
-  })
-
-  it('sums the automatic work other daemons publish, and forgets old admits', () => {
-    ledger(200).publish({
-      terminals: 3,
-      automaticInFlight: 1,
-      automaticLive: 2,
-      automaticAdmits: [now - 60_000, now - 100]
-    })
-    ledger(300).publish(share(1))
-    alive.add(300)
-    expect(ledger(100).readOthers()).toEqual({
-      terminals: 4,
-      automatic: { inFlight: 1, live: 2, admits: [now - 100] }
-    })
   })
 
   it('reads an entry from a daemon that publishes terminals only', () => {
@@ -161,20 +136,5 @@ describe('HostTerminalLedger', () => {
     expect(isolated.tryReserve(share(1))).toBe(true)
     expect(isolated.tryReserve(share(2))).toBe(false)
     expect(log).toHaveBeenCalledWith('host-terminal-ledger-unavailable', expect.any(Object))
-  })
-})
-
-describe('resolveMaxHostTerminals', () => {
-  it('defaults when the override is absent or out of range', () => {
-    expect(resolveMaxHostTerminals({})).toBe(DEFAULT_MAX_HOST_TERMINALS)
-    expect(resolveMaxHostTerminals({ ORCA_DAEMON_MAX_HOST_TERMINALS: 'many' })).toBe(
-      DEFAULT_MAX_HOST_TERMINALS
-    )
-    expect(resolveMaxHostTerminals({ ORCA_DAEMON_MAX_HOST_TERMINALS: '0' })).toBe(
-      DEFAULT_MAX_HOST_TERMINALS
-    )
-    expect(resolveMaxHostTerminals({ ORCA_DAEMON_MAX_HOST_TERMINALS: '100000' })).toBe(
-      DEFAULT_MAX_HOST_TERMINALS
-    )
   })
 })

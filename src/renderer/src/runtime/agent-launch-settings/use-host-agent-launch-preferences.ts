@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import {

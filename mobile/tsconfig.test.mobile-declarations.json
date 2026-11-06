@@ -34,7 +34,8 @@
     "src/worktree/workspace-list-sections.ts",
     "src/worktree/worktree-catalog-snapshot-client.ts",
     "src/worktree/worktree-host-context-labels.ts",
-    "src/worktree/workspace-view-settings.ts"
+    "src/worktree/workspace-view-settings.ts",
+    "src/session/native-chat/transcript/mobile-native-chat-projection.ts"
   ],
   "include": ["**/*.d.ts"],
   "exclude": ["node_modules"]

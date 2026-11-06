@@ -3,17 +3,20 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/mobile-fit-overrides'
 import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
-import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import {
+  restoreTerminalFitToDesktop,
+  restoreTerminalFitsToDesktop
+} from './viewport/terminal-fit-restore'
 import {
   armPrimarySelectionNativePasteSuppression,
   isPrimarySelectionEnabled,
   readPrimarySelectionText
 } from '@/lib/primary-selection'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
-import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { resolveTerminalPasteRuntime } from './input/paste/terminal-paste-runtime'
+import { isTerminalPanePasteTargetCurrent } from './input/paste/terminal-paste-target-state'
+import { pasteTextIntoTerminalPane } from './input/paste/terminal-pane-paste-dispatch'
+import { formatTerminalPasteExecutionError } from './input/paste/terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import type { TerminalPaneContextController } from './use-terminal-pane-context-actions'

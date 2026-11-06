@@ -16,11 +16,9 @@ import {
   getWorktreeLookupIndex,
   findWorktreeById
 } from './worktree-refresh'
-import {
-  findIndexedDetectedWorktrees,
-  findIndexedRepoOwnerForHost,
-  worktreeOwnerHostIds
-} from '@/lib/worktree-runtime-owner-index'
+import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { findKnownWorktreeById } from '../slices/worktrees/listing/detected-worktree-meta'
 import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'

@@ -205,16 +205,11 @@ export function runHook(
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
-    // Forward unattended Git flags and indexed config to WSL; keep host askpass out of the guest.
+    // Forward unattended Git flags to WSL; keep host askpass out of the guest.
     const guardedEnv = promptGuardShellEnv(wslEnv)
     const guestEnv: Record<string, string> = { ...wslEnv }
     for (const [key, value] of Object.entries(guardedEnv)) {
-      if (
-        value !== undefined &&
-        (key === 'GIT_TERMINAL_PROMPT' ||
-          key === 'GCM_INTERACTIVE' ||
-          key.startsWith('GIT_CONFIG_'))
-      ) {
+      if (value !== undefined && (key === 'GIT_TERMINAL_PROMPT' || key === 'GCM_INTERACTIVE')) {
         guestEnv[key] = value
       }
     }

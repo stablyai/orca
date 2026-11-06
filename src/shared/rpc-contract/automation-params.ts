@@ -180,7 +180,11 @@ export const AutomationRuns = z.object({
   automationId: OptionalString,
   expectedOwner: ExpectedOwner,
   limit: OptionalPositiveInt,
-  cursor: OptionalString
+  cursor: OptionalString,
+  /** Reply with a byte-bounded page of rows whose output is cut to a preview. */
+  preview: OptionalBoolean,
+  /** Reply with this one full run as `{ run }`; requires `automationId`. */
+  runId: OptionalString
 })
 
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
