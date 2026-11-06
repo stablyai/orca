@@ -65,6 +65,10 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
     if (start.mode === 'append') {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
+        const recoverable = this.store.resumableCursor(candidate)
+        if (recoverable && recoverable.byteOffset < start.previousByteOffset) {
+          return null
+        }
         // A missing span or partial cursor requires a whole read; appending would preserve an index hole.
         this.store.setFileState(candidate.file.path, 'due')
         return null
@@ -141,7 +145,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   }
 
   finish(outcome: TranscriptReadOutcome): void {
-    if (outcome.cancelled || this.write.cancelled?.()) {
+    if (outcome.cancelled || this.write.cancelled?.() || this.write.failed?.()) {
       // Cancellation must not count toward the failure limit for a healthy file.
       this.write.discard()
       return

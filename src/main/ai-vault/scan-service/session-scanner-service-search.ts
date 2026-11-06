@@ -1,3 +1,4 @@
+import { withinSessionSearchDeadline } from '../../ai-vault-search/session-search-request-deadline'
 import type { SessionSearchIndexerOptions } from '../../ai-vault-search/session-search-indexer-options'
 import { unavailableSessionSearchStatus } from '../../../shared/ai-vault/search/ai-vault-search-client'
 import { AiVaultSearchRequestSchema } from '../../../shared/ai-vault/search/ai-vault-search-contract'
@@ -21,6 +22,8 @@ type SearchOperation = Extract<
 /** Keep indexing with transcript readers; callers access the database through service IPC. */
 export class SessionScannerServiceSearch {
   private transition = Promise.resolve()
+  private applying = 0
+  private enabled = false
   private instance: SessionSearchInstance | null = null
   private databasePath: string | null = null
   private roots: SessionSearchScanRoots | null = null
@@ -28,7 +31,15 @@ export class SessionScannerServiceSearch {
   constructor(private readonly resolveRoots?: SessionSearchIndexerOptions['resolveRoots']) {}
 
   apply(init: AiVaultSessionSearchInit): Promise<void> {
-    return (this.transition = this.transition.then(() => this.applySettings(init)))
+    this.enabled = init.settings.enabled
+    this.applying++
+    const operation = this.transition.then(() => this.applySettings(init))
+    this.transition = operation
+      .catch((error: unknown) => console.warn('[ai-vault-search]', error))
+      .finally(() => {
+        this.applying--
+      })
+    return this.transition
   }
 
   private async applySettings(init: AiVaultSessionSearchInit): Promise<void> {
@@ -65,34 +76,43 @@ export class SessionScannerServiceSearch {
     request: SearchOperation,
     signal?: AbortSignal
   ): Promise<AiVaultServiceResultValue> {
-    await this.transition
     const instance = this.instance
     if (request.operation === 'searchStatus') {
       return {
         operation: 'searchStatus',
-        value: (await instance?.status()) ?? unavailableSessionSearchStatus()
+        value: this.enabled
+          ? { ...((await instance?.status()) ?? unavailableSessionSearchStatus()), enabled: true }
+          : unavailableSessionSearchStatus()
       }
     }
     if (request.operation === 'searchReconcile') {
-      await instance?.reconcile()
+      await withinSessionSearchDeadline(
+        this.transition.then(() => this.instance?.reconcile(signal)),
+        signal
+      )
       return { operation: 'searchReconcile', value: null }
     }
     if (request.operation === 'searchClear') {
-      if (!instance) {
+      if (!instance && !this.applying) {
         throw new Error('Agent Session History search is not available.')
       }
-      await instance.clear()
+      await withinSessionSearchDeadline(
+        this.transition.then(() => this.instance?.clear(signal)),
+        signal
+      )
       return { operation: 'searchClear', value: null }
     }
     return {
       operation: 'searchSessions',
-      value: instance
-        ? await instance.search(
-            AiVaultSearchRequestSchema.parse(request.request),
-            request.hostScope,
-            signal
-          )
-        : { kind: 'unavailable', reason: 'disabled' }
+      value: !this.enabled
+        ? { kind: 'unavailable', reason: 'disabled' }
+        : this.applying || !instance
+          ? { kind: 'unavailable', reason: 'not-ready' }
+          : await instance.search(
+              AiVaultSearchRequestSchema.parse(request.request),
+              request.hostScope,
+              signal
+            )
     }
   }
 

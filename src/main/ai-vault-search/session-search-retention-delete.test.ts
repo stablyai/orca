@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type SyncDatabase from '../sqlite/sync-database'
 import {
   deleteExpiredSearchFiles,
@@ -117,7 +117,7 @@ it('finishes an interrupted deletion after reopening', async () => {
     closed = false
     // Orphaned rows must drain even after retention becomes unlimited.
     await store.purgeOlderThan(null)
-    expect(count(index.db, 'messages')).toBe(0)
+    await vi.waitFor(() => expect(count(index.db, 'messages')).toBe(0))
     expect(count(index.db, 'messages_fts')).toBe(0)
   } finally {
     if (!closed) {
@@ -141,7 +141,7 @@ it('cancels retention between batches and resumes without exposing a partial ses
     expect(remaining).toBeLessThan(1025)
     expect(visibleSessionIds(index.db)).toEqual([])
     await store.purgeOlderThan(null)
-    expect(count(index.db, 'messages')).toBe(0)
+    await vi.waitFor(() => expect(count(index.db, 'messages')).toBe(0))
   } finally {
     store.close()
     await index.close()

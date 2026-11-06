@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
+import * as searchSchema from './session-search-schema'
+import { SessionSearchReaders } from './session-search-readers'
 import { SessionSearchInstance } from './session-search-instance'
 import {
   openSessionSearchIndexerHarness,
@@ -170,4 +172,26 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
   expect(errors).toEqual([])
+})
+
+it('propagates query failures while status remains available without a reader', async () => {
+  const subject = newInstance()
+  await subject.apply({ enabled: true, historyDays: null })
+  await subject.settled()
+  const before = await subject.status()
+  vi.spyOn(SessionSearchReaders.prototype, 'query').mockRejectedValue(new Error('reader failed'))
+  await expect(subject.search({ query: 'needle' })).rejects.toThrow('reader failed')
+  expect(await subject.status()).toEqual(before)
+})
+
+it('rejects a failed clear and keeps the transition chain usable for another clear', async () => {
+  const subject = newInstance()
+  const remove = vi
+    .spyOn(searchSchema, 'removeSessionSearchDatabase')
+    .mockImplementationOnce(() => {
+      throw new Error('unlink denied')
+    })
+  await expect(subject.clear()).rejects.toThrow('unlink denied')
+  await expect(subject.clear()).resolves.toBeUndefined()
+  expect(remove).toHaveBeenCalledTimes(2)
 })

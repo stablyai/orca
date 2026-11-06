@@ -119,6 +119,10 @@ export class SessionSearchIndexer {
     return this.tick()
   }
 
+  generation(): number {
+    return this.store.generation
+  }
+
   status(): SessionSearchIndexStatus {
     // Use cached counts after close to avoid reading a shut database.
     const settled = (this.closed ? this.lastCounts : this.readCounts()) ?? {

@@ -18,3 +18,14 @@ export function traceSessionSearch<T>(
     throw error
   }
 }
+
+export function reportSessionSearchBackgroundError(
+  report: (error: unknown) => void,
+  error: unknown
+): void {
+  try {
+    report(error)
+  } catch {
+    // Why: reporting a background failure must not terminate the writer.
+  }
+}

@@ -56,7 +56,7 @@ export type SessionSearchEngineOptions = {
   retentionCutoffMs?: number | null
 }
 
-/** Use independent statements to avoid pinning WAL; reject pages whose content generation changes. */
+/** One page reads one WAL snapshot; later page requests still validate their generation. */
 export class SessionSearchEngine {
   private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
@@ -76,6 +76,18 @@ export class SessionSearchEngine {
   }
 
   search(request: SessionSearchRequest): SessionSearchResponse {
+    this.db.exec('BEGIN')
+    try {
+      const result = this.readPage(request)
+      this.db.exec('COMMIT')
+      return result
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  private readPage(request: SessionSearchRequest): SessionSearchResponse {
     const startedAt = performance.now()
     ensureSessionSearchQuerySchema(this.db)
     const generation = readIndexGeneration(this.db)

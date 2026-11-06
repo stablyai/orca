@@ -45,11 +45,11 @@ export type SearchWorkerCommand =
   | { op: 'purge'; cutoff: number | null }
   | { op: 'sync' }
   | { op: 'query'; request: AiVaultSearchRequest; scope?: SessionSearchHostScope }
-  | { op: 'status' }
 export type SearchWorkerRequest = { id: number; command: SearchWorkerCommand }
 export type SearchWorkerResponse = {
   id: number
   trace?: unknown
+  failure?: 'write'
   error?: string
   accepted?: boolean
   snapshot?: SessionSearchSnapshotRow[]

@@ -13,7 +13,8 @@ export async function deleteExpiredSearchFiles(
   cutoffMs: number | null,
   closed: () => boolean,
   yieldStep: () => Promise<void> = yieldToEventLoop,
-  onMessagesChanged: (delta: number) => void = () => undefined
+  onMessagesChanged: (delta: number) => void = () => undefined,
+  reclaim = true
 ): Promise<void> {
   if (cutoffMs !== null) {
     const expired = db
@@ -41,7 +42,9 @@ export async function deleteExpiredSearchFiles(
       await yieldStep()
     }
   }
-  await drainOrphanedMessages(db, closed, yieldStep, onMessagesChanged)
+  if (reclaim) {
+    await drainOrphanedMessages(db, closed, yieldStep, onMessagesChanged)
+  }
 }
 
 /** Drain orphaned rows left by retention, replacement, or interruption; the rows record unfinished work. */

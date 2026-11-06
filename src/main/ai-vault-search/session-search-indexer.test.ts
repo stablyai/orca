@@ -520,3 +520,30 @@ it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable r
     await chmod(locked, 0o700)
   }
 })
+
+it('holds out a repeatedly rejected write while other files continue indexing', async () => {
+  const broken = transcriptPath()
+  await writeClaudeTranscript(broken, ['rejectedneedle'], SESSION_ID)
+  await writeClaudeTranscript(transcriptPath(OTHER_SESSION_ID), ['healthyneedle'], OTHER_SESSION_ID)
+  const subject = newIndexer()
+  await subject.initialize()
+  harness.write((db) =>
+    db.exec(`CREATE TRIGGER reject_one_file BEFORE INSERT ON messages
+    WHEN (SELECT file_path FROM sessions WHERE id=NEW.session_row_id) LIKE '%${SESSION_ID}%'
+    BEGIN SELECT RAISE(ABORT, 'rejected fixture write'); END`)
+  )
+  await subject.start()
+  for (let pass = 0; pass < 3; pass++) {
+    await subject.reconcile({ full: true })
+  }
+  expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
+  expect(sessionsMatching('healthyneedle')).toEqual([OTHER_SESSION_ID])
+  expect(sessionsMatching('rejectedneedle')).toEqual([])
+  await appendFile(
+    transcriptPath(OTHER_SESSION_ID),
+    `${claudeLines(['continuedneedle'], OTHER_SESSION_ID, 10).join('\n')}\n`
+  )
+  await subject.reconcile({ full: true })
+  expect(sessionsMatching('continuedneedle')).toEqual([OTHER_SESSION_ID])
+  expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
+})

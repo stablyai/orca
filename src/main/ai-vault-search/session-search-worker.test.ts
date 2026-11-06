@@ -113,3 +113,38 @@ it('cancels a dead writer handle and lets a fresh pass recover without failing t
   })
   expect(subject.stateCounts().failed).toBe(0)
 })
+
+it('drains a near-10-MiB JSONL record even when one synchronous emission exceeds transfer credits', async () => {
+  root = await mkdtemp(join(tmpdir(), 'ss-worker-burst-'))
+  const path = join(root, 'index.sqlite')
+  const file = join(root, 'burst.jsonl')
+  const text = `largestburstneedle ${'x '.repeat(5 * 1024 * 1024 - 1024)}`
+  const { writeClaudeTranscript } = await import('./session-search-indexer-test-fixture')
+  await writeClaudeTranscript(file, [text], 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
+  const info = await stat(file)
+  const candidate = syntheticCandidate({ path: file, mtimeMs: info.mtimeMs, sizeBytes: info.size })
+  store = new SessionSearchWorkerStore(path, (error) => {
+    throw error
+  })
+  await store.prepare()
+  registerSessionSearchIndexConsumer(store)
+  const { readResumableTranscript } =
+    await import('../ai-vault/transcripts/session-transcript-reader')
+  const { createClaudeSessionResumeState } =
+    await import('../ai-vault/scanners/claude/session-scanner-primary-parsers')
+  await readResumableTranscript({
+    candidate,
+    platform: process.platform,
+    resume: null,
+    indexing: true,
+    stateFactory: (channel) => createClaudeSessionResumeState(candidate.file, channel)
+  })
+  await store.flush()
+  expect(store.coversTranscript(candidate)).toBe(true)
+  expect(store.stateCounts().failed).toBe(0)
+  readers = new SessionSearchReaders(path, null)
+  expect((await readers.query({ query: 'largestburstneedle' })).result).toMatchObject({
+    kind: 'results',
+    hits: [{ sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }]
+  })
+}, 30_000)

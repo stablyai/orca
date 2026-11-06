@@ -1,3 +1,4 @@
+import { readIndexGeneration } from './session-search-index-generation'
 import { parentPort } from 'node:worker_threads'
 import SyncDatabase from '../sqlite/sync-database'
 import { withSpan, setActiveSink } from '../observability/tracer'
@@ -127,11 +128,15 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       },
       (n) => {
         counts.messages += n
-        parentPort?.postMessage({ id: 0, counts })
+        parentPort?.postMessage({
+          id: 0,
+          counts,
+          generation: readIndexGeneration(store!.connection)
+        })
       }
     )
     store.setRetentionCutoffMs(c.cutoff)
-    return { id, snapshot: snapshot(), counts }
+    return { id, snapshot: snapshot(), counts, generation: readIndexGeneration(store.connection) }
   }
   if (c.op === 'query') {
     if (!engine) {
@@ -151,12 +156,6 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       result: await withSpan('aiVault.search.query', () => service.search(c.request, c.scope))
     }
   }
-  if (c.op === 'status') {
-    return {
-      id,
-      generation: await withSpan('aiVault.search.status', () => engine?.generation() ?? 0)
-    }
-  }
   if (!store) {
     throw new Error('Search writer is not open')
   }
@@ -174,6 +173,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
   let accepted = true
   switch (c.op) {
     case 'begin': {
+      handlePaths.set(c.handle, c.candidate.file.path)
       let identity: TranscriptSessionIdentity | null = null
       const write = store.beginWrite(c.candidate, c.mode, c.offset, () => identity)
       if (write) {
@@ -229,7 +229,13 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       await withSpan('aiVault.search.purge', () => store!.purgeOlderThan(c.cutoff))
       const remaining = new Map(rows().map((row) => [row.path, row]))
       const deltas = before.filter((p) => !remaining.has(p)).map(delta)
-      return { id, snapshot: reset, deltas, counts }
+      return {
+        id,
+        snapshot: reset,
+        deltas,
+        counts,
+        generation: readIndexGeneration(store.connection)
+      }
     }
     case 'sync':
       break
@@ -244,7 +250,14 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
   if (c.op === 'finish' || c.op === 'discard') {
     handlePaths.delete(c.handle)
   }
-  return { id, accepted, snapshot: reset, deltas: path ? [delta(path)] : undefined, counts }
+  return {
+    id,
+    accepted,
+    snapshot: reset,
+    deltas: path ? [delta(path)] : undefined,
+    counts,
+    generation: readIndexGeneration(store.connection)
+  }
 }
 const handlePaths = new Map<number, string>()
 let lane = Promise.resolve()
@@ -253,8 +266,19 @@ parentPort?.on('message', (request: SearchWorkerRequest) => {
     try {
       parentPort?.postMessage(await execute(request))
     } catch (error) {
+      const command = request.command
+      if ('handle' in command) {
+        writes.get(command.handle)?.write.discard()
+        writes.delete(command.handle)
+        handlePaths.delete(command.handle)
+      }
       parentPort?.postMessage({
         id: request.id,
+        accepted: false,
+        failure:
+          command.op === 'begin' || command.op === 'batch' || command.op === 'finish'
+            ? 'write'
+            : undefined,
         error: error instanceof Error ? error.message : 'Session search failed'
       })
     }

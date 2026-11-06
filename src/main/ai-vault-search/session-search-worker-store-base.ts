@@ -2,7 +2,11 @@ import {
   createAiVaultScanCancelledError,
   abandonRemoteSessionScanOnCancel
 } from '../ai-vault/ai-vault-scan-cancellation'
-import { SessionSearchWorkerClient } from './session-search-worker-client'
+import {
+  SessionSearchWorkerClient,
+  SessionSearchOperationError
+} from './session-search-worker-client'
+import { reportSessionSearchBackgroundError } from './session-search-trace'
 import { SessionSearchCursorSnapshot } from './session-search-cursor-snapshot'
 import type { SessionSearchFileState, SessionSearchStateCounts } from './session-search-store'
 import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search-worker-protocol'
@@ -12,7 +16,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   protected readonly client: SessionSearchWorkerClient
   protected readonly transfers = new Set<Promise<unknown>>()
   protected readonly credits = new Set<Promise<unknown>>()
-  protected readonly invalidations = new Set<AbortController>()
+  protected readonly invalidations = new Map<AbortController, string>()
   protected initialization: Promise<void> | null = null
   protected initializedEpoch = -1
   protected snapshotEpoch = 0
@@ -26,6 +30,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     messages: 0,
     sessionsByAgent: {}
   }
+  generation = 0
   protected cutoff: number | null = null
 
   constructor(
@@ -68,12 +73,15 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       })
     await this.initialization
   }
+  protected onWriteInvalidated(): void {
+    this.onInvalidated()
+  }
   protected update(response: SearchWorkerResponse): void {
     if (response.snapshot) {
       if (this.invalidations.size) {
         this.onInvalidated()
       }
-      for (const owner of this.invalidations) {
+      for (const owner of this.invalidations.keys()) {
         owner.abort()
       }
       this.invalidations.clear()
@@ -91,6 +99,9 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
         this.committed.delete(path)
       }
     }
+    if (response.generation !== undefined) {
+      this.generation = response.generation
+    }
     if (response.counts) {
       this.counts = response.counts
     }
@@ -99,9 +110,13 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     const promise = this.client.request(command)
     this.transfers.add(promise)
     void promise
-      .catch(() => {
+      .catch((error: unknown) => {
+        if (error instanceof SessionSearchOperationError) {
+          reportSessionSearchBackgroundError(this.onError, error)
+          return
+        }
         this.onInvalidated()
-        for (const owner of this.invalidations) {
+        for (const owner of this.invalidations.keys()) {
           owner.abort()
         }
         this.invalidations.clear()
@@ -112,7 +127,9 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     return promise
   }
   async flush(): Promise<void> {
-    await Promise.allSettled(this.transfers)
+    while (this.transfers.size) {
+      await Promise.allSettled(this.transfers)
+    }
   }
   stateCounts(): SessionSearchStateCounts {
     return this.counts
@@ -137,7 +154,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   }
   close(): void {
     this.closed = true
-    for (const owner of this.invalidations) {
+    for (const owner of this.invalidations.keys()) {
       owner.abort()
     }
     this.invalidations.clear()

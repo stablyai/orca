@@ -20,6 +20,8 @@ export function sessionSearchWorkerFactory() {
   return spawnWorkerThread(path, { resourceLimits: { maxOldGenerationSizeMb: 256 } })
 }
 
+export class SessionSearchOperationError extends Error {}
+
 /** Why: a failed port invalidates every staged handle; none can resume on a replacement. */
 export class SessionSearchWorkerClient {
   private nextId = 0
@@ -51,8 +53,8 @@ export class SessionSearchWorkerClient {
           return
         }
         this.pending.delete(value.id)
-        if (value.error) {
-          call.reject(new Error(value.error))
+        if (value.error && !value.failure) {
+          call.reject(new SessionSearchOperationError(value.error))
         } else {
           call.resolve(value)
         }

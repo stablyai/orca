@@ -5,11 +5,18 @@ import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search
 
 /** Two fixed slots count retiring native readers against capacity until their exit. */
 export class SessionSearchReaders {
-  private readonly slots = Array.from({ length: 2 }, () => ({
-    client: new SessionSearchWorkerClient(),
-    opened: -1,
-    opening: null as Promise<void> | null
-  }))
+  private readonly slots = Array.from(
+    { length: 2 },
+    (): {
+      client: SessionSearchWorkerClient
+      opened: number
+      opening: Promise<void> | null
+    } => ({
+      client: new SessionSearchWorkerClient(),
+      opened: -1,
+      opening: null
+    })
+  )
   private closed = false
   constructor(
     private readonly path: string,
@@ -17,9 +24,6 @@ export class SessionSearchReaders {
   ) {}
   query(request: AiVaultSearchRequest, scope?: SessionSearchHostScope, signal?: AbortSignal) {
     return this.execute({ op: 'query', request, scope }, signal)
-  }
-  status(signal?: AbortSignal) {
-    return this.execute({ op: 'status' }, signal)
   }
   private execute(
     command: SearchWorkerCommand,

@@ -172,6 +172,11 @@ function queueRequest(request: AiVaultServiceRequest): void {
     return
   }
   pending.add(request.id)
+  // Why: search deadlines and cancellation start at admission, independent of the interactive lane.
+  if (sessionSearch.handles(request)) {
+    void handleRequest(request)
+    return
+  }
   if (aiVaultServiceLane(request.operation) === 'interactive') {
     interactiveLane = interactiveLane.then(() => handleRequest(request))
     return

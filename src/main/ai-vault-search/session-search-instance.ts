@@ -1,3 +1,4 @@
+import { withinSessionSearchDeadline } from './session-search-request-deadline'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
@@ -27,6 +28,7 @@ export class SessionSearchInstance {
   private live: LiveIndex | null = null
   private settings: AiVaultSearchSettings = { enabled: false, historyDays: null }
   private transition = Promise.resolve()
+  private cachedStatus = unavailableSessionSearchStatus()
   private readonly onError: (error: unknown) => void
   constructor(private readonly options: SessionSearchInstanceOptions) {
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
@@ -36,50 +38,57 @@ export class SessionSearchInstance {
   }
   apply(next: AiVaultSearchSettings): Promise<void> {
     this.settings = next
-    return this.queue(next, false)
+    return this.queue(next, false).catch(() => undefined)
   }
-  clear(): Promise<void> {
-    return this.queue(this.settings, true)
+  clear(signal?: AbortSignal): Promise<void> {
+    return withinSessionSearchDeadline(this.queue(this.settings, true), signal)
   }
   close(): Promise<void> {
     return (this.transition = this.transition.then(() => this.closeLive()).catch(this.onError))
   }
   private queue(settings: AiVaultSearchSettings, clear: boolean): Promise<void> {
     const old = this.live
+    if (old) {
+      this.cachedStatus = {
+        enabled: true,
+        ...old.indexer.status(),
+        generation: old.indexer.generation()
+      }
+    }
     this.live = null
     old?.indexer.close()
     const retired = old
       ? Promise.all([old.indexer.retired(), old.readers.close()])
       : Promise.resolve()
-    return (this.transition = this.transition
-      .then(async () => {
-        await retired
-        await this.closeLive()
-        if (clear) {
-          removeSessionSearchDatabase(this.options.databasePath)
-        }
-        if (!settings.enabled) {
-          return
-        }
-        const indexer = new SessionSearchIndexer({
-          ...this.options,
-          historyDays: settings.historyDays
-        })
-        try {
-          await indexer.initialize()
-        } catch (error) {
-          indexer.close()
-          await indexer.retired()
-          throw error
-        }
-        const readers = new SessionSearchReaders(
-          this.options.databasePath,
-          sessionSearchHistoryCutoffMs(settings.historyDays, Date.now())
-        )
-        this.live = { indexer, readers }
-        void indexer.start().catch(this.onError)
+    const operation = this.transition.then(async () => {
+      await retired
+      await this.closeLive()
+      if (clear) {
+        removeSessionSearchDatabase(this.options.databasePath)
+      }
+      if (!settings.enabled) {
+        return
+      }
+      const indexer = new SessionSearchIndexer({
+        ...this.options,
+        historyDays: settings.historyDays
       })
-      .catch(this.onError))
+      try {
+        await indexer.initialize()
+      } catch (error) {
+        indexer.close()
+        await indexer.retired()
+        throw error
+      }
+      const readers = new SessionSearchReaders(
+        this.options.databasePath,
+        sessionSearchHistoryCutoffMs(settings.historyDays, Date.now())
+      )
+      this.live = { indexer, readers }
+      void indexer.start().catch(this.onError)
+    })
+    this.transition = operation.catch(this.onError)
+    return operation
   }
   async search(
     request: AiVaultSearchRequest,
@@ -90,36 +99,30 @@ export class SessionSearchInstance {
     if (!live) {
       return { kind: 'unavailable', reason: this.settings.enabled ? 'not-ready' : 'disabled' }
     }
-    try {
-      return (
-        (await live.readers.query(request, scope, signal)).result ?? {
-          kind: 'unavailable',
-          reason: 'not-ready'
-        }
-      )
-    } catch (error) {
-      this.onError(error)
-      return { kind: 'unavailable', reason: 'not-ready' }
+    const response = await live.readers.query(request, scope, signal)
+    if (!response.result) {
+      throw new Error('Could not search sessions')
     }
+    return response.result
   }
   async status(): Promise<AiVaultSearchStatus> {
     const live = this.live
-    if (!live) {
-      return { ...unavailableSessionSearchStatus(), enabled: this.settings.enabled }
-    }
-    try {
-      return {
+    if (live) {
+      this.cachedStatus = {
         enabled: true,
         ...live.indexer.status(),
-        generation: (await live.readers.status()).generation ?? 0
+        generation: live.indexer.generation()
       }
-    } catch {
-      return { ...unavailableSessionSearchStatus(), enabled: true }
     }
+    return this.settings.enabled
+      ? { ...this.cachedStatus, enabled: true }
+      : unavailableSessionSearchStatus()
   }
-  async reconcile(): Promise<void> {
-    await this.transition
-    await this.live?.indexer.reconcile({ full: true })
+  reconcile(signal?: AbortSignal): Promise<void> {
+    return withinSessionSearchDeadline(
+      this.transition.then(() => this.live?.indexer.reconcile({ full: true })),
+      signal
+    )
   }
   async settled(): Promise<void> {
     await this.transition

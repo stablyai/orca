@@ -41,29 +41,41 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
     const epoch = this.client.epoch
     const snapshotEpoch = this.snapshotEpoch
     const owner = new AbortController()
-    this.invalidations.add(owner)
+    this.invalidations.set(owner, candidate.file.path)
     const readSignal = signal ? AbortSignal.any([owner.signal, signal]) : owner.signal
     let ended = false
     let cancelled = false
+    let failed = false
     let rows: TranscriptMessage[] = []
     let size = 0
     let hash =
       mode === 'append'
         ? (this.row(candidate.file.path, null)?.contentHash ?? EMPTY_CONTENT_HASH)
         : EMPTY_CONTENT_HASH
-    const valid = () =>
+    const active = () =>
       !cancelled &&
       this.acceptingReads &&
       epoch === this.client.epoch &&
       snapshotEpoch === this.snapshotEpoch &&
       !readSignal.aborted
+    const valid = () => active() && !failed
     const post = (command: SearchWorkerCommand) => {
       if (!valid()) {
         return Promise.resolve({ id: 0, accepted: false })
       }
       return this.send(command)
         .then((response) => {
-          if (response.accepted === false) {
+          if (response.failure === 'write' && !failed) {
+            failed = true
+            this.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+            for (const [dependent, path] of this.invalidations) {
+              if (dependent !== owner && path === candidate.file.path) {
+                dependent.abort()
+              }
+            }
+            this.speculative.delete(candidate.file.path)
+            this.onWriteInvalidated()
+          } else if (response.accepted === false && !failed) {
             cancelled = true
             owner.abort()
             this.speculative.delete(candidate.file.path)
@@ -113,16 +125,17 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
         .catch(() => undefined)
     }
     return {
-      cancelled: () => !valid(),
+      failed: () => failed,
+      cancelled: () => !active(),
       drain: async () => {
         batch()
-        if (!valid()) {
+        if (!active()) {
           throw createAiVaultScanCancelledError()
         }
         if (this.bytes >= TRANSFER_BYTES) {
           await abandonRemoteSessionScanOnCancel(Promise.allSettled(this.credits), readSignal)
         }
-        if (!valid()) {
+        if (!active()) {
           throw createAiVaultScanCancelledError()
         }
       },

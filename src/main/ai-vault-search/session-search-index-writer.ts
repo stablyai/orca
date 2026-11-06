@@ -6,7 +6,7 @@ import type {
   TranscriptReadOutcome,
   TranscriptSessionIdentity
 } from '../ai-vault/transcripts/session-transcript-consumers'
-import { SessionSearchWriteBuffer } from './session-search-write-buffer'
+import { SessionSearchWriteBuffer, SessionSearchStagingBudget } from './session-search-write-buffer'
 import {
   EMPTY_CONTENT_HASH,
   foldContentHash,
@@ -43,6 +43,7 @@ type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 export type SessionSearchFileWrite = {
   /** Commit named chunks at the ceiling; spill anonymous reads privately until atomic publication. */
   add(message: TranscriptMessage): void
+  failed?(): boolean
   cancelled?(): boolean
   drain?(): Promise<void>
   addPrepared?(rows: Iterable<TranscriptMessage>, hash: SessionContentHash): void
@@ -56,6 +57,7 @@ export class SessionSearchIndexWriter {
   private readonly records: SessionSearchFileRecords
   private readonly activeWrites = new Map<string, { removed: boolean; readers: number }>()
   private readonly pendingBuffers = new Set<SessionSearchWriteBuffer>()
+  private readonly staging = new SessionSearchStagingBudget()
   private closed = false
 
   constructor(
@@ -143,7 +145,7 @@ export class SessionSearchIndexWriter {
   close(): void {
     this.closed = true
     for (const buffer of this.pendingBuffers) {
-      buffer.clear()
+      buffer.release()
     }
     this.pendingBuffers.clear()
     for (const active of this.activeWrites.values()) {
@@ -166,7 +168,7 @@ export class SessionSearchIndexWriter {
   ): SessionSearchFileWrite {
     const db = this.db
     const path = candidate.file.path
-    const buffer = new SessionSearchWriteBuffer(this.commitChars)
+    const buffer = new SessionSearchWriteBuffer(this.commitChars, this.staging)
     this.pendingBuffers.add(buffer)
     // Recheck inside each transaction to prevent stale chunks resurrecting deleted or superseded rows.
     let expected = opened
@@ -181,7 +183,7 @@ export class SessionSearchIndexWriter {
         return
       }
       released = true
-      buffer.clear()
+      buffer.release()
       this.pendingBuffers.delete(buffer)
       lifetime.readers--
       if (lifetime.readers === 0 && this.activeWrites.get(path) === lifetime) {
@@ -283,16 +285,13 @@ export class SessionSearchIndexWriter {
       }
       for (const row of rows) {
         buffer.add(row)
-        if (!buffer.ready && (!identity || !buffer.hasSpilled)) {
+        if (!buffer.ready) {
           continue
         }
         const named = identity?.() ?? null
-        if (!buffer.ready && !named) {
-          continue
-        }
-        if (!named) {
+        if (!named && buffer.spillReady) {
           buffer.spill()
-        } else if (!write(null, named)) {
+        } else if (named && !write(null, named)) {
           fenced = true
           discard()
           return
