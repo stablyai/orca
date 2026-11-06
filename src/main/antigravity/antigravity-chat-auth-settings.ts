@@ -6,17 +6,16 @@ import {
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { ANTIGRAVITY_LAUNCH_GATE, antigravityChatSignIn } from './antigravity-chat-account'
+import {
+  assertAntigravityChatAuthPublished,
+  publishAntigravityChatAuth
+} from './antigravity-chat-auth-publication'
 
 type AuthStore = Pick<RuntimeStore, 'getSettings' | 'updateSettingsAndFlush'>
-let flushing = false
 
 export function readAntigravityChatAuthConfig(store: AuthStore): AntigravityChatAuthConfig | null {
-  if (flushing) {
-    throw new Error(
-      'Antigravity account settings are being saved on this host. Try again after it finishes.'
-    )
-  }
   const value = store.getSettings().antigravityChatAuth
+  assertAntigravityChatAuthPublished(value)
   if (value === undefined) {
     return { method: 'oauth-personal' }
   }
@@ -29,12 +28,13 @@ export function applyAntigravityChatAuthConfig(
   value: unknown,
   stopLiveChats: () => Promise<void>
 ): Promise<AntigravityChatAuthConfig> {
-  const next = resolveAntigravityChatAuthConfig(value)
+  const next = { ...resolveAntigravityChatAuthConfig(value) }
   const read = ANTIGRAVITY_LAUNCH_GATE.enter(undefined)
   let unchanged: boolean
   try {
     // A malformed saved choice must still be repairable from Account settings.
     const value = store.getSettings().antigravityChatAuth
+    assertAntigravityChatAuthPublished(value)
     const previous = AntigravityChatAuthConfigSchema.safeParse(
       value === undefined ? { method: 'oauth-personal' } : value
     )
@@ -51,15 +51,12 @@ export function applyAntigravityChatAuthConfig(
     )
   }
   const flush = store.updateSettingsAndFlush.bind(store)
-  return ANTIGRAVITY_LAUNCH_GATE.run(stopLiveChats, async () => {
-    flushing = true
-    try {
+  return ANTIGRAVITY_LAUNCH_GATE.run(stopLiveChats, () =>
+    publishAntigravityChatAuth(next, async () => {
       await flush({ antigravityChatAuth: next }, { notifyListeners: true })
       antigravityChatSignIn.set({ auth: 'unknown', flow: null })
       agentModelCatalogStore.expireAgent('antigravity')
       return next
-    } finally {
-      flushing = false
-    }
-  })
+    })
+  )
 }

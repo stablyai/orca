@@ -3,6 +3,8 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
 import { AntigravityChatSignInRow } from './AntigravityChatSignInRow'
 import { AntigravityProviderSignInArea } from './AntigravityProviderSignInArea'
 import {
@@ -45,7 +47,8 @@ vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
     }
   )
 }))
-afterEach(() => {
+afterEach(async () => {
+  await i18n.changeLanguage('en')
   cleanup()
   streams.releases.splice(0).forEach((release) => release())
   streams.handlers.clear()
@@ -132,24 +135,36 @@ it.each(['accounts', 'provider'] as const)(
   }
 )
 
-it('keeps the visible draft and does not start sign-in after a failed automatic save', async () => {
-  const target = { kind: 'environment', environmentId: 'failed-save' } as const
-  vi.mocked(callAntigravityChatAuthConfig).mockImplementation((_owner, config) =>
-    config === undefined
-      ? Promise.resolve(enterprise)
-      : Promise.reject(new Error('Could not save account settings'))
-  )
-  const user = userEvent.setup()
-  render(
-    <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
-  )
-  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-  await user.type(screen.getByLabelText('Google Cloud project'), '-changed')
-  await user.click(screen.getByRole('button', { name: 'Sign in' }))
-  await screen.findByRole('alert')
-  expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project-changed')
-  expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
-})
+it.each([
+  { surface: 'accounts', language: 'en', action: 'Sign in' },
+  { surface: 'provider', language: 'en', action: 'Sign in' },
+  { surface: 'accounts', language: 'es', action: 'Iniciar sesión' }
+] as const)(
+  '$surface retains the draft and restart instruction after an unconfirmed save ($language)',
+  async ({ surface, language, action }) => {
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage(language)
+    const target = {
+      kind: 'environment',
+      environmentId: `failed-save-${surface}-${language}`
+    } as const
+    const failure =
+      'Antigravity account settings could not be confirmed on this host. Restart Orca on this host, then try again.'
+    vi.mocked(callAntigravityChatAuthConfig).mockImplementation((_owner, config) =>
+      config === undefined ? Promise.resolve(enterprise) : Promise.reject(new Error(failure))
+    )
+    const user = userEvent.setup()
+    renderSurface(surface, target)
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+    const project = screen.getAllByRole('textbox')[0]
+    await user.type(project, '-changed')
+    await user.click(screen.getByRole('button', { name: action }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(failure)
+    expect(screen.getAllByText(failure)).toHaveLength(1)
+    expect(project).toHaveValue('enterprise-project-changed')
+    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+  }
+)
 
 it('does not start a departed host after its prepared save settles', async () => {
   const target = { kind: 'environment', environmentId: 'departed-host' } as const

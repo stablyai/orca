@@ -13,6 +13,7 @@ import {
   type AntigravityChatAuthConfig
 } from '../../shared/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { assertAntigravityChatAuthPublished } from '../antigravity/antigravity-chat-auth-publication'
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -182,6 +183,9 @@ async function readAcpLaunchInvocation(
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
   Object.assign(env, spec.env)
   const commandSettings = deps.resolveCommandSettings?.()
+  if (spec.agent === 'antigravity') {
+    assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
+  }
   const antigravityChatAuth =
     spec.agent === 'antigravity'
       ? resolveAntigravityChatAuthConfig(commandSettings?.antigravityChatAuth)
