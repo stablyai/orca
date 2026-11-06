@@ -14,7 +14,6 @@ import {
   runtimeEnvironmentSupportsCapabilities
 } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 
 export async function agentSessionCreateCapabilities(environmentId: string) {
   const [complete, choices] = await runtimeEnvironmentSupportsCapabilities(environmentId, [
@@ -61,19 +60,15 @@ export function createAgentSessionTrustWorktreeOptions(trustWorktreeId: string |
       if (!trustWorktreeId) {
         return {}
       }
-      try {
-        const supported = await runtimeEnvironmentSupportsCapability(
-          environmentId,
-          AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY
-        )
-        return supported ? { trustWorktreeId } : {}
-      } catch (error) {
-        if (isRuntimeCompatBlockError(error)) {
-          throw error
-        }
-        return {}
-      }
-    })()
+      const supported = await runtimeEnvironmentSupportsCapability(
+        environmentId,
+        AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY
+      )
+      return supported ? { trustWorktreeId } : {}
+    })().catch((error: unknown) => {
+      negotiated = undefined
+      throw error
+    })
     return negotiated
   }
 }

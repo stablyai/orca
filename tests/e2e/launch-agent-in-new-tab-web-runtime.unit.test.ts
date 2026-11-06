@@ -20,6 +20,43 @@ import { describe, expect, it, vi } from 'vitest'
 import { CreateAgentSessionParams } from '../../src/shared/rpc-contract/agent-session-params'
 
 describe('launchAgentInNewTab paired web runtime', () => {
+  it.each(['structured', 'legacy'] as const)(
+    'fails visibly before %s creation when section trust capability lookup fails',
+    async (route) => {
+      mocks.actualOperation = true
+      mocks.capability.mockImplementation(async (_environmentId, capability) => {
+        if (capability === 'agent-session.trust-worktree.v1') {
+          throw new Error('private capability transport failure')
+        }
+        return route === 'structured'
+      })
+      const dispatch = vi.fn(async (request: { method: string }) => ({
+        ok: true,
+        result:
+          request.method === 'terminal.createAgentSession'
+            ? { terminal: { tabId: 'host-tab', paneKey: 'host-tab:leaf' } }
+            : { tab: { id: 'host-tab', leafId: 'leaf' } }
+      }))
+      stubRuntimeEnvironmentBridge({ call: dispatch })
+      const { launchAgentInNewTab } = await import('@/lib/launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        activate: false,
+        initialCwd: '/outside/section',
+        trustWorktreeId: 'repo::/outside/section',
+        prompt: 'Resolve conflicts'
+      })
+      await expect(result?.terminalCompletion).resolves.toMatchObject({
+        outcome: { status: 'failed' }
+      })
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(mocks.toastError).toHaveBeenCalledOnce()
+    }
+  )
+
   it.each(['deadline', 'edited', 'authoritative', 'old', 'no-trust', 'old-client'] as const)(
     'delivers the actual %s operation once with the correct model owner and final result',
     async (route) => {
@@ -142,6 +179,12 @@ describe('launchAgentInNewTab paired web runtime', () => {
           expect(creates()[0][0].params).not.toHaveProperty('launchPreferences')
           expect(spawn).toHaveBeenCalledTimes(1)
           expect(spawn.mock.calls[0]?.[1]).toMatchObject({ cwd: '/host-child' })
+          if (route === 'old-client') {
+            expect(mocks.capability).not.toHaveBeenCalledWith(
+              'web-runtime',
+              'agent-session.trust-worktree.v1'
+            )
+          }
           if (route === 'no-trust' || route === 'old-client') {
             expect(creates()[0][0].params).not.toHaveProperty('trustWorktreeId')
             expect(spawn.mock.calls[0]?.[1]).not.toHaveProperty('trustWorktreeId')
