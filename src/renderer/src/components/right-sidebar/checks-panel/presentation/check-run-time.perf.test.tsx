@@ -10,7 +10,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const formatCalls = vi.hoisted(() => ({ count: 0 }))
 
-// Each timed label formats its exact times once per render; counting calls counts label renders.
+// Counts how often labels rebuild their exact times, the per-row text that never depends on the clock.
 vi.mock('@/components/github/pr-check-presentation', () => ({
   formatCheckTimestamp: (input: string | null | undefined) => {
     formatCalls.count += 1
@@ -69,15 +69,20 @@ afterEach(() => {
 })
 
 describe('CheckRunTime clock cost', () => {
-  it('re-renders only rows dated by a time, once per tick, at N and 10N rows', () => {
-    // A tick must refresh every visible age (one render per timed row, two exact times each) and nothing else.
-    expect(formatsPerTick(10, 10)).toBe(10 * 2)
+  it('rebuilds no fixed text on a clock tick, at N and 10N rows', () => {
+    // A tick can only move ages; exact times, durations and copy depend on data and language alone.
+    expect(formatsPerTick(10, 10)).toBe(0)
     act(() => root.unmount())
     root = createRoot(container)
-    expect(formatsPerTick(100, 100)).toBe(100 * 2)
+    expect(formatsPerTick(100, 100)).toBe(0)
   })
 
-  it('leaves a list without times entirely off the clock', () => {
-    expect(formatsPerTick(0, 100)).toBe(0)
+  it('still moves each visible age on a tick', () => {
+    formatsPerTick(3, 0)
+    expect(container.textContent).toContain('2h ago')
+    act(() => {
+      vi.advanceTimersByTime(60 * 60_000)
+    })
+    expect(container.textContent).toContain('3h ago')
   })
 })

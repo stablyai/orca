@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { formatCheckTimestamp } from '@/components/github/pr-check-presentation'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
@@ -10,10 +10,12 @@ const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
 
-export type CheckRunTimeLabel = {
+/** What a row shows that only changes with its data; the age is derived from it on each clock tick. */
+export type CheckRunTimeFacts = {
   /** When the check last moved: its finish, or its start while it still runs. */
-  when: string | null
-  duration: string | null
+  whenMs: number | null
+  /** The duration and earlier-commit note, joined for the row. */
+  fixedText: string
   details: string[]
 }
 
@@ -63,45 +65,71 @@ function formatRunDuration(durationMs: number): string {
   return formatUiNarrowDuration(seconds, 'second')
 }
 
-export function getCheckRunTimeLabel(
-  check: PRCheckDetail,
-  nowMs: number
-): CheckRunTimeLabel | null {
+export function getCheckRunTimeFacts(
+  check: Pick<PRCheckDetail, 'status' | 'startedAt' | 'completedAt' | 'notLatestCommitSha'>
+): CheckRunTimeFacts | null {
   const startedMs = parseTime(check.startedAt)
   const completedMs = parseTime(check.completedAt)
   const running = check.status !== 'completed'
   // A finished check without a finish time has no honest "when"; its start would misdate the result.
   const whenMs = running ? startedMs : completedMs
-  if (whenMs === null) {
+  const { notLatestCommitSha } = check
+  if (whenMs === null && !notLatestCommitSha) {
     return null
   }
-  const durationMs =
-    !running && startedMs !== null && completedMs !== null ? completedMs - startedMs : null
   const details: string[] = []
-  const started = formatCheckTimestamp(check.startedAt)
-  const finished = running ? null : formatCheckTimestamp(check.completedAt)
-  if (started) {
-    details.push(
-      translate('auto.components.right.sidebar.checks.panel.runTime.started', 'Started {{time}}', {
-        time: started
-      })
-    )
+  if (whenMs !== null) {
+    const started = formatCheckTimestamp(check.startedAt)
+    const finished = running ? null : formatCheckTimestamp(check.completedAt)
+    if (started) {
+      details.push(
+        translate(
+          'auto.components.right.sidebar.checks.panel.runTime.started',
+          'Started {{time}}',
+          { time: started }
+        )
+      )
+    }
+    if (finished) {
+      details.push(
+        translate(
+          'auto.components.right.sidebar.checks.panel.runTime.finished',
+          'Finished {{time}}',
+          { time: finished }
+        )
+      )
+    }
   }
-  if (finished) {
+  if (notLatestCommitSha) {
     details.push(
       translate(
-        'auto.components.right.sidebar.checks.panel.runTime.finished',
-        'Finished {{time}}',
-        { time: finished }
+        'auto.components.right.sidebar.checks.panel.runTime.notLatestCommitDetail',
+        'Ran on commit {{sha}}, not the latest commit',
+        { sha: notLatestCommitSha.slice(0, 8) }
       )
     )
   }
-  return {
-    when: formatAge(nowMs - whenMs),
+  const durationMs =
+    whenMs !== null && !running && startedMs !== null && completedMs !== null
+      ? completedMs - startedMs
+      : null
+  const fixedText = [
+    notLatestCommitSha
+      ? translate(
+          'auto.components.right.sidebar.checks.panel.runTime.notLatestCommit',
+          'Earlier commit'
+        )
+      : null,
     // Under a second (skipped and instant runs report equal times) says nothing useful.
-    duration: durationMs !== null && durationMs >= 1000 ? formatRunDuration(durationMs) : null,
-    details
-  }
+    durationMs !== null && durationMs >= 1000 ? formatRunDuration(durationMs) : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return { whenMs, fixedText, details }
+}
+
+export function formatCheckRunAge(facts: CheckRunTimeFacts, nowMs: number): string | null {
+  return facts.whenMs === null ? null : formatAge(nowMs - facts.whenMs)
 }
 
 /** The check's age from the shared 30s clock the panel already ticks on, so rows add no timer. */
@@ -112,48 +140,32 @@ function useCheckRunNow(enabled: boolean): number {
 }
 
 export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Element | null {
-  // Only the time a row is dated by ages; rows without it don't listen to the clock.
-  const nowMs = useCheckRunNow(
-    Boolean(check.status === 'completed' ? check.completedAt : check.startedAt)
+  const { status, startedAt, completedAt, notLatestCommitSha } = check
+  const locale = getIntlLocale()
+  // Clock ticks change only the age, so the exact times, duration and copy are built once per data or language change.
+  const facts = useMemo(
+    () => getCheckRunTimeFacts({ status, startedAt, completedAt, notLatestCommitSha }),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() and the date formatter read the UI language implicitly.
+    [status, startedAt, completedAt, notLatestCommitSha, locale]
   )
-  const { notLatestCommitSha } = check
-  const label = getCheckRunTimeLabel(check, nowMs)
-  if (!label && !notLatestCommitSha) {
+  // Only the time a row is dated by ages; rows without it don't listen to the clock.
+  const nowMs = useCheckRunNow(facts?.whenMs != null)
+  if (!facts) {
     return null
   }
-  const details = label?.details ?? []
-  if (notLatestCommitSha) {
-    details.push(
-      translate(
-        'auto.components.right.sidebar.checks.panel.runTime.notLatestCommitDetail',
-        'Ran on commit {{sha}}, not the latest commit',
-        { sha: notLatestCommitSha.slice(0, 8) }
-      )
-    )
-  }
-  const fixed = [
-    notLatestCommitSha
-      ? translate(
-          'auto.components.right.sidebar.checks.panel.runTime.notLatestCommit',
-          'Earlier commit'
-        )
-      : null,
-    label?.duration
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const age = formatCheckRunAge(facts, nowMs)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="flex shrink-0 items-center gap-1 text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
-          {fixed && <span>{label?.when ? `${fixed} ·` : fixed}</span>}
+          {facts.fixedText && <span>{age ? `${facts.fixedText} ·` : facts.fixedText}</span>}
           {/* The age is the only part that changes over time; its reserved width keeps "9m ago" to "10m ago" from re-truncating the name. */}
-          {label?.when && <span className="min-w-[8ch] text-right">{label.when}</span>}
+          {age && <span className="min-w-[8ch] text-right">{age}</span>}
         </span>
       </TooltipTrigger>
-      {details.length > 0 && (
+      {facts.details.length > 0 && (
         <TooltipContent side="left" sideOffset={4}>
-          {details.map((line) => (
+          {facts.details.map((line) => (
             <div key={line}>{line}</div>
           ))}
         </TooltipContent>
