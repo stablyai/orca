@@ -30,7 +30,7 @@ function recorder() {
 const flush = () => new Promise<void>((resolve) => queueMicrotask(resolve))
 
 describe('subscribeSharedClientEvents', () => {
-  it('shares one wire subscription and closes it with the last listener or the wire end', () => {
+  it('shares one wire subscription, keeps it across a same-tick rejoin and closes it with the last listener or the wire end', async () => {
     const { client, opened } = wire()
     const a = recorder()
     const b = recorder()
@@ -43,8 +43,13 @@ describe('subscribeSharedClientEvents', () => {
     expect(b.events).toEqual([{ type: 'reposChanged' }])
 
     stopA()
-    expect(opened[0]!.stop).not.toHaveBeenCalled()
     stopB()
+    const stopRejoined = subscribeSharedClientEvents(client, recorder().listener)
+    await flush()
+    expect(opened).toHaveLength(1)
+    expect(opened[0]!.stop).not.toHaveBeenCalled()
+    stopRejoined()
+    await flush()
     expect(opened[0]!.stop).toHaveBeenCalledTimes(1)
 
     const c = recorder()

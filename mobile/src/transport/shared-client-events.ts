@@ -29,7 +29,7 @@ const streams = new WeakMap<SharedClientEventsClient, SharedStream>()
 /**
  * One `runtime.clientEvents` wire stream per client, shared by every listener in this JS world.
  * Every wire event reaches every listener; a listener that joins after the wire's `ready` on the
- * current connection gets a `joined` ready instead. The stream closes with its last listener.
+ * current connection gets a `joined` ready instead. The stream closes once its last listener leaves.
  */
 export function subscribeSharedClientEvents(
   client: SharedClientEventsClient,
@@ -66,11 +66,17 @@ export function subscribeSharedClientEvents(
     if (!stream.listeners.delete(subscription) || stream.listeners.size > 0) {
       return
     }
-    if (streams.get(client) === stream) {
-      streams.delete(client)
-    }
-    stream.stop?.()
-    stream.stop = null
+    // An effect that re-runs leaves and rejoins in one commit; keep the wire stream across it.
+    queueMicrotask(() => {
+      if (stream.listeners.size > 0) {
+        return
+      }
+      if (streams.get(client) === stream) {
+        streams.delete(client)
+      }
+      stream.stop?.()
+      stream.stop = null
+    })
   }
 }
 
