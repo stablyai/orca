@@ -13,6 +13,7 @@ import type {
 } from '../../shared/git/remotes/git-fork-sync'
 import type {
   GitConflictOperation,
+  GitRebaseOperationResult,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
@@ -84,6 +85,7 @@ export type IGitProvider = {
   bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
+  getRebaseOperation(worktreePath: string): Promise<GitRebaseOperationResult>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>

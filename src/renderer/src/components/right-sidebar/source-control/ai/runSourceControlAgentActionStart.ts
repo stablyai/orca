@@ -115,20 +115,20 @@ export async function runSourceControlAgentActionStart({
   onLaunchAborted,
   onLaunched,
   onClose
-}: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+}: RunSourceControlAgentActionStartArgs): Promise<'started' | 'not-started' | 'refused'> {
   const recipe = structuredClone(submittedRecipe)
   // Detection and delivery planning can outlive the state that opened the composer.
   if (signal?.aborted) {
-    return false
+    return 'not-started'
   }
   if (recoveryContext && !(await admitSourceControlRecovery(recoveryContext, signal))) {
-    return false
+    return 'not-started'
   }
   if (admitLaunch && !(await admitLaunch())) {
-    return false
+    return 'refused'
   }
   if (signal?.aborted) {
-    return false
+    return 'not-started'
   }
   const state = useAppStore.getState()
   const settings = state.settings
@@ -232,7 +232,7 @@ export async function runSourceControlAgentActionStart({
       ...(launchChoice ? { launchChoice } : {})
     })
     if (result === 'cancelled') {
-      return false
+      return 'not-started'
     }
     launched = result
     if (launched) {
@@ -264,7 +264,7 @@ export async function runSourceControlAgentActionStart({
       launchSource
     })
     if (!result || 'refused' in result) {
-      return false
+      return 'not-started'
     }
     launched = true
     if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
@@ -297,7 +297,7 @@ export async function runSourceControlAgentActionStart({
         )
       )
     }
-    return false
+    return 'not-started'
   }
 
   const backgroundWorkspaceId =
@@ -309,5 +309,5 @@ export async function runSourceControlAgentActionStart({
   if (!signal?.aborted) {
     onClose()
   }
-  return true
+  return 'started'
 }

@@ -98,7 +98,6 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
               )
           }
       const reviewWorktreeId = activeWorktreeId
-      let rebaseRefused = false
       const launchContext = {
         initialSelection: selection,
         worktreeId: activeWorktreeId,
@@ -106,14 +105,8 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         // Review conflicts and comments work in this checkout; a rebase there must finish first.
         ...(reviewWorktreeId
           ? {
-              admitLaunch: async () => {
-                const admitted = await confirmNoRebaseBeforeReviewAction(
-                  reviewWorktreeId,
-                  model.ownerCopyHostId
-                )
-                rebaseRefused = !admitted
-                return admitted
-              }
+              admitLaunch: () =>
+                confirmNoRebaseBeforeReviewAction(reviewWorktreeId, model.ownerCopyHostId)
             }
           : {}),
         connectionId: model.activeConnectionId,
@@ -131,10 +124,9 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         launchSource: composer.launchSource,
         promptDelivery: 'submit-after-ready',
         onClose: () => {},
-        onFallback: () => {
-          // A refused rebase check already said why; the composer would only repeat it.
+        onFallback: (reason) => {
           if (
-            !rebaseRefused &&
+            reason !== 'refused' &&
             checksPanelReviewStableKey(model.asyncResultKeyRef.current) ===
               checksPanelReviewStableKey(stateRequestKey)
           ) {

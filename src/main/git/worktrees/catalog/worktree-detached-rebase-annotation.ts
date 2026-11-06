@@ -2,6 +2,7 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../shared/abort-signal-reason'
+import { BoundedMap } from '../../../../shared/bounded-map'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { isUnobservedWorktreeIdentity } from '../../../../shared/worktree/hosted-review-branch-ownership'
@@ -17,29 +18,22 @@ const DETACHED_REBASE_READ_CONCURRENCY = 8
 const DETACHED_REBASE_READ_BUDGET_MS = 2_000
 const UNVERIFIED: RebaseOperationRead = { state: 'unverifiable' }
 
-// Why: a read on a hung mount cannot be cancelled. A checkout whose read outlived its budget gets
-// no new one until that read settles, so repeated scans cannot pile reads onto it. Holds no results.
-const stuckProbeKeys = new Set<string>()
+// Filesystem reads cannot be cancelled; overlapping scans skip a checkout until its read settles.
+const pendingProbeKeys = new Set<string>()
+// Keep only the next path, never a verdict: every observation still reads fresh metadata.
+const nextProbePaths = new BoundedMap<string, string>({ maxEntries: 256 })
 
 async function detachedRebaseVerdict(
   worktree: GitWorktreeInfo,
   options: GitWorktreeExecOptions,
-  deadlineAt: number
+  remainingMs: number,
+  key: string
 ): Promise<GitWorktreeInfo['detachedRebase']> {
-  const key = `${options.wslDistro ?? ''}\0${worktree.path}`
-  const remainingMs = deadlineAt - Date.now()
-  if (remainingMs <= 0 || options.signal?.aborted || stuckProbeKeys.has(key)) {
-    return undefined
-  }
-  let settled = false
+  pendingProbeKeys.add(key)
   const probe = readRebaseOperation(worktree.path, options).finally(() => {
-    settled = true
-    stuckProbeKeys.delete(key)
+    pendingProbeKeys.delete(key)
   })
   const read = await withTimeout(probe, remainingMs, UNVERIFIED)
-  if (!settled) {
-    stuckProbeKeys.add(key)
-  }
   if (read.state === 'active') {
     return read.branch ? { active: true, branch: read.branch } : { active: true }
   }
@@ -49,6 +43,7 @@ async function detachedRebaseVerdict(
 
 /** Detached rows get their owning host's rebase verdict within a budget; others stay unknown. */
 export async function annotateDetachedRebaseOperations(
+  repoPath: string,
   worktrees: GitWorktreeInfo[],
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
@@ -56,14 +51,29 @@ export async function annotateDetachedRebaseOperations(
     (worktree) =>
       !worktree.isBare && worktree.branch === '' && !isUnobservedWorktreeIdentity(worktree)
   )
+  const scanKey = `${options.wslDistro ?? ''}\0${repoPath}`
   if (detached.length === 0) {
+    nextProbePaths.delete(scanKey)
     return worktrees
   }
+  const nextPath = nextProbePaths.get(scanKey)
+  const startIndex = Math.max(
+    0,
+    detached.findIndex((worktree) => worktree.path === nextPath)
+  )
+  const ordered = [...detached.slice(startIndex), ...detached.slice(0, startIndex)]
   const deadlineAt = Date.now() + DETACHED_REBASE_READ_BUDGET_MS
   const verdicts = new Map<GitWorktreeInfo, GitWorktreeInfo['detachedRebase']>()
   await waitForPromiseWithSignal(
-    mapWithConcurrency(detached, DETACHED_REBASE_READ_CONCURRENCY, async (worktree) => {
-      verdicts.set(worktree, await detachedRebaseVerdict(worktree, options, deadlineAt))
+    mapWithConcurrency(ordered, DETACHED_REBASE_READ_CONCURRENCY, async (worktree, index) => {
+      const remainingMs = deadlineAt - Date.now()
+      const key = `${options.wslDistro ?? ''}\0${worktree.path}`
+      if (remainingMs <= 0 || options.signal?.aborted || pendingProbeKeys.has(key)) {
+        return
+      }
+      // Advance at admission, so a budget expiry or cancellation cannot restart the same prefix.
+      nextProbePaths.set(scanKey, ordered[(index + 1) % ordered.length].path)
+      verdicts.set(worktree, await detachedRebaseVerdict(worktree, options, remainingMs, key))
     }),
     options.signal
   )

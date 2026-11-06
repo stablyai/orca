@@ -2,6 +2,7 @@ import { access, readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitConflictOperation,
+  GitRebaseOperationResult,
   GitRebaseOperationState
 } from '../../../shared/git/status/git-status-types'
 import {
@@ -120,6 +121,14 @@ export async function readRebaseOperation(
     return { state: 'none', headDetached: false }
   }
   return isFullGitObjectId(head) ? { state: 'none', headDetached: true } : UNVERIFIABLE
+}
+
+/** Fresh owner-side verdict, without enumerating status or sharing a prior read. */
+export async function getRebaseOperation(
+  worktreePath: string,
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
+): Promise<GitRebaseOperationResult> {
+  return { rebaseOperation: (await readRebaseOperation(worktreePath, options)).state }
 }
 
 /** Treat inaccessible paths as absent without throwing. */

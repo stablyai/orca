@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import { getRebaseOperation } from '../../../../main/git/source-control/git-conflict-operation'
 import { listWorktreesStrict } from '../../../../main/git/worktrees/catalog/worktree-listing'
 import { mergeWorktree } from '../../../../main/ipc/worktree-metadata-merge'
 import { mergeWorktreeMetaForWrite } from '../../../../main/persistence/loading-store/worktree-meta-write-normalization'
 import { readGitCommonHeadIdentities } from '../../../../main/ipc/worktrees/creation/worktree-head-identity-reader'
-import { getStatus } from '../../../../main/git/source-control/status-read'
 import { applyWorktreeHeadIdentities } from '../../hooks/worktree-head-identity-apply'
 import { confirmNoRebaseBeforeReviewAction } from '../../lib/review-action-rebase-check'
 import {
@@ -17,7 +17,7 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
   worktreeListMock
-} from './worktrees-slice-test-harness'
+} from './worktrees/worktrees-slice-test-harness'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -388,11 +388,10 @@ describe('review action rebase check at the action boundary', () => {
     const repo = createReviewRepo('feature')
     const persisted = createPersistence(reviewMeta())
     await observe(repo, persisted)
-    // The renderer's local status call reaches the real owner-side status read.
+    // The renderer's verdict call reaches the real owner-side metadata read.
     Object.assign(mockApi, {
       git: {
-        status: (args: { worktreePath: string; verifyRebaseOperation?: boolean }) =>
-          getStatus(args.worktreePath, { verifyRebaseOperation: args.verifyRebaseOperation })
+        rebaseOperation: (args: { worktreePath: string }) => getRebaseOperation(args.worktreePath)
       }
     })
     try {

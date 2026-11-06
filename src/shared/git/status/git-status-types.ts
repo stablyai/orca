@@ -53,6 +53,8 @@ export type GitBranchLineTotal = {
   generated?: { added: number; removed: number }
 }
 
+export type GitRebaseOperationResult = { rebaseOperation: GitRebaseOperationState }
+
 export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation

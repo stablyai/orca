@@ -48,21 +48,7 @@ export async function resolveVerifiedGitDir(
   if (!hostWorktreePath) {
     return null
   }
-  const dotGitPath = path.join(hostWorktreePath, '.git')
-  let gitDir: string
-  try {
-    const pointer = parseGitdirMarkerPayload(await readFile(dotGitPath, 'utf-8'))
-    const resolved = pointer ? resolveGitMetadataPath(hostWorktreePath, pointer, options) : null
-    if (!resolved) {
-      return null
-    }
-    gitDir = resolved
-  } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'EISDIR')) {
-      return null
-    }
-    gitDir = dotGitPath
-  }
+  const gitDir = await resolveGitDir(worktreePath, options)
   // A pruned or untranslatable pointer still resolves to a path; only HEAD proves a Git dir.
   try {
     await readFile(path.join(gitDir, 'HEAD'), 'utf-8')

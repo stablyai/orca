@@ -8,6 +8,7 @@ import type { BranchSwitchTarget } from '../../../../shared/git/branch-switch-ta
 import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from '../../../git/branch-switch'
 import type {
   GitConflictOperation,
+  GitRebaseOperationResult,
   GitStagingArea,
   GitStatusResult
 } from '../../../../shared/git/status/git-status-types'
@@ -83,6 +84,11 @@ export class RuntimeGitStatusCommands {
   ): Promise<GitHistoryResult> {
     const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).getHistory(target.worktree.path, options)
+  }
+
+  async getRuntimeGitRebaseOperation(worktreeSelector: string): Promise<GitRebaseOperationResult> {
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
+    return requireRuntimeGitProvider(target).getRebaseOperation(target.worktree.path)
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {

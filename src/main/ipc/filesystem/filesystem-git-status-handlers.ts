@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type {
   GitConflictOperation,
+  GitRebaseOperationResult,
   GitStagingArea,
   GitStatusResult
 } from '../../../shared/git/status/git-status-types'
@@ -11,7 +12,8 @@ import { getSubmoduleStatus } from '../../git/source-control/submodule-status'
 import {
   abortMerge,
   abortRebase,
-  detectConflictOperation
+  detectConflictOperation,
+  getRebaseOperation
 } from '../../git/source-control/git-conflict-operation'
 import { getDiff } from '../../git/source-control/file-diff'
 import { registerFilesystemGitHistoryHandlers } from './filesystem-git-history-handlers'
@@ -167,6 +169,17 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return appendFolderToGitignore(worktreePath, args.folderName)
+    }
+  )
+
+  ipcMain.handle(
+    'git:rebaseOperation',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<GitRebaseOperationResult> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      return readWorktreeGitUnlessWslStopped(store, args.worktreePath, false, getRebaseOperation)
     }
   )
 

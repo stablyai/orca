@@ -6,6 +6,7 @@ import type {
 import type { GitMutationInFlight } from '../../../../../shared/git/commands/git-mutation-in-flight'
 import type {
   GitConflictOperation,
+  GitRebaseOperationResult,
   GitStagingArea,
   GitStatusResult
 } from '../../../../../shared/git/status/git-status-types'
@@ -215,6 +216,23 @@ export async function getRuntimeGitHistory(
     target,
     'git.history',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...options },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitRebaseOperation(
+  context: RuntimeGitContext
+): Promise<GitRebaseOperationResult> {
+  if (context.target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.rebaseOperation({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitRebaseOperationResult>(
+    context.target,
+    'git.rebaseOperation',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
     { timeoutMs: 15_000 }
   )
 }

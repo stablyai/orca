@@ -156,7 +156,7 @@ export type HostedReviewClearUpdates = Partial<
 export function hostedReviewClearUpdates(
   decision: HostedReviewClear,
   context: HostedReviewContext
-): { updates: HostedReviewClearUpdates; full: boolean } | null {
+): HostedReviewClearUpdates | null {
   if (!decision.selection && !decision.push) {
     return null
   }
@@ -164,12 +164,7 @@ export function hostedReviewClearUpdates(
     (decision.selection || !hasSelection(context)) &&
     (decision.push || context.pushTarget === undefined)
   if (full) {
-    return { updates: CLEARED_HOSTED_REVIEW_LINK_UPDATES, full }
+    return CLEARED_HOSTED_REVIEW_LINK_UPDATES
   }
-  return {
-    updates: decision.selection
-      ? CLEARED_HOSTED_REVIEW_SELECTION_UPDATES
-      : { pushTarget: undefined },
-    full
-  }
+  return decision.selection ? CLEARED_HOSTED_REVIEW_SELECTION_UPDATES : { pushTarget: undefined }
 }

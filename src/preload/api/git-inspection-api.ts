@@ -6,6 +6,7 @@ import type {
 import type { GitMutationInFlight } from '../../shared/git/commands/git-mutation-in-flight'
 import type {
   GitConflictOperation,
+  GitRebaseOperationResult,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
@@ -70,6 +71,10 @@ export type GitInspectionApi = {
       wakeWslDistro?: boolean
     } & GitHistoryOptions
   ) => Promise<GitHistoryResult>
+  rebaseOperation: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<GitRebaseOperationResult>
   conflictOperation: (args: {
     worktreePath: string
     connectionId?: string

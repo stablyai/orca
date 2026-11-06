@@ -91,6 +91,7 @@ async function runAnnotatedWorktreeScan(
 ): Promise<GitWorktreeInfo[]> {
   const worktrees = await listWorktreeGraph(repoPath, options)
   return annotateDetachedRebaseOperations(
+    repoPath,
     await annotateSparseCheckoutStatus(repoPath, worktrees, options),
     options
   )

@@ -227,7 +227,7 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.onLaunched).not.toHaveBeenCalled()
 
     resolveDelivery({ delivered: true, failureNotified: false })
-    await expect(launchPromise).resolves.toBe(true)
+    await expect(launchPromise).resolves.toBe('started')
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
     expect(onLaunchAborted).not.toHaveBeenCalled()
   })
@@ -270,7 +270,7 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.onClose).not.toHaveBeenCalled()
 
     resolveDelivery({ delivered: false, failureNotified: true })
-    await expect(launchPromise).resolves.toBe(false)
+    await expect(launchPromise).resolves.toBe('not-started')
 
     expect(onSaveAgentDefault).toHaveBeenCalledOnce()
     expect(onLaunchAborted).toHaveBeenCalledTimes(1)
@@ -290,7 +290,7 @@ it('confirms delivery and closes even while saving remains pending', async () =>
     runSourceControlAgentActionStart(
       buildArgs({ saveTargetValue: 'global', onSaveAgentDefault, onLaunched })
     )
-  ).resolves.toBe(true)
+  ).resolves.toBe('started')
   expect(onLaunched).toHaveBeenCalledOnce()
   expect(mocks.onClose).toHaveBeenCalled()
 })

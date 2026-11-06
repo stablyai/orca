@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import { getRuntimeGitRebaseOperation } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GitRebaseOperationState } from '../../../shared/git/status/git-status-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -28,17 +28,14 @@ async function readOwnerRebaseOperation(
     return 'not-git'
   }
   try {
-    const status = await getRuntimeGitStatus(
-      {
-        target: copy.transport,
-        worktreeId,
-        worktreePath: worktree.path,
-        connectionId: copy.connectionId
-      },
-      { admissionTier: 'interactive', includeLineStats: false, verifyRebaseOperation: true }
-    )
+    const result = await getRuntimeGitRebaseOperation({
+      target: copy.transport,
+      worktreeId,
+      worktreePath: worktree.path,
+      connectionId: copy.connectionId
+    })
     // Older hosts omit the verdict; that is unverified, not proof that no rebase is running.
-    return status.rebaseOperation ?? 'host-outdated'
+    return result.rebaseOperation ?? 'host-outdated'
   } catch {
     return 'unverifiable'
   }

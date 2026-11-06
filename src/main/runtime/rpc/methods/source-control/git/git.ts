@@ -55,6 +55,12 @@ export const GIT_METHODS = [
       })
   }),
   defineMethod({
+    name: 'git.rebaseOperation',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.getRuntimeGitRebaseOperation(params.worktree)
+  }),
+  defineMethod({
     name: 'git.mutationInFlight',
     permission: 'workspace',
     params: WorktreeSelector,

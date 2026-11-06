@@ -11,7 +11,8 @@ import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync } from '../git/ru
 import {
   abortMerge,
   abortRebase,
-  detectConflictOperation
+  detectConflictOperation,
+  getRebaseOperation
 } from '../git/source-control/git-conflict-operation'
 import { bulkDiscardChanges, discardChanges } from '../git/source-control/discard-changes'
 import {
@@ -109,6 +110,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     discardChanges: (worktreePath, filePath) => discardChanges(worktreePath, filePath, interactive),
     bulkDiscardChanges: (worktreePath, filePaths) =>
       bulkDiscardChanges(worktreePath, filePaths, interactive),
+    getRebaseOperation: (worktreePath) => getRebaseOperation(worktreePath, base),
     detectConflictOperation: (worktreePath) => detectConflictOperation(worktreePath, base),
     abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
     abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),

@@ -95,6 +95,7 @@ export async function listWorktreesStrict(
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
   return annotateDetachedRebaseOperations(
+    repoPath,
     await annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options),
     options
   )

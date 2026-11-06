@@ -3,7 +3,7 @@ import type { MobileRuntimeRepoSummary } from './agent-launch/mobile-runtime-rep
 import { isFolderRepo } from '../../../src/shared/repo-kind'
 import { gitRebaseVerdictRead } from '../source-control/mobile-git-read-operations'
 import { translate } from '../i18n/mobile-i18n'
-import { workspaceKindForWorktreeId } from '../../../src/shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../src/shared/agent-launch/contracts/workspace-launch-kind'
 
 export type MobileReviewActionAdmission = { ok: true } | { ok: false; message: string }
 
@@ -24,10 +24,7 @@ export async function confirmNoRebaseBeforeMobileReviewAction(
   let verdict: 'active' | 'none' | 'unverifiable' | undefined
   try {
     const reply = await gitRebaseVerdictRead.request(client, {
-      worktree: `id:${worktreeId}`,
-      admissionTier: 'interactive',
-      includeLineStats: false,
-      verifyRebaseOperation: true
+      worktree: `id:${worktreeId}`
     })
     verdict = gitRebaseVerdictRead.interpret(reply).rebaseOperation
     if (verdict === undefined) {

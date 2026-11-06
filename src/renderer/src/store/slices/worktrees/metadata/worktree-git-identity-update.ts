@@ -157,7 +157,7 @@ export function createUpdateWorktreeGitIdentity(
           clearedCopy = copy
           clearedOnTwin = targets.isTwin
           clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
-          clearUpdates = clear.updates
+          clearUpdates = clear
           rememberHostedReviewLinkClear(
             worktreeId,
             nextBranch,
@@ -213,7 +213,7 @@ export function createUpdateWorktreeGitIdentity(
           head: nextHead,
           branch: nextBranch,
           displayName: nextDisplayName,
-          ...(clear ? normalizeWorkspaceAttachmentUpdate(worktree, clear.updates) : {})
+          ...(clear ? normalizeWorkspaceAttachmentUpdate(worktree, clear) : {})
         }
       })
 

@@ -130,7 +130,7 @@ async function pickExistingWorktreeAgent(
     )
   }
   // Why after the agent waits: they can be long, and the rebase verdict must be fresh at launch.
-  return agent && (await confirmNoRebaseBeforeReviewAction(worktreeId, row?.hostId)) ? agent : null
+  return agent && (await confirmNoRebaseBeforeReviewAction(worktreeId)) ? agent : null
 }
 
 export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {

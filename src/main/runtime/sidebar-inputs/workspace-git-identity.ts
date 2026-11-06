@@ -93,7 +93,7 @@ export class WorkspaceGitIdentity {
         sameInstance && !unobserved
           ? decideHostedReviewClear(before.owner, row.branch, row)
           : { selection: false, push: false }
-      const updates = hostedReviewClearUpdates(decision, row)?.updates ?? null
+      const updates = hostedReviewClearUpdates(decision, row)
       if (updates && row.hostId !== undefined) {
         clears.push({ target: hostWorktreeTarget({ id: row.id, hostId: row.hostId }), updates })
       }

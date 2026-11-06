@@ -192,7 +192,7 @@ export function useSourceControlAgentActionStart({
           return false
         }
         setDeliveryPlan(nextPlan)
-        return await runSourceControlAgentActionStart({
+        const result = await runSourceControlAgentActionStart({
           selectedAgent,
           trimmedCommandInput,
           launchChoice,
@@ -230,6 +230,7 @@ export function useSourceControlAgentActionStart({
             }
           }
         })
+        return result === 'started'
       } finally {
         if (attemptRef.current === attempt) {
           attemptRef.current = null
