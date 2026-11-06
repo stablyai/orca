@@ -11,12 +11,10 @@ export class AgentPromptPermissionReturnedError extends Error {
   }
 }
 
-export const AGENT_PROMPT_PENDING_INPUT_ERROR = 'agent_prompt_pending_input'
-
 /** The writer's other pre-paste refusal: the composer already holds unsent text. */
 export class AgentPromptPendingInputError extends Error {
   constructor(readonly pendingInput: string) {
-    super(AGENT_PROMPT_PENDING_INPUT_ERROR)
+    super('agent_prompt_pending_input')
     this.name = 'AgentPromptPendingInputError'
   }
 }

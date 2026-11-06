@@ -31,27 +31,13 @@ import {
   withTerminalInputSequence
 } from './terminal-send-input-sequence'
 
-/**
- * Build the one shape every refused send reports: zero bytes written, never accepted.
- *
- * @param refusedReason The guard's reason, when it has one.
- * @param pendingInput The unsent composer text, carried only by a `'pending-input'` refusal so
- * the sender can tell the user what is in the way. Both are omitted rather than sent as
- * `undefined`, keeping the wire additive for older clients.
- */
+// Every refused send reports the same zero-byte result, with the guard's reason when it has one.
 function refusedSend(
   handle: string,
-  refusedReason?: NonNullable<RuntimeTerminalSend['refusedReason']>,
-  pendingInput?: string
+  refusedReason?: NonNullable<RuntimeTerminalSend['refusedReason']>
 ) {
   return {
-    send: {
-      handle,
-      accepted: false,
-      bytesWritten: 0,
-      ...(refusedReason ? { refusedReason } : {}),
-      ...(pendingInput === undefined ? {} : { pendingInput })
-    }
+    send: { handle, accepted: false, bytesWritten: 0, ...(refusedReason ? { refusedReason } : {}) }
   }
 }
 
@@ -272,7 +258,8 @@ export const TERMINAL_SEND_METHODS = [
             return acceptedPromptCheckpoint
           }
           if (error instanceof AgentPromptPendingInputError) {
-            return refusedSend(params.terminal, 'pending-input', error.pendingInput)
+            const { send } = refusedSend(params.terminal, 'pending-input')
+            return { send: { ...send, pendingInput: error.pendingInput } }
           }
           const refusedReason = getTerminalSendGuardRefusedReason(error)
           if (refusedReason) {
