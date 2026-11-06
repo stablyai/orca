@@ -13,6 +13,7 @@ import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
+import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
@@ -79,6 +80,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
       ON agent_session_records (CASE WHEN json_valid(record_json)
         THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
     ensureAgentSessionAttachmentClaimTables(probe)
+    ensurePRWatchTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }

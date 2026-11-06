@@ -17,7 +17,7 @@ const CREATE_COMMANDS: readonly { provider: Provider; command: RegExp }[] = [
 
 // Where a shell starts a command, past `NAME=value` assignments and wrappers like `timeout 60`.
 // A create command anywhere else, as in `echo "gh pr create"`, is text, not a command that runs.
-const COMMAND_START =
+export const COMMAND_START =
   '(?:^|[;&|({`\\n]|\\b(?:do|then|else)\\s)\\s*(?:(?:\\w+=\\S*|env|time|nohup|timeout\\s+\\S+)\\s+)*'
 const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
   provider,
@@ -41,7 +41,7 @@ function createCount(code: string): number {
 }
 
 /** The commands a script runs, without the text it carries. */
-function shellCode(script: string): string {
+export function shellCode(script: string): string {
   return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
     // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
     // including a backslash before CR, becomes one word.
@@ -50,7 +50,7 @@ function shellCode(script: string): string {
 }
 
 /** A script split at command separators that sit outside quotes. */
-function shellSegments(script: string): string[] {
+export function shellSegments(script: string): string[] {
   const segments: string[] = []
   let current = ''
   let quote: string | null = null
