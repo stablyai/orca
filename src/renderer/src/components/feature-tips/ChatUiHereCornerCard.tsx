@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react'
+import { useEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
 import { X } from 'lucide-react'
 import { FEATURE_TIPS } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
@@ -22,23 +22,43 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
   const mountedRef = useMountedRef()
   const settings = useAppStore((s) => s.settings)
   const [stage, setStage] = useState<'prompt' | 'saving' | 'switched'>('prompt')
+  const focusSwitchedNote = useRef(false)
+  const [focusSettings, setFocusSettings] = useState(false)
+
+  useEffect(() => {
+    if (stage !== 'saving') {
+      return
+    }
+    const cancelFocusTransfer = (): void => {
+      focusSwitchedNote.current = false
+    }
+    document.addEventListener('focusin', cancelFocusTransfer)
+    document.addEventListener('pointerdown', cancelFocusTransfer)
+    return () => {
+      document.removeEventListener('focusin', cancelFocusTransfer)
+      document.removeEventListener('pointerdown', cancelFocusTransfer)
+    }
+  }, [stage])
+
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'chat-ui-here')
   if (!tip) {
     return null
   }
   if (stage === 'switched') {
-    return <ChatUiSwitchedCornerNote onClose={onClose} />
+    return <ChatUiSwitchedCornerNote onClose={onClose} focusSettings={focusSettings} />
   }
   const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
   const [intro = ''] = paragraphs
 
-  const handleUseChatUi = async (): Promise<void> => {
+  const handleUseChatUi = async (event: MouseEvent<HTMLButtonElement>): Promise<void> => {
     if (stage !== 'prompt') {
       return
     }
+    focusSwitchedNote.current = event.detail === 0 && document.activeElement === event.currentTarget
     setStage('saving')
     const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
     if (mountedRef.current) {
+      setFocusSettings(saved && focusSwitchedNote.current)
       setStage(saved ? 'switched' : 'prompt')
     }
   }
@@ -111,7 +131,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
                 settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
                 settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
               }
-              onPrimaryAction={() => void handleUseChatUi()}
+              onPrimaryAction={(event) => void handleUseChatUi(event)}
               onSkip={handleStayInTerminal}
               showSkip={secondaryLabel !== null}
               secondaryLabel={secondaryLabel ?? undefined}

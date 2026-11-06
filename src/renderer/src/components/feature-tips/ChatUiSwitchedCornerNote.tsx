@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState, type JSX } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { Trans } from 'react-i18next'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,21 @@ import { openChatUiFeatureTipSettings } from './chat-ui-here-actions'
 
 const AUTO_DISMISS_MS = 12_000
 
-export function ChatUiSwitchedCornerNote({ onClose }: { onClose: () => void }): JSX.Element {
+export function ChatUiSwitchedCornerNote({
+  onClose,
+  focusSettings = false
+}: {
+  onClose: () => void
+  focusSettings?: boolean
+}): JSX.Element {
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+
+  useLayoutEffect(() => {
+    if (focusSettings && document.activeElement === document.body) {
+      settingsButtonRef.current?.focus()
+    }
+  }, [focusSettings])
+
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const paused = hovered || focused
@@ -49,7 +63,10 @@ export function ChatUiSwitchedCornerNote({ onClose }: { onClose: () => void }): 
               <Check className="size-3" strokeWidth={3} />
             </span>
             <CardTitle id="chat-ui-switched-note-heading">
-              {translate('featureTips.chatUiHere.switchedNoteTitle', 'Chat UI is now the default')}
+              {translate(
+                'featureTips.chatUiHere.switchedNoteTitle',
+                'New agents will open in Chat UI'
+              )}
             </CardTitle>
           </div>
           <Button
@@ -78,7 +95,13 @@ export function ChatUiSwitchedCornerNote({ onClose }: { onClose: () => void }): 
             <Button variant="ghost" size="sm" onClick={onClose}>
               {translate('featureTips.gotIt', 'Got it')}
             </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={handleOpenSettings}>
+            <Button
+              ref={settingsButtonRef}
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={handleOpenSettings}
+            >
               {translate('featureTips.chatUiHere.openSettings', 'Open Settings')}
             </Button>
           </div>
