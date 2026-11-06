@@ -4,6 +4,7 @@ export const WORKER_THREAD_ENTRY_NAMES = [
   'warp-theme-parser-worker',
   'foreign-sqlite-reader-entry',
   'journal-sql-worker-entry',
+  'journal-sql-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
   'command-path-directory-worker-entry',
