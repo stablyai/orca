@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 
-export const NativeChatInteractionModeToggle = memo(function NativeChatInteractionModeToggle({
+export function useNativeChatInteractionMode({
   surface,
   snapshot,
   focusComposer
@@ -18,7 +18,7 @@ export const NativeChatInteractionModeToggle = memo(function NativeChatInteracti
   surface: SessionOptionsSurface | null
   snapshot: readonly SessionOptionDescriptor[]
   focusComposer?: () => void
-}): React.JSX.Element | null {
+}) {
   useUiLanguageRevision()
   const [pending, setPending] = useState<string | null>(null)
   const descriptor = snapshot.find((entry) => entry.id === 'interactionMode')
@@ -30,6 +30,29 @@ export const NativeChatInteractionModeToggle = memo(function NativeChatInteracti
   const label = plan
     ? translate('components.native-chat.composer.planMode', 'Plan')
     : translate('components.native-chat.composer.buildMode', 'Build')
+  return {
+    plan,
+    Icon,
+    label,
+    disabled: !descriptor.settable || pending !== null,
+    select: (value: 'default' | 'plan'): void => {
+      runSessionOptionSurfaceCall(value, setPending, () =>
+        surface.setOption('interactionMode', value)
+      )
+      focusComposer?.()
+    }
+  }
+}
+
+export function NativeChatInteractionModeButton({
+  control
+}: {
+  control: ReturnType<typeof useNativeChatInteractionMode>
+}): React.JSX.Element | null {
+  if (!control) {
+    return null
+  }
+  const { plan, Icon, label, disabled, select } = control
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -39,17 +62,11 @@ export const NativeChatInteractionModeToggle = memo(function NativeChatInteracti
           size="xs"
           aria-label={label}
           aria-pressed={plan}
-          disabled={!descriptor.settable || pending !== null}
-          onClick={() => {
-            const value = plan ? 'default' : 'plan'
-            runSessionOptionSurfaceCall(value, setPending, () =>
-              surface.setOption('interactionMode', value)
-            )
-            focusComposer?.()
-          }}
+          disabled={disabled}
+          onClick={() => select(plan ? 'default' : 'plan')}
         >
           <Icon className="size-3.5" aria-hidden />
-          <span>{label}</span>
+          <span data-composer-label>{label}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
@@ -57,4 +74,10 @@ export const NativeChatInteractionModeToggle = memo(function NativeChatInteracti
       </TooltipContent>
     </Tooltip>
   )
+}
+
+export const NativeChatInteractionModeToggle = memo(function NativeChatInteractionModeToggle(
+  props: Parameters<typeof useNativeChatInteractionMode>[0]
+): React.JSX.Element | null {
+  return <NativeChatInteractionModeButton control={useNativeChatInteractionMode(props)} />
 })

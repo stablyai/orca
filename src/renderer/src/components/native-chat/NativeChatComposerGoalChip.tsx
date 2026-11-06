@@ -25,7 +25,7 @@ export function NativeChatComposerGoalChip(props: { onExit: () => void }): React
             aria-hidden
             className="hidden group-hover/goal-chip:block group-focus-visible/goal-chip:block"
           />
-          {translate('components.native-chat.goal.chip', 'Goal')}
+          <span data-composer-label>{translate('components.native-chat.goal.chip', 'Goal')}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

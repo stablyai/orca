@@ -10,7 +10,14 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { NativeChatInteractionModeToggle } from './NativeChatInteractionModeToggle'
+import {
+  NativeChatInteractionModeButton,
+  useNativeChatInteractionMode
+} from './NativeChatInteractionModeToggle'
+import {
+  NativeChatComposerToolbar,
+  type NativeChatComposerControl
+} from './NativeChatComposerToolbar'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
@@ -86,6 +93,11 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   launchPrompt = false
 }: NativeChatComposerActionsProps): React.JSX.Element {
   useUiLanguageRevision()
+  const mode = useNativeChatInteractionMode({
+    surface: sessionOptionsSurface,
+    snapshot: sessionOptionsSnapshot,
+    focusComposer
+  })
   // Like Enter, a typed draft sends while the agent works; Esc still stops.
   const stops = isWorking && !hasDraft
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
@@ -218,24 +230,72 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     )
   }
 
-  return (
-    <div className="flex w-full items-center justify-between gap-2 text-chat-foreground-faint">
-      <div className="flex min-w-0 items-center gap-0.5">
-        {attach}
-        <NativeChatInteractionModeToggle
-          surface={sessionOptionsSurface}
-          snapshot={sessionOptionsSnapshot}
-          focusComposer={focusComposer}
-        />
+  const left: NativeChatComposerControl[] = [
+    { id: 'attach', priority: 6, content: attach },
+    ...(mode
+      ? [
+          {
+            id: 'mode',
+            priority: 7,
+            content: <NativeChatInteractionModeButton control={mode} />,
+            overflow: (close: () => void) => (
+              <div className="flex gap-1">
+                {(['default', 'plan'] as const).map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    aria-pressed={mode.plan === (value === 'plan')}
+                    disabled={mode.disabled}
+                    onClick={() => {
+                      mode.select(value)
+                      close()
+                    }}
+                  >
+                    {value === 'plan'
+                      ? translate('components.native-chat.composer.planMode', 'Plan')
+                      : translate('components.native-chat.composer.buildMode', 'Build')}
+                  </Button>
+                ))}
+              </div>
+            )
+          }
+        ]
+      : []),
+    {
+      id: 'permissions',
+      priority: 5,
+      content: (
         <NativeChatComposerPermissionPicker
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           {...(agent ? { agent } : {})}
         />
-        {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
-      </div>
-      <div className="ml-auto flex items-center gap-1.5">
-        {/* Keep option pickers beside the session actions they affect. */}
+      )
+    },
+    ...(onExitGoalMode
+      ? [
+          {
+            id: 'goal',
+            priority: 4,
+            content: <NativeChatComposerGoalChip onExit={onExitGoalMode} />,
+            overflow: (close: () => void) => (
+              <NativeChatComposerGoalChip
+                onExit={() => {
+                  onExitGoalMode()
+                  close()
+                }}
+              />
+            )
+          }
+        ]
+      : [])
+  ]
+  const right: NativeChatComposerControl[] = [
+    {
+      id: 'model',
+      content: (
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
@@ -243,15 +303,39 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           pickerRequest={sessionOptionsPickerRequest}
           focusComposer={focusComposer}
         />
-        {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
-        {dictation}
-        <DraftNotSavedIcon shown={draftNotSaved === true} />
-        {editSession ? (
-          <Button type="button" variant="ghost" size="sm" onClick={editSession.cancel}>
-            {translate('common.cancel', 'Cancel')}
-          </Button>
-        ) : null}
-        {sendHint ? (
+      )
+    },
+    ...(contextUsage
+      ? [
+          {
+            id: 'context',
+            priority: 0,
+            content: <NativeChatContextUsageRing usage={contextUsage} />
+          }
+        ]
+      : []),
+    { id: 'dictation', priority: 2, content: dictation },
+    ...(draftNotSaved ? [{ id: 'draft', priority: 1, content: <DraftNotSavedIcon shown /> }] : []),
+    ...(editSession
+      ? [
+          {
+            id: 'cancel',
+            priority: 3,
+            content: (
+              <Button type="button" variant="ghost" size="sm" onClick={editSession.cancel}>
+                {translate('common.cancel', 'Cancel')}
+              </Button>
+            )
+          }
+        ]
+      : [])
+  ]
+  return (
+    <NativeChatComposerToolbar
+      left={left}
+      right={right}
+      primary={
+        sendHint ? (
           <Tooltip>
             <TooltipTrigger asChild>
               {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
@@ -263,9 +347,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           </Tooltip>
         ) : (
           sendButton
-        )}
-      </div>
-    </div>
+        )
+      }
+    />
   )
 })
 
