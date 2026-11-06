@@ -53,17 +53,20 @@ let cached: {
   parents: SidebarLineageParentIdentities
 } | null = null
 
-const INPUT_KEYS = [
-  'worktreesByRepo',
-  'worktreeLineageById',
-  'crossStoreLineageByStoreKey',
-  'ownLineageInstallationId',
-  'runtimeStatusByEnvironmentId',
-  'removedRuntimeEnvironmentIds'
-] as const satisfies readonly (keyof CrossStoreLineageInputs)[]
+/** Every resolution input, compared by identity to skip recomputation. */
+function resolutionInputs(state: CrossStoreLineageInputs): readonly unknown[] {
+  return [
+    selectWorktreesByRepo(state),
+    state.worktreeLineageById,
+    state.crossStoreLineageByStoreKey,
+    state.ownLineageInstallationId,
+    state.runtimeStatusByEnvironmentId,
+    state.removedRuntimeEnvironmentIds
+  ]
+}
 
 let lastCall: {
-  inputs: CrossStoreLineageInputs
+  inputs: readonly unknown[]
   result: SidebarLineageParentIdentities | undefined
 } | null = null
 
@@ -73,22 +76,13 @@ export function selectSidebarLineageParentIdentities(
   state: CrossStoreLineageInputs
 ): SidebarLineageParentIdentities | undefined {
   // Every subscriber runs this on unrelated writes; unchanged inputs skip the record scans.
+  const inputs = resolutionInputs(state)
   const previous = lastCall
-  if (previous && INPUT_KEYS.every((key) => previous.inputs[key] === state[key])) {
+  if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
     return previous.result
   }
   const result = resolveSidebarParents(state)
-  lastCall = {
-    inputs: {
-      worktreesByRepo: state.worktreesByRepo,
-      worktreeLineageById: state.worktreeLineageById,
-      crossStoreLineageByStoreKey: state.crossStoreLineageByStoreKey,
-      ownLineageInstallationId: state.ownLineageInstallationId,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
-    },
-    result
-  }
+  lastCall = { inputs, result }
   return result
 }
 

@@ -151,6 +151,8 @@ export type WorktreeSlice = {
   fetchWorktreeLineage: (options?: {
     forceLocalOwner?: boolean
     executionHostId?: ExecutionHostId
+    /** Hosts whose other stores also load their cross-machine links. */
+    crossStoreHostIds?: Iterable<ExecutionHostId>
   }) => Promise<void>
   /** `executionHostId` names the clicked row's host, so a same-id twin elsewhere is never the target. */
   updateWorktreeLineage: (

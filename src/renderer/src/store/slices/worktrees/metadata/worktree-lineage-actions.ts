@@ -1,7 +1,12 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/runtime-client-target'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  ipcOrRuntimeTargetForHostId,
+  runtimeTargetForOwnerEnvironment
+} from '../../../../runtime/runtime-client-target'
+import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
+import { refreshCrossStoreLineageForTarget } from './cross-store-lineage-hydration'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   applyWorktreeLineageUpdate,
@@ -26,6 +31,29 @@ async function refreshWorktreeLineageBestEffort(
   }
 }
 
+/** The focused store's refresh owns the bare-id same-store maps; other stores load only their
+ * cross-machine links (local: also this desktop's identity), one list per store. */
+function requestOtherStoresCrossStoreLineage(
+  focusedTarget: RuntimeClientTarget,
+  hostIds: Iterable<ExecutionHostId>,
+  set: WorktreeSliceSet,
+  get: WorktreeSliceGet
+): void {
+  const focusedStoreKey = lineageStoreKeyOfTarget(focusedTarget)
+  const otherStores = new Map<string, RuntimeClientTarget>()
+  for (const hostId of hostIds) {
+    const target = ipcOrRuntimeTargetForHostId(hostId)
+    if (target && lineageStoreKeyOfTarget(target) !== focusedStoreKey) {
+      otherStores.set(lineageStoreKeyOfTarget(target), target)
+    }
+  }
+  for (const target of otherStores.values()) {
+    void refreshCrossStoreLineageForTarget(target, set, get, {
+      reuseRecentCompatibilityFailure: true
+    }).catch((err: unknown) => console.warn('Host worktree lineage refresh failed:', err))
+  }
+}
+
 export function createFetchWorktreeLineage(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -43,14 +71,11 @@ export function createFetchWorktreeLineage(
           : parsedHost || options?.forceLocalOwner
             ? null
             : ownerSettings?.activeRuntimeEnvironmentId
-      await refreshWorktreeLineageForTarget(
-        runtimeTargetForOwnerEnvironment(activeRuntimeEnvironmentId ?? null),
-        set,
-        get,
-        {
-          reuseRecentCompatibilityFailure: true
-        }
-      )
+      const target = runtimeTargetForOwnerEnvironment(activeRuntimeEnvironmentId ?? null)
+      requestOtherStoresCrossStoreLineage(target, options?.crossStoreHostIds ?? [], set, get)
+      await refreshWorktreeLineageForTarget(target, set, get, {
+        reuseRecentCompatibilityFailure: true
+      })
     } catch (err) {
       console.error('Failed to fetch worktree lineage:', err)
     }
