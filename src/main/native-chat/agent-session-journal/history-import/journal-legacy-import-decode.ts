@@ -49,7 +49,8 @@ export async function decodeLegacyTranscriptImport(
 ): Promise<PreparedLegacyImport> {
   throwIfSignalAborted(input.signal)
   const run = createTranscriptWorkScheduler(input.signal)
-  const parseRecord = (line: string) => run(parseTranscriptRecordWork(line))
+  const parseRecord = (line: string) =>
+    run(parseTranscriptRecordWork(line, input.transcriptAgent === 'claude'))
   const source = createAdoptedTranscriptObservation(input.agent, input.filePath)
   const tracker = createLegacyIdentityTracker({
     transcriptAgent: input.transcriptAgent,

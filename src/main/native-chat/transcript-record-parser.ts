@@ -1,4 +1,5 @@
 import { Assembler } from 'stream-json/core/assembler.js'
+import type { Token } from 'stream-json/core/parser.js'
 import { createJsonTokenReader } from '../../shared/json-token-reader'
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { TranscriptWork } from './transcript-work-scheduler'
@@ -45,10 +46,74 @@ const TRANSCRIPT_FIELDS = new Set([
   'display'
 ])
 
-/** Embedded tool arguments are values; only transcript records may omit unused root fields. */
+type ClaudeContainer = 'root' | 'message' | 'attachment' | 'content' | 'block' | 'source' | 'opaque'
+
+/** Direct content-block source.data is unused; arbitrary nested tool values remain whole. */
+function createClaudeRecordSelection() {
+  const containers: ClaudeContainer[] = []
+  const selections: boolean[] = []
+  let key = ''
+  let selected = true
+  return {
+    retainScalar: () => selected,
+    accept(token: Token): boolean {
+      if (token.name === 'startObject' || token.name === 'startArray') {
+        const root = containers.length === 0
+        const parent = containers.at(-1)
+        let container: ClaudeContainer = 'opaque'
+        if (token.name === 'startObject') {
+          if (root) {
+            container = 'root'
+          } else if (parent === 'root' && key === 'message') {
+            container = 'message'
+          } else if (parent === 'root' && key === 'attachment') {
+            container = 'attachment'
+          } else if (parent === 'content') {
+            container = 'block'
+          } else if (parent === 'block' && key === 'source') {
+            container = 'source'
+          }
+        } else if (
+          (parent === 'message' && key === 'content') ||
+          (parent === 'attachment' && key === 'prompt')
+        ) {
+          container = 'content'
+        }
+        if (root) {
+          selected = token.name === 'startObject'
+        }
+        containers.push(container)
+        selections.push(selected)
+        return root || selected
+      }
+      if (token.name === 'endObject' || token.name === 'endArray') {
+        const accepted = selections.pop() ?? true
+        containers.pop()
+        selected = selections.at(-1) ?? true
+        return containers.length === 0 || accepted
+      }
+      if (token.name === 'keyValue') {
+        key = token.value
+        const container = containers.at(-1)
+        selected = selections.at(-1) ?? true
+        if (container === 'root') {
+          selected &&= TRANSCRIPT_FIELDS.has(key)
+        } else if (container === 'source' && key === 'data') {
+          selected = false
+        }
+        return selected
+      }
+      const accepted = selected
+      selected = selections.at(-1) ?? true
+      return accepted
+    }
+  }
+}
+
+/** Embedded tool arguments are whole values; transcript records may omit unused fields. */
 export function* parseTranscriptValueWork(
   text: string,
-  transcript = false
+  context: 'value' | 'record' | 'claude' = 'value'
 ): TranscriptWork<unknown> {
   const bytes = Buffer.byteLength(text)
   if (bytes <= PARSE_QUANTUM) {
@@ -57,38 +122,45 @@ export function* parseTranscriptValueWork(
     return value
   }
   const assembler = new Assembler()
+  const claude = context === 'claude' ? createClaudeRecordSelection() : null
   let depth = 0
   let rootObject = false
   let selected = true
   const parser = createJsonTokenReader(
-    (token) => {
-      if (token.name === 'startObject' || token.name === 'startArray') {
-        if (depth === 0) {
-          rootObject = token.name === 'startObject'
-          selected = !transcript || rootObject
+    claude
+      ? (token) => {
+          if (claude.accept(token)) {
+            assembler.consume(token)
+          }
         }
-        if (depth === 0 || selected) {
-          assembler.consume(token)
-        }
-        depth++
-        return
-      }
-      if (token.name === 'endObject' || token.name === 'endArray') {
-        depth--
-        if (depth === 0 || selected) {
-          assembler.consume(token)
-        }
-        return
-      }
-      if (transcript && rootObject && depth === 1 && token.name === 'keyValue') {
-        selected = TRANSCRIPT_FIELDS.has(token.value)
-      }
-      if (selected) {
-        assembler.consume(token)
-      }
-    },
+      : (token) => {
+          if (token.name === 'startObject' || token.name === 'startArray') {
+            if (depth === 0) {
+              rootObject = token.name === 'startObject'
+              selected = context === 'value' || rootObject
+            }
+            if (depth === 0 || selected) {
+              assembler.consume(token)
+            }
+            depth++
+            return
+          }
+          if (token.name === 'endObject' || token.name === 'endArray') {
+            depth--
+            if (depth === 0 || selected) {
+              assembler.consume(token)
+            }
+            return
+          }
+          if (context !== 'value' && rootObject && depth === 1 && token.name === 'keyValue') {
+            selected = TRANSCRIPT_FIELDS.has(token.value)
+          }
+          if (selected) {
+            assembler.consume(token)
+          }
+        },
     PARSE_QUANTUM,
-    () => selected
+    claude?.retainScalar ?? (() => selected)
   )
   const inputBuffer = Buffer.allocUnsafe(Math.min(text.length, PARSE_QUANTUM) * 2)
   for (let offset = 0; offset < text.length; offset += PARSE_QUANTUM) {
@@ -103,13 +175,14 @@ export function* parseTranscriptValueWork(
 }
 
 export function* parseTranscriptRecordWork(
-  text: string
+  text: string,
+  claude = false
 ): TranscriptWork<Record<string, unknown> | null> {
   if (!text.trim()) {
     return null
   }
   try {
-    return asRecord(yield* parseTranscriptValueWork(text, true))
+    return asRecord(yield* parseTranscriptValueWork(text, claude ? 'claude' : 'record'))
   } catch (error) {
     if (error instanceof SyntaxError) {
       return null

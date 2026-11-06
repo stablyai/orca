@@ -238,7 +238,12 @@ it.each(['object', 'array'] as const)(
     const padding = 'x'.repeat(65536)
     const argument =
       shape === 'object'
-        ? JSON.stringify({ path: '/x', unmodeled: { keep: true }, padding })
+        ? JSON.stringify({
+            path: '/x',
+            unmodeled: { keep: true },
+            message: { content: [{ source: { data: 'argument-data' } }] },
+            padding
+          })
         : `[1e400,-0,${JSON.stringify(padding)}]`
     await writeFile(
       filePath,
@@ -262,7 +267,12 @@ it.each(['object', 'array'] as const)(
       throw new Error('Expected tool input')
     }
     if (shape === 'object') {
-      expect(body.input).toEqual({ path: '/x', unmodeled: { keep: true }, padding })
+      expect(body.input).toEqual({
+        path: '/x',
+        unmodeled: { keep: true },
+        message: { content: [{ source: { data: 'argument-data' } }] },
+        padding
+      })
     } else {
       if (!Array.isArray(body.input)) {
         throw new Error('Expected array tool input')
@@ -275,7 +285,7 @@ it.each(['object', 'array'] as const)(
   }
 )
 
-it('balances duplicate selected values and ignores complete nested root values', async () => {
+it('preserves duplicate fields, image references and opaque tool values in large records', async () => {
   const filePath = join(root, 'claude.jsonl')
   await writeFile(
     filePath,
@@ -283,7 +293,21 @@ it('balances duplicate selected values and ignores complete nested root values',
       pad('{"type":"assistant","uuid":"discarded","message":{"content":"old"},"message":null}'),
       pad(
         '{"type":"assistant","uuid":"kept","message":null,"message":{"content":"kept"},"ignored":{"message":{"content":"wrong"},"empty":[{},[]]}}'
-      )
+      ),
+      `{"type":"user","uuid":"images","message":{"content":[{"source":{"url":"wrong"},"source":{"data":"discarded","data":{"nested":["${'A'.repeat(131072)}",{"message":{"content":[{"source":{"data":0}}]}}]},"url":"https://image"},"type":"text","type":"image","path":"/image","alt":"direct"},{"type":"image","source":{"data":[]},"path":"/path-only"},{"type":"image","source":{"data":"base64-only"}},{"type":"text","text":"after-image"}]}}`,
+      pad(
+        '{"type":"assistant","uuid":"tool","message":{"content":[{"type":"tool_use","name":"inspect","input":{"message":{"content":[{"source":{"data":"tool-data"}}]},"attachment":{"prompt":[{"source":{"data":"prompt-data"}}]},"__proto__":{"data":"own-data"}}}]}}'
+      ),
+      pad(
+        '{"type":"user","uuid":"result","message":{"content":[{"type":"tool_result","tool_use_id":"call","content":{"source":{"data":"result-data"}}}]}}'
+      ),
+      pad(
+        '{"type":"attachment","uuid":"queued","attachment":{"type":"queued_command","commandMode":"prompt","prompt":[{"source":{"data":null,"url":"https://queued"},"type":"image"},{"type":"text","text":"after-queued"}]}}'
+      ),
+      pad(
+        '{"type":"user","uuid":"malformed","message":{"content":[{"type":"image","source":{"data":[1,],"url":"https://invalid"}}]}}'
+      ),
+      pad('{"type":"assistant","uuid":"following","message":{"content":"after-malformed"}}')
     ].join('\n')
   )
   const result = await prepareLegacyTranscriptImport({
@@ -293,13 +317,71 @@ it('balances duplicate selected values and ignores complete nested root values',
   })
   expect(result).toMatchObject({
     ok: true,
-    items: [{ identity: { provider: 'claude', uuid: 'kept' }, body: text('kept') }]
+    items: [
+      { identity: { provider: 'claude', uuid: 'kept' }, body: text('kept') },
+      {
+        identity: { provider: 'claude', uuid: 'images' },
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [
+            { type: 'image-ref', url: 'https://image', path: '/image', alt: 'direct' },
+            { type: 'image-ref', path: '/path-only' },
+            { type: 'text', text: 'after-image' }
+          ]
+        }
+      },
+      {
+        identity: { provider: 'claude', uuid: 'tool' },
+        body: {
+          kind: 'tool-call',
+          name: 'inspect',
+          input: {
+            message: { content: [{ source: { data: 'tool-data' } }] },
+            attachment: { prompt: [{ source: { data: 'prompt-data' } }] },
+            ['__proto__']: { data: 'own-data' }
+          },
+          state: 'completed'
+        }
+      },
+      {
+        identity: { provider: 'claude', uuid: 'result' },
+        body: {
+          kind: 'message',
+          role: 'tool',
+          blocks: [
+            {
+              type: 'tool-result',
+              callId: 'call',
+              output: '{"source":{"data":"result-data"}}'
+            }
+          ]
+        }
+      },
+      {
+        identity: { provider: 'claude', uuid: 'queued' },
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [
+            { type: 'image-ref', url: 'https://queued' },
+            { type: 'text', text: 'after-queued' }
+          ]
+        }
+      },
+      { identity: { provider: 'claude', uuid: 'following' }, body: text('after-malformed') }
+    ]
   })
   if (!result.ok) {
     throw new Error(result.error)
   }
   expect(result.items.map((item) => item.identity)).toEqual([
-    { provider: 'claude', sessionId: 'session', uuid: 'kept' }
+    { provider: 'claude', sessionId: 'session', uuid: 'kept' },
+    { provider: 'claude', sessionId: 'session', uuid: 'images' },
+    { provider: 'claude', sessionId: 'session', uuid: 'tool' },
+    { provider: 'claude', sessionId: 'session', uuid: 'result' },
+    { provider: 'claude', sessionId: 'session', uuid: 'queued' },
+    { provider: 'claude', sessionId: 'session', uuid: 'following' }
   ])
   await writeFile(
     filePath,
