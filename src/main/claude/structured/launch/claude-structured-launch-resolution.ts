@@ -1,5 +1,4 @@
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
-import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
@@ -29,7 +28,10 @@ import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from '../../claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/native-chat-visuals-delivery'
-import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
+import {
+  claudeLaunchResumesTranscript,
+  prepareStructuredClaudeLaunchAccount
+} from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
 import {
@@ -265,7 +267,16 @@ export function claudeStructuredLaunchPart(
       sources,
       { runtimeOnPath: false }
     )
-    const accountRecipe = await prepareClaudeLaunchAccount(router, env, accountHome.path)
+    const accountRecipe = await prepareStructuredClaudeLaunchAccount(
+      router,
+      env,
+      accountHome.path,
+      {
+        sessionId: identity.sessionId,
+        providerSessionId,
+        workspaceId: identity.workspaceId
+      }
+    )
     const launchHome = accountRecipe.home
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {

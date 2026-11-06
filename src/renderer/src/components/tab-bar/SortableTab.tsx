@@ -39,6 +39,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import type { StructuredChatTabNamingFailure } from '@/runtime/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
+import { ClaudePaneAccountMark } from './ClaudePaneAccountBadge'
 
 /** What the strip draws for a terminal or native chat tab; never a source of agent identity. */
 type SortableTabModel = Pick<
@@ -123,9 +124,6 @@ export default function SortableTab({
   )
   const { activityStatus, programProgress } = useTerminalTabActivity(tab)
 
-  // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
-  const shellForIcon = tab.shellOverride
-
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
   const displayTitle =
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
@@ -199,6 +197,7 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
+  const paneMark = { tabId: tab.id, color: tab.color, editing: isEditing, nativeChat }
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -247,10 +246,11 @@ export default function SortableTab({
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
       )}
+      {/* Why: shellOverride is stamped at create time, so a later default shell does not repaint this tab. */}
       <TerminalTabLeadingIcon
         agent={tabAgent}
         activityStatus={activityStatus}
-        shell={shellForIcon}
+        shell={tab.shellOverride}
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
         progress={programProgress}
@@ -290,12 +290,7 @@ export default function SortableTab({
       ) : (
         <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
       )}
-      {tab.color && !isEditing && (
-        <span
-          className="mr-1.5 size-2 rounded-full shrink-0"
-          style={{ backgroundColor: tab.color }}
-        />
-      )}
+      <ClaudePaneAccountMark {...paneMark} />
       {isExpanded && !isEditing && (
         <button
           className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
@@ -373,15 +368,15 @@ export default function SortableTab({
               programName={
                 tabAgent
                   ? getAgentLabel(tabAgent)
-                  : shellForIcon
-                    ? basename(shellForIcon)
+                  : tab.shellOverride
+                    ? basename(tab.shellOverride)
                     : translate('tabHoverCard.terminal', 'Terminal')
               }
               icon={
                 <TerminalTabLeadingIcon
                   agent={tabAgent}
                   activityStatus={activityStatus}
-                  shell={shellForIcon}
+                  shell={tab.shellOverride}
                   showUnreadActivity={false}
                   isActive
                   progress={programProgress}

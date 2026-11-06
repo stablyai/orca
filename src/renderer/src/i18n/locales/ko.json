@@ -21144,6 +21144,14 @@
       "copySignInLink": "대신 로그인 링크 복사",
       "signInLinkCopied": "로그인 링크를 복사했습니다. 다른 계정으로 로그인하려면 비공개 창에서 여세요.",
       "signInLinkCopyFailed": "링크를 복사할 수 없습니다.",
+      "pool": {
+        "settingTitle": "세션을 계정에 분산",
+        "settingDescription": "새 Claude 세션은 여유가 가장 많은 계정에서 시작합니다.",
+        "sessionsOne": "세션 1개",
+        "sessionsOther": "세션 {{count}}개",
+        "badge": "분산",
+        "paneBadge": "Claude 계정 {{label}}"
+      },
       "switchSessions": {
         "busy": "작업 중",
         "idle": "유휴",

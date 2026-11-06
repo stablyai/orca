@@ -41,6 +41,8 @@ import {
 } from './InlineProviderUsage'
 import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
+import { Badge } from '@/components/ui/badge'
+import { claudeSessionCountLabel } from '@/components/tab-bar/ClaudePaneAccountBadge'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 
@@ -240,21 +242,33 @@ export function ClaudeSwitcherForOwner({
     return runtimeTarget.kind === 'local' ? accountControl.button : null
   }
 
-  const rows = (selectedGroup?.targets ?? []).map((target) => ({
-    target,
-    inactiveUsage: target.id ? inactiveClaudeAccounts.find((a) => a.accountId === target.id) : null,
-    // Why local only: the hidden sign-in runs on this device, not a remote server.
-    signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
-  }))
+  const rows = (selectedGroup?.targets ?? []).map((target) => {
+    const sessionCount = target.id
+      ? (accounts.assignedSessions?.find((row) => row.accountId === target.id)?.count ?? 0)
+      : 0
+    return {
+      target,
+      inactiveUsage: target.id
+        ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+        : null,
+      // Why local only: the hidden sign-in runs on this device, not a remote server.
+      signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null,
+      // The pool spreads sessions; the row says how many this account carries.
+      detail: [target.hint, sessionCount > 0 ? claudeSessionCountLabel(sessionCount) : null]
+        .filter((part): part is string => Boolean(part))
+        .join(' · ')
+    }
+  })
   const signedOutRows = rows.filter((row) => row.signInId)
   const renderRow = ({
     target,
     inactiveUsage,
-    signInId
+    signInId,
+    detail
   }: (typeof rows)[number]): React.JSX.Element => (
     <AccountSwitchRowItem
       label={target.label}
-      detail={target.hint}
+      detail={detail || null}
       active={target.active}
       key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
       disabled={
@@ -328,6 +342,11 @@ export function ClaudeSwitcherForOwner({
         heading={translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
         targets={selectedGroup?.targets ?? []}
         panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        badge={
+          accounts.pool === 'on' ? (
+            <Badge variant="hostContext">{translate('accounts.claude.pool.badge', 'Pool')}</Badge>
+          ) : undefined
+        }
         onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',

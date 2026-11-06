@@ -66,6 +66,10 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
   return undefined
 }
 
+function unsetSessionMoverStop(): (() => void) | null {
+  return null
+}
+
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
 
@@ -91,6 +95,7 @@ export const mainProcessState = {
   claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
   runtime: null as OrcaRuntimeService | null,
   rateLimits: null as RateLimitService | null,
+  stopClaudeSessionMover: unsetSessionMoverStop(),
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),
   desktopRelayService: null as DesktopRelayService | null,

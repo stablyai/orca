@@ -388,7 +388,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     this.terminalIdlePolls
   )
 
-  protected ptyController: RuntimePtyController | null = null
+  ptyController: RuntimePtyController | null = null
 
   protected readonly ptyLivenessVerdictByPtyId = new Map<
     string,

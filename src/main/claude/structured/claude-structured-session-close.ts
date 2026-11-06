@@ -21,6 +21,7 @@ import { claudeHeldSends } from '../claude-command-lifecycle'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { forgetStructuredClaudeSession } from './claude-structured-session-key'
 
 /** Root exit releases the lease even with unverified descendants; a failed spawn proves no exit. */
 export function claudeRootExitObserved(
@@ -138,6 +139,8 @@ async function finalizeClaudePublishedSession(
   // Finalize before saving the resume point; persistence failure cannot undo a proven exit.
   session.closeFinalized = true
   input.sessions.delete(input.sessionId)
+  // A crash re-acquires this session and must keep the slot. A proved close does not.
+  forgetStructuredClaudeSession(input.sessionId)
   let callbackError: unknown
   let callbackThrew = false
   const deliver = (event: ClaudeStructuredSessionEvent): void => {

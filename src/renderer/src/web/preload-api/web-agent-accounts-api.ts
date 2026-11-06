@@ -137,7 +137,17 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
         { accountId, movesRunningSessions: true },
         ACCOUNT_MUTATION_TIMEOUT_MS
       )
-    }
+    },
+    setAutoSwitch: ({ enabled }) =>
+      callRuntimeResult<ClaudeRateLimitAccountsState>(
+        'accounts.setClaudeAutoSwitch',
+        { enabled },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      ),
+    // Why: an automatic switch on the server is the server's own; this client restarts nothing.
+    onAutoSwitched: () => () => {},
+    // Desktop pushes claudeAccounts:paneAssigned. The web client paints paneAccounts from list().
+    onPaneAssigned: () => () => {}
   }
 }
 

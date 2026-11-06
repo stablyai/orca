@@ -4,6 +4,7 @@ import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../shared/claude-profile-routing'
+import { noteUserAnthropicBaseUrl } from './claude-auth-proxy/claude-auth-proxy-note'
 
 export const CLAUDE_AUTH_ENV_VARS = [
   'ANTHROPIC_API_KEY',
@@ -18,6 +19,8 @@ export type ClaudeEnvPatch = {
   [CLAUDE_USER_CONFIG_DIR_ENV]?: string
   CLAUDE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
+  /** Loopback auth-proxy slot. Never replaces a value the user already set. */
+  ANTHROPIC_BASE_URL?: string
 }
 
 export function applyClaudeEnvPatch(
@@ -66,6 +69,13 @@ export function applyClaudeEnvPatch(
   }
   if (patch.ANTHROPIC_CUSTOM_HEADERS !== undefined) {
     baseEnv.ANTHROPIC_CUSTOM_HEADERS = patch.ANTHROPIC_CUSTOM_HEADERS
+  }
+  if (patch.ANTHROPIC_BASE_URL !== undefined) {
+    if (baseEnv.ANTHROPIC_BASE_URL) {
+      noteUserAnthropicBaseUrl()
+    } else {
+      baseEnv.ANTHROPIC_BASE_URL = patch.ANTHROPIC_BASE_URL
+    }
   }
 
   return baseEnv

@@ -4,7 +4,6 @@ const { getPreferredSystemLanguages, isReady } = vi.hoisted(() => ({
   getPreferredSystemLanguages: vi.fn(),
   isReady: vi.fn()
 }))
-vi.mock('electron', () => ({ app: { getPreferredSystemLanguages, isReady } }))
 
 beforeEach(() => {
   vi.resetModules()
@@ -12,9 +11,18 @@ beforeEach(() => {
   getPreferredSystemLanguages.mockReturnValue(['fr-FR', 'en-US'])
 })
 
+async function loadSystemLanguage() {
+  const mod = await import('./system-language')
+  mod.bindSystemLanguageReader({
+    isReady: () => isReady(),
+    preferredLanguages: () => getPreferredSystemLanguages()
+  })
+  return mod
+}
+
 describe('native language snapshot', () => {
   it('reads preferences once after app readiness and shares the ordered result', async () => {
-    const { getSystemLanguageDetection } = await import('./system-language')
+    const { getSystemLanguageDetection } = await loadSystemLanguage()
     isReady.mockReturnValue(false)
     getPreferredSystemLanguages.mockReturnValueOnce(['ja-JP'])
     // Pre-ready reads serve startup-failure dialogs without pinning the post-ready snapshot.
@@ -39,7 +47,7 @@ describe('native language snapshot', () => {
         }
         return []
       })
-      const { getSystemLanguageDetection } = await import('./system-language')
+      const { getSystemLanguageDetection } = await loadSystemLanguage()
       expect(getSystemLanguageDetection()).toBeNull()
       const fallback = getSystemLanguageDetection(['fr-FR'])
       expect(fallback).toMatchObject({ locale: 'fr', source: 'browser-fallback' })

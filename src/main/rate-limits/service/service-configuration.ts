@@ -99,6 +99,16 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.inactiveClaudeAccountsGeneration += 1
   }
 
+  /** Maps a normalized `CLAUDE_CONFIG_DIR` to the managed account whose folder it is, or null. */
+  setLiveClaudeAccountResolver(resolver: (configDir: string) => string | null): void {
+    this.liveClaudeAccountResolver = resolver
+  }
+
+  /** Answers whether System Default signs for the given managed account. */
+  setClaudeSystemDefaultCoverageResolver(resolver: (accountId: string) => boolean): void {
+    this.claudeSystemDefaultCoverageResolver = resolver
+  }
+
   setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
     this.inactiveCodexAccountsResolver = resolver
     this.inactiveCodexAccountsGeneration += 1

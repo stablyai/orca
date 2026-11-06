@@ -87,6 +87,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     debug: '--debug                Include the planner route the host used',
     'index-status': '--index-status         Report the index instead of searching'
   },
+  'account auth-proxy': {
+    status:
+      '--status               Print the auth proxy port, slots, recent requests, and the last error'
+  },
   ports: {
     all: '--all                  List every listener on the workspace host, not just this workspace'
   },

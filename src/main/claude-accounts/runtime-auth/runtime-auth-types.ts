@@ -9,4 +9,6 @@ export type ClaudeRuntimeAuthPreparation = {
   provenance: string
   /** Report unavailable usage without throwing out the entire polling cycle. */
   usageError?: string
+  /** The account pool chose this launch, including when it fell back to the selected account. */
+  pooled?: boolean
 }

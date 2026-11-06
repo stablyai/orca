@@ -1,4 +1,5 @@
 import { killWslChannelsInCloseGrace } from '../wsl/execution/wsl-command-channel'
+import { stopClaudeAuthProxy } from '../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
 import { markHostShuttingDown } from './quit/host-shutdown-state'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
@@ -96,6 +97,9 @@ function installBeforeQuitHandler(): void {
     // Beforeunload may veto; wait for ref locks now but uninstall only after committed quit. isQuitting already blocks new attempts.
     state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
     // Delay PTY cleanup until scrollback capture; exit events otherwise unmount the renderer callbacks.
+    void stopClaudeAuthProxy()
+    state.stopClaudeSessionMover?.()
+    state.stopClaudeSessionMover = null
     state.rateLimits?.stop()
     // History GC is idempotent and rescheduled next launch; a vetoed quit costs only a deferred sweep.
     cancelHistoryGc()

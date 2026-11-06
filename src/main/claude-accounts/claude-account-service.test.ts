@@ -42,6 +42,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     )
   }
   const covered = new Set<string>()
+  const notifiedWrites: Partial<GlobalSettings>[] = []
   let settings: GlobalSettings = {
     ...getDefaultSettings('/tmp'),
     claudeManagedAccounts: accounts,
@@ -76,8 +77,11 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
   const service = new ClaudeAccountService(
     {
       getSettings: () => settings,
-      updateSettings: (patch) => {
+      updateSettings: (patch, options) => {
         settings = { ...settings, ...patch }
+        if (options?.notifyListeners) {
+          notifiedWrites.push(patch)
+        }
       }
     },
     {
@@ -87,7 +91,17 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     runtimeAuth,
     runLogin
   )
-  return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
+  return {
+    root,
+    home,
+    service,
+    runtimeAuth,
+    runLogin,
+    signIn,
+    covered,
+    notifiedWrites,
+    settings: () => settings
+  }
 }
 
 function newId(f: ReturnType<typeof fixture>): string {
@@ -102,6 +116,25 @@ function handOverClaudeSignInLink(windowsPath: string, link: string): void {
 }
 
 describe('ClaudeAccountService', () => {
+  it('turns automatic switching on where the accounts live, and reports it with the accounts', () => {
+    const f = fixture()
+    expect(f.service.listAccounts().autoSwitchEnabled).toBe(false)
+
+    expect(f.service.setAutoSwitch(true)).toMatchObject({ autoSwitchEnabled: true })
+    expect(f.settings().claudeAutoSwitchEnabled).toBe(true)
+    // Every window hears about it, as it does about a select.
+    expect(f.notifiedWrites).toContainEqual({ claudeAutoSwitchEnabled: true })
+  })
+
+  it('turns the account pool on where the accounts live, and reports it with the accounts', () => {
+    const f = fixture()
+    expect(f.service.listAccounts().pool).toBe('off')
+
+    expect(f.service.setAccountPool(true)).toMatchObject({ pool: 'on' })
+    expect(f.settings().claudeAccountPool).toBe('on')
+    expect(f.service.setAccountPool(false).pool).toBe('off')
+  })
+
   it('saves an account only once its folder holds a login', async () => {
     const f = fixture()
     const begun = await f.service.beginSignIn({ runtime: 'host' })
@@ -280,6 +313,30 @@ describe('ClaudeAccountService', () => {
     await expect(f.service.reauthenticateAccount('b')).rejects.toThrow('cancelled')
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
+  })
+
+  it('drops a queued automatic switch once the user acts', async () => {
+    const f = fixture([account('a'), account('b'), account('c')])
+    f.signIn('a', 'a@example.test')
+    f.signIn('b', 'b@example.test')
+    f.signIn('c', 'c@example.test')
+    f.runLogin.mockImplementationOnce(
+      (_args, _config, _timeoutMs, options) =>
+        new Promise((_resolve, reject) =>
+          options?.signal?.addEventListener('abort', () =>
+            reject(new Error('Claude sign-in was cancelled.'))
+          )
+        )
+    )
+    const adding = f.service.addAccount({ runtime: 'host' }).catch(() => null)
+    await vi.waitFor(() => expect(f.runLogin).toHaveBeenCalled())
+
+    const autoSwitch = f.service.autoSelectAccountForTarget('b', { runtime: 'host' }, () => true)
+    await f.service.removeAccount('c')
+    await adding
+
+    await expect(autoSwitch).resolves.toBe(false)
+    expect(f.settings().activeClaudeManagedAccountIdsByRuntime?.host).toBe('a')
   })
 
   it('keeps the row when its folder cannot be deleted, so the user can retry', async () => {

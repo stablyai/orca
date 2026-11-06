@@ -131,7 +131,10 @@ export type RuntimeMobileSessionAgentTabStatus = Pick<
   | 'updatedAt'
   | 'evidenceObservedAt'
   | 'structuredHostOwned'
->
+> & {
+  /** Billed Claude account. Absent on other agents and until the chat is registered. */
+  claudeAccountId?: string
+}
 
 export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionTerminalTab
