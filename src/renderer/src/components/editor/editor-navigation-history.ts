@@ -8,7 +8,7 @@ import type {
   HistoryStateRef
 } from './editor-navigation.types'
 
-function sameEditor(a: Location, b: Location): boolean {
+const sameEditor = (a: Location, b: Location): boolean => {
   return (
     a.file.id === b.file.id &&
     a.file.worktreeId === b.file.worktreeId &&
@@ -18,7 +18,11 @@ function sameEditor(a: Location, b: Location): boolean {
   )
 }
 
-function coalescesLocation(current: Location, location: Location, explicitJump: boolean): boolean {
+const coalescesLocation = (
+  current: Location,
+  location: Location,
+  explicitJump: boolean
+): boolean => {
   return (
     sameEditor(current, location) &&
     ((current.position.lineNumber === location.position.lineNumber &&
@@ -28,18 +32,18 @@ function coalescesLocation(current: Location, location: Location, explicitJump: 
   )
 }
 
-function replaceCurrent(state: HistoryState, location: Location): HistoryState {
+const replaceCurrent = (state: HistoryState, location: Location): HistoryState => {
   return {
     ...state,
     entries: state.entries.map((entry, index) => (index === state.index ? location : entry))
   }
 }
 
-function recordLocation(
+const recordLocation = (
   state: HistoryState,
   location: Location,
   explicitJump: boolean
-): HistoryState {
+): HistoryState => {
   const current = state.entries[state.index]
 
   if (current && coalescesLocation(current, location, explicitJump)) {
@@ -51,23 +55,23 @@ function recordLocation(
   return { entries, index: entries.length - 1 }
 }
 
-function updateLocation(state: HistoryState, location: Location): HistoryState {
+const updateLocation = (state: HistoryState, location: Location): HistoryState => {
   const current = state.entries[state.index]
 
   return current && sameEditor(current, location) ? replaceCurrent(state, location) : state
 }
 
-function nextLocationIndex(
+const nextLocationIndex = (
   state: HistoryState,
   direction: Direction,
   canVisit: CanVisitLocation
-): number {
+): number => {
   return direction === DIRECTION.BACK
     ? state.entries.findLastIndex((location, index) => index < state.index && canVisit(location))
     : state.entries.findIndex((location, index) => index > state.index && canVisit(location))
 }
 
-export function createEditorNavigationHistory(): History {
+export const createEditorNavigationHistory = (): History => {
   const state: HistoryStateRef = { current: { entries: [], index: -1 } }
 
   return {

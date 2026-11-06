@@ -14,19 +14,19 @@ import { TAB_TYPE, DELETED_FILE_MUTATION, FILE_MODE } from './editor-navigation.
 
 const restoration: RestorationState = { pending: null, editors: new Map() }
 
-export function cancelRestore(): void {
+export const cancelRestore = (): void => {
   restoration.pending = null
 }
 
-export function hasPendingRestore(): boolean {
+export const hasPendingRestore = (): boolean => {
   return restoration.pending !== null
 }
 
-export function isRestoring(): boolean {
+export const isRestoring = (): boolean => {
   return restoration.pending !== null && isCurrentRestore(restoration.pending)
 }
 
-export function registerEditor(key: string, mounted: MountedEditor): () => void {
+export const registerEditor = (key: string, mounted: MountedEditor): (() => void) => {
   restoration.editors.set(key, mounted)
 
   return () => {
@@ -36,7 +36,7 @@ export function registerEditor(key: string, mounted: MountedEditor): () => void 
   }
 }
 
-function isCurrentRestore(location: Location): boolean {
+const isCurrentRestore = (location: Location): boolean => {
   const state = useAppStore.getState()
   const tab = state.getActiveTab(location.file.worktreeId)
   const file = state.openFiles.find((candidate) => candidate.id === location.file.id)
@@ -52,11 +52,11 @@ function isCurrentRestore(location: Location): boolean {
   )
 }
 
-function hasCurrentOwner(
+const hasCurrentOwner = (
   state: AppState,
   location: Location,
   existing: OpenFile | undefined
-): boolean {
+): boolean => {
   if (getEditorModelOwnerKey(existing ?? location.file, state) !== location.ownerKey) {
     return false
   }
@@ -74,7 +74,7 @@ function hasCurrentOwner(
   }
 }
 
-export function canRestoreLocation(location: Location): boolean {
+export const canRestoreLocation = (location: Location): boolean => {
   const state = useAppStore.getState()
   const existing = state.openFiles.find((candidate) => candidate.id === location.file.id)
 
@@ -85,13 +85,17 @@ export function canRestoreLocation(location: Location): boolean {
   )
 }
 
-function withActiveTab(location: Location): Location {
+const withActiveTab = (location: Location): Location => {
   const tabId = useAppStore.getState().getActiveTab(location.file.worktreeId)?.id
 
   return { ...location, tabId, viewStateId: tabId ?? location.file.id }
 }
 
-function activateExistingLocation(state: AppState, location: Location, file: OpenFile): Location {
+const activateExistingLocation = (
+  state: AppState,
+  location: Location,
+  file: OpenFile
+): Location => {
   state.setActiveFile(file.id, file.worktreeId)
   const tab = location.tabId ? state.getTab(location.tabId) : null
 
@@ -104,7 +108,7 @@ function activateExistingLocation(state: AppState, location: Location, file: Ope
   return withActiveTab(location)
 }
 
-function reopenFileDescriptor(file: OpenFile): FileDescriptor {
+const reopenFileDescriptor = (file: OpenFile): FileDescriptor => {
   return {
     filePath: file.filePath,
     relativePath: file.relativePath,
@@ -119,13 +123,13 @@ function reopenFileDescriptor(file: OpenFile): FileDescriptor {
   }
 }
 
-function reopenLocation(state: AppState, location: Location): Location {
+const reopenLocation = (state: AppState, location: Location): Location => {
   const id = state.openFile(reopenFileDescriptor(location.file), { preview: true })
 
   return withActiveTab({ ...location, file: { ...location.file, id } })
 }
 
-function finishRestore(location: Location): void {
+const finishRestore = (location: Location): void => {
   const mounted = restoration.editors.get(location.viewStateId ?? location.file.id)
   mounted?.editor.setScrollPosition({
     scrollTop: location.scrollTop,
@@ -135,7 +139,7 @@ function finishRestore(location: Location): void {
   mounted?.record()
 }
 
-function revealLocation(location: Location): void {
+const revealLocation = (location: Location): void => {
   scheduleEditorLineReveal(
     useAppStore.getState,
     location.file.filePath,
@@ -150,7 +154,7 @@ function revealLocation(location: Location): void {
   )
 }
 
-export function restoreLocation(location: Location): Location {
+export const restoreLocation = (location: Location): Location => {
   const state = useAppStore.getState()
   const existing = state.openFiles.find((candidate) => candidate.id === location.file.id)
   restoration.pending = location

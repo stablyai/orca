@@ -33,14 +33,14 @@ import {
 
 const histories = new Map<string, History>()
 
-function historyFor(worktreeId: string): History {
+const historyFor = (worktreeId: string): History => {
   const history = histories.get(worktreeId) ?? createEditorNavigationHistory()
   setWithLRU(histories, worktreeId, history)
 
   return history
 }
 
-function navigate(worktreeId: string, direction: Direction): void {
+const navigate = (worktreeId: string, direction: Direction): void => {
   const history = historyFor(worktreeId)
   const location = history.step(direction, canRestoreLocation)
 
@@ -49,7 +49,7 @@ function navigate(worktreeId: string, direction: Direction): void {
   }
 }
 
-function readActiveEditorTarget(params: EditorParams, state: AppState): Target | null {
+const readActiveEditorTarget = (params: EditorParams, state: AppState): Target | null => {
   const file = state.openFiles.find((candidate) => candidate.id === params.fileIdRef.current)
 
   if (
@@ -74,7 +74,7 @@ function readActiveEditorTarget(params: EditorParams, state: AppState): Target |
   return { file, tabId: tab?.id }
 }
 
-function readEditorViewport(editorInstance: editor.IStandaloneCodeEditor) {
+const readEditorViewport = (editorInstance: editor.IStandaloneCodeEditor) => {
   const position = editorInstance.getPosition()
 
   return position
@@ -86,7 +86,7 @@ function readEditorViewport(editorInstance: editor.IStandaloneCodeEditor) {
     : null
 }
 
-function readEditorLocation(params: EditorParams): Location | null {
+const readEditorLocation = (params: EditorParams): Location | null => {
   const target = readActiveEditorTarget(params, useAppStore.getState())
   const viewport = readEditorViewport(params.editorInstance)
 
@@ -97,11 +97,11 @@ function readEditorLocation(params: EditorParams): Location | null {
   return { ...target, ...viewport, ownerKey: params.ownerKey, viewStateId: params.viewStateId }
 }
 
-function recordEditorLocation(
+const recordEditorLocation = (
   params: EditorParams,
   recording: RecordingState,
   explicitJump: boolean
-): void {
+): void => {
   if (isRestoring()) {
     return
   }
@@ -117,7 +117,7 @@ function recordEditorLocation(
   recording.location = location
 }
 
-function updateEditorLocation(params: EditorParams, recording: RecordingState): void {
+const updateEditorLocation = (params: EditorParams, recording: RecordingState): void => {
   const previous = recording.location
 
   if (!previous || hasPendingRestore()) {
@@ -135,7 +135,7 @@ function updateEditorLocation(params: EditorParams, recording: RecordingState): 
   historyFor(location.file.worktreeId).update(location)
 }
 
-function createNavigationRecorder(params: EditorParams): Recorder {
+const createNavigationRecorder = (params: EditorParams): Recorder => {
   const recording: RecordingState = { location: null }
 
   return {
@@ -145,7 +145,7 @@ function createNavigationRecorder(params: EditorParams): Recorder {
   }
 }
 
-function navigationDirection(event: KeyboardEvent): Direction | null {
+const navigationDirection = (event: KeyboardEvent): Direction | null => {
   if (editorShortcutMatches(ACTION.BACK, event)) {
     return DIRECTION.BACK
   }
@@ -157,7 +157,7 @@ function navigationDirection(event: KeyboardEvent): Direction | null {
   return null
 }
 
-function handleNavigationKey(event: KeyboardEvent, recorder: Recorder): void {
+const handleNavigationKey = (event: KeyboardEvent, recorder: Recorder): void => {
   if (event.defaultPrevented || event.isComposing) {
     return
   }
@@ -185,10 +185,10 @@ function handleNavigationKey(event: KeyboardEvent, recorder: Recorder): void {
   }
 }
 
-function installNavigationKeyboard(
+const installNavigationKeyboard = (
   editorInstance: editor.IStandaloneCodeEditor,
   recorder: Recorder
-): () => void {
+): (() => void) => {
   const container = editorInstance.getContainerDomNode()
   const onKeyDown = (event: KeyboardEvent): void => handleNavigationKey(event, recorder)
   container.addEventListener(EVENT.KEY_DOWN, onKeyDown, true)
@@ -196,10 +196,10 @@ function installNavigationKeyboard(
   return () => container.removeEventListener(EVENT.KEY_DOWN, onKeyDown, true)
 }
 
-function subscribeNavigationEvents(
+const subscribeNavigationEvents = (
   editorInstance: editor.IStandaloneCodeEditor,
   recorder: Recorder
-): () => void {
+): (() => void) => {
   const subscriptions = [
     editorInstance.onDidFocusEditorWidget(() => recorder.record()),
     editorInstance.onDidBlurEditorWidget(recorder.update),
@@ -219,7 +219,7 @@ function subscribeNavigationEvents(
   return () => subscriptions.forEach((subscription) => subscription.dispose())
 }
 
-export function installMonacoNavigationHistory(params: EditorParams): () => void {
+export const installMonacoNavigationHistory = (params: EditorParams): (() => void) => {
   const recorder = createNavigationRecorder(params)
   const key = params.viewStateId ?? params.fileIdRef.current
   const unregisterEditor = registerEditor(key, {
