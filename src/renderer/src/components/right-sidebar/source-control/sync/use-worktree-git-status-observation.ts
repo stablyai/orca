@@ -1,3 +1,4 @@
+import type { OpenFile } from '@/store/slices/editor'
 import type { SourceControlScope } from '../panel/worktree-scope'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
@@ -17,6 +18,7 @@ import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
 import {
+  admissionTierForGitStatusRefreshReason,
   createGitStatusRefreshPacing,
   createGitStatusRefreshScheduler,
   type GitStatusRefreshPacing,
@@ -24,6 +26,10 @@ import {
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+
+export { admissionTierForGitStatusRefreshReason } from './git-status-refresh-scheduler'
+
+const NO_OWNER_FILES: OpenFile[] = []
 
 const STATUS_SAFETY_INTERVAL_MS = 60_000
 const STATUS_ACTIVITY_DEBOUNCE_MS = 125
@@ -34,12 +40,6 @@ export const SLOW_GIT_POLL_BACKOFF = {
   idleMultiplier: 1,
   changeSignalMultiplier: 1,
   maxIntervalMs: 5 * 60_000
-}
-
-export function admissionTierForGitStatusRefreshReason(
-  reason: GitStatusRefreshReason
-): 'status' | 'background' {
-  return reason === 'safety' ? 'background' : 'status'
 }
 
 export function useWorktreeGitStatusObservation(
@@ -60,6 +60,7 @@ export function useWorktreeGitStatusObservation(
   )
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
+  const openFiles = useAppStore((s) => (owner ? NO_OWNER_FILES : s.openFiles))
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -307,7 +308,7 @@ export function useWorktreeGitStatusObservation(
     fetchStatus: fetchStatusOnChangeSignal,
     gitStatusHugeByWorktree: activeWorktreeId ? { [activeWorktreeId]: huge } : {},
     isConnectionReady: () => isActiveConnectionReady,
-    openFiles: [],
+    openFiles,
     rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,

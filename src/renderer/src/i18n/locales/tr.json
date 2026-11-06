@@ -13867,7 +13867,8 @@
             "clearNotesFromFile_one": "{{path}} dosyasındaki {{count}} not silinsin mi?",
             "markResolved": "Çözüldü olarak işaretle",
             "keepFile": "Dosyayı koru",
-            "keepDeletion": "Silmeyi koru"
+            "keepDeletion": "Silmeyi koru",
+            "refreshAll": "Tümünü yenile"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -18209,6 +18210,10 @@
           "actionsUnavailable": "Eklenti işlemleri bu istemcide kullanılamıyor.",
           "messageTooLarge": "Mesaj boyut sınırını aşıyor.",
           "tooManyRequests": "Çok fazla istek."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Bu çalışma ağacını aç",
+          "reconnect": "Bu çalışma ağacının değişikliklerini görmek için yeniden bağlanın."
         }
       },
       "link": {
@@ -23199,8 +23204,5 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
-  },
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Bu çalışma ağacını aç",
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Bu çalışma ağacının değişikliklerini görmek için yeniden bağlanın.",
-  "auto.components.right.sidebar.SourceControl.refreshAll": "Tümünü yenile"
+  }
 }

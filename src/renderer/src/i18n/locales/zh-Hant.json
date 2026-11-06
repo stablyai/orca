@@ -13694,7 +13694,8 @@
             "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 則筆記？",
             "markResolved": "標記為已解決",
             "keepFile": "保留檔案",
-            "keepDeletion": "保留刪除"
+            "keepDeletion": "保留刪除",
+            "refreshAll": "全部重新整理"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -17975,6 +17976,10 @@
           "actionsUnavailable": "此用戶端不支援外掛操作。",
           "messageTooLarge": "訊息超過大小限制。",
           "tooManyRequests": "請求過多。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "開啟此工作樹",
+          "reconnect": "請重新連線以查看此工作樹的變更。"
         }
       },
       "link": {
@@ -22884,8 +22889,5 @@
     "sameAsTextDefault": "與預設值相同 · {{value0}}",
     "chatChoicesNote": "沒有 CLI 旗標的 {{agent}} 模型或推理力度選項適用於聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度選項包含在模型引數中。"
-  },
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "開啟此工作樹",
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "請重新連線以查看此工作樹的變更。",
-  "auto.components.right.sidebar.SourceControl.refreshAll": "全部重新整理"
+  }
 }

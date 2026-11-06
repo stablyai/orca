@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import FolderWorkspaceSourceControlPanel from './FolderWorkspaceSourceControlPanel'
 import { useSourceControlWatchConsumers } from '@/hooks/source-control-watch-consumers'
 import { useSourceControlScope } from './source-control/panel/worktree-scope'
+import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 
 const probes = vi.hoisted(() => ({
@@ -70,6 +71,7 @@ afterEach(async () => {
   await act(async () => root.unmount())
   container.remove()
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 function Watches() {
   probes.watches = useSourceControlWatchConsumers().length
@@ -81,7 +83,17 @@ function setup(count: number) {
     repoId: 'repo',
     path: `/child-${i}`,
     branch: `feature-${i}`,
-    hostId: 'local',
+    displayName: `Child ${i}`,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: i,
+    lastActivityAt: 0,
+    hostId: 'local' as const,
     instanceId: `instance-${i}`
   }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the catalog and status fields consumed by the folder panel.
@@ -190,3 +202,50 @@ it.each([3, 30])(
     expect(probes.watches).toBe(0)
   }
 )
+
+function ActiveStatusObserver() {
+  useWorktreeGitStatusObservation(null)
+  return null
+}
+
+it('refreshes an open diff after a file event with the sidebar closed', async () => {
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
+  const [worktree] = setup(1)
+  const path = '/Users/test/Library/Containers/app/worktree'
+  useAppStore.setState({
+    activeWorktreeId: worktree!.id,
+    activeWorkspaceKey: `worktree:${worktree!.id}`,
+    worktreesByRepo: { repo: [{ ...worktree!, path }] },
+    rightSidebarOpen: false,
+    openFiles: [
+      {
+        id: 'open-diff',
+        filePath: `${path}/a.ts`,
+        relativePath: 'a.ts',
+        worktreeId: worktree!.id,
+        language: 'typescript',
+        isDirty: false,
+        mode: 'diff'
+      }
+    ]
+  })
+  await act(async () => root.render(<ActiveStatusObserver />))
+  expect(probes.status).toHaveBeenCalledTimes(1)
+  probes.status.mockClear()
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+        detail: {
+          runtimeEnvironmentId: null,
+          payload: {
+            worktreePath: path,
+            events: [{ absolutePath: `${path}/a.ts`, kind: 'change' }]
+          }
+        }
+      })
+    )
+    await vi.advanceTimersByTimeAsync(4000)
+  })
+  expect(probes.status).toHaveBeenCalledTimes(1)
+  expect(probes.status.mock.calls[0]?.[0]?.worktreeId).toBe(worktree!.id)
+})

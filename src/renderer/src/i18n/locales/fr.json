@@ -13797,7 +13797,8 @@
             "clearNotesFromFile_many": "Effacer {{count}} notes de {{path}} ?",
             "markResolved": "Marquer comme résolu",
             "keepFile": "Conserver le fichier",
-            "keepDeletion": "Conserver la suppression"
+            "keepDeletion": "Conserver la suppression",
+            "refreshAll": "Tout actualiser"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -18202,6 +18203,10 @@
           "actionsUnavailable": "Les actions de plugin ne sont pas disponibles dans ce client.",
           "messageTooLarge": "Le message dépasse la taille limite.",
           "tooManyRequests": "Trop de requêtes."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Ouvrir ce worktree",
+          "reconnect": "Reconnectez-vous pour voir les modifications de ce worktree."
         }
       },
       "link": {
@@ -23623,8 +23628,5 @@
   "wslDistroHold": {
     "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
     "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
-  },
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Ouvrir ce worktree",
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Reconnectez-vous pour voir les modifications de ce worktree.",
-  "auto.components.right.sidebar.SourceControl.refreshAll": "Tout actualiser"
+  }
 }

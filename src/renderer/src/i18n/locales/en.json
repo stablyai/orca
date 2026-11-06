@@ -14240,7 +14240,8 @@
             "clearNotesFromFile_other": "Clear {{count}} notes from {{path}}?",
             "markResolved": "Mark as resolved",
             "keepFile": "Keep file",
-            "keepDeletion": "Keep deletion"
+            "keepDeletion": "Keep deletion",
+            "refreshAll": "Refresh all"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -18621,6 +18622,10 @@
           "loadFailedKeptLastGood": "{{value0}} failed to load. Showing the last version that loaded.",
           "pluginMessage": "Message from {{value0}}: {{value1}}",
           "reloaded": "Reloaded"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Open this worktree",
+          "reconnect": "Reconnect to see this worktree’s changes."
         }
       },
       "link": {
@@ -23932,8 +23937,5 @@
   },
   "checks": {
     "rerunUnsuccessful": "Rerun unsuccessful"
-  },
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Open this worktree",
-  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Reconnect to see this worktree’s changes.",
-  "auto.components.right.sidebar.SourceControl.refreshAll": "Refresh all"
+  }
 }

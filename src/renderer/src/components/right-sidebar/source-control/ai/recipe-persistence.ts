@@ -1,4 +1,4 @@
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -42,7 +42,11 @@ export async function saveSourceControlAiActionRecipeForTarget({
   }
   const latestRepo =
     target.type === 'repo'
-      ? findRepoForHost(state.repos, target.repoId, { hostId, settings: state.settings })
+      ? (state.repos.find((candidate) =>
+          hostId
+            ? repoMatchesHostIdentity(candidate, target.repoId, hostId)
+            : candidate.id === target.repoId
+        ) ?? null)
       : null
   const result = saveSourceControlActionRecipe({
     target,
