@@ -17,6 +17,7 @@ import {
 } from './host-path-memory'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
+import { directProbeTimeoutMsForEndpoint } from './mobile-direct-return-probe'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -96,6 +97,7 @@ function createSupervisor(
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
+    directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
         relay,

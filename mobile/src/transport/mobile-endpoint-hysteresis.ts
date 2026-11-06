@@ -30,7 +30,8 @@ export class MobileEndpointHysteresis {
       // Arrival waives the dwell: reconnecting to the relay after a network change also counts as a migration.
       const ready =
         this.consecutiveDirectSuccesses >= ARRIVAL_SUCCESSES_REQUIRED &&
-        observedMs >= ARRIVAL_OBSERVATION_MS
+        observedMs >= ARRIVAL_OBSERVATION_MS &&
+        this.arrivalWaitMs(now) === 0
       this.arrived = !ready
       if (ready) {
         this.lastArrivalUpgradeAt = now
@@ -50,20 +51,27 @@ export class MobileEndpointHysteresis {
     this.cooldownUntil = now + FAILURE_COOLDOWN_MS
   }
 
+  // A relay takeover keeps a pending arrival: the network change that caused it is why the relay redialed.
   recordMigration(now: number): void {
     this.lastMigrationAt = now
     this.resetProgress()
   }
 
-  // Lasts until the next direct failure or upgrade. One per dwell, so Wi-Fi at the edge of range can't flap the path.
-  recordNetworkArrival(now: number): boolean {
-    if (now - this.lastArrivalUpgradeAt < MINIMUM_DWELL_MS) {
-      return false
-    }
+  recordDirectMigration(now: number): void {
+    this.arrived = false
+    this.recordMigration(now)
+  }
+
+  // Lasts until the next direct failure or upgrade.
+  recordNetworkArrival(): void {
     this.arrived = true
     this.cooldownUntil = 0
     this.resetProgress()
-    return true
+  }
+
+  // One arrival upgrade per dwell, so Wi-Fi at the edge of range can't flap the path; a later arrival waits out the rest.
+  arrivalWaitMs(now: number): number {
+    return Math.max(0, this.lastArrivalUpgradeAt + MINIMUM_DWELL_MS - now)
   }
 
   isArrival(): boolean {

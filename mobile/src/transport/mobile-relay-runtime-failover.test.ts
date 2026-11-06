@@ -225,6 +225,7 @@ function dependencies(
     recordGoodPath: vi.fn(async () => {}),
     readLocalNetwork: vi.fn(async () => null),
     directPath: 'lan',
+    directProbeTimeoutMs: 4_000,
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
     setTimer: (handler, ms) => setTimeout(handler, ms),

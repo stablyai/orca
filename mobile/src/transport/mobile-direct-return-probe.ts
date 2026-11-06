@@ -1,3 +1,4 @@
+import { classifyRemotePairingHostname } from '../../../src/shared/remote-runtime/pairing/remote-pairing-address'
 import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import { ARRIVAL_OBSERVATION_MS, type MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import type { RpcClient } from './rpc-client'
@@ -5,12 +6,19 @@ import type { ScheduleTimer } from './timer-scheduler'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
-// A reachable LAN authenticates well inside 4 s; a longer bound only holds the probe mutex while away.
-// Tailscale can cross a cold DERP route from anywhere, so it keeps the socket's own 12 s bound.
-const LAN_PROBE_TIMEOUT_MS = 4_000
-const TAILSCALE_PROBE_TIMEOUT_MS = 12_000
 // After a network change the relay redial holds the mutex for about a second.
 const ARRIVAL_BLOCKED_RETRY_MS = 500
+
+// A private-address host authenticates well inside 4 s, and a longer bound only holds the probe mutex while away.
+// Tailscale, public and custom hosts can cross a slow internet route, so they keep the socket's own 12 s.
+export function directProbeTimeoutMsForEndpoint(endpoint: string): number {
+  try {
+    const kind = classifyRemotePairingHostname(new URL(endpoint).hostname)
+    return kind === 'lan' || kind === 'loopback' ? 4_000 : 12_000
+  } catch {
+    return 12_000
+  }
+}
 
 export class DirectReturnProbe {
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -25,6 +33,7 @@ export class DirectReturnProbe {
       clearTimer: typeof clearTimeout
       openDirect: () => RpcClient
       directPath: Exclude<MobileConnectionPath, 'relay'>
+      directProbeTimeoutMs: number
     },
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
@@ -53,16 +62,13 @@ export class DirectReturnProbe {
 
   // A dial begun on the previous network can only time out, so drop it uncounted and probe now.
   arrive(): void {
-    if (
-      this.stopped ||
-      !this.hooks.canSchedule() ||
-      !this.hooks.hysteresis.recordNetworkArrival(this.deps.now())
-    ) {
+    if (this.stopped || !this.hooks.canSchedule()) {
       return
     }
+    this.hooks.hysteresis.recordNetworkArrival()
     this.activeProbe?.abort()
     this.clear()
-    this.schedule(0)
+    this.schedule(this.hooks.hysteresis.arrivalWaitMs(this.deps.now()))
   }
 
   clear(): void {
@@ -93,7 +99,7 @@ export class DirectReturnProbe {
     try {
       successful = await openAuthenticatedDirectEndpoint(
         this.deps.openDirect,
-        this.deps.directPath === 'lan' ? LAN_PROBE_TIMEOUT_MS : TAILSCALE_PROBE_TIMEOUT_MS,
+        this.deps.directProbeTimeoutMs,
         controller.signal
       )
       if (this.stopped || controller.signal.aborted) {
@@ -121,7 +127,7 @@ export class DirectReturnProbe {
       if (this.stopped) {
         return
       }
-      this.hooks.hysteresis.recordMigration(this.deps.now())
+      this.hooks.hysteresis.recordDirectMigration(this.deps.now())
       await this.hooks.onDirectMigrated()
     } finally {
       this.activeProbe = null
@@ -133,6 +139,9 @@ export class DirectReturnProbe {
   }
 
   private intervalMs(): number {
-    return this.hooks.hysteresis.isArrival() ? ARRIVAL_OBSERVATION_MS : DIRECT_PROBE_INTERVAL_MS
+    const { hysteresis } = this.hooks
+    return hysteresis.isArrival()
+      ? Math.max(ARRIVAL_OBSERVATION_MS, hysteresis.arrivalWaitMs(this.deps.now()))
+      : DIRECT_PROBE_INTERVAL_MS
   }
 }

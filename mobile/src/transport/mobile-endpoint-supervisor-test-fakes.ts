@@ -216,6 +216,7 @@ export function dependencies(
     recordGoodPath: vi.fn(async () => {}),
     readLocalNetwork: vi.fn(async () => null),
     directPath: 'lan',
+    directProbeTimeoutMs: 4_000,
     now: Date.now,
     randomBytes: (length) => new Uint8Array(length).fill(1),
     setTimer: defaultScheduleTimer,

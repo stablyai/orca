@@ -12,6 +12,7 @@ import type { ConnectionLogSink } from './types'
 export type MobileEndpointSupervisorDependencies = {
   openDirect: () => RpcClient
   directPath: Exclude<MobileConnectionPath, 'relay'>
+  directProbeTimeoutMs: number
   openRelay: (
     relay: MobileRelayEndpoint,
     credential: { token: string; version: number },
