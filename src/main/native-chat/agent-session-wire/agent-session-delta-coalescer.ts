@@ -41,21 +41,20 @@ function snapshotOf(stream: AgentSessionDeltaStream): AgentSessionDeltaSnapshot 
   const { chunks } = stream
   const count = chunks.length
   let text: string | undefined
-  const snapshot = {
+  const snapshot: AgentSessionDeltaSnapshot = {
     get text() {
       text ??= (count === chunks.length ? chunks : chunks.slice(0, count)).join('')
       return text
     },
+    textLength: stream.textLength,
     observedBytes: stream.observedBytes,
-    truncated: stream.truncated
+    truncated: stream.truncated,
+    bounded: (headBytes) => boundedDeltaPayload(stream.chunks, stream.digest, headBytes)
   }
-  // Non-enumerable, so snapshots still compare and serialize as text and byte counts.
-  return Object.defineProperties(snapshot, {
-    textLength: { value: stream.textLength },
-    bounded: {
-      value: (headBytes: number) => boundedDeltaPayload(stream.chunks, stream.digest, headBytes)
-    }
-  }) as AgentSessionDeltaSnapshot
+  // Hidden, so snapshots still compare and serialize as text and byte counts.
+  Object.defineProperty(snapshot, 'textLength', { enumerable: false })
+  Object.defineProperty(snapshot, 'bounded', { enumerable: false })
+  return snapshot
 }
 
 export type AgentSessionDeltaCoalescerDeps = {
