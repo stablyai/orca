@@ -19941,6 +19941,9 @@
       "composer": {
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
+        "previewQueue": "В очередь",
+        "previewSteer": "Направить",
+        "previewSteerQueued": "Направить следующее",
         "alternateQueueHint": "{{shortcut}}, чтобы поставить в очередь",
         "noPty": "Терминал отключён. Вернитесь в него, чтобы подключиться снова.",
         "locked": "Вводом управляет другое устройство.",
