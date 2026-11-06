@@ -32,11 +32,13 @@ export type NativeChatDeliveryNotice =
       onEdit?: never
       onSend?: never
       detail?: never
+      failureKind?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
+      failureKind?: string
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void

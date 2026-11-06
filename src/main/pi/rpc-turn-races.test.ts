@@ -125,3 +125,30 @@ describe('Pi turn settlement races', () => {
     expect((await h.rig.turns())[0]?.outcome).toBe('failure')
   })
 })
+
+it('keeps an expired sign-in visible when Pi accepted the turn before auth failed', async () => {
+  const h = await setup()
+  await h.start()
+  h.turns.receive({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [],
+      stopReason: 'error',
+      errorMessage:
+        'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant'
+    }
+  })
+  h.turns.receive({ type: 'agent_settled' })
+  await h.flush()
+  const rows = await h.rig.rows()
+  expect(rows).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({
+        kind: 'status',
+        failure: expect.objectContaining({ kind: 'notSignedIn' })
+      })
+    })
+  )
+  expect((await h.rig.turns())[0]?.outcome).toBe('failure')
+})

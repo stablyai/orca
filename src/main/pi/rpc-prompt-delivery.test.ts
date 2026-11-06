@@ -175,3 +175,23 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
   expect(h.settled.mock.calls[0]?.[1].reason).toContain('`pi`')
   expect(h.settled.mock.calls[0]?.[1].reason).toContain('`/login`')
 })
+
+// Pi b556cfe5b0300a91f39c7bc5369a65a25fb7fcd5: auth/resolve.ts and models-runtime.test.ts.
+it.each([
+  [
+    'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant',
+    'notSignedIn'
+  ],
+  ['OAuth refresh failed for openai-codex: fetch failed', 'providerRejected']
+])('settles %s without retrying an unusable grant', async (error, kind) => {
+  vi.useFakeTimers()
+  const h = rig()
+  await h.delivery.submit('auth-failure', 1, { type: 'prompt', message: 'hello' })
+  h.delivery.reply({ type: 'response', command: 'prompt', success: false, error })
+  expect(h.settled).toHaveBeenCalledWith(
+    'auth-failure',
+    expect.objectContaining({ state: 'rejected', rejection: expect.objectContaining({ kind }) })
+  )
+  await vi.runAllTimersAsync()
+  expect(h.send).toHaveBeenCalledOnce()
+})

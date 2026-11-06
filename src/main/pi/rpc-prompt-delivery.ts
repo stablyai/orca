@@ -29,11 +29,22 @@ type DeliveryDeps = {
   refused?: () => void
 }
 
+const MISSING_KEY_PREFIX = 'No API key found for '
+const DEAD_OAUTH_GRANT =
+  /invalid_grant|invalid_token|unauthorized_client|\brevoked\b|refresh[\s_]?token.*expired/i
+const TEMPORARY_OAUTH_FAILURE =
+  /timeout|network|fetch failed|ECONN(?:REFUSED|RESET)|ETIMEDOUT|ETIMEOUT|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|FailedToOpenSocket|EAI_AGAIN|socket hang up|\b(?:408|425|429|5\d{2})\b|rate.?limit|too many requests|temporar|unavailable|forbidden|permission_denied|cloudflare|captcha/i
+
 export function piRpcFailureFact(error: string) {
-  return agentSessionFailureFact(
-    error.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
-    { detail: providerDiagnostic(error, 'person') }
-  )
+  const signInRequired =
+    error.startsWith(MISSING_KEY_PREFIX) ||
+    (error.startsWith('Authentication failed for ') && error.includes("Run '/login ")) ||
+    (error.startsWith('OAuth refresh failed for ') &&
+      (DEAD_OAUTH_GRANT.test(error) ||
+        (/\b401\b/.test(error) && !TEMPORARY_OAUTH_FAILURE.test(error))))
+  return agentSessionFailureFact(signInRequired ? 'notSignedIn' : 'providerRejected', {
+    detail: providerDiagnostic(error, 'person')
+  })
 }
 
 function piRejection(fact: SubmissionRejectionFact): AgentSessionDispatchOutcome {
@@ -112,7 +123,11 @@ export class PiRpcPromptDelivery {
     if (!reply.success) {
       const error = reply.error ?? 'Pi rejected the prompt'
       const fact = piRpcFailureFact(error)
-      if (!submission.accepted && fact.kind === 'notSignedIn' && submission.retries++ < 8) {
+      if (
+        !submission.accepted &&
+        error.startsWith(MISSING_KEY_PREFIX) &&
+        submission.retries++ < 8
+      ) {
         submission.signInRefusal = error
         this.removeWaiting(submission)
         const timer = setTimeout(() => {

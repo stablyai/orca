@@ -60,6 +60,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
           ? agentSessionFailureDetailText(fact)
           : undefined
       notices.set(id, {
+        failureKind: fact?.kind,
         text: agentSessionWriteNoticeText(
           structuredAgentSessionRecordedRejectionParts(
             submission,
