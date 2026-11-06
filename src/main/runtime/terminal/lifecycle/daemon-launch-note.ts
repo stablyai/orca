@@ -28,19 +28,24 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     reattach: { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote }
   ): Promise<void> {
     const { launchNote, launchAgent, incarnationId } = reattach
-    if (!launchNote) {
+    if (!launchNote || pty.launchToken) {
       return
     }
     const foreground = await this.readLaunchedAgentForeground(ptyId, launchAgent).catch(
       () => 'unknown' as const
     )
-    if (this.ptysById.get(ptyId) !== pty || pty.incarnationId !== incarnationId) {
+    // A launch main already holds for this PTY is newer than anything the reattach can say.
+    if (
+      this.ptysById.get(ptyId) !== pty ||
+      pty.incarnationId !== incarnationId ||
+      pty.launchToken
+    ) {
       return
     }
     if (foreground === 'shell') {
       this.ptyController?.setLaunchNote?.(ptyId, { retire: launchNote.launchToken })
     }
-    if (foreground === 'agent' && pty.launchAgent === launchAgent && !pty.launchToken) {
+    if (foreground === 'agent' && pty.launchAgent === launchAgent) {
       pty.launchToken = launchNote.launchToken
       pty.launchIncarnationId = incarnationId
       pty.launchConfig = launchNote.launchConfig
