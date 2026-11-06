@@ -261,8 +261,8 @@ describe("OMP's own model command", () => {
     expect(OMP_ACP_DIALECT.authenticationRequired!(noModel)).toBe(false)
     // The saved selection stays; its proof is gone, so the next send writes it again.
     const setOption = vi.fn(async () => undefined)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with the write accepted, the send path reads only session.options.
     await applyAcpMessageOptions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with the write accepted, the send path reads only session.options.
       { options } as unknown as AcpStructuredSession,
       { model: '@worker_bee' },
       setOption,
