@@ -176,13 +176,17 @@ export function captureNativeChatComposerDraftReplaySnapshot(): NativeChatCompos
   return entries
 }
 
+/** The scope's earlier-run entries: from the load attempt's snapshot, or with no attempt reading,
+ *  from one read of the journal that nothing keeps. */
 export function nativeChatComposerDraftReplayEntries(
   scopeKey: string
 ): NativeChatComposerDraftJournalSnapshot {
-  if (!replaySnapshot) {
-    captureNativeChatComposerDraftReplaySnapshot()
+  if (replaySnapshot) {
+    return replaySnapshot.get(scopeKey) ?? []
   }
-  return replaySnapshot?.get(scopeKey) ?? []
+  return readNativeChatComposerDraftJournal().entries.filter(
+    (entry) => entry.run !== THIS_RUN && entry.scopeKey === scopeKey
+  )
 }
 
 /** The attempt ended (or a new one begins): its snapshot is no longer the journal to replay. */

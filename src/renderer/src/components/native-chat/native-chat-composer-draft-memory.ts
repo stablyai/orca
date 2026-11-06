@@ -115,7 +115,8 @@ export const load: LoadBookkeeping = {
   appendSequence: 0,
   editedBeforeLoad: new Set(),
   appendsBeforeLoad: new Map(),
-  deletionsBeforeLoad: []
+  deletionsBeforeLoad: [],
+  fenced: new Set()
 }
 
 let lastSavedAt = 0
@@ -183,6 +184,7 @@ export function clearDraftMemoryForTests(): void {
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
+  load.fenced.clear()
 }
 
 export type NativeChatDraftAppend =

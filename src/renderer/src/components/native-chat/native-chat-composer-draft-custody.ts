@@ -50,8 +50,6 @@ export type NativeChatDraftCustody = {
 }
 
 export const draftCustody = new Map<string, NativeChatDraftCustody>()
-/** Scopes whose memory already holds their complete stored base; a later load must not replace it. */
-export const knownDraftBases = new Set<string>()
 
 export function handbackReceiptKey(receipt: NativeChatDraftHandbackReceipt): string {
   return JSON.stringify([receipt.operationId, receipt.clientMessageId, receipt.sessionId ?? null])

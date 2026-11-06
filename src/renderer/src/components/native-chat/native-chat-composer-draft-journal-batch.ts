@@ -74,8 +74,10 @@ export function writeNativeChatComposerDraftJournalBatch(
   }
   const { raw, entries, read } = readNativeChatComposerDraftJournal()
   const existing = entries.map((entry, index) => encode(entry, read[index]))
-  // Each identified addition's current copies, indexed once.
+  // Each identified addition's current copies, and the whole copies a scope's admitted snapshot
+  // replaces that are charged now (kept if it is omitted), indexed once.
   const copies = new Map<string, Encoded[]>()
+  const charged = new Map<string, number>()
   let used = 0
   for (const encoded of existing) {
     const { entry, text } = encoded
@@ -85,12 +87,14 @@ export function writeNativeChatComposerDraftJournalBatch(
       list.push(encoded)
       copies.set(id, list)
     }
-    if (
-      !isAddition(entry) &&
-      entry.draft &&
-      (!snapshots.has(entry.scopeKey) || entry.draft.handbacks?.length)
-    ) {
+    if (isAddition(entry) || !entry.draft) {
+      continue
+    }
+    if (!snapshots.has(entry.scopeKey)) {
       used += text.length + 1
+    } else if (entry.draft.handbacks?.length) {
+      used += text.length + 1
+      charged.set(entry.scopeKey, (charged.get(entry.scopeKey) ?? 0) + text.length + 1)
     }
   }
   const candidates = [...snapshots]
@@ -98,14 +102,15 @@ export function writeNativeChatComposerDraftJournalBatch(
     .sort((left, right) => left.text.length - right.text.length)
   const added: Encoded[] = []
   for (const candidate of candidates) {
-    const size = candidate.text.length + 1
-    if (!isAddition(candidate.entry) && candidate.entry.draft && used + size > MAX_JOURNAL_CHARS) {
+    // An admitted snapshot replaces its scope's older whole copies: charged at its net size.
+    const whole = !isAddition(candidate.entry) && Boolean(candidate.entry.draft)
+    const next =
+      used - (charged.get(candidate.entry.scopeKey) ?? 0) + (whole ? candidate.text.length + 1 : 0)
+    if (whole && next > MAX_JOURNAL_CHARS) {
       continue
     }
     added.push(candidate)
-    if (!isAddition(candidate.entry) && candidate.entry.draft) {
-      used += size
-    }
+    used = next
   }
   const replaced = new Set(added.map(({ entry }) => entry.scopeKey))
   const removedIds = new Set(

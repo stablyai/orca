@@ -23,6 +23,11 @@ import {
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { draftCustody } from '@/components/native-chat/native-chat-composer-draft-custody'
 import {
+  dirtyScopes,
+  load,
+  unconfirmed
+} from '@/components/native-chat/native-chat-composer-draft-memory'
+import {
   nativeChatDraftHasReceipt,
   nativeChatDraftReceiptProgress
 } from '@/components/native-chat/native-chat-composer-draft-handback'
@@ -340,12 +345,20 @@ describe('many launches whose returns wait on their drafts', () => {
    *  lookups in that index. Every operation still runs natively. */
   function snapshotWork() {
     const CORPUS = /^tab-\d+:pane$/
-    const isEntry = (value: unknown) =>
-      typeof value === 'object' &&
-      value !== null &&
-      typeof (value as { scopeKey?: unknown }).scopeKey === 'string' &&
-      typeof (value as { at?: unknown }).at === 'number' &&
-      ('draft' in value || 'addition' in value)
+    // A journal entry, read or encoded for the shared key.
+    const isEntry = (item: unknown): boolean => {
+      const value =
+        typeof item === 'object' && item !== null && 'entry' in item && 'text' in item
+          ? (item as { entry: unknown }).entry
+          : item
+      return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as { scopeKey?: unknown }).scopeKey === 'string' &&
+        typeof (value as { at?: unknown }).at === 'number' &&
+        ('draft' in value || 'addition' in value)
+      )
+    }
     const ofEntries = (list: unknown) => Array.isArray(list) && list.length > 0 && isEntry(list[0])
     const array = Array.prototype as unknown as Record<PropertyKey, unknown>
     const passes = ['filter', 'map', 'flatMap', 'forEach', 'some', 'every', 'find', 'reduce']
@@ -407,6 +420,57 @@ describe('many launches whose returns wait on their drafts', () => {
       }
       return { ...work }
     }
+  }
+
+  /** What an unload collects before any filter: the dirty and unconfirmed scopes it visits, and
+   *  the pending contributions it reads. Each still runs natively. */
+  function collectorWork(run: () => void) {
+    const work = { dirty: 0, unconfirmed: 0, pending: 0 }
+    const counting =
+      <T>(iterate: () => Iterator<T>, key: 'dirty' | 'unconfirmed') =>
+      () => {
+        const iterator = iterate()
+        return {
+          next: () => {
+            const step = iterator.next()
+            work[key] += step.done ? 0 : 1
+            return step
+          },
+          [Symbol.iterator]() {
+            return this
+          }
+        }
+      }
+    const each = Array.prototype.forEach
+    const ownUnconfirmed = unconfirmed[Symbol.iterator].bind(unconfirmed)
+    const ownDirty = dirtyScopes[Symbol.iterator].bind(dirtyScopes)
+    const restore = [
+      vi
+        .spyOn(unconfirmed, Symbol.iterator)
+        .mockImplementation(counting(ownUnconfirmed, 'unconfirmed') as never),
+      vi
+        .spyOn(dirtyScopes, Symbol.iterator)
+        .mockImplementation(counting(ownDirty, 'dirty') as never)
+    ]
+    Array.prototype.forEach = function (this: unknown[], ...args: Parameters<typeof each>) {
+      const first = this[0]
+      if (
+        typeof first === 'object' &&
+        first !== null &&
+        'receipt' in first &&
+        'contribution' in first
+      ) {
+        work.pending += this.length
+      }
+      return each.apply(this, args)
+    }
+    try {
+      run()
+    } finally {
+      Array.prototype.forEach = each
+      restore.forEach((spy) => spy.mockRestore())
+    }
+    return work
   }
 
   it.each([3, 30])(
@@ -487,8 +551,21 @@ describe('many launches whose returns wait on their drafts', () => {
 
       const before = localStorage.getItem(JOURNAL) ?? ''
       take()
-      window.dispatchEvent(new Event('pagehide'))
+      let collected = { dirty: 0, unconfirmed: 0, pending: 0 }
+      const admission = await measure(async () => {
+        collected = collectorWork(() => window.dispatchEvent(new Event('pagehide')))
+      })
       const unload = take()
+      // Bound, from input and output before any filter: it collects each unconfirmed scope and
+      // pending contribution once (U = P = N) and at most N dirty scopes. Over E = 2N existing
+      // entries and P = N contributions it visits entries in parse, old-copy/whole index, sizing,
+      // kept selection and encoding (5E), the contributions twice (2P), their replaced copies
+      // (M <= E) and the output (2F, F <= E + P): within 10E + 6P, with at most one keyed
+      // admission lookup per existing and incoming entry (E + P).
+      expect(collected).toEqual({ dirty: expect.any(Number), unconfirmed: count, pending: count })
+      expect(collected.dirty).toBeLessThanOrEqual(count)
+      expect(admission.entryVisits).toBeLessThanOrEqual(10 * (2 * count) + 6 * count)
+      expect(admission.indexLookups).toBeLessThanOrEqual(2 * count + count)
       const output = localStorage.getItem(JOURNAL) ?? ''
       const entries: { at: number; run: string }[] = JSON.parse(output)
       // The one retained output: the unrelated journal and one identified addition per chat,
@@ -546,6 +623,10 @@ describe('many launches whose returns wait on their drafts', () => {
       expect(bases).toEqual({ entryVisits: 0, indexAdds: 0, indexLookups: count })
       saves.resolve()
       await nativeChatComposerDraftWritesSettled()
+      // The older load is still pending: it alone fences the scopes their own reads resolved.
+      for (const launch of launches) {
+        expect(load.fenced.has(scopeOf(launch))).toBe(true)
+      }
       // The older load lands after: it replaces none of them, and replays the unrelated panes.
       landed.resolve()
       await hydrateNativeChatComposerDrafts()
@@ -585,7 +666,9 @@ describe('many launches whose returns wait on their drafts', () => {
       expect(host.prepare).toHaveBeenCalledTimes(count)
       expect(host.release).toHaveBeenCalledTimes(count)
       // Nothing of these completed returns is kept while their ordinary drafts live on: no
-      // custody, and no remembered completion behind their receipts.
+      // custody, no remembered completion behind their receipts, and no fence once no load can
+      // publish.
+      expect(load.fenced.size).toBe(0)
       const forgotten = { backed: false, incorporated: false, retired: false }
       for (const launch of launches) {
         expect(draftCustody.has(scopeOf(launch))).toBe(false)
@@ -610,9 +693,75 @@ describe('many launches whose returns wait on their drafts', () => {
         )
       }
       expect(receiptListeners.live).toBe(0)
+      expect(load.fenced.size).toBe(0)
       warn.mockRestore()
     }
   )
+
+  it('lets a large returned draft go once its complete fallback replaces itself within the cap, while the backend still refuses', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const [launch] = launchesOf(1)
+    const scope = scopeOf(launch)
+    const parent = deferred<AgentLaunchReleasePhaseStatusResult>()
+    await releaseLaunches([launch], () => parent.promise)
+    // An ordinary large draft, saved by its own debounced write.
+    const typed = 'a'.repeat(80_000)
+    writeNativeChatDraftCache(scope, typed)
+    await vi.advanceTimersByTimeAsync(250)
+    await nativeChatComposerDraftWritesSettled()
+    const backend = nativeChatComposerDraftStorage() as ReturnType<
+      typeof nativeChatComposerDraftStorage
+    > & { drafts: Map<string, { text: string }> }
+    expect(backend.drafts.get(scope)?.text === typed).toBe(true)
+    const journaled: string[] = []
+    const setItem = localStorage.setItem.bind(localStorage)
+    vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === JOURNAL) {
+        journaled.push(value)
+      }
+      setItem(key, value)
+    })
+    // From here the draft's backend refuses every write; only the journal can hold the return.
+    refuseDraftWrites(true)
+    parent.resolve({ state: 'unknown' })
+    await vi.waitFor(() =>
+      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.callers.outcome).toBe('unknown')
+    )
+    // With no backend recovery and no further edit, the launch lets go of its return.
+    await vi.waitFor(() => expect(receiptListeners.live).toBe(0))
+    await nativeChatComposerDraftWritesSettled()
+    const once = `${typed}\n\n${HELD}`
+    expect(draft(launch.sessionId) === once).toBe(true)
+    // The receipt-bearing complete fallback, then its receipt-free replacement: each fits the
+    // whole cap; the two together would not.
+    const fallback = journaled.find((value) => value.includes('"handbacks"')) ?? ''
+    const replacement = journaled.at(-1) ?? ''
+    expect(fallback.length).toBeLessThan(256_000)
+    expect(replacement.length).toBeLessThan(256_000)
+    expect(fallback.length + replacement.length).toBeGreaterThan(256_000)
+    const [entry] = JSON.parse(replacement)
+    expect(entry).toMatchObject({ scopeKey: scope })
+    expect(entry.draft.text === once).toBe(true)
+    expect(entry.draft).not.toHaveProperty('handbacks')
+    expect(localStorage.getItem(JOURNAL)).toBe(replacement)
+    expect(nativeChatDraftHasReceipt(scope, receiptOf(launch))).toBe(false)
+    expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeUndefined()
+    const saved: Record<string, unknown>[] = JSON.parse(localStorage.getItem(SAVED) ?? '[]')
+    expect(saved.find((row) => row.sessionId === launch.sessionId)?.firstMessage).toBeUndefined()
+    // An actual same-O Retry settles with nothing new issued.
+    host.status.mockReset()
+    host.status.mockResolvedValue({ state: 'unknown' })
+    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
+    await vi.waitFor(() =>
+      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.callers.outcome).toBe('unknown')
+    )
+    await nativeChatComposerDraftWritesSettled()
+    expect(draft(launch.sessionId) === once).toBe(true)
+    expect(receiptListeners.live).toBe(0)
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(host.release).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
 
   it('keeps the last identified backup when an unload’s replacement no longer fits, then recovers', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

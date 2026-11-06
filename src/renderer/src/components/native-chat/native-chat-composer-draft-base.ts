@@ -4,7 +4,6 @@ import { withIndependentNativeChatComposerDraft } from './native-chat-composer-d
 import {
   draftCustody,
   handbackReceiptKey,
-  knownDraftBases,
   referencedNativeChatDraftPaths,
   withIdentifiedHandback
 } from './native-chat-composer-draft-custody'
@@ -28,6 +27,27 @@ import { noticeNativeChatDraftReceipts } from './native-chat-composer-draft-rece
 import { installStoredNativeChatComposerDraft } from './native-chat-composer-draft-restore'
 import { currentStoredNativeChatComposerDraft } from './native-chat-composer-draft-saved-form'
 import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
+
+/** Whether memory holds the scope's resolved base: never while contributions wait for its read;
+ *  always once every draft was loaded; while a load can still publish, when the scope's own read
+ *  or write resolved it; once the load gave up, its own live draft is all there is. */
+export function nativeChatDraftBaseKnown(scopeKey: string): boolean {
+  if (draftCustody.get(scopeKey)?.pending.length) {
+    return false
+  }
+  if (load.complete) {
+    return true
+  }
+  return load.hydrated ? records.has(scopeKey) : load.fenced.has(scopeKey)
+}
+
+/** The scope's own read or write resolved its base: a load still able to publish an older read of
+ *  it must not replace it. */
+function fenceNativeChatDraftFromLoad(scopeKey: string): void {
+  if (!load.hydrated) {
+    load.fenced.add(scopeKey)
+  }
+}
 
 /** Composes the scope's pending hand-backs, and what was typed into its partial view, onto its
  *  actual base, then shows that complete draft; later edits are ordinary complete edits. */
@@ -58,7 +78,7 @@ export function establishNativeChatDraftBase(
   if (custody) {
     custody.pending = []
   }
-  knownDraftBases.add(scopeKey)
+  fenceNativeChatDraftFromLoad(scopeKey)
   installStoredNativeChatComposerDraft(
     scopeKey,
     { ...draft, savedAt: nextSavedAt() },
@@ -81,7 +101,7 @@ export function nativeChatDraftAtBase(
     return null
   }
   const custody = draftCustody.get(scopeKey)
-  if (custody?.pending.length && !knownDraftBases.has(scopeKey)) {
+  if (custody?.pending.length) {
     const drafts = new Map([[scopeKey, stored]])
     const materialized = new Map<string, Set<string>>()
     if (!load.complete) {
@@ -107,9 +127,9 @@ export function nativeChatDraftAtBase(
     if (learned.length) {
       noticeNativeChatDraftReceipts(scopeKey, learned)
     }
-    if (!load.complete && !load.appendsBeforeLoad.has(scopeKey)) {
+    if (!load.appendsBeforeLoad.has(scopeKey)) {
       // Storage now holds exactly this memory: a load that read the older record must not replace it.
-      knownDraftBases.add(scopeKey)
+      fenceNativeChatDraftFromLoad(scopeKey)
     }
   }
   const result = currentStoredNativeChatComposerDraft(scopeKey)

@@ -9,7 +9,7 @@ import {
   notifyScope,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
-import { draftCustody, knownDraftBases } from './native-chat-composer-draft-custody'
+import { draftCustody } from './native-chat-composer-draft-custody'
 import {
   claimUncommittedNativeChatDraftHandbacks,
   settleLoadedNativeChatDraftProof,
@@ -62,12 +62,17 @@ export type LoadBookkeeping = {
     scopeKey: string,
     draft: StoredNativeChatComposerDraft
   ) => boolean)[]
+  /** Scopes whose own read or write resolved their base while a load could still publish an older
+   *  read of them: that load must not replace them. Ends with the load (done or given up). */
+  readonly fenced: Set<string>
 }
 
 // Bound database-open retries; after exhaustion retain memory changes and expose refused saves.
 const RETRY_DELAYS_MS = [1_000, 5_000, 30_000]
 
 let hydration: Promise<void> | null = null
+// The current attempt; a superseded attempt's late result or failure does nothing.
+let attempts = 0
 let failedLoads = 0
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -128,7 +133,7 @@ function applyLoaded(
   for (const [scopeKey, stored] of drafts) {
     const journaled = [...(materialized.get(scopeKey) ?? [])]
     // Its own read already gave this scope its complete base; this older snapshot must not replace it.
-    if (knownDraftBases.has(scopeKey)) {
+    if (load.fenced.has(scopeKey)) {
       continue
     }
     if (draftCustody.get(scopeKey)?.pending.length) {
@@ -170,10 +175,14 @@ function applyLoaded(
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
+  load.fenced.clear()
   flushNativeChatComposerDrafts()
 }
 
-function retryLater(error: unknown): void {
+function retryLater(attempt: number, error: unknown): void {
+  if (attempt !== attempts) {
+    return
+  }
   if (failedLoads === 0) {
     console.warn('[native-chat-drafts] saved drafts could not be loaded', error)
   }
@@ -186,6 +195,7 @@ function retryLater(error: unknown): void {
     load.editedBeforeLoad.clear()
     load.appendsBeforeLoad.clear()
     load.deletionsBeforeLoad.length = 0
+    load.fenced.clear()
     return
   }
   retryTimer = setTimeout(() => {
@@ -197,7 +207,11 @@ function retryLater(error: unknown): void {
 
 /** Loads every saved draft into memory, once; a failed load is retried a few times, then left. */
 export function hydrateNativeChatComposerDrafts(): Promise<void> {
-  hydration ??= (async () => {
+  if (hydration) {
+    return hydration
+  }
+  const attempt = ++attempts
+  hydration = (async () => {
     removeLegacyLocalStorageNativeChatComposerDrafts()
     installNativeChatComposerDraftBroadcast()
     // Why read here: storage applies changes in order, so this load reads every append made so far.
@@ -206,8 +220,11 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     const journal = captureNativeChatComposerDraftReplaySnapshot().filter(
       (entry) => !isNativeChatSetupDraft(entry.scopeKey)
     )
-    applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
-  })().catch(retryLater)
+    const loaded = await nativeChatComposerDraftStorage().loadAll()
+    if (attempt === attempts) {
+      applyLoaded(loaded, readAtSequence, journal)
+    }
+  })().catch((error: unknown) => retryLater(attempt, error))
   return hydration
 }
 
@@ -229,9 +246,9 @@ export function resetNativeChatComposerDraftLoadForTests(): void {
     retryTimer = null
   }
   hydration = null
+  attempts += 1
   failedLoads = 0
   draftCustody.clear()
-  knownDraftBases.clear()
   resetNativeChatDraftReceiptEventsForTests()
   releaseNativeChatComposerDraftReplaySnapshot()
   startNativeChatComposerDraftJournalRunForTests()

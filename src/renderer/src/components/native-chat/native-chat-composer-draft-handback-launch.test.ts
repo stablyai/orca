@@ -347,4 +347,53 @@ describe('a returned opening and a draft whose saved base the renderer has not r
     expect(await backend.read(SCOPE)).toMatchObject({ text: once })
     expect(host.release).toHaveBeenCalledOnce()
   })
+
+  it('lets go of the return once its complete fallback replaces itself within the cap, while the backend still refuses', async () => {
+    const A_LARGE = 'a'.repeat(70_000)
+    await store.hydrateNativeChatComposerDrafts()
+    store.updateNativeChatComposerDraft(SCOPE, { text: A_LARGE, images: [] }, 'immediate')
+    await store.nativeChatComposerDraftWritesSettled()
+    const parent = await released()
+    const journal = 'orca:nativeChatComposerDraftJournal:v1'
+    const journaled: string[] = []
+    const setItem = localStorage.setItem.bind(localStorage)
+    vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === journal) {
+        journaled.push(value)
+      }
+      setItem(key, value)
+    })
+    // Only the draft's backend refuses, from here to the end.
+    refuseDraftWrites(true)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    parent.resolve({ state: 'unknown' })
+    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+    // With no backend recovery and no further edit, the receipt goes once its replacement fits.
+    await vi.waitFor(() => expect(heldReceipt()).toBe(false))
+    await store.nativeChatComposerDraftWritesSettled()
+    const once = `${A_LARGE}\n\n${HELD}`
+    expect(text() === once).toBe(true)
+    // The receipt-bearing complete fallback and its receipt-free replacement each fit the whole
+    // cap; the two together would not.
+    const fallback = journaled.find((value) => value.includes('"handbacks"')) ?? ''
+    const replacement = localStorage.getItem(journal) ?? ''
+    expect(fallback.length).toBeLessThan(256_000)
+    expect(replacement.length).toBeLessThan(256_000)
+    expect(fallback.length + replacement.length).toBeGreaterThan(256_000)
+    const [entry] = JSON.parse(replacement)
+    expect(entry.draft.text === once).toBe(true)
+    expect(entry.draft).not.toHaveProperty('handbacks')
+    // An actual same-O Retry settles with nothing new issued.
+    host.status.mockReset()
+    host.status.mockResolvedValue({ state: 'unknown' })
+    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+    await store.nativeChatComposerDraftWritesSettled()
+    expect(text() === once).toBe(true)
+    expect(heldReceipt()).toBe(false)
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(host.release).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
 })

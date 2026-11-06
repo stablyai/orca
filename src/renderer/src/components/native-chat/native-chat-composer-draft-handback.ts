@@ -2,6 +2,7 @@
 // durability is proved by a concrete commit or journal entry and heard through one subscription.
 
 import { currentDraftScope } from './native-chat-launch-draft-source'
+import { nativeChatDraftBaseKnown } from './native-chat-composer-draft-base'
 import {
   journalNativeChatComposerDraftAddition,
   writeNativeChatComposerDraftJournalBatch
@@ -9,7 +10,6 @@ import {
 import {
   dirtyScopes,
   isNativeChatMemoryOnlyDraft,
-  load,
   nextSavedAt,
   notifyDraftAppend,
   records,
@@ -25,7 +25,6 @@ import {
   draftCustody,
   handbackReceiptKey,
   hasHandbackReceipt,
-  knownDraftBases,
   pruneNativeChatDraftSourcePaths,
   scopeCustody,
   withHandbackReceipts,
@@ -87,7 +86,7 @@ export function adoptIdentifiedNativeChatDraftInput(
   if (journaled) {
     custody.durable.add(key)
   }
-  if (!load.complete && !knownDraftBases.has(scopeKey)) {
+  if (!nativeChatDraftBaseKnown(scopeKey)) {
     // Whether this input was already adopted is unknown until the scope's base is read.
     custody.pending.push(handback)
     void hydrateNativeChatComposerDrafts()
@@ -197,7 +196,7 @@ export function retireNativeChatDraftReceipt(
   if (!custody || !hasHandbackReceipt(custody.handbacks, receipt)) {
     // The draft's known base no longer holds it; once no journal copy can replay it, it is done.
     if (
-      (load.complete || knownDraftBases.has(scopeKey)) &&
+      nativeChatDraftBaseKnown(scopeKey) &&
       writeNativeChatComposerDraftJournalBatch({ discharge: [[scopeKey, key]] }).written
     ) {
       deliverNativeChatDraftReceiptCompletion(scopeKey, key)

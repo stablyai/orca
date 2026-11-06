@@ -5,6 +5,7 @@ import type * as DraftHandback from './native-chat-composer-draft-handback'
 import type * as DraftCache from './native-chat-draft-cache'
 import type * as DraftMove from './native-chat-composer-draft-move'
 import type * as Staging from './native-chat-draft-attachment-staging'
+import type * as DraftMemory from './native-chat-composer-draft-memory'
 import {
   createMemoryNativeChatComposerDraftStorage,
   type NativeChatComposerDraftStorage
@@ -16,6 +17,7 @@ type Renderer = {
   drafts: typeof DraftCache
   move: typeof DraftMove
   staging: typeof Staging
+  memory: typeof DraftMemory
 }
 
 const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
@@ -58,7 +60,8 @@ async function reload(
     handback: await import('./native-chat-composer-draft-handback'),
     drafts: await import('./native-chat-draft-cache'),
     move: await import('./native-chat-composer-draft-move'),
-    staging: await import('./native-chat-draft-attachment-staging')
+    staging: await import('./native-chat-draft-attachment-staging'),
+    memory: await import('./native-chat-composer-draft-memory')
   }
   loaded.push(instance)
   if (options.hydrate !== false) {
@@ -389,6 +392,40 @@ describe('an identified hand-back before its draft’s saved base is known', () 
         expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\ntyped meanwhile\n\n${B}`)
       }
       localStorage.clear()
+    }
+  })
+
+  it('keeps a base its own read resolved through failed loads, and nothing of it once loading gives up', async () => {
+    vi.useFakeTimers()
+    try {
+      const tab = await reload({
+        hydrate: false,
+        storage: { loadAll: () => Promise.reject(new Error('database busy')) }
+      })
+      tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      // Its own read put B beside stored A while the load fails: a later attempt must not replace it.
+      expect(text(tab)).toBe(`${A}\n\n${B}`)
+      expect(tab.memory.load.fenced.has(SCOPE)).toBe(true)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(tab.memory.load.fenced.has(SCOPE)).toBe(true)
+      // The last attempts fail too: no load can publish any more, so nothing fences the scope.
+      await vi.advanceTimersByTimeAsync(35_000)
+      expect(tab.memory.load).toMatchObject({ hydrated: true, complete: false })
+      expect(tab.memory.load.fenced.size).toBe(0)
+      // Its live draft is its resolved base: another return joins it once.
+      const next = 'Then run the build'
+      tab.handback.adoptIdentifiedNativeChatDraftInput(
+        SCOPE,
+        RECEIPT_2,
+        { text: next, images: [] },
+        []
+      )
+      expect(text(tab)).toBe(`${A}\n\n${B}\n\n${next}`)
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\n${B}\n\n${next}`)
+    } finally {
+      vi.useRealTimers()
     }
   })
 
