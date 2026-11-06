@@ -1,3 +1,10 @@
+export type AgentWorkspaceTrustSettings = {
+  /** Off: never pre-trust. On: pre-trust per each repo's decision (asked on first desktop launch). Defaults on. */
+  agentWorkspaceTrustEnabled: boolean
+  /** One-shot guard: repos saved before per-repo trust decisions were pinned to pre-trust. */
+  agentWorkspaceTrustExistingReposMigrated?: boolean
+}
+
 /** Per-repo answer to "should Orca pre-trust this repo for agents?"; worktrees share their repo's answer. */
 export type AgentWorkspaceTrustDecision = 'pre-trust' | 'agent-asks'
 
