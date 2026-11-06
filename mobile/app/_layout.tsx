@@ -34,6 +34,7 @@ import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
+import { startDeviceStore } from '../src/device-store/device-store'
 
 export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
 
@@ -178,7 +179,8 @@ export default function RootLayout() {
     await Promise.all([appearanceReady, languageReady])
     // Let the language switch commit before revealing the first frame.
     await new Promise((resolve) => requestAnimationFrame(resolve))
-    await SplashScreen.hideAsync()
+    // The device store starts once the splash is gone, whether or not hiding it succeeded.
+    await SplashScreen.hideAsync().finally(startDeviceStore)
   }, [])
 
   return (
