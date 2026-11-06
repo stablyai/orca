@@ -1,10 +1,11 @@
 // Startup never installs a managed runtime; missing installations must fail before spawn.
 
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPreSpawnError,
-  launchPreparationFailure,
-  type StructuredAgentSessionAcquireInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+  launchPreparationFailure
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 

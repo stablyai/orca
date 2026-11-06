@@ -9,7 +9,7 @@ describe('side chat commands', () => {
   it.each(['model', 'goal'])('preserves multiline /%s message passthrough', async (name) => {
     const setOption = vi.fn(async () => true)
     const runConversationCommand = vi.fn(async () => ({ accepted: true, error: null }))
-    const setThreadGoalObjective = vi.fn(async () => true)
+    const changeThreadGoal = vi.fn(async () => true)
     const text = `/${name} first line\nsecond line`
     expect(isStructuredAgentSessionComposerCommand(text, 'codex', undefined, true)).toBe(false)
     expect(
@@ -19,12 +19,12 @@ describe('side chat commands', () => {
         setOption,
         conversationCommands: ['compact'],
         runConversationCommand,
-        setThreadGoalObjective
+        changeThreadGoal
       })
     ).toEqual({ handled: false, accepted: false, error: null })
     expect(setOption).not.toHaveBeenCalled()
     expect(runConversationCommand).not.toHaveBeenCalled()
-    expect(setThreadGoalObjective).not.toHaveBeenCalled()
+    expect(changeThreadGoal).not.toHaveBeenCalled()
   })
 
   it('keeps multiline compact instructions on the host command path with side chats enabled', async () => {

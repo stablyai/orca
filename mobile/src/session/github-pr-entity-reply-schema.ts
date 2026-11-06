@@ -1,3 +1,4 @@
+import { normalizePRCheckHeadSha } from '../../../src/shared/github/pr-check-head'
 import { z } from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import type { GitHubReaction, PRComment } from '../../../src/shared/github/comment-types'
@@ -236,7 +237,8 @@ const checkDetailSchema = z
     conclusion: salvagedOptional('conclusion', z.enum(CHECK_RUN_CONCLUSION)),
     url: prText('url'),
     checkRunId: prCount('checkRunId'),
-    workflowRunId: prCount('workflowRunId')
+    workflowRunId: prCount('workflowRunId'),
+    observedHeadSha: z.unknown().optional().transform(normalizePRCheckHeadSha)
   })
   .transform((check): PRCheckDetail => ({
     name: check.name,
@@ -244,7 +246,8 @@ const checkDetailSchema = z
     conclusion: check.conclusion ?? null,
     url: check.url ?? null,
     checkRunId: check.checkRunId,
-    workflowRunId: check.workflowRunId
+    workflowRunId: check.workflowRunId,
+    observedHeadSha: check.observedHeadSha
   }))
 
 export const prChecksSchema = salvagingArray(checkDetailSchema)

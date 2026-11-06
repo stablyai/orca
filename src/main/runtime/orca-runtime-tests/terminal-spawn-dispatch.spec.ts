@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 
 // `agent.launch` settles a launch as failed only when its create threw before this hook ran.

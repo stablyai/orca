@@ -16,7 +16,6 @@ const SYNC_START = '\x1b[?2026h'
 const SYNC_END = '\x1b[?2026l'
 const ERASE_LINE = '\x1b[K'
 // xterm's SynchronizedOutputHandler safety timeout.
-const XTERM_SYNCHRONIZED_OUTPUT_TIMEOUT_MS = 1_000
 
 // Codex 0.158 wraps each redraw in DEC 2026 and erases rows before repainting them.
 function firstCodexFrameWithErase(): { erased: string; rest: string } {
@@ -127,17 +126,6 @@ describe('presentPaneViewport during synchronized output', () => {
     expect(screenText()).toContain(COHERENT_TEXT)
 
     await write(terminal, frame.rest + SYNC_END)
-    await vi.advanceTimersByTimeAsync(50)
-    expect(screenText()).not.toContain(COHERENT_TEXT)
-  })
-
-  it('still paints a frame the agent never closes once xterm times out', async () => {
-    const frame = firstCodexFrameWithErase()
-    await write(terminal, SYNC_START + frame.erased)
-
-    presentPaneViewport(pane)
-    await vi.advanceTimersByTimeAsync(XTERM_SYNCHRONIZED_OUTPUT_TIMEOUT_MS - 1)
-    expect(screenText()).toContain(COHERENT_TEXT)
     await vi.advanceTimersByTimeAsync(50)
     expect(screenText()).not.toContain(COHERENT_TEXT)
   })

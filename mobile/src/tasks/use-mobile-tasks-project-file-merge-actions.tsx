@@ -300,13 +300,15 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
       const nextState = item.source.state === 'closed' ? 'open' : 'closed'
       const isCurrent = claimPublication(item)
       try {
+        const target = requireGitHubTaskTarget(item.source)
         const updated =
           item.source.type === 'issue'
             ? githubIssueUpdate.interpret(
                 await withGitHubTargetOperation({
                   client,
                   params: { repo: `id:${item.source.repoId}` },
-                  ownerRepo: requireGitHubTaskTarget(item.source).repository,
+                  ownerRepo: target.repository,
+                  issueTarget: target,
                   send: (selected, exact, options) =>
                     githubIssueUpdate.request(
                       selected,
@@ -324,7 +326,7 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
                 await githubPullRequestStateUpdate.request(client, {
                   repo: `id:${item.source.repoId}`,
                   prNumber: item.source.number,
-                  prRepo: requireGitHubTaskTarget(item.source).repository,
+                  prRepo: target.repository,
                   updates: { state: nextState }
                 })
               )

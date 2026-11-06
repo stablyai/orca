@@ -92,12 +92,41 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
   )
 }
 
+export type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>
+
+/** Whether `acpModelListingForRelease` needs the installed version. */
+export function acpListingDependsOnRelease(discovery: AcpModelDiscovery): boolean {
+  return discovery.kind === 'command' && discovery.supportsVersion !== undefined
+}
+
+/** How the installed release lists; null when only its chats can. */
+export function acpModelListingForRelease(
+  discovery: AcpModelDiscovery,
+  version: string | null
+): AcpModelListing | null {
+  if (discovery.kind === 'unavailable') {
+    return null
+  }
+  if (discovery.kind !== 'command' || !discovery.supportsVersion) {
+    return discovery
+  }
+  if (version !== null && discovery.supportsVersion(version)) {
+    return discovery
+  }
+  return discovery.otherReleasesListInSession
+    ? { kind: 'session', listingNamesConfiguredModel: discovery.listingNamesConfiguredModel }
+    : null
+}
+
 export type AcpLaunchSpec = {
   agent: TuiAgent
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
-  args(input: { fullAccess: boolean; pluginDir: string | null }): string[]
+  /** `model` is the chat's saved model, passed only to specs that launch with it. */
+  args(input: { fullAccess: boolean; pluginDir: string | null; model?: string }): string[]
+  /** The ACP model option cannot name every selection the CLI resolves, so the launch line carries it. */
+  launchesWithModel?: true
   /** Applied after the account and user environment. */
   env: Readonly<Record<string, string>>
   /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
@@ -187,7 +216,7 @@ function openCodeLaunchSpec(
     ...row,
     // No bypass flag; full access approves permission requests individually.
     args: () => ['acp'],
-    // Disable unsupported question forms: 1.x waits forever; 2.x drops them.
+    // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,
@@ -231,8 +260,16 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'omp',
   command: 'omp',
   // Full access approves permission requests individually.
-  args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
-  env: {},
+  args: ({ pluginDir, model }) => [
+    'acp',
+    ...(pluginDir ? ['--plugin-dir', pluginDir] : []),
+    ...(model ? ['--model', model] : [])
+  ],
+  // ACP takes listed provider/id values only; the CLI also resolves roles, fallbacks and :level.
+  launchesWithModel: true,
+  // Answering forms marks the session as having a UI, so `pty: true` bash would open a TUI
+  // overlay ACP cannot draw and fail; OMP's own headless modes set this too.
+  env: { PI_NO_PTY: '1' },
   dialect: OMP_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>

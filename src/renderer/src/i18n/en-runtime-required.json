@@ -869,8 +869,6 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "ImportedWorktreesVisibilityLine": {
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
           "hiding_one": "Hiding {{count}} discovered worktree",
           "hiding_other": "Hiding {{count}} discovered worktrees",
           "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
@@ -935,6 +933,8 @@
           "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
           "hideChildWorkspaces_one": "Hide {{count}} child workspace",
           "hideChildWorkspaces_other": "Hide {{count}} child workspaces",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "showChildWorkspaces_one": "Show {{count}} child workspace",
           "showChildWorkspaces_other": "Show {{count}} child workspaces"
         },
@@ -1325,6 +1325,7 @@
         "importFailedTryClosing": "Could not import cookies from {{browser}}. Try closing {{browser}} first.",
         "importFailedWithLog": "Could not import cookies from {{browser}}: {{detail}}. Details were written to {{logPath}}.",
         "invalidBrowserProfile": "Invalid browser profile name.",
+        "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "noCookies": "No cookies found in {{browser}}.",
         "noValidCookies": "No valid cookies found in {{browser}}.",
         "notAuthorized": "Not authorized",
@@ -1483,6 +1484,7 @@
         "headerTotal_other": "{{count}} background tasks",
         "monitor": "Background monitor",
         "monitoring": "Monitoring background tasks",
+        "outputFile": "Output: {{value0}}",
         "reasonBlocked": "failed",
         "reasonWaiting": "needs approval",
         "stateBlocked": "blocked",
@@ -1594,11 +1596,14 @@
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
+        "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
         "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+        "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "notSignedIn": "{{agent}} is not signed in.",
+        "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
@@ -1620,6 +1625,8 @@
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
+        "sideChatSourceUnsaved": "The source chat has no saved history. Send a message there before opening a side chat.",
+        "sideChatUnsupported": "This version of {{agent}} cannot open side chats. Update it on the host and try again.",
         "signInFirst": "Sign in first.",
         "signInThenRunCommand": "Sign in, then run /{{command}} again.",
         "signInThenSend": "Sign in, then send your message again.",
@@ -1641,6 +1648,7 @@
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "goalControl": {
+        "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
@@ -1651,6 +1659,7 @@
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
+        "forkedFrom": "Forked from",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -1662,6 +1671,10 @@
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "plan": "Plan",
         "stoppedBeforeStart": "Stopped manually"
+      },
+      "openedPullRequests": {
+        "many_one": "Opened {{count}} pull request",
+        "many_other": "Opened {{count}} pull requests"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -1929,7 +1942,15 @@
           "selectionVanishedCount_one": "{{count}} selected workspace no longer exists.",
           "selectionVanishedCount_other": "{{count}} selected workspaces no longer exist.",
           "selectionWithheldCount_one": "{{count}} selected workspace is hidden by the current filters and was deselected.",
-          "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected."
+          "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
+          "workspaceCount_one": "{{count}} workspace",
+          "workspaceCount_other": "{{count}} workspaces"
+        },
+        "confirm": {
+          "deleteTitle_one": "Delete {{count}} workspace?",
+          "deleteTitle_other": "Delete {{count}} workspaces?",
+          "deletingTitle_one": "Deleting {{count}} workspace",
+          "deletingTitle_other": "Deleting {{count}} workspaces"
         },
         "scan": {
           "multipleErrorsCount_one": "Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.",

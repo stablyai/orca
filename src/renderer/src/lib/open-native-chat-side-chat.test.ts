@@ -111,13 +111,13 @@ it('keeps same-text side questions with different picked skill files independent
     expect(mocks.begin).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        plan: expect.objectContaining({ skills: one })
+        plan: expect.objectContaining({ promptSkills: one })
       })
     )
     expect(mocks.begin).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        plan: expect.objectContaining({ skills: two })
+        plan: expect.objectContaining({ promptSkills: two })
       })
     )
   } finally {

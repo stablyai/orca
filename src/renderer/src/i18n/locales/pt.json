@@ -705,10 +705,8 @@
       "offTerminal": "Prefere o terminal? Ele continua com suporte completo. Seus agentes continuam abrindo nele até você escolher Chat.",
       "onIntro": "A interface de chat deixou de ser experimental e agora faz parte do Orca. Seus agentes continuam abrindo como chats, com mensagens formatadas, recursos visuais e imagens.",
       "onTerminal": "O terminal também continua com suporte completo. Volte qualquer agente para ele quando quiser.",
-      "changeInSettings": "Altere quando quiser em <link>Configurações → Agentes</link>.",
       "stayInTerminal": "Continuar no terminal",
       "cta": "Usar a interface de chat",
-      "saveFailed": "Não foi possível ativar a interface de chat. Escolha Chat em Configurações → Agentes.",
       "demoTabTitle": "Explicar o login",
       "demoPrompt": "Mostre como o login funciona",
       "demoReply": "O login começa em {{file}}: o navegador envia para /login, o servidor verifica a senha e cria uma sessão, depois redireciona você para o app. Este é o fluxo:",
@@ -1801,7 +1799,9 @@
         "cb4d287238": "Nome do servidor",
         "3affe7de3a": "Cole uma URL de pareamento de um servidor Orca que este navegador possa acessar.",
         "e3bcd082ac": "Conectar ao Orca",
-        "mobileScopeRejected": "Este código QR concede acesso limitado (mobile). Para usar o app web completo, abra o link de acesso do navegador em Configurações → Ambientes de Execução → Compartilhar este servidor Orca → Novo Link."
+        "mobileScopeRejected": "Este código QR concede acesso limitado (mobile). Para usar o app web completo, abra o link de acesso do navegador em Configurações → Ambientes de Execução → Compartilhar este servidor Orca → Novo Link.",
+        "replaceSavedServer": "Este link conecta a um servidor diferente de \"{{name}}\" ({{endpoint}}). Conecte-se apenas se confiar no endpoint abaixo.",
+        "keepSavedServer": "Manter servidor salvo"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "O Histórico de Sessões do Agente não está disponível para este host de execução.",
@@ -2880,7 +2880,6 @@
           "ff92d15436": "O Orca vai avisá-lo quando os agentes terminarem ou precisarem de ajuda.",
           "b054332836": "Configurar notificações",
           "f396db9f20": "Deixe com a sua cara",
-          "322fc50a18": "O Orca funciona com todo agente de CLI. Escolha o que você vai usar mais. Troque quando quiser.",
           "198b148b3c": "Escolha seu agente padrão",
           "windowsTerminalTitle": "Definir padrões do terminal do Windows",
           "windowsTerminalSubtitle": "Escolha o Shell PADRÃO para novos painéis e como o clique com o botão direito se comporta no terminal.",
@@ -6510,7 +6509,7 @@
             "agentsRead": "Receber avisos quando o status de um agente mudar"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
-          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede e executar outros programas.",
+          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
           "uiWarning": "Executa o código do publicador dentro do Orca para desenhar sua visualização. O Orca mostra o que ele pode acessar e pergunta antes de ativá-lo."
         },
         "SparsePresetSettingsSection": {
@@ -12154,9 +12153,6 @@
           "hiding_one": "Ocultando {{count}} worktree descoberta",
           "hiding_other": "Ocultando {{count}} worktrees descobertas",
           "hiding_many": "Ocultando {{count}} worktrees descobertas",
-          "hidingInRepo_one": "Ocultando {{count}} worktree descoberta em {{repo}}",
-          "hidingInRepo_other": "Ocultando {{count}} worktrees descobertas em {{repo}}",
-          "hidingInRepo_many": "Ocultando {{count}} worktrees descobertas em {{repo}}",
           "keepHiddenAriaLabel_one": "Manter {{count}} worktree descoberta oculta para {{repo}}; recupere-a pelo menu do projeto",
           "keepHiddenAriaLabel_other": "Manter {{count}} worktrees descobertas ocultas para {{repo}}; recupere-as pelo menu do projeto",
           "keepHiddenAriaLabel_many": "Manter {{count}} worktrees descobertas ocultas para {{repo}}; recupere-as pelo menu do projeto",
@@ -14709,6 +14705,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "O host de execução salvo não corresponde mais a esta configuração do projeto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "As configurações de inicialização do agente exigem uma nova sessão a cada execução."
         }
       },
       "TaskPage": {
@@ -14907,7 +14906,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Precisa de revisão",
         "7698af5263": "Meus",
         "94f0339621": "Atribuído a mim",
         "c2268a9982": "Todos",
@@ -15007,6 +15005,8 @@
         "loadGitHubWorkFailed": "Falha ao carregar o trabalho do GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Minhas tarefas",
         "startWorkspaceFromMr": "Iniciar espaço de trabalho a partir da MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espaço de trabalho a partir da issue {{number}}",
@@ -15237,8 +15237,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "ex.: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Comando personalizado",
-            "4b2fc4b80c": "Esforço de raciocínio",
-            "be8917699e": "Modelo",
             "560d4feb00": "Personalizado",
             "29d119fe95": "Agente",
             "f9382b48a1": "Ativar autor de IA",
@@ -17481,7 +17479,6 @@
             "e8b3741ff7": "Ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Selecionar {{value0}}",
             "b771c92598": "Excluir selecionados",
             "7eee951968": "Escaneando espaços de trabalho",
@@ -17490,7 +17487,6 @@
             "b2c1331844": "Excluir Espaços de Trabalho Inativos",
             "7f451a3e2c": "Não foi possível ignorar a sugestão de limpeza",
             "662b8ec3f8": "Falha na varredura de limpeza de espaços de trabalho",
-            "4d0b72481c": "Ignorar",
             "9cc26c019d": "Remover",
             "0e2d235c63": "Varredura de espaços de trabalho pronta",
             "4a35c08764": "Revisar",
@@ -17498,9 +17494,6 @@
             "1d3503357d": "Você pode fechar isto e voltar enquanto a exclusão continua.",
             "4c2990886e": "{{value0}}/{{value1}} excluídos",
             "86ba852118": "{{value0}}, {{value1}} falharam",
-            "deletingCount": "Excluindo espaços de trabalho: {{value0}}",
-            "deleteCount": "Excluir espaços de trabalho: {{value0}}?",
-            "selectedForDeletionCount": "Selecionados para exclusão: {{value0}}",
             "deleteButtonCount": "Excluir {{value0}}",
             "archivedStatus": "Arquivado",
             "74f6c16279": "Voltar"
@@ -17515,7 +17508,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Contexto",
             "flagsLabel": "Flags",
             "collapseDetails": "Recolher detalhes",
@@ -18119,7 +18111,6 @@
                 "06e10d7356": "Encerrar emulador",
                 "e7a0d1897e": "Início",
                 "6bd8dff42a": "Girar",
-                "3d836b879c": "Escolher emulador",
                 "81b3571a07": "Conectar",
                 "868c0f2938": "Processando…"
               }
@@ -18284,6 +18275,8 @@
               "25349b66fc": "Novo Arquivo Markdown",
               "784812ca24": "Abra uma aba de navegador no espaço de trabalho ativo.",
               "892bfa9339": "Nova Aba do Navegador",
+              "splitChatRight": "Dividir Chat à Direita",
+              "splitChatDown": "Dividir Chat para Baixo",
               "verbs": {
                 "newBrowser": "novo navegador",
                 "newBrowserTab": "nova aba do navegador",
@@ -18297,6 +18290,10 @@
                 "newTerminal": "novo terminal",
                 "newTerminalTab": "nova aba de terminal",
                 "newShell": "nova shell",
+                "splitChatRight": "dividir chat à direita",
+                "splitChatDown": "dividir chat para baixo",
+                "chatPaneRight": "painel de chat à direita",
+                "chatPaneBelow": "painel de chat abaixo",
                 "terminalTab": "aba de terminal",
                 "createWorktree": "criar worktree",
                 "addWorktree": "adicionar worktree",
@@ -18306,18 +18303,8 @@
                 "removeWorktree": "remover worktree",
                 "trashWorktree": "descartar worktree",
                 "addQuickCommand": "adicionar comando rápido",
-                "newQuickCommand": "novo comando rápido",
-                "splitChatRight": "dividir chat à direita",
-                "newChatRight": "novo chat à direita",
-                "chatPaneRight": "painel de chat à direita",
-                "splitChatDown": "dividir chat para baixo",
-                "newChatBelow": "novo chat abaixo",
-                "chatPaneBelow": "painel de chat abaixo"
-              },
-              "splitChatRight": "Dividir Chat à Direita",
-              "splitChatRightDescription": "Abra um novo chat em um painel dividido à direita.",
-              "splitChatDown": "Dividir Chat para Baixo",
-              "splitChatDownDescription": "Abra um novo chat em um painel dividido abaixo."
+                "newQuickCommand": "novo comando rápido"
+              }
             }
           },
           "palette": {
@@ -20033,12 +20020,6 @@
       "useKnownId": "Usar o ID de usuário conhecido \"{{value0}}\""
     },
     "native-chat": {
-      "sideChat": {
-        "new": "Nova conversa paralela",
-        "badge": "btw",
-        "failed": "Não foi possível abrir uma conversa paralela.",
-        "title": "Conversa paralela"
-      },
       "taskList": {
         "title": "Tarefas",
         "completed": "Concluída",
@@ -20059,8 +20040,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferenças",
-        "hideDiff": "Ocultar diferenças",
         "changedFiles_one": "{{count}} arquivo alterado",
         "changedFiles_other": "{{count}} arquivos alterados",
         "changedFiles_many": "{{count}} arquivos alterados"
@@ -20101,6 +20080,9 @@
       "composer": {
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
+        "previewQueue": "Colocar na fila",
+        "previewSteer": "Orientar",
+        "previewSteerQueued": "Orientar o próximo",
         "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",
@@ -21057,6 +21039,19 @@
         "hostUnavailable": "O host do anexo está indisponível. Reconecte-se e tente novamente.",
         "connectionChanged": "A conexão mudou. Feche este anexo e abra-o novamente.",
         "readFailed": "Não foi possível ler este anexo no host. Reconecte-se e tente novamente. O arquivo pode ter sido removido ou alterado."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Falha ao copiar",
+        "copyIdentity": "Copiar {{value0}}",
+        "folder": "Pasta",
+        "mainCheckout": "Checkout principal",
+        "worktree": "Worktree"
+      },
+      "sideChat": {
+        "new": "Nova conversa paralela",
+        "badge": "btw",
+        "failed": "Não foi possível abrir uma conversa paralela.",
+        "title": "Conversa paralela"
       }
     },
     "tab": {
@@ -21105,9 +21100,7 @@
         "browse": {
           "noSizes": "Nenhum tamanho de espaço de trabalho medido ainda.",
           "noSizesDescription": "Os tamanhos aparecem após o uso de disco ser medido.",
-          "measureSizes": "Verificar",
           "measureSizesTitle": "Verificar tamanhos dos espaços de trabalho",
-          "measureSizesDescription": "Verifique o uso de disco para comparar, ordenar e filtrar espaços de trabalho por tamanho.",
           "sizeOnDisk": "Tamanho em disco: {{value0}}",
           "checkingGitRow": "Verificando status do git",
           "searchPlaceholder": "Pesquisar nome, repositório, branch, caminho, host",
@@ -21461,6 +21454,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
+        "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
+        "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
+        "scrollToLatestOnSendSearchPosition": "posição",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
@@ -21473,8 +21469,14 @@
         "shellEnvSearchVariables": "variáveis de ambiente",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "proxy",
-        "sideChatPaneTitle": "Agrupar conversas paralelas num painel",
-        "sideChatPaneCopy": "Reúne as conversas paralelas deste espaço de trabalho num painel dividido. Quando desativado, as novas abrem junto ao separador de origem; os painéis existentes são mantidos."
+        "idleStopTitle": "Parar agentes inativos após",
+        "idleStopCopy": "Encerra o agente de um chat quando o chat fica inativo por esse tempo, para liberar memória. O chat continua e sua próxima mensagem inicia o agente de novo. Escolha Nunca para agentes que continuam trabalhando em segundo plano entre os turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tempo limite",
+        "idleStopSearchKeepAlive": "manter ativo",
+        "idleStopNever": "Nunca",
+        "sideChatPaneCopy": "Reúne as conversas paralelas deste espaço de trabalho num painel dividido. Quando desativado, as novas abrem junto ao separador de origem; os painéis existentes são mantidos.",
+        "sideChatPaneTitle": "Agrupar conversas paralelas num painel"
       }
     },
     "jiraIssueAssigneeField": {
@@ -21616,7 +21618,10 @@
       "workerAutoClose": {
         "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
-        "keepOpen": "Manter aberto"
+        "keepOpen": "Manter aberto",
+        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "temporaryBadge": "Temporário"
       }
     },
     "wslHostMark": {

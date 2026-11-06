@@ -1,7 +1,8 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
@@ -19,7 +20,7 @@ import type {
   DelegatedMobileDeviceSyncResult
 } from '../../../shared/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'

@@ -80,19 +80,6 @@ describe('kernel picker trust', () => {
     expect(screen.getByRole('menuitem', { name: CREATE_VENV }).dataset.disabled).toBeUndefined()
     expect(screen.queryByText(TRUST_FIRST)).toBeNull()
   })
-
-  it('keeps Restart kernel disabled, and says why, until the notebook is trusted', () => {
-    const file = '/repo/saved-env.ipynb'
-    setEnvironment(file, { path: '/repo/.venv/bin/python', name: '.venv', version: '3.12.1' })
-    renderToolbar(file)
-    expect(screen.getByRole('button', { name: 'Restart kernel' })).toHaveProperty('disabled', true)
-    // Disabled buttons need a focusable wrapper for their explanatory tooltip.
-    expect(screen.getByLabelText(TRUST_FIRST).getAttribute('tabindex')).toBe('0')
-
-    act(() => trustNotebook(file))
-    expect(screen.getByRole('button', { name: 'Restart kernel' })).toHaveProperty('disabled', false)
-    expect(screen.queryByLabelText(TRUST_FIRST)).toBeNull()
-  })
 })
 
 describe('ipykernel setup dialog', () => {

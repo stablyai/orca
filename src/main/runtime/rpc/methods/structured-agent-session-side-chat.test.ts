@@ -12,15 +12,15 @@ import {
   createRestTestRig,
   REST_TEST_CALLER,
   type RestTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import {
   HOST_TEST_SESSION as SOURCE,
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { call } from './structured-agent-session-rpc.test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { call } from './structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
 import type { StructuredAgentSessionCreateIntentInput } from '../../agent-session/structured-agent-session-create-adoption'
 
 let rig: RestTestRig
@@ -151,6 +151,24 @@ it('delivers /btw’s question once to the child across a replayed create', asyn
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
   expect(await rig.host.journalSnapshot(SOURCE)).toEqual(before)
+})
+
+it('publishes the child tab even when its first question cannot be confirmed', async () => {
+  vi.spyOn(rig.host, 'send').mockRejectedValueOnce(new Error('first message response lost'))
+  const publishStructuredAgentSessionTab = vi.fn().mockResolvedValue(undefined)
+  const input = create(true)
+  const result = await call('agentSession.create', input, client, {
+    ...runtime,
+    publishStructuredAgentSessionTab
+  })
+  expect(publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionId: CHILD, workspaceId: 'workspace-1' })
+  )
+  expect(result).toMatchObject({
+    ok: true,
+    result: { ok: false, refusal: { details: { reason: 'outcomeUnknown' } } }
+  })
+  expect(rig.store.getRecord(CHILD)?.sideChat?.sourceSessionId).toBe(SOURCE)
 })
 
 it('refuses a combined resume and side-chat request before starting another child', async () => {

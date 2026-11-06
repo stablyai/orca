@@ -22,6 +22,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
+  sideChatUnsupported:
+    'This version of {{agent}} cannot open side chats. Update it on the host and try again.',
+  sideChatSourceUnsaved:
+    'The source chat has no saved history. Send a message there before opening a side chat.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
@@ -102,7 +106,13 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeEffortInvalid:
     'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+  modelNotSelected:
+    '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
+  modelUnavailableUpdate:
+    "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
+  pluginInputRequired:
+    '{{agent}} stopped because the "{{plugin}}" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.',
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',
   attachmentTooLarge: 'An image on this message is too large, so the message was not sent.',
@@ -182,6 +192,7 @@ export type AgentSessionFailureCopyValues = {
   installedVersion?: string
   minimumVersion?: string
   agent?: string
+  plugin?: string
   command?: string
   loginCommand?: string
   slashCommand?: string

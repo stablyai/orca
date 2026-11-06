@@ -2,6 +2,7 @@ import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentSessionFirstMessage,
+  StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/structured-agent-session-create'
 import {
@@ -57,6 +58,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
   sideChatOf?: string
+  forkFrom?: StructuredAgentSessionForkSource
   firstMessage?: StructuredAgentSessionFirstMessage
   explicitLaunchOptions?: Readonly<Record<string, string>>
   optionsMode?: 'replace-model-selection'
@@ -72,7 +74,8 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom, firstMessage, optionsMode, options, sideChatOf } = intent.params
+  const { envelope, resumeFrom, forkFrom, sideChatOf, firstMessage, optionsMode, options } =
+    intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
@@ -86,6 +89,7 @@ export function structuredAgentLaunchRecordFor(
     expectedRuntimeFence: envelope.expectedRuntimeFence,
     ...(resumeFrom ? { resumeFrom } : {}),
     ...(sideChatOf ? { sideChatOf } : {}),
+    ...(forkFrom ? { forkFrom } : {}),
     ...(firstMessage ? { firstMessage } : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
@@ -128,6 +132,7 @@ export function validRecord(value: unknown): value is Omit<
   } = value
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
   const sideChatOf = 'sideChatOf' in value ? value.sideChatOf : undefined
+  const forkFrom = 'forkFrom' in value ? value.forkFrom : undefined
   const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
   const failedAt = 'failedAt' in value ? value.failedAt : undefined
   const firstMessage = 'firstMessage' in value ? value.firstMessage : undefined
@@ -154,11 +159,29 @@ export function validRecord(value: unknown): value is Omit<
       value.explicitLaunchOptions === undefined ||
       isAgentSessionOptions(value.explicitLaunchOptions)) &&
     (createMessageSupport === undefined || typeof createMessageSupport === 'boolean') &&
+    (forkFrom === undefined ||
+      (validForkSource(forkFrom) &&
+        resumeFrom === undefined &&
+        options === undefined &&
+        optionsMode === undefined)) &&
     (resumeFrom === undefined ||
       (typeof resumeFrom === 'object' &&
         resumeFrom !== null &&
         'providerSessionId' in resumeFrom &&
         typeof resumeFrom.providerSessionId === 'string'))
+  )
+}
+
+function validForkSource(value: unknown): value is StructuredAgentSessionForkSource {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'sessionId' in value &&
+    typeof value.sessionId === 'string' &&
+    value.sessionId.length > 0 &&
+    'throughItemId' in value &&
+    typeof value.throughItemId === 'string' &&
+    value.throughItemId.length > 0
   )
 }
 

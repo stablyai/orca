@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { htmlRendersAsText } from './comment-markdown-unknown-html-as-text'
 import { splitMarkdownTopLevelBlocks, type MarkdownBlockSplit } from './markdown-top-level-blocks'
 
 const REPLY = [
@@ -72,6 +73,51 @@ describe('splitMarkdownTopLevelBlocks', () => {
   ])('leaves a document with %s whole, however it arrived', (_name, source) => {
     expect(cut(source)).toEqual([source])
     expect(streamed(source, 2)).toEqual([source])
+  })
+
+  describe('when unknown HTML renders as text', () => {
+    const rendersAsText = (html: string): boolean =>
+      htmlRendersAsText(html, new Set(['b', 'sub', 'details']))
+    function streamedAsText(source: string): string[] {
+      let split: MarkdownBlockSplit | null = null
+      for (let end = 2; end < source.length + 2; end += 2) {
+        split = splitMarkdownTopLevelBlocks(
+          source.slice(0, end),
+          split,
+          true,
+          undefined,
+          undefined,
+          rendersAsText
+        )
+      }
+      return (split?.blocks ?? []).map((block) => block.text)
+    }
+
+    it.each([
+      ['a type parameter', 'A Vec<T> of Promise<void>.\n\nAfter.\n', 2],
+      ['an unknown tag block', '<example>\n\nInside.\n\n</example>\n', 3]
+    ])('keeps cutting a document with %s', (_name, source, blocks) => {
+      expect(streamedAsText(source)).toHaveLength(blocks)
+      expect(streamedAsText(source).join('')).toBe(source)
+    })
+
+    it.each([
+      ['a kept tag', 'Before <sub>low</sub>.\n\nAfter.\n'],
+      ['a kept tag beside an unknown one', 'A <example><b>bold</b>.\n\nAfter.\n'],
+      [
+        'bold the HTML parser carries out of a table',
+        '<b><table><tr><td>one</b></td></tr></table>\n\nAfter.\n'
+      ],
+      ['a comment', '<!-- a --!><b>oops -->\n\nAfter.\n'],
+      ['a malformed kept tag', '<details title=a<>\n\nAfter **x**\n']
+    ])('leaves a document with %s whole', (_name, source) => {
+      expect(streamedAsText(source)).toEqual([source])
+    })
+
+    it('leaves raw unknown HTML whole when it does not render as text', () => {
+      expect(cut('<select>\n\nAfter **bold**.\n')).toHaveLength(1)
+      expect(cut('A Vec<T>.\n\nAfter.\n')).toHaveLength(1)
+    })
   })
 
   it('starts over when the source is replaced rather than appended to', () => {

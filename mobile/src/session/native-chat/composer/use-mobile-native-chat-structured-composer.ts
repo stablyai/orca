@@ -3,6 +3,7 @@ import type { AgentSessionConversationCommand } from '../../../../../src/shared/
 import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
 import type { MobileNativeChatFileAttachments } from './use-mobile-native-chat-file-attachments'
 import type { useMobileStructuredSessionCommands } from '../../use-mobile-structured-session-commands'
+import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -15,11 +16,12 @@ export function useMobileNativeChatStructuredComposer(args: {
   sideChat?: boolean
   compactInstructions?: boolean
   files: MobileNativeChatFileAttachments
+  threadGoal: MobileStructuredThreadGoal | null
 }): MobileNativeChatStructuredComposer | null {
-  const { structured, acceptsFiles, compactInstructions, files } = args
+  const { structured, acceptsFiles, compactInstructions, files, threadGoal } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
-  const { files: pendingFiles, attachFiles, removeFiles } = files
+  const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const catalog = useMemo(
     () => ({
@@ -37,14 +39,21 @@ export function useMobileNativeChatStructuredComposer(args: {
             catalog,
             onSlashMenuOpen: refresh,
             onSlashMenuDemand: setMenuOpen,
-            ...(acceptsFiles ? { onAttachFiles: () => void attachFiles() } : {}),
+            onAttachFiles: acceptsFiles ? () => void attachFiles() : undefined,
+            onAttachPastedText:
+              acceptsFiles && attachPastedText
+                ? (text: string) => void attachPastedText(text)
+                : undefined,
             files: pendingFiles,
-            onRemoveFile: (id: string) => removeFiles([id])
+            onRemoveFile: (id: string) => removeFiles([id]),
+            threadGoal
           }
         : null,
     [
+      threadGoal,
       acceptsFiles,
       attachFiles,
+      attachPastedText,
       catalog,
       pendingFiles,
       refresh,

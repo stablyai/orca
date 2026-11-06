@@ -114,7 +114,7 @@ describe('Codex side conversations', () => {
     const request = vi.fn(async (_method: string) => ({
       thread: { id: 'child', historyMode: 'paginated' }
     }))
-    const opened = await openCodexThread({ request }, launch, 2000)
+    const opened = await openCodexThread({ request }, { ...launch, model: 'gpt-6.1-sol' }, 2000)
     expect(opened.threadId).toBe('child')
     expect(request.mock.calls.map(([method]) => method)).toEqual([
       'thread/fork',
@@ -126,6 +126,7 @@ describe('Codex side conversations', () => {
       {
         threadId: 'parent',
         cwd: '/workspace',
+        model: 'gpt-6.1-sol',
         excludeTurns: true
       },
       { timeoutMs: 2000 }
@@ -147,12 +148,18 @@ describe('Codex side conversations', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
-  it('does not fall back to starting or resuming when the provider cannot fork', async () => {
-    const error = new CodexAppServerRequestError('thread/fork', -32601, 'Unsupported')
-    const request = vi.fn().mockRejectedValue(error)
-    await expect(openCodexThread({ request }, launch, 2000)).rejects.toBe(error)
-    expect(request).toHaveBeenCalledOnce()
-  })
+  it.each([
+    [-32601, 'Method not found', 'sideChatUnsupported'],
+    [-32600, 'no rollout found for thread id parent', 'sideChatSourceUnsaved']
+  ])(
+    'maps fork refusal %s without starting or resuming another thread',
+    async (code, message, reason) => {
+      const error = new CodexAppServerRequestError('thread/fork', code, message)
+      const request = vi.fn().mockRejectedValue(error)
+      await expect(openCodexThread({ request }, launch, 2000)).rejects.toMatchObject({ reason })
+      expect(request).toHaveBeenCalledOnce()
+    }
+  )
 
   it('honors the selected policy on subsequent resumes instead of overriding it', async () => {
     const request = vi.fn(async () => ({ thread: { id: 'child' } }))

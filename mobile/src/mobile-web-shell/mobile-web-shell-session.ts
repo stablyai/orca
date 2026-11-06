@@ -153,7 +153,7 @@ function onManifestRead(
   )
 }
 
-// Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount without deletion; unavailable isolation is terminal.
+// Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount per painted page, without deletion; unavailable isolation is terminal.
 // Retired document reports cannot interrupt recovery; profile failures can end startup before ready.
 function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): MobileWebShellStep {
   if (session.state.kind !== 'ready' && reason !== 'host-profile-unreadable') {
@@ -259,14 +259,21 @@ export function reduceMobileWebShellSession(
       return reducePageDocumentLifecycle(session, event, (failed) =>
         onShellFailed(failed, 'document-load-failed')
       )
-    case 'page-ready':
     case 'page-painted':
+      // A painted remount refills the budget; only a loss before paint walls.
+      return step(
+        session,
+        session.state.kind === 'ready'
+          ? { ...pageDocumentStatePatch(session, event), remountedOnce: false }
+          : {}
+      )
+    case 'page-ready':
     case 'page-back-claim':
       return step(session, pageDocumentStatePatch(session, event))
     case 'layout-changed':
       return onLayoutChanged(session, event.wide)
     case 'retry-pressed':
-      // Only explicit retry resets recovery latches; reconnect must not grant another remount.
+      // Only explicit retry resets both latches; reconnect must not grant another remount.
       return session.gates === null
         ? step(session, {
             retriedOnce: false,

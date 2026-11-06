@@ -39,6 +39,7 @@ export function describeRelayHosts(
         label: host.label,
         health: host.health,
         relay: relayVerdict(host.health, answer),
+        ...(host.installationId ? { installationId: host.installationId } : {}),
         ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
         ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
       }

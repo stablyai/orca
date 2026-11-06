@@ -6,9 +6,15 @@ import type { StructuredAgentLaunchOptions } from './structured-agent-session-la
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
-  scope: Pick<StructuredAgentLaunchOptions, 'resumeFrom' | 'executionHostId' | 'sideChatOf'> = {}
+  scope: Pick<
+    StructuredAgentLaunchOptions,
+    'resumeFrom' | 'executionHostId' | 'sideChatOf' | 'forkFrom'
+  > = {}
 ): string {
-  const { resumeFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  const { resumeFrom, forkFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  if (forkFrom) {
+    return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.throughItemId}`
+  }
   // A conversation id names a transcript on one host; never join a resume running on another.
   return scope.sideChatOf
     ? `${agent}:${worktreeId}:side:${executionHostId}:${scope.sideChatOf}`

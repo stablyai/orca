@@ -1,5 +1,5 @@
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionAcquisitionRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   providerDiagnostic,
   withProviderDiagnostic
@@ -34,14 +34,15 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-/** Only this thread-specific resume error proves no rollout; archived resumes report "is archived". */
+/** Only a thread-specific missing rollout proves the source history is unavailable. */
 function isCodexNoRolloutError(
   error: unknown,
-  threadId: string
+  threadId: string,
+  method: 'thread/resume' | 'thread/fork'
 ): error is CodexAppServerRequestError {
   return (
     isCodexAppServerRequestError(error) &&
-    error.method === 'thread/resume' &&
+    error.method === method &&
     error.code === -32600 &&
     error.message.endsWith(`no rollout found for thread id ${threadId}`)
   )
@@ -93,15 +94,36 @@ export async function openCodexThread(
   let opened: unknown
   if (launch.forkThreadId && !resumeThreadId) {
     throwIfSignalAborted(signal)
-    opened = await connection.request(
-      'thread/fork',
-      {
-        threadId: launch.forkThreadId,
-        ...threadSettings,
-        excludeTurns: true
-      },
-      { timeoutMs }
-    )
+    try {
+      opened = await connection.request(
+        'thread/fork',
+        {
+          threadId: launch.forkThreadId,
+          ...threadSettings,
+          ...(launch.model ? { model: launch.model } : {}),
+          excludeTurns: true
+        },
+        { timeoutMs }
+      )
+    } catch (error) {
+      throwIfSignalAborted(signal)
+      if (!isCodexAppServerRequestError(error) || error.method !== 'thread/fork') {
+        throw error
+      }
+      const reason =
+        error.code === -32601
+          ? 'sideChatUnsupported'
+          : isCodexNoRolloutError(error, launch.forkThreadId, 'thread/fork')
+            ? 'sideChatSourceUnsaved'
+            : null
+      if (!reason) {
+        throw error
+      }
+      throw withProviderDiagnostic(
+        Object.assign(new AgentSessionAcquisitionRefusal(error.message, reason), { cause: error }),
+        providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+      )
+    }
   } else if (!resumeThreadId) {
     opened = await startThread()
   } else {
@@ -134,7 +156,7 @@ export async function openCodexThread(
           providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
         )
       }
-      if (!isCodexNoRolloutError(error, resumeThreadId)) {
+      if (!isCodexNoRolloutError(error, resumeThreadId, 'thread/resume')) {
         throw error
       }
       if (!launch.supersedeIfUnsaved) {

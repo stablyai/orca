@@ -194,6 +194,7 @@
       "loadFailed": "Failed to load host.",
       "saveFailed": "Failed to save host.",
       "title": "Edit host",
+      "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
       "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
@@ -290,7 +291,10 @@
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
       "useReset": "Use reset",
-      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
+      "otherAgents": "Other agents",
+      "fableWindow": "Fable",
+      "mcpWindow": "MCP"
     }
   },
   "agentHistory": {
@@ -517,9 +521,7 @@
       "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
     },
     "listFooter": {
-      "hostPickerTitle": "Open Tasks On",
-      "automationsHeading": "Automations",
-      "automationsHostPickerTitle": "Open Automations On"
+      "hostPickerTitle": "Open Tasks On"
     },
     "listHeader": {
       "desktopsHeading": "Desktops"
@@ -539,13 +541,59 @@
       "pairDesktop": "Pair a desktop"
     },
     "jumpBackIn": {
-      "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
     },
     "sections": {
       "tasks": "Tasks",
       "tasksSubtitle": "Browse your issues and reviews"
+    },
+    "stats": {
+      "heading": "Your stats",
+      "agentsSpawned": "Agents spawned",
+      "agentTime": "Agent time",
+      "prsCreated": "PRs created",
+      "days": "{{days}}d",
+      "hours": "{{hours}}h",
+      "minutes": "{{minutes}}m"
+    },
+    "agents": {
+      "heading": "Agents",
+      "activeCount": "{{count}} active",
+      "showFewer": "Show fewer",
+      "showAll": "Show all {{count}}"
+    },
+    "automationsTab": {
+      "newAutomation": "New automation",
+      "lastStatus": "Last: {{status}}",
+      "paused": "Paused",
+      "showFor": "Show automations for",
+      "emptyTitle": "Schedule agent work",
+      "pairDesktop": "Pair a desktop to view and run automations.",
+      "updateDesktop": "Update Orca on {{desktop}} to use automations.",
+      "connectDesktop": "Connect {{desktop}} to view and run automations.",
+      "noAutomations": "No automations yet",
+      "createHint": "Tap + to schedule an agent.",
+      "scheduled": "Scheduled",
+      "toggleFailed": "Couldn’t update {{name}}"
+    },
+    "tabs": {
+      "automations": "Automations",
+      "feed": "Feed",
+      "chooseDesktop": "{{desktop}}, choose another desktop",
+      "usage": "Usage"
+    },
+    "usage": {
+      "refresh": "Refresh usage",
+      "showUsageFor": "Show usage for",
+      "pairDesktop": "Pair a desktop to see agent account usage.",
+      "connectDesktop": "Connect {{desktop}} to see agent account usage.",
+      "addAccounts": "Add accounts from desktop Settings → Accounts.",
+      "updatedJustNow": "Updated just now",
+      "updatedAgo": "Updated {{time}} ago",
+      "active": "Active",
+      "openAccountsHint": "Opens this desktop’s accounts",
+      "emptyTitle": "No usage yet"
     }
   },
   "hooks": {
@@ -587,11 +635,18 @@
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",
+      "rename": "Rename",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
       "deleteAnyway": "Delete Anyway"
+    },
+    "workspaceRenameSheet": {
+      "title": "Rename Workspace",
+      "emptyUsesBranch": "Leave empty to use the branch name.",
+      "emptyUsesFolder": "Leave empty to use the folder name.",
+      "failed": "Couldn't rename the workspace. {{reason}}"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -736,7 +791,7 @@
     "onboardingPage": {
       "sessionViewTitle": "How should sessions open?",
       "notificationsTitle": "Don’t miss when an agent needs you",
-      "sessionViewDescription": "Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.",
+      "sessionViewDescription": "Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default any time in Settings → Chat UI.",
       "notificationsDescription": "Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.",
       "notificationsDisclosure": "Delivered through Orca’s push service after your desktop has been idle for 3 minutes. Change this anytime in Settings.",
       "useChatUi": "Use Chat UI",
@@ -1039,11 +1094,13 @@
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
       "pairingTemporarilyUnavailable": "Pairing temporarily unavailable",
-      "updateDesktopHint": "Update desktop Orca and sign in to connect from anywhere",
+      "sameNetworkOnlyHint": "Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again",
       "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",
-      "hostActions": "Actions for {{title}}"
+      "hostActions": "Actions for {{title}}",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
     },
     "htmlPreview": {
       "previewRenderedHtml": "Preview rendered HTML",
@@ -1266,7 +1323,16 @@
     },
     "markdownBlocks": {
       "copyCode": "Copy code",
-      "openImage": "Open image"
+      "openImage": "Open image",
+      "wrapLines": "Wrap lines",
+      "disableLineWrap": "Disable line wrap"
+    },
+    "markdownCallout": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"
@@ -1327,6 +1393,14 @@
       "noMatches": "No files match",
       "current": "current",
       "viewedFile": "{{path}} viewed"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files",
+        "partial": "Partial diff",
+        "showMoreFiles": "Show {{count}} more"
+      }
     }
   },
   "pullRequest": {
@@ -1805,6 +1879,10 @@
       "previewFile": "Preview file {{name}}",
       "unavailable": "Unavailable on mobile"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copy Name",
+      "copyRelativePath": "Copy Relative Path"
+    },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
     },
@@ -1887,7 +1965,6 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
-      "editingAttributed": "Editing message · {{attribution}}",
       "editing": "Editing message"
     },
     "accessoryKeys": {
@@ -1996,6 +2073,7 @@
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
       "renameTerminal": "Rename Terminal",
+      "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close"
     },
@@ -2096,13 +2174,8 @@
       "agent": "Agent"
     },
     "agentMessageAttribution": {
-      "messageFromUnnamed": "Message from an agent",
-      "fromUnnamed": "From an agent",
       "unnamedSender": "an agent",
-      "messageFromMore": "Message from {{sender}} +{{count}}",
-      "fromMore": "From {{sender}} +{{count}}",
-      "messageFrom": "Message from {{sender}}",
-      "from": "From {{sender}}"
+      "fromSender": "From"
     },
     "backgroundTask": {
       "monitoring": "Monitoring background tasks",
@@ -2115,6 +2188,7 @@
       "monitor": "Background monitor",
       "task": "Background task",
       "detailsUnavailable": "Task details are unavailable for this session.",
+      "outputFile": "Output: {{value0}}",
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agents",
       "countShell_one": "{{count}} shell",
@@ -2287,9 +2361,6 @@
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
-    },
-    "tabCard": {
-      "editor": "Editor"
     },
     "terminalTabAgent": {
       "newBrowser": "New Browser",
@@ -2464,6 +2535,7 @@
       "backgroundTaskNotStopped": "The background task wasn't stopped.",
       "backgroundTasksNotStopped": "The background tasks weren't stopped.",
       "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "hostFault": "Orca ran into a problem, so this didn't go through.",
       "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
       "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
@@ -2488,6 +2560,8 @@
       "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
       "claudeEffortInvalid": "Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.",
       "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+      "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
+      "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
       "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -2565,7 +2639,9 @@
       "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
       "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
       "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
-      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent."
+      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
+      "sideChatUnsupported": "This version of {{agent}} cannot open side chats. Update it on the host and try again.",
+      "sideChatSourceUnsaved": "The source chat has no saved history. Send a message there before opening a side chat."
     },
     "writeNotice": {
       "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -2721,6 +2797,11 @@
       "fileFailed": "Couldn't load file preview",
       "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
     },
+    "linkActionSheet": {
+      "openInOrca": "Open in Orca browser",
+      "openInBrowser": "Open in system browser",
+      "copyLink": "Copy link"
+    },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Waiting for desktop..."
     },
@@ -2740,6 +2821,11 @@
       "sendSteer": "Steer",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
+    },
+    "contextUsage": {
+      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
+      "title": "Context",
+      "estimated": "Estimated from the last response."
     },
     "composerAttachments": {
       "file": "File",
@@ -2809,7 +2895,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
-      "notReportedMarker": "Not reported"
+      "notReportedMarker": "Not reported",
+      "moreModels": "More models",
+      "fewerModels": "Fewer models"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Sent to the agent — not confirmed"
@@ -2886,13 +2974,16 @@
       "responding": "Agent is responding"
     },
     "message": {
-      "copyMessage": "Copy message"
+      "copyMessage": "Copy message",
+      "forkFromResponse": "Fork from this response",
+      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",
-      "selectText": "Select text"
+      "selectText": "Select text",
+      "rewind": "Rewind to here"
     },
     "notice": {
       "stoppedManually": "Stopped manually",
@@ -2902,7 +2993,10 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+      "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+      "forkedFrom": "Forked from",
+      "signIn": "Sign in",
+      "signInHint": "Opens a terminal on the computer running this chat"
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -2966,6 +3060,13 @@
       "remote": "Orca on {{machine}} stopped while this response was in progress.",
       "canContinue": "You can continue in this conversation.",
       "unnamedServer": "the remote server"
+    },
+    "interruptedContinue": {
+      "failed": "Couldn't continue this chat. Try again, or send a message.",
+      "explanation": "Continue, and the agent first checks whether its last step finished."
+    },
+    "sendError": {
+      "dismiss": "Dismiss"
     },
     "toolActivity": {
       "count_one": "{{count}} tool call",
@@ -3038,7 +3139,14 @@
       "windowCredits": "extra usage",
       "reachedNamed": "{{agent}} hit its {{window}} limit.",
       "reached": "{{agent}} hit its usage limit.",
-      "resetsAt": "It resets at {{when}}."
+      "switchAccount": "Switch Account",
+      "autoContinueCancelFailed": "Couldn't cancel automatic continuation. Try again.",
+      "autoContinueCancel": "Don't continue",
+      "statusResetAt": "Reset at {{time}}",
+      "statusResetsAt": "Resets at {{time}}",
+      "statusContinuesShortly": "Orca continues shortly",
+      "statusContinuesThen": "Orca continues then",
+      "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
       "reconnecting": "Reconnecting…",
@@ -3046,7 +3154,18 @@
       "prompt": "Ask anything, @ to mention files, / for commands"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Close image"
+      "closeImage": "Close image",
+      "imageActions": "Image actions",
+      "copyImage": "Copy image",
+      "saveImage": "Save image",
+      "share": "Share…",
+      "imageCopied": "Image copied",
+      "imageSaved": "Image saved",
+      "copyFailed": "Couldn't copy image",
+      "saveFailed": "Couldn't save image",
+      "shareFailed": "Couldn't share image",
+      "photosAccessDenied": "Allow Orca to add photos in Settings",
+      "imageTooLarge": "This image is too large"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",
@@ -3118,8 +3237,54 @@
       "taskFromCoordinator": "Task from coordinator",
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
-      "messageFrom": "Message from",
-      "showMore": "Show more"
+      "messageFrom": "Message from"
+    },
+    "fork": {
+      "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
+      "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
+      "failed": "{{agent}} couldn't fork this chat. {{detail}}",
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} is reconnecting…",
+      "stopped": "{{hostName}} is stopped. Start it on your computer.",
+      "server": "The server",
+      "unavailable": "{{hostName}} isn't available from your phone. Open one of its projects on your computer."
+    },
+    "goal": {
+      "chip": "Goal",
+      "exitMode": "Exit goal mode",
+      "placeholder": "Describe your goal, define measurable outcomes for best results",
+      "pursuing": "Pursuing goal",
+      "set": "Goal set",
+      "paused": "Paused goal",
+      "blocked": "Goal blocked",
+      "limited": "Goal limited",
+      "clear": "Clear goal",
+      "expand": "Show full goal",
+      "collapse": "Hide full goal",
+      "attachmentsUnsupported": "Remove attachments before setting a goal.",
+      "pause": "Pause",
+      "resume": "Resume"
+    },
+    "rewind": {
+      "title": "Rewind to here?",
+      "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
+      "confirm": "Rewind",
+      "unsupported": "This chat can't go back to an earlier message.",
+      "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
+      "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+      "staleEpoch": "The conversation changed. Review the latest messages and try again.",
+      "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
+      "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
+      "providerRefused": "The agent couldn't go back to this message.",
+      "proofMismatch": "The agent's history didn't match this chat. Check the conversation before continuing.",
+      "outcomeUnknown": "Orca couldn't confirm whether the conversation went back to an earlier message. It checks before your next message is sent.",
+      "refused": "Orca couldn't go back to this message. Check the conversation before continuing.",
+      "unavailable": "Wait for the chat to finish connecting.",
+      "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
+      "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
+      "pending": "Wait for the conversation to go back to the earlier message."
     }
   },
   "sourceControl": {
@@ -3771,7 +3936,8 @@
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields",
       "loading": "Loading project…",
-      "noMatches": "No project items match."
+      "noMatches": "No project items match.",
+      "linkedPullRequestsOverflow": "+{{count}} more"
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",
@@ -4438,6 +4604,7 @@
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Runs on the selected host. Keep that host available at the scheduled time.",
       "host": "Host",
       "pairedHost": "Paired host",
+      "chooseHost": "Automations on {{host}}, choose another host",
       "selectedServerUnavailable": "Selected server (unavailable)",
       "addANameInstructionsAndAnAgent": "Add a name, instructions and an agent.",
       "chooseAnExistingWorkspace": "Choose an existing workspace.",
@@ -4466,9 +4633,12 @@
       "unknownResult": "Unknown result",
       "notReported": "Not reported",
       "searchOptions": "Search options",
-      "scheduleAgentWorkAndViewRuns": "Schedule agent work and view runs",
       "task": "Task",
-      "review": "Review"
+      "review": "Review",
+      "discardChangesTitle": "Discard changes?",
+      "discardChangesMessage": "Unsaved edits to this automation will be lost.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",

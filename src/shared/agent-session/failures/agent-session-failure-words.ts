@@ -90,11 +90,9 @@ function startRetry(
   if (retryControl) {
     return []
   }
-  return [
-    command
-      ? say('runCommandAgain', { command })
-      : say(messageSubmitted === false ? 'sendToTryAgain' : sendAgain)
-  ]
+  return command
+    ? [say('runCommandAgain', { command })]
+    : [say(messageSubmitted === false ? 'sendToTryAgain' : sendAgain)]
 }
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
@@ -155,6 +153,8 @@ const FAILURE_SENTENCES = {
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
   savedConversationMissing: (context, _fact, _surface, say) =>
     joinSentences([say('savedConversationMissing', agent(say, context)), say('startNewChat')]),
+  sideChatUnsupported: namingAgent('sideChatUnsupported'),
+  sideChatSourceUnsaved: (_context, _fact, _surface, say) => say('sideChatSourceUnsaved'),
   startFailed: couldNot('couldNotStart'),
   notSignedIn: (context, fact, surface, say) => notSignedInSentence(context, fact, say, surface),
   cliMissing: (context, _fact, _surface, say) => cliMissingSentence(context, say),
@@ -196,8 +196,13 @@ const FAILURE_SENTENCES = {
     ),
   restartFailed: couldNot('couldNotRestart'),
   claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
-  modelUnavailable: (context, fact, _surface, say) =>
-    say('modelUnavailable', { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }),
+  modelUnavailable: (context, fact, _surface, say) => {
+    const words = { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }
+    return fact.agentUpdate
+      ? say('modelUnavailableUpdate', { ...words, minimumVersion: fact.agentUpdate })
+      : say('modelUnavailable', words)
+  },
+  modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
       say,
@@ -206,6 +211,11 @@ const FAILURE_SENTENCES = {
       fact.detail,
       agent(say, context)
     ),
+  pluginInputRequired: (context, fact, _surface, say) =>
+    say('pluginInputRequired', {
+      ...agent(say, context),
+      plugin: fact.detail?.text ?? 'unnamed'
+    }),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
       ? attachmentProblemSentence(say, context, fact.attachment)

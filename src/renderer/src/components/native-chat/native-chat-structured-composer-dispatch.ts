@@ -14,7 +14,10 @@ export async function dispatchNativeChatStructuredComposerText(
   draftText: string,
   attachments: readonly NativeChatComposerImageAttachment[] = [],
   skills: readonly AgentJournalSkillRef[] = [],
-  intent: Pick<StructuredAgentSessionSendRequest, 'alternate'> = {},
+  intent: Pick<
+    StructuredAgentSessionSendRequest,
+    'alternate' | 'prepareAttachments' | 'onSettled'
+  > = {},
   onPending?: () => void
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
   // Number image chips by their attachment order in this message.

@@ -10,12 +10,12 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
-import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-transition'
+import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   continuedOutsideRecordId,
   createHistoryCatchUpBatch
-} from '../../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import { createCodexHistoryObservations } from './codex-history-observations'
 import type { HistoryAnchor } from './codex-history-source-facts'
 import {
@@ -32,7 +32,7 @@ import { readCodexSubagentAnnouncements } from '../../structured/background-work
 import {
   endedJournalReasoning,
   withJournalReasoningLifecycle
-} from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+} from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 
 /** Reconcile each completed source group before unique projection into one checked transaction. */
 export function createCodexHistoryImportPlan(input: {

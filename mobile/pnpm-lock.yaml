@@ -203,6 +203,9 @@ importers:
       '@react-native-async-storage/async-storage':
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))
+      '@tanstack/react-query':
+        specifier: 5.105.3
+        version: 5.105.3(@types/react@19.2.18)(react@19.2.8)
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.330
         version: 0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336)
@@ -287,6 +290,9 @@ importers:
       i18next:
         specifier: 26.5.11
         version: 26.5.11(typescript@7.0.2)
+      katex:
+        specifier: 0.18.10
+        version: 0.18.10
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -2764,6 +2770,18 @@ packages:
 
   '@sinonjs/fake-timers@10.3.0':
     resolution: {integrity: sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==}
+
+  '@tanstack/query-core@5.105.3':
+    resolution: {integrity: sha512-v1rbNy7MB/4Akth7CQH+CerV13K7Ok9hAusEsfz4sCjDdu3/kOSJPoWfoB+YjdEX1eBFBWKNAGE5nqZCgdlHDw==}
+
+  '@tanstack/react-query@5.105.3':
+    resolution: {integrity: sha512-dj5hGWZmwoc9NG4enoXuYbiYwb5FxgJYPVv06eUgicMTfEMTRXn08Xv9D/r1V8TfjAv+BpxdvZFzJ1h3hSWZcQ==}
+    peerDependencies:
+      '@types/react': ^18 || ^19
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   '@testing-library/react-native@13.3.3':
     resolution: {integrity: sha512-k6Mjsd9dbZgvY4Bl7P1NIpePQNi+dfYtlJ5voi9KQlynxSyQkfOgJmYGCYmw/aSgH/rUcFvG8u5gd4npzgRDyg==}
@@ -10269,6 +10287,15 @@ snapshots:
   '@sinonjs/fake-timers@10.3.0':
     dependencies:
       '@sinonjs/commons': 3.0.1
+
+  '@tanstack/query-core@5.105.3': {}
+
+  '@tanstack/react-query@5.105.3(@types/react@19.2.18)(react@19.2.8)':
+    dependencies:
+      '@tanstack/query-core': 5.105.3
+      react: 19.2.8
+    optionalDependencies:
+      '@types/react': 19.2.18
 
   '@testing-library/react-native@13.3.3(jest@29.7.0(@types/node@26.6.2)(supports-color@8.1.1))(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react-test-renderer@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:

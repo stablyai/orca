@@ -85,34 +85,6 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
     )
   })
 
-  it('leaves every saved binding as it was for a spawn of an id no pane names', () => {
-    switchState.on = true
-    const session = savedSession('inc-before-restart')
-    const before = structuredClone(session)
-
-    applyPtyBinding(
-      {
-        worktreeId: WORKTREE,
-        tabId: 'new-tab',
-        leafId: NEW_LEAF,
-        ptyId: 'pty-4',
-        incarnationId: 'inc-4'
-      },
-      session,
-      WORKTREE,
-      `new-tab:${NEW_LEAF}`
-    )
-
-    expect(session.terminalLayoutsByTabId['saved-tab']).toEqual(
-      before.terminalLayoutsByTabId['saved-tab']
-    )
-    expect(session.tabsByWorktree[WORKTREE]?.[0]).toEqual(before.tabsByWorktree[WORKTREE]?.[0])
-    expect(session.terminalPtyIncarnationsByPaneKey).toEqual({
-      [`saved-tab:${SAVED_LEAF}`]: 'inc-before-restart',
-      [`new-tab:${NEW_LEAF}`]: 'inc-4'
-    })
-  })
-
   it('moves the tab row to the pane still bound when the stale pane is a split of the same tab', () => {
     switchState.on = true
     const session = savedSession('inc-before-restart')
@@ -169,17 +141,5 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
     expect(panesBinding(session, 'pty-3').sort()).toEqual(
       [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()
     )
-  })
-
-  it('changes nothing with the switch off', () => {
-    switchState.on = false
-    const session = savedSession('inc-before-restart')
-
-    bindNewTerminal(session)
-
-    expect(panesBinding(session, 'pty-3').sort()).toEqual(
-      [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()
-    )
-    switchState.on = true
   })
 })

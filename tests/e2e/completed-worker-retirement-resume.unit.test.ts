@@ -7,10 +7,14 @@ import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceSession } from '../../src/shared/workspace-session/workspace-session-schema'
 import type { TerminalTab } from '../../src/shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../src/shared/worktree/types'
-import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
+import { OrchestrationDb } from '../../src/main/runtime/orchestration/db/orchestration-db'
+import '../../src/main/runtime/orchestration/db/contract-constants'
+import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../src/main/runtime/orchestration/db/dispatch-row-writer'
+import '../../src/main/runtime/orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
-import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/orchestration'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
@@ -308,6 +312,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
   })
   const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockImplementation(async () => {
     closeTerminalTab(ORIGINAL_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
@@ -407,6 +412,7 @@ describe('completed background-worker retirement resume matrix', () => {
     seedWorkspace()
     recordCompletedWorker()
     closeTerminalTab(ORIGINAL_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
@@ -495,6 +501,7 @@ describe('completed background-worker retirement resume matrix', () => {
       makeLayout(ORIGINAL_LEAF_ID, ORIGINAL_PTY_ID)
     )
     closeTerminalTab(HELPER_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true

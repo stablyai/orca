@@ -21,7 +21,7 @@ import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import {
   runtimeVisibleProjectGroups,
   runtimeVisibleRepos
-} from '../runtime/runtime-visible-catalog'
+} from '../runtime/workspaces/catalog/runtime-visible-catalog'
 
 const Place = z.union([
   z.tuple([z.literal('git'), z.string().min(1), z.string().min(1)]),

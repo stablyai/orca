@@ -3,8 +3,12 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../../../structured-worker-identity'
-import { OrchestrationDb } from '../../db'
+} from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { OrchestrationDb } from '../orchestration-db'
+import '../contract-constants'
+import '../messages/mailbox-routing-page'
+import '../dispatch-row-writer'
+import '../attempt-outcome-projection'
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId

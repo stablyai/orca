@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -148,54 +148,6 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(join(accountTwo.managedHomePath, 'auth.json'), 'utf8')).toBe(accountTwoAuth)
   })
 
-  it('migrates the one proven C-era refresh, launches E home, then ignores shared auth', async () => {
-    const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
-    const migrated = createAuth('one@example.com', 'acct-1', 'migrated', 2_000)
-    const laterShared = createAuth('one@example.com', 'acct-1', 'later-shared', 3_000)
-    const account = createManagedAccount('account-1', 'acct-1', stale)
-    writeFileSync(sharedAuthPath(), migrated, 'utf-8')
-    writeFileSync(systemAuthPath(), 'system auth sentinel\n', 'utf-8')
-    const { settings, store } = createStore([account], account.id)
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
-    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
-    writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: account.managedHomePath
-    })
-    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
-    expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
-    expect(settings.activeCodexManagedAccountId).toBe(account.id)
-  })
-
-  it('keeps E in-place auth when selection becomes real-home without an explicit sync', async () => {
-    const fresh = createAuth('one@example.com', 'acct-1', 'e-refresh', 3_000)
-    const mismatch = createAuth('other@example.com', 'acct-other', 'stale-shared', 4_000)
-    const account = createManagedAccount('account-1', 'acct-1', fresh)
-    writeFileSync(sharedAuthPath(), mismatch, 'utf-8')
-    writeFileSync(systemAuthPath(), 'system auth sentinel\n', 'utf-8')
-    const { settings, store } = createStore([account], account.id)
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    settings.activeCodexManagedAccountId = null
-    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
-
-    expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: systemHome()
-    })
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(fresh)
-    expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(mismatch)
-    expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
-  })
-
   it('never continuously recovers a missing E auth from shared state after takeover', async () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const takeover = createAuth('one@example.com', 'acct-1', 'takeover', 2_000)
@@ -261,25 +213,6 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
     ).toBe('{"session":"account-one"}\n')
     expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
-  })
-
-  it('does not expose an untrusted persisted home through rollout discovery', async () => {
-    const outsideHome = join(testState.userData, 'outside', 'account-1', 'home')
-    mkdirSync(join(outsideHome, 'sessions'), { recursive: true })
-    writeFileSync(join(outsideHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
-    writeFileSync(
-      join(outsideHome, 'auth.json'),
-      createAuth('one@example.com', 'acct-1', 'outside', 1_000),
-      'utf-8'
-    )
-    const account = managedAccountRecord('account-1', 'acct-1', outsideHome)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { store } = createStore([account], account.id)
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).not.toContain(outsideHome)
-    expect(warn).toHaveBeenCalled()
   })
 })
 

@@ -132,7 +132,7 @@ async function launchNativeChatSideChat(
       ? {
           prompt: question,
           promptDelivery: 'auto-submit',
-          ...(skills.length > 0 ? { skills } : {})
+          ...(skills.length > 0 ? { promptSkills: skills } : {})
         }
       : {})
   })

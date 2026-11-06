@@ -1,15 +1,16 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/floating-workspace-worktree'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resolveStructuredSideChatSource } from './structured-side-chat-source'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   type RestTestRig
-} from './agent-session-wire/structured-agent-session-rest-test-rig'
+} from './agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import {
   hostTestAttachParams,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD
-} from './agent-session-wire/structured-agent-session-host-test-data'
+} from './agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 let rig: RestTestRig
 beforeEach(async () => {
@@ -55,6 +56,32 @@ it.each(['own', 'ask', 'auto', 'full-access'] as const)(
     expect(rig.store.getRecord(HOST_TEST_SESSION)).toEqual(before)
   }
 )
+
+it('keeps a floating side chat in the source’s pinned directory', async () => {
+  const location = { ...source().location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID }
+  const parent = rig.store.getRecord(HOST_TEST_SESSION)!
+  const getRecord = rig.store.getRecord.bind(rig.store)
+  const read = vi
+    .spyOn(rig.store, 'getRecord')
+    .mockImplementation((id) =>
+      id === HOST_TEST_SESSION
+        ? { ...parent, location, launchDirectory: '/original-folder' }
+        : getRecord(id)
+    )
+  try {
+    expect(resolveStructuredSideChatSource({ ...source(), location })).toMatchObject({
+      hostLaunchDirectory: '/original-folder'
+    })
+    read.mockImplementation((id) =>
+      id === HOST_TEST_SESSION ? { ...parent, location, launchDirectory: undefined } : getRecord(id)
+    )
+    expect(() => resolveStructuredSideChatSource({ ...source(), location })).toThrow(
+      'This chat has no conversation available for a side chat.'
+    )
+  } finally {
+    read.mockRestore()
+  }
+})
 
 it.each(['workspace', 'host', 'agent', 'self'] as const)(
   'refuses an incompatible %s source',

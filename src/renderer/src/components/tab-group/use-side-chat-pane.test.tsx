@@ -68,7 +68,7 @@ vi.mock('@/runtime/structured-agent-session-client', async (original) => ({
   ...(await original<object>()),
   supportsStructuredAgentSessionSideChat: async () => true
 }))
-vi.mock('@/lib/structured-agent-session-host-admission', async (original) => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', async (original) => ({
   ...(await original<object>()),
   admitStructuredLaunchOnHost: async () => ({ kind: 'admitted' })
 }))

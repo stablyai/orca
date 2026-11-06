@@ -9,7 +9,8 @@ import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
@@ -45,32 +46,16 @@ const pendingSideChatCreates = new WeakMap<
   Map<string, StructuredAgentSessionCreateParams>
 >()
 
-function createParamsFor(
-  agent: StructuredAgentId,
-  worktree: string,
-  sideChatOf?: string,
-  question?: string,
-  skills: readonly AgentJournalSkillRef[] = [],
-  permission: SideChatPermission = 'inherit'
-): StructuredAgentSessionCreateParams {
-  return structuredAgentSessionCreateParams({
-    sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
-    worktree,
-    agent,
-    ...(sideChatOf ? { sideChatOf } : {}),
-    ...(sideChatOf && permission === 'read-only'
-      ? { options: { permissionMode: 'read-only' } }
-      : {}),
-    ...(question?.trim()
-      ? {
-          firstMessage: {
-            clientMessageId: structuredSessionOperationId(),
-            body: structuredAgentSessionSendBody(question, [], skills)
-          }
-        }
-      : {}),
-    randomUuid: randomV4Uuid
-  })
+function sideChatOpeningMessage(
+  question: string | undefined,
+  skills: readonly AgentJournalSkillRef[]
+): StructuredAgentSessionCreateParams['firstMessage'] {
+  return question?.trim()
+    ? {
+        clientMessageId: structuredSessionOperationId(),
+        body: structuredAgentSessionSendBody(question, [], skills)
+      }
+    : undefined
 }
 
 function unknownCreateResult(
@@ -110,6 +95,38 @@ export async function createMobileStructuredAgentSession(
   skills: readonly AgentJournalSkillRef[] = [],
   permission: SideChatPermission = 'inherit'
 ): Promise<MobileStructuredAgentLaunchResult> {
+  return launchMobileStructuredChat(client, worktreeId, agent, {
+    sideChatOf,
+    question,
+    skills,
+    permission
+  })
+}
+
+export function createMobileStructuredAgentSessionFork(
+  client: RpcClient,
+  worktreeId: string,
+  agent: StructuredAgentId,
+  forkFrom: StructuredAgentSessionForkSource,
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
+): Promise<MobileStructuredAgentLaunchResult> {
+  return launchMobileStructuredChat(client, worktreeId, agent, { forkFrom, tabPlacement })
+}
+
+async function launchMobileStructuredChat(
+  client: RpcClient,
+  worktreeId: string,
+  agent: StructuredAgentId,
+  options: {
+    sideChatOf?: string
+    question?: string
+    skills?: readonly AgentJournalSkillRef[]
+    permission?: SideChatPermission
+    forkFrom?: StructuredAgentSessionForkSource
+    tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
+  }
+): Promise<MobileStructuredAgentLaunchResult> {
+  const { sideChatOf, question, skills = [], permission, forkFrom, tabPlacement } = options
   const worktree = `id:${worktreeId}`
   if (!sideChatOf) {
     let supportResponse
@@ -170,7 +187,19 @@ export async function createMobileStructuredAgentSession(
   }
   const params =
     (key ? pending?.get(key) : undefined) ??
-    createParamsFor(agent, worktree, sideChatOf, question, skills, permission)
+    structuredAgentSessionCreateParams({
+      sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
+      worktree,
+      agent,
+      sideChatOf,
+      forkFrom,
+      tabPlacement,
+      ...(sideChatOf && permission === 'read-only'
+        ? { options: { permissionMode: 'read-only' } }
+        : {}),
+      firstMessage: sideChatOpeningMessage(question, skills),
+      randomUuid: randomV4Uuid
+    })
   if (key) {
     pending?.set(key, params)
   }
@@ -237,6 +266,14 @@ async function requestMobileStructuredCreate(
       typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
+    }
+    if (
+      params.sideChatOf &&
+      result.refusal.ownerVerdict === 'exited' &&
+      (result.refusal.details?.reason === 'sideChatUnsupported' ||
+        result.refusal.details?.reason === 'sideChatSourceUnsaved')
+    ) {
+      return { kind: 'failed', message: result.refusal.message }
     }
     return classifyCreateRefusal(agent, result.refusal.code, result.refusal.message)
   }

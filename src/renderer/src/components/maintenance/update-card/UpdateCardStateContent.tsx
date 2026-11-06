@@ -60,10 +60,19 @@ export function UpdateCardStateContent({
     )
   }
   if (status.state === 'not-available') {
+    const unsupported = status.unsupportedSystemUpdate
     return (
       <UpdateCheckFeedback
         icon="check"
-        text={translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")}
+        text={
+          unsupported
+            ? translate(
+                'macosUpdateRequirement.settingsStatus',
+                'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
+                { version: unsupported.version, macos: unsupported.minimumMacosVersion }
+              )
+            : translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")
+        }
       />
     )
   }

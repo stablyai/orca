@@ -1,5 +1,5 @@
 import { normalizeExternalBrowserUrl } from '../../../../shared/browser-url'
-import type { UserAgentMetadata } from '../../identity/browser-tab-identity'
+import type { CdpUserAgentMetadata } from '../../identity/browser-tab-identity'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
@@ -60,7 +60,7 @@ export type PendingMainFrameNavigation = {
 /** An empty userAgent clears the CDP override. */
 export type CdpUserAgentOverride = {
   userAgent: string
-  userAgentMetadata?: UserAgentMetadata
+  userAgentMetadata?: CdpUserAgentMetadata
 }
 
 export type CdpUserAgentOverrideOperation = {

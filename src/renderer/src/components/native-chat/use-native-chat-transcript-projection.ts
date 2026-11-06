@@ -8,7 +8,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
-import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
+import { omitNativeChatThreadGoalRows } from '../../../../shared/native-chat/transcript/native-chat-thread-goal-rows'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
 /** Separate conversation/subagent rows, using journal turn placement when available. */

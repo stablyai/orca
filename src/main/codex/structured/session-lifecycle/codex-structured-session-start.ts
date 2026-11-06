@@ -3,11 +3,11 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../shared/abort-signal-reason'
-import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
-} from '../../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+} from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { initializeCodexAppServerConnection } from '../../app-server/codex-app-server-handshake'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import {

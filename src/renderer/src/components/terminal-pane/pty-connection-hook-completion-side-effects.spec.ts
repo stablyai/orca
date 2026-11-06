@@ -146,6 +146,10 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
+      // A known server OS settles the pane's resize model, leaving only completion's subscriber.
+      mockStoreState.runtimeStatusByEnvironmentId = new Map([
+        ['env-1', { status: { hostPlatform: 'linux' as const }, checkedAt: 1 }]
+      ])
       vi.useFakeTimers()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState.agentStatusByPaneKey[paneKey] = {

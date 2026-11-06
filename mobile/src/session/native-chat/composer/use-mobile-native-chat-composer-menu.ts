@@ -6,6 +6,10 @@ import {
   isSkillPickerTriggered
 } from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
 import { applyPickerSuggestion } from '../../../../../src/shared/native-chat/input/native-chat-picker-triggers'
+import {
+  structuredAgentSessionGoalModeDraft,
+  structuredAgentSessionPickEntersGoalMode
+} from '../../../../../src/shared/agent-session/view/structured-agent-session-goal-mode'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import {
   boundedMenuItems,
@@ -41,6 +45,8 @@ export function useMobileNativeChatComposerMenu(input: {
   onPickSkill?: (skill: { token: string; path?: string }) => void
   editing?: boolean
   refuseCommand?: (text: string) => boolean
+  /** Picking `/goal` enters goal mode instead of inserting the command; an edit has no goal mode. */
+  goalMode?: { hostSetsGoals: boolean; enter?: () => void }
   focusField: () => void
 }) {
   const { value, onChangeText, agent, structuredCatalog, filePaths, skillDiscovery } = input
@@ -52,8 +58,8 @@ export function useMobileNativeChatComposerMenu(input: {
 
   const reported = structuredCatalog?.reported
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent ?? 'codex', reported),
-    [agent, reported]
+    () => prepareQueuedMessageEditText(agent ?? 'codex', reported, input.goalMode?.hostSetsGoals),
+    [agent, reported, input.goalMode?.hostSetsGoals]
   )
   const commandAvailable = useMemo(
     () => (input.editing ? (name: string) => acceptsText(`/${name}`) : undefined),
@@ -114,11 +120,17 @@ export function useMobileNativeChatComposerMenu(input: {
   const { onNeedFiles, onNeedSkills, onSlashMenuOpen } = input
   // Scan disk skills only once a token needs them, as desktop does.
   const skillsTriggered = isSkillPickerTriggered(beforeCaret, catalog.profile)
+  // A restored draft's leading skill was never typed here, yet its chip needs the catalog too.
+  const leadingSkillTriggered = isSkillPickerTriggered(
+    value.split(' ', 1)[0] ?? '',
+    catalog.profile
+  )
+  // Each caret trigger still re-asks, so reopening the menu retries a failed scan.
   useEffect(() => {
-    if (skillsTriggered) {
+    if (skillsTriggered || leadingSkillTriggered) {
       onNeedSkills?.()
     }
-  }, [onNeedSkills, skillsTriggered])
+  }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
   const mentionQuery = autocomplete.mode === 'mention' ? autocomplete.query : null
   useEffect(() => {
     if (mentionQuery !== null) {
@@ -157,6 +169,17 @@ export function useMobileNativeChatComposerMenu(input: {
       const next = applyMentionSuggestion(value, cursor, row.path)
       setDraft(next.draft)
       placeCaret(next.caret)
+      return
+    }
+    const enterGoalMode = input.goalMode?.enter
+    if (
+      enterGoalMode &&
+      structuredAgentSessionPickEntersGoalMode(row, input.goalMode?.hostSetsGoals === true)
+    ) {
+      const next = structuredAgentSessionGoalModeDraft(value, cursor, row)
+      setDraft(next.draft)
+      placeCaret(next.caret)
+      enterGoalMode()
       return
     }
     const next = applyPickerSuggestion(value, cursor, row)

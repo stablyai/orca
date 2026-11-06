@@ -4,7 +4,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 /** Whether the terminal belongs to the tab: main holds it there, or, switch-on, in no pane. */
 export function terminalIsOfTab(heldTabId: string | null, parentTabId: string): boolean {

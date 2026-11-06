@@ -7,24 +7,24 @@ import { sendRequest } from '../../../../../cli/runtime/transport'
 import type { RuntimeMetadata } from '../../../../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../../../../shared/runtime-rpc-envelope'
 import { OrchestrationMutationExecutor } from '../../orchestration-mutation-executor'
-import { CLIENT_HISTORY_READER } from '../../../../native-chat/agent-session-wire/agent-session-item-wire-form'
+import { CLIENT_HISTORY_READER } from '../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
-import { STATUS_METHODS } from '../status'
+import { STATUS_METHODS } from '../host-management/status'
 import { eraseRpcMethods } from '../../core'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
-import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { agentMessageDisplayText } from '../../../../../shared/agent-session/agent-message-display-text'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
@@ -54,7 +54,7 @@ import {
   agentMessageHeading,
   agentMessageSenderCanOpen
 } from '../../../../../shared/agent-session/agent-message-presentation'
-import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const h = createOrchestrationRpcHarness()
 let rig: QueuedMessageTestRig | undefined
@@ -526,8 +526,11 @@ it.each([
       const beforeRequests = requests.length
       await expect(
         call('orchestration.taskCreate', { spec: task + '\n'.repeat(100000), run: run.id })
-      ).rejects.toThrow()
-      expect(rejectedFrames).toBe(1)
+      ).rejects.toMatchObject({
+        code: 'invalid_argument',
+        data: { effectsApplied: false }
+      })
+      expect(rejectedFrames).toBe(0)
       expect(requests).toHaveLength(beforeRequests)
       expect(db.listTasks({ runId: run.id })).toHaveLength(beforeWrites)
     }
@@ -666,19 +669,6 @@ it.each([
         body
       })
       expect(projected?.from?.senders[0].agent).toBe('claude')
-      const attributionPath =
-        '../../../../../../mobile/src/session/mobile-agent-message-attribution'
-      const { agentMessageAttribution } = await import(attributionPath)
-      expect(agentMessageAttribution('Message from', projected?.from)).toBe(
-        'Message from Claude Chat'
-      )
-      const queuePath =
-        '../../../../../../mobile/src/session/mobile-structured-queued-message-cards'
-      const { mobileQueuedMessageCards } = await import(queuePath)
-      const [mobileCard] = mobileQueuedMessageCards([queued], [])
-      expect(mobileCard.attribution).toBe('From Claude Chat')
-      expect(mobileCard.line).toBe(task)
-      expect(mobileCard.from.senders[0].agent).toBe('claude')
       const [card] = projectQueuedMessageCards([queued], [], {})
       expect(card.from?.senders[0].agent).toBe('claude')
       expect(queuedMessageCardLine(card)).toBe(task)

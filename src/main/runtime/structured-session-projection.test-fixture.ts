@@ -1,4 +1,4 @@
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 export function structuredSessionProjectionStub<TStore>(store: TStore) {
   return {

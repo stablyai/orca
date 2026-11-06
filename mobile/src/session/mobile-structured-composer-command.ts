@@ -7,7 +7,7 @@ import {
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionComposerCommand,
+  isStructuredAgentSessionHostCommand,
   type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
 } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
@@ -51,10 +51,9 @@ export async function dispatchMobileStructuredCommand(input: {
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (
-    !isStructuredAgentSessionComposerCommand(
+    !isStructuredAgentSessionHostCommand(
       input.text,
-      input.controller.agent,
-      input.controller.sessionCommands,
+      input.controller.changeThreadGoal !== undefined,
       input.controller.openSideChat !== undefined
     )
   ) {

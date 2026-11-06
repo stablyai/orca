@@ -31,6 +31,9 @@ describe('useIpcEvents updater integration', () => {
     } = {
       current: null
     }
+    const targetRemovedListenerRef: { current: ((data: { targetId: string }) => void) | null } = {
+      current: null
+    }
     const storeState = {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
@@ -230,7 +233,11 @@ describe('useIpcEvents updater integration', () => {
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},
-          onDetectedPortsChanged: () => () => {}
+          onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: (listener: (data: { targetId: string }) => void) => {
+            targetRemovedListenerRef.current = listener
+            return () => {}
+          }
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -365,5 +372,10 @@ describe('useIpcEvents updater integration', () => {
 
     expect(setSshConnectionState).toHaveBeenCalledTimes(1)
     expect(setSshConnectionState).toHaveBeenCalledWith('conn-refresh-failure', refreshFailureState)
+
+    // Removal by any client (Settings, CLI, paired client) clears the target's live state.
+    clearRemovedSshTargetState.mockClear()
+    targetRemovedListenerRef.current?.({ targetId: 'conn-1' })
+    expect(clearRemovedSshTargetState).toHaveBeenCalledWith('conn-1')
   })
 })

@@ -5,8 +5,8 @@ import { isAgentChatPermissionChoice } from '../../shared/agent-launch/permissio
 import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-host'
-import type { AgentSessionAttachParams } from './agent-session-wire/structured-agent-session-attach'
+import type { StructuredAgentSessionHost } from './agent-session-wire/host/structured-agent-session-host'
+import type { AgentSessionAttachParams } from './agent-session-wire/acquisition/structured-agent-session-attach'
 import type { StructuredAgentSessionCreateIntentInput } from '../runtime/agent-session/structured-agent-session-create-adoption'
 
 export function structuredSideChatCreateIntent(
@@ -15,7 +15,7 @@ export function structuredSideChatCreateIntent(
     location: AgentSessionExecutionLocation
   }
 ): AgentSessionAttachParams & { hostLaunchDirectory?: string } {
-  if (!input.sideChatOf || input.resumeFrom) {
+  if (!input.sideChatOf || input.resumeFrom || input.forkFrom) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
     })

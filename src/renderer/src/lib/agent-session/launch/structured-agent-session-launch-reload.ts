@@ -43,6 +43,7 @@ export function restorePersistedStructuredLaunchState(
       expectedRuntimeFence: record.expectedRuntimeFence,
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
       ...(record.sideChatOf ? { sideChatOf: record.sideChatOf } : {}),
+      ...(record.forkFrom ? { forkFrom: record.forkFrom } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),
       ...(record.optionsMode ? { optionsMode: record.optionsMode } : {}),

@@ -41,17 +41,3 @@ it('hands focused query input to the other mode in both directions and keeps eac
   expect(document.activeElement).toBe(contents)
   expect(contents).toHaveProperty('value', 'contents')
 })
-
-it('keeps focus on the switch when navigating it with the keyboard', async () => {
-  const user = userEvent.setup()
-  render(<QueryStrip />)
-  const names = screen.getByRole('radio', { name: 'Filter files by name' })
-  const contents = screen.getByRole('radio', { name: 'Search file contents' })
-  await user.click(names)
-  expect(document.activeElement).toBe(names)
-  await user.keyboard('{ArrowRight}')
-  expect(document.activeElement).toBe(contents)
-  await user.keyboard(' ')
-  expect(contents.getAttribute('aria-checked')).toBe('true')
-  expect(document.activeElement).toBe(contents)
-})

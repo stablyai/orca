@@ -17,7 +17,7 @@ import {
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveCodexCommand } from '../../../codex-cli/command'
-import type { StructuredAgentLaunchPartResolver } from '../../../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'

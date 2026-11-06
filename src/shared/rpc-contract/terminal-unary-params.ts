@@ -98,6 +98,8 @@ export const TerminalListParams = z.object({
   includeVisualLayouts: z.boolean().optional(),
   // Readers that never show the output tail drop it; absent includes it, as older hosts always do.
   includePreview: z.boolean().optional(),
+  // Agent sleep asks who else is viewing or typing; older hosts ignore it and report nothing.
+  includeAttention: z.boolean().optional(),
   // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
   // activation sweep); other hosts drop it, as they did before it existed.
   placeUnshownLiveTerminals: z.boolean().optional()
