@@ -6,7 +6,7 @@ import { act, cleanup, render, renderHook, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from '../terminal-pane/pty-transport-types'
+import type { PtyTransport } from '../terminal-pane/pty-transport/pty-transport-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'

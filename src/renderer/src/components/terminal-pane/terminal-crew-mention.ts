@@ -8,7 +8,7 @@ import {
   type CapturedTerminalDropTarget
 } from './input/file-drop/terminal-drop-target'
 import { writeTerminalPastePtyInput } from './input/paste/terminal-pty-paste-writer'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 export async function insertTerminalCrewMention(
   manager: PaneManager,

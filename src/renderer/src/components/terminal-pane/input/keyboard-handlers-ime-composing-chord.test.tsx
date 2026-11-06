@@ -3,7 +3,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from '../pty-transport-types'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import {
   installTerminalImeCompositionRoute,
   XTERM_COMPOSITION_SESSION_END_EVENT,

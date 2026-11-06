@@ -6,7 +6,7 @@ import {
 } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 
 type TerminalPasteRuntimeTransport = {
   getLocalSessionMetadata?: () =>

@@ -7,7 +7,7 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-pas
 import { waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
-import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buffer'
+import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-transport/input/pty-preconnect-input-buffer'
 import { writeTerminalPastePtyInput } from '../input/paste/terminal-pty-paste-writer'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { paneHasStartupWork } from './pane-transport-options'
