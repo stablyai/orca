@@ -15,15 +15,17 @@ import { finalizeRuntimeMobileSessionTabsResult } from '../../../src/main/runtim
 
 function counted<T>(rows: T[]) {
   let visits = 0
-  return {
-    rows: new Proxy(rows, {
-      get(target, key, receiver) {
-        if (typeof key === 'string' && /^\d+$/.test(key)) {
-          visits++
-        }
-        return Reflect.get(target, key, receiver)
+  const observed = [...rows]
+  rows.forEach((row, index) => {
+    Object.defineProperty(observed, index, {
+      get() {
+        visits++
+        return row
       }
-    }),
+    })
+  })
+  return {
+    rows: observed,
     visits: () => visits,
     reset: () => {
       visits = 0
