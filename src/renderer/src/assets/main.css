@@ -1583,7 +1583,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   left: -9px;
-  top: 0;
+  /* Reach up through the margin so the open parent's thread runs straight into its children. */
+  top: -9px;
   bottom: 8px;
   width: 1px;
   background: var(--worktree-card-slot-guide);
@@ -1592,6 +1593,22 @@ html.native-shell .app-layout {
 
 .worktree-card-slot-lineage > * {
   position: relative;
+}
+
+/* An open 2.0 card hangs a line from its title through the rows it owns. */
+.worktree-card-slot-thread {
+  position: relative;
+}
+
+.worktree-card-slot-thread::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 22px;
+  bottom: 3px;
+  width: 1px;
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 16%, transparent);
+  pointer-events: none;
 }
 
 .worktree-card-slot-lineage > *::before {

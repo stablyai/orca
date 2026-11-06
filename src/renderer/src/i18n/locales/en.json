@@ -224,6 +224,8 @@
       "existingAccept": "Add on host"
     },
     "cardSlot": {
+      "openCard": "Show workspace activity",
+      "closeCard": "Hide workspace activity",
       "needsYouLabel": "Waiting on you",
       "failedLabel": "Last turn failed",
       "markedUnread": "Marked unread by you",

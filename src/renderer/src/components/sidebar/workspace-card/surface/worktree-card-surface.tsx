@@ -9,6 +9,7 @@ import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeCo
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
+import { useWorktreeCardOpen } from './worktree-card-open-state'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 
@@ -48,6 +49,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   } = card
   const slotLayout = card.worktreeCardStyle === 'experimental-2'
   const isSleeping = useIsSleepingWorktree(worktree.id)
+  const cardOpen = useWorktreeCardOpen(worktree.id, card.lineageDescendantIdentities)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
@@ -61,7 +63,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     }
   )
   const parentCardContent = slotLayout ? (
-    <WorktreeCardSlotContent card={card} presentation={buildWorktreeCardPresentation(card)} />
+    <WorktreeCardSlotContent
+      card={card}
+      presentation={buildWorktreeCardPresentation(card)}
+      open={cardOpen.open}
+      onToggleOpen={cardOpen.toggle}
+    />
   ) : (
     templateContent
   )
@@ -128,7 +135,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {lineageChildren ? (
+      {lineageChildren && (!slotLayout || cardOpen.open) ? (
         <div
           className={cn(
             'space-y-1',
