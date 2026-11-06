@@ -170,6 +170,9 @@ export function structuredChatNamingDeps(
             }
           })
       if (!target) {
+        if ((shouldExecute && !shouldExecute()) || !settingsCurrent()) {
+          return null
+        }
         const failure = chatNamingFailure('noAgentAvailable')
         logger.warn(failure.error, log)
         return failure
