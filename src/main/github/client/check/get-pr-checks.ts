@@ -152,13 +152,13 @@ async function readPRChecks(
         }
       )
       noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-      const data = JSON.parse(stdout) as {
+      const data: {
         name: string
         state: string
         link: string
         startedAt?: string
         completedAt?: string
-      }[]
+      }[] = JSON.parse(stdout)
       return data.map((d) => ({
         name: d.name,
         status: mapCheckStatus(d.state),
