@@ -1,8 +1,6 @@
 import {
-  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
-  type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -11,12 +9,17 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
+import { attestedLaunchConfig, type PtyLaunchFacts } from '../launch/attested-launch-config'
 
-/** Per slept PTY: the resume records captured, the panes the hook store proves moved on, and
- *  the panes whose Orca launch still runs though a daemon reattach cost main its recipe. */
+function attestedLaunchConfigField(launch: PtyLaunchFacts | undefined, agent: string) {
+  const launchConfig = attestedLaunchConfig(launch, agent)
+  return launchConfig ? { launchConfig } : {}
+}
+
+/** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
   string,
-  { retiredPaneKeys: string[]; records: SleepingAgentSessionRecord[]; recipeLostPaneKeys: string[] }
+  { retiredPaneKeys: string[]; records: SleepingAgentSessionRecord[] }
 >
 
 /** Captures before a host-driven sleep stops its PTYs and persists for the ones proven stopped. */
@@ -34,10 +37,8 @@ export async function captureWorktreeSleepResumeRecords(args: {
   worktreeId: string
   paneKeysByPtyId: ReadonlyMap<string, Iterable<string>>
   /** The agent each PTY was launched as, with its recipe; resume must reuse a custom binary/args. */
-  launchByPtyId: ReadonlyMap<
-    string,
-    { agent: string | null; config: SleepingAgentLaunchConfig | null }
-  >
+  /** Each PTY's launch facts; only a launch main still holds supplies its recipe. */
+  launchByPtyId: ReadonlyMap<string, PtyLaunchFacts | undefined>
   /** Read after each presence probe, so a conversation started during it is the one captured. */
   readRows: () => readonly AgentStatusIpcPayload[]
   checkAgentPresence:
@@ -53,7 +54,6 @@ export async function captureWorktreeSleepResumeRecords(args: {
     })
     const records: SleepingAgentSessionRecord[] = []
     const retiredPaneKeys: string[] = []
-    const recipeLostPaneKeys: string[] = []
     const launch = args.launchByPtyId.get(ptyId)
     for (const { paneKey, tabId } of panes) {
       // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
@@ -87,13 +87,10 @@ export async function captureWorktreeSleepResumeRecords(args: {
         restoreOnTabOpenOnly: true,
         // Why: the SSH host boundary keeps the id off another machine; a WSL relay tag is local transport.
         connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
-        ...(launch?.config && launch.agent === agent ? { launchConfig: launch.config } : {})
+        ...attestedLaunchConfigField(launch, agent)
       })
-      if (!launch?.config && launch?.agent === agent) {
-        recipeLostPaneKeys.push(paneKey)
-      }
     }
-    capture.set(ptyId, { retiredPaneKeys, records, recipeLostPaneKeys })
+    capture.set(ptyId, { retiredPaneKeys, records })
   }
   return capture
 }
@@ -116,16 +113,8 @@ export function applyWorktreeSleepResumeRecords(
       }
     }
     for (const record of entry?.records ?? []) {
-      const previous = next[record.paneKey]
-      // Why only a lost recipe: a typed agent resuming the same conversation never ran the earlier launch.
-      const keptLaunchConfig =
-        entry?.recipeLostPaneKeys.includes(record.paneKey) &&
-        previous?.launchConfig &&
-        previous.agent === record.agent &&
-        agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
-          ? { launchConfig: previous.launchConfig }
-          : {}
-      next[record.paneKey] = { ...record, ...keptLaunchConfig }
+      // Why no earlier record's recipe: only the capture's own attested launch proves which launch ran.
+      next[record.paneKey] = record
       changed = true
     }
   }

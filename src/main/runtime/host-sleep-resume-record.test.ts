@@ -130,6 +130,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     const launchConfig = { agentArgs: '--dangerously-skip-permissions', agentEnv: {} }
     const pty = [...runtime['ptysById'].values()][0]!
     pty.launchAgent = 'claude'
+    pty.launchToken = 'launch-1'
     pty.launchConfig = launchConfig
 
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
@@ -176,28 +177,33 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     }
   )
 
+  // Only a launch main still holds proves the recipe belongs to the agent in the pane now.
   it.each([
-    ['claude', true],
-    ['codex', false]
-  ] as const)('keeps a %s-launched PTY recipe: %s', async (launchAgent, kept) => {
-    const config = { agentCommand: '/opt/claude-custom', agentArgs: '--x', agentEnv: {} }
-    const launchedRow = hookRow({
-      paneKey: PANE_KEY,
-      agentType: 'claude',
-      providerSession: { key: 'session_id', id: SESSION_ID },
-      prompt: '',
-      receivedAt: 1
-    })
-    const capture = await captureWorktreeSleepResumeRecords({
-      worktreeId: TEST_WORKTREE_ID,
-      paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),
-      launchByPtyId: new Map([['pty', { agent: launchAgent, config }]]),
-      readRows: () => [launchedRow],
-      checkAgentPresence: null,
-      capturedAt: 2
-    })
-    expect(capture.get('pty')?.records[0]?.launchConfig).toEqual(kept ? config : undefined)
-  })
+    ['claude', 'token', true],
+    ['claude', null, false],
+    ['codex', 'token', false]
+  ] as const)(
+    'keeps a %s launch recipe with token %s: %s',
+    async (launchAgent, launchToken, kept) => {
+      const config = { agentCommand: '/opt/claude-custom', agentArgs: '--x', agentEnv: {} }
+      const launchedRow = hookRow({
+        paneKey: PANE_KEY,
+        agentType: 'claude',
+        providerSession: { key: 'session_id', id: SESSION_ID },
+        prompt: '',
+        receivedAt: 1
+      })
+      const capture = await captureWorktreeSleepResumeRecords({
+        worktreeId: TEST_WORKTREE_ID,
+        paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),
+        launchByPtyId: new Map([['pty', { launchAgent, launchToken, launchConfig: config }]]),
+        readRows: () => [launchedRow],
+        checkAgentPresence: null,
+        capturedAt: 2
+      })
+      expect(capture.get('pty')?.records[0]?.launchConfig).toEqual(kept ? config : undefined)
+    }
+  )
 
   it('retires an older capture when the hook store names a non-resumable agent in the pane', async () => {
     const row = hookRow({
@@ -214,11 +220,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       checkAgentPresence: async () => 'unverifiable',
       capturedAt: 2
     })
-    expect(capture.get('pty')).toEqual({
-      retiredPaneKeys: [PANE_KEY],
-      records: [],
-      recipeLostPaneKeys: []
-    })
+    expect(capture.get('pty')).toEqual({ retiredPaneKeys: [PANE_KEY], records: [] })
   })
 
   it.each([
@@ -245,12 +247,8 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     expect(capture.get('pty')?.records[0]?.connectionId).toBe(stamped)
   })
 
-  // A typed agent resuming the same conversation never ran the earlier launch, so only a lost recipe is kept.
-  it.each([
-    [[PANE_KEY], true],
-    [[], false]
-  ])('stamps the SSH host and keeps the saved recipe only for a lost recipe %j', (lost, kept) => {
-    const launchConfig = { agentArgs: '--x', agentEnv: {} }
+  // An earlier record's recipe may belong to another launch of the conversation, so it is not reused.
+  it("stamps the SSH host and drops an earlier record's recipe", () => {
     const record = {
       paneKey: PANE_KEY,
       worktreeId: TEST_WORKTREE_ID,
@@ -263,20 +261,17 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       connectionId: 'ssh-target'
     }
     const session = makeWorkspaceSessionWithHeadlessTerminal({
-      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: { ...record, launchConfig } }
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: { ...record, launchConfig: { agentArgs: '--x', agentEnv: {} } }
+      }
     })
     const next = applyWorktreeSleepResumeRecords(
       session,
-      new Map([
-        [
-          'pty',
-          { retiredPaneKeys: [], records: [{ ...record, capturedAt: 2 }], recipeLostPaneKeys: lost }
-        ]
-      ]),
+      new Map([['pty', { retiredPaneKeys: [], records: [{ ...record, capturedAt: 2 }] }]]),
       ['pty']
     )
     const saved = next?.sleepingAgentSessionsByPaneKey?.[PANE_KEY]
     expect(saved).toMatchObject({ capturedAt: 2, connectionId: 'ssh-target' })
-    expect(saved?.launchConfig).toEqual(kept ? launchConfig : undefined)
+    expect(saved?.launchConfig).toBeUndefined()
   })
 })

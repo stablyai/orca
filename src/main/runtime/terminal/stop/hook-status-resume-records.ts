@@ -3,7 +3,6 @@ import {
   capturedResumeRecord,
   liveResumeRecord,
   liveResumeRecordChange,
-  recordLaunchConfigForStatus,
   statusRetainsResumableIdentity,
   type ResumeRecordStatus,
   type ResumeRecordTab
@@ -22,7 +21,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 /** The part of a pane's previous status the next one may inherit its provider session from. */
 export type PreviousHookStatus = Pick<ResumeRecordStatus, 'agentType' | 'state' | 'providerSession'>
 
-/** A pane's agent launch recipe, when its terminal was launched as `agent`. */
+/** The note of the Orca launch running in a pane as `agent` now; none when that is unproven. */
 export type PaneLaunchConfigOf = (
   paneKey: string,
   agent: ResumeRecordStatus['agentType']
@@ -86,11 +85,7 @@ export function hookStatusResumeCommand(args: {
     worktreeIdOf: () => worktreeId,
     tabOf: () => tab,
     capturedAt: status.updatedAt,
-    launchConfig:
-      args.launchConfigOf(status.paneKey, status.agentType) ??
-      (status.state !== 'done' || retainsResumableIdentity
-        ? recordLaunchConfigForStatus(existing, status)
-        : undefined)
+    launchConfig: args.launchConfigOf(status.paneKey, status.agentType)
   })
   const change = liveResumeRecordChange(existing, live)
   if (!change) {
@@ -120,9 +115,7 @@ export function quitResumeRecords(args: {
       capturedAt: args.capturedAt,
       worktreeIdOf: () => status.worktreeId ?? args.worktreeIdOf(status.paneKey),
       tabOf: tabFor,
-      launchConfigOf: () =>
-        args.launchConfigOf(status.paneKey, status.agentType) ??
-        recordLaunchConfigForStatus(existing, status)
+      launchConfigOf: () => args.launchConfigOf(status.paneKey, status.agentType)
     })
     // Only a pane this partition holds keeps a record here.
     return record && tabFor(record.worktreeId) ? [record] : []

@@ -516,35 +516,6 @@ describe('a follow-up to a finished terminal worker', () => {
     ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
   })
 
-  // A daemon reattach costs main the recipe; a later capture of the same launch must not erase it.
-  it.each([
-    [true, true],
-    [undefined, false]
-  ] as const)('keeps the stored recipe when the Orca launch is %s', async (orcaLaunched, kept) => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    const read = vi.mocked(h.runtime.getExactWorkerProviderSession)
-    const notify = watchMovedWorkerResumeSessions(h.runtime, () => h.db)
-    const launchConfig = { agentArgs: '--dangerously-skip-permissions', agentEnv: {} }
-    const capture = (id: string, extra: object) => {
-      read.mockReturnValue({
-        paneKey: h.workerPaneKey,
-        agent: 'claude',
-        processIncarnation: 'runtime_test:term_worker:1',
-        providerSession: { key: 'session_id', id },
-        observedAt: 1,
-        ...extra
-      })
-      notify([{ paneKey: h.workerPaneKey, sessionId: id }])
-    }
-    capture('launched', { launchConfig, orcaLaunched: true })
-    capture('after-reattach', orcaLaunched ? { orcaLaunched } : {})
-
-    expect(
-      readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))?.launchConfig
-    ).toEqual(kept ? launchConfig : undefined)
-  })
-
   it('saves nothing again when a status change repeats the same conversations', async () => {
     h.setup()
     await h.startSettledWorker()

@@ -119,7 +119,7 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
-  const launchConfig = session.launchConfig ?? keptLaunchConfig(db, resourceId, session)
+  const { launchConfig } = session
   const value = JSON.stringify({
     agent: session.agent,
     providerSession: session.providerSession,
@@ -132,19 +132,6 @@ export function recordWorkerResumeSession(
       'UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ? AND resume_session IS NOT ?'
     )
     .run(value, resourceId, value)
-}
-
-/** The stored recipe of the same Orca launch, whose recipe main no longer holds after a daemon reattach. */
-function keptLaunchConfig(
-  db: OrchestrationDb,
-  resourceId: string,
-  session: ExactWorkerProviderSession
-): SleepingAgentLaunchConfig | undefined {
-  if (!session.orcaLaunched) {
-    return undefined
-  }
-  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
-  return stored?.agent === session.agent ? stored.launchConfig : undefined
 }
 
 /** A reopened worker keeps its conversation until its own pane reports one. */

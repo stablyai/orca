@@ -34,8 +34,6 @@ export type ExactWorkerProviderSession = {
   providerSession: AgentProviderSessionMetadata
   /** The recipe Orca launched this worker's agent with; a reopen replays it. */
   launchConfig?: SleepingAgentLaunchConfig
-  /** Orca's launch still owns the agent, though a daemon reattach may have cost main its recipe. */
-  orcaLaunched?: true
   observedAt: number
 }
 

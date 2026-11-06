@@ -1,5 +1,6 @@
 import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
+import { attestedLaunchConfig } from '../launch/attested-launch-config'
 import {
   applyWorktreeSleepResumeRecords,
   captureWorktreeSleepResumeRecords,
@@ -96,12 +97,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         paneKeysByPtyId: new Map(
           [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
         ),
-        launchByPtyId: new Map(
-          [...ptyIds].map((ptyId) => {
-            const pty = this.ptysById.get(ptyId)
-            return [ptyId, { agent: pty?.launchAgent ?? null, config: pty?.launchConfig ?? null }]
-          })
-        ),
+        launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
         readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
@@ -129,14 +125,12 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   >()
   private hookStatusResumeWrites: Promise<void> = Promise.resolve()
 
-  private readonly paneLaunchConfigOf: PaneLaunchConfigOf = (paneKey, agent) => {
+  /** The note of the Orca launch running in this pane now; the one check every saved note passes. */
+  getAttestedLaunchConfigForPaneKey: PaneLaunchConfigOf = (paneKey, agent) => {
     for (const pty of this.ptysById.values()) {
-      if (
-        pty.launchConfig &&
-        pty.launchAgent === agent &&
-        this.paneOfPty(pty).paneKey === paneKey
-      ) {
-        return pty.launchConfig
+      const launchConfig = attestedLaunchConfig(pty, agent)
+      if (launchConfig && this.paneOfPty(pty).paneKey === paneKey) {
+        return launchConfig
       }
     }
     return undefined
@@ -207,7 +201,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       status,
       session: this.store.getWorkspaceSession(hostId),
       worktreeId,
-      launchConfigOf: this.paneLaunchConfigOf
+      launchConfigOf: this.getAttestedLaunchConfigForPaneKey
     })
     if (command) {
       // Not this.applyLayoutCommand: this runs inside the resume-record queue, which that would await.
@@ -225,7 +219,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       statuses,
       session,
       worktreeIdOf: (paneKey) => this.getTerminalWorktreeIdForPaneKey(paneKey),
-      launchConfigOf: this.paneLaunchConfigOf,
+      launchConfigOf: this.getAttestedLaunchConfigForPaneKey,
       capturedAt: Date.now()
     })
   }
