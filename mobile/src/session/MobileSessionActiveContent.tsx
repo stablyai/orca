@@ -8,6 +8,7 @@ import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
+import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
 import { MobileDictationMeterContext } from './mobile-dictation-meter-context'
@@ -39,7 +40,6 @@ export function MobileSessionActiveContent({
   const {
     hostId,
     worktreeId,
-    insets,
     client,
     terminals,
     terminalTextScale,
@@ -49,8 +49,6 @@ export function MobileSessionActiveContent({
     terminalSplitActive,
     visibleTerminalHandles,
     notifyTerminalPaneFrame,
-    markdownDocs,
-    fileDocs,
     diffComments,
     diffCommentBusy,
     createError,
@@ -171,7 +169,7 @@ export function MobileSessionActiveContent({
       <View style={styles.markdownFrame}>
         <MarkdownReader
           documentId={activeMarkdownTab.id}
-          doc={markdownDocs.get(activeMarkdownTab.id)}
+          doc={controller.markdownDocs.get(activeMarkdownTab.id)}
           onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
           onSave={() => void saveMarkdownTab(activeMarkdownTab)}
@@ -194,7 +192,7 @@ export function MobileSessionActiveContent({
         <FileReader
           documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
           client={client}
-          doc={fileDocs.get(activeFileTab.id)}
+          doc={controller.fileDocs.get(activeFileTab.id)}
           title={activeFileTab.title || t('session.activeContent.fileTitle', 'File')}
           relativePath={activeFileTab.relativePath}
           language={activeFileTab.language}
@@ -228,7 +226,7 @@ export function MobileSessionActiveContent({
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
           keyboardLift={keyboardLift}
-          bottomInset={insets.bottom}
+          bottomInset={controller.insets.bottom}
           onToast={showToast}
         />
         {toastMessage && (
@@ -342,43 +340,45 @@ export function MobileSessionActiveContent({
               scopeKey={nativeChatImageSource}
               open={openSender}
             >
-              <MobileNativeChatOverlay
-                controller={nativeChatController}
-                imageSource={nativeChatImageSource}
-                worktreePath={controller.worktreePath}
-                connState={controller.connState}
-                activeSessionTabId={controller.activeSessionTab?.id}
-                onOpenFile={handleNativeChatFileTap}
-                images={nativeChatImages}
-                structuredComposer={nativeChatStructuredComposer}
-                onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-                micActive={dictation.isStarting || dictation.isRecording}
-                micStarting={dictation.isStarting}
-                micProcessing={dictation.isProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={handleDictationPressIn}
-                onMicPressOut={handleDictationPressOut}
-                inputLockReason={nativeChatOverlayInputLockReason}
-                sendErrorMessage={nativeChatSendError.message}
-                onClearSendError={nativeChatSendError.clear}
-                sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-                sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-                getSendCompletionGeneration={controller.getSendCompletionGeneration}
-                keyboardInset={keyboardLift}
-                // A workspace routed to another server stops with that server, whose name the phone lacks.
-                hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-                onOpenUrlInOrca={openUrlInOrca}
-                hostOutage={nativeChatHostOutage}
-                onRunInTerminal={(command) =>
-                  void controller.handleCreateTerminal(undefined, {
-                    startupCommand: command,
-                    startupCommandDelivery: 'shell-ready',
-                    terminalView: true
-                  })
-                }
-                // Accounts open on the paired host, so a chat another server runs offers none.
-                onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
-              />
+              <MobileNativeChatForkProvider controller={controller}>
+                <MobileNativeChatOverlay
+                  controller={nativeChatController}
+                  imageSource={nativeChatImageSource}
+                  worktreePath={controller.worktreePath}
+                  connState={controller.connState}
+                  activeSessionTabId={controller.activeSessionTab?.id}
+                  onOpenFile={handleNativeChatFileTap}
+                  images={nativeChatImages}
+                  structuredComposer={nativeChatStructuredComposer}
+                  onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+                  micActive={dictation.isStarting || dictation.isRecording}
+                  micStarting={dictation.isStarting}
+                  micProcessing={dictation.isProcessing}
+                  dictationMode={dictationMode}
+                  onMicPressIn={handleDictationPressIn}
+                  onMicPressOut={handleDictationPressOut}
+                  inputLockReason={nativeChatOverlayInputLockReason}
+                  sendErrorMessage={nativeChatSendError.message}
+                  onClearSendError={nativeChatSendError.clear}
+                  sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+                  sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+                  getSendCompletionGeneration={controller.getSendCompletionGeneration}
+                  keyboardInset={keyboardLift}
+                  // A workspace routed to another server stops with that server, whose name the phone lacks.
+                  hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                  onOpenUrlInOrca={openUrlInOrca}
+                  hostOutage={nativeChatHostOutage}
+                  onRunInTerminal={(command) =>
+                    void controller.handleCreateTerminal(undefined, {
+                      startupCommand: command,
+                      startupCommandDelivery: 'shell-ready',
+                      terminalView: true
+                    })
+                  }
+                  // Accounts open on the paired host, so a chat another server runs offers none.
+                  onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
+                />
+              </MobileNativeChatForkProvider>
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>

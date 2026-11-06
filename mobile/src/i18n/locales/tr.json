@@ -2041,6 +2041,8 @@
       "managedAccountEnvOverride": "Bu Claude başlatma işlemi kendi Anthropic oturum değişkenlerini tanımlıyor. Yönetilen bir Claude hesabını kullanmak için bunları kaldırın.",
       "managedAccountUnsupported": "WSL'de bir Claude hesabı eklenmiş olsa da Claude sohbetleri Windows'ta bir Claude hesabı gerektirir.",
       "modelUnavailable": "{{agent}}, {{detail}} modelini kullanamadı. Başka bir model seçip yeniden gönderin.",
+      "modelUnavailableUpdate": "{{agent}}, {{detail}} modelini kullanamadı. Yeniden başlatmadan sonra korumak için {{agent}} uygulamasını {{minimumVersion}} veya üzerine güncelleyin ya da başka bir model seçip yeniden gönderin.",
+      "modelNotSelected": "{{agent}} için seçili bir model yok. Model seçimini ve {{agent}} oturumunu kontrol edip yeniden gönderin.",
       "noTurnToStop": "{{agent}} için durdurulacak bir tur çalışmıyordu.",
       "notDelivered": "Bu mesaj iletilmedi.",
       "notDeliveredSendAgain": "Bu mesaj iletilmedi. Devam etmek için yeniden gönderin.",
