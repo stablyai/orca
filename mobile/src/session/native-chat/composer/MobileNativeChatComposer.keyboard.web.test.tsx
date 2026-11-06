@@ -237,6 +237,7 @@ describe('mobile composer modifier submit in the paired web page', () => {
     const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     await act(async () => {
       row!.dispatchEvent(down)
+      row!.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
       row!.click()
     })
     expect(down.defaultPrevented).toBe(true)
@@ -250,7 +251,16 @@ describe('mobile composer modifier submit in the paired web page', () => {
   it('retires scrolled-out or hidden editor suggestions and restores them from current geometry', async () => {
     const anchor = queuedGeometry()
     await queuedMention()
-    expect(suggestion()).not.toBeNull()
+    expect(
+      suggestion(),
+      JSON.stringify({
+        value: field().value,
+        caret: field().selectionStart,
+        focused: document.activeElement === field(),
+        viewport: window.innerHeight,
+        text: container.textContent?.slice(0, 120)
+      })
+    ).not.toBeNull()
     anchor.top = 900
     await act(async () => window.dispatchEvent(new Event('scroll')))
     expect(suggestion()).toBeNull()
