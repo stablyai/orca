@@ -14,6 +14,7 @@ function terminal(id: string, worktreeId: string): TerminalRow {
 }
 
 function unified(id: string, entityId: string, worktreeId: string): UnifiedRow {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Kill All reads only these fields of a unified tab.
   return { id, entityId, worktreeId, contentType: 'terminal' } as UnifiedRow
 }
 
@@ -50,6 +51,16 @@ function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTer
     runtimeEnvironmentCatalogHydrated: true,
     removedRuntimeEnvironmentIds: new Set()
   }
+}
+
+type WorktreeRows = NonNullable<KillAllTerminalSurfaceState['worktreesByRepo']>[string]
+
+function setWorktreeRows(
+  current: KillAllTerminalSurfaceState,
+  rows: Partial<WorktreeRows[number]>[]
+) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership reads only these row fields.
+  current.worktreesByRepo = { 'fixture-repo': rows as WorktreeRows }
 }
 
 function removeSurface(current: KillAllTerminalSurfaceState, targetId: string): void {
@@ -130,12 +141,10 @@ describe('runKillAllTerminalSurfaces', () => {
         'mirrored-unified': ['remote:env-paired@@terminal-2']
       }
     })
-    current.worktreesByRepo = {
-      'fixture-repo': [
-        { id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' },
-        { id: 'wt-paired', repoId: 'fixture-repo', runtimeOwnerEnvironmentId: 'env-paired' }
-      ]
-    } as never
+    setWorktreeRows(current, [
+      { id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' },
+      { id: 'wt-paired', repoId: 'fixture-repo', runtimeOwnerEnvironmentId: 'env-paired' }
+    ])
     const closeSurface = vi.fn((targetId: string) => removeSurface(current, targetId))
     const killPty = vi.fn().mockResolvedValue(undefined)
 
@@ -163,11 +172,52 @@ describe('runKillAllTerminalSurfaces', () => {
         'foreign-tab': ['remote:env-forgotten@@terminal-1', 'ssh:other-host@@pty-2']
       }
     })
-    current.worktreesByRepo = {
-      'fixture-repo': [{ id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' }]
-    } as never
+    setWorktreeRows(current, [{ id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' }])
 
     expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
+  })
+
+  it('leaves a local-workspace tab open when one of its panes runs on a paired host', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local'), terminal('split-tab', 'wt-local')]
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['pty-local'],
+        'split-tab': ['pty-local-2', 'remote:env-paired@@terminal-3']
+      }
+    })
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
+  })
+
+  it('leaves a pending paired-host tab open before it has a PTY', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local'), terminal('pending', 'wt-local')]
+      },
+      unifiedTabsByWorktree: {
+        'wt-local': [
+          {
+            ...unified('pending-visible', 'pending', 'wt-local'),
+            executionHostId: 'runtime:env-paired'
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'local-tab': ['pty-local'] }
+    })
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
+  })
+
+  it('still closes SSH workspace tabs, which this computer relays', async () => {
+    const current = state({
+      tabsByWorktree: { 'wt-ssh': [terminal('ssh-tab', 'wt-ssh')] },
+      ptyIdsByTabId: { 'ssh-tab': ['ssh:devbox@@pty-1'] }
+    })
+    setWorktreeRows(current, [{ id: 'wt-ssh', repoId: 'fixture-repo', hostId: 'ssh:devbox' }])
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['ssh-tab'])
   })
 
   it('revalidates remaining ownership after a yield before killing an exact PTY', async () => {

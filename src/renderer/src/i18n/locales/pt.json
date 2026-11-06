@@ -18801,7 +18801,7 @@
           "d9657ac204": "Encerramento da sessão de terminal solicitado.",
           "e8f25bd903": "Não foi possível concluir a limpeza do terminal.",
           "a702d4196e": "Isso fecha todas as abas de terminal em todos os espaços de trabalho e solicita o encerramento de suas sessões de terminal atuais. Qualquer trabalho de terminal não salvo será perdido. O daemon continua em execução, e novos terminais podem ser abertos imediatamente. Isso não pode ser desfeito.",
-          "killAllRemoteTabsStayOpen": "As abas de hosts remotos e computadores pareados permanecem abertas, e suas sessões continuam em execução lá.",
+          "killAllServerTabsStayOpen": "As abas de servidores Orca e computadores pareados permanecem abertas, e suas sessões continuam em execução lá. Os terminais SSH são fechados como os locais.",
           "confirmRestart": "Reiniciar",
           "busyRestarting": "Reiniciando…",
           "confirmKillAll": "Encerrar todas as sessões",

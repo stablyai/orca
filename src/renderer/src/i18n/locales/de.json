@@ -7291,7 +7291,7 @@
           "d9657ac204": "Beenden der Terminalsitzung angefordert.",
           "e8f25bd903": "Terminalbereinigung konnte nicht abgeschlossen werden.",
           "a702d4196e": "Dies schließt alle Terminal-Tabs in sämtlichen Arbeitsbereichen und fordert das Beenden ihrer aktuellen Terminalsitzungen an. Nicht gespeicherte Arbeit in Terminals geht verloren. Der Daemon selbst läuft weiter, und neue Terminals können sofort geöffnet werden. Dies kann nicht rückgängig gemacht werden.",
-          "killAllRemoteTabsStayOpen": "Tabs von Remote-Hosts und gekoppelten Computern bleiben geöffnet, und ihre Sitzungen laufen dort weiter.",
+          "killAllServerTabsStayOpen": "Tabs von Orca-Servern und gekoppelten Computern bleiben geöffnet, und ihre Sitzungen laufen dort weiter. SSH-Terminals werden wie lokale geschlossen.",
           "confirmRestart": "Neu starten",
           "busyRestarting": "Neustart läuft…",
           "confirmKillAll": "Alle Sitzungen beenden",

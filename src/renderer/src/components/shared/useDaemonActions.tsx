@@ -257,8 +257,8 @@ function getCopy(kind: DaemonActionKind): DaemonActionCopy {
           "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
         )}{' '}
         {translate(
-          'auto.components.shared.useDaemonActions.killAllRemoteTabsStayOpen',
-          'Tabs from remote hosts and paired computers stay open, and their sessions keep running there.'
+          'auto.components.shared.useDaemonActions.killAllServerTabsStayOpen',
+          'Tabs from Orca servers and paired computers stay open, and their sessions keep running there. SSH terminals close like local ones.'
         )}
       </>
     ),
