@@ -17,12 +17,14 @@ import type { OpenCodePromptFailureQuery } from '../foreign-sqlite-readers/openc
 import SyncDatabase from '../sqlite/sync-database'
 import { createOpenCodeAcpConnection } from './opencode-acp-connection'
 
+const NOW = 1_800_000_000_000
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) {
     await cleanup()
   }
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
 
@@ -62,7 +64,7 @@ async function fixture(
       'ses-own',
       'user',
       turn * 10,
-      Date.now(),
+      NOW,
       '{}'
     )
     db.prepare('INSERT OR REPLACE INTO session_message VALUES (?, ?, ?, ?, ?, ?)').run(
@@ -70,7 +72,7 @@ async function fixture(
       'ses-own',
       'idle',
       turn * 10 + 1,
-      options.stale ? 1 : Date.now(),
+      options.stale ? 1 : NOW,
       JSON.stringify({ error: native })
     )
     agent.fail(
@@ -119,6 +121,7 @@ const quota = { type: 'provider.quota', message: 'Free usage limit reached.', st
 
 describe('OpenCode ACP native failure recovery', () => {
   it('journals the recovered failure through the full chat adapter and accepts the next send', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const spec = acpLaunchSpecFor('opencode2')
     if (!spec) {
       throw new Error('OpenCode 2 launch specification missing')
