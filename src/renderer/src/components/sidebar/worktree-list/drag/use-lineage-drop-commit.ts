@@ -183,14 +183,23 @@ export function useWorktreeLineageDropCommit(args: {
           : []
       })
       const folderChildIds = new Set(folderChildren.map(({ copy }) => copy.id))
-      const ids = getReorderedWorktreeIdsToUnnest({
-        draggedIds: unnestArgs.draggedIds.filter((id) => !folderChildIds.has(id)),
+      const folderCopies = new Set(folderChildren.map(({ copy }) => copy))
+      const legacy = getReorderedWorktreeIdsToUnnest({
+        draggedIds: unnestArgs.draggedIds,
         // Lineage is keyed by worktree id; drag groups key members by host identity.
         sourceGroupIds: sourceGroup.worktreeIds.map(getWorktreeIdFromHostIdentity),
         lineageById: worktreeLineageById,
         worktreeMap,
         cyclicLineageIds
       })
+      // An id a folder child shares names its other picked copies by host; any other id stays bare.
+      const ids = legacy.flatMap((id): (string | DraggedWorktreeCopies[number])[] =>
+        folderChildIds.has(id)
+          ? (unnestArgs.pickedCopies ?? []).filter(
+              (copy) => copy.id === id && !folderCopies.has(copy)
+            )
+          : [id]
+      )
       const unnestedFolderChildren = folderChildren.flatMap(({ copy, parent }) =>
         isReorderInsideFolderRow(parent, unnestArgs.dropPoint) ? [] : [copy]
       )
