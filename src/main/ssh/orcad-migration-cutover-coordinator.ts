@@ -11,6 +11,10 @@ import type {
   OrcadMigrationSnapshotChunkResult
 } from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
+  OrcadMigrationBlobChunkRequest,
+  OrcadMigrationBlobChunkResult
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import type {
   OrcadMigrationSourceCutover,
   OrcadMigrationSourceCutoverPhase
 } from '../../shared/orcad-migration/orcad-migration-source-cutover'
@@ -26,6 +30,11 @@ import {
   transferOrcadMigrationSnapshots,
   type OrcadMigrationSnapshotSource
 } from './orcad-migration-snapshot-coordinator'
+import {
+  exportedOrcadMigrationBlobSource,
+  transferOrcadMigrationBlobs
+} from './orcad-migration-blob-coordinator'
+import type { OrcadMigrationExportedBlob } from './orcad-migration-manifest-export'
 import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 import { sshRelayMigrationCutoverPort } from './orcad-migration-ssh-relay-source'
 import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
@@ -42,6 +51,11 @@ export type OrcadMigrationDestinationCatalog = {
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest
   ) => Promise<OrcadMigrationSnapshotChunkResult>
+  /** Read fresh before blobs are sent: each blob kind needs its own capability. */
+  readCapabilities: () => Promise<readonly string[]>
+  stageBlobChunk: (
+    request: OrcadMigrationBlobChunkRequest
+  ) => Promise<OrcadMigrationBlobChunkResult>
 }
 
 export type OrcadMigrationCutoverContext = {
@@ -68,7 +82,7 @@ export async function stageOrcadMigrationDestination(
   if (cutover.phase === 'destination-committed' || cutover.phase === 'source-retired') {
     return cutover
   }
-  assertSourceUnchanged(context, cutover)
+  const blobs = assertSourceUnchanged(context, cutover)
   const { destination } = context
   const read = await destination.readState(cutover.manifest)
   const state =
@@ -86,6 +100,16 @@ export async function stageOrcadMigrationDestination(
       manifest: cutover.manifest,
       state,
       destination: { readState: destination.readState, stageChunk: destination.stageChunk }
+    })
+    await transferOrcadMigrationBlobs({
+      source: exportedOrcadMigrationBlobSource(blobs),
+      manifest: cutover.manifest,
+      blobs: blobs.map((blob) => blob.descriptor),
+      destination: {
+        readCapabilities: destination.readCapabilities,
+        readState: destination.readState,
+        stageChunk: destination.stageBlobChunk
+      }
     })
   }
   return cutover
@@ -178,8 +202,8 @@ export async function confirmDurableCommit(
 function assertSourceUnchanged(
   context: OrcadMigrationCutoverContext,
   cutover: OrcadMigrationSourceCutover
-): void {
-  cutoverSource(context).verifyFence(cutover)
+): OrcadMigrationExportedBlob[] {
+  return cutoverSource(context).verifyFence(cutover)
 }
 
 /** Persist observed state before returning. */

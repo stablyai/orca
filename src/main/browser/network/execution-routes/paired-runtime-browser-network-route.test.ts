@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
-  encodeBrowserNetworkTunnelFrame
+  encodeBrowserNetworkTunnelFrame,
+  encodeBrowserNetworkTunnelWindowUpdate
 } from '../../../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -176,6 +177,73 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     ready(attempts[1]!, 8)
     await expect(reconnecting).resolves.toEqual(address)
 
+    await route.close()
+  })
+
+  it('reattaches with the exact existing v1 payload and tunnel capabilities', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const route = createRoute({
+      subscription: { clientCapabilities: ['existing.optional.v1'] }
+    })
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    await starting
+    attempts[0]!.callbacks.onClose?.()
+
+    const reconnecting = route.reconnect()
+    await vi.waitFor(() => expect(attempts).toHaveLength(2))
+    ready(attempts[1]!, 8)
+    await reconnecting
+
+    for (const attempt of attempts) {
+      expect(attempt.method).toBe('network.browserTunnel')
+      expect(attempt.params).toEqual({
+        ...lease,
+        executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
+      })
+      expect(attempt.options).toMatchObject({
+        perMessageDeflate: false,
+        clientCapabilities: [
+          'existing.optional.v1',
+          'browser.clientHost.v1',
+          'network.browserTunnel.v1',
+          'network.browserTunnel.window.v2'
+        ]
+      })
+    }
+    await route.close()
+  })
+
+  it.each([
+    ['rejects', 'an older host', undefined],
+    ['accepts', 'a host that accepts window.v2', ['network.browserTunnel.window.v2']]
+  ])('%s a 2 MiB stream window from %s', async (outcome, _host, capabilities) => {
+    const attempts = mockSubscriptionAttempts()
+    const route = createRoute()
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7, capabilities)
+    const address = await starting
+    const socket = await connectSocks(address.host, address.port)
+    await greetSocks(socket)
+    socket.write(domainConnectRequest('window.internal', 443))
+    await vi.waitFor(() => expect(openFrames(attempts[0]!)).toHaveLength(1))
+
+    for (const [opcode, payload] of [
+      [BrowserNetworkTunnelOpcode.Opened, new Uint8Array()],
+      [
+        BrowserNetworkTunnelOpcode.WindowUpdate,
+        encodeBrowserNetworkTunnelWindowUpdate(2 * 1024 * 1024)
+      ]
+    ] as const) {
+      attempts[0]!.callbacks.onBinary?.(
+        encodeBrowserNetworkTunnelFrame({ opcode, tunnelGeneration: 7, streamId: 1, payload })
+      )
+    }
+
+    expect(attempts[0]!.close).toHaveBeenCalledTimes(outcome === 'rejects' ? 1 : 0)
+    socket.destroy()
     await route.close()
   })
 
@@ -387,11 +455,15 @@ function mockSubscriptionAttempts(): SubscriptionAttempt[] {
   return attempts
 }
 
-function ready(attempt: SubscriptionAttempt, tunnelGeneration: number): void {
+function ready(
+  attempt: SubscriptionAttempt,
+  tunnelGeneration: number,
+  capabilities?: string[]
+): void {
   attempt.callbacks.onResponse({
     id: 'browser-route',
     ok: true,
-    result: { type: 'ready', tunnelGeneration },
+    result: { type: 'ready', tunnelGeneration, ...(capabilities ? { capabilities } : {}) },
     _meta: { runtimeId: 'runtime-a' }
   })
 }

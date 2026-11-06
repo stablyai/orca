@@ -10,17 +10,27 @@ export function useSessionTitleCard(besideTabs: boolean, obscured: boolean) {
   const barRef = useRef<View>(null)
   const titleRef = useRef<ComponentRef<typeof Text>>(null)
   // Below the session bar, lined up with the title's leading edge.
-  const measure = useCallback<DetailCardMeasure>((root, place) => {
+  const measure = useCallback<DetailCardMeasure>((place) => {
     const title = titleRef.current
     const bar = barRef.current
     if (!title || !bar) {
       place(null)
       return
     }
+    let left: number | undefined
+    let top: number | undefined
+    const finish = () => {
+      if (left !== undefined && top !== undefined) {
+        place({ side: 'below', left, top })
+      }
+    }
     title.measureInWindow((x) => {
-      bar.measureInWindow((_x, barY, _width, barHeight) => {
-        place({ side: 'below', left: x - root.x, top: barY + barHeight - root.y })
-      })
+      left = x
+      finish()
+    })
+    bar.measureInWindow((_x, y, _width, height) => {
+      top = y + height
+      finish()
     })
   }, [])
   const card = useAnchoredDetailCard({ geometry: String(besideTabs), obscured, measure })

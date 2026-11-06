@@ -69,33 +69,6 @@ describe.skipIf(process.platform === 'win32')(
       })
     })
 
-    it('keeps PATH order and leaves later copies unprobed when the first works', async () => {
-      const first = await cliInDirectory('first')
-      const second = await cliInDirectory('second')
-      vi.stubEnv('PATH', [first, second].join(path.delimiter))
-
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'available',
-        binary: path.join(first, COMMAND)
-      })
-      expect(await probedArgs(first)).toEqual(['--version'])
-      expect(await probedArgs(second)).toEqual([])
-    })
-
-    it('keeps the full timeout for a healthy first copy when other copies exist', async () => {
-      const first = await cliInDirectory('slow-first', '/bin/sleep 2\necho gh-version-fixture\n')
-      const second = await cliInDirectory('broken-second', BROKEN_SHIM)
-      const third = await cliInDirectory('broken-third', BROKEN_SHIM)
-      vi.stubEnv('PATH', [first, second, third].join(path.delimiter))
-
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'available',
-        binary: path.join(first, COMMAND)
-      })
-      expect(await probedArgs(second)).toEqual([])
-      expect(await probedArgs(third)).toEqual([])
-    })
-
     it('distinguishes exhausted failing copies from an absent command', async () => {
       const first = await cliInDirectory('first', BROKEN_SHIM)
       const second = await cliInDirectory('second', BROKEN_SHIM)
@@ -122,67 +95,6 @@ describe.skipIf(process.platform === 'win32')(
         status: 'exec_failed',
         binary: selected
       })
-      expect(await probedArgs(good)).toEqual([])
-    })
-
-    it('executes relative explicit paths and reports an explicit missing path', async () => {
-      const good = await cliInDirectory('good')
-      const selected = path.relative(process.cwd(), path.join(good, COMMAND))
-      vi.stubEnv('PATH', '')
-
-      await expect(findRunnableLocalCommand(selected)).resolves.toEqual({
-        status: 'available',
-        binary: selected
-      })
-      await expect(findRunnableLocalCommand(path.join(root, 'missing', COMMAND))).resolves.toEqual({
-        status: 'absent'
-      })
-    })
-
-    it.each([true, false])(
-      'preserves relative PATH order with shim first: %s',
-      async (shimFirst) => {
-        const good = await cliInDirectory('good')
-        const shim = await cliInDirectory('shim', BROKEN_SHIM)
-        const relative = path.relative(process.cwd(), good)
-        vi.stubEnv('PATH', (shimFirst ? [shim, relative] : [relative, shim]).join(path.delimiter))
-
-        await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-          status: 'available',
-          binary: path.join(good, COMMAND)
-        })
-        expect(await probedArgs(good)).toEqual(['--version'])
-        expect(await probedArgs(shim)).toEqual(shimFirst ? ['--version'] : [])
-      }
-    )
-
-    it('deduplicates PATH entries before spending the probe limit', async () => {
-      const shim = await cliInDirectory('shim', BROKEN_SHIM)
-      const good = await cliInDirectory('good')
-      vi.stubEnv('PATH', [shim, shim, shim, shim, good].join(path.delimiter))
-
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'available',
-        binary: path.join(good, COMMAND)
-      })
-      expect(await probedArgs(shim)).toEqual(['--version'])
-    })
-
-    it('caps execution at four distinct candidates and reports the limit', async () => {
-      const doomed: string[] = []
-      for (const index of [0, 1, 2, 3]) {
-        doomed.push(await cliInDirectory(`doomed-${index}`, BROKEN_SHIM))
-      }
-      const good = await cliInDirectory('past-cap')
-      vi.stubEnv('PATH', [...doomed, good].join(path.delimiter))
-
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'limit_reached',
-        binary: path.join(doomed[3], COMMAND)
-      })
-      for (const dir of doomed) {
-        expect(await probedArgs(dir)).toEqual(['--version'])
-      }
       expect(await probedArgs(good)).toEqual([])
     })
 

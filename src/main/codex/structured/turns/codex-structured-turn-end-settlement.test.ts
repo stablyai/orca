@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-
-import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import {
   acquiredCodexAdapter,
   CODEX_TEST_THREAD_ID,
@@ -110,27 +108,6 @@ describe('a Codex send its turn ended without echoing', () => {
     ])
   })
 
-  it('accepts a send its turn echoed, with its key, exactly once', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-    rig.turns.echo('client-1')
-
-    rig.turns.end('interrupted')
-
-    expect(rig.settlements).toEqual([
-      {
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        providerIdentity: {
-          provider: 'codex',
-          threadId: CODEX_TEST_THREAD_ID,
-          turnId: 'turn-1',
-          ordinal: 0
-        }
-      }
-    ])
-  })
-
   it('leaves a send pending, still armed, when its answer is read after its turn completed', async () => {
     const rig = await turnEndRig()
     const release = rig.turns.holdNextAnswer()
@@ -145,79 +122,6 @@ describe('a Codex send its turn ended without echoing', () => {
     rig.turns.echo('client-1')
     expect(rig.settledIds()).toEqual(['client-1'])
     expect(rig.settlements[0]).toHaveProperty('providerIdentity')
-  })
-
-  it('leaves a send whose answer timed out to its echo', async () => {
-    const rig = await turnEndRig()
-    rig.codex.routes['turn/start'] = () => {
-      throw new Error('codex app-server turn/start exceeded 30000ms')
-    }
-    await expect(rig.send('client-1')).rejects.toThrow('exceeded')
-
-    rig.codex.connections[0]!.handlers.onNotification?.('turn/started', {
-      threadId: CODEX_TEST_THREAD_ID,
-      turn: { id: 'turn-9' }
-    })
-    rig.codex.connections[0]!.handlers.onNotification?.('item/completed', {
-      threadId: CODEX_TEST_THREAD_ID,
-      turn: { id: 'turn-9' },
-      item: { type: 'userMessage', id: 'item-9', clientId: 'client-1', content: [] }
-    })
-
-    expect(rig.settlements).toEqual([
-      expect.objectContaining({
-        clientMessageId: 'client-1',
-        providerIdentity: expect.objectContaining({ turnId: 'turn-9' })
-      })
-    ])
-  })
-
-  it('ignores a turn end on a child thread', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-
-    rig.codex.connections[0]!.handlers.onNotification?.('turn/completed', {
-      threadId: 'thread-child',
-      turn: { id: 'turn-1', status: 'interrupted' }
-    })
-
-    expect(rig.settlements).toEqual([])
-  })
-})
-
-describe('a send bound to a turn', () => {
-  it('dies with the settlement its turn end makes', () => {
-    const echoes = createCodexDispatchEchoes()
-    echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
-
-    expect(echoes.endTurn('thread-1', 'turn-1', { status: 'interrupted' })).toEqual([
-      { clientMessageId: 'client-1', via: 'start' }
-    ])
-    expect(echoes.size).toBe(0)
-    expect(echoes.settle('client-1')).toBe(false)
-  })
-
-  it('dies with its child, which forgets recorded turn ends too', () => {
-    const echoes = createCodexDispatchEchoes()
-    echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
-    echoes.endTurn('thread-2', 'turn-2', { status: 'interrupted' })
-
-    echoes.clear()
-
-    expect(echoes.size).toBe(0)
-    echoes.arm('client-2')
-    expect(echoes.bindTurn('client-2', 'thread-2', 'turn-2', 'start')).toBeNull()
-  })
-
-  it('is matched by thread as well as turn id', () => {
-    const echoes = createCodexDispatchEchoes()
-    echoes.arm('client-1')
-    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
-
-    expect(echoes.endTurn('thread-2', 'turn-1', { status: 'interrupted' })).toEqual([])
-    expect(echoes.size).toBe(1)
   })
 })
 

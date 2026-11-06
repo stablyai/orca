@@ -46,10 +46,26 @@ export const styles = themedStyleSheet(() => ({
     borderRadius: radii.mark,
     paddingHorizontal: 4
   },
+  // GitHub's inline tags: raised and lowered small text, a key cap, an insertion.
+  sup: { fontSize: 10, position: 'relative', top: -5 },
+  sub: { fontSize: 10, position: 'relative', top: 3 },
+  kbd: { borderWidth: 1, borderColor: colors.borderSubtle },
+  ins: { textDecorationLine: 'underline' },
   inlineCodeLink: {
     color: colors.accentBlue,
     textDecorationLine: 'underline'
   },
+  callout: {
+    borderLeftWidth: 2,
+    borderTopRightRadius: radii.surface,
+    borderBottomRightRadius: radii.surface,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm
+  },
+  calloutTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  calloutTitleText: { fontSize: 13, fontWeight: '600' },
   quote: {
     borderLeftWidth: 2,
     borderLeftColor: colors.borderSubtle,
@@ -213,13 +229,14 @@ export const styles = themedStyleSheet(() => ({
     minWidth: 0,
     gap: spacing.xs
   },
+  taskMarker: { minWidth: 22, justifyContent: 'center' },
   listText: {
     fontSize: 13,
     lineHeight: 19,
     color: colors.textPrimary
   },
   footnoteReference: {
-    color: colors.textSecondary
+    color: colors.accentBlue
   },
   rule: {
     marginVertical: spacing.xs,

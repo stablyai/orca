@@ -16468,6 +16468,8 @@
               "25349b66fc": "새 Markdown 파일",
               "784812ca24": "활성 워크스페이스에서 브라우저 탭을 엽니다.",
               "892bfa9339": "새 브라우저 탭",
+              "splitChatRight": "채팅을 오른쪽으로 분할",
+              "splitChatDown": "채팅 분할",
               "verbs": {
                 "newBrowser": "새 브라우저",
                 "newBrowserTab": "새 브라우저 탭",
@@ -16481,6 +16483,10 @@
                 "newTerminal": "새 terminal",
                 "newTerminalTab": "새 terminal 탭",
                 "newShell": "새 셸",
+                "splitChatRight": "바로 채팅 분할",
+                "splitChatDown": "채팅을 분할하다",
+                "chatPaneRight": "채팅창 오른쪽",
+                "chatPaneBelow": "아래 채팅 창",
                 "terminalTab": "terminal 탭",
                 "createWorktree": "작업 트리 만들기",
                 "addWorktree": "작업 트리 추가",
@@ -16490,18 +16496,8 @@
                 "removeWorktree": "작업 트리 제거",
                 "trashWorktree": "워크트리 휴지통으로 이동",
                 "addQuickCommand": "빠른 명령 추가",
-                "newQuickCommand": "새로운 빠른 명령",
-                "splitChatRight": "바로 채팅 분할",
-                "newChatRight": "오른쪽에 새 채팅",
-                "chatPaneRight": "채팅창 오른쪽",
-                "splitChatDown": "채팅을 분할하다",
-                "newChatBelow": "아래에 새 채팅",
-                "chatPaneBelow": "아래 채팅 창"
-              },
-              "splitChatRight": "채팅을 오른쪽으로 분할",
-              "splitChatRightDescription": "오른쪽 분할 창에서 새 채팅을 엽니다.",
-              "splitChatDown": "채팅 분할",
-              "splitChatDownDescription": "아래 분할 창에서 새 채팅을 엽니다."
+                "newQuickCommand": "새로운 빠른 명령"
+              }
             }
           },
           "palette": {

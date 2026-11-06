@@ -17648,6 +17648,8 @@
               "25349b66fc": "Новый файл Markdown",
               "784812ca24": "Открыть вкладку браузера в активном рабочем пространстве.",
               "892bfa9339": "Новая вкладка браузера",
+              "splitChatRight": "Разделить чат вправо",
+              "splitChatDown": "Разделить чат вниз",
               "verbs": {
                 "newBrowser": "новый браузер",
                 "newBrowserTab": "новая вкладка браузера",
@@ -17661,6 +17663,10 @@
                 "newTerminal": "новый терминал",
                 "newTerminalTab": "новая вкладка терминала",
                 "newShell": "новая оболочка",
+                "splitChatRight": "разделить чат вправо",
+                "splitChatDown": "разделить чат вниз",
+                "chatPaneRight": "панель чата справа",
+                "chatPaneBelow": "панель чата снизу",
                 "terminalTab": "вкладка терминала",
                 "createWorktree": "создать рабочее дерево",
                 "addWorktree": "добавить рабочее дерево",
@@ -17670,18 +17676,8 @@
                 "removeWorktree": "убрать рабочее дерево",
                 "trashWorktree": "удалить рабочее дерево",
                 "addQuickCommand": "добавить быструю команду",
-                "newQuickCommand": "новая быстрая команда",
-                "splitChatRight": "разделить чат вправо",
-                "newChatRight": "новый чат справа",
-                "chatPaneRight": "панель чата справа",
-                "splitChatDown": "разделить чат вниз",
-                "newChatBelow": "новый чат снизу",
-                "chatPaneBelow": "панель чата снизу"
-              },
-              "splitChatRight": "Разделить чат вправо",
-              "splitChatRightDescription": "Открыть новый чат в отдельной панели справа.",
-              "splitChatDown": "Разделить чат вниз",
-              "splitChatDownDescription": "Открыть новый чат в отдельной панели снизу."
+                "newQuickCommand": "новая быстрая команда"
+              }
             }
           },
           "palette": {

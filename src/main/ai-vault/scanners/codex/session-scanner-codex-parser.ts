@@ -1,6 +1,9 @@
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultSession,
+  AiVaultSessionTitleKind
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -218,13 +221,17 @@ async function finalizeCodexParseState(
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
   // Recheck the signature-cached index: a title can arrive after the transcript stops growing.
+  let titleKind: AiVaultSessionTitleKind =
+    snapshot.titleSource === 'meta' && snapshot.accumulator.title ? 'named' : 'fallback'
   if (snapshot.sawSessionMeta) {
     const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
     if (indexedTitle) {
       snapshot.accumulator.title = indexedTitle
+      titleKind = 'named'
     }
   }
   return finalizeSession(snapshot.accumulator, platform, {
+    titleKind,
     codexHome: args.codexHome,
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform

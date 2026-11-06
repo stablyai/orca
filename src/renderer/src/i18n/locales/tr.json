@@ -17130,6 +17130,8 @@
               "25349b66fc": "Yeni Markdown Dosyası",
               "784812ca24": "Aktif çalışma alanında bir tarayıcı sekmesi açın.",
               "892bfa9339": "Yeni Tarayıcı Sekmesi",
+              "splitChatRight": "Sohbeti Sağa Böl",
+              "splitChatDown": "Sohbeti Aşağı Böl",
               "verbs": {
                 "newBrowser": "yeni tarayıcı",
                 "newBrowserTab": "yeni tarayıcı sekmesi",
@@ -17143,6 +17145,10 @@
                 "newTerminal": "yeni terminal",
                 "newTerminalTab": "yeni terminal sekmesi",
                 "newShell": "yeni shell",
+                "splitChatRight": "sohbeti sağa böl",
+                "splitChatDown": "sohbeti aşağı böl",
+                "chatPaneRight": "sohbet paneli sağda",
+                "chatPaneBelow": "sohbet paneli altta",
                 "terminalTab": "terminal sekmesi",
                 "createWorktree": "worktree oluştur",
                 "addWorktree": "worktree ekle",
@@ -17152,18 +17158,8 @@
                 "removeWorktree": "worktree kaldır",
                 "trashWorktree": "worktree'yi çöpe at",
                 "addQuickCommand": "hızlı komut ekle",
-                "newQuickCommand": "yeni hızlı komut",
-                "splitChatRight": "sohbeti sağa böl",
-                "newChatRight": "sağda yeni sohbet",
-                "chatPaneRight": "sohbet paneli sağda",
-                "splitChatDown": "sohbeti aşağı böl",
-                "newChatBelow": "altta yeni sohbet",
-                "chatPaneBelow": "sohbet paneli altta"
-              },
-              "splitChatRight": "Sohbeti Sağa Böl",
-              "splitChatRightDescription": "Sağda ayrı bir bölmede yeni bir sohbet açın.",
-              "splitChatDown": "Sohbeti Aşağı Böl",
-              "splitChatDownDescription": "Altta ayrı bir bölmede yeni bir sohbet açın."
+                "newQuickCommand": "yeni hızlı komut"
+              }
             }
           },
           "palette": {

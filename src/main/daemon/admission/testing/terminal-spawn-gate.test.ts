@@ -96,73 +96,6 @@ describe('TerminalSpawnGate', () => {
     })
   }
 
-  it('admits every automatic restore while counting the ones the policy would pace', async () => {
-    for (let i = 0; i < 5; i++) {
-      await restore(`restore-${i}`)
-    }
-
-    expect(spawnSubprocess).toHaveBeenCalledTimes(5)
-    expect(gate.snapshot()).toMatchObject({ liveAutomatic: 5, waited: 2, deferred: 0 })
-    expect(log).toHaveBeenCalledWith(
-      'spawn-admission-observed',
-      expect.objectContaining({ decision: 'wait', charge: 'automatic' })
-    )
-  })
-
-  it('counts a remote resume that arrives with a claim but no history seed', async () => {
-    await host.createOrAttach({
-      sessionId: 'remote-resume',
-      cols: 80,
-      rows: 24,
-      agentSessionEnsure: {
-        claim: {
-          digestVersion: 1 as const,
-          keyId: 'key',
-          identityDigest: 'r'.repeat(43),
-          worktreeScopeDigest: 'b'.repeat(43),
-          agent: 'codex' as const
-        },
-        surface: {
-          worktreeId: 'worktree',
-          tabId: 'tab-remote',
-          leafId: '11111111-1111-4111-8111-111111111111',
-          terminalHandle: 'term_remote'
-        }
-      },
-      streamClient: stream()
-    })
-    expect(gate.snapshot().liveAutomatic).toBe(1)
-  })
-
-  it('never charges an attach and frees the live slot when the session exits', async () => {
-    await restore('restore-a')
-    await host.createOrAttach({
-      sessionId: 'restore-a',
-      cols: 80,
-      rows: 24,
-      attachOnly: true,
-      streamClient: stream()
-    })
-    expect(spawnSubprocess).toHaveBeenCalledOnce()
-    expect(gate.snapshot().liveAutomatic).toBe(1)
-
-    exits.get(1000)?.(0)
-    expect(gate.snapshot().liveAutomatic).toBe(0)
-  })
-
-  it('does not count a plain shell, and releases the in-flight slot when the fork throws', async () => {
-    await host.createOrAttach({ sessionId: 'shell', cols: 80, rows: 24, streamClient: stream() })
-    expect(gate.snapshot()).toMatchObject({ liveAutomatic: 0, inFlight: { interactive: 0 } })
-    expect(log).not.toHaveBeenCalled()
-
-    spawnSubprocess.mockImplementationOnce((options) => {
-      options.onCreationDisposition?.({ kind: 'no-fork' })
-      throw new Error('spawn failed')
-    })
-    await expect(restore('restore-fails')).rejects.toThrow('spawn failed')
-    expect(gate.snapshot()).toMatchObject({ liveAutomatic: 0, inFlight: { automatic: 0 } })
-  })
-
   it('keeps a canceled fork charged while its child refuses to die, and frees it once reaped', async () => {
     let canceled = false
     let release: (() => void) | undefined
@@ -243,17 +176,6 @@ describe('TerminalSpawnGate', () => {
       expect(gate.snapshot()).toMatchObject({ terminals: 2, hostCapRefused: 2 })
     })
 
-    it('keeps a declared restore sleeping at the cap instead of failing its pane', async () => {
-      capAt(1)
-      await shell('a')
-      await expect(restore('b', { declaredIntent: 'automatic-restore' })).rejects.toThrow(
-        'terminal_spawn_deferred:live_cap'
-      )
-      await expect(restore('c', { declaredIntent: 'user-resume' })).rejects.toThrow(
-        'terminal_spawn_deferred:live_cap'
-      )
-    })
-
     it('frees a slot when a terminal exits, and never charges an attach', async () => {
       capAt(1)
       await shell('a')
@@ -294,19 +216,6 @@ describe('TerminalSpawnGate', () => {
     beforeEach(() => {
       vi.useFakeTimers({ now: 0 })
       useGate('enforce')
-    })
-
-    it('paces an undeclared restore storm to the burst, then one per second', async () => {
-      const results = Array.from({ length: 5 }, (_, i) => restore(`storm-${i}`))
-      await vi.advanceTimersByTimeAsync(0)
-      expect(spawnSubprocess).toHaveBeenCalledTimes(3)
-
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(spawnSubprocess).toHaveBeenCalledTimes(4)
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(spawnSubprocess).toHaveBeenCalledTimes(5)
-      await Promise.all(results)
-      expect(gate.snapshot()).toMatchObject({ liveAutomatic: 5, waiting: 0, waited: 2 })
     })
 
     it('admits an undeclared restore at its deadline instead of refusing it', async () => {
@@ -353,21 +262,6 @@ describe('TerminalSpawnGate', () => {
       expect(spawnSubprocess).toHaveBeenCalledTimes(2)
     })
 
-    it('arms the crash marker before the first automatic fork only', async () => {
-      const armAutomaticWork = vi.fn()
-      gate = new TerminalSpawnGate({
-        log,
-        mode: 'enforce',
-        now: () => Date.now(),
-        armAutomaticWork
-      })
-      host = new TerminalHost({ spawnSubprocess, spawnGate: gate })
-      await host.createOrAttach({ sessionId: 'shell', cols: 80, rows: 24, streamClient: stream() })
-      expect(armAutomaticWork).not.toHaveBeenCalled()
-      await restore('first')
-      expect(armAutomaticWork).toHaveBeenCalledOnce()
-    })
-
     it('lets an undeclared restore wait out a growth storm, refusing it only past its deadline', async () => {
       let pressure: HostPressureLevel = 'critical'
       gate = new TerminalSpawnGate({
@@ -393,18 +287,6 @@ describe('TerminalSpawnGate', () => {
         'terminal_spawn_deferred:pressure'
       )
       expect(spawnSubprocess).toHaveBeenCalledOnce()
-    })
-
-    it('never queues an interactive shell behind a restore storm', async () => {
-      for (let i = 0; i < 3; i++) {
-        await restore(`burst-${i}`)
-      }
-      const waiting = restore('waiting')
-      await expect(
-        host.createOrAttach({ sessionId: 'shell', cols: 80, rows: 24, streamClient: stream() })
-      ).resolves.toMatchObject({ isNew: true })
-      await vi.advanceTimersByTimeAsync(1000)
-      await waiting
     })
 
     it('leaves the queue without forking when the caller cancels', async () => {

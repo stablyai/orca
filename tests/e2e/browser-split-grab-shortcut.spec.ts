@@ -215,6 +215,62 @@ test.describe('browser split grab shortcut', () => {
     await expect(annotateBanner(orcaPage, fixture.secondBrowserTabId)).toBeHidden()
   })
 
+  test('escape typed in the page exits grab, the copy toast and find', async ({ orcaPage }) => {
+    const fixture = await createBrowserSplit(orcaPage, {
+      first: server.pageUrl('a', 1),
+      second: server.pageUrl('b', 1, 'localhost')
+    })
+    await waitForGuestUrl(orcaPage, fixture.firstBrowserTabId, server.pageUrl('a', 1))
+    const overlay = browserOverlay(orcaPage, fixture.firstBrowserTabId)
+    const pressInGuest = (keyCode: string, modifiers: GuestModifier[] = []): Promise<void> =>
+      pressKeyInBrowserGuest(
+        orcaPage,
+        fixture.firstBrowserTabId,
+        fixture.firstBrowserPageId,
+        keyCode,
+        modifiers
+      )
+
+    await pressInGuest('C', [guestModifier])
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await pressInGuest('Escape')
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeHidden()
+
+    // Why: a click-copy rearms the picker when its toast closes; outlasting the toast proves Escape ended it.
+    await pressInGuest('C', [guestModifier])
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await orcaPage.evaluate(async (browserTabId) => {
+      const webview = document.querySelector<Electron.WebviewTag>(
+        `[data-browser-overlay-tab-id="${browserTabId}"] webview`
+      )
+      await webview?.sendInputEvent({ type: 'mouseMove', x: 60, y: 30 })
+      await webview?.sendInputEvent({
+        type: 'mouseDown',
+        x: 60,
+        y: 30,
+        button: 'left',
+        clickCount: 1
+      })
+      await webview?.sendInputEvent({
+        type: 'mouseUp',
+        x: 60,
+        y: 30,
+        button: 'left',
+        clickCount: 1
+      })
+    }, fixture.firstBrowserTabId)
+    await expect(overlay.getByText('Copied').first()).toBeVisible()
+    await pressInGuest('Escape')
+    await expect(overlay.getByText('Copied').first()).toBeHidden()
+    await expect(grabBanner(orcaPage, fixture.firstBrowserTabId)).toBeHidden()
+
+    await pressInGuest('F', [guestModifier])
+    const findInput = overlay.getByPlaceholder('Find in page...')
+    await expect(findInput).toBeVisible()
+    await pressInGuest('Escape')
+    await expect(findInput).toBeHidden()
+  })
+
   test('copy chord with native chat text selected copies instead of arming grab', async ({
     electronApp,
     orcaPage

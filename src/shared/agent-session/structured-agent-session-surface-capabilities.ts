@@ -18,6 +18,8 @@ export const STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY =
 // Save names only on rename-capable hosts; older hosts retain the local tab alias.
 export const STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY =
   'agent-session.structured.rename.v1' as const
+// A client that names chats without reading them (the paired CLI) asks for agentSession.rename alone.
+export const AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY = 'agent-session.rename-only.v1' as const
 // Negotiate resumeFrom before sending: old strict create schemas reject it, while unproven acceptance could silently start a blank chat.
 export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
   'agent-session.structured.resume-history.v1' as const
