@@ -1,3 +1,4 @@
+import { createMobileNativeChatReadingHold } from './mobile-native-chat-reading-hold'
 import { connectMobileNativeChatScrollGesture } from './mobile-native-chat-scroll-gesture'
 import { externalAllowance, visible } from './mobile-native-chat-lower-geometry'
 
@@ -18,8 +19,9 @@ export function connectMobileNativeChatLowerScroll(
   onGeometry: (height: number, allowance: number) => void
 ) {
   let attached = true
-  let hold: { element: HTMLElement; offset: number } | null = null
+  const reading = createMobileNativeChatReadingHold(viewport, content)
   let lastScroll = viewport.scrollTop
+  let lastMaximum = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
   let active: { element: HTMLElement; visible: boolean; clipped: number } | null = null
   let pending: HTMLElement | null | undefined
   let frame: number | null = null
@@ -58,26 +60,16 @@ export function connectMobileNativeChatLowerScroll(
       ? { element, visible: intersectsViewport(element), clipped: clipping(element) }
       : null
   }
-  const capture = () => {
-    const rect = viewport.getBoundingClientRect()
-    const hit = document.elementFromPoint(
-      rect.left + rect.width / 2,
-      rect.top + Math.min(4, rect.height / 2)
-    )
-    hold =
-      hit instanceof HTMLElement && hit !== content && content.contains(hit) && visible(hit)
-        ? { element: hit, offset: hit.getBoundingClientRect().top - rect.top }
-        : null
-  }
   const write = (node: HTMLElement, offset: number) => {
     const next = Math.max(0, Math.min(offset, node.scrollHeight - node.clientHeight))
     if (Math.abs(next - node.scrollTop) < 0.5) {
       return
     }
-    ownWrites.set(node, next)
     node.scrollTop = next
+    ownWrites.set(node, node.scrollTop)
     if (node === viewport) {
-      lastScroll = next
+      lastScroll = node.scrollTop
+      lastMaximum = maximum()
     }
   }
   const expose = (node: HTMLElement, target: HTMLElement) => {
@@ -93,7 +85,11 @@ export function connectMobileNativeChatLowerScroll(
   }
   const reconcile = () => {
     frame = null
-    if (disposed || gesture.active() || settling) {
+    if (disposed) {
+      return
+    }
+    observeOuterMovement()
+    if (gesture.active() || settling) {
       return
     }
     onGeometry(viewport.clientHeight, externalAllowance(root))
@@ -121,24 +117,21 @@ export function connectMobileNativeChatLowerScroll(
         group.getBoundingClientRect().height <= viewport.clientHeight ? group : target
       )
       attached = atBottom()
+      reading.clear()
       if (!attached) {
-        capture()
+        reading.refresh(false)
       }
     } else {
       pending = undefined
       if (attached) {
         write(viewport, maximum())
-      } else if (hold && content.contains(hold.element) && visible(hold.element)) {
-        const displacement =
-          hold.element.getBoundingClientRect().top -
-          viewport.getBoundingClientRect().top -
-          hold.offset
-        write(viewport, viewport.scrollTop + displacement)
       } else {
-        write(viewport, viewport.scrollTop)
+        write(viewport, viewport.scrollTop + (reading.displacement() ?? 0))
       }
-      if (!attached) {
-        capture()
+      if (attached) {
+        reading.clear()
+      } else {
+        reading.refresh(false)
       }
     }
     recordActive()
@@ -178,6 +171,28 @@ export function connectMobileNativeChatLowerScroll(
       schedule()
     }, SCROLL_SETTLE_MS)
   }
+  const observeOuterMovement = () => {
+    const position = viewport.scrollTop
+    const limit = maximum()
+    const bouncing = lastScroll < 0 || lastScroll > lastMaximum || position < 0 || position > limit
+    const delta = bouncing ? 0 : position - Math.min(lastScroll, limit)
+    lastScroll = position
+    lastMaximum = limit
+    if (Math.abs(delta) < 0.5) {
+      return false
+    }
+    pending = undefined
+    reading.move(delta)
+    attached = atBottom()
+    if (attached) {
+      reading.clear()
+    } else {
+      reading.refresh()
+    }
+    recordActive()
+    settleLater()
+    return true
+  }
   const onScroll = (event: Event) => {
     const node = event.target
     if (!(node instanceof HTMLElement)) {
@@ -188,21 +203,16 @@ export function connectMobileNativeChatLowerScroll(
     if (own !== undefined && Math.abs(own - node.scrollTop) < 1) {
       return
     }
-    pending = undefined
+    const moved = observeOuterMovement()
     if (node === viewport) {
-      const delta = node.scrollTop - lastScroll
-      if (hold) {
-        hold.offset -= delta
+      if (!moved) {
+        schedule()
       }
-      lastScroll = node.scrollTop
-      attached = atBottom()
-      if (!attached) {
-        capture()
-      }
-    } else {
-      if (!attached) {
-        capture()
-      }
+      return
+    }
+    pending = undefined
+    if (!attached) {
+      reading.refresh()
     }
     recordActive()
     settleLater()
@@ -214,7 +224,10 @@ export function connectMobileNativeChatLowerScroll(
     },
     settleLater
   )
-  const onScrollEnd = () => {
+  const onScrollEnd = (event: Event) => {
+    if (event.target !== viewport) {
+      return
+    }
     if (settle !== null) {
       clearTimeout(settle)
       settle = null
@@ -270,7 +283,7 @@ export function connectMobileNativeChatLowerScroll(
       if (settle !== null) {
         clearTimeout(settle)
       }
-      hold = null
+      reading.clear()
       pending = undefined
     }
   }
