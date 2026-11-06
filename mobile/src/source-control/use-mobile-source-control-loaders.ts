@@ -8,7 +8,7 @@ import {
   type MutableRefObject
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
@@ -242,6 +242,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     ]
   )
 
+  const t = useMobileTranslation()
   const screenState = useMemo((): ScreenState => {
     if (statusRead?.kind === 'ready') {
       return { kind: 'ready', status: statusRead.status }
@@ -249,7 +250,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     if (statusRead?.kind === 'unavailable') {
       return {
         kind: 'unavailable',
-        message: translate(
+        message: t(
           'sourceControl.loaders.updateDesktop',
           'Update Orca desktop to use Source Control on mobile.'
         )
@@ -269,8 +270,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         kind: 'error',
         message:
           connState === 'connected'
-            ? translate('sourceControl.loaders.connectingToDesktop', 'Connecting to desktop...')
-            : translate('sourceControl.loaders.waitingForDesktop', 'Waiting for desktop...')
+            ? t('sourceControl.loaders.connectingToDesktop', 'Connecting to desktop...')
+            : t('sourceControl.loaders.waitingForDesktop', 'Waiting for desktop...')
       }
     }
     if (empty === 'empty-error') {
@@ -278,11 +279,11 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         kind: 'error',
         message:
           statusError?.message ||
-          translate('sourceControl.loaders.loadFailed', 'Unable to load source control')
+          t('sourceControl.loaders.loadFailed', 'Unable to load source control')
       }
     }
     return { kind: 'loading' }
-  }, [statusRead, statusError, statusFetching, statusEnabled, client, connState])
+  }, [statusRead, statusError, statusFetching, statusEnabled, client, connState, t])
 
   return {
     screenState,
