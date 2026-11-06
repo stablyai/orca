@@ -9,13 +9,13 @@ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatPaneCover } from '../terminal-pane/NativeChatPaneCover'
 
-import { registerTerminalPanePasteListeners } from '../terminal-pane/terminal-pane-paste-listeners'
+import { registerTerminalPanePasteListeners } from '../terminal-pane/input/paste/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from '../terminal-pane/use-terminal-pane-close-actions'
-import type { TerminalPanePasteExecution } from '../terminal-pane/terminal-pane-paste-execution'
+import type { TerminalPanePasteExecution } from '../terminal-pane/input/paste/terminal-pane-paste-execution'
 import {
   pasteTerminalPaneMenuClipboard,
   type TerminalPaneMenuPasteContext
-} from '../terminal-pane/terminal-pane-menu-paste'
+} from '../terminal-pane/input/paste/terminal-pane-menu-paste'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 
 const mocks = vi.hoisted(() => ({
@@ -28,10 +28,10 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
   ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('../terminal-pane/terminal-clipboard-paste', () => ({
+vi.mock('../terminal-pane/clipboard/terminal-clipboard-paste', () => ({
   pasteTerminalClipboard: mocks.terminalClipboard
 }))
-vi.mock('../terminal-pane/terminal-clipboard-event-paste', () => ({
+vi.mock('../terminal-pane/clipboard/terminal-clipboard-event-paste', () => ({
   isClipboardEventPasteRequired: () => false,
   firesNativePasteEvent: () => true,
   getClipboardEventText: (event: ClipboardEvent) => event.clipboardData?.getData('text/plain') ?? ''

@@ -6,7 +6,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktre
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
 import type { PaneCwdMap } from './resolve-split-cwd'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 type TerminalTabShellState = {
   tabsByWorktree: Record<

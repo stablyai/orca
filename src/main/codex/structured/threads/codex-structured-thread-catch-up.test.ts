@@ -1,6 +1,12 @@
+import { recordedCodexRollout } from '../../__fixtures__/codex-rollout-recordings'
+import {
+  prepareLegacyTranscriptImport,
+  importLegacyTranscriptIntoJournal
+} from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { codexNonMessageIdentity } from '../items/codex-thread-item-identity'
+import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { writeFile } from 'node:fs/promises'
-import { importLegacyTranscriptIntoJournal } from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { join } from 'node:path'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -577,3 +583,131 @@ describe('Codex chat catch-up', () => {
     expect(c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
   })
 })
+
+it.each(['a', 'b'] as const)(
+  'conserves recorded %s interruption in an admitted returned-turn transaction',
+  async (label) => {
+    const c = await chat({ now: 1_000 })
+    const records = await recordedCodexRollout(label)
+    const filePath = join(c.root, `rollout-${String(records[0]!.payload.id)}.jsonl`)
+    await writeFile(filePath, records.map((record) => JSON.stringify(record)).join('\n'))
+    const imported = await prepareLegacyTranscriptImport({
+      agent: 'codex',
+      sessionId: SESSION,
+      options: { filePath }
+    })
+    expect(imported.ok).toBe(true)
+    if (!imported.ok) {
+      return
+    }
+    const turnId =
+      label === 'a'
+        ? '01a1b0de-97e0-7c01-babd-9d697204ab3e'
+        : '01a1b0e1-897d-73e0-b910-5b854abbfcb7'
+    const id =
+      label === 'a'
+        ? 'exec-422971fb-5f49-4f00-8701-a031ef77f289'
+        : 'exec-b421ed59-e65b-4311-acc8-685624133938'
+    const body = imported.items.find(
+      (row) => row.body.kind === 'tool-call' && row.body.callId === id
+    )!.body
+    const nativeId = codexNonMessageIdentity(THREAD, turnId, id)
+    const key = agentJournalItemKey(nativeId)
+    const turnIdentity = codexTurnLifecycleIdentity(SESSION, turnId)
+    // Saved-live setup has no adoption cutoff; returned full turns are an admitted caller path.
+    await c.journal.appendItem(
+      turnIdentity,
+      {
+        kind: 'turn',
+        turnId,
+        state: label === 'a' ? 'interrupted' : 'completed',
+        outcome: label === 'a' ? 'cancellation' : 'success'
+      },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    await c.journal.appendItem(nativeId, body, {
+      fence: 1,
+      turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turnIdentity) }
+    })
+    const before = c.journal.item(key)!.revision
+    // API contract derived from recorded command fields, not a captured list/read response.
+    const command = {
+      type: 'commandExecution',
+      id,
+      status: 'failed',
+      command: "/bin/zsh -lc 'sleep 60'",
+      cwd: '/Users/brennanbenson/orca/workspaces/orca/qa-codex-exec-import-qg/codex-exec-import/run/workspace',
+      exitCode: -1,
+      durationMs: label === 'a' ? 9915 : 53631
+    }
+    const supplied = {
+      id: turnId,
+      status: label === 'a' ? 'interrupted' : 'completed',
+      items: [
+        { ...command, aggregatedOutput: 'partial output contract' },
+        { ...command, id: 'unsaved-minus-one' },
+        { ...command, id: 'still-running', status: 'inProgress', exitCode: undefined },
+        { ...command, id: 'failed-seven', exitCode: 7, durationMs: 11872 }
+      ]
+    }
+    await c.open([], { returnedTurns: [supplied], paginate: false })
+    const saved = c.journal.item(key)!
+    expect(saved.revision).toBeGreaterThan(before)
+    expect(saved.body).toMatchObject({
+      kind: 'tool-call',
+      state: 'failed',
+      endedAs: 'interrupted',
+      output: { head: 'partial output contract' }
+    })
+    expect(saved.body).not.toHaveProperty('exitCode')
+    expect(saved.body).not.toHaveProperty('durationMs')
+    expect(c.journal.item(agentJournalItemKey(turnIdentity))?.body).toMatchObject({
+      state: label === 'a' ? 'interrupted' : 'completed'
+    })
+    const calls = projectStructuredItemsToNativeChat(c.journal.snapshot().items)
+      .flatMap((message) => message.blocks)
+      .filter((block) => block.type === 'tool-call')
+    expect(calls.find((call) => call.callId === id)).not.toHaveProperty('exitCode')
+    expect(calls.find((call) => call.callId === id)).not.toHaveProperty('durationMs')
+    expect(calls.find((call) => call.callId === 'unsaved-minus-one')).toMatchObject({
+      state: 'failed',
+      exitCode: -1
+    })
+    expect(calls.find((call) => call.callId === 'unsaved-minus-one')).not.toHaveProperty('endedAs')
+    expect(calls.find((call) => call.callId === 'still-running')).toMatchObject({
+      state: 'running'
+    })
+    expect(calls.find((call) => call.callId === 'failed-seven')).toMatchObject({
+      state: 'failed',
+      exitCode: 7,
+      durationMs: 11872
+    })
+    await c.open([], {
+      returnedTurns: [
+        {
+          ...supplied,
+          items: [
+            command,
+            {
+              ...command,
+              id: 'failed-seven',
+              status: undefined,
+              exitCode: undefined,
+              durationMs: undefined
+            }
+          ]
+        }
+      ],
+      paginate: false
+    })
+    expect(c.journal.item(key)?.body).toEqual(saved.body)
+    expect(
+      c.journal
+        .snapshot()
+        .items.find((row) => row.body.kind === 'tool-call' && row.body.callId === 'failed-seven')
+        ?.body
+    ).toMatchObject({ state: 'failed', exitCode: 7, durationMs: 11872 })
+    await c.reopen()
+    expect(c.journal.item(key)?.body).toEqual(saved.body)
+  }
+)

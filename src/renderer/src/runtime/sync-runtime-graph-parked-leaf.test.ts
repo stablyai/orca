@@ -5,16 +5,19 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>()
-  return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
-})
+vi.mock(
+  '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher',
+  async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>()
+    return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
+  }
+)
 
-import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
+import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState
-} from '@/components/terminal-pane/pty-pre-handler-buffer'
+} from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
 import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 

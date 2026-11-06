@@ -42,7 +42,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
   callRuntimeRpc: mocks.rpc,
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focus,
   focusRuntimeTerminalHandle: mocks.remoteFocus
 }))
