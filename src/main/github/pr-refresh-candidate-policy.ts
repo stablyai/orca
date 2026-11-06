@@ -93,7 +93,7 @@ export function isBackground(reason: GitHubPRRefreshReason): boolean {
 }
 
 export function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
-  return reason === 'visible' || reason === 'swr'
+  return reason === 'visible' || reason === 'swr' || reason === 'watch'
 }
 
 export function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: number): boolean {

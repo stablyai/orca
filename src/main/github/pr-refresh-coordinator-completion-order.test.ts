@@ -45,11 +45,11 @@ describe('main refresh completion ordering', () => {
       const {
         reportVisiblePRRefreshCandidates,
         refreshPRNow,
-        setPRRefreshOutcomeObserver,
+        addPRRefreshOutcomeObserver,
         _getPRRefreshQueueSizeForTests
       } = await import('./pr-refresh-coordinator')
       const observer = vi.fn()
-      setPRRefreshOutcomeObserver(observer)
+      addPRRefreshOutcomeObserver(observer)
       const candidate = makeCandidate({ isSelected: true })
       reportVisiblePRRefreshCandidates([candidate], 1, 1)
       await vi.advanceTimersByTimeAsync(0)
@@ -112,9 +112,9 @@ describe('main refresh completion ordering', () => {
         () => new Promise<PRRefreshOutcome>((resolve) => (finishOlder = resolve))
       )
       .mockImplementation(async () => found('merged'))
-    const { refreshPRNow, setPRRefreshOutcomeObserver } = await import('./pr-refresh-coordinator')
+    const { refreshPRNow, addPRRefreshOutcomeObserver } = await import('./pr-refresh-coordinator')
     const observer = vi.fn()
-    setPRRefreshOutcomeObserver(observer)
+    addPRRefreshOutcomeObserver(observer)
     const candidate = makeCandidate()
     const older = refreshPRNow(candidate)
     await vi.advanceTimersByTimeAsync(0)
@@ -158,10 +158,10 @@ describe('main refresh completion ordering', () => {
     getPRForBranchOutcomeMock.mockImplementation(() =>
       runCoalescedProbe(reads, 'same-provider-lookup', provider, 120_000)
     )
-    const { reportVisiblePRRefreshCandidates, refreshPRNow, setPRRefreshOutcomeObserver } =
+    const { reportVisiblePRRefreshCandidates, refreshPRNow, addPRRefreshOutcomeObserver } =
       await import('./pr-refresh-coordinator')
     const observer = vi.fn()
-    setPRRefreshOutcomeObserver(observer)
+    addPRRefreshOutcomeObserver(observer)
     const candidate = makeCandidate({ isSelected: true })
     reportVisiblePRRefreshCandidates([candidate], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
