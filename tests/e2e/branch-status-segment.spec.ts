@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
@@ -15,7 +15,20 @@ test('switches local and origin branches from the status bar', async ({
   registerPostElectronShutdownCleanup
 }, testInfo) => {
   const fixture = createGoldenWorktree(testRepoPath, 'branch-segment')
-  registerPostElectronShutdownCleanup(async () => cleanupGoldenWorktree(testRepoPath, fixture))
+  // Why: the worker's repository outlives this test, so its remote and branches must be restored.
+  const previousOrigin = spawnSync('git', ['remote', 'get-url', 'origin'], {
+    cwd: testRepoPath,
+    encoding: 'utf8'
+  })
+  const hadOrigin = previousOrigin.status === 0
+  registerPostElectronShutdownCleanup(async () => {
+    cleanupGoldenWorktree(testRepoPath, fixture)
+    const remote = hadOrigin
+      ? ['remote', 'set-url', 'origin', previousOrigin.stdout.trim()]
+      : ['remote', 'remove', 'origin']
+    spawnSync('git', remote, { cwd: testRepoPath })
+    spawnSync('git', ['branch', '-D', 'segment-local', 'segment-remote'], { cwd: testRepoPath })
+  })
   const git = (...args: string[]): string =>
     execFileSync('git', args, { cwd: fixture.worktreePath, encoding: 'utf8' }).trim()
   const currentBranch = (): string => git('branch', '--show-current')
@@ -24,7 +37,7 @@ test('switches local and origin branches from the status bar', async ({
   const origin = testInfo.outputPath('origin.git')
   execFileSync('git', ['clone', '-q', '--bare', testRepoPath, origin])
   execFileSync('git', ['branch', 'segment-remote', 'main'], { cwd: origin })
-  git('remote', 'add', 'origin', origin)
+  git('remote', hadOrigin ? 'set-url' : 'add', 'origin', origin)
   git('fetch', '-q', 'origin')
 
   await waitForSessionReady(orcaPage)
