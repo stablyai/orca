@@ -12,9 +12,11 @@ let dir: string
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-device-registry-auth-'))
+  vi.useFakeTimers({ toFake: ['performance'] })
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   rmSync(dir, { recursive: true, force: true })
 })
@@ -23,9 +25,15 @@ function registryPath(): string {
   return join(dir, DEVICE_REGISTRY_FILENAME)
 }
 
+// Another process's edit is seen once the registry's one-second stat window has passed.
+function editOnDisk(contents: string): void {
+  writeFileSync(registryPath(), contents)
+  vi.advanceTimersByTime(1000)
+}
+
 function removeOnDisk(deviceId: string): void {
   const rows: { deviceId: string }[] = JSON.parse(readFileSync(registryPath(), 'utf8'))
-  writeFileSync(registryPath(), JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
+  editOnDisk(JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
 }
 
 function spyOnSaves() {
@@ -84,7 +92,7 @@ describe('device registry auth checks see edits made on disk', () => {
     }
 
     expect(reads).not.toHaveBeenCalled()
-    writeFileSync(registryPath(), `${readFileSync(registryPath(), 'utf8')}\n`)
+    editOnDisk(`${readFileSync(registryPath(), 'utf8')}\n`)
     registry.validateToken(desktop.token)
     expect(reads).toHaveBeenCalledOnce()
   })

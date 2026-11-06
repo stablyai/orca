@@ -348,6 +348,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it.each(['binary', 'text', 'sibling-cascade'] as const)(
     'retires an established keyed terminal subscription through %s revocation',
     async (kind) => {
+      vi.useFakeTimers({ toFake: ['performance'] })
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-fork-stream-revoke-'))
       const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
       const write = vi.fn(() => true)
@@ -462,6 +463,8 @@ describe('OrcaRuntimeRpcServer', () => {
             )
           )
         )
+        // The registry sees another process's edit once its one-second stat window has passed.
+        vi.advanceTimersByTime(1000)
         const closed = waitForWsClose(ws)
 
         if (kind === 'sibling-cascade') {
@@ -497,6 +500,7 @@ describe('OrcaRuntimeRpcServer', () => {
         expect(server['mobileSocketWiring']?.connectionCount).toBe(0)
       } finally {
         cleanup.mockRestore()
+        vi.useRealTimers()
         await server.stop()
       }
     }
