@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useNavigationContainerRef, useRouter } from 'expo-router'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigationContainerRef, usePathname, useRouter } from 'expo-router'
 // Expo Router's own stack router, the one Navigator falls back to; not re-exported from the package root.
 import { StackRouter } from 'expo-router/build/layouts/StackClient'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
@@ -50,10 +50,22 @@ function matchSegments(
   return pattern.length === segments.length ? params : null
 }
 
+// A malformed escape names no screen; it must not throw inside the navigator's render.
+function decodedPathSegments(pathname: string): string[] | null {
+  try {
+    return pathname.split('/').map(decodeURIComponent)
+  } catch {
+    return null
+  }
+}
+
 // Resolve an /h/ href to this stack's screen: static segments beat dynamic ones and a catch-all comes last, as Expo ranks them.
 export function stackRouteForHref(href: string, routeNames: readonly string[]): StackRoute | null {
   const url = new URL(href, 'orca-page://document')
-  const segments = url.pathname.split('/').slice(2).map(decodeURIComponent)
+  const segments = decodedPathSegments(url.pathname)?.slice(2)
+  if (segments === undefined) {
+    return null
+  }
   let best: (StackRoute & { rank: number }) | null = null
   for (const name of routeNames) {
     const pattern = name
@@ -113,6 +125,8 @@ export function useShellOpenTarget(): StackRouterFactory {
   const client = usePageBridgeClient()
   const router = useRouter()
   const navigation = useNavigationContainerRef()
+  const pathname = useRef('')
+  pathname.current = usePathname()
   const [opened] = useState(() => {
     const target = openTargetOf(client.getShellSession()?.route)
     return target !== '' && isThisHost(client, target) && servedHere(client, target) ? target : null
@@ -130,6 +144,11 @@ export function useShellOpenTarget(): StackRouterFactory {
       }
       // Unserved targets go back to the shell, which pushes them natively as it did before page version 2.
       if (handOffRoute(client, target, report) !== 'local') {
+        return
+      }
+      // Already on top: a second copy would only stack the same screen under itself.
+      const path = new URL(target, 'orca-page://document').pathname
+      if (decodedPathSegments(path)?.join('/') === pathname.current) {
         return
       }
       // A route update can land before the root navigator is ready; Expo Router refuses to route until then.

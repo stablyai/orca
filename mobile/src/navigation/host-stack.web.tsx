@@ -79,6 +79,13 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const nodes = useRef(new Map<string, HTMLElement>())
   const mounted = useRef(new Set<string>())
   const [paintedKey, setPaintedKey] = useState<string | null>(null)
+  const waiting = useRef(false)
+  // Only a paint that releases a waiting route re-renders the stack; every other screen's paint is ignored.
+  const onPainted = useCallback((routeKey: string) => {
+    if (waiting.current) {
+      setPaintedKey(routeKey)
+    }
+  }, [])
 
   // Derive during render so a pop’s first frame still contains its outgoing screen.
   if (shown.routes !== routes) {
@@ -106,6 +113,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
     for (const route of drawn) {
       mounted.current.add(route.key)
     }
+    waiting.current = drawn.length < slots.length
   })
 
   // Start before paint so screens never flash at rest before sliding.
@@ -136,7 +144,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
             routeKey={route.key}
             nodes={nodes.current}
             visible={route.key === topKey || leaving || route.key === underKey}
-            onPainted={setPaintedKey}
+            onPainted={onPainted}
           >
             {descriptor?.render()}
           </StackScreen>
