@@ -15,6 +15,8 @@ import {
 import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
 import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../shared/orcad-stop-request'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
+import type { OrcadUnexpectedExit } from '../../shared/orcad-unexpected-exit'
+import { orcadPreviousUnexpectedExit } from './orcad-unexpected-exit'
 
 /** Distinguish real PTY spawn coverage from handshake-only platform probes. */
 type PtySelfTestCoverage = 'pty-spawn' | 'handshake'
@@ -58,6 +60,8 @@ export type OrcadHealth = {
   stopRequests?: typeof ORCAD_STOP_REQUESTS_CAPABILITY
   /** Managed launches only; older/user-started builds omit prior idle-stop outcomes. */
   previousIdleStop?: OrcadIdleStopRecord | null
+  /** Older builds omit it; null means the previous run stopped cleanly or its boot is unknown. */
+  previousUnexpectedExit?: OrcadUnexpectedExit | null
 }
 
 /** Hash launcher contents: inherited version strings cannot prove that rollback replaced a build. */
@@ -146,6 +150,7 @@ export async function collectOrcadHealth(
     terminalDaemon: await collectTerminalDaemonHealth(),
     ...(profileStateAuthority ? { profileStateAuthority } : {}),
     stopRequests: ORCAD_STOP_REQUESTS_CAPABILITY,
-    ...(previousIdleStop !== undefined ? { previousIdleStop } : {})
+    ...(previousIdleStop !== undefined ? { previousIdleStop } : {}),
+    previousUnexpectedExit: orcadPreviousUnexpectedExit()
   }
 }

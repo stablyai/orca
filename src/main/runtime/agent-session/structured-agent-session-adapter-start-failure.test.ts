@@ -9,11 +9,11 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
 import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
-import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

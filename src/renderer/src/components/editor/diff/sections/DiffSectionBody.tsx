@@ -19,6 +19,7 @@ import {
   syncDiffEditorOriginalWordWrap
 } from '../monaco-view/diff-editor-word-wrap-options'
 import { monacoFindOptions } from '../../monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
 import { installDiffEditorShiftWheelScroll } from '../monaco-view/diff-editor-shift-wheel-scroll'
 import { installCombinedDiffCursorReveal } from '../../combined-diff/scroll-viewport/combined-diff-cursor-reveal'
 import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
@@ -98,9 +99,18 @@ export function DiffSectionBody({
       renderOverviewRuler: false,
       scrollbar: combinedDiffSectionScrollbarOptions,
       hideUnchangedRegions: { enabled: true },
-      find: monacoFindOptions
+      find: monacoFindOptions,
+      unicodeHighlight: buildEditorUnicodeHighlightOptions(language)
     }),
-    [isEditable, sideBySide, typography, editorLineNumbers, diffWordWrap, diffShowWhitespace]
+    [
+      isEditable,
+      sideBySide,
+      typography,
+      editorLineNumbers,
+      diffWordWrap,
+      diffShowWhitespace,
+      language
+    ]
   )
   useLayoutEffect(() => {
     diffWordWrapRef.current = diffWordWrap

@@ -8,6 +8,7 @@ import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
 import { activateMobileUiLocale } from '../i18n/mobile-i18n'
 import { useMobileFileTapHandlers } from '../session/use-mobile-file-tap-handlers'
 import { MobileNativeChatComposerAttachments } from '../session/native-chat/composer/MobileNativeChatComposerAttachments'
+import { MobileNativeChatOpenFileContext } from '../session/native-chat/mobile-native-chat-open-file-context'
 import { normalizeMobileFilePreviewRouteParams } from './mobile-file-preview-route'
 
 import { AttachmentTextSource } from '../../../src/shared/attachment-text-source'
@@ -277,13 +278,16 @@ it(
         reportChatTapFailure: vi.fn(),
         getSendCompletionGeneration: () => 0
       })
-      return createElement(MobileNativeChatComposerAttachments, {
-        images: [],
-        files: [
-          { id: 'file', name: 'report.txt', mime: 'text/plain', byteLength: content.length, path }
-        ],
-        onOpenFile: handlers.handleNativeChatFileTap
-      })
+      return createElement(
+        MobileNativeChatOpenFileContext,
+        { value: handlers.handleNativeChatFileTap },
+        createElement(MobileNativeChatComposerAttachments, {
+          images: [],
+          files: [
+            { id: 'file', name: 'report.txt', mime: 'text/plain', byteLength: content.length, path }
+          ]
+        })
+      )
     }
     const container = document.createElement('div')
     document.body.append(container)

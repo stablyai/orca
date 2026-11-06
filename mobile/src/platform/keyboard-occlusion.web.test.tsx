@@ -6,9 +6,7 @@ import {
   currentSoftKeyboardHeight,
   subscribeSoftKeyboard,
   useKeyboardOcclusion,
-  useSoftKeyboard,
-  publishShellKeyboardSource,
-  type SoftKeyboardState
+  publishShellKeyboardSource
 } from './keyboard-occlusion.web'
 
 class FakeVisualViewport extends EventTarget {
@@ -237,10 +235,10 @@ describe('the keyboard as events, for a sheet', () => {
   })
 })
 
-let keyboardState: SoftKeyboardState = { height: 0, visible: false }
+let keyboardHeight = 0
 
 function StateHarness(): null {
-  keyboardState = useSoftKeyboard()
+  keyboardHeight = useKeyboardOcclusion()
   return null
 }
 
@@ -281,11 +279,11 @@ function createShellKeyboard(initial = 0) {
 describe('the state a native screen reads, from the browser outside the shell', () => {
   it('is open exactly while something is covered', async () => {
     const tree = await mountState()
-    expect(keyboardState).toEqual({ height: 0, visible: false })
+    expect(keyboardHeight).toBe(0)
     await act(async () => viewport?.resizeTo(464))
-    expect(keyboardState).toEqual({ height: 336, visible: true })
+    expect(keyboardHeight).toBe(336)
     await act(async () => viewport?.resizeTo(LAYOUT_HEIGHT))
-    expect(keyboardState).toEqual({ height: 0, visible: false })
+    expect(keyboardHeight).toBe(0)
     await act(async () => tree.unmount())
   })
 })
@@ -304,13 +302,13 @@ describe('the keyboard the shell says covers the page', () => {
     // Pixel_API_37: the suggestion strip grows IME height from 312 to 346.
     for (const height of [312, 346]) {
       await act(async () => shell.move(height))
-      expect(keyboardState).toEqual({ height, visible: true })
+      expect(keyboardHeight).toBe(height)
       expect(lift).toBe(height)
     }
     await act(async () => viewport?.resizeTo(464))
-    expect(keyboardState.height).toBe(346)
+    expect(keyboardHeight).toBe(346)
     await act(async () => shell.move(0))
-    expect(keyboardState).toEqual({ height: 0, visible: false })
+    expect(keyboardHeight).toBe(0)
     expect(lift).toBe(0)
     await act(async () => {
       tree.unmount()
@@ -323,7 +321,7 @@ describe('the keyboard the shell says covers the page', () => {
     publishShellKeyboardSource(createShellKeyboard(312).source)
     expect(currentSoftKeyboardHeight()).toBe(312)
     const tree = await mountState()
-    expect(keyboardState).toEqual({ height: 312, visible: true })
+    expect(keyboardHeight).toBe(312)
     await act(async () => tree.unmount())
   })
 

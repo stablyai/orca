@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { Tab } from '../../../shared/tab-types'
 import { isAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import type {
@@ -60,8 +60,13 @@ function useStructuredSessionSummaryField<T>(
   }, [executionHostId])
   const watched = sessionId ? feed : null
   useEffect(() => watched?.activate(), [watched])
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      watched && sessionId ? watched.subscribeSession(sessionId, listener) : noSubscription(),
+    [watched, sessionId]
+  )
   return useSyncExternalStore(
-    watched?.subscribe ?? noSubscription,
+    subscribe,
     () => read(sessionId ? watched?.getNamingSnapshot().get(sessionId) : undefined),
     () => null
   )

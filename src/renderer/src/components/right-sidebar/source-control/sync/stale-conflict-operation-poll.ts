@@ -35,7 +35,8 @@ export function useStaleConflictOperationPolling(args: {
     slowTaskBackoff
   } = args
   // Active worktrees already receive full Git status refreshes.
-  const staleConflictWorktrees = useMemo(() => {
+  // Why a content key: unrelated worktree writes would otherwise restart the poll and probe immediately.
+  const staleConflictWorktreesKey = useMemo(() => {
     const result: { id: string; path: string }[] = []
     for (const [worktreeId, op] of Object.entries(conflictOperationByWorktree)) {
       if (worktreeId === activeWorktreeId || op === 'unknown') {
@@ -50,12 +51,14 @@ export function useStaleConflictOperationPolling(args: {
         result.push({ id: worktree.id, path: worktree.path })
       }
     }
-    return result
+    return JSON.stringify(result)
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
   useEffect(() => {
     if (!enabled) {
       return
     }
+    const staleConflictWorktrees: { id: string; path: string }[] =
+      JSON.parse(staleConflictWorktreesKey)
     if (staleConflictWorktrees.length === 0) {
       return
     }
@@ -110,5 +113,5 @@ export function useStaleConflictOperationPolling(args: {
       pollRunner.dispose()
       stopVisiblePoll()
     }
-  }, [enabled, staleConflictWorktrees, setConflictOperation, isConnectionReady, slowTaskBackoff])
+  }, [enabled, staleConflictWorktreesKey, setConflictOperation, isConnectionReady, slowTaskBackoff])
 }

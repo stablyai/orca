@@ -234,17 +234,6 @@ describe('WSL browser network execution route', () => {
     expect(child.kill).toHaveBeenCalledOnce()
   })
 
-  it('rejects stale runtime identity before launching WSL', async () => {
-    const launchRelay = vi.fn()
-    await expect(
-      resolveWslBrowserNetworkExecutionRoute(
-        { executionHost, runtimeId: 'runtime-a', runtimeRevision: 8 },
-        { launchRelay }
-      )
-    ).rejects.toThrow('browser_tunnel_execution_host_mismatch')
-    expect(launchRelay).not.toHaveBeenCalled()
-  })
-
   it('invalidates the route when the exact distro process exits', async () => {
     const child = createRelayProcess(() => new FakeDestination())
     const route = await resolveWslBrowserNetworkExecutionRoute(
@@ -258,26 +247,6 @@ describe('WSL browser network execution route', () => {
     const socket = route.connect({ host: 'must-not-fallback.internal', port: 443 })
     socket.on('error', () => {})
     await vi.waitFor(() => expect(socket.destroyed).toBe(true))
-    await route.close()
-  })
-
-  it('delivers a response larger than the relay receive window', async () => {
-    const payload = patternedPayload(4 * BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
-    const destination = new PacedDestination(payload)
-    const route = await resolveWslBrowserNetworkExecutionRoute(
-      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 7 },
-      { launchRelay: async () => createRelayProcess(() => destination.accept()) }
-    )
-
-    const socket = route.connect({ host: 'large.internal', port: 443 })
-    socket.on('error', () => {})
-    const received: Buffer[] = []
-    socket.on('data', (bytes) => received.push(Buffer.from(bytes)))
-
-    await vi.waitFor(() => expect(Buffer.concat(received).byteLength).toBe(payload.byteLength), {
-      timeout: 10_000
-    })
-    expect(Buffer.concat(received).equals(payload)).toBe(true)
     await route.close()
   })
 

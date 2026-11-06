@@ -36,7 +36,7 @@ it.each(['reattach', 'cold-restore-new'] as const)(
     await p.connecting
     expect(window.api.pty.kill).not.toHaveBeenCalled()
     expect(p.state.terminalLayoutsByTabId[p.tabId].ptyIdsByLeafId?.[p.leafId]).toBe('pty-restored')
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     vi.mocked(window.api.pty.spawn).mockResolvedValueOnce({ id: 'pty-restored', isReattach: true })
     const replacement = createIpcPtyTransport({})
     await replacement.connect({ url: '', sessionId: 'pty-restored', callbacks: {} })
@@ -49,7 +49,7 @@ it.each(['layout', 'transport'] as const)(
   'protects a sibling owner recorded only in %s',
   async (owner) => {
     const p = await preparePendingSplitClose()
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     const survivor = createIpcPtyTransport({})
     if (owner === 'transport') {
       survivor.attach({ existingPtyId: 'pty-restored', callbacks: {} })
@@ -85,7 +85,7 @@ it.each(['same-leaf', 'different-tab', 'new-transport-map'] as const)(
     const p = await preparePendingSplitClose()
     p.actions.executeClosePane(1, 'user')
     await p.mainAnswered()
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     const replacement = createIpcPtyTransport({})
     if (owner === 'same-leaf') {
       p.state.terminalLayoutsByTabId[p.tabId].ptyIdsByLeafId = { [p.leafId]: 'pty-restored' }

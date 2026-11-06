@@ -15,7 +15,7 @@ import {
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
-} from './terminal-view-attribute-store'
+} from './terminal/view/terminal-view-attribute-store'
 import type {
   TerminalViewAttributes,
   TerminalViewRgb

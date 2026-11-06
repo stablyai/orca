@@ -16,7 +16,7 @@ import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { commitMessagePickerModel } from '@/components/feature-wall/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
+import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,

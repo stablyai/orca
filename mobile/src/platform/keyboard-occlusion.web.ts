@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 export type ShellKeyboardSource = {
   read: () => number
@@ -66,24 +66,11 @@ export function currentSoftKeyboardHeight(): number {
   return viewport === undefined ? 0 : occlusion(viewport)
 }
 
-export function useKeyboardOcclusion(): number {
-  const [keyboardLift, setKeyboardLift] = useState(0)
-
-  useEffect(() => {
-    setKeyboardLift(currentSoftKeyboardHeight())
-    return subscribeSoftKeyboard(
-      (height) => setKeyboardLift(height),
-      () => setKeyboardLift(0)
-    )
-  }, [])
-
-  return keyboardLift
+function subscribeKeyboardHeight(onChange: () => void): () => void {
+  return subscribeSoftKeyboard(onChange, onChange)
 }
 
-// Unlike native keyboard events, page visibility is inferred from a positive occluded strip.
-export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
-
-export function useSoftKeyboard(): SoftKeyboardState {
-  const height = useKeyboardOcclusion()
-  return { height, visible: height > 0 }
+// Read on first render too, so a view that mounts under an open keyboard paints in place.
+export function useKeyboardOcclusion(): number {
+  return useSyncExternalStore(subscribeKeyboardHeight, currentSoftKeyboardHeight)
 }

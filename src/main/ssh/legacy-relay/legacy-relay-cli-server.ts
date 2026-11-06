@@ -12,7 +12,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import {
   assertLegacyRelayCliScope,
   resolveLegacyRelayCliCaller,

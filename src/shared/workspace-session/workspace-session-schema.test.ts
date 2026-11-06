@@ -177,7 +177,8 @@ describe('parseWorkspaceSession', () => {
             aiVaultTitle: {
               agent: 'codex',
               sessionId: 'session-1',
-              title: 'Provider thread name'
+              title: 'Provider thread name',
+              kind: 'named'
             },
             customTitle: null,
             color: null,
@@ -201,7 +202,8 @@ describe('parseWorkspaceSession', () => {
             aiVaultTitle: {
               agent: 'codex',
               sessionId: 'session-1',
-              title: 'Provider thread name'
+              title: 'Provider thread name',
+              kind: 'unknown-future-kind'
             },
             customLabel: null,
             color: null,
@@ -216,8 +218,12 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      // The kind survives a restore, so a session's name still outranks a quick-command label.
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.kind).toBe('named')
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
       expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      // An unknown kind from a newer build keeps the title, unclassified.
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.kind).toBeUndefined()
       expect(result.value.unifiedTabs?.wt[0].executionHostId).toBe('runtime:host-b')
     }
   })

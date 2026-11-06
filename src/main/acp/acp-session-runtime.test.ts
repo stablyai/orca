@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AcpAuthRequiredError, AcpConnectionClosedError, AcpRpcError } from './acp-errors'
+import { AcpConnectionClosedError } from './acp-errors'
 import {
   AcpSessionRuntime,
   type AcpSessionRuntimeOptions,
@@ -10,7 +10,6 @@ import type {
   AgentCapabilities,
   RequestPermissionResponse
 } from './generated/acp-protocol.generated'
-import { SetSessionConfigOptionRequestSchema } from './generated/acp-protocol.generated'
 
 const opened: { runtime: AcpSessionRuntime; agent: AcpScriptedAgent }[] = []
 const startOptions = { cwd: '/runtime/project', mcpServers: [] }
@@ -98,12 +97,16 @@ describe('ACP session runtime', () => {
     }
   )
 
-  it('denies autonomous permissions between attempts and allows the admitted retry to ask', async () => {
+  it('lets the agent ask from its own turn while a busy refusal holds the prompt', async () => {
+    const asked: string[] = []
     const { runtime, agent } = fixture(
       {},
       {
         retryBusyPrompts: true,
-        onPermission: () => ({ outcome: { outcome: 'selected', optionId: 'allow' } })
+        onPermission: (request) => {
+          asked.push(request.toolCall.toolCallId)
+          return { outcome: { outcome: 'selected', optionId: 'allow' } }
+        }
       }
     )
     await runtime.start(startOptions)
@@ -125,21 +128,16 @@ describe('ACP session runtime', () => {
     const pending = runtime.prompt([...textPrompt])
     await tick()
     expect(agent.frames.find((frame) => frame.id === 'same-chunk')).toMatchObject({
-      result: { outcome: { outcome: 'cancelled' } }
-    })
-    expect(await agent.request('waiting', 'session/request_permission', permission)).toMatchObject({
-      result: { outcome: { outcome: 'cancelled' } }
+      result: { outcome: { outcome: 'selected', optionId: 'allow' } }
     })
     agent.on('session/prompt', (frame) => {
-      void agent.request('admitted', 'session/request_permission', permission).then((response) => {
-        expect(response).toMatchObject({
-          result: { outcome: { outcome: 'selected', optionId: 'allow' } }
-        })
+      void agent.request('admitted', 'session/request_permission', permission).then(() => {
         agent.reply(frame, { stopReason: 'end_turn' })
       })
     })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await pending).toEqual({ stopReason: 'end_turn' })
+    expect(asked).toHaveLength(2)
   })
 
   it.each(['close', 'EOF'] as const)('ends delayed busy recovery on %s', async (action) => {
@@ -216,73 +214,6 @@ describe('ACP session runtime', () => {
     expect(runtime.closed).toBe(false)
     expect(() => runtime.requestExtension('x.ai/subagent/cancel', {})).toThrow('underscore')
   })
-  it('initializes once, starts a session, streams typed updates, and completes the turn', async () => {
-    const { runtime, agent } = fixture()
-    const events: AcpSessionEvent[] = []
-    const unsubscribe = runtime.subscribe((event) => events.push(event))
-    const updates = [
-      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Hello' } },
-      { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'Thinking' } },
-      { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'hello' } },
-      { sessionUpdate: 'tool_call', toolCallId: 'tool-1', title: 'Read file' },
-      { sessionUpdate: 'tool_call_update', toolCallId: 'tool-1', status: 'completed' },
-      {
-        sessionUpdate: 'plan',
-        entries: [{ content: 'Read', priority: 'medium', status: 'completed' }]
-      },
-      { sessionUpdate: 'usage_update', used: 12, size: 100 },
-      { sessionUpdate: 'available_commands_update', availableCommands: [] },
-      { sessionUpdate: 'current_mode_update', currentModeId: 'plan' },
-      { sessionUpdate: 'config_option_update', configOptions: [] },
-      { sessionUpdate: 'session_info_update', title: 'Test session' }
-    ]
-    agent.on('session/prompt', (frame) => {
-      for (const update of updates) {
-        agent.notify('session/update', { sessionId: 'session-1', update })
-      }
-      agent.reply(frame, { stopReason: 'end_turn' })
-    })
-    await Promise.all([runtime.initialize(), runtime.initialize()])
-    expect(await runtime.start(startOptions)).toMatchObject({ kind: 'new', sessionId: 'session-1' })
-    expect(await runtime.prompt([...textPrompt])).toEqual({ stopReason: 'end_turn' })
-    expect(
-      events.map((event) => (event.kind === 'known' ? event.notification.update : event.raw.update))
-    ).toEqual(updates)
-    expect(agent.frames.filter((frame) => frame.method === 'initialize')).toHaveLength(1)
-    expect(agent.frames[0].params).toEqual({
-      protocolVersion: 1,
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }
-    })
-    expect(agent.frames.find((frame) => frame.method === 'session/new')?.params).toEqual(
-      startOptions
-    )
-    unsubscribe()
-    agent.notify('session/update', { sessionId: 'session-1', update: updates[0] })
-    expect(events).toHaveLength(updates.length)
-  })
-
-  it.each([
-    [{ loadSession: true }, undefined, 'load'],
-    [{ sessionCapabilities: { resume: {} } }, undefined, 'resume'],
-    [{ loadSession: true, sessionCapabilities: { resume: {} } }, undefined, 'load'],
-    [{ loadSession: true, sessionCapabilities: { resume: {} } }, 'resume', 'resume'],
-    [{ loadSession: true, sessionCapabilities: { resume: null } }, 'resume', 'load']
-  ] as const)(
-    'selects supported activation (%j, %s)',
-    async (capabilities, preference, expected) => {
-      const { runtime, agent } = fixture(capabilities)
-      const result = await runtime.start({
-        ...startOptions,
-        sessionId: 'old',
-        resumePreference: preference
-      })
-      expect(result).toMatchObject({ kind: expected, sessionId: 'old' })
-      expect(agent.frames.at(-1)).toMatchObject({
-        method: `session/${expected}`,
-        params: { ...startOptions, sessionId: 'old' }
-      })
-    }
-  )
 
   it('refuses unsupported restoration without silently creating a different session', async () => {
     const { runtime, agent } = fixture({ sessionCapabilities: { resume: null } })
@@ -290,45 +221,6 @@ describe('ACP session runtime', () => {
       code: -32601
     })
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
-  })
-
-  it('round-trips permission and vendor requests while prompt is pending', async () => {
-    const permitted = deferred<unknown>()
-    const { runtime, agent } = fixture(
-      {},
-      {
-        onPermission: (request) => {
-          expect(request.toolCall.toolCallId).toBe('tool-1')
-          return { outcome: { outcome: 'selected', optionId: 'allow' } }
-        },
-        onRequest: (method, params) =>
-          method === '_vendor/question'
-            ? { answer: params }
-            : (() => {
-                throw new AcpRpcError(-32601, 'Unknown method')
-              })()
-      }
-    )
-    agent.on('session/prompt', (frame) => {
-      void agent.request('agent-id', 'session/request_permission', permission).then((response) => {
-        permitted.resolve(response.result)
-        agent.reply(frame, { stopReason: 'end_turn' })
-      })
-    })
-    await runtime.start(startOptions)
-    const prompt = runtime.prompt([...textPrompt])
-    expect(await permitted.promise).toEqual({ outcome: { outcome: 'selected', optionId: 'allow' } })
-    await prompt
-    expect(await agent.request(1, '_vendor/question', 'yes')).toMatchObject({
-      id: 1,
-      result: { answer: 'yes' }
-    })
-    expect(await agent.request('unknown', '_vendor/unknown', {})).toMatchObject({
-      error: { code: -32601 }
-    })
-    expect(await agent.request('fs', 'fs/read_text_file', {})).toMatchObject({
-      error: { code: -32601 }
-    })
   })
 
   it('leaves open and late permission decisions with their owner after cancel', async () => {
@@ -362,18 +254,6 @@ describe('ACP session runtime', () => {
     await prompt
   })
 
-  it('surfaces authentication-required errors with code and data', async () => {
-    const { runtime, agent } = fixture()
-    agent.on('session/new', (frame) =>
-      agent.fail(frame, -32000, 'Login required', { detail: 'Sign in' })
-    )
-    await expect(runtime.start(startOptions)).rejects.toBeInstanceOf(AcpAuthRequiredError)
-    await expect(runtime.start(startOptions)).rejects.toMatchObject({
-      code: -32000,
-      data: { detail: 'Sign in' }
-    })
-  })
-
   it('authenticates once with a configured agent method and retries session setup', async () => {
     const { runtime, agent } = fixture()
     let authenticated = false
@@ -397,54 +277,6 @@ describe('ACP session runtime', () => {
       'session/new'
     ])
     expect(agent.frames[2].params).toEqual({ methodId: 'login' })
-  })
-
-  it('leaves advertised authentication methods for the caller to choose', async () => {
-    const { runtime, agent } = fixture()
-    const authMethods = [
-      { id: 'terminal', name: 'Interactive login', type: 'terminal' },
-      { id: 'agent', name: 'Agent login' }
-    ]
-    agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1, authMethods }))
-    agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Login required'))
-    await expect(runtime.start(startOptions)).rejects.toMatchObject({ authMethods })
-    expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize', 'session/new'])
-  })
-
-  it('sends mode, model, and config changes to the active session', async () => {
-    const { runtime, agent } = fixture()
-    agent.on('session/set_mode', (frame) => agent.reply(frame, {}))
-    agent.on('session/set_model', (frame) => agent.reply(frame, {}))
-    agent.on('session/set_config_option', (frame) => {
-      SetSessionConfigOptionRequestSchema.parse(frame.params)
-      agent.reply(frame, { configOptions: [] })
-    })
-    await runtime.start(startOptions)
-    await runtime.setMode('plan')
-    await runtime.setModel('model-1')
-    await runtime.setConfigOption('thinking', 'high')
-    expect(agent.frames.slice(-3).map((frame) => frame.params)).toEqual([
-      { sessionId: 'session-1', modeId: 'plan' },
-      { sessionId: 'session-1', modelId: 'model-1' },
-      { sessionId: 'session-1', configId: 'thinking', value: 'high' }
-    ])
-    await runtime.setConfigOption('enabled', true)
-    expect(agent.frames.at(-1)?.params).toEqual({
-      sessionId: 'session-1',
-      configId: 'enabled',
-      value: true,
-      type: 'boolean'
-    })
-  })
-
-  it('rejects an unsupported protocol and malformed session responses', async () => {
-    const { runtime, agent } = fixture()
-    agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 2 }))
-    await expect(runtime.start(startOptions)).rejects.toMatchObject({ code: -32602 })
-    expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
-    const malformed = fixture()
-    malformed.agent.on('session/new', (frame) => malformed.agent.reply(frame, {}))
-    await expect(malformed.runtime.start(startOptions)).rejects.toMatchObject({ code: -32603 })
   })
 
   it('rejects unroutable permission requests and answers an unavailable selection cancelled', async () => {

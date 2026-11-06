@@ -12,7 +12,7 @@ import {
   resolveWindowsShellOverride
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
-import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
+import { readInFlightCommandCodeTurn } from '../parking/output-watchers/parked-terminal-command-status'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
@@ -20,7 +20,7 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect-facts-handler'
-import { isRendererHiddenPtyDeliveryGateEnabled } from '../terminal-hidden-delivery-gate'
+import { isRendererHiddenPtyDeliveryGateEnabled } from '../pty-transport/delivery/terminal-hidden-delivery-gate'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,

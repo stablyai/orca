@@ -14,15 +14,16 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabActivationResult } from '../../../../shared/runtime-session-contracts'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { includeTargetResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { includeTargetResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
-import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
+import { recordShownTerminalUserOpen } from '../../run-terminal-client-use'
 import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract toMobileSessionTabsResult(
@@ -231,6 +232,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           }
           throw err
         }
+        if (!automatic) {
+          recordShownTerminalUserOpen(this, worktreeId, tab.id)
+        }
         const activated = this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
             includeAgentSenders: opts.includeAgentSenders
@@ -261,6 +265,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
                 candidate.isActive
             )
       const targetTab = activeSibling ?? tab
+      if (!automatic) {
+        recordShownTerminalUserOpen(this, worktreeId, targetTab.id)
+      }
       if (targetsHost && !this.notifier?.focusTerminal) {
         if (
           !targetTab.isActive &&

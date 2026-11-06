@@ -11,7 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type * as structuredSessionClient from '@/runtime/structured-agent-session-client'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-agent-session-launch-registry'
 import {

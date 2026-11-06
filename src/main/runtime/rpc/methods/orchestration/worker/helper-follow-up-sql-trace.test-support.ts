@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { SqliteBindings, SqliteRow } from '../../../../../sqlite/sqlite-statement'
 import { installSqlVisitCounters } from '../../../../dispatch-predicate-visits.test-fixture'
 

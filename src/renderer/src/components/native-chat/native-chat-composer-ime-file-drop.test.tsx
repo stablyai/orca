@@ -37,7 +37,9 @@ const testState: {
   }
 }))
 
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: typeof testState.store) => unknown) =>
@@ -45,7 +47,7 @@ vi.mock('@/store', () => {
   useAppStore.getState = () => testState.store
   return { useAppStore }
 })
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
 // Retain production notices and exports so mocks cannot hide stale wording or new behavior.

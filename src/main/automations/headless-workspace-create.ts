@@ -1,5 +1,5 @@
 import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
-import { hostQualifiedRepoSelector } from '../runtime/runtime-repo-selector'
+import { hostQualifiedRepoSelector } from '../runtime/workspaces/catalog/runtime-repo-selector'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
@@ -45,6 +45,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     startupAgent: automation.agentId,
     startupPrompt: automation.prompt,
     startupSuppressUpdatePrompt: true,
+    startupTitle: run.title,
     ...(setup.extraAgentArgs ? { startupExtraAgentArgs: setup.extraAgentArgs } : {}),
     ...(setup.agentArgs !== undefined ? { startupAgentArgs: setup.agentArgs } : {}),
     ...(setup.sessionOptions ? { startupSessionOptions: setup.sessionOptions } : {}),
