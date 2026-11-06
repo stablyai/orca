@@ -90,9 +90,9 @@ export function NavBar({
 
 // Sits on the bar's bottom edge so the title, subtitle and accessory never move.
 function NavBarRefreshLine() {
-  // Unknown counts as reduced, like LoadingSpinner.
-  const reducedMotion = useReducedMotionEnabled() !== false
-  const sweep = useWorkingSweep(!reducedMotion)
+  // Draw nothing until the preference is known, so a reveal never swaps shapes.
+  const reducedMotion = useReducedMotionEnabled()
+  const sweep = useWorkingSweep(reducedMotion === false)
   return (
     <View
       pointerEvents="none"
@@ -100,15 +100,15 @@ function NavBarRefreshLine() {
       importantForAccessibility="no-hide-descendants"
       style={styles.refreshTrack}
     >
-      {reducedMotion ? (
+      {reducedMotion === true ? (
         <View style={[styles.refreshSegment, styles.refreshSegmentStill]} />
-      ) : (
+      ) : reducedMotion === false ? (
         <Animated.View
           ref={sweep.ref}
           onLayout={sweep.onLayout}
           style={[styles.refreshSegment, sweep.style]}
         />
-      )}
+      ) : null}
     </View>
   )
 }
