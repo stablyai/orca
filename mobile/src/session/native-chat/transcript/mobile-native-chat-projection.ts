@@ -43,6 +43,7 @@ export type MobileNativeChatProjection = {
 type JournalPosition = NonNullable<NativeChatMessage['journalPosition']>
 
 function samePosition(left: JournalPosition, right: JournalPosition): boolean {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Own enumerable keys are used only to compare the same fields on both positions.
   const keys = Object.keys(left) as (keyof JournalPosition)[]
   return (
     keys.length === Object.keys(right).length &&
@@ -54,6 +55,7 @@ function sameSource(left: NativeChatMessage, right: NativeChatMessage): boolean 
   if (left === right) {
     return true
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Own enumerable keys are used only to compare the same fields on both messages.
   const keys = Object.keys(left) as (keyof NativeChatMessage)[]
   return (
     keys.length === Object.keys(right).length &&
