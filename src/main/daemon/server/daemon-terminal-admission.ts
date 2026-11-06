@@ -183,7 +183,7 @@ export class DaemonTerminalAdmission {
       shellState: result.shellState,
       incarnationId: result.incarnationId,
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-      ...(result.launchNote ? { launchNote: result.launchNote } : {}),
+      ...(result.launchNote !== undefined ? { launchNote: result.launchNote } : {}),
       wslDistro: result.wslDistro,
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),

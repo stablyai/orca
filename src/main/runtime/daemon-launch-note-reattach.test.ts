@@ -11,7 +11,13 @@ const LAUNCH_CONFIG = {
   agentEnv: { K: 'v' }
 }
 
-async function reattach(foreground: 'agent' | 'shell' | 'unknown', mainHoldsLaunch = false) {
+const NOTE = { launchToken: 'launch-1', launchConfig: LAUNCH_CONFIG }
+
+async function reattach(
+  foreground: 'agent' | 'shell' | 'unknown',
+  mainHoldsLaunch = false,
+  launchNote: typeof NOTE | null | 'omitted' = NOTE
+) {
   const runtime = new OrcaRuntimeService(null)
   const setLaunchNote = vi.fn()
   runtime.setPtyController({
@@ -37,12 +43,12 @@ async function reattach(foreground: 'agent' | 'shell' | 'unknown', mainHoldsLaun
     providerReattachLaunchIdentity: {
       incarnationId: INCARNATION,
       launchAgent: 'claude',
-      launchNote: { launchToken: 'launch-1', launchConfig: LAUNCH_CONFIG }
+      ...(launchNote !== 'omitted' ? { launchNote } : {})
     }
   })
   await new Promise((resolve) => setTimeout(resolve, 0))
   return {
-    config: runtime.getAttestedLaunchConfigForPaneKey(makePaneKey(TAB_ID, LEAF_ID), 'claude'),
+    config: runtime.getLaunchStatementForPaneKey(makePaneKey(TAB_ID, LEAF_ID), 'claude'),
     retired: setLaunchNote.mock.calls.some(([, change]) => 'retire' in change)
   }
 }
@@ -53,8 +59,21 @@ describe('a daemon reattach after a main restart', () => {
     expect(await reattach('agent')).toEqual({ config: LAUNCH_CONFIG, retired: false })
   })
 
-  it.each(['shell', 'unknown'] as const)('declines when the foreground is %s', async (fg) => {
-    expect((await reattach(fg)).config).toBeUndefined()
+  it('says no launch runs when the foreground is the shell', async () => {
+    expect(await reattach('shell')).toEqual({ config: null, retired: true })
+  })
+
+  it('says no launch runs when the daemon retired its note', async () => {
+    expect((await reattach('agent', false, null)).config).toBeNull()
+  })
+
+  // Undecided: readers keep their earlier same-session rule rather than drop the settings.
+  it('makes no statement when the foreground is unreadable', async () => {
+    expect((await reattach('unknown')).config).toBeUndefined()
+  })
+
+  it('makes no statement for a daemon that keeps no launch notes', async () => {
+    expect((await reattach('agent', false, 'omitted')).config).toBeUndefined()
   })
 
   // The renderer attaches a pane the CLI launched before its agent has started.

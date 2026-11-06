@@ -8,6 +8,6 @@ export function daemonSpawnResultIdentity(
     ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
     ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
     ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-    ...(result.launchNote ? { launchNote: result.launchNote } : {})
+    ...(result.launchNote !== undefined ? { launchNote: result.launchNote } : {})
   }
 }

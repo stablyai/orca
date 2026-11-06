@@ -54,8 +54,10 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       providerReattachLaunchIdentity?: {
         incarnationId: PtyIncarnationId
         launchAgent: TuiAgent
-        launchNote?: DaemonLaunchNote
+        launchNote?: DaemonLaunchNote | null
       }
+      /** The reattached host keeps no launch notes, so main can't tell whose launch runs here. */
+      launchUndecided?: boolean
     },
     isWsl?: boolean
   ): void {
@@ -165,6 +167,13 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       this.armDaemonLaunchNote(ptyId, pty)
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
+    if (
+      binding?.launchUndecided &&
+      pty.launchToken === null &&
+      pty.incarnationId === binding.incarnationId
+    ) {
+      pty.launchUndecided = true
+    }
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
     if (
       providerReattachLaunchIdentity &&

@@ -20,14 +20,19 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     }
   }
 
-  /** Re-arm an unretired launch only while an agent holds the foreground; anything else declines. */
+  /** Re-arm an unretired launch only while an agent holds the foreground. Main can't tell when the
+   *  host keeps no notes (an older daemon) or the foreground is unreadable (Windows), so it stays undecided. */
   protected async rearmReattachedLaunch(
     ptyId: string,
     pty: RuntimePtyWorktreeRecord,
-    reattach: { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote }
+    reattach: { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote | null }
   ): Promise<void> {
     const { launchNote, launchAgent, incarnationId } = reattach
-    if (!launchNote || pty.launchToken) {
+    if (launchNote === null || pty.launchToken) {
+      return
+    }
+    pty.launchUndecided = true
+    if (!launchNote) {
       return
     }
     const foreground = await this.readLaunchedAgentForeground(ptyId, launchAgent).catch(
@@ -43,8 +48,10 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     }
     if (foreground === 'shell') {
       this.ptyController?.setLaunchNote?.(ptyId, { retire: launchNote.launchToken })
+      pty.launchUndecided = false
     }
     if (foreground === 'agent' && pty.launchAgent === launchAgent) {
+      pty.launchUndecided = false
       pty.launchToken = launchNote.launchToken
       pty.launchIncarnationId = incarnationId
       pty.launchConfig = launchNote.launchConfig

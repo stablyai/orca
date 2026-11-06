@@ -45,9 +45,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       if (structuredHost) {
         return
       }
-      const launchConfig = state.runtime
-        ? (state.runtime.getAttestedLaunchConfigForPaneKey(paneKey, payload.agentType) ?? null)
-        : undefined
+      const launchConfig = state.runtime?.getLaunchStatementForPaneKey(paneKey, payload.agentType)
       if (providerSessionOnly) {
         // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
         state.mainWindow?.webContents.send('agentStatus:set', {

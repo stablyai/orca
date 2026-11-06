@@ -12,8 +12,8 @@ export type DaemonCreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
-  /** The launch main armed and has not retired; older daemons omit it. */
-  launchNote?: DaemonLaunchNote
+  /** The launch main armed and has not retired, null for none; older daemons omit it. */
+  launchNote?: DaemonLaunchNote | null
   /** Undefined only when talking to a daemon predating WSL session context. */
   wslDistro?: string | null
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -31,13 +31,13 @@ export function getDaemonSessionResultMetadata(session: {
   wslDistro: string | null
 }): {
   launchAgent?: TuiAgent
-  launchNote?: DaemonLaunchNote
+  launchNote: DaemonLaunchNote | null
   historySeeded?: boolean
   wslDistro: string | null
 } {
   return {
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
-    ...(session.launchNote.current ? { launchNote: session.launchNote.current } : {}),
+    launchNote: session.launchNote.current,
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
     // Null identifies native sessions; only older daemons omit the field.
     wslDistro: session.wslDistro

@@ -35,12 +35,24 @@ export function admitRendererAgentLaunchAuthority(args: {
   }
 }
 
+/** A reattach whose host keeps no launch notes (an older daemon, SSH) leaves main unable to tell whose launch runs. */
+export function reattachLeavesLaunchUndecided(result: {
+  isReattach?: boolean
+  launchNote?: DaemonLaunchNote | null
+}): boolean {
+  return result.isReattach === true && result.launchNote === undefined
+}
+
 export function admitProviderReattachLaunchIdentity(args: {
   isReattach?: boolean
   launchAgent?: unknown
-  launchNote?: DaemonLaunchNote
+  launchNote?: DaemonLaunchNote | null
   incarnationId?: unknown
-}): { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote } | null {
+}): {
+  incarnationId: string
+  launchAgent: TuiAgent
+  launchNote?: DaemonLaunchNote | null
+} | null {
   if (
     !args.isReattach ||
     !isTuiAgent(args.launchAgent) ||
@@ -51,7 +63,7 @@ export function admitProviderReattachLaunchIdentity(args: {
   return {
     incarnationId: args.incarnationId,
     launchAgent: args.launchAgent,
-    ...(args.launchNote ? { launchNote: args.launchNote } : {})
+    ...(args.launchNote !== undefined ? { launchNote: args.launchNote } : {})
   }
 }
 

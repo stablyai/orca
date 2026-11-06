@@ -21,6 +21,7 @@ import { commitAttachedPtySize } from './delivery/attached-pty-size'
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import {
   admitProviderReattachLaunchIdentity,
+  reattachLeavesLaunchUndecided,
   type admitRendererAgentLaunchAuthority
 } from './pane/launch-authority'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
@@ -165,7 +166,8 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
               ? { agentLaunchAuthority: registration.rendererLaunchAuthority }
               : {}),
             ...(registration.launchedAgent ? { launchedAgent: registration.launchedAgent } : {}),
-            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
+            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
+            ...(reattachLeavesLaunchUndecided(result) ? { launchUndecided: true } : {})
           }
         : undefined,
       shouldSkipCodexHomeEnvForWindowsShell(registration.shellOverride, state.cwd)
@@ -226,7 +228,8 @@ async function commitAdoptedAgentSession(
       leafId: surface.leafId,
       terminalHandle: surface.terminalHandle,
       ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
-      ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
+      ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
+      ...(reattachLeavesLaunchUndecided(adoptedResult) ? { launchUndecided: true } : {})
     }
   )
   if (rejectedRegistration) {

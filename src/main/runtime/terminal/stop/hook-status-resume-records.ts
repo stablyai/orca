@@ -3,6 +3,7 @@ import {
   capturedResumeRecord,
   liveResumeRecord,
   liveResumeRecordChange,
+  recordLaunchConfigForStatus,
   statusRetainsResumableIdentity,
   type ResumeRecordStatus,
   type ResumeRecordTab
@@ -21,11 +22,11 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 /** The part of a pane's previous status the next one may inherit its provider session from. */
 export type PreviousHookStatus = Pick<ResumeRecordStatus, 'agentType' | 'state' | 'providerSession'>
 
-/** The note of the Orca launch running in a pane as `agent` now; none when that is unproven. */
+/** Main's word on a pane's launch as `agent`: its note, null for none, undefined when main can't tell. */
 export type PaneLaunchConfigOf = (
   paneKey: string,
   agent: ResumeRecordStatus['agentType']
-) => SleepingAgentLaunchConfig | undefined
+) => SleepingAgentLaunchConfig | null | undefined
 
 /** A hook row as the window's status entry reads it; null for rows that are not a pane's status. */
 export function resumeStatusFromHookRow(
@@ -79,13 +80,18 @@ export function hookStatusResumeCommand(args: {
   }
   const existing = session.sleepingAgentSessionsByPaneKey?.[status.paneKey]
   const retainsResumableIdentity = statusRetainsResumableIdentity(status, status.providerSession)
+  // Main can't tell for a terminal that predates its launch proof, so it keeps the pane's earlier rule.
+  const statement = args.launchConfigOf(status.paneKey, status.agentType)
   const live = liveResumeRecord({
     entry: status,
     retainsResumableIdentity,
     worktreeIdOf: () => worktreeId,
     tabOf: () => tab,
     capturedAt: status.updatedAt,
-    launchConfig: args.launchConfigOf(status.paneKey, status.agentType)
+    launchConfig:
+      statement === undefined && (status.state !== 'done' || retainsResumableIdentity)
+        ? recordLaunchConfigForStatus(existing, status)
+        : (statement ?? undefined)
   })
   const change = liveResumeRecordChange(existing, live)
   if (!change) {
@@ -115,7 +121,12 @@ export function quitResumeRecords(args: {
       capturedAt: args.capturedAt,
       worktreeIdOf: () => status.worktreeId ?? args.worktreeIdOf(status.paneKey),
       tabOf: tabFor,
-      launchConfigOf: () => args.launchConfigOf(status.paneKey, status.agentType)
+      launchConfigOf: () => {
+        const statement = args.launchConfigOf(status.paneKey, status.agentType)
+        return statement === undefined
+          ? recordLaunchConfigForStatus(existing, status)
+          : (statement ?? undefined)
+      }
     })
     // Only a pane this partition holds keeps a record here.
     return record && tabFor(record.worktreeId) ? [record] : []

@@ -53,7 +53,7 @@ export type CreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
-  launchNote?: DaemonLaunchNote
+  launchNote?: DaemonLaunchNote | null
   wslDistro: string | null
   attachToken: symbol
   incarnationId: PtyIncarnationId

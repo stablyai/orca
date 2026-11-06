@@ -27,7 +27,7 @@ export type PtySpawnResult = TerminalLaunchResult & {
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
   /** The unretired launch main armed before a restart, returned by daemon reattach. */
-  launchNote?: DaemonLaunchNote
+  launchNote?: DaemonLaunchNote | null
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
   /** Daemon reattach ANSI screen restore for xterm. */

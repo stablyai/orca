@@ -4,7 +4,7 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 
 export type PtyLaunchFacts = Pick<
   RuntimePtyWorktreeRecord,
-  'launchToken' | 'launchAgent' | 'launchConfig'
+  'launchToken' | 'launchAgent' | 'launchConfig' | 'launchUndecided'
 >
 
 /** The note of the Orca launch main still holds for this PTY as `agent`; a typed agent gets none.
@@ -20,4 +20,17 @@ export function attestedLaunchConfig(
     sameAgentIdentity(pty.launchAgent, agent)
     ? pty.launchConfig
     : undefined
+}
+
+/** Main's word on this PTY's launch: its note, null when none runs, undefined when main can't tell,
+ *  so readers keep their pre-attestation rule for a terminal that predates this proof. */
+export function launchStatement(
+  pty: PtyLaunchFacts | null | undefined,
+  agent: string | null | undefined
+): SleepingAgentLaunchConfig | null | undefined {
+  const note = attestedLaunchConfig(pty, agent)
+  if (note) {
+    return note
+  }
+  return pty?.launchUndecided && !pty.launchToken ? undefined : null
 }

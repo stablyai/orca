@@ -2,6 +2,7 @@
 
 import { agentVerdictFields } from '../../agent-status/lifecycle/agent-main-agent-verdict'
 import {
+  agentProviderSessionsEqual,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
@@ -111,6 +112,19 @@ export function statusRetainsResumableIdentity(
     providerSession !== undefined &&
     getAgentResumeArgv(status.agentType, providerSession) !== null
   )
+}
+
+/** The recipe a pane's earlier record kept, when it records this status's own session. */
+export function recordLaunchConfigForStatus(
+  record: SleepingAgentSessionRecord | undefined,
+  status: Pick<AgentStatusEntry, 'agentType' | 'providerSession'>
+): SleepingAgentLaunchConfig | undefined {
+  return record?.launchConfig &&
+    record.agent === status.agentType &&
+    status.providerSession &&
+    agentProviderSessionsEqual(status.agentType, record.providerSession, status.providerSession)
+    ? record.launchConfig
+    : undefined
 }
 
 /** Checkpoint live sessions for terminal loss; finished resumable sessions retain identity but drop turn text. */

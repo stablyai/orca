@@ -1,4 +1,5 @@
 import {
+  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
   type SleepingAgentSessionRecord
@@ -9,12 +10,17 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
-import { attestedLaunchConfig, type PtyLaunchFacts } from '../launch/attested-launch-config'
+import { launchStatement, type PtyLaunchFacts } from '../launch/attested-launch-config'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
   string,
-  { retiredPaneKeys: string[]; records: SleepingAgentSessionRecord[] }
+  {
+    retiredPaneKeys: string[]
+    records: SleepingAgentSessionRecord[]
+    /** Main can't tell this PTY's launch, so a record keeps an earlier capture's same-session note. */
+    launchUndecided?: boolean
+  }
 >
 
 /** Captures before a host-driven sleep stops its PTYs and persists for the ones proven stopped. */
@@ -49,6 +55,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
     const records: SleepingAgentSessionRecord[] = []
     const retiredPaneKeys: string[] = []
     const launch = args.launchByPtyId.get(ptyId)
+    let launchUndecided = false
     for (const { paneKey, tabId } of panes) {
       // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
       if ((await args.checkAgentPresence?.(paneKey, 0).catch(() => null)) === 'exited') {
@@ -66,7 +73,9 @@ export async function captureWorktreeSleepResumeRecords(args: {
         retiredPaneKeys.push(paneKey)
         continue
       }
-      const launchConfig = attestedLaunchConfig(launch, agent)
+      const statement = launchStatement(launch, agent)
+      launchUndecided ||= statement === undefined
+      const launchConfig = statement ?? undefined
       records.push({
         paneKey,
         tabId,
@@ -85,7 +94,11 @@ export async function captureWorktreeSleepResumeRecords(args: {
         ...(launchConfig ? { launchConfig } : {})
       })
     }
-    capture.set(ptyId, { retiredPaneKeys, records })
+    capture.set(ptyId, {
+      retiredPaneKeys,
+      records,
+      ...(launchUndecided ? { launchUndecided } : {})
+    })
   }
   return capture
 }
@@ -108,8 +121,17 @@ export function applyWorktreeSleepResumeRecords(
       }
     }
     for (const record of entry?.records ?? []) {
-      // Why no earlier record's recipe: only the capture's own attested launch proves which launch ran.
-      next[record.paneKey] = record
+      // Only a terminal main can't tell about keeps an earlier capture's recipe for the same session.
+      const previous = next[record.paneKey]
+      const keptLaunchConfig =
+        entry?.launchUndecided &&
+        !record.launchConfig &&
+        previous?.launchConfig &&
+        previous.agent === record.agent &&
+        agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
+          ? { launchConfig: previous.launchConfig }
+          : {}
+      next[record.paneKey] = { ...record, ...keptLaunchConfig }
       changed = true
     }
   }

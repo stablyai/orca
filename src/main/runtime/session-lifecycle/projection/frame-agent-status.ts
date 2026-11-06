@@ -1,8 +1,5 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  attestedLaunchConfig,
-  type PtyLaunchFacts
-} from '../../terminal/launch/attested-launch-config'
+import { launchStatement, type PtyLaunchFacts } from '../../terminal/launch/attested-launch-config'
 
 /** A pane's projected agent status as a session-tabs frame publishes it. The frame names its
  *  worktree on every agent: a restored row without a live PTY names none, and clients decide row
@@ -16,9 +13,10 @@ export function frameAgentStatus(
     return {}
   }
   const { turnCompletedAt, ...fields } = projected
+  const statement = pty ? launchStatement(pty, fields.agentType) : undefined
   return {
     agentStatus: { ...fields, worktreeId },
-    ...(pty ? { launchAttested: !!attestedLaunchConfig(pty, fields.agentType) } : {}),
+    ...(statement !== undefined ? { launchAttested: statement !== null } : {}),
     ...(turnCompletedAt !== undefined ? { projectedTurnCompletedAt: turnCompletedAt } : {})
   }
 }

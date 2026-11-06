@@ -201,8 +201,11 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     expect(capture.get('pty')?.records[0]?.connectionId).toBe(stamped)
   })
 
-  // An earlier record's recipe may belong to another launch of the conversation, so it is not reused.
-  it("stamps the SSH host and drops an earlier record's recipe", () => {
+  // An earlier recipe may belong to another launch; only a terminal main can't tell about keeps it, as before.
+  it.each([
+    [false, undefined],
+    [true, { agentArgs: '--x', agentEnv: {} }]
+  ])('stamps the SSH host; undecided %s keeps the earlier recipe %j', (launchUndecided, kept) => {
     const record = {
       paneKey: PANE_KEY,
       worktreeId: TEST_WORKTREE_ID,
@@ -221,11 +224,13 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     })
     const next = applyWorktreeSleepResumeRecords(
       session,
-      new Map([['pty', { retiredPaneKeys: [], records: [{ ...record, capturedAt: 2 }] }]]),
+      new Map([
+        ['pty', { retiredPaneKeys: [], records: [{ ...record, capturedAt: 2 }], launchUndecided }]
+      ]),
       ['pty']
     )
     const saved = next?.sleepingAgentSessionsByPaneKey?.[PANE_KEY]
     expect(saved).toMatchObject({ capturedAt: 2, connectionId: 'ssh-target' })
-    expect(saved?.launchConfig).toBeUndefined()
+    expect(saved?.launchConfig).toEqual(kept)
   })
 })
