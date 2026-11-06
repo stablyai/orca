@@ -131,6 +131,42 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it.each(['local', undefined] as const)(
+    'routes a local chat with tab owner %s when the workspace has no host stamp',
+    (executionHostId) => {
+      const snapshot = buildDashboardSnapshot(
+        baseState({
+          agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+          unifiedTabsByWorktree: {
+            w1: [
+              {
+                id: TAB_ID,
+                entityId: 'chat-local',
+                groupId: 'group',
+                worktreeId: 'w1',
+                ...(executionHostId ? { executionHostId } : {}),
+                contentType: 'agent-session',
+                agentSessionAgent: 'claude',
+                label: 'Chat',
+                customLabel: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: NOW
+              }
+            ]
+          },
+          ptyIdsByTabId: { [TAB_ID]: [] }
+        }),
+        NOW
+      )
+      expect(snapshot.cards[0]?.executionHostId).toBe('local')
+      expect(snapshot.cards[0]?.chatSession).toEqual({
+        sessionId: 'chat-local',
+        target: { kind: 'local' }
+      })
+    }
+  )
+
   it('omits an unstamped structured preview when two hosts publish the same workspace', () => {
     const local = {
       id: 'r1',
