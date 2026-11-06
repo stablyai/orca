@@ -206,3 +206,41 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
   })
 })
+
+describe('useMobileSourceControlLoaders action error', () => {
+  it('keeps an action error through a status read the screen did not ask for', async () => {
+    const calls: PendingCall[] = []
+    const actionErrors: (string | null)[] = []
+    const queryClient = createOrcaQueryClient()
+    function Harness(): null {
+      useMobileSourceControlLoaders({
+        hostId: 'host-1',
+        client: fakeClient(calls),
+        connState: 'connected',
+        statusIdentityKey: IDENTITY,
+        worktreeId: WORKTREE,
+        setActionError: (message) => actionErrors.push(message)
+      })
+      return null
+    }
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(QueryClientProvider, { client: queryClient }, createElement(Harness))
+      )
+    })
+    // Opening the screen settles the previous action's error.
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(actionErrors).toEqual([null])
+
+    // A foreground or reconnect refetch must not wipe a commit hook's error.
+    await act(async () => {
+      void queryClient.invalidateQueries()
+    })
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(actionErrors).toEqual([null])
+    act(() => renderer?.unmount())
+  })
+})

@@ -7,7 +7,7 @@ import {
   useState,
   type MutableRefObject
 } from 'react'
-import { hashKey, useQueryClient } from '@tanstack/react-query'
+import { hashKey, notifyManager, useQueryClient } from '@tanstack/react-query'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
@@ -90,11 +90,14 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     () => hostQueryKey(hostId, gitStatusQuery.family, target, NO_INPUT),
     [hostId, target]
   )
+  // Only reads the screen asked for (opening it, an action, a refresh) settle the action error; foreground and reconnect reads leave it.
+  const screenReadRef = useRef<{ clearActionError: boolean } | null>({ clearActionError: true })
   // A screen under another one stops observing, so it revalidates when it is back on top rather than while hidden.
   const [focused, setFocused] = useState(true)
   useFocusEffect(
     useCallback(() => {
       setFocused(true)
+      screenReadRef.current = { clearActionError: true }
       return () => {
         setFocused(false)
         // Screens above can write (Review stages files), so coming back always revalidates.
@@ -115,7 +118,6 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   })
   const [rebaseBaseRef, setRebaseBaseRef] = useState<string | null>(null)
   const mountedRef = useRef(true)
-  const keepActionErrorRef = useRef(false)
   const branchCompare = useRef(
     new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareAttempt>()
   ).current
@@ -193,9 +195,12 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       return
     }
     compareWith(read)
-    if (keepActionErrorRef.current) {
-      keepActionErrorRef.current = false
-    } else {
+    const screenRead = screenReadRef.current
+    if (!screenRead) {
+      return
+    }
+    screenReadRef.current = null
+    if (screenRead.clearActionError) {
       setActionError(null)
     }
     // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
@@ -240,10 +245,13 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         if (options?.force) {
           await queryClient.cancelQueries({ queryKey: live.queryKey, exact: true })
         }
-        keepActionErrorRef.current = options?.clearActionErrorOnSuccess === false
-        return (await queryClient.query(live)).kind === 'ready'
+        screenReadRef.current = { clearActionError: options?.clearActionErrorOnSuccess !== false }
+        const read = await queryClient.query(live)
+        // Resolve once observers hold the new status, so callers act on what the screen shows.
+        await new Promise<void>((resolve) => notifyManager.schedule(resolve))
+        return read.kind === 'ready'
       } catch {
-        keepActionErrorRef.current = false
+        screenReadRef.current = null
         return false
       }
     },
