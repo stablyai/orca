@@ -1,6 +1,5 @@
 import {
   deliverLaunchPromptToAgentTab,
-  notifyAgentLaunchPromptNotSent,
   settleAgentLaunchPromptFailure
 } from './agent-launch-prompt-delivery'
 import { useAppStore } from '@/store'
@@ -207,7 +206,6 @@ function settleHostedPrompt(delivery: PendingHostedPrompt, failed: boolean): voi
   stopPendingAgentStartupSubscriptionIfIdle()
   if (failed) {
     settleAgentLaunchPromptFailure({ ...delivery.prompt, tabId: delivery.tabId })
-    notifyAgentLaunchPromptNotSent(delivery.prompt.agent, delivery.prompt.content)
   }
 }
 

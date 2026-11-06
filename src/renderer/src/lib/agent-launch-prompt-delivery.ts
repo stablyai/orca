@@ -1,6 +1,3 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-native-draft-prefill'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
@@ -113,26 +110,6 @@ export function deliverLaunchPromptToAgentTab(args: {
   )
 }
 
-export function notifyAgentLaunchPromptNotSent(agent: TuiAgent, content?: string): void {
-  toast.error(
-    translate(
-      'agentLaunch.terminalPromptFailed',
-      'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
-      { value0: structuredAgentLabel(agent) }
-    ),
-    content !== undefined
-      ? {
-          action: {
-            label: translate('components.agentSessionContinuation.copyPrompt', 'Copy prompt'),
-            onClick: () => {
-              void window.api.ui.writeClipboardText(content)
-            }
-          }
-        }
-      : undefined
-  )
-}
-
 export function settleAgentLaunchPromptFailure(args: {
   tabId: string
   agent: TuiAgent
@@ -152,4 +129,7 @@ export function settleAgentLaunchPromptFailure(args: {
       createdAt: Date.now()
     })
   }
+  void import('./agent-launch-prompt-failure-notice').then(({ notifyAgentLaunchPromptNotSent }) =>
+    notifyAgentLaunchPromptNotSent(args.agent, args.content)
+  )
 }

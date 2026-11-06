@@ -82,7 +82,8 @@ beforeEach(() => {
   })
   mocks.write.mockResolvedValue(true)
 })
-afterEach(() => {
+afterEach(async () => {
+  await vi.dynamicImportSettled()
   resetAgentStartupDelayedDeliveryForTests()
   useAppStore.setState(originalState, true)
   vi.useRealTimers()
@@ -332,6 +333,7 @@ it('settles the prompt when the host proves its surface closed but discarded the
   await terminal.connect({ url: '', callbacks: {} })
   expect(exited).toHaveBeenCalledWith(ptyId)
   expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(true)
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
   ready.resolve(true)
   await expect(pending).resolves.toBe(false)
@@ -369,6 +371,7 @@ it('claims at the first write and never replays partially accepted input', async
   })
   await expect(deliver('x'.repeat(70_000))).resolves.toBe(false)
   expect(mocks.write).toHaveBeenCalledTimes(writes)
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
 })
 
@@ -387,6 +390,7 @@ it('expires a never-observed adopted tab without store updates and fences late r
   await vi.advanceTimersByTimeAsync(
     REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + resolveDraftPasteReadyTimeoutMs('codex') - 1000
   )
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
   expect(mocks.failed).toHaveBeenCalledWith('tab-1')
   expect(mocks.prompt).toHaveBeenCalledWith(
@@ -401,6 +405,7 @@ it('expires a never-observed adopted tab without store updates and fences late r
   rebindPendingAgentStartupPrompt({ ...identity, ptyId: ptyId })
   await vi.advanceTimersByTimeAsync(1000)
   expect(mocks.write).not.toHaveBeenCalled()
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
 })
 
@@ -434,6 +439,7 @@ it('expiry during an acknowledged chunk stops content and closes bracketed paste
   await vi.advanceTimersByTimeAsync(
     REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + resolveDraftPasteReadyTimeoutMs('codex')
   )
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
   contentWrite.resolve(true)
   await vi.advanceTimersByTimeAsync(0)
@@ -446,6 +452,7 @@ it('expiry during an acknowledged chunk stops content and closes bracketed paste
   rebindPendingAgentStartupPrompt({ ...identity, ptyId, beforePaste: () => true })
   await vi.advanceTimersByTimeAsync(1000)
   expect(mocks.write).toHaveBeenCalledTimes(3)
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
 })
 
@@ -474,6 +481,7 @@ it('settled Aider failure copies the original prompt for its existing terminal',
   await vi.advanceTimersByTimeAsync(
     REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + resolveDraftPasteReadyTimeoutMs('aider')
   )
+  await vi.dynamicImportSettled()
   expect(mocks.error).toHaveBeenCalledOnce()
   const recovery = mocks.error.mock.calls[0]?.[1].action
   recovery.onClick()

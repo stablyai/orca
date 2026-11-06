@@ -5,7 +5,7 @@ import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-sess
 import type { AgentTerminalLaunchCompletion } from './agent-session/launch/structured-agent-session-launch-admission'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
-import { notifyAgentLaunchPromptNotSent } from './agent-launch-prompt-delivery'
+import { notifyAgentLaunchPromptNotSent } from './agent-launch-prompt-failure-notice'
 
 export function completeWebHostAgentLaunch(args: {
   agent: TuiAgent
