@@ -9,10 +9,10 @@ import { observeAntigravityChatSignIn } from '@/runtime/antigravity-chat-sign-in
 import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/runtime-rpc-subscribe'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-const streams = vi.hoisted(() => ({
-  handlers: new Map<string, RuntimeRpcSubscriptionHandlers>(),
-  releases: [] as (() => void)[]
-}))
+const streams = vi.hoisted(() => {
+  const releases: (() => void)[] = []
+  return { handlers: new Map<string, RuntimeRpcSubscriptionHandlers>(), releases }
+})
 const key = (owner: RuntimeClientTarget): string =>
   owner.kind === 'local' ? 'local' : owner.environmentId
 function follow(owner: RuntimeClientTarget): void {
