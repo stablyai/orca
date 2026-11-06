@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from '../../e2ee-keypair'
+import { ensureHostInstanceIdentity } from '../../host-instance-identity'
 import { RuntimeRpcState } from './runtime-rpc-state'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -86,6 +87,19 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
   }
 
   protected initializePairingIdentity(): PairingIdentityInitialization {
+    try {
+      ensureHostInstanceIdentity(this.userDataPath)
+    } catch (error) {
+      // A rotation that could not finish must not fall back to serving the copied keypair and tokens.
+      console.error(
+        '[runtime] Failed to rotate the pairing identity for a new ORCA_INSTANCE_ID:',
+        error
+      )
+      return {
+        ok: false,
+        failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
+      }
+    }
     let deviceRegistry: DeviceRegistry
     try {
       deviceRegistry = new DeviceRegistry(this.userDataPath)

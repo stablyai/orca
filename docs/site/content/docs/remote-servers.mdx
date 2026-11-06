@@ -198,6 +198,22 @@ orca-ide serve --pairing-address 100.64.1.20
 
 This only stops Orca from turning the GPU off. Chromium may still render in software on Orca's own Xvfb, which has no GPU of its own; open `chrome://gpu` in a browser pane to check, and point `DISPLAY` at a GPU-backed X server if it reports software rendering. If you installed the server with `orca serve service install`, add the variable to the service unit yourself. If the server stops starting or browser panes crash with it set, unset it to go back to software rendering.
 
+### Servers cloned from a snapshot or image
+
+Orca keeps the server's pairing identity (its encryption key, paired devices, and installation id) in its data directory. If you boot several servers from one disk snapshot or machine image, they all start with the same identity: clients can't tell them apart, and revoking a device on one server doesn't revoke it on the copies.
+
+To give each copy its own identity, set `ORCA_INSTANCE_ID` in the environment that starts `orca serve` to a value that is unique per server and stays the same across its restarts, such as the VM's instance id:
+
+```bash
+export ORCA_INSTANCE_ID=<unique-id-for-this-server>
+orca-ide serve --pairing-address 100.64.1.20
+```
+
+- The first start with the variable set only records it. Set it on the server you build the image from too, so copies that boot with a different value are detected.
+- When a later start sees a different value, Orca moves the old identity files into an `orca-host-identity-backup-<time>` folder in the data directory, creates a new identity, and logs `ORCA_INSTANCE_ID changed`. Pair your clients with that server again.
+- Never use a value that changes on every boot, such as a boot id: every change forces a re-pair.
+- Without the variable, Orca never checks or changes the identity.
+
 ### Mobile from a headless server
 
 For the Orca mobile app, request a mobile-scoped QR code and link:

@@ -1,7 +1,7 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import '../unused-default-rpc-methods.test-fixture'
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -76,6 +76,48 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     await server.stop()
+  })
+
+  it('gives a clone with a new ORCA_INSTANCE_ID its own key and drops tokens copied from the source', async () => {
+    const pairFrom = async (userDataPath: string, instanceId: string) => {
+      vi.stubEnv('ORCA_INSTANCE_ID', instanceId)
+      const server = new OrcaRuntimeRpcServer({
+        methods: [],
+        runtime: new OrcaRuntimeService(),
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
+      })
+      await server.start()
+      const offer = server.createPairingOffer({ name: 'Clone test' })
+      return { server, parsed: offer.available ? parsePairingCode(offer.pairingUrl) : null }
+    }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const source = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const clone = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    try {
+      const original = await pairFrom(source, 'vm-a')
+      await original.server.stop()
+      cpSync(source, clone, { recursive: true })
+
+      const cloned = await pairFrom(clone, 'vm-b')
+      expect(cloned.parsed?.publicKeyB64).toBeTruthy()
+      expect(cloned.parsed?.publicKeyB64).not.toBe(original.parsed?.publicKeyB64)
+      expect(
+        cloned.server.getDeviceRegistry()?.validateToken(original.parsed!.deviceToken)
+      ).toBeNull()
+      await cloned.server.stop()
+
+      const restarted = await pairFrom(source, 'vm-a')
+      expect(restarted.parsed?.publicKeyB64).toBe(original.parsed?.publicKeyB64)
+      expect(
+        restarted.server.getDeviceRegistry()?.validateToken(original.parsed!.deviceToken)
+      ).not.toBeNull()
+      await restarted.server.stop()
+    } finally {
+      vi.unstubAllEnvs()
+      warnSpy.mockRestore()
+    }
   })
 
   it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
