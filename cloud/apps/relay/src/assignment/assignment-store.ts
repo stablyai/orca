@@ -4169,9 +4169,13 @@ export class RelayAssignmentStore {
     // Neither side of an idle rehome may be a reserve-mode cell: the commit moves rows here.
     const reserveCells = await this.reserveModeCells()
     if (reserveCells === null) return []
+    // Nor the relay edge: its hosts' data lives there and comes back only through the assign path.
     return selection.candidates.filter(
       (candidate) =>
-        !reserveCells.has(candidate.sourceCellId) && !reserveCells.has(candidate.targetCellId)
+        !reserveCells.has(candidate.sourceCellId) &&
+        !reserveCells.has(candidate.targetCellId) &&
+        candidate.sourceCellId !== EDGE_CELL_ID &&
+        candidate.targetCellId !== EDGE_CELL_ID
     )
   }
 

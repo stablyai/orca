@@ -19,6 +19,7 @@ import {
 } from './cell/reservations/cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { EdgeAssignments } from './edge-relay.js'
+import { createEdgeAdmin } from './edge-admin-client.js'
 import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell/control-flags/cell-flags.js'
 import { CellReserveBook } from './cell/reservations/cell-reserve-book.js'
@@ -171,7 +172,18 @@ export function createRelayServer(
   // Until the seed lands (or if it fails) the override answers nothing and today's path runs.
   const edgeAssignments =
     config.role === 'director' && config.edge
-      ? new EdgeAssignments(observedDatabase, config.edge, options.now)
+      ? new EdgeAssignments(
+          observedDatabase,
+          config.edge,
+          options.now,
+          config.edge.adminSigningKey
+            ? createEdgeAdmin({
+                cellUrl: config.edge.cellUrl,
+                signingKey: config.edge.adminSigningKey,
+                issuer: config.publicUrl
+              })
+            : undefined
+        )
       : undefined
   if (edgeAssignments) {
     void edgeAssignments.ensureEdgeCell().then(
