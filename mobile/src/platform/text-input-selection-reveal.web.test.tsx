@@ -29,7 +29,7 @@ it('reveals the current caret after the field is capped and preserves later manu
       0: rect,
       length: 1,
       item: () => rect,
-      [Symbol.iterator]: function* () {
+      [Symbol.iterator]: function* (): Generator<DOMRect, undefined, unknown> {
         yield rect
       }
     }
