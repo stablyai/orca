@@ -1,6 +1,7 @@
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 import { act, Profiler, type ReactNode } from 'react'
+import { fireEvent, screen } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -107,7 +108,8 @@ vi.mock('@/runtime/runtime-git-diff-client', async (original) => ({
 }))
 vi.mock('@/runtime/runtime-repo-client', async (original) => ({
   ...(await original<typeof RepoClient>()),
-  watchRuntimeRepoBaseRefDefault: () => () => {}
+  watchRuntimeRepoBaseRefDefault: () => () => {},
+  searchRuntimeRepoBaseRefs: async () => ['feature/live']
 }))
 
 // Report a section on screen only when the test made it visible, as a scrolled sidebar would.
@@ -667,4 +669,25 @@ it('split-opens child content in the current placement group after a focus chang
       preview: false
     })
   )
+})
+
+it('keeps an owned base-ref dialog usable after its section leaves the viewport and collapses', async () => {
+  const worktrees = setup(3)
+  probes.visible.add(worktrees[0]!.id)
+  await render(<FolderWorkspaceSourceControlPanel />)
+  const changeBase = screen.getByRole('button', { name: /Change base ref/ })
+  await act(async () => fireEvent.click(changeBase))
+  await scrollTo([])
+  const section = container.querySelector('section')!
+  const collapse = section.querySelector<HTMLButtonElement>('button[aria-expanded="true"]')!
+  await act(async () => fireEvent.click(collapse))
+  await act(async () => {
+    fireEvent.change(screen.getByPlaceholderText('Search branches by name...'), {
+      target: { value: 'feature' }
+    })
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250)
+  })
+  expect(screen.getByRole('button', { name: 'feature/live' })).toBeTruthy()
 })

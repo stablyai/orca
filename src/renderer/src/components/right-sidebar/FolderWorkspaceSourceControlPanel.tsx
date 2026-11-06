@@ -1,5 +1,5 @@
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
@@ -10,6 +10,7 @@ import {
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
@@ -61,8 +62,23 @@ const WorktreeSection = memo(
     const [sectionRef, onScreen] = useSectionOnScreen(scrollRoot)
     const bodyShown =
       isExpanded && connected && (statusKnown || error !== undefined || isFolderRepo(owner.repo))
-    // Compare, upstream, review and history work runs only while the body is shown and on screen.
-    const bodyActive = bodyShown && onScreen
+    // Open overlays keep their section live until they close, including while off screen.
+    const [openOverlays, setOpenOverlays] = useState(() => new Set<HTMLElement>())
+    const onOverlayActivity = useCallback((overlay: HTMLElement, open: boolean) => {
+      setOpenOverlays((current) => {
+        if (current.has(overlay) === open) {
+          return current
+        }
+        const next = new Set(current)
+        if (open) {
+          next.add(overlay)
+        } else {
+          next.delete(overlay)
+        }
+        return next
+      })
+    }, [])
+    const bodyActive = (bodyShown && onScreen) || openOverlays.size > 0
     // Mount on first sight, then keep the body so selection, history view and focus survive scrolling and collapse.
     const [bodyMounted, setBodyMounted] = useState(false)
     if (bodyActive && !bodyMounted) {
@@ -174,9 +190,11 @@ const WorktreeSection = memo(
         {bodyMounted && (
           // A read error renders the body's existing failure banner with Retry.
           <div hidden={!bodyShown}>
-            <SourceControlScopeProvider owner={owner} active={bodyActive}>
-              {panel}
-            </SourceControlScopeProvider>
+            <OverlayActivityOwner.Provider value={onOverlayActivity}>
+              <SourceControlScopeProvider owner={owner} active={bodyActive}>
+                {panel}
+              </SourceControlScopeProvider>
+            </OverlayActivityOwner.Provider>
           </div>
         )}
       </section>
