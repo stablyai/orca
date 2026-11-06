@@ -105,14 +105,18 @@ export function MobileSessionAccessoryKeys({
       chord: chord !== null
     }
   }
+  // Later writes belong to the same press, so a scroll after release mustn't drop them; a tab switch does.
   const sendSmartKey = (key: AgentSmartKey) => {
-    const presses = key.writes.map((bytes) => prepareAccessoryPress({ bytes }))
+    const handle = controller.activeHandleRef.current
     void (async () => {
-      for (const [index, press] of presses.entries()) {
+      for (const [index, bytes] of key.writes.entries()) {
         if (index > 0) {
           await new Promise((resolve) => setTimeout(resolve, AGENT_SMART_KEY_STEP_MS))
         }
-        if (!(await press.tap())) {
+        if (controller.activeHandleRef.current !== handle) {
+          return
+        }
+        if (!(await prepareAccessoryPress({ bytes }).tap())) {
           return
         }
       }

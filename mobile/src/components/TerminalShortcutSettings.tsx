@@ -149,10 +149,13 @@ export function TerminalShortcutSettings({
     [persistLayout]
   )
 
+  // Resetting the keys leaves the Smart rail setting alone.
   const resetBuiltInKeys = useCallback(() => {
-    const next = defaultLayout()
-    setShortcutLayout(next)
-    persistLayout(next)
+    setShortcutLayout((current) => {
+      const next = { ...defaultLayout(), smartRail: current.smartRail }
+      persistLayout(next)
+      return next
+    })
   }, [defaultLayout, persistLayout])
 
   const reorderCustomKeys = useCallback(
