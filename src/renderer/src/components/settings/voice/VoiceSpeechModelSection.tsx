@@ -119,7 +119,9 @@ export function VoiceSpeechModelSection({
                   }
                 }}
                 className={`group flex items-center gap-2.5 py-2.5 ${
-                  !isCloud && !isReady && !isDownloading ? 'opacity-50' : ''
+                  manifest.replacedBy || (!isCloud && !isReady && !isDownloading)
+                    ? 'opacity-50'
+                    : ''
                 }`}
               >
                 <span className="flex size-4 shrink-0 items-center justify-center">
