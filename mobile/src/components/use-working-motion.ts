@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Easing, type LayoutChangeEvent } from 'react-native'
 
 // The page runs these as compositor animations instead (use-working-motion.web.ts).
@@ -82,10 +82,15 @@ export function useWorkingSweep(active: boolean): WorkingMotion<{
     animation.start()
     return () => animation.stop()
   }, [active, progress])
-  const translateX = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-segmentWidth, segmentWidth * SWEEP_END]
-  })
+  // A new node per render would re-attach to the native loop each time.
+  const translateX = useMemo(
+    () =>
+      progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-segmentWidth, segmentWidth * SWEEP_END]
+      }),
+    [progress, segmentWidth]
+  )
   return {
     ref: noRef,
     // Unmeasured, it would sit still at the left edge for a frame.

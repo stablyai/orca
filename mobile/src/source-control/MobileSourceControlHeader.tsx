@@ -6,11 +6,13 @@ import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { useRefreshHint } from '../query/refresh-hint'
 
 type Props = {
   embedded: boolean
   worktreeLabel: string
   ioBusy: boolean
+  /** Shown rows are being re-read; the line waits out quick reads. */
   refreshing: boolean
   onBack: () => void
   // Dock dismissal does not pop a route; keep it separate from Back.
@@ -39,6 +41,8 @@ export function MobileSourceControlHeader({
   menuGroups = null
 }: Props) {
   const t = useMobileTranslation()
+  // Here, not in the panel, so the hint's timers re-render only the bar.
+  const showRefreshLine = useRefreshHint(refreshing)
   const moreRef = useRef<View>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const actions: ActionSheetAction[] = [
@@ -90,7 +94,7 @@ export function MobileSourceControlHeader({
         title={t('sourceControl.header.title', 'Source Control')}
         subtitle={worktreeLabel}
         accessory={accessory}
-        refreshing={refreshing}
+        refreshing={showRefreshLine}
         trailing={
           <NavBarButton
             ref={moreRef}

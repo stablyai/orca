@@ -33,7 +33,7 @@ type NavBarProps = {
   /** From useCollapsingTitle: the title waits until the list's PageTitle has scrolled under the bar. */
   titleOpacity?: Animated.AnimatedInterpolation<number>
   dividerOpacity?: Animated.AnimatedInterpolation<number>
-  /** From useHostRefreshHint: shown data is refreshing in the background. */
+  /** From useRefreshHint: shown data is refreshing in the background. */
   refreshing?: boolean
 }
 
@@ -90,9 +90,12 @@ export function NavBar({
 
 // Sits on the bar's bottom edge so the title, subtitle and accessory never move.
 function NavBarRefreshLine() {
-  // Draw nothing until the preference is known, so a reveal never swaps shapes.
   const reducedMotion = useReducedMotionEnabled()
   const sweep = useWorkingSweep(reducedMotion === false)
+  // Draw nothing until the preference is known, so a reveal never swaps shapes.
+  if (reducedMotion === null) {
+    return null
+  }
   return (
     <View
       pointerEvents="none"
@@ -100,15 +103,11 @@ function NavBarRefreshLine() {
       importantForAccessibility="no-hide-descendants"
       style={styles.refreshTrack}
     >
-      {reducedMotion === true ? (
-        <View style={[styles.refreshSegment, styles.refreshSegmentStill]} />
-      ) : reducedMotion === false ? (
-        <Animated.View
-          ref={sweep.ref}
-          onLayout={sweep.onLayout}
-          style={[styles.refreshSegment, sweep.style]}
-        />
-      ) : null}
+      <Animated.View
+        ref={sweep.ref}
+        onLayout={sweep.onLayout}
+        style={[styles.refreshSegment, reducedMotion ? styles.refreshSegmentStill : sweep.style]}
+      />
     </View>
   )
 }

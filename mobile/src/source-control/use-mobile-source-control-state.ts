@@ -243,6 +243,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     createPrAction,
     loadStatus,
     rebaseBaseRef: loaders.rebaseBaseRef,
+    refreshing: loaders.refreshing,
     openDiffForFile,
     ...runners
   }

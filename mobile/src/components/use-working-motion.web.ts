@@ -52,6 +52,11 @@ export function useWorkingPulse(active: boolean): WorkingMotion<never> {
 }
 
 // Percent keyframes follow the segment's own width, so the page needs no layout pass.
+// Each reveal starts at the left edge: a shared phase could show a short reveal only as it exits right.
 export function useWorkingSweep(active: boolean): WorkingMotion<never> & { onLayout: undefined } {
-  return { ref: useElementLoop(active, SWEEP, SWEEP_TIMING), style: undefined, onLayout: undefined }
+  return {
+    ref: useElementLoop(active, SWEEP, SWEEP_TIMING, false),
+    style: undefined,
+    onLayout: undefined
+  }
 }
