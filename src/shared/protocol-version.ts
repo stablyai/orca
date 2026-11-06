@@ -1,3 +1,4 @@
+import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
 import {
@@ -65,7 +66,8 @@ export {
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
   AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY,
-  AUTOMATION_SURFACE_RUNTIME_CAPABILITY
+  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
+  AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY
 } from './automation-runtime-capabilities'
 export {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
@@ -114,6 +116,7 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
 // Individual protocol exports must not retain the unused host capability aggregate.
 export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    ...EMULATOR_RUNTIME_CAPABILITIES,
     SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
     ...HOST_RUNTIME_CAPABILITIES,
     ...DEVICE_KEY_RUNTIME_CAPABILITIES,

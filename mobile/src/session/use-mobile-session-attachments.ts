@@ -117,7 +117,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
     compactInstructions:
       nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
-    files: nativeChatFiles
+    files: nativeChatFiles,
+    threadGoal: nativeChatController.nativeChatThreadGoal
   })
 
   useEffect(() => {

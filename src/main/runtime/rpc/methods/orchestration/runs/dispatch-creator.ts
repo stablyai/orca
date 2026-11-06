@@ -1,5 +1,5 @@
 import type { DispatchCreator } from '../../../../orchestration/db/dispatch-depth'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { orchestrationCallerIdentity } from './run-scope'
 

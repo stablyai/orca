@@ -1,4 +1,4 @@
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
@@ -6,10 +6,8 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 export function completeNativeChatStructuredUserAction(
   agent: AgentType,
   transport: NativeChatStructuredComposerTransport,
-  revealsTranscript: boolean
+  reveal: (() => void) | undefined
 ): void {
   emitNativeChatMessageSent({ agent, runtime: transport.runtime })
-  if (revealsTranscript) {
-    transport.onSubmitted?.()
-  }
+  reveal?.()
 }

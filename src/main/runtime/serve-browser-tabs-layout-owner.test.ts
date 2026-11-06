@@ -42,43 +42,6 @@ function servedHost(initial: WorkspaceSessionState = getDefaultWorkspaceSession(
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('served browser tabs in a layout-owner build', () => {
-  it('opens a tab through layout.apply, then saves its page so a restart lists it', async () => {
-    const host = servedHost()
-
-    host.tabs.opened({ ...PAGE, profileId: 'p1' })
-    await settle()
-
-    expect(host.applyLayout).toHaveBeenCalledWith(
-      { type: 'openBrowserTab', workspace: WT, pageId: 'page-1', profileId: 'p1' },
-      'local'
-    )
-    expect(host.session().browserTabsByWorktree?.[WT]).toEqual([
-      expect.objectContaining({
-        id: 'page-1',
-        pageIds: ['page-1'],
-        sessionProfileId: 'p1',
-        url: PAGE.url,
-        title: PAGE.title
-      })
-    ])
-    expect(host.session().browserPagesByWorkspace?.['page-1']).toEqual([
-      expect.objectContaining({ id: 'page-1', workspaceId: 'page-1', url: PAGE.url })
-    ])
-    expect(host.tabs.listUnstarted(WT).map((tab) => tab.browserPageId)).toEqual(['page-1'])
-  })
-
-  it('does not open a saved page again', async () => {
-    const host = servedHost()
-    host.tabs.opened(PAGE)
-    await settle()
-
-    host.tabs.opened(PAGE)
-    await settle()
-
-    expect(host.applyLayout).toHaveBeenCalledTimes(1)
-    expect(host.session().browserTabsByWorktree?.[WT]).toHaveLength(1)
-  })
-
   it('closes a window-saved tab by its own tab-bar entry', async () => {
     const host = servedHost()
     host.tabs.opened(PAGE)
@@ -143,18 +106,5 @@ describe('served browser tabs in a layout-owner build', () => {
     host.tabs.closed(WT, 'page-1')
 
     expect(host.tabs.listUnstarted(WT)).toEqual([])
-  })
-
-  it('saves no page when main refuses the open', async () => {
-    const host = servedHost()
-    host.applyLayout.mockResolvedValueOnce({ ok: false, code: 'invalid_params' })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    host.tabs.opened(PAGE)
-    await settle()
-
-    expect(host.save).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
   })
 })

@@ -113,7 +113,8 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
       ptyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId()
     })
     for (const paneId of retiredPaneIds) {
-      executeClosePane(paneId)
+      // Host-retired PTY-less panes: housekeeping, never a user close of the tab.
+      executeClosePane(paneId, 'cleanup')
     }
     if (appliedInsertion) {
       persistLayoutSnapshot()

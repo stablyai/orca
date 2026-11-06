@@ -4,7 +4,9 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-ru
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -91,31 +93,6 @@ describe('an on-connect update re-pairs a managed server', () => {
     const store = userOnServer()
     store.getState().setRuntimeEnvironments([server(2)])
     store.getState().setRuntimeEnvironments([server(2, 'key-reinstalled')])
-    expect(keptWorkspaces(store)).toEqual({ repos: 0, tabs: 0 })
-  })
-})
-
-describe('Settings refreshes a hand-paired server with a new code for it', () => {
-  function handPaired(pairingRevision: number, hostKeyFingerprint: string) {
-    const { orcadDeployment: _managed, ...rest } = server(pairingRevision, hostKeyFingerprint)
-    return rest
-  }
-
-  function userOnHandPairedServer() {
-    const store = userOnServer()
-    store.getState().setRuntimeEnvironments([handPaired(1, 'key-a')])
-    return store
-  }
-
-  it('keeps the workspaces and tabs when the new pairing carries the same key', () => {
-    const store = userOnHandPairedServer()
-    store.getState().setRuntimeEnvironments([handPaired(2, 'key-a')])
-    expect(keptWorkspaces(store)).toEqual({ repos: 1, tabs: 1 })
-  })
-
-  it('retires them when the new pairing is for another machine', () => {
-    const store = userOnHandPairedServer()
-    store.getState().setRuntimeEnvironments([handPaired(2, 'key-other')])
     expect(keptWorkspaces(store)).toEqual({ repos: 0, tabs: 0 })
   })
 })

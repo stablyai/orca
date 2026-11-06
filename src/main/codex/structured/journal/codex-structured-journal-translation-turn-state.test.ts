@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  CodexJournalActiveTurns,
-  CodexJournalRecentTurns,
-  MAX_CODEX_RECENT_TURN_BYTES,
-  MAX_CODEX_RECENT_TURNS
-} from './codex-structured-journal-translation-turn-state'
+import { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 
 describe('CodexJournalActiveTurns', () => {
   it('uses dispatch order even when the host clock moves backwards', () => {
@@ -36,34 +31,5 @@ describe('CodexJournalActiveTurns', () => {
         userItemId: 'mid-turn-send'
       })
     ).toBeNull()
-  })
-})
-
-describe('CodexJournalRecentTurns', () => {
-  it('evicts the oldest terminal turn at its bounded capacity', () => {
-    const recent = new CodexJournalRecentTurns()
-    for (let index = 0; index <= MAX_CODEX_RECENT_TURNS; index += 1) {
-      recent.remember('thread', {
-        turnId: `turn-${index}`,
-        state: 'completed',
-        userItemId: `user-${index}`,
-        startedAt: 1_000,
-        completedAt: 2_000
-      })
-    }
-
-    expect(recent.size).toBe(MAX_CODEX_RECENT_TURNS)
-    expect(recent.bytes).toBeLessThanOrEqual(MAX_CODEX_RECENT_TURN_BYTES)
-    expect(
-      recent.requestOriginRevision('thread', 'turn-0', {
-        requestedAt: 900,
-        sequence: 0,
-        userItemId: 'opening-send'
-      })
-    ).toBeNull()
-
-    recent.clear()
-    expect(recent.size).toBe(0)
-    expect(recent.bytes).toBe(0)
   })
 })

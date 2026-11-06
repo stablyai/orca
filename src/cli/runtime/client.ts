@@ -17,7 +17,7 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
-import { attachMutationRecovery } from './client-error-recovery'
+import { attachMutationRecovery, isRequestUnsent } from './client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
@@ -30,7 +30,7 @@ import {
   attachUnverifiedTerminalPromptRecovery,
   didAnotherRuntimeHandleTerminalPrompt
 } from './terminal-prompt-mutation-recovery'
-import { markEnvironmentUsed } from './environments'
+import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { createRuntimeSourceFence, type RuntimeSourceFence } from './runtime-source-fence'
 import { resolveRemoteConnection } from './runtime-remote-pairing'
 import {
@@ -176,7 +176,7 @@ export class RuntimeClient {
         throw recover(new RuntimeRpcFailureError(response), null)
       }
       if (this.environmentSelector) {
-        markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+        recordRuntimeEnvironmentUsage(this.userDataPath, this.environmentSelector, {
           runtimeId: response._meta.runtimeId
         })
       }
@@ -197,7 +197,8 @@ export class RuntimeClient {
         options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
-      throw recover(error, metadata.runtimeId ?? null)
+      // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
+      throw isRequestUnsent(error) ? error : recover(error, metadata.runtimeId ?? null)
     }
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)

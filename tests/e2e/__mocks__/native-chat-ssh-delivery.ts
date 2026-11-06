@@ -16,7 +16,7 @@ import type { IPtyProvider } from '../../../src/main/providers/pty-provider-cont
 import type * as PtyProviderRegistry from '../../../src/main/ipc/pty/provider/registry'
 import { ptyOwnership } from '../../../src/main/ipc/pty/provider/ownership-state'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { makeStore } from '../../../src/main/runtime/runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../../src/main/runtime/rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const io = vi.hoisted(() => ({
   getProvider: (): IPtyProvider => {

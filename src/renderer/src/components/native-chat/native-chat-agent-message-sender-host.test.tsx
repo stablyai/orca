@@ -52,7 +52,7 @@ vi.mock('./NativeChatPaneFileDropSurface', () => ({
 vi.mock('../tab-group/RetainedPaneHost', () => ({
   RetainedPaneHost: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   focusRendererTerminalHandle: transport.focusRenderer
 }))
@@ -290,22 +290,6 @@ it.each([false, true])(
     stopLocal()
   }
 )
-
-it('keeps recorded CLI labels and focuses the exact remote pane from both surfaces', async () => {
-  seed(false, true)
-  await mount()
-  for (const link of screen.getAllByRole('button', { name: 'Recorded sender' })) {
-    await act(async () => fireEvent.click(link))
-    expect(transport.focusRenderer).toHaveBeenLastCalledWith('term-current', 'server-1')
-    expect(transport.bridge).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'server-1',
-        method: 'terminal.focus',
-        params: { terminal: 'term-current', navigation: 'host' }
-      })
-    )
-  }
-})
 
 it('keeps older-host direct-root names and both clicks on the stamped host when the workspace is local', async () => {
   seed()

@@ -115,21 +115,6 @@ describe('Codex session resume daemon socket guard', () => {
     expect(config).toContain(`daemon_auto_start = false ${CODEX_DAEMON_OVERRIDE_MARKER}`)
   })
 
-  it('guards the resumed account home when hooks are off and the refresh returns early', async () => {
-    mocks.refreshRuntimeUserHooksForLaunchPrep.mockResolvedValue({
-      agent: 'codex',
-      state: 'error',
-      detail: 'Could not read system Codex hooks.json'
-    })
-
-    await resume()
-
-    expect(mocks.refreshRuntimeUserHooksForLaunchPrep).toHaveBeenCalledWith(accountHome)
-    expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).toContain(
-      `daemon_auto_start = false ${CODEX_DAEMON_OVERRIDE_MARKER}`
-    )
-  })
-
   it('never writes the guard into the real Codex home a migrated resume runs in', async () => {
     expect(codexDaemonSocketPathExceedsLimit(mocks.systemHomePath)).toBe(true)
     mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: true })

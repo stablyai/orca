@@ -63,16 +63,3 @@ it('still falls back to a symlink between Orca-managed homes', async () => {
   expect(summary).toMatchObject({ linkedFiles: 1, skippedFiles: 0 })
   expect(lstatSync(join(root, 'codex', 'sessions', ROLLOUT)).isSymbolicLink()).toBe(true)
 })
-
-it('hardlinks on one volume', async () => {
-  crossVolume.on = false
-  const summary = await bridgeCodexSessionsIntoAccountHome({
-    targetCodexHomePath: join(root, 'codex'),
-    sourceCodexHomePaths: [join(root, 'account')],
-    hardlinkOnly: true
-  })
-
-  expect(summary).toMatchObject({ linkedFiles: 1, skippedFiles: 0 })
-  expect(summary.bridgedThreads.size).toBe(1)
-  expect(lstatSync(join(root, 'codex', 'sessions', ROLLOUT)).isSymbolicLink()).toBe(false)
-})

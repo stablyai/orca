@@ -30,6 +30,8 @@ export function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
+  // The bridge serves claimed hosts, including owned ones whose state stays internal below.
+  requestDesktopBrowserBridgeReconcile()
   const target = getSshTargetRegistryStore()?.getTarget(targetId)
   // Internal targets must not leak transport state into clients' persisted reconnect hints.
   if (isOwnedSshTargetId(targetId) || (target && isRuntimeOwnedSshTarget(target))) {
@@ -43,7 +45,6 @@ export function broadcastSshState(
   }
   // Paired clients lack local SSH IPC; publish runtime events to clear stale reconnect overlays.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
-  requestDesktopBrowserBridgeReconcile()
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
@@ -70,6 +71,17 @@ export function clearPublishedManagedServer(targetId: string): void {
 export function getPublicSshState(targetId: string): SshConnectionState | undefined {
   const state = connectionManager!.getState(targetId)
   return state ? withSshRemotePlatform(targetId, state) : undefined
+}
+
+/** Settings, CLI and paired-client removals all publish this so the renderer drops the target's live state once. */
+export function broadcastSshTargetRemoved(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string
+): void {
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('ssh:target-removed', { targetId })
+  }
 }
 
 export function broadcastPortForwards(

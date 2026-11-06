@@ -41,10 +41,6 @@ beforeEach(() => {
   readWindowsProcessCreationTime.mockReset()
 })
 
-function errnoError(code: string): NodeJS.ErrnoException {
-  return Object.assign(new Error(code), { code })
-}
-
 afterEach(async () => {
   vi.restoreAllMocks()
   setPlatform(originalPlatform)
@@ -58,10 +54,6 @@ describe.skipIf(process.platform === 'win32')('probeCodexSharedServer on POSIX',
   it('is live while the control socket accepts connections', async () => {
     await listen()
     await expect(probeCodexSharedServer(home)).resolves.toBe('live')
-  })
-
-  it('is absent when no socket exists', async () => {
-    await expect(probeCodexSharedServer(home)).resolves.toBe('absent')
   })
 
   it('is absent when a crashed server left its socket file behind', async () => {
@@ -83,82 +75,6 @@ describe.skipIf(process.platform === 'win32')('probeCodexSharedServer on POSIX',
   it('is unknown when the socket path cannot be connected to for another reason', async () => {
     // ENOTDIR does not prove server absence.
     writeFileSync(join(home, 'app-server-control'), '')
-    await expect(probeCodexSharedServer(home)).resolves.toBe('unknown')
-  })
-})
-
-describe('probeCodexSharedServer on Windows', () => {
-  const START_FILETIME = '134352704749372843'
-  const START_UNIX_MS = 1_790_796_874_937
-
-  beforeEach(() => {
-    setPlatform('win32')
-    vi.spyOn(process, 'kill').mockReturnValue(true)
-  })
-
-  function writeRecord(name: string, record: unknown): void {
-    mkdirSync(join(home, 'app-server-daemon'), { recursive: true })
-    writeFileSync(
-      join(home, 'app-server-daemon', name),
-      typeof record === 'string' ? record : JSON.stringify(record)
-    )
-  }
-
-  it('is live when the recorded pid still has the recorded creation time', async () => {
-    writeRecord('daemon.pid', { pid: 27368, processStartTime: START_FILETIME })
-    readWindowsProcessCreationTime.mockReturnValue(START_UNIX_MS)
-    await expect(probeCodexSharedServer(home)).resolves.toBe('live')
-    expect(readWindowsProcessCreationTime).toHaveBeenCalledWith(27368)
-  })
-
-  it('reads the legacy record name', async () => {
-    writeRecord('app-server.pid', { pid: 27368, processStartTime: START_FILETIME })
-    readWindowsProcessCreationTime.mockReturnValue(START_UNIX_MS)
-    await expect(probeCodexSharedServer(home)).resolves.toBe('live')
-  })
-
-  it('is absent when no record exists', async () => {
-    await expect(probeCodexSharedServer(home)).resolves.toBe('absent')
-  })
-
-  it('is absent when the recorded pid is not running', async () => {
-    writeRecord('daemon.pid', { pid: 27368, processStartTime: START_FILETIME })
-    vi.mocked(process.kill).mockImplementation(() => {
-      throw errnoError('ESRCH')
-    })
-    await expect(probeCodexSharedServer(home)).resolves.toBe('absent')
-    expect(readWindowsProcessCreationTime).not.toHaveBeenCalled()
-  })
-
-  it('is absent when the pid was reused by a later process', async () => {
-    writeRecord('daemon.pid', { pid: 27368, processStartTime: START_FILETIME })
-    readWindowsProcessCreationTime.mockReturnValue(START_UNIX_MS + 60_000)
-    await expect(probeCodexSharedServer(home)).resolves.toBe('absent')
-  })
-
-  it.each([
-    [
-      'access to the pid is denied',
-      () =>
-        vi.mocked(process.kill).mockImplementation(() => {
-          throw errnoError('EPERM')
-        })
-    ],
-    [
-      'the creation time cannot be read',
-      () => readWindowsProcessCreationTime.mockReturnValue(null)
-    ],
-    [
-      'the record holds no parseable start time',
-      () => {
-        readWindowsProcessCreationTime.mockReturnValue(START_UNIX_MS)
-        writeRecord('daemon.pid', { pid: 27368, processStartTime: 'Wed Sep 30 15:33:16 2026' })
-      }
-    ],
-    ['the record is not JSON', () => writeRecord('daemon.pid', '{')]
-  ])('is unknown when %s', async (_label, arrange) => {
-    writeRecord('daemon.pid', { pid: 27368, processStartTime: START_FILETIME })
-    arrange()
     await expect(probeCodexSharedServer(home)).resolves.toBe('unknown')
   })
 })

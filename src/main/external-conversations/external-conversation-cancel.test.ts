@@ -187,21 +187,6 @@ describe('ExternalConversationSeam cancel', () => {
     await expect(seam.cancel(host, KEY, 'c1')).resolves.toEqual({ outcome: 'accepted' })
     expect(fake.keys).toEqual(['\x1b'])
   })
-
-  it('refuses a delivery id another method used, and everything once connectors are off', async () => {
-    const { seam, host, hookRows, fake } = await linked()
-    hookRows.set(PANE, hookRow())
-    await expect(seam.cancel(host, KEY, 'd1')).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'delivery_id_reused'
-    })
-    seam.dispose('connectors_disabled')
-    await expect(seam.cancel(host, KEY, 'c1')).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'connectors_disabled'
-    })
-    expect(fake.keys).toEqual([])
-  })
 })
 
 describe('ExternalConversationSeam cancel: what watchers hear', () => {

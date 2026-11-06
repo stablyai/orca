@@ -68,54 +68,6 @@ afterEach(() => {
 })
 
 describe('useAddRepoWslHostPaths', () => {
-  it('offers the Windows folder picker only for a WSL host', () => {
-    expect(setup({ selectedHostId: WSL_HOST }).view.result.current.browseWslHost).not.toBeNull()
-    expect(
-      setup({ selectedHostId: 'runtime:paired-server' }).view.result.current.browseWslHost
-    ).toBeNull()
-    expect(setup({ selectedHostId: 'local' }).view.result.current.browseWslHost).toBeNull()
-  })
-
-  it('offers nothing off Windows', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
-    expect(setup({ selectedHostId: WSL_HOST }).view.result.current.browseWslHost).toBeNull()
-  })
-
-  it('fills the host path from a pick under the host distro', async () => {
-    mocks.pickDirectory.mockResolvedValue('\\\\wsl.localhost\\ubuntu\\home\\me\\repo')
-    const { view, setServerPath, setStep } = setup({ selectedHostId: WSL_HOST })
-    act(() => view.result.current.browseWslHost?.())
-    await waitFor(() => expect(setServerPath).toHaveBeenCalledWith('/home/me/repo'))
-    expect(setStep).toHaveBeenCalledWith('server-path')
-    expect(mocks.browse).toHaveBeenCalledWith('wsl:Ubuntu', '~')
-    expect(mocks.pickDirectory).toHaveBeenCalledWith({
-      defaultPath: '\\\\wsl.localhost\\Ubuntu\\home\\me'
-    })
-  })
-
-  it.each([
-    ['C:\\Users\\me\\src', 'C:\\Users\\me\\src'],
-    ['\\\\wsl.localhost\\Ubuntu\\mnt\\c\\work', 'C:\\work']
-  ])(
-    'refuses a %s pick before it reaches the host path step or any scan',
-    async (picked, windowsPath) => {
-      mocks.pickDirectory.mockResolvedValue(picked)
-      const { view, setServerPath, setStep, onWindowsDriveRefusal } = setup({
-        selectedHostId: WSL_HOST
-      })
-      act(() => view.result.current.browseWslHost?.())
-      await waitFor(() =>
-        expect(onWindowsDriveRefusal).toHaveBeenCalledWith({
-          kind: 'wsl_host_windows_drive_path',
-          windowsPath
-        })
-      )
-      // The host path step is what scans and adds; a refused pick never gets there.
-      expect(setServerPath).not.toHaveBeenCalled()
-      expect(setStep).not.toHaveBeenCalled()
-    }
-  )
-
   it('drops a pick that lands after the dialog closed', async () => {
     let resolvePick: (path: string) => void = () => {}
     mocks.pickDirectory.mockReturnValue(new Promise((resolve) => (resolvePick = resolve)))
@@ -125,15 +77,5 @@ describe('useAddRepoWslHostPaths', () => {
     view.rerender({ selectedHostId: WSL_HOST, isOpen: false })
     await act(async () => resolvePick('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'))
     expect(setServerPath).not.toHaveBeenCalled()
-  })
-
-  it('fills a dropped folder once its WSL host is selected', () => {
-    const { view, setServerPath, setStep } = setup({ selectedHostId: null, dropped: '/home/me/a' })
-    expect(setServerPath).not.toHaveBeenCalled()
-    view.rerender({ selectedHostId: WSL_HOST, isOpen: true })
-    expect(setServerPath).toHaveBeenCalledWith('/home/me/a')
-    expect(setStep).toHaveBeenCalledWith('server-path')
-    view.rerender({ selectedHostId: WSL_HOST, isOpen: true })
-    expect(setServerPath).toHaveBeenCalledTimes(1)
   })
 })

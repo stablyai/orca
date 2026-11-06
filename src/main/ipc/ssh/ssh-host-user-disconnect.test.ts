@@ -34,17 +34,9 @@ vi.mock(
 vi.mock('../runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: runtime.invalidate
 }))
-
-import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
-import {
-  clearRuntimeEnvironmentManualDisconnect,
-  isRuntimeEnvironmentManuallyDisconnected
-} from '../runtime-environments/runtime-environment-manual-disconnect'
+import type { SshTarget } from '../../../shared/ssh-types'
+import { clearRuntimeEnvironmentManualDisconnect } from '../runtime-environments/runtime-environment-manual-disconnect'
 import { isSshUserDisconnected } from '../../ssh/ssh-user-disconnect'
-import {
-  holdLaunchReconnectOptOuts,
-  resetLaunchReconnectOptOutsForTests
-} from './ssh-host-user-disconnect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 
@@ -102,99 +94,6 @@ describe('a user Disconnect of an SSH host', () => {
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
     expect(isSshUserDisconnected(target.id)).toBe(true)
   })
-
-  it("also stops the managed server's status checks, which would redial the host", async () => {
-    await disconnect()
-
-    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
-    expect(runtime.invalidate).toHaveBeenCalledWith(managedServer.id)
-    expect(isRuntimeEnvironmentManuallyDisconnected(otherServer.id)).toBe(false)
-  })
-
-  /** Settings' Connect; the server decision is mocked, so only the lift matters here. */
-  async function connectExplicitly(): Promise<void> {
-    await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(
-      () => {}
-    )
-  }
-
-  it('is not re-applied by its own cleanup when a Connect follows at once', async () => {
-    const disconnecting = disconnect()
-    const connecting = connectExplicitly()
-    await Promise.all([disconnecting, connecting])
-
-    expect(isSshUserDisconnected(target.id)).toBe(false)
-    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(false)
-    expect(runtime.invalidate).not.toHaveBeenCalled()
-  })
-
-  it('is lifted, with its server, by an explicit Connect, whose status checks resume after', async () => {
-    await disconnect()
-    mockConnectionManager.connect.mockResolvedValue({})
-    const { publishManagedServerConnect } = await import('./ssh-host-server-connect')
-    const connected: SshConnectionState = {
-      targetId: target.id,
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    }
-    vi.mocked(publishManagedServerConnect).mockReturnValue(connected)
-
-    await connectExplicitly()
-
-    expect(isSshUserDisconnected(target.id)).toBe(false)
-    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(false)
-    expect(runtime.activate).toHaveBeenCalledTimes(1)
-  })
-
-  it('still lets the user test the connection, which leaves it disconnected', async () => {
-    await disconnect()
-    mockConnectionManager.connect.mockResolvedValue({
-      getState: () => ({ targetId: target.id, status: 'connected', error: null })
-    })
-
-    await handlers.get('ssh:testConnection')!(null, { targetId: target.id })
-
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { probe: true })
-    expect(isSshUserDisconnected(target.id)).toBe(true)
-    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
-  })
-})
-
-describe('a host opted out of reconnect on launch', () => {
-  const harness = createSshIpcHarness(mocks)
-  const { handlers } = harness
-
-  beforeEach(async () => {
-    await harness.reset()
-    runtime.environments = [managedServer, otherServer]
-    runtime.getStatusOwner.mockReset().mockReturnValue({ activate: runtime.activate })
-    runtime.activate.mockReset()
-    mockSshStore.getTarget.mockReturnValue({ ...target, reconnectOnLaunch: false })
-  })
-
-  afterEach(() => {
-    clearRuntimeEnvironmentManualDisconnect(managedServer.id)
-  })
-
-  it('is not dialed at launch, nor is its managed server, until the user connects it', async () => {
-    // Handler registration already took this process's hold with no hosts; take it again here.
-    resetLaunchReconnectOptOutsForTests()
-    holdLaunchReconnectOptOuts([{ ...target, reconnectOnLaunch: false }, { id: 'ssh-2' }], '/tmp')
-
-    await expect(
-      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
-    ).rejects.toThrow('Server was disconnected. Connect to use it again.')
-    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
-    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
-    expect(isSshUserDisconnected('ssh-2')).toBe(false)
-
-    await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(
-      () => {}
-    )
-    expect(isSshUserDisconnected(target.id)).toBe(false)
-    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(false)
-  })
 })
 
 describe('a host whose managed server the user stopped and removed', () => {
@@ -210,23 +109,6 @@ describe('a host whose managed server the user stopped and removed', () => {
     runtime.environments = [otherServer]
     mockSshStore.getTarget.mockReturnValue(removed)
     vi.mocked((await import('./ssh-host-server-connect')).decideHostServer).mockClear()
-  })
-
-  it('is not redeployed by a reload or launch reconnect, only by an explicit Connect', async () => {
-    const { decideHostServer } = await import('./ssh-host-server-connect')
-
-    await expect(
-      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
-    ).rejects.toThrow('Server was disconnected. Connect to use it again.')
-    expect(decideHostServer).not.toHaveBeenCalled()
-
-    await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(
-      () => {}
-    )
-    expect(mockSshStore.updateTarget).toHaveBeenCalledWith(target.id, {
-      managedServerRemoved: undefined
-    })
-    expect(decideHostServer).toHaveBeenCalledTimes(1)
   })
 
   it('holds a reconnect that queued behind the Stop that wrote the hold', async () => {

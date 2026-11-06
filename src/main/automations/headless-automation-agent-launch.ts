@@ -1,3 +1,4 @@
+import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
@@ -10,7 +11,7 @@ import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
+import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
@@ -136,9 +137,10 @@ export async function launchHeadlessAutomationAgent(
             prompt: startupPrompt ?? '',
             title: run.title,
             suppressStartupUpdatePrompt: true,
-            ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+            ...automationTerminalLaunchInputs(automation),
             // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
-            ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
+            ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const }),
+            surfaceOwner: false
           },
           {
             worktree: resolved,

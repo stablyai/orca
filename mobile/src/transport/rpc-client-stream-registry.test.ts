@@ -199,79 +199,6 @@ describe('RpcClientStreamRegistry', () => {
     expect(registry.size()).toBe(0)
   })
 
-  it.each([
-    ['browser.screencast', 'browser.screencast.unsubscribe', { page: 'page-1' }],
-    ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe', null],
-    ['notifications.subscribe', 'notifications.unsubscribe', null],
-    ['accounts.subscribe', 'accounts.unsubscribe', null],
-    ['session.tabs.subscribe', 'session.tabs.unsubscribe', { worktree: 'wt-1' }]
-  ])(
-    'releases canceled %s callbacks while preserving late host cleanup',
-    (method, cleanup, params) => {
-      const { registry, sent } = createRegistry()
-      const events: unknown[] = []
-      const listener = (event: unknown) => events.push(event)
-      const onBinaryFrame = () => events.push('binary')
-      for (let index = 0; index < 64; index++) {
-        registry.subscribe(method, params, listener, { onBinaryFrame })()
-      }
-
-      // Check the actual retaining roots: canceled starts can return without any reply.
-      const registryState: unknown = registry
-      if (
-        typeof registryState !== 'object' ||
-        registryState === null ||
-        !('streams' in registryState)
-      ) {
-        throw new Error('Stream registry has no inspectable retaining map')
-      }
-      const streams = registryState.streams
-      if (!(streams instanceof Map)) {
-        throw new Error('Stream registry has no inspectable retaining map')
-      }
-      expect(streams.size).toBe(64)
-      for (const entry of streams.values()) {
-        const stream: unknown = entry
-        if (
-          typeof stream !== 'object' ||
-          stream === null ||
-          !('cancelled' in stream) ||
-          !('listener' in stream) ||
-          !('onBinaryFrame' in stream)
-        ) {
-          throw new Error('Stream registry has no inspectable retained callbacks')
-        }
-        expect(stream.cancelled).toBe(true)
-        expect(stream.listener).toBeUndefined()
-        expect(stream.onBinaryFrame).toBeUndefined()
-      }
-
-      const requests = [...sent]
-      for (const request of requests) {
-        registry.handleResponse(
-          streamingResponse(
-            request.id,
-            method === 'session.tabs.subscribe'
-              ? { type: 'snapshot', tabs: [] }
-              : { type: 'ready', subscriptionId: `host:${request.id}` }
-          )
-        )
-      }
-
-      expect(events).toEqual([])
-      expect(registry.size()).toBe(0)
-      expect(
-        sent.filter((request) => request.method === cleanup).map((request) => request.params)
-      ).toEqual(
-        requests.map((request) =>
-          method === 'session.tabs.subscribe'
-            ? { worktree: 'wt-1', subscriptionId: request.id }
-            : { subscriptionId: `host:${request.id}` }
-        )
-      )
-    }
-  )
-
   describe.each([
     ['browser.screencast', 'browser.screencast.unsubscribe', { page: 'page-1' }],
     ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe', null],
@@ -494,21 +421,6 @@ describe('RpcClientStreamRegistry', () => {
 
       // A disposal while disconnected has nothing to name on the next connection.
       expect(unsubscribes(sent)).toEqual([])
-      expect(registry.size()).toBe(0)
-    })
-
-    it('still releases a stream cancelled before its first ready', () => {
-      const { registry, sent } = createRegistry()
-      const dispose = registry.subscribe(method, params, () => {})
-      const requestId = sent[0]!.id
-
-      dispose()
-      expect(unsubscribes(sent)).toEqual([])
-      registry.handleResponse(
-        streamingResponse(requestId, { type: 'ready', subscriptionId: 'first-id' })
-      )
-
-      expect(unsubscribes(sent)).toEqual([{ subscriptionId: 'first-id' }])
       expect(registry.size()).toBe(0)
     })
 

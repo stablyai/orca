@@ -6,12 +6,13 @@ import {
   ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationEnvironmentSendOptions } from '../../../../orchestration/federation/environment-transport'
 import { readFederatedWorkerOutput } from './federated-worker-read'
 import { parseRemoteReleaseReceipt, releaseFederatedWorker } from './federated-worker-release'
 import { callFederatedWorkerShow } from '../worker/worker-observation'
-import { syncFederatedDispatch } from '../../../../orchestration/federation-sync'
+import { syncFederatedDispatch } from '../../../../orchestration/federation/synchronization/federation-sync'
 import { ORCHESTRATION_WORKER_STOP_METHODS } from '../worker/worker-stop'
 
 const server = {
@@ -60,6 +61,78 @@ describe('federated transport safety', () => {
     for (const entry of call.mock.calls) {
       expect((entry as unknown[])[5]).toBe(73)
     }
+  })
+
+  it('proves the contract once per host incarnation and pins each mutation to it', async () => {
+    let currentRuntimeId = 'epoch-1'
+    let currentCapabilities = [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY]
+    const call = vi.fn(
+      async (
+        _selector: string,
+        method: string,
+        _params?: unknown,
+        _timeoutMs?: number,
+        _envelope?: unknown,
+        _pairingRevision?: number,
+        send?: OrchestrationEnvironmentSendOptions
+      ) =>
+        send?.expectedRuntimeId !== undefined && send.expectedRuntimeId !== currentRuntimeId
+          ? {
+              id: method,
+              ok: false as const,
+              error: { code: 'runtime_environment_changed', message: 'changed' },
+              _meta: { runtimeId: currentRuntimeId }
+            }
+          : {
+              id: method,
+              ok: true as const,
+              result:
+                method === 'status.get'
+                  ? runtimeStatus(currentCapabilities)
+                  : { acknowledgedThrough: 1 },
+              _meta: { runtimeId: currentRuntimeId }
+            }
+    )
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      orchestrationEnvironmentTransport: { resolve: () => server, call }
+    })
+    const ack = () =>
+      runtime.callOrchestrationWorkerServer(
+        server.environmentId,
+        'orchestration.federationAck',
+        { dispatchId: 'dispatch-worker', throughSequence: 1 },
+        15_000,
+        { orchestrationRequestId: 'ack-request' }
+      )
+    const sent = () => call.mock.calls.map((entry) => [entry[1], entry[6]?.expectedRuntimeId])
+
+    await ack()
+    await ack()
+    expect(sent()).toEqual([
+      ['status.get', undefined],
+      ['orchestration.federationAck', 'epoch-1'],
+      ['orchestration.federationAck', 'epoch-1']
+    ])
+
+    // The host restarted: the pinned send is refused before any effect, then the new incarnation is proved.
+    call.mockClear()
+    currentRuntimeId = 'epoch-2'
+    await ack()
+    expect(sent()).toEqual([
+      ['orchestration.federationAck', 'epoch-1'],
+      ['status.get', undefined],
+      ['orchestration.federationAck', 'epoch-2']
+    ])
+
+    // A downgraded restart lacks the contract, so no mutation reaches it.
+    call.mockClear()
+    currentRuntimeId = 'epoch-3'
+    currentCapabilities = []
+    await expect(ack()).rejects.toMatchObject({ code: 'orchestration_migration_required' })
+    expect(sent()).toEqual([
+      ['orchestration.federationAck', 'epoch-2'],
+      ['status.get', undefined]
+    ])
   })
 
   it('fences structured reads and worker-show to the resolved pairing revision', async () => {
@@ -262,7 +335,11 @@ describe('federated transport safety', () => {
       'orchestration.federationImport'
     ])
     for (const call of callOrchestrationWorkerServer.mock.calls) {
-      expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
+      expect((call as unknown[])[5]).toEqual(
+        call[1] === 'orchestration.federationImport'
+          ? { expectedEnvironmentPairingRevision: 73, prepareRequest: expect.any(Function) }
+          : { expectedEnvironmentPairingRevision: 73 }
+      )
     }
   })
 
@@ -270,7 +347,8 @@ describe('federated transport safety', () => {
     const db = {
       getFederatedDispatch: () => federatedDispatch(),
       beginWorkerStop: () => ({ disposition: 'stopping', worker: { state: 'stopping' } }),
-      reconcileFederatedWorkerStop: () => ({ state: 'stopped' })
+      reconcileFederatedWorkerStop: () => ({ state: 'stopped' }),
+      listHelperDispatchIds: () => []
     }
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) =>
       method === 'status.get'
@@ -295,6 +373,77 @@ describe('federated transport safety', () => {
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
     }
+  })
+})
+
+describe('worker-stop of a remote worker already settled at home', () => {
+  async function stopSettledRemote(helpers: Record<string, string[]>, rootHelpers?: unknown) {
+    const db = {
+      getFederatedDispatch: () => federatedDispatch(),
+      beginWorkerStop: () => ({ disposition: 'already_settled', worker: { state: 'succeeded' } }),
+      getWorkerDispatch: () => ({ state: 'succeeded' }),
+      listHelperDispatchIds: (id: string) => helpers[id] ?? []
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop reads only these runtime members.
+    const runtime = {
+      getOrchestrationDb: () => db,
+      getRuntimeId: () => 'runtime-home',
+      resolveOrchestrationWorkerServer: () => server,
+      callOrchestrationWorkerServer: vi.fn(async (_selector, method: string, params) => {
+        if (method === 'status.get') {
+          return runtimeStatus(['orchestration.worker-stop-helpers.v1'])
+        }
+        if (method === 'orchestration.federationStop') {
+          if (
+            params.dispatchId === 'dispatch-worker' &&
+            (helpers['dispatch-worker'] || rootHelpers)
+          ) {
+            return {
+              state: 'succeeded',
+              alreadySettled: true,
+              processAction: 'none',
+              helpers: rootHelpers
+            }
+          }
+          throw new Error('timed out')
+        }
+        return { keptOpen: false }
+      })
+    } as unknown as OrcaRuntimeService
+    const method = ORCHESTRATION_WORKER_STOP_METHODS[0]!
+    return method.handler(method.params!.parse({ dispatch: 'dispatch-worker' }), {
+      runtime,
+      orchestrationMutation: { requestId: 'request-stop' }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime and orchestrationMutation.
+    } as never)
+  }
+
+  it('fails the stop when its host cannot be reached to stop its helpers', async () => {
+    await expect(stopSettledRemote({})).resolves.toMatchObject({
+      state: 'succeeded',
+      alreadySettled: true,
+      helperStopError: expect.stringContaining('timed out')
+    })
+  })
+
+  it('fails the stop when a capable host returns an unreadable helper list', async () => {
+    await expect(stopSettledRemote({}, 'not a list')).resolves.toMatchObject({
+      helperStopError: expect.stringContaining('cannot read')
+    })
+  })
+
+  it('reports a settled helper whose host could not stop its helpers as unconfirmed', async () => {
+    await expect(
+      stopSettledRemote({ 'dispatch-worker': ['dispatch-helper'] })
+    ).resolves.toMatchObject({
+      helpers: [
+        {
+          dispatchId: 'dispatch-helper',
+          outcome: 'unconfirmed',
+          lastError: expect.stringContaining('timed out')
+        }
+      ]
+    })
   })
 })
 

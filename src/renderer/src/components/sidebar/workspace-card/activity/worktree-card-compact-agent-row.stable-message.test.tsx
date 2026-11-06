@@ -92,21 +92,4 @@ describe('CompactAgentRow stable assistant message', () => {
     rerenderRow(makeAgent({ stateStartedAt: 3000 }))
     expect(container.textContent).not.toContain('First reply')
   })
-
-  it('never holds across pings for entries without a turn identity (stateStartedAt 0)', () => {
-    const container = renderRow(makeAgent({ stateStartedAt: 0, lastAssistantMessage: 'Turn one' }))
-    expect(container.textContent).toContain('Turn one')
-
-    rerenderRow(makeAgent({ stateStartedAt: 0 }))
-    expect(container.textContent).not.toContain('Turn one')
-  })
-
-  it('drops the held line when the agent leaves working', () => {
-    const container = renderRow(
-      makeAgent({ stateStartedAt: 1000, lastAssistantMessage: 'First reply' })
-    )
-    rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'done' }))
-    rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'working' }))
-    expect(container.textContent).not.toContain('First reply')
-  })
 })

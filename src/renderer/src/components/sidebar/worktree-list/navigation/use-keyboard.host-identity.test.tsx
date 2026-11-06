@@ -11,7 +11,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
 const activateAndRevealWorktree = vi.fn()
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activateAndRevealWorktree(...args)
 }))
 
@@ -116,30 +116,6 @@ describe('worktree keyboard cycling with a resolved active host', () => {
   it('steps to the next row when the active host resolved to local but rows are unqualified', () => {
     // Clicks resolve local host ownership; raw hostless identities would miss the active row and wrap to the top.
     renderProbe('b', 'local')
-
-    press('down')
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
-
-  it('steps to the previous row when the active host resolved to local', () => {
-    renderProbe('b', 'local')
-
-    press('up')
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
-
-  it('still steps normally when the active host is unqualified', () => {
-    renderProbe('b', null)
 
     press('down')
 

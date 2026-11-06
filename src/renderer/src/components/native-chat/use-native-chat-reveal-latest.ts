@@ -51,46 +51,66 @@ export function useNativeChatInteractiveSendReveal(
 }
 
 export type NativeChatMessageListHandle = {
-  /** Bring the latest into view and follow it, wherever the reader had scrolled. */
-  revealLatest: () => void
+  /** After the reader's own send, follow the latest; with that setting off, only for a reader at the end. */
+  revealLatest: (readerWasAtEnd?: boolean) => void
+  readerAtEnd: () => boolean
   /** Bring a find match into view, clear of the find bar; the reader stops following the latest. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
   /** What the row drawing this message copies from its hover button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
+  /** Open a subagent's activity where it sits in the conversation and bring it into view. */
+  revealSubagent: (agentId: string) => void
 }
 
 /** This pane's own transcript; an unmounted pane's reveal reaches nothing. */
 export function useNativeChatRevealLatest(): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
+  captureRevealLatest: () => () => void
 } {
   const messageListRef = useRef<NativeChatMessageListHandle>(null)
-  const revealLatest = useCallback(() => {
+  const reveal = useCallback((readerWasAtEnd?: boolean) => {
     try {
-      messageListRef.current?.revealLatest()
+      messageListRef.current?.revealLatest(readerWasAtEnd)
     } catch (error) {
       // Navigation never stops the send that asked for it.
       console.error('Could not reveal the submitted chat content', error)
     }
   }, [])
-  return { messageListRef, revealLatest }
+  const revealLatest = useCallback(() => reveal(), [reveal])
+  // A reveal that waits for the host reads the reader at the press, before the send's echo moves the end.
+  const captureRevealLatest = useCallback(() => {
+    const readerWasAtEnd = messageListRef.current?.readerAtEnd()
+    return () => reveal(readerWasAtEnd)
+  }, [reveal])
+  return { messageListRef, revealLatest, captureRevealLatest }
 }
 
 function ignoreFindMatch(): void {}
 
+function alwaysAtEnd(): boolean {
+  return true
+}
+
+function ignoreSubagent(): void {}
+
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
-  jumpToLatest: () => void,
+  revealLatest: NativeChatMessageListHandle['revealLatest'],
   revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
-  slots: readonly NativeChatTranscriptSlot[] = []
+  slots: readonly NativeChatTranscriptSlot[] = [],
+  readerAtEnd: NativeChatMessageListHandle['readerAtEnd'] = alwaysAtEnd,
+  revealSubagent: NativeChatMessageListHandle['revealSubagent'] = ignoreSubagent
 ): void {
   useImperativeHandle(
     ref,
     () => ({
-      revealLatest: jumpToLatest,
+      revealLatest,
+      readerAtEnd,
       revealFindMatch,
-      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
+      messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId),
+      revealSubagent
     }),
-    [jumpToLatest, revealFindMatch, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, revealSubagent, slots]
   )
 }

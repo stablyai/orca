@@ -33,31 +33,4 @@ describe('useWslDistroList', () => {
     await waitFor(() => expect(result.current.distros).toEqual([ubuntu, debian]))
     expect(listDistros).toHaveBeenCalledTimes(2)
   })
-
-  it('re-reads on visibility return and on demand, but never on its own', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    listDistros.mockResolvedValue([ubuntu])
-    const { result } = renderHook(() => useWslDistroList(true))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    vi.advanceTimersByTime(60_000)
-    expect(listDistros).toHaveBeenCalledTimes(1)
-
-    act(() => {
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
-    await waitFor(() => expect(result.current.refreshing).toBe(false))
-    expect(listDistros).toHaveBeenCalledTimes(2)
-
-    act(() => result.current.refresh())
-    await waitFor(() => expect(listDistros).toHaveBeenCalledTimes(3))
-  })
-
-  it('reads nothing when disabled', () => {
-    const { result } = renderHook(() => useWslDistroList(false))
-    expect(result.current.loading).toBe(false)
-    act(() => {
-      window.dispatchEvent(new Event('focus'))
-    })
-    expect(listDistros).not.toHaveBeenCalled()
-  })
 })

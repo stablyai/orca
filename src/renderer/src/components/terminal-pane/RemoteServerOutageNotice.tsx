@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { CalmStatusView } from '@/hooks/use-calm-status-reveal'
 import { RemoteRuntimeRecoveryCard } from './RemoteRuntimeRecoveryCard'
-import { remoteRuntimeRecoveryCopy } from './remote-runtime-recovery-copy'
+import { remoteRuntimeRecoveryCopy } from './pty-transport/remote-runtime/recovery/remote-runtime-recovery-copy'
 import {
   selectRemoteServerOutageCause,
   selectRuntimeServerName,

@@ -7,7 +7,7 @@ import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { PtyConnectionDeps } from './pty-connection-types'
-import { resolveParkRevealLiveTuiLeafIds } from './park-reveal-live-tui-leaves'
+import { resolveParkRevealLiveTuiLeafIds } from './parking/lifecycle/park-reveal-live-tui-leaves'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   mapRestoredPaneTitlesByPaneId,

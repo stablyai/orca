@@ -11,7 +11,7 @@ import { classifyRuntimeHostRePair } from '../../../shared/remote-runtime/host-s
 import type { WebPairingOffer } from './web-pairing'
 import { readWebDeviceKeySupport } from './web-device-key-support'
 import { MIGRATED_DEVICE_TOKEN_PREFIX } from './web-runtime-credential-source'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {

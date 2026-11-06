@@ -12,7 +12,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { SourceControlAgentActionDialog } from '../../SourceControlAgentActionDialog'
+import { SourceControlAgentActionDialog } from '../ai/SourceControlAgentActionDialog'
 import { SourceControlTextGenerationDialog } from '../ai/text-generation-dialog'
 import { SourceControlDiscardDialog } from '../commit/discard-dialog'
 

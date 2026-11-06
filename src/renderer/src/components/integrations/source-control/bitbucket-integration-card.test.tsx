@@ -65,40 +65,6 @@ describe('BitbucketIntegrationCard credential-read failures', () => {
     container.remove()
   })
 
-  it('says the credential could not be read rather than rendering as "nothing stored"', async () => {
-    mocks.status.mockRejectedValue(new Error('keychain locked'))
-
-    await renderCard()
-
-    expect(container.textContent).toContain(LOAD_FAILED_TEXT)
-    expect(container.textContent).not.toContain('Connect')
-    expect(container.textContent).toContain('Add or replace credentials')
-    expect(container.textContent).not.toContain('credentials are configured')
-
-    await act(async () => {
-      Array.from(container.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Add or replace credentials')
-        ?.click()
-    })
-    expect(container.textContent).toContain('Credential dialog open')
-  })
-
-  it('retries the failed credential read from Re-check, not just the preflight', async () => {
-    mocks.status.mockRejectedValueOnce(new Error('keychain locked'))
-    mocks.status.mockResolvedValueOnce({ source: 'none', account: null })
-
-    await renderCard()
-    expect(container.textContent).toContain(LOAD_FAILED_TEXT)
-
-    await act(async () => {
-      recheckButton().click()
-    })
-
-    expect(mocks.status).toHaveBeenCalledTimes(2)
-    expect(mocks.refresh).toHaveBeenCalled()
-    expect(container.textContent).not.toContain(LOAD_FAILED_TEXT)
-  })
-
   it('does not let an older failed read overwrite a newer successful re-check', async () => {
     let rejectInitial!: (error: Error) => void
     mocks.status

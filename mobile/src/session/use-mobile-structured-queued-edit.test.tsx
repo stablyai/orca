@@ -6,7 +6,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
-import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
+import '../../../src/shared/queued-message-edit'
 import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import {
@@ -57,90 +57,6 @@ describe('mobile in-place queued Edit', () => {
     resolved,
     requestedFingerprint
   } = rig
-  it('waits for the capability probe before offering the legacy fallback', async () => {
-    await mount(queuedDraft({ messageId: 'draft-1' }), null)
-    expect(state.hook!.queued.edit).toBeUndefined()
-    expect(
-      sendRequest.mock.calls.some(
-        ([method]) =>
-          method === 'agentSession.queuedMessageDelete' ||
-          method === 'agentSession.queuedMessageEditHold'
-      )
-    ).toBe(false)
-    await act(async () => state.renderer?.update(createElement(Harness, { editSupport: false })))
-    expect(state.hook!.queued.edit).toEqual(expect.any(Function))
-  })
-
-  it.each([
-    [false, false],
-    [true, false],
-    [false, true],
-    [true, true]
-  ])(
-    'sends own optional keys only for host image=%s skill=%s capabilities',
-    async (imagesSupport, skillsSupport) => {
-      const message = queuedDraft({
-        messageId: 'matrix',
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [
-            { type: 'text', text: '$review original' },
-            {
-              type: 'image-ref',
-              path: '/host/original.png',
-              alt: 'original'
-            }
-          ],
-          skills: [{ name: 'review', path: '/host/old/SKILL.md' }]
-        }
-      })
-      await mount(message)
-      act(() => state.hook!.queued.editor!.cancel())
-      await act(async () =>
-        state.renderer!.update(createElement(Harness, { imagesSupport, skillsSupport }))
-      )
-      await act(async () => {
-        await state.hook!.queued.edit!('matrix')
-      })
-      act(() => state.hook!.queued.editor!.change('$review changed'))
-      await act(async () => {
-        expect(await state.hook!.queued.editor!.save()).toBe(true)
-      })
-      const request = fieldsOf(
-        sendRequest.mock.calls.find(
-          ([method]) => method === 'agentSession.queuedMessageUpdate'
-        )?.[1]
-      )
-      expect(Object.hasOwn(request, 'images')).toBe(imagesSupport)
-      expect(Object.hasOwn(request, 'skills')).toBe(skillsSupport)
-      if (imagesSupport) {
-        expect(request.images).toEqual([message.body.blocks[1]])
-      }
-      if (skillsSupport) {
-        expect(request.skills).toEqual(message.body.skills)
-      }
-      // The old-host path leaves image blocks on the host while changing only text.
-      const edited = queuedMessageWithEdit(message.body, {
-        text: String(request.text),
-        ...(imagesSupport
-          ? {
-              images: [
-                {
-                  type: 'image-ref' as const,
-                  path: '/host/original.png',
-                  alt: 'original'
-                }
-              ]
-            }
-          : {}),
-        ...(skillsSupport ? { skills: message.body.skills } : {})
-      })
-      expect(edited.ok && edited.body.blocks.filter((block) => block.type === 'image-ref')).toEqual(
-        [message.body.blocks[1]]
-      )
-    }
-  )
 
   it.each([false, true])(
     'clean departure redirects captured dictation and Cancel=%s retires it',

@@ -8,8 +8,10 @@ import {
   createWorktreePreparationLockReason
 } from '../../../../shared/worktree/create-preparation'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
-import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/worktree-create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
+import {
+  prepareWorktreeCreateCheckout,
+  discardPreparedWorktree
+} from '../../../git/worktrees/creation/worktree-create-preparation'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
@@ -37,7 +39,9 @@ import {
   trackPreparationDiscard
 } from './worktree-preparation-discard-retry'
 
-export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
+import { WorktreePreparationOperation } from '../../../git/worktrees/creation/worktree-preparation-operation'
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+export { WORKTREE_CREATE_PREPARATION_TTL_MS } from '../../../git/worktrees/creation/worktree-preparation-operation'
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3
 
 export type PreparationEntry = {
@@ -54,8 +58,7 @@ export type PreparationEntry = {
   options: AddWorktreeOptions
   createdAt: number
   ready: Promise<void>
-  expiration: NodeJS.Timeout
-  controller: AbortController
+  operation: WorktreePreparationOperation
   checkoutStarted: boolean
   activity: PreparationActivity
 }
@@ -80,13 +83,25 @@ function discardEntryInBackground(entry: PreparationEntry): void {
   trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
 }
 
-function expireEntry(entry: PreparationEntry): void {
-  if (preparations.get(entry.key) !== entry) {
-    return
-  }
+function evictEntry(entry: PreparationEntry): void {
   preparations.delete(entry.key)
-  entry.controller.abort()
+  entry.operation.controller.abort()
   discardEntryInBackground(entry)
+}
+
+function expireEntry(entry: PreparationEntry): void {
+  if (preparations.get(entry.key) === entry) {
+    evictEntry(entry)
+  }
+}
+
+/** A removed project has no create left to claim its armed checkouts. */
+export function discardRepoPreparations(repoPathKey: string): void {
+  for (const entry of preparations.values()) {
+    if (entry.repoPathKey === repoPathKey) {
+      evictEntry(entry)
+    }
+  }
 }
 
 /** Bound full-checkout disk use, evicting the requesting workspace's oldest preparation first. */
@@ -107,10 +122,7 @@ function enforcePreparationLimit(
     if (!victim) {
       return
     }
-    preparations.delete(victim.key)
-    clearTimeout(victim.expiration)
-    victim.controller.abort()
-    discardEntryInBackground(victim)
+    evictEntry(victim)
   }
 }
 
@@ -135,7 +147,7 @@ export function takePreparation(
   requestedCanonicalBase = entry.canonicalBase
 ): PreparationClaim {
   preparations.delete(entry.key)
-  clearTimeout(entry.expiration)
+  entry.operation.claim()
   const requestedKey = preparationEntryKey(
     entry.repoPathKey,
     entry.workspaceRootKey,
@@ -182,7 +194,7 @@ function refreshPreparationTip(
       }
       if (available) {
         preparations.delete(entry.key)
-        clearTimeout(entry.expiration)
+        entry.operation.complete()
       }
       discardEntryInBackground(entry)
     },
@@ -214,12 +226,8 @@ function startBackgroundPreparation({
   const paths = isWindowsAbsolutePathLike(workspaceRoot) ? win32 : posix
   const preparationRoot = paths.join(workspaceRoot, WORKTREE_CREATE_PREPARATION_DIRECTORY)
   const preparedPath = paths.join(preparationRoot, preparationId)
-  const controller = new AbortController()
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, controller.signal])
-    : controller.signal
-  const expiration = setTimeout(() => expireEntry(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
-  expiration.unref()
+  const operation = new WorktreePreparationOperation(options, () => expireEntry(entry))
+  const signal = operation.signal
   const entry: PreparationEntry = {
     key,
     repoPath,
@@ -233,45 +241,41 @@ function startBackgroundPreparation({
     lockReason,
     options,
     createdAt: Date.now(),
-    expiration,
-    controller,
+    operation,
     checkoutStarted: false,
     activity: createPreparationActivity(kind),
     ready: Promise.resolve()
   }
-  entry.ready = (async () => {
-    await startStalePreparationCleanup(
-      preparationHostKey(repoPathKey, wslDistro),
-      repoPath,
-      options
+  operation.setDiscard((cleanupOptions) =>
+    discardPreparedWorktree(repoPath, preparedPath, cleanupOptions, lockReason)
+  )
+  entry.ready = operation.run(async () => {
+    await waitForPromiseWithSignal(
+      startStalePreparationCleanup(preparationHostKey(repoPathKey, wslDistro), repoPath, options),
+      signal
     )
     signal.throwIfAborted()
-    await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
+    await operation.trackWriter(mkdir(toHostFilesystemPath(preparationRoot), { recursive: true }))
     signal.throwIfAborted()
     entry.checkoutStarted = true
-    try {
-      await prepareWorktreeCreateCheckout(
-        repoPath,
-        preparedPath,
-        canonicalBase,
-        lockReason,
-        { ...options, signal },
-        beforeMaterialization
-      )
-    } catch (error) {
-      if (error instanceof WorktreePreparationLockOwnershipError) {
-        entry.checkoutStarted = false
-      }
-      throw error
-    }
-  })()
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      canonicalBase,
+      lockReason,
+      { ...options, signal },
+      beforeMaterialization,
+      operation
+    )
+  })
   preparations.set(key, entry)
   entry.activity.track(entry.ready)
   void entry.ready.catch(() => {
     if (preparations.get(key) === entry) {
       preparations.delete(key)
-      clearTimeout(entry.expiration)
+      entry.operation.complete()
     }
+    discardEntryInBackground(entry)
   })
   return entry.ready
 }
@@ -283,7 +287,7 @@ export async function _resetPreparationPoolForTests(): Promise<void> {
   await resetStalePreparationCleanupForTests()
   await Promise.all(
     entries.map(async (entry) => {
-      clearTimeout(entry.expiration)
+      entry.operation.controller.abort()
       await discardPreparationEntry(entry)
     })
   )

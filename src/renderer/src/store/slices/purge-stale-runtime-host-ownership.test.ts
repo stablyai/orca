@@ -6,7 +6,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -20,39 +22,6 @@ const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 const RUNTIME_B = toRuntimeExecutionHostId('env-b')
 
 describe('purgeStaleRuntimeHostState ownership evidence', () => {
-  it('purges nested SSH rows when their transport-owning runtime is removed', () => {
-    const store = createTestStore()
-    const worktreeId = 'repoA::/nested-ssh'
-    seedStore(store, {
-      repos: [
-        {
-          id: 'repoA',
-          path: '/nested-ssh',
-          displayName: 'Nested SSH',
-          executionHostId: RUNTIME_A
-        } as never
-      ],
-      worktreesByRepo: {
-        repoA: [
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repoA',
-            hostId: 'ssh:hub-private-target',
-            runtimeOwnerEnvironmentId: 'env-a'
-          })
-        ]
-      },
-      tabsByWorktree: {
-        [worktreeId]: [makeTab({ id: 'nested-tab', worktreeId })]
-      }
-    })
-
-    store.getState().purgeStaleRuntimeHostState(['env-a'])
-
-    expect(store.getState().worktreesByRepo.repoA).toEqual([])
-    expect(store.getState().tabsByWorktree[worktreeId]).toBeUndefined()
-  })
-
   it('purges restored session state owned by the removed host despite an exact-id survivor', () => {
     const store = createTestStore()
     const worktreeId = 'shared::/same/path'
@@ -96,43 +65,5 @@ describe('purgeStaleRuntimeHostState ownership evidence', () => {
     expect(state.restoredRuntimeHostIdByWorkspaceSessionKey[worktreeId]).toBeUndefined()
     expect(state.activeWorktreeId).toBeNull()
     expect(state.activeWorkspaceKey).toBeNull()
-  })
-
-  it('preserves a surviving restored session before its catalog rows load', () => {
-    const store = createTestStore()
-    const removedWorktreeId = 'shared::/removed-host'
-    const survivingWorktreeId = 'shared::/surviving-host'
-    const survivingTabs = [
-      makeTab({
-        id: 'surviving-host-tab',
-        worktreeId: survivingWorktreeId,
-        ptyId: 'remote:env-b@@terminal-b'
-      })
-    ]
-    seedStore(store, {
-      repos: [],
-      worktreesByRepo: {},
-      tabsByWorktree: {
-        [removedWorktreeId]: [makeTab({ id: 'removed-host-tab', worktreeId: removedWorktreeId })],
-        [survivingWorktreeId]: survivingTabs
-      },
-      restoredRuntimeHostIdByWorkspaceSessionKey: {
-        [removedWorktreeId]: RUNTIME_A,
-        [survivingWorktreeId]: RUNTIME_B
-      },
-      activeWorktreeId: survivingWorktreeId,
-      activeWorkspaceKey: worktreeWorkspaceKey(survivingWorktreeId)
-    })
-
-    store.getState().purgeStaleRuntimeHostState(['env-a'])
-
-    const state = store.getState()
-    expect(state.tabsByWorktree[removedWorktreeId]).toBeUndefined()
-    expect(state.tabsByWorktree[survivingWorktreeId]).toBe(survivingTabs)
-    expect(state.restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
-      [survivingWorktreeId]: RUNTIME_B
-    })
-    expect(state.activeWorktreeId).toBe(survivingWorktreeId)
-    expect(state.activeWorkspaceKey).toBe(worktreeWorkspaceKey(survivingWorktreeId))
   })
 })

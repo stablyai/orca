@@ -9,20 +9,22 @@ import { operationGitContext } from '../listing/operation-target'
 import { translate } from '@/i18n/i18n'
 import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generation-client'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
-import { normalizeHostedReviewHeadRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import { localizedCreateFailure } from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
+import {
+  normalizeHostedReviewHeadRef,
+  normalizeHostedReviewBaseRef as stripBaseRef
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { resolveCreateReviewSeedText } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   createPrIntentRunTokenMatches,
   resolveCreatePrIntentGeneratedReviewFields,
   resolveCreatePrIntentReviewBase,
   shouldAttemptCreateHostedReviewForIntent,
-  shouldGenerateHostedReviewDetailsForIntent,
+  shouldAttemptCreateHostedReviewForIntent as shouldGenerateHostedReviewDetailsForIntent,
   type CreatePrIntentRunToken
 } from './create-pr-intent-flow'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
-import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -30,7 +32,7 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 /** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({

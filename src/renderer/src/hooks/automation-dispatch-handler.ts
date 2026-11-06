@@ -1,7 +1,8 @@
+import { automationTerminalLaunchInputs } from '../../../shared/automation-launch-setup'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
-import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
+import { launchAgentBackgroundSession } from '@/lib/agent-session/launch/background/launch-agent-background-session'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
@@ -193,7 +194,7 @@ export async function handleAutomationDispatchRequest({
       worktreeId: worktree.id,
       resolvedTarget: { worktree, repo: resolved.repo },
       prompt: automation.prompt,
-      ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+      ...automationTerminalLaunchInputs(automation),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,

@@ -23,11 +23,7 @@ vi.mock('../../../windows/windows-process-table', () => ({
   readWindowsProcessTable: mocks.readWindowsProcessTable
 }))
 
-import {
-  findPaneCodex,
-  findPaneCodexOnSharedServer,
-  resolveCodexPaneHome
-} from './codex-shared-server-pane'
+import { findPaneCodex } from './codex-shared-server-pane'
 
 const SHELL = 100
 
@@ -82,76 +78,5 @@ describe('findPaneCodex', () => {
   it('ignores Codex outside this pane and non-Codex children', () => {
     const rows = [row(SHELL, 1, '-zsh'), row(101, SHELL, 'vim'), row(201, 1, 'codex')]
     expect(findPaneCodex(rows, SHELL)).toBeNull()
-  })
-})
-
-describe('resolveCodexPaneHome', () => {
-  it.each([
-    [{ selectionKey: 'host', accountId: null, homeRoute: 'real-home' }, '/home/me/.codex'],
-    [{ selectionKey: 'host', accountId: null, homeRoute: 'shared-home' }, null],
-    [{ selectionKey: 'host', accountId: 'acct', homeRoute: 'account-home' }, null],
-    [{ selectionKey: 'wsl:Ubuntu', accountId: null, homeRoute: 'real-home' }, null],
-    [{ selectionKey: 'host', accountId: null }, null]
-  ] satisfies [CodexPaneAccountRecord, string | null][])(
-    'resolves %o to %s',
-    (record, expected) => {
-      mocks.getCodexPaneAccount.mockReturnValue(record)
-      expect(resolveCodexPaneHome('pty')).toBe(expected)
-    }
-  )
-
-  it('names no home for a pane with no launch record', () => {
-    mocks.getCodexPaneAccount.mockReturnValue(null)
-    expect(resolveCodexPaneHome('pty')).toBeNull()
-  })
-})
-
-describe('findPaneCodexOnSharedServer', () => {
-  beforeEach(() => {
-    mocks.getCodexPaneAccount.mockReturnValue({
-      selectionKey: 'host',
-      accountId: null,
-      homeRoute: 'real-home'
-    })
-    mocks.probeCodexSharedServer.mockResolvedValue('live')
-    const rows = [row(SHELL, 1, '-bash'), row(101, SHELL, 'codex')]
-    mocks.getProcessTableSnapshot.mockResolvedValue(rows)
-    mocks.readWindowsProcessTable.mockResolvedValue(rows)
-  })
-
-  it('finds a typed codex while its home has a live server', async () => {
-    await expect(findPaneCodexOnSharedServer('pty', SHELL)).resolves.toEqual({
-      command: 'codex',
-      shell: 'bash'
-    })
-    expect(mocks.probeCodexSharedServer).toHaveBeenCalledWith('/home/me/.codex')
-  })
-
-  it.each(['absent', 'unknown'] as const)(
-    'finds none when the pane home server is %s',
-    async (state) => {
-      mocks.probeCodexSharedServer.mockResolvedValue(state)
-      await expect(findPaneCodexOnSharedServer('pty', SHELL)).resolves.toBeNull()
-    }
-  )
-
-  it('finds none when Codex runs with --no-daemon, without probing', async () => {
-    mocks.getProcessTableSnapshot.mockResolvedValue([
-      row(SHELL, 1, '-bash'),
-      row(101, SHELL, 'codex --no-daemon')
-    ])
-    mocks.readWindowsProcessTable.mockResolvedValue([
-      row(SHELL, 1, 'cmd.exe'),
-      row(101, SHELL, 'codex --no-daemon')
-    ])
-    await expect(findPaneCodexOnSharedServer('pty', SHELL)).resolves.toBeNull()
-    expect(mocks.probeCodexSharedServer).not.toHaveBeenCalled()
-  })
-
-  it('finds none when the pane home cannot be named, without reading processes', async () => {
-    mocks.getCodexPaneAccount.mockReturnValue(null)
-    await expect(findPaneCodexOnSharedServer('pty', SHELL)).resolves.toBeNull()
-    expect(mocks.getProcessTableSnapshot).not.toHaveBeenCalled()
-    expect(mocks.readWindowsProcessTable).not.toHaveBeenCalled()
   })
 })

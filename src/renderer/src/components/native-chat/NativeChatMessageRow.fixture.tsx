@@ -53,3 +53,78 @@ export const rejected = defineFixture({
   width: 480,
   render: () => <RecordedSteer state="rejected" />
 })
+
+export const dollars = defineFixture({
+  width: 640,
+  render: () => (
+    <div className="native-chat-appearance space-y-4 p-4">
+      <MessageRow
+        message={{
+          id: 'dollar-question',
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Can I use `$HOME/bin:$PATH`? It costs $5 or $10.' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={() => {}}
+      />
+      <MessageRow
+        message={{
+          id: 'dollar-answer',
+          role: 'assistant',
+          timestamp: 1,
+          source: 'transcript',
+          blocks: [
+            {
+              type: 'text',
+              text: [
+                'Set $ORCA_HOME then run echo $PATH. Use `$HOME/bin:$PATH` or `$HOME/${PATH}`. In PowerShell, use `$env:PATH;$env:TEMP`.',
+                'Prices: $5 + tax$ stays as written. Inline code stays literal: `echo $HOME`.',
+                String.raw`Real math: the $n$th term, $x^2$, $5+2$, and \(5 + 2\).`,
+                '$$5 + 2$$'
+              ].join('\n\n')
+            }
+          ]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={() => {}}
+      />
+    </div>
+  )
+})
+
+export const advisor = defineFixture({
+  width: 640,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <MessageRow
+        message={{
+          id: 'advisor',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [
+            { type: 'tool-call', name: 'advisor', input: {}, callId: 'server', state: 'completed' },
+            {
+              type: 'tool-result',
+              callId: 'server',
+              output:
+                '{"type":"advisor_redacted_result","encrypted_content":"redacted-advisor-content"}'
+            }
+          ]
+        }}
+        expandSignal
+        onScrollMessageToTop={() => {}}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    const members = frame.querySelectorAll<HTMLButtonElement>(
+      '[data-native-chat-tool-run-members] button[aria-expanded="false"]'
+    )
+    for (const member of members) {
+      member.click()
+    }
+  }
+})

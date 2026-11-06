@@ -1,5 +1,5 @@
-import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
+import type { RemoteOpKind } from '@/components/right-sidebar/source-control/review/source-control-primary-action-types'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary

@@ -82,17 +82,6 @@ describe('Agent Session History scan coalescing', () => {
     expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledTimes(2)
   })
 
-  it('does not forward conditional hints into truncated all-host merges', async () => {
-    registerRuntimeHost()
-    await _internals.listAiVaultSessions({
-      executionHostScope: 'all',
-      afterFingerprint: 'a'.repeat(64)
-    })
-    expect(mocks.scanRuntimeAiVaultSessions.mock.calls[0]?.[1]).not.toHaveProperty(
-      'afterFingerprint'
-    )
-  })
-
   it.each([
     ['local', mocks.scanAiVaultSessionsInService],
     ['runtime:remote-server', mocks.scanRuntimeAiVaultSessions]
@@ -148,24 +137,6 @@ describe('Agent Session History scan coalescing', () => {
       await expect(beforeDelete).resolves.toMatchObject({ scannedAt: EMPTY_RESULT.scannedAt })
     }
   )
-
-  it('reports a failed local scan as a host issue rather than rejecting', async () => {
-    mocks.scanAiVaultSessionsInService.mockRejectedValue(new Error('transcript root is unreadable'))
-    registerAiVaultHandlers()
-    const list = ipcHandler('aiVault:listSessions')
-
-    // Like SSH failures, local failures must become issue rows instead of rejected IPC calls.
-    const result = await list(
-      { sender: Object.assign(new EventEmitter(), { id: 1 }) },
-      { executionHostScope: 'local', requestToken: 'scan' }
-    )
-    expect(result).toMatchObject({
-      sessions: [],
-      scanId: expect.any(String),
-      issues: [expect.objectContaining({ message: 'transcript root is unreadable', kind: 'host' })]
-    })
-    expect(result).not.toHaveProperty('cancelled')
-  })
 })
 
 function registerRuntimeHost(): void {

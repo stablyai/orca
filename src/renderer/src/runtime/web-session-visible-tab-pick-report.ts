@@ -8,7 +8,7 @@ import {
 } from '../../../shared/workspace-layout/terminal-surface-id'
 import { useAppStore } from '../store'
 import { getRuntimeEnvironmentConnectionGeneration } from '../store/slices/runtime-status-connection-generation'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../lib/workspace/ownership/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   captureRuntimeEnvironmentCall,

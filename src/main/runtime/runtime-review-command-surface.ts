@@ -1,9 +1,9 @@
-import type { RuntimeGitHubIssueCommentCommands } from './runtime-github-issue-comment-commands'
-import type { RuntimeGitHubProjectCommands } from './runtime-github-project-commands'
-import type { RuntimeGitHubReviewMutationCommands } from './runtime-github-review-mutation-commands'
-import type { RuntimeGitHubReviewQueryCommands } from './runtime-github-review-query-commands'
-import type { RuntimeGitLabMutationCommands } from './runtime-gitlab-mutation-commands'
-import type { RuntimeGitLabQueryCommands } from './runtime-gitlab-query-commands'
+import type { RuntimeGitHubIssueCommentCommands } from './integrations/github/runtime-github-issue-comment-commands'
+import type { RuntimeGitHubProjectCommands } from './integrations/github/runtime-github-project-commands'
+import type { RuntimeGitHubReviewMutationCommands } from './integrations/github/runtime-github-review-mutation-commands'
+import type { RuntimeGitHubReviewQueryCommands } from './integrations/github/runtime-github-review-query-commands'
+import type { RuntimeGitLabMutationCommands } from './integrations/gitlab/runtime-gitlab-mutation-commands'
+import type { RuntimeGitLabQueryCommands } from './integrations/gitlab/runtime-gitlab-query-commands'
 
 type GitLabQueryName = Exclude<keyof RuntimeGitLabQueryCommands, 'constructor'>
 type GitLabMutationName = Exclude<keyof RuntimeGitLabMutationCommands, 'constructor'>

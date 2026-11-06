@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   TEST_WORKTREE_ID,
@@ -7,7 +9,7 @@ import {
   antigravityPromptBeforeModelReadyScreen,
   antigravityReadyScreen,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('allows non-Claude foreground agents after preserved Claude agents management evidence', async () => {
@@ -652,9 +654,11 @@ describe('OrcaRuntimeService', () => {
         browserPageId: 'browser-page-live',
         url: 'https://live.example/',
         title: 'Live Browser',
-        isActive: true
+        isActive: false
       })
     ])
+    expect(headlessResult.activeTabId).toBeNull()
+    expect(headlessResult.activeTabType).toBeNull()
     expect([...runtime['collectPublicMobileSessionTabIds'](headlessSnapshot)]).toEqual([
       'browser-unified-live',
       'browser-workspace-live'

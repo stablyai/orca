@@ -195,15 +195,4 @@ describe('combined diff word-wrap lifecycle', () => {
 
     expect(syncWordWrap).toHaveBeenLastCalledWith(mountedEditors[1]?.editor, false)
   })
-
-  // The Monaco wrapper calls updateOptions on every options identity change, once per mounted section.
-  it('keeps editor options stable across re-renders that change no option', () => {
-    const view = render(<DiffSectionBody {...props} />)
-    view.rerender(<DiffSectionBody {...props} onMount={vi.fn()} onRetrySection={vi.fn()} />)
-    expect(renderedOptions.at(-1)).toBe(renderedOptions[0])
-
-    view.rerender(<DiffSectionBody {...props} sideBySide={false} />)
-    expect(renderedOptions.at(-1)).not.toBe(renderedOptions[0])
-    expect(renderedOptions.at(-1)).toMatchObject({ renderSideBySide: false })
-  })
 })

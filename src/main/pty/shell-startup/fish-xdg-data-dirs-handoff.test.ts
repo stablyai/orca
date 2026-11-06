@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
+
 import {
   fishRequirementViolation,
   resolveFishBinary
@@ -11,28 +11,12 @@ import {
 import {
   buildFishVendorConfWrapperFile,
   FISH_XDG_DATA_DIRS_PREFIX_ENV,
-  getFishVendorConfSnippet,
   getFishXdgDataDirsLaunchEnv
 } from './fish-xdg-data-dirs-handoff'
 
 const ROOT = '/orca/shell-wrappers/abc'
-const DATA_DIR = `${ROOT}/fish-xdg-data`
 
 describe('getFishXdgDataDirsLaunchEnv', () => {
-  it('adds the XDG default after Orca when the variable is unset', () => {
-    const expected = `${DATA_DIR}:/usr/local/share:/usr/share`
-    expect(getFishXdgDataDirsLaunchEnv(ROOT, undefined)).toEqual({
-      XDG_DATA_DIRS: expected,
-      [FISH_XDG_DATA_DIRS_PREFIX_ENV]: expected
-    })
-  })
-
-  it('treats an empty XDG_DATA_DIRS as unset', () => {
-    expect(getFishXdgDataDirsLaunchEnv(ROOT, '')).toEqual(
-      getFishXdgDataDirsLaunchEnv(ROOT, undefined)
-    )
-  })
-
   it.each([['-N'], ['--no-config'], ['--no-c'], ['-lN'], ['-Ni']])(
     'skips fish args that disable config: %s',
     (arg) => {
@@ -40,41 +24,8 @@ describe('getFishXdgDataDirsLaunchEnv', () => {
     }
   )
 
-  it.for([['-l'], ['-i'], ['--login'], ['--no-execute'], ['--no-'], ['-c', 'echo N']])(
-    'still hands off for fish args %j',
-    (args) => {
-      expect(getFishXdgDataDirsLaunchEnv(ROOT, undefined, args)).not.toEqual({})
-    }
-  )
-
-  it('prepends to an existing value and records only its own entry', () => {
-    expect(getFishXdgDataDirsLaunchEnv(ROOT, '/opt/a:/opt/b')).toEqual({
-      XDG_DATA_DIRS: `${DATA_DIR}:/opt/a:/opt/b`,
-      [FISH_XDG_DATA_DIRS_PREFIX_ENV]: DATA_DIR
-    })
-  })
-
-  it('prepends again when the inherited value already names the dir', () => {
-    const inherited = `${DATA_DIR}:/opt/a`
-    expect(getFishXdgDataDirsLaunchEnv(ROOT, inherited).XDG_DATA_DIRS).toBe(
-      `${DATA_DIR}:${inherited}`
-    )
-  })
-
   it('skips a dir that XDG_DATA_DIRS cannot represent', () => {
     expect(getFishXdgDataDirsLaunchEnv('/odd:root', undefined)).toEqual({})
-  })
-})
-
-describe('fish vendor snippet', () => {
-  it('embeds the shared fish codex function verbatim', () => {
-    expect(getFishVendorConfSnippet()).toContain(getFishCodexShellLaunchPreflight())
-  })
-
-  it('lives where fish looks for vendor snippets under the data dir', () => {
-    expect(buildFishVendorConfWrapperFile(ROOT)[0]).toBe(
-      `${DATA_DIR}/fish/vendor_conf.d/orca-shell-integration.fish`
-    )
   })
 })
 

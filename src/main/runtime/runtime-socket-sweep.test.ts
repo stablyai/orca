@@ -6,7 +6,7 @@ import {
   createRuntimeTransportMetadata,
   RUNTIME_SOCKET_NAME_REGEX,
   sweepOrphanedRuntimeSockets
-} from './runtime-rpc/runtime-rpc-socket-metadata'
+} from './rpc/server/runtime-rpc-socket-metadata'
 
 describe('sweepOrphanedRuntimeSockets', () => {
   // Use an always-live non-runner pid (POSIX init) to distinguish own-pid skip, live sibling retention and dead sweep.

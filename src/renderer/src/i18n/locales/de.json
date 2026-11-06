@@ -844,7 +844,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}"
+      "sameAsChoice": "Wie {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -953,7 +954,7 @@
         "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
         "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
         "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
-        "zipformerStreamingEn": "Nur Englisch. Schlankes Modell mit 20 Mio. Parametern und gutem Verhältnis von Geschwindigkeit und Größe.",
+        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
         "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
         "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
         "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
@@ -1160,7 +1161,9 @@
         "cb4d287238": "Servername",
         "3affe7de3a": "Eine Kopplungs-URL von einem Orca-Server einfügen, den dieser Browser erreichen kann.",
         "e3bcd082ac": "Mit Orca verbinden",
-        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen."
+        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen.",
+        "replaceSavedServer": "Dieser Link verbindet mit einem anderen Server als „{{name}}“ ({{endpoint}}). Verbinde dich nur, wenn du dem Endpunkt unten vertraust.",
+        "keepSavedServer": "Gespeicherten Server behalten"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Der Agenten-Sitzungsverlauf ist für diesen Ausführungshost nicht verfügbar.",
@@ -2318,6 +2321,7 @@
         "cb55b0390f": "Verwalten",
         "4f9313984d": "Prüfer",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Dieses Element konnte nicht geladen werden. Aktualisiere, um es erneut zu versuchen.",
         "be3d291837": "Dateien",
         "c996e2962c": "Unterhaltung",
         "b3c156dd51": "Aktualisieren",
@@ -3034,7 +3038,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Review erforderlich",
         "7698af5263": "Eigene",
         "94f0339621": "Mir zugewiesen",
         "c2268a9982": "Alle",
@@ -3130,6 +3133,8 @@
         "loadGitHubWorkFailed": "GitHub-Aufgaben konnten nicht geladen werden.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Alle Personen",
+        "gitlabInvolvementReviewing": "Als Reviewer",
         "gitlabViewTodos": "Meine Aufgaben",
         "startWorkspaceFromMr": "Arbeitsbereich aus MR {{number}} starten",
         "startWorkspaceFromIssue": "Arbeitsbereich aus Issue {{number}} starten",
@@ -3741,7 +3746,6 @@
             "e8b3741ff7": "Ignoriert",
             "a9957007eb": "{{value0}} ignorieren",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} auswählen",
             "b771c92598": "Ausgewählte löschen",
             "7eee951968": "Arbeitsbereiche werden durchsucht",
@@ -3750,7 +3754,6 @@
             "b2c1331844": "Inaktive Arbeitsbereiche löschen",
             "7f451a3e2c": "Bereinigungsvorschlag konnte nicht ignoriert werden",
             "662b8ec3f8": "Suche nach zu bereinigenden Arbeitsbereichen fehlgeschlagen",
-            "4d0b72481c": "Ignorieren",
             "9cc26c019d": "Entfernen",
             "0e2d235c63": "Suche in Arbeitsbereichen abgeschlossen",
             "4a35c08764": "Prüfen",
@@ -3758,9 +3761,6 @@
             "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
-            "deletingCount": "Arbeitsbereiche werden gelöscht: {{value0}}",
-            "deleteCount": "Arbeitsbereiche löschen: {{value0}}?",
-            "selectedForDeletionCount": "Zum Löschen ausgewählt: {{value0}}",
             "deleteButtonCount": "{{value0}} löschen",
             "archivedStatus": "Archiviert",
             "74f6c16279": "Zurück"
@@ -3775,7 +3775,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Kontext",
             "flagsLabel": "Labels",
             "collapseDetails": "Details einklappen",
@@ -4271,7 +4270,8 @@
             "chatUnavailableAfterSelection": "Ein Chat mit {{value0}} konnte nicht gestartet werden.",
             "startChat": "Chat mit {{value0}} starten",
             "cliTag": "(CLI)",
-            "agentsLoading": "Agenten werden geladen"
+            "agentsLoading": "Agenten werden geladen",
+            "chatNotOnWindows": "Unter Windows noch kein Chat"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Tab wechseln",
@@ -6040,8 +6040,6 @@
           "expandAriaLabel": "Ausgeblendete Worktrees für {{repo}} ausklappen",
           "hiding_one": "{{count}} entdeckter Worktree ausgeblendet",
           "hiding_other": "{{count}} entdeckte Worktrees ausgeblendet",
-          "hidingInRepo_one": "{{count}} entdeckter Worktree in {{repo}} ausgeblendet",
-          "hidingInRepo_other": "{{count}} entdeckte Worktrees in {{repo}} ausgeblendet",
           "keepHiddenAriaLabel_one": "{{count}} entdeckten Worktree für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenAriaLabel_other": "{{count}} entdeckte Worktrees für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenTooltip": "Ausgeblendet lassen - über das Projektmenü wieder einblenden",
@@ -6164,7 +6162,6 @@
           "savedInProjectSettings": "In den <settings>Einstellungen dieses Projekts</settings> gespeichert"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Lokales Setup speichern",
           "3933401d28": "Konfigurieren",
           "31b8b01a45": "Einstellungen",
           "4a98f907ae": "Erneut versuchen",
@@ -6179,7 +6176,15 @@
           "5bfd5c8779": "Setup-Skripte ausblenden",
           "detectedFromSource": "In <source>{{source}}</source> erkannt",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
-          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen."
+          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen.",
+          "reviewSetupScript": "Einrichtungsskript prüfen"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Einrichtungsskript prüfen",
+          "description": "Nach dem Speichern wird dies bei jeder Worktree-Erstellung für {{repo}} durch Orca ausgeführt.",
+          "setupScript": "Einrichtungsskript",
+          "archiveScript": "Archivierungsskript",
+          "save": "Lokales Setup speichern"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Abbrechen",
@@ -8299,7 +8304,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Coding-Agenten die Steuerung des aktiven mobilen Emulators über Orca-CLI-Befehle ermöglichen.",
           "f2f8d97bb6": "Steuerung mobiler Emulatoren durch Agenten",
-          "143961d031": "Standardgerät",
           "8aec2f99a0": "Emulatorverfügbarkeit aktualisieren",
           "ae1612c58c": "Verfügbarkeit",
           "f9af91ea26": "Zeigt die Aktion „Neuer mobiler Emulator“ an und ermöglicht Agenten, sich mit dem aktiven Emulator zu verbinden.",
@@ -8312,9 +8316,7 @@
           "d704fb5023": "Einrichtung erforderlich",
           "06b06429c6": "Unterstützung für Android SDK und iOS Simulator wird geprüft.",
           "6d1483d4a0": "1 Emulatorgerät erkannt.",
-          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt.",
-          "f62a1bb759": "Orca wählt automatisch ein Emulatorgerät aus, sobald Geräte erkannt werden.",
-          "b2fd62ea75": "Standardgerät für neue Emulator-Tabs und Verbindungsbefehle von Agenten. Die automatische Auswahl bevorzugt ein bereits laufendes Gerät."
+          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Keine Schnittstellen gefunden"
@@ -11916,7 +11918,7 @@
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
-          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen und andere Programme ausführen.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
           "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
         },
         "PluginConsentProvenance": {
@@ -13276,7 +13278,8 @@
           "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
           "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
           "review": "Prüfen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "movedInstalled": "Es bleibt aus, bis du es prüfst."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",
@@ -15062,7 +15065,6 @@
           "ff92d15436": "Orca zeigt Benachrichtigungen an, wenn Agenten fertig sind oder Hilfe benötigen.",
           "b054332836": "Benachrichtigungen einrichten",
           "f396db9f20": "Vertraute Umgebung einrichten",
-          "322fc50a18": "Orca funktioniert mit jedem CLI-Agenten. Den bevorzugten Agenten auswählen. Ein Wechsel ist jederzeit möglich.",
           "198b148b3c": "Standardagenten auswählen",
           "windowsTerminalTitle": "Standardeinstellungen für Windows-Terminals festlegen",
           "windowsTerminalSubtitle": "Die Standard-Shell für neue Bereiche und das Verhalten bei Rechtsklicks im Terminal auswählen.",
@@ -15518,8 +15520,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "z. B. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Benutzerdefinierter Befehl",
-            "4b2fc4b80c": "Denkaufwand",
-            "be8917699e": "Modell",
             "560d4feb00": "Benutzerdefiniert",
             "29d119fe95": "Agent",
             "f9382b48a1": "KI-Autor aktivieren",
@@ -15924,7 +15924,6 @@
                 "06e10d7356": "Emulator herunterfahren",
                 "e7a0d1897e": "Startbildschirm",
                 "6bd8dff42a": "Drehen",
-                "3d836b879c": "Emulator auswählen",
                 "81b3571a07": "Verbinden",
                 "868c0f2938": "In Bearbeitung…"
               }
@@ -17155,6 +17154,8 @@
               "25349b66fc": "Markdown-Datei erstellen",
               "784812ca24": "Einen Browser-Tab im aktiven Arbeitsbereich öffnen.",
               "892bfa9339": "Neuen Browser-Tab öffnen",
+              "splitChatRight": "Chat nach rechts teilen",
+              "splitChatDown": "Chat nach unten teilen",
               "verbs": {
                 "newBrowser": "Neuen Browser öffnen",
                 "newBrowserTab": "Neuen Browser-Tab öffnen",
@@ -17168,6 +17169,10 @@
                 "newTerminal": "Neues Terminal öffnen",
                 "newTerminalTab": "Neuen Terminal-Tab öffnen",
                 "newShell": "Neue Shell öffnen",
+                "splitChatRight": "Chat nach rechts teilen",
+                "splitChatDown": "Chat nach unten teilen",
+                "chatPaneRight": "Chat-Bereich rechts",
+                "chatPaneBelow": "Chat-Bereich darunter",
                 "terminalTab": "Terminal-Tab",
                 "createWorktree": "Worktree erstellen",
                 "addWorktree": "Worktree hinzufügen",
@@ -17177,18 +17182,8 @@
                 "removeWorktree": "Worktree entfernen",
                 "trashWorktree": "Worktree in den Papierkorb verschieben",
                 "addQuickCommand": "Schnellbefehl hinzufügen",
-                "newQuickCommand": "Neuen Schnellbefehl erstellen",
-                "splitChatRight": "Chat nach rechts teilen",
-                "newChatRight": "Neuen Chat rechts öffnen",
-                "chatPaneRight": "Chat-Bereich rechts",
-                "splitChatDown": "Chat nach unten teilen",
-                "newChatBelow": "Neuen Chat darunter öffnen",
-                "chatPaneBelow": "Chat-Bereich darunter"
-              },
-              "splitChatRight": "Chat nach rechts teilen",
-              "splitChatRightDescription": "Einen neuen Chat in einem geteilten Bereich auf der rechten Seite öffnen.",
-              "splitChatDown": "Chat nach unten teilen",
-              "splitChatDownDescription": "Einen neuen Chat in einem geteilten Bereich darunter öffnen."
+                "newQuickCommand": "Neuen Schnellbefehl erstellen"
+              }
             }
           },
           "palette": {
@@ -17644,6 +17639,8 @@
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
           "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
+          "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+          "retryFullOutput": "Erneut versuchen",
           "backToList": "Alle Automatisierungen",
           "tableName": "Name",
           "tableProject": "Projekt",
@@ -18007,6 +18004,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent-Starteinstellungen erfordern für jeden Durchlauf eine neue Sitzung."
         }
       },
       "agent": {
@@ -18925,6 +18925,9 @@
           "cancel": "Abbrechen",
           "add": "Katalog hinzufügen",
           "body": "Ein Link möchte {{value0}} aus diesem Katalog anzeigen. Füge Kataloge nur von Personen hinzu, denen du vertraust."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -19336,8 +19339,6 @@
       },
       "turnDiff": {
         "partial": "Teilweiser Diff",
-        "showDiff": "Diff anzeigen",
-        "hideDiff": "Diff ausblenden",
         "changedFiles_one": "{{count}} geänderte Datei",
         "changedFiles_other": "{{count}} geänderte Dateien"
       },
@@ -19376,7 +19377,11 @@
       },
       "composer": {
         "send": "Senden",
+        "planMode": "Planen",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
+        "previewQueue": "Einreihen",
+        "previewSteer": "Steuern",
+        "previewSteerQueued": "Wartende steuern",
         "alternateQueueHint": "{{shortcut}} zum Einreihen",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",
         "locked": "Die Eingabe wird von einem anderen Gerät gesteuert.",
@@ -20096,7 +20101,15 @@
         "hostUnavailable": "Der Host des Anhangs ist nicht verfügbar. Stelle die Verbindung erneut her und versuche es erneut.",
         "connectionChanged": "Die Verbindung hat sich geändert. Schließe diesen Anhang und öffne ihn erneut.",
         "readFailed": "Dieser Anhang konnte auf seinem Host nicht gelesen werden. Stelle die Verbindung erneut her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert."
-      }
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copyIdentity": "{{value0}} kopieren",
+        "folder": "Ordner",
+        "mainCheckout": "Haupt-Checkout",
+        "worktree": "Worktree"
+      },
+      "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal."
     },
     "tab": {
       "bar": {
@@ -20144,9 +20157,7 @@
         "browse": {
           "noSizes": "Es wurden noch keine Arbeitsbereichsgrößen gemessen.",
           "noSizesDescription": "Die Größen werden nach der Messung des Speicherplatzbedarfs angezeigt.",
-          "measureSizes": "Scannen",
           "measureSizesTitle": "Arbeitsbereichsgrößen erfassen",
-          "measureSizesDescription": "Speicherplatzbedarf erfassen, um Arbeitsbereiche nach Größe zu vergleichen, zu sortieren und zu filtern.",
           "sizeOnDisk": "Speicherplatzbedarf: {{value0}}",
           "checkingGitRow": "Git-Status wird geprüft",
           "searchPlaceholder": "Name, Repo, Branch, Pfad, Host suchen",
@@ -20490,6 +20501,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
+        "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
+        "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
+        "scrollToLatestOnSendSearchPosition": "Position",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20501,7 +20515,13 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "idleStopTitle": "Inaktive Agenten beenden nach",
+        "idleStopCopy": "Beendet den Agenten eines Chats, sobald der Chat so lange inaktiv war, um Speicher freizugeben. Der Chat bleibt erhalten, und deine nächste Nachricht startet den Agenten erneut. Wähle Nie für Agenten, die zwischen Durchgängen im Hintergrund weiterarbeiten.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "Zeitlimit",
+        "idleStopSearchKeepAlive": "aktiv halten",
+        "idleStopNever": "Nie"
       }
     },
     "agentChildRow": {
@@ -20638,7 +20658,10 @@
       "workerAutoClose": {
         "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "keepOpen": "Offen halten"
+        "keepOpen": "Offen halten",
+        "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
+        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
+        "temporaryBadge": "Temporär"
       }
     },
     "wslHostMark": {
@@ -20829,10 +20852,8 @@
       "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
       "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
       "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
-      "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",
       "stayInTerminal": "Im Terminal bleiben",
       "cta": "Chat-Oberfläche nutzen",
-      "saveFailed": "Die Chat-Oberfläche konnte nicht aktiviert werden. Unter Einstellungen → Agenten „Chat“ wählen.",
       "demoTabTitle": "Anmeldung erklären",
       "demoPrompt": "Zeig mir, wie die Anmeldung funktioniert",
       "demoReply": "Die Anmeldung beginnt in {{file}}: Der Browser sendet an /login, der Server prüft das Passwort und erstellt eine Sitzung, dann leitet er dich zur App weiter. So läuft es ab:",

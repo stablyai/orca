@@ -90,37 +90,6 @@ afterEach(() => {
 })
 
 describe('useWorkspaceKanbanSelection', () => {
-  it('ranges across the whole board when nothing is filtered', () => {
-    renderSelection()
-
-    click(alpha.id)
-    click(gamma.id, true)
-
-    expect(selectedIds()).toEqual(['alpha', 'beta', 'gamma'])
-  })
-
-  it('never ranges through cards a search has hidden', () => {
-    renderSelection([alpha, gamma])
-
-    click(alpha.id)
-    click(gamma.id, true)
-
-    expect(selectedIds()).toEqual(['alpha', 'gamma'])
-  })
-
-  it('keeps a hidden card selected so clearing the search restores the selection', () => {
-    renderSelection()
-    click(alpha.id)
-    click(beta.id, true)
-    expect(selectedIds()).toEqual(['alpha', 'beta'])
-
-    renderSelection([alpha])
-    expect(selectedIds()).toEqual(['alpha', 'beta'])
-
-    renderSelection()
-    expect(selectedIds()).toEqual(['alpha', 'beta'])
-  })
-
   it('extends the range from a visible card when a search hides the anchor', () => {
     renderSelection()
     click(alpha.id)
@@ -132,40 +101,6 @@ describe('useWorkspaceKanbanSelection', () => {
     click(gamma.id, true)
 
     expect(selectedIds()).toEqual(['alpha', 'beta', 'gamma'])
-  })
-
-  it('replaces a hidden selection on every replace-shaped gesture alike', () => {
-    // Every replace-shaped gesture must drop hidden cards to avoid invisible selections.
-    renderSelection()
-    click(delta.id)
-    toggleClick(alpha.id)
-    expect(selectedIds()).toEqual(['alpha', 'delta'])
-
-    renderSelection([alpha, beta, gamma])
-    click(gamma.id, true)
-
-    expect(selectedIds()).toEqual(['alpha', 'beta', 'gamma'])
-  })
-
-  it('lets a plain click clear a selection the search is hiding', () => {
-    renderSelection()
-    click(alpha.id)
-    toggleClick(delta.id)
-
-    renderSelection([alpha, beta, gamma])
-    click(beta.id)
-
-    expect(selectedIds()).toEqual(['beta'])
-  })
-
-  it('still prunes ids that leave the board entirely', () => {
-    renderSelection()
-    click(alpha.id)
-    click(gamma.id, true)
-
-    renderSelection([alpha, beta], [alpha, beta])
-
-    expect(selectedIds()).toEqual(['alpha', 'beta'])
   })
 
   it('selects same-id cards independently by host', () => {

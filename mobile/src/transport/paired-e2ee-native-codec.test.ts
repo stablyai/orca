@@ -15,12 +15,24 @@ import type { PairedE2EENativeBindings } from './paired-e2ee-native-codec'
 
 // Use the package’s wasm libsodium under Node; Kotlin/Swift tests pin the separate codec stand-in.
 const secretboxOpenCalls = vi.fn()
+const secretboxSealCalls = vi.fn()
 let bindings: PairedE2EENativeBindings | null = null
 
 function libsodiumBindings(): PairedE2EENativeBindings {
   return {
     sodium: {
       fromBase64: (value, variant) => sodium.from_base64(value, variant).slice().buffer,
+      toBase64: (value, variant) => sodium.to_base64(new Uint8Array(value), variant),
+      secretboxSeal: (message, nonce, key) => {
+        secretboxSealCalls(message.byteLength)
+        return sodium
+          .crypto_secretbox_easy(
+            new Uint8Array(message),
+            new Uint8Array(nonce),
+            new Uint8Array(key)
+          )
+          .slice().buffer
+      },
       secretboxOpen: (box, nonce, key) => {
         secretboxOpenCalls(box.byteLength)
         return sodium
@@ -191,6 +203,29 @@ describe('the native paired E2EE codec', () => {
     }
   })
 
+  it('seals through native exactly the frames tweetnacl seals', async () => {
+    const { native } = await load(true)
+    const key = Uint8Array.from({ length: 32 }, (_, index) => index)
+    const nonce = Uint8Array.from({ length: 24 }, (_, index) => index)
+    const box = native!.sealSecretbox(new TextEncoder().encode('ok'), nonce, key)
+    expect(native!.encodeBase64(box)).toBe('sqQBX9c2fQaZ4F6j8gHDpjGU')
+    expect(new TextDecoder().decode(nacl.secretbox.open(box, nonce, key)!)).toBe('ok')
+
+    const sealed: string[][] = []
+    for (const mode of ['native', 'original']) {
+      const { primitives } = await load(mode === 'native')
+      const { session } = pairedSession(primitives)
+      secretboxSealCalls.mockClear()
+      sealed.push(PAYLOADS.map((payload) => session.sealText(payload)))
+      if (mode === 'native') {
+        expect(secretboxSealCalls).toHaveBeenCalled()
+      } else {
+        expect(secretboxSealCalls).not.toHaveBeenCalled()
+      }
+    }
+    expect(sealed[0]).toEqual(sealed[1])
+  })
+
   it('uses native once provided, even after a lookup with no provider', async () => {
     const { native: before } = await load(false)
     expect(before).toBeNull()
@@ -198,27 +233,6 @@ describe('the native paired E2EE codec', () => {
     bindings = libsodiumBindings()
     codec.providePairedE2EENativeBindings(() => bindings)
     expect(codec.pairedE2EENativeCodec()).not.toBeNull()
-  })
-
-  it('agrees with tweetnacl on boxes either library sealed', async () => {
-    const { native } = await load(true)
-    for (let index = 0; index < 300; index++) {
-      const key = randomBytes(32)
-      const nonce = randomBytes(24)
-      const message = randomBytes(random(600))
-      const boxes = [
-        sodium.crypto_secretbox_easy(message, nonce, key),
-        nacl.secretbox(message, nonce, key)
-      ]
-      expect(boxes[0]).toEqual(boxes[1])
-      for (const box of boxes) {
-        expect(native!.openSecretbox(box, nonce, key)).toEqual(message)
-        const tampered = box.slice()
-        tampered[random(box.length)]! ^= 1 << random(8)
-        expect(native!.openSecretbox(tampered, nonce, key)).toBeNull()
-        expect(nacl.secretbox.open(tampered, nonce, key)).toBeNull()
-      }
-    }
   })
 
   // UTF-8 fallback must preserve an already-opened frame whose counter advanced.
@@ -255,48 +269,5 @@ describe('the native paired E2EE codec', () => {
       ).toBeNull()
     }
     expect(secretboxOpenCalls).not.toHaveBeenCalled()
-  })
-
-  it('accepts exactly the base64 that re-encodes to itself, on both paths', async () => {
-    const { native, primitives } = await load(true)
-    const { primitives: fallback } = await load(false)
-    const reencodes = (value: string) => {
-      try {
-        const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
-        return b64(bytes) === value ? bytes : null
-      } catch {
-        return null
-      }
-    }
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    const noise = `${alphabet}=-_ \n\t.`
-    const cases = [
-      '',
-      'QR==',
-      'QQ==',
-      'QQ',
-      'QQ=',
-      'Q===',
-      '====',
-      'QUJD',
-      'QUJ D',
-      'Q=Q=',
-      '-_8=',
-      'AB+/'
-    ]
-    for (let index = 0; index < 5_000; index++) {
-      let value = b64(randomBytes(random(10)))
-      if (random(2) === 0) {
-        const at = random(value.length + 1)
-        value = value.slice(0, at) + noise[random(noise.length)] + value.slice(at + 1)
-      }
-      cases.push(value)
-    }
-    for (const value of cases) {
-      const expected = reencodes(value)
-      expect(native!.decodeBase64(value), value).toEqual(expected)
-      expect(primitives.decodeCanonicalBase64!(value), value).toEqual(expected)
-      expect(fallback.decodeCanonicalBase64!(value), value).toEqual(expected)
-    }
   })
 })

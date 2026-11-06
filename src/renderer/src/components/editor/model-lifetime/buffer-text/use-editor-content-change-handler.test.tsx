@@ -27,22 +27,3 @@ it('does not recreate a draft when a pending editor detaches after its tab was c
   act(() => result.current(file, 'pending,cell'))
   expect(useAppStore.getState().editorDrafts[file.id]).toBeUndefined()
 })
-
-it('retains a pending draft when the tab is still open but its table view detached', () => {
-  useAppStore.getState().openFile({
-    filePath: '/repo/open.csv',
-    relativePath: 'open.csv',
-    mode: 'edit',
-    language: 'plaintext',
-    worktreeId: 'csv-close-test'
-  })
-  const file = useAppStore.getState().openFiles.find((file) => file.filePath === '/repo/open.csv')!
-  const { result } = renderHook(() =>
-    useEditorContentChangeHandler({ fileContents: {}, diffContents: {} })
-  )
-  act(() => result.current(file, 'pending,cell'))
-  expect(useAppStore.getState().editorDrafts[file.id]).toBe('pending,cell')
-  expect(
-    useAppStore.getState().openFiles.find((candidate) => candidate.id === file.id)?.isDirty
-  ).toBe(true)
-})

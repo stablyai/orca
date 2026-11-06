@@ -13,7 +13,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
-import { STATUS_COLORS } from '../right-sidebar/status-display'
+import { STATUS_COLORS } from '../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'

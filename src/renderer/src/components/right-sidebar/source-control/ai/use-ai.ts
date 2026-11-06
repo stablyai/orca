@@ -5,8 +5,8 @@ import {
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { useSavedSourceControlActionStart } from '../../use-saved-source-control-action-start'
-import type { SourceControlAgentActionDialogProps } from '../../SourceControlAgentActionDialog'
+import { useSavedSourceControlActionStart } from './use-saved-source-control-action-start'
+import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
@@ -28,7 +28,7 @@ import {
   saveSourceControlTextGenerationDefaults
 } from './recipe-persistence'
 import type { SourceControlAiControllerParams } from './controller-types'
-import { openSourceControlAiSettingsTarget } from '../../source-control-ai-settings-navigation'
+import { openSourceControlAiSettingsTarget } from '../panel/source-control-ai-settings-navigation'
 import { useSourceControlRecoveryAi } from './use-recovery-ai'
 import { useConflictRecoveryComposer } from './use-conflict-recovery-composer'
 import { toast } from 'sonner'
