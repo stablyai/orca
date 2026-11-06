@@ -7,7 +7,10 @@ import {
 } from '../../shared/codex-native-notice'
 import { observeCodexCapacityTerminalStatus } from './codex-notice-terminal-status'
 import * as agentProcessRecognition from '../../shared/agent-status/process/agent-process-recognition'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 
 const transcript = readFileSync(
   new URL('./__fixtures__/codex-model-capacity.txt', import.meta.url),

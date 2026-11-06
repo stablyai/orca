@@ -1,0 +1,33 @@
+---
+title: Antigravity accounts
+description: Save several agy logins and switch between them.
+---
+
+Orca can remember more than one Antigravity CLI (`agy`) account and switch between them. Unlike [Codex](/docs/agents/codex-hot-swap), this is **switching one shared login**, not running isolated accounts side by side.
+
+## Save accounts
+
+1. Run `agy` in a terminal on the machine that runs your agents and complete its browser sign-in.
+1. Open **Settings → AI Provider Accounts → Antigravity** and click **Save current account**.
+1. To add another account, run `/logout` inside `agy`, sign in with the next account, click **Refresh accounts**, then **Save current account** again.
+1. Repeat for each account.
+
+## Switch accounts
+
+Click **Select** on a saved account. Orca writes that login into `agy`'s own credential store on this machine and checks that `agy` now reports it. New `agy` sessions use the selected account. Sessions already running may keep their previous account until restarted.
+
+## Concurrency limits
+
+- `agy` keeps a single login per machine, so new Antigravity terminals on that machine all use whichever account is selected. Running sessions may keep their previous account, but you cannot pin two new sessions to two different accounts at once.
+- Saving several accounts does not give you parallel, isolated identities, and Orca does not pool quota across them.
+- The status bar's Antigravity usage reflects the account currently signed in to `agy`. Select another account and refresh usage to see its quota.
+
+## Antigravity chats
+
+Antigravity in [Chat UI](/docs/agents/native-chat) uses its own sign-in, separate from your `agy` account. Saved `agy` accounts do not choose which account chats use; sign chats in from the **Antigravity** chat row in the same Settings section.
+
+## Where accounts live
+
+- Accounts belong to the machine that runs `agy`. On a [Remote Orca Server](/docs/remote-servers), save and select them on that server.
+- On Windows, Orca manages the Windows `agy` login, or the `agy` login inside the WSL distro selected as the account location. Each distro keeps its own saved accounts. Start the distro before managing its accounts; Orca does not start it for you.
+- On Linux desktops, `agy` keeps its login in the system keyring (Secret Service). Orca needs `secret-tool` (from `libsecret-tools` or your distribution's equivalent) and an unlocked keyring to switch it. Headless hosts without a session bus, containers, and SSH sessions use `agy`'s credential file instead.

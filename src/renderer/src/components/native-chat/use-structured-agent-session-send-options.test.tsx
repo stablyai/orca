@@ -13,7 +13,6 @@ import {
   createStructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
 
-import { projectRuntimePermission } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
 import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 
@@ -45,11 +44,7 @@ it('desktop capture freezes only accepted echoed inputs; empty origin differs fr
       current: applyStructuredAgentSessionOptions(state, CLAUDE_SESSION_OPTION_CATALOG, answer)
     },
     optionView: (current: typeof state) => ({
-      ...projectRuntimePermission(
-        structuredAgentSessionOptionView(current, undefined, {}),
-        undefined,
-        null
-      ),
+      ...structuredAgentSessionOptionView(current, undefined, {}),
       permissionOwnSupported: null
     }),
     takesSelection: true,

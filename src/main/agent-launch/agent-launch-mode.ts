@@ -6,7 +6,7 @@ import type {
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-runtime-metadata'
+import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
@@ -69,6 +69,7 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
+  chat_unavailable_on_windows: "this agent's chat isn't available on Windows yet",
   structured_unsupported_on_host: 'the execution host cannot create one here',
   chat_runtime_not_installed:
     "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"
@@ -90,6 +91,7 @@ const HOST_SUPPORT_REASON: Record<StructuredAgentCreateSupportReason, AgentLaunc
     agent: 'structured_unsupported_on_host',
     remote: 'remote_execution_host',
     wsl: 'wsl_execution_runtime',
+    windows: 'chat_unavailable_on_windows',
     'chat-program': 'chat_runtime_not_installed'
   }
 

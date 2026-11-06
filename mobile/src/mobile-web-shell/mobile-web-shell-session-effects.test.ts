@@ -102,7 +102,7 @@ describe('a download that reuses the cached generation', () => {
         createStore: () => store,
         mintSessionId: () => 's',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       },
       startedAt: 0,
       downloads,

@@ -4,7 +4,7 @@ import { normalizeGitHubLinkQuery, parseGitHubIssueOrPRLink } from '@/lib/github
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
-} from '@/lib/github-work-item-source-lookup'
+} from '@/lib/work-items/github/github-work-item-source-lookup'
 import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'

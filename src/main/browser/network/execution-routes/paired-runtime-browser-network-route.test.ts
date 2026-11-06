@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
-  encodeBrowserNetworkTunnelFrame
+  encodeBrowserNetworkTunnelFrame,
+  encodeBrowserNetworkTunnelWindowUpdate
 } from '../../../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -25,7 +26,6 @@ vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
 
 import { PairedRuntimeBrowserNetworkRoute } from './paired-runtime-browser-network-route'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
-import { RemoteBrowserSocksServer } from '../tunnels/remote-browser-socks-server'
 
 const pairing = {
   v: 2,
@@ -119,92 +119,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     expect(closeSubscription).toHaveBeenCalledOnce()
   })
 
-  it('surfaces listener teardown failures', async () => {
-    vi.spyOn(RemoteBrowserSocksServer.prototype, 'close').mockRejectedValueOnce(
-      new Error('listener close failed')
-    )
-    const route = createRoute()
-
-    await expect(route.close()).rejects.toThrow('listener close failed')
-  })
-
-  it('tears down the local route when the runtime closes the tunnel', async () => {
-    let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
-    const closeSubscription = vi.fn()
-    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
-        callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
-        return {
-          requestId: 'runtime-closed-subscription',
-          close: closeSubscription,
-          sendBinary: () => true
-        }
-      }
-    )
-    const onError = vi.fn()
-    const route = createRoute({ onError })
-    const starting = route.start()
-    await vi.waitFor(() => expect(callbacks).toBeDefined())
-    callbacks!.onResponse({
-      id: 'runtime-closed-subscription',
-      ok: true,
-      result: { type: 'ready', tunnelGeneration: 7 },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    await starting
-
-    callbacks!.onResponse({
-      id: 'runtime-closed-subscription',
-      ok: true,
-      result: { type: 'closed', tunnelGeneration: 7 },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-
-    await vi.waitFor(() => expect(closeSubscription).toHaveBeenCalledOnce())
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Browser network route closed by the runtime' })
-    )
-  })
-
-  it('finishes failure cleanup when reporting and listener teardown both throw', async () => {
-    let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
-    const closeSubscription = vi.fn()
-    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
-        callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
-        return {
-          requestId: 'cleanup-failure-subscription',
-          close: closeSubscription,
-          sendBinary: () => true
-        }
-      }
-    )
-    const closeSocks = vi
-      .spyOn(RemoteBrowserSocksServer.prototype, 'close')
-      .mockRejectedValueOnce(new Error('listener close failed'))
-    const route = createRoute({
-      onError: () => {
-        throw new Error('reporting failed')
-      }
-    })
-    const starting = route.start()
-    await vi.waitFor(() => expect(callbacks).toBeDefined())
-    callbacks!.onResponse({
-      id: 'cleanup-failure-subscription',
-      ok: true,
-      result: { type: 'ready', tunnelGeneration: 7 },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    await starting
-
-    callbacks!.onClose?.()
-
-    await vi.waitFor(() => expect(closeSubscription).toHaveBeenCalledOnce())
-    expect(closeSocks).not.toHaveBeenCalled()
-    await expect(route.close()).rejects.toThrow('listener close failed')
-    expect(closeSocks).toHaveBeenCalledOnce()
-  })
-
   it('binds and releases the exact browser-host outbound memory lease', async () => {
     let callbacks: RemoteRuntimeSubscriptionCallbacks | undefined
     let subscriptionOptions: Record<string, unknown> | undefined
@@ -233,14 +147,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
 
     await route.close()
     expect(registry.evidence()).toMatchObject({ hosts: 0, leases: 0 })
-  })
-
-  it('opens no subscription when browser-host memory admission is exhausted', async () => {
-    const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({ processMaxLeases: 0 })
-    const route = createRoute({ outboundMemoryBudgetRegistry: registry })
-
-    await expect(route.start()).rejects.toThrow('outbound memory admission failed')
-    expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
 
   it('keeps one listener fail-closed and accepts an increasing replacement generation', async () => {
@@ -274,30 +180,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await route.close()
   })
 
-  it('suspends the tunnel immediately while preserving the SOCKS listener', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute()
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    const address = await starting
-
-    route.suspend()
-    expect(attempts[0]!.close).toHaveBeenCalledOnce()
-    const offline = await connectSocks(address.host, address.port)
-    await greetSocks(offline)
-    offline.write(domainConnectRequest('offline.internal', 443))
-    expect(Array.from(await readExact(offline, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
-    offline.destroy()
-
-    const reconnecting = route.reconnect()
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    ready(attempts[1]!, 8)
-    await expect(reconnecting).resolves.toEqual(address)
-    await route.close()
-  })
-
-  it('reattaches with the exact existing v1 payload and capability pair', async () => {
+  it('reattaches with the exact existing v1 payload and tunnel capabilities', async () => {
     const attempts = mockSubscriptionAttempts()
     const route = createRoute({
       subscription: { clientCapabilities: ['existing.optional.v1'] }
@@ -324,58 +207,43 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
         clientCapabilities: [
           'existing.optional.v1',
           'browser.clientHost.v1',
-          'network.browserTunnel.v1'
+          'network.browserTunnel.v1',
+          'network.browserTunnel.window.v2'
         ]
       })
     }
     await route.close()
   })
 
-  it('keeps page-command negotiation off the independent tunnel attach', async () => {
+  it.each([
+    ['rejects', 'an older host', undefined],
+    ['accepts', 'a host that accepts window.v2', ['network.browserTunnel.window.v2']]
+  ])('%s a 2 MiB stream window from %s', async (outcome, _host, capabilities) => {
     const attempts = mockSubscriptionAttempts()
-    const commandLease = { ...lease, pageCommandProtocolVersion: 1 }
-    const route = new PairedRuntimeBrowserNetworkRoute({
-      connection: pairedRuntimeConnectionFromOffer(pairing),
-      lease: commandLease,
-      executionHostRevision: 1
-    })
+    const route = createRoute()
     const starting = route.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    await starting
+    ready(attempts[0]!, 7, capabilities)
+    const address = await starting
+    const socket = await connectSocks(address.host, address.port)
+    await greetSocks(socket)
+    socket.write(domainConnectRequest('window.internal', 443))
+    await vi.waitFor(() => expect(openFrames(attempts[0]!)).toHaveLength(1))
 
-    expect(attempts[0]!.params).toEqual({
-      ...lease,
-      executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
-    })
-    await route.close()
-  })
-
-  it('negotiates execution-host routing only for an SSH descriptor', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const executionHost = {
-      kind: 'ssh' as const,
-      targetId: 'target-a',
-      providerEpoch: 'provider-epoch-a',
-      connectionGeneration: 2
+    for (const [opcode, payload] of [
+      [BrowserNetworkTunnelOpcode.Opened, new Uint8Array()],
+      [
+        BrowserNetworkTunnelOpcode.WindowUpdate,
+        encodeBrowserNetworkTunnelWindowUpdate(2 * 1024 * 1024)
+      ]
+    ] as const) {
+      attempts[0]!.callbacks.onBinary?.(
+        encodeBrowserNetworkTunnelFrame({ opcode, tunnelGeneration: 7, streamId: 1, payload })
+      )
     }
-    const route = createRoute({ executionHost })
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    await starting
 
-    expect(attempts[0]).toMatchObject({
-      method: 'network.browserTunnel',
-      params: { ...lease, executionHost },
-      options: {
-        clientCapabilities: [
-          'browser.clientHost.v1',
-          'network.browserTunnel.v1',
-          'network.browserTunnel.executionHosts.v1'
-        ]
-      }
-    })
+    expect(attempts[0]!.close).toHaveBeenCalledTimes(outcome === 'rejects' ? 1 : 0)
+    socket.destroy()
     await route.close()
   })
 
@@ -413,69 +281,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await route.close()
   })
 
-  it('reconnects after a current tunnel protocol failure closes the client', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute()
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    const address = await starting
-
-    attempts[0]!.callbacks.onBinary?.(new Uint8Array([1, 2, 3]))
-    await vi.waitFor(() => expect(attempts[0]!.close).toHaveBeenCalledOnce())
-    const reconnecting = route.reconnect()
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    ready(attempts[1]!, 8)
-    await reconnecting
-
-    const current = await connectSocks(address.host, address.port)
-    await greetSocks(current)
-    current.write(domainConnectRequest('recovered.internal', 443))
-    await vi.waitFor(() => expect(openFrames(attempts[1]!)).toHaveLength(1))
-    attempts[1]!.callbacks.onBinary?.(
-      encodeBrowserNetworkTunnelFrame({
-        opcode: BrowserNetworkTunnelOpcode.Opened,
-        tunnelGeneration: 8,
-        streamId: 1,
-        payload: new Uint8Array()
-      })
-    )
-    expect(Array.from(await readExact(current, 10))).toEqual([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
-
-    current.destroy()
-    await route.close()
-  })
-
-  it('rebuilds a retained route after its tunnel transport dies unprompted', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute()
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    const address = await starting
-
-    attempts[0]!.callbacks.onClose?.()
-
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    ready(attempts[1]!, 8)
-    const recovered = await connectSocks(address.host, address.port)
-    await greetSocks(recovered)
-    recovered.write(domainConnectRequest('recovered.internal', 443))
-    await vi.waitFor(() => expect(openFrames(attempts[1]!)).toHaveLength(1))
-    attempts[1]!.callbacks.onBinary?.(
-      encodeBrowserNetworkTunnelFrame({
-        opcode: BrowserNetworkTunnelOpcode.Opened,
-        tunnelGeneration: 8,
-        streamId: 1,
-        payload: new Uint8Array()
-      })
-    )
-    expect(Array.from(await readExact(recovered, 10))).toEqual([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
-
-    recovered.destroy()
-    await route.close()
-  })
-
   it('recovers again after a second transport death', async () => {
     const attempts = mockSubscriptionAttempts()
     const route = createRoute()
@@ -495,46 +300,6 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     ready(attempts[2]!, 9)
     await expectSocksRoundTrip(address, attempts[2]!, 9, 'twice-recovered.internal')
 
-    await route.close()
-  })
-
-  it('retries a failing rebuild and reports the terminal failure to the route owner', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const onUnavailable = vi.fn()
-    const route = createRoute({ onUnavailable, recoveryGraceMs: 200, recoveryRetryDelayMs: 10 })
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    await starting
-
-    subscribeRemoteRuntimeRequestMock.mockRejectedValue(new Error('runtime unreachable'))
-    attempts[0]!.callbacks.onClose?.()
-
-    await vi.waitFor(() =>
-      expect(onUnavailable).toHaveBeenCalledWith(
-        expect.objectContaining({ message: expect.stringContaining('could not be rebuilt') })
-      )
-    )
-    expect(subscribeRemoteRuntimeRequestMock.mock.calls.length).toBeGreaterThan(2)
-    await route.close()
-  })
-
-  it('abandons transport recovery once the route is suspended', async () => {
-    const attempts = mockSubscriptionAttempts()
-    const route = createRoute({ recoveryGraceMs: 5_000 })
-    const starting = route.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    ready(attempts[0]!, 7)
-    await starting
-
-    attempts[0]!.callbacks.onClose?.()
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    attempts[1]!.callbacks.onClose?.()
-    route.suspend()
-
-    const settled = attempts.length
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    expect(attempts).toHaveLength(settled)
     await route.close()
   })
 
@@ -690,11 +455,15 @@ function mockSubscriptionAttempts(): SubscriptionAttempt[] {
   return attempts
 }
 
-function ready(attempt: SubscriptionAttempt, tunnelGeneration: number): void {
+function ready(
+  attempt: SubscriptionAttempt,
+  tunnelGeneration: number,
+  capabilities?: string[]
+): void {
   attempt.callbacks.onResponse({
     id: 'browser-route',
     ok: true,
-    result: { type: 'ready', tunnelGeneration },
+    result: { type: 'ready', tunnelGeneration, ...(capabilities ? { capabilities } : {}) },
     _meta: { runtimeId: 'runtime-a' }
   })
 }

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import {
   getTerminalUrlOrcaBrowserHint,
   getTerminalUrlSystemBrowserHint
-} from '../../../terminal-pane/terminal-link-open-hints'
+} from '../../../terminal-pane/links/terminal-link-open-hints'
 import type { ChecksPanelReview } from '../checks-panel-review'
 import type { ChecksPanelHostedReviewModifierDestination } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { translate } from '@/i18n/i18n'

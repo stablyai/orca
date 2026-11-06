@@ -34,9 +34,9 @@ import { useLiveDashboardSnapshot } from '@/components/dashboard/useLiveDashboar
 import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace-session-host-hydration'
-import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
-import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace/persistence/workspace-session-host-hydration'
+import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { sendMessageToAgent } from '@/lib/agent-message-send'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 

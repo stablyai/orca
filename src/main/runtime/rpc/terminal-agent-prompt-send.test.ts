@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 
 vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

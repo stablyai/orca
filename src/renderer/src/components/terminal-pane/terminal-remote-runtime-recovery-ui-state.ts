@@ -1,4 +1,4 @@
-import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { PtyTransportRecoveryState } from './pty-transport/pty-transport-types'
 
 export type VisiblePtyRecoveryState = Omit<PtyTransportRecoveryState, 'phase'> & {
   phase: Extract<PtyTransportRecoveryState['phase'], 'recovering' | 'backoff' | 'disconnected'>

@@ -20,12 +20,13 @@ import {
   downloadedMegabytesCaption
 } from '../mobile-web-shell/DownloadProgressBar'
 import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
-import { SHELL_PAGE_COVER_FADE_MS } from '../mobile-web-shell/ShellWaitingFrame'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const CANCEL_DRAG_DISTANCE = 40
+// Longer than the page cover's fade: the overlay WebView itself is still taking its first frames.
+const EXIT_FADE_MS = 220
 
 // Render in the loading WebView’s window: a native Modal stalls the page behind it. Fade only after the page paints its own drawer; backdrop/drag/Back cancel.
 export function NewWorkspaceLoadingDrawer({
@@ -66,7 +67,7 @@ export function NewWorkspaceLoadingDrawer({
         })
       : Animated.timing(presence, {
           toValue: 0,
-          duration: SHELL_PAGE_COVER_FADE_MS,
+          duration: EXIT_FADE_MS,
           easing: Easing.in(Easing.quad),
           useNativeDriver: true
         })

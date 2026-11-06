@@ -53,13 +53,55 @@ import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-
 import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// Only fixture pr view; best-effort merge metadata failures must not hide its summary.
+// Metadata and complete checks are independent provider responses.
 function mockPullRequestDetail(payload: Record<string, unknown>): void {
+  const head = 'a'.repeat(40)
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-    if (args[0] !== 'pr' || args[1] !== 'view') {
-      throw new Error('unexpected gh call')
+    if (args[0] === 'pr' && args[1] === 'view') {
+      return { stdout: JSON.stringify({ ...payload, headRefOid: head }) }
     }
-    return { stdout: JSON.stringify(payload) }
+    if (args.includes('graphql') && args.some((arg) => arg.includes('statusCheckRollup'))) {
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                number: payload.number,
+                headRefOid: head,
+                commits: {
+                  nodes: [
+                    {
+                      commit: {
+                        oid: head,
+                        statusCheckRollup: {
+                          contexts: {
+                            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these test payloads contain object rollup rows only.
+                            nodes: (payload.statusCheckRollup as Record<string, unknown>[]).map(
+                              (raw) => ({
+                                ...raw,
+                                __typename:
+                                  raw.__typename ?? (raw.state ? 'StatusContext' : 'CheckRun'),
+                                ...(!raw.state ? { checkSuite: { databaseId: 7 } } : {})
+                              })
+                            ),
+                            pageInfo: { hasNextPage: false, endCursor: null }
+                          }
+                        },
+                        checkSuites: {
+                          nodes: [],
+                          pageInfo: { hasNextPage: false, endCursor: null }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+      }
+    }
+    throw new Error('unexpected gh call')
   })
 }
 

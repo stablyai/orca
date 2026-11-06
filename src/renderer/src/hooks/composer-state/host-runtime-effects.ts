@@ -30,7 +30,7 @@ import { useEffect, useCallback } from 'react'
 import {
   readWorkspaceSetupInspection,
   getComposerSetupInspectionCommit
-} from '@/lib/workspace-setup-preparation'
+} from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled

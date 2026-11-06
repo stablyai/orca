@@ -1,7 +1,7 @@
 // Best-effort visual setup must never prevent chat startup.
 
 import { mkdir } from 'node:fs/promises'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
 import {
   resolveNativeChatVisualsSkillLocation,

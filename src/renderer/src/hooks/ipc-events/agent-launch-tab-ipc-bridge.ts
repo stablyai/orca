@@ -1,7 +1,7 @@
 import type { AgentLaunchTabPublishRequest } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import { publishAgentLaunchTab } from '@/lib/agent-launch-tab-publication'
-import { applyAgentLaunchPaneVerdict } from '@/lib/agent-launch-pane-verdict-application'
-import { keepAgentLaunchTabMainWrote } from '@/lib/agent-launch-tab-main-written'
+import { publishAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-publication'
+import { applyAgentLaunchPaneVerdict } from '@/lib/agent-session/launch/pane/agent-launch-pane-verdict-application'
+import { keepAgentLaunchTabMainWrote } from '@/lib/agent-session/launch/pane/agent-launch-tab-main-written'
 import { afterLayoutFrame } from '@/runtime/layout-frame-position'
 
 function replyToPublish(request: AgentLaunchTabPublishRequest): void {

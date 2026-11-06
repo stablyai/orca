@@ -53,9 +53,12 @@ export function MarkdownTableOfContentsPanel({
     setWidth: setMarkdownTocPanelWidth
   })
 
-  useEffect(() => {
+  // Prune on change, not in a derivation, so a heading that is retyped does not resurrect its collapse.
+  const [prevItems, setPrevItems] = useState(items)
+  if (prevItems !== items) {
+    setPrevItems(items)
     setCollapsedIds((current) => pruneMarkdownTocCollapsedIds(current, items))
-  }, [items])
+  }
 
   useEffect(() => {
     const container = containerRef.current

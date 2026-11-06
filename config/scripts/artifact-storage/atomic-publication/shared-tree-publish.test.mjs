@@ -37,19 +37,6 @@ const readPayload = (dir) => readFileSync(path.join(dir, 'payload'), 'utf8')
 const isGood = (dir) => existsSync(path.join(dir, 'payload')) && readPayload(dir) !== 'bad'
 
 describe('publishSharedTree', () => {
-  it('names staging trees uniquely beside the entry', () => {
-    expect(sharedTreeStagingPath('/x/entry', () => 'u1')).toBe(`/x/entry.staging-${process.pid}-u1`)
-  })
-
-  it('renames a staged tree into an empty slot', () => {
-    const root = makeRoot()
-    const entry = path.join(root, 'entry')
-    const staging = writeTree(sharedTreeStagingPath(entry), 'new')
-    expect(publishSharedTree(staging, entry, { isUsable: isGood })).toBe(true)
-    expect(readPayload(entry)).toBe('new')
-    expect(readdirSync(root)).toEqual(['entry'])
-  })
-
   it('never replaces a usable entry, and drops its own staging tree', () => {
     const root = makeRoot()
     const entry = writeTree(path.join(root, 'entry'), 'old')

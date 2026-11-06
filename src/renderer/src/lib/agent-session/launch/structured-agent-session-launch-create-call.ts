@@ -1,5 +1,6 @@
 import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import {
+  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
 } from '../../../../../shared/agent-session/agent-session-create-capabilities'
@@ -17,6 +18,7 @@ import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-sessio
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,
+  structuredAgentSessionHostCapabilityState,
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
@@ -88,6 +90,35 @@ async function requireHostCreateSupport(
   return support.seedOptions
 }
 
+/** The refusal a fork gets from a host that does not advertise forks; nothing was sent to it. */
+export const STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL =
+  'structured_agent_session_fork_unsupported'
+
+async function requireHostForkSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
+  if (!intent.params.forkFrom) {
+    return
+  }
+  const support = await structuredAgentSessionHostCapabilityState(
+    intent.target,
+    AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
+  )
+  if (support === 'supported') {
+    return
+  }
+  // An unanswered probe may follow a create whose reply was lost, so it settles nothing.
+  if (support === 'unknown') {
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      'The host could not say whether it forks chats.',
+      'runtime_unavailable'
+    )
+  }
+  abandonStructuredAgentSessionLaunchIntent(intent)
+  throw new StructuredAgentSessionCreateRefusalError(
+    STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL,
+    STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL
+  )
+}
+
 /** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
 const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
 
@@ -134,6 +165,7 @@ export async function launchStructuredAgentSession(
     }
     delete intent.createAfter
   }
+  await requireHostForkSupport(intent)
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)

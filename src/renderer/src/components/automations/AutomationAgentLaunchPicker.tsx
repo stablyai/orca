@@ -9,7 +9,7 @@ import {
   selectAgentLaunchRouteView,
   resolveHostCapabilities,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'

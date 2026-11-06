@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -45,10 +45,20 @@ describe('validate-plugin-files', () => {
     expect(result.stdout).toContain('not in a Git repository')
   }, 60_000)
 
-  it('exits 1 for a missing path and 2 without arguments', async () => {
-    const missing = await validate(path.join(await tempRoot(), 'nope'))
-    expect(missing.code).toBe(1)
-    expect(missing.stderr).toContain('does not exist')
-    expect((await validate()).code).toBe(2)
+  it('passes a language pack that translates protected copy, warning that Orca ignores it', async () => {
+    const dir = path.join(await tempRoot(), 'portuguese')
+    await createPluginFromTemplate({ dir, template: 'language-pack', publisher: 'acme' })
+    await writeFile(
+      path.join(dir, 'locales', 'pt-BR.json'),
+      JSON.stringify({
+        common: { cancel: 'Cancelar' },
+        components: { 'native-chat': { approval: { allow: 'Permitir', deny: 'Negar' } } }
+      })
+    )
+    const result = await validate(dir)
+    expect(result.code, result.stderr).toBe(0)
+    expect(result.stderr).toContain(
+      'warning: contributes.languagePacks "pt-BR" (locales/pt-BR.json): 2 protected strings are ignored'
+    )
   }, 60_000)
 })

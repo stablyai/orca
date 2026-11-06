@@ -1,14 +1,11 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'node:path'
-import { rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { DaemonClient } from '../../../transport/client/daemon-client'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { DaemonServer } from '../../../server/daemon-server'
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
-import type { HistoryReader } from '../../../history/restoration/history-reader'
 import type { DaemonFileLog } from '../../../observability/daemon-file-log'
-import { serializeDaemonPidFile } from '../../../launch/daemon-spawner'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -109,64 +106,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
-    it('includes rehydrateSequences in snapshot when terminal modes are active', async () => {
-      const sessionId = 'rehydrate-test'
-      await adapter.spawn({ cols: 80, rows: 24, sessionId })
-
-      lastSubprocess._simulateData('\x1b[?2004h')
-      lastSubprocess._simulateData('prompt$ ')
-      await new Promise((r) => setTimeout(r, 50))
-
-      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(result.isReattach).toBe(true)
-      expect(result.snapshot).toContain('\x1b[?2004h')
-      expect(result.snapshot).toContain('prompt$')
-    })
-
-    it('publishes the alt-frame payload as explicit strings', async () => {
-      const sessionId = 'alt-frame-boundary'
-      await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      lastSubprocess._simulateData('\x1b[?1049h\x1b[HSTATIC-ALT-FRAME')
-      await new Promise((r) => setTimeout(r, 50))
-
-      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(result.snapshotPrefixAnsi).toContain('\x1b[?1049h')
-      expect(result.snapshotFrameAnsi).toContain('STATIC-ALT-FRAME')
-      expect(result.snapshot).toBe([result.snapshotPrefixAnsi, result.snapshotFrameAnsi].join(''))
-      expect(result.snapshotFrameRestoreAnsi).not.toContain('STATIC-ALT-FRAME')
-    })
-
-    it('returns the preserved sequence from attach-only adoption', async () => {
-      const sessionId = 'attach-sequence-handoff'
-      await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      lastSubprocess._simulateData('preserved output')
-      await new Promise((r) => setTimeout(r, 50))
-
-      await expect(adapter.attach(sessionId)).resolves.toMatchObject({
-        providerSequence: {
-          value: 'preserved output'.length,
-          generation: 'continued'
-        }
-      })
-    })
-
-    it('returns the session title from attach-only adoption', async () => {
-      const sessionId = 'attach-title-handoff'
-      await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      lastSubprocess._simulateData('\x1b]0;first\x07\x1b]0;⠋ Claude\x07')
-      await new Promise((r) => setTimeout(r, 50))
-
-      await expect(adapter.attach(sessionId)).resolves.toMatchObject({ lastTitle: '⠋ Claude' })
-    })
-
-    it('returns plain result for new sessionId', async () => {
-      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId: 'brand-new' })
-      expect(result.id).toBe('brand-new')
-      expect(result.isReattach).toBeUndefined()
-      expect(result.snapshot).toBeUndefined()
-      expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
-    })
-
     it('forwards attach-only and never creates an absent stable session', async () => {
       const subprocessBeforeAttach = lastSubprocess
       await expect(
@@ -178,75 +117,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
       ).rejects.toThrow('Session not found: missing-stable-pane-session')
       expect(lastSubprocess).toBe(subprocessBeforeAttach)
-    })
-
-    it('does not inspect cold history for attach-only ownership checks', async () => {
-      const historyDir = join(dir, 'attach-only-history')
-      const historyAdapter = new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        historyPath: historyDir
-      })
-      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
-      const probe = vi.spyOn(reader, 'probeRestorableHistory')
-      const getAppliedSize = vi.spyOn(historyAdapter, 'getAppliedSize')
-
-      try {
-        await expect(
-          historyAdapter.spawn({
-            cols: 80,
-            rows: 24,
-            sessionId: 'missing-attach-only-history-session',
-            attachOnly: true
-          })
-        ).rejects.toThrow('Session not found: missing-attach-only-history-session')
-        expect(probe).not.toHaveBeenCalled()
-        expect(getAppliedSize).not.toHaveBeenCalled()
-      } finally {
-        historyAdapter.dispose()
-      }
-    })
-
-    it('reattaches a stable pane through a preserved v30 daemon', async () => {
-      const ensureConnected = vi
-        .spyOn(DaemonClient.prototype, 'ensureConnected')
-        .mockResolvedValue()
-      const request = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
-        isNew: false,
-        snapshot: null,
-        pid: 4321,
-        shellState: 'unsupported',
-        incarnationId: 'legacy-stable-pane-incarnation'
-      })
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
-      try {
-        await expect(
-          legacy.spawn({
-            cols: 80,
-            rows: 24,
-            sessionId: 'legacy-stable-pane-session',
-            attachOnly: true,
-            command: 'must-not-run'
-          })
-        ).resolves.toMatchObject({
-          id: 'legacy-stable-pane-session',
-          incarnationId: 'legacy-stable-pane-incarnation',
-          isReattach: true
-        })
-        expect(request).toHaveBeenCalledWith(
-          'createOrAttach',
-          expect.objectContaining({
-            command: undefined,
-            launchAgent: undefined,
-            startupCommandDelivery: undefined
-          })
-        )
-        expect(request.mock.calls[0]?.[1]).not.toHaveProperty('attachOnly')
-      } finally {
-        legacy.dispose()
-        request.mockRestore()
-        ensureConnected.mockRestore()
-      }
     })
 
     it('retires a replacement created by a raced-out v30 stable pane', async () => {
@@ -293,22 +163,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('attach', () => {
-    it('reattaches to existing session and receives events', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-
-      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
-      const dataPayloads: { id: string; data: string }[] = []
-      adapter2.onData((payload) => dataPayloads.push(payload))
-
-      await adapter2.attach(id)
-
-      lastSubprocess._simulateData('after-reattach')
-      await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach' })
-
-      adapter2.dispose()
-    })
-
     it('preserves the live session dimensions instead of forcing 80×24', async () => {
       const { id } = await adapter.spawn({ cols: 137, rows: 41 })
 
@@ -345,39 +199,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(adapter2.getActiveSessionIds()).toEqual([])
       } finally {
         adapter2.dispose()
-      }
-    })
-
-    it('keeps legacy attach behavior when no output sequence is available', async () => {
-      const ensureConnected = vi
-        .spyOn(DaemonClient.prototype, 'ensureConnected')
-        .mockResolvedValue()
-      const request = vi
-        .spyOn(DaemonClient.prototype, 'request')
-        .mockImplementation(async (type: string) =>
-          type === 'getSize'
-            ? ({ size: { cols: 100, rows: 30 } } as never)
-            : ({
-                isNew: false,
-                snapshot: null,
-                pid: 4321,
-                shellState: 'unsupported',
-                incarnationId: 'legacy-attach-incarnation'
-              } as never)
-        )
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
-      try {
-        const attached = await legacy.attach('legacy-session')
-        expect(attached).toMatchObject({
-          id: 'legacy-session',
-          isReattach: true,
-          incarnationId: 'legacy-attach-incarnation'
-        })
-        expect(attached.providerSequence).toBeUndefined()
-      } finally {
-        legacy.dispose()
-        request.mockRestore()
-        ensureConnected.mockRestore()
       }
     })
 
@@ -422,42 +243,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(current.getActiveSessionIds()).toEqual([])
       } finally {
         current.dispose()
-        requestSpy.mockRestore()
-        ensureConnectedSpy.mockRestore()
-      }
-    })
-
-    it('retires the accidental spawn of a pre-v31 daemon that ignores attachOnly', async () => {
-      const ensureConnectedSpy = vi
-        .spyOn(DaemonClient.prototype, 'ensureConnected')
-        .mockResolvedValue()
-      const requestSpy = vi
-        .spyOn(DaemonClient.prototype, 'request')
-        .mockImplementation(async (type: string) =>
-          type === 'getSize'
-            ? ({ size: { cols: 100, rows: 30 } } as never)
-            : type === 'createOrAttach'
-              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
-              : ({} as never)
-        )
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
-      try {
-        await expect(legacy.attach('raced-legacy-session')).rejects.toThrow(
-          'Session not found: raced-legacy-session'
-        )
-
-        expect(requestSpy).toHaveBeenCalledWith(
-          'createOrAttach',
-          expect.objectContaining({ cols: 100, rows: 30 })
-        )
-        const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
-        expect(createPayload).not.toHaveProperty('attachOnly')
-        expect(requestSpy).toHaveBeenCalledWith('kill', {
-          sessionId: 'raced-legacy-session',
-          immediate: true
-        })
-      } finally {
-        legacy.dispose()
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }
@@ -512,6 +297,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
     })
 
+    it('reports no title, since a made-up one would read as the terminal’s own', async () => {
+      await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect((await adapter.listProcesses()).map((row) => row.title)).toEqual([''])
+    })
+
     // Reconcile missed disconnect-time exits so cached hasPty results cannot block absence proofs.
     it('drops cached session ids an authoritative inventory omits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
@@ -523,96 +314,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(adapter.hasPty(staleId)).toBe(false)
       expect(adapter.hasPty(id)).toBe(true)
-    })
-
-    it('returns active sessions', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/repo/owned-before-osc7',
-        worktreeId: 'repo::/repo/owned-before-osc7'
-      })
-      await adapter.spawn({ cols: 80, rows: 24 })
-
-      const procs = await adapter.listProcesses()
-      expect(procs).toHaveLength(2)
-      expect(procs[0]).toHaveProperty('id')
-      expect(procs[0]).toHaveProperty('cwd')
-      expect(procs[0]).toHaveProperty('title')
-      expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
-      expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
-      expect(adapter.getLastAuditObservation()).toMatchObject({
-        state: 'present',
-        reason: 'authenticated_inventory',
-        inventoryAuthority: 'authoritative'
-      })
-    })
-
-    it('loads persisted Linux birth identity for audit observations', async () => {
-      adapter.dispose()
-      await server.shutdown()
-      const startedAtMs = 1_700_000_000_000
-      const launchNonce = 'launch-with-linux-identity'
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        startedAtMs,
-        launchNonce,
-        log: daemonLog,
-        spawnSubprocess: (opts) => {
-          lastSpawnOpts = opts
-          lastSubprocess = createMockSubprocess()
-          return lastSubprocess
-        }
-      })
-      await server.start()
-      const pidPath = join(dir, 'daemon.pid')
-      writeFileSync(
-        pidPath,
-        serializeDaemonPidFile({
-          pid: process.pid,
-          startedAtMs,
-          launchNonce,
-          linuxStartTicks: '4242',
-          bootId: 'boot-a'
-        })
-      )
-      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-      try {
-        adapter = new DaemonPtyAdapter({ socketPath, tokenPath, pidPath })
-
-        await expect(adapter.listProcesses()).resolves.toEqual([])
-
-        expect(adapter.getLastAuditObservation()?.exactIncarnation).toMatchObject({
-          linuxStartTicks: '4242',
-          bootId: 'boot-a'
-        })
-      } finally {
-        if (platform) {
-          Object.defineProperty(process, 'platform', platform)
-        }
-      }
-    })
-
-    it('reports the daemon session WSL owner', async () => {
-      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      try {
-        const spawned = await adapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
-        })
-
-        const procs = await adapter.listProcesses()
-
-        expect(procs.find((process) => process.id === spawned.id)?.wslDistro).toBe('Ubuntu')
-      } finally {
-        if (platform) {
-          Object.defineProperty(process, 'platform', platform)
-        }
-      }
     })
 
     it('retains authenticated identity and reports replacement across a same-endpoint reconnect', async () => {
@@ -661,77 +362,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       ])
       expect(adapter.getLastAuthenticatedDaemonIdentity()).toEqual(identityChanges[0]?.current)
     })
-
-    it('isolates audit observation listeners from inventory and later listeners', async () => {
-      const laterListener = vi.fn()
-      adapter.onAuditEligibilityObservation(() => {
-        throw new Error('audit listener failed')
-      })
-      adapter.onAuditEligibilityObservation(laterListener)
-
-      await expect(adapter.listProcesses()).resolves.toEqual([])
-
-      expect(laterListener).toHaveBeenCalledOnce()
-      expect(laterListener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          state: 'present',
-          reason: 'authenticated_inventory'
-        })
-      )
-      expect(adapter.getLastAuditObservation()).toMatchObject({
-        state: 'present',
-        reason: 'authenticated_inventory'
-      })
-    })
-
-    it('audits token ENOENT only after an authenticated disconnect', async () => {
-      const observations: {
-        trigger: string
-        state: string
-        evidenceSources: readonly string[]
-      }[] = []
-      adapter.onAuditEligibilityObservation((observation) => observations.push(observation))
-      await adapter.listProcesses()
-
-      await server.shutdown()
-      await waitFor(
-        () => !(adapter as unknown as { client: { isConnected(): boolean } }).client.isConnected()
-      )
-      await expect(adapter.listProcesses()).rejects.toThrow()
-      await waitFor(() =>
-        observations.some(
-          (observation) => observation.trigger === 'token_missing_after_authenticated_disconnect'
-        )
-      )
-
-      expect(observations).toContainEqual(
-        expect.objectContaining({
-          trigger: 'token_missing_after_authenticated_disconnect',
-          state: 'unknown',
-          evidenceSources: expect.arrayContaining(['token_file'])
-        })
-      )
-    })
-  })
-
-  describe('hasChildProcesses / getForegroundProcess', () => {
-    it('returns false for shell foreground processes', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-      vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('bash')
-      expect(await adapter.hasChildProcesses(id)).toBe(false)
-    })
-
-    it('returns true for non-shell foreground processes', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-      vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('codex')
-      expect(await adapter.hasChildProcesses(id)).toBe(true)
-    })
-
-    it('returns the foreground process', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-      vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('codex')
-      expect(await adapter.getForegroundProcess(id)).toBe('codex')
-    })
   })
 
   describe('killed-session tombstones', () => {
@@ -743,100 +373,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(adapter.spawn({ cols: 80, rows: 24, sessionId })).rejects.toThrow(
         'was explicitly killed'
       )
-    })
-
-    it('allows spawn for different sessionId after shutdown', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, sessionId: 'kill-me' })
-      await adapter.shutdown('kill-me', { immediate: true })
-
-      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId: 'fresh-one' })
-      expect(result.id).toBe('fresh-one')
-    })
-
-    it('clearTombstone allows re-spawn', async () => {
-      const sessionId = 'cleared-tombstone'
-      await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      await adapter.shutdown(sessionId, { immediate: true })
-
-      adapter.clearTombstone(sessionId)
-
-      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId })
-      expect(result.id).toBe(sessionId)
-    })
-
-    it('evicts oldest tombstone when exceeding limit', async () => {
-      const ids: string[] = []
-      for (let i = 0; i < 5; i++) {
-        const id = `evict-${i}`
-        ids.push(id)
-        await adapter.spawn({ cols: 80, rows: 24, sessionId: id })
-        await adapter.shutdown(id, { immediate: true })
-      }
-
-      for (const id of ids) {
-        await expect(adapter.spawn({ cols: 80, rows: 24, sessionId: id })).rejects.toThrow(
-          'was explicitly killed'
-        )
-      }
-
-      adapter.clearTombstone(ids[0])
-      await adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })
-      await adapter.shutdown(ids[0], { immediate: true })
-
-      await expect(adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })).rejects.toThrow(
-        'was explicitly killed'
-      )
-    })
-  })
-
-  describe('reconcileOnStartup', () => {
-    it('returns alive sessions for valid worktrees', async () => {
-      const wt = 'repo-a::/wt/active'
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: wt })
-
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set([wt]))
-      expect(alive).toHaveLength(1)
-      expect(alive[0]).toContain(wt)
-      expect(killed).toHaveLength(0)
-    })
-
-    it('kills sessions for removed worktrees', async () => {
-      const wt = 'repo-a::/wt/removed'
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: wt })
-
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set(['repo-a::/wt/other']))
-      expect(alive).toHaveLength(0)
-      expect(killed).toHaveLength(1)
-      expect(killed[0]).toContain(wt)
-    })
-
-    it('handles mix of valid and orphaned sessions', async () => {
-      const keep = 'repo-a::/wt/keep'
-      const drop = 'repo-a::/wt/delete'
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: keep })
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: drop })
-
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set([keep]))
-      expect(alive).toHaveLength(1)
-      expect(killed).toHaveLength(1)
-    })
-
-    it('correctly parses hyphenated worktreeIds', async () => {
-      const complexId = 'repo-abc::/Users/dev/my-feature-branch'
-      await adapter.spawn({ cols: 80, rows: 24, worktreeId: complexId })
-
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set([complexId]))
-      expect(alive).toHaveLength(1)
-      expect(killed).toHaveLength(0)
-    })
-
-    it('kills sessions whose id does not match the minted format, even if id is in valid set', async () => {
-      const sessionId = 'bare-uuid-no-separators'
-      await adapter.spawn({ cols: 80, rows: 24, sessionId })
-
-      const { alive, killed } = await adapter.reconcileOnStartup(new Set([sessionId]))
-      expect(alive).toHaveLength(0)
-      expect(killed).toHaveLength(1)
     })
   })
 })

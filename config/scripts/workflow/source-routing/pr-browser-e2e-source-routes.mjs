@@ -12,6 +12,16 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
       file === 'tests/e2e/helpers/browser-link-server.ts'
   },
   {
+    // Paired HTML previews render client-side over orca-preview://; links route through confirmation into the browser.
+    id: 'doc-preview.paired-local-render',
+    specs: ['tests/e2e/paired-remote-html-preview-local-render.spec.ts'],
+    matches: (file) =>
+      file === 'tests/e2e/helpers/paired-html-preview-inventory.ts' ||
+      (isProductSource(file) &&
+        (/^src\/(?:main|preload|renderer\/src|shared)\/.*doc-preview[^/]*\.tsx?$/.test(file) ||
+          /^src\/renderer\/src\/components\/browser-pane\/workspace-doc\/[^/]+\.tsx?$/.test(file)))
+  },
+  {
     // Client-rendered host rows need two real Electron apps; omit high-churn ipc/runtime/useIpcEvents/preload seams covered by main-process integration.
     id: 'client-hosted-browser.host-strip',
     specs: ['tests/e2e/paired-client-hosted-browser-host-strip.spec.ts'],
@@ -25,7 +35,7 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/paired-client-hosted-browser-restart-survival.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      (file === 'src/main/runtime/browser/browser-commands.ts' ||
+      (file === 'src/main/runtime/browser/commands/browser-commands.ts' ||
         /^src\/.*(?:[Cc]lient-?[Hh]osted|browser-host-(?:lease|page|client-page)|browser-client-(?:host|page)|runtime-browser-(?:client-)?page|session-tabs-sync|host-session-snapshot-authority|orca-runtime\.ts|\/runtime-(?:status|types)\.ts)/.test(
           file
         ))

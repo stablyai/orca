@@ -13,22 +13,22 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
-import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
+import { collectRuntimeWorktreeAgentSources } from './workspaces/process-listing/runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
-import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { createScriptedClaudeRuntime } from './agent-session/installation/structured-claude-scripted-runtime-test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -121,7 +121,8 @@ describe('the chat strip and the session list read the same host child records',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      // Side reads (at-rest `/` commands) spawn the CLI directly; a missing binary keeps them off the real codex.
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection),
       statusSink

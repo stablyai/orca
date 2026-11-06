@@ -4,8 +4,8 @@ import { _resetTracerForTests, setActiveSink, type TracerSink } from '../../obse
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
-import { SESSION_TAB_METHODS } from './methods/session-tabs'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { SESSION_TAB_METHODS } from './methods/session-tabs/session-tabs'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 
 const BEARER_CLIENT_ID = 'secret-bearer-client-id'
 

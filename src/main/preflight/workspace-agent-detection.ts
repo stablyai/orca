@@ -2,8 +2,8 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
-import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
-import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
+import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
+import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -25,7 +25,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
-import { resolveWorktreeHostRouting } from '../runtime/worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from '../runtime/workspaces/catalog/worktree-launch-host-repo'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   detectInstalledAgentsWithShellPathHydration,

@@ -16,7 +16,7 @@ import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
-import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
+import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../browser/browser-manager'

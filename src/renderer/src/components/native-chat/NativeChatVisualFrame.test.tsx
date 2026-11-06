@@ -17,7 +17,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-visual-shell'
 
 const openHttpLink = vi.fn()
-vi.mock('@/lib/http-link-routing', () => ({
+vi.mock('@/lib/browser/navigation/http-link-routing', () => ({
   openHttpLink: (...args: unknown[]) => openHttpLink(...args)
 }))
 

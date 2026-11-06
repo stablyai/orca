@@ -94,7 +94,9 @@ vi.mock('@/components/shared/useDaemonActions', () => ({
   useDaemonActions: () => ({ isBusy: false, busyKind: null, setPending: fake.action }),
   DaemonActionDialog: () => null
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
 beforeEach(() => {

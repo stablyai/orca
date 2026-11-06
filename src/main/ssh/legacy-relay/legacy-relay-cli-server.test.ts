@@ -6,7 +6,11 @@ import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connec
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import '../../runtime/orchestration/db/contract-constants'
+import '../../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../runtime/orchestration/db/dispatch-row-writer'
+import '../../runtime/orchestration/db/attempt-outcome-projection'
 import { LEGACY_RELAY_CLI_UNVERIFIED } from './legacy-relay-cli-caller'
 import {
   createLegacyRelayCliServer,

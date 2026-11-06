@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { projectGroupIdFromRepoId } from '../shared/folder-workspaces/folder-workspace-worktree'
+import { isFloatingWorkspaceId } from '../shared/floating-workspace-worktree'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -268,6 +269,29 @@ export function selectWorktreeIdOnHost(
 ): string | undefined {
   const match = catalog.find((row) => row.id === worktreeId && isOnCallerHost(row, hostId))
   return match ? worktreeSelections([match], catalog)[0]!.selector : undefined
+}
+
+/** The workspace this Orca terminal names; native folders and the floating terminal have no catalog row. */
+export function selectCallerTerminalWorkspace(
+  catalog: readonly CatalogRow[],
+  hostId: ExecutionHostId
+): string | undefined {
+  const worktreeId = process.env.ORCA_WORKTREE_ID
+  const trimmed = worktreeId?.trim()
+  if (isFloatingWorkspaceId(worktreeId)) {
+    return undefined
+  }
+  if (worktreeId && trimmed && !trimmed.startsWith('folder:')) {
+    const scoped = selectWorktreeIdOnHost(catalog, worktreeId, hostId)
+    if (!scoped) {
+      throw new RuntimeClientError(
+        'selector_not_found',
+        `This terminal's workspace ${worktreeId} is not listed by Orca on this host. Run the command from a workspace directory or pass --worktree <selector> (or all) where the command accepts it.`
+      )
+    }
+    return scoped
+  }
+  return [trimmed, process.env.ORCA_WORKSPACE_ID?.trim()].find((id) => id?.startsWith('folder:'))
 }
 
 export async function resolveCallerPaneWorktreeSelector(

@@ -8,8 +8,8 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getMobileSessionTabOrderIds } from '../mobile-session-tab-merge'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { getMobileSessionTabOrderIds } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
 import type { AgentSenderRevision } from '../../../shared/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
@@ -305,14 +305,11 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         if (tabOrder.length === 0) {
           return null
         }
-        const activeTabId =
-          group.activeTabId && tabOrder.includes(group.activeTabId)
-            ? group.activeTabId
-            : (tabOrder[0] ?? null)
         const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
         return {
           id: group.id,
-          activeTabId,
+          activeTabId:
+            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
           tabOrder,
           ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
         }
