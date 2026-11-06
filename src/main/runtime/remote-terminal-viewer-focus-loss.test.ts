@@ -4,7 +4,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 function createRuntime(hasLocalPane = false) {
   const runtime = new OrcaRuntimeService()
   const reportFocusLost = vi.fn(async () => {})
-  // SAFETY: viewer presence and client disconnect reach only these controller members.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: viewer presence and client disconnect reach only these controller members.
   runtime.setPtyController({
     write: () => true,
     kill: () => true,

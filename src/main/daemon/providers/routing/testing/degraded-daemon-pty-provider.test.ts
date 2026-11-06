@@ -129,6 +129,7 @@ function createDaemonAdapter(
   label: string,
   sessions: string[] = []
 ): DaemonPtyAdapter & ProviderMock {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the degraded router reaches only these adapter members.
   return {
     ...createProvider(label, sessions, true),
     protocolVersion: 13,

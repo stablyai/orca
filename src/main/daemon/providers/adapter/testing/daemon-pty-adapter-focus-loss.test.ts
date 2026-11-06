@@ -46,10 +46,10 @@ describe('DaemonPtyAdapter.reportFocusLost', () => {
 
   it('leaves a daemon that predates the request, and its session, working', async () => {
     const id = await focusedSession()
-    // SAFETY: stands in for an older daemon's router, whose default branch rejects unknown types.
-    const router = (
-      server as unknown as { requestRouter: { route: (...args: never[]) => unknown } }
-    ).requestRouter
+    const router =
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stands in for an older daemon's router, whose default branch rejects unknown types.
+      (server as unknown as { requestRouter: { route: (...args: never[]) => unknown } })
+        .requestRouter
     const route = router.route.bind(router)
     const rejected = vi.fn()
     router.route = (clientId: never, request: never) => {
