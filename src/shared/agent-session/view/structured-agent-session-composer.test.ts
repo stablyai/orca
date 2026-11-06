@@ -2,7 +2,8 @@ import { queuedMessageEditAcceptsText } from '../../queued-message-edit-command'
 import { describe, expect, it, vi } from 'vitest'
 import {
   dispatchStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionComposerCommand
+  isStructuredAgentSessionComposerCommand,
+  structuredSessionSlashCommands
 } from './structured-agent-session-composer'
 
 describe('dispatchStructuredAgentSessionComposerCommand', () => {
@@ -69,6 +70,30 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
       expect(setOption).not.toHaveBeenCalled()
     }
   )
+  it('drops curated terminal-only catalog rows for the no-parser codex runtime', () => {
+    const names = (agent: 'codex' | 'claude') =>
+      structuredSessionSlashCommands(
+        agent,
+        ['clear', 'compact'],
+        [
+          { name: 'status', kind: 'command' },
+          { name: 'custom-tool', kind: 'command' }
+        ]
+      ).map((entry) => entry.name)
+    // Codex app-server has no slash parser: /status would land as prose and its
+    // curated reply is terminal-only, so the chat surface drops it. A reported
+    // name outside the curated catalog stays (the session advertised it).
+    expect(names('codex')).toEqual(['model', 'effort', 'clear', 'compact', 'goal', 'custom-tool'])
+    // Claude's harness expands slash commands from message text, so it keeps them.
+    expect(names('claude')).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'status',
+      'custom-tool'
+    ])
+  })
 })
 
 describe('agent-implemented commands pass through to the agent', () => {
