@@ -44,7 +44,7 @@ export class AgentTranscriptPollScheduler<T> {
     })
   }
 
-  schedule(key: string, value: T, filePath?: string): void {
+  schedule(key: string, value: T, filePath?: string, delayMs?: number, reset = false): void {
     let entry = this.entries.get(key)
     if (entry && entry.filePath !== filePath) {
       this.clear(key)
@@ -92,7 +92,7 @@ export class AgentTranscriptPollScheduler<T> {
     }
     entry.value = value
     // The pending callback reads this entry's latest hook, so repeated hooks need neither a new watch nor a new timer.
-    if (entry.scheduled) {
+    if (entry.scheduled && !reset) {
       return
     }
     const now = performance.now()
@@ -100,7 +100,8 @@ export class AgentTranscriptPollScheduler<T> {
       entry.watcherBound = entry.watcher.bind()
       entry.nextBindAt = now + ROOT_RECONCILIATION_MS
     }
-    const delay = entry.watcherBound && !entry.initialCheck ? ROOT_RECONCILIATION_MS : this.delayMs
+    const delay =
+      delayMs ?? (entry.watcherBound && !entry.initialCheck ? ROOT_RECONCILIATION_MS : this.delayMs)
     entry.scheduled = true
     this.deadlines.schedule(key, entry, delay)
   }

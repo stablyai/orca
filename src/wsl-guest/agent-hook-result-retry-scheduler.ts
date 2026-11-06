@@ -12,6 +12,8 @@ import type { AgentHookSource } from '../shared/agent-hook-listener/transport/ag
 import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 import {
   advanceTranscriptPollIdle,
+  museHookPollPane,
+  museTranscriptStamp,
   presenceRestatedPollRow,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -147,8 +149,24 @@ export class AgentHookResultRetryScheduler {
         version,
         idle
       },
-      hookTranscriptWatchPath(this.host.state, source, original.paneKey)
+      hookTranscriptWatchPath(this.host.state, source, original.paneKey),
+      source === 'muse' ? (idle?.delay ?? 1_000) : undefined,
+      source === 'muse' && !idle
     )
+  }
+
+  rearmIgnoredMuseHook(body: unknown): void {
+    const paneKey = museHookPollPane(this.host.state, body, this.host.env)
+    if (!paneKey) {
+      return
+    }
+    const poll = this.transcriptPollScheduler.peek(paneKey)
+    if (
+      poll?.source === 'muse' &&
+      this.host.state.lastStatusByPaneKey.get(paneKey) === poll.original
+    ) {
+      this.scheduleTranscriptPoll('muse', poll.body, poll.original, poll.env, poll.version)
+    }
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -162,23 +180,24 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
-    const event =
-      source === 'codex'
-        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
-        : normalizeHookPayload(this.host.state, source, body, this.host.env)
-    if (!event) {
-      return
+    const stamp = source === 'muse' ? museTranscriptStamp(this.host.state, paneKey) : undefined
+    let next = original
+    if (!stamp || stamp !== idle?.mark) {
+      const event =
+        source === 'codex'
+          ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
+          : normalizeHookPayload(this.host.state, source, body, this.host.env)
+      if (!event) {
+        return
+      }
+      const update = transcriptPollUpdate(source, original, event)
+      const applied = update ? this.host.applyEvent(update, source, env, version) : original
+      if (!applied) {
+        return
+      }
+      next = applied
     }
-    const update = transcriptPollUpdate(source, original, event)
-    // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
-    const next = update ? this.host.applyEvent(update, source, env, version) : original
-    if (!next) {
-      return
-    }
-    const advanced = advanceTranscriptPollIdle(this.host.state, source, paneKey, idle, Date.now())
-    if (advanced.action === 'stop') {
-      return
-    }
+    const advanced = advanceTranscriptPollIdle(source, stamp, idle, Date.now())
     if (advanced.action === 'probe') {
       void this.host.checkAgentPresence(paneKey).then(() => {
         const row = presenceRestatedPollRow(

@@ -38,7 +38,7 @@ function createSessionLog(home: string): string {
 }
 
 // Ctrl-Z/fg makes the idle presence probe restate the row; no hook arrives to re-arm the poll.
-it('keeps polling a Muse session log after an idle presence probe restates the row', async () => {
+it('keeps polling a quiet Muse session and re-arms on an ignored hook', async () => {
   vi.useFakeTimers()
   dataHome = mkdtempSync(join(tmpdir(), 'relay-muse-poll-'))
   vi.stubEnv('XDG_DATA_HOME', dataHome)
@@ -80,10 +80,11 @@ it('keeps polling a Muse session log after an idle presence probe restates the r
   }
   scheduler.scheduleTranscriptPoll('muse', body, stored)
 
-  await vi.advanceTimersByTimeAsync(62_000)
+  await vi.advanceTimersByTimeAsync(100_000)
   expect(checkAgentPresence).toHaveBeenCalledWith(PANE_KEY)
   expect(state.lastStatusByPaneKey.get(PANE_KEY)?.agentPresence?.suspended).toBe(true)
 
+  await vi.advanceTimersByTimeAsync(31 * 60_000)
   appendFileSync(
     logPath,
     `${JSON.stringify({
@@ -97,6 +98,10 @@ it('keeps polling a Muse session log after an idle presence probe restates the r
       }
     })}\n`
   )
+  scheduler.rearmIgnoredMuseHook({
+    ...body,
+    payload: { ...body.payload, hook_event_name: 'PermissionRequest' }
+  })
   await vi.advanceTimersByTimeAsync(2_000)
   expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('waiting')
   scheduler.clearAll()

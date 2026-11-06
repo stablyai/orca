@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
@@ -5,6 +6,7 @@ import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
 import { hasPendingCodexSubagentIdentity } from '../codex-subagent-roster'
 import { isSameAgentProcess } from '../agent-status/process/agent-process-presence'
+import { parseHookEnvelope } from './hook-envelope'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,
@@ -26,33 +28,65 @@ export function shouldPollHookTranscript(
   return false
 }
 
-// Muse can end without Stop; a silent session log probes its owner, then the backstop ends the poll.
+// A quiet Muse log backs off while periodic presence checks can prove its owner exited.
 const MUSE_IDLE_PROBE_MS = 60_000
-const MUSE_IDLE_LIMIT_MS = 30 * 60_000
+const MUSE_POLL_MAX_DELAY_MS = 30_000
 
-export type TranscriptPollIdle = { mark?: number; since: number; probedAt: number }
+export type TranscriptPollIdle = { mark?: string; delay: number; probedAt: number }
 
 export function advanceTranscriptPollIdle(
-  state: HookListenerState,
   source: AgentHookSource,
-  paneKey: string,
+  mark: string | undefined,
   idle: TranscriptPollIdle | undefined,
   now: number
-): { idle?: TranscriptPollIdle; action: 'poll' | 'probe' | 'stop' } {
+): { idle?: TranscriptPollIdle; action: 'poll' | 'probe' } {
   if (source !== 'muse') {
     return { action: 'poll' }
   }
-  const mark = state.musePaneStateByPaneKey.get(paneKey)?.log?.cursor.offset
   if (!idle || idle.mark !== mark) {
-    return { idle: { mark, since: now, probedAt: now }, action: 'poll' }
+    return { idle: { mark, delay: 1_000, probedAt: now }, action: 'poll' }
   }
-  if (now - idle.since >= MUSE_IDLE_LIMIT_MS) {
-    return { idle, action: 'stop' }
-  }
+  idle = { ...idle, delay: Math.min(idle.delay * 2, MUSE_POLL_MAX_DELAY_MS) }
   if (now - idle.probedAt >= MUSE_IDLE_PROBE_MS) {
     return { idle: { ...idle, probedAt: now }, action: 'probe' }
   }
   return { idle, action: 'poll' }
+}
+
+export function museTranscriptStamp(state: HookListenerState, paneKey: string): string | undefined {
+  const cursor = state.musePaneStateByPaneKey.get(paneKey)?.log?.cursor
+  const path = cursor?.filePath
+  if (!path) {
+    return undefined
+  }
+  try {
+    const stat = statSync(path)
+    return stat.isFile() && stat.size === cursor.offset
+      ? `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function museHookPollPane(
+  state: HookListenerState,
+  body: unknown,
+  env: string
+): string | undefined {
+  const hook = parseHookEnvelope(state, 'muse', body, env)
+  if (!hook) {
+    return undefined
+  }
+  const row = state.lastStatusByPaneKey.get(hook.paneKey)
+  const session = hook.hookPayloadRecord.session_id
+  return row?.payload.agentType === 'muse' &&
+    row.payload.state !== 'done' &&
+    row.worktreeId === hook.worktreeId &&
+    typeof session === 'string' &&
+    session === row.providerSession?.id
+    ? hook.paneKey
+    : undefined
 }
 
 /** A probe can restate a live row (e.g. suspension flip) with no hook to re-arm its poll; returns that row. */

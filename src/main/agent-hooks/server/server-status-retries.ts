@@ -9,6 +9,8 @@ import type { AgentHookSource } from '../../../shared/agent-hook-listener/transp
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   advanceTranscriptPollIdle,
+  museHookPollPane,
+  museTranscriptStamp,
   presenceRestatedPollRow,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -127,8 +129,21 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     this.transcriptPollScheduler.schedule(
       original.paneKey,
       { source, body, original, idle },
-      hookTranscriptWatchPath(this.state, source, original.paneKey)
+      hookTranscriptWatchPath(this.state, source, original.paneKey),
+      source === 'muse' ? (idle?.delay ?? 1_000) : undefined,
+      source === 'muse' && !idle
     )
+  }
+
+  protected rearmIgnoredMuseHook(body: unknown): void {
+    const paneKey = museHookPollPane(this.state, body, this.env)
+    if (!paneKey) {
+      return
+    }
+    const poll = this.transcriptPollScheduler.peek(paneKey)
+    if (poll?.source === 'muse' && this.state.lastStatusByPaneKey.get(paneKey) === poll.original) {
+      this.scheduleTranscriptPoll('muse', poll.body, poll.original)
+    }
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -141,22 +156,24 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized =
-      source === 'codex'
-        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
-        : normalizeHookPayload(this.state, source, body, this.env)
-    if (!normalized) {
-      return
+    const stamp = source === 'muse' ? museTranscriptStamp(this.state, paneKey) : undefined
+    let next = original
+    if (!stamp || stamp !== idle?.mark) {
+      const normalized =
+        source === 'codex'
+          ? pollCodexTranscriptStatus(this.state, original, body, this.env)
+          : normalizeHookPayload(this.state, source, body, this.env)
+      if (!normalized) {
+        return
+      }
+      const update = transcriptPollUpdate(source, original, normalized)
+      const applied = update ? this.applyNormalizedStatus(update) : original
+      if (!applied) {
+        return
+      }
+      next = applied
     }
-    const update = transcriptPollUpdate(source, original, normalized)
-    const next = update ? this.applyNormalizedStatus(update) : original
-    if (!next) {
-      return
-    }
-    const advanced = advanceTranscriptPollIdle(this.state, source, paneKey, idle, Date.now())
-    if (advanced.action === 'stop') {
-      return
-    }
+    const advanced = advanceTranscriptPollIdle(source, stamp, idle, Date.now())
     if (advanced.action === 'probe') {
       // An exited owner is reconciled, which clears this poll.
       void this.checkAgentPresence(paneKey).then(() => {
