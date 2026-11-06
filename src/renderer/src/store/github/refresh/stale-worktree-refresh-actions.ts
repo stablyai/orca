@@ -1,3 +1,7 @@
+import {
+  getWorktreeCardStyle,
+  isExperimentalWorktreeCardStyle
+} from '../../../../shared/worktree/card-style'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
@@ -35,7 +39,7 @@ export const createStaleWorktreeRefreshActions = (
     const cardProps = state.worktreeCardProperties ?? []
     const shouldRefreshPR =
       state.groupBy === 'pr-status' ||
-      (state.settings?.experimentalNewWorktreeCardStyle === true
+      (isExperimentalWorktreeCardStyle(getWorktreeCardStyle(state.settings))
         ? cardProps.includes('status')
         : cardProps.includes('pr') || cardProps.some((property: string) => property === 'ci')) ||
       rightSidebarShowsPullRequestData(state)

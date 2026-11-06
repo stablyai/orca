@@ -5,12 +5,12 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 export function getNewWorktreeCardStyleSearchEntry(): SettingsSearchEntry {
   return {
     title: translate(
-      'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
-      'New card style'
+      'auto.components.settings.experimental.search.worktreeCardStyle.title',
+      'Card style'
     ),
     description: translate(
-      'auto.components.settings.experimental.search.newWorktreeCardStyle.description',
-      'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+      'auto.components.settings.experimental.search.worktreeCardStyle.description',
+      'Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.'
     ),
     keywords: [
       ...translateSearchKeyword(

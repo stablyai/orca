@@ -1,0 +1,154 @@
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+
+/** What one agent line means for the Experimental 2.0 card, in slot priority order. */
+export type SlotLineKind = 'needs' | 'failed' | 'unread' | 'working' | 'seen' | 'idle'
+
+export type SlotLineSignal = { kind: SlotLineKind; at: number | null }
+
+/** One right-hand slot: the first exception that applies, otherwise a time, or quiet. */
+export type SlotSignal =
+  | { kind: 'needs'; count: number }
+  | { kind: 'failed' }
+  | { kind: 'unread'; at: number | null; manual: boolean }
+  | { kind: 'working'; at: number | null }
+  | { kind: 'offline' }
+  | { kind: 'time'; at: number | null }
+  | { kind: 'quiet' }
+
+const LINE_KIND_RANK: Record<SlotLineKind, number> = {
+  needs: 0,
+  failed: 1,
+  unread: 2,
+  working: 3,
+  seen: 4,
+  idle: 5
+}
+
+export function classifySlotLine(args: {
+  dotState: AgentDotState
+  needsAttention: boolean
+  unreadCompletion: boolean
+}): SlotLineKind {
+  const { dotState } = args
+  if (
+    args.needsAttention ||
+    dotState === 'waiting' ||
+    dotState === 'blocked' ||
+    dotState === 'permission'
+  ) {
+    return 'needs'
+  }
+  if (dotState === 'failed') {
+    return 'failed'
+  }
+  if (dotState === 'working' || dotState === 'monitoring') {
+    return 'working'
+  }
+  if (dotState === 'done' || dotState === 'interrupted' || dotState === 'unconfirmed') {
+    return args.unreadCompletion ? 'unread' : 'seen'
+  }
+  return 'idle'
+}
+
+/** Working shows how long; everything else shows when it last changed. */
+export function slotLineAt(
+  agent: Pick<DashboardAgentRow, 'rowSource' | 'state' | 'entry' | 'childRow' | 'startedAt'>,
+  kind: SlotLineKind
+): number | null {
+  const stateStartedAt = agent.entry.stateStartedAt > 0 ? agent.entry.stateStartedAt : null
+  if (kind === 'working' || kind === 'needs') {
+    return stateStartedAt ?? (agent.startedAt > 0 ? agent.startedAt : null)
+  }
+  return lastEnteredDoneAt(agent) ?? stateStartedAt
+}
+
+export function compareSlotLines(a: SlotLineSignal, b: SlotLineSignal): number {
+  return LINE_KIND_RANK[a.kind] - LINE_KIND_RANK[b.kind] || (b.at ?? 0) - (a.at ?? 0)
+}
+
+function latest(lines: readonly SlotLineSignal[]): number | null {
+  let at: number | null = null
+  for (const line of lines) {
+    if (line.at !== null && (at === null || line.at > at)) {
+      at = line.at
+    }
+  }
+  return at
+}
+
+/** The exception a set of lines reports, or null when every line is quiet. */
+export function slotExceptionFor(lines: readonly SlotLineSignal[]): SlotSignal | null {
+  const needs = lines.filter((line) => line.kind === 'needs').length
+  if (needs > 0) {
+    return { kind: 'needs', count: needs }
+  }
+  if (lines.some((line) => line.kind === 'failed')) {
+    return { kind: 'failed' }
+  }
+  const unread = lines.filter((line) => line.kind === 'unread')
+  if (unread.length > 0) {
+    return { kind: 'unread', at: latest(unread), manual: false }
+  }
+  const working = lines.filter((line) => line.kind === 'working')
+  if (working.length > 0) {
+    return { kind: 'working', at: latest(working) }
+  }
+  return null
+}
+
+export function slotForLine(line: SlotLineSignal): SlotSignal {
+  return slotExceptionFor([line]) ?? { kind: 'time', at: line.at }
+}
+
+const SLOT_EXCEPTION_RANK: Partial<Record<SlotSignal['kind'], number>> = {
+  needs: 0,
+  failed: 1,
+  unread: 2,
+  working: 3
+}
+
+export function mergeSlotExceptions(a: SlotSignal | null, b: SlotSignal | null): SlotSignal | null {
+  if (!a || !b) {
+    return a ?? b
+  }
+  if (a.kind === 'needs' && b.kind === 'needs') {
+    return { kind: 'needs', count: a.count + b.count }
+  }
+  if (
+    (a.kind === 'unread' && b.kind === 'unread') ||
+    (a.kind === 'working' && b.kind === 'working')
+  ) {
+    return (b.at ?? 0) > (a.at ?? 0) ? b : a
+  }
+  return (SLOT_EXCEPTION_RANK[a.kind] ?? 9) <= (SLOT_EXCEPTION_RANK[b.kind] ?? 9) ? a : b
+}
+
+/**
+ * The title row stays quiet while its agent lines are on screen; it speaks only for
+ * sources the user can't see: hidden own agents, collapsed children, or a manual mark.
+ */
+export function titleRowSlot(args: {
+  offline: boolean
+  hiddenLines: readonly SlotLineSignal[]
+  collapsedLineage: SlotSignal | null
+  manualUnread: boolean
+  ownLinesShown: boolean
+  lastActivityAt: number | null
+}): SlotSignal {
+  if (args.offline) {
+    return { kind: 'offline' }
+  }
+  const exception = mergeSlotExceptions(slotExceptionFor(args.hiddenLines), args.collapsedLineage)
+  if (exception) {
+    return exception
+  }
+  if (args.manualUnread) {
+    return { kind: 'unread', at: args.lastActivityAt, manual: true }
+  }
+  if (args.ownLinesShown) {
+    return { kind: 'quiet' }
+  }
+  return { kind: 'time', at: latest(args.hiddenLines) ?? args.lastActivityAt }
+}

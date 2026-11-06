@@ -31,6 +31,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     flushSurface,
     contentIndent,
     newCardStyle,
+    worktreeCardStyle,
     compactCards,
     isFolder,
     detachedHeadDisplay,
@@ -137,11 +138,13 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleWrapper = hasHoverDetails
     ? (title: React.ReactElement): React.ReactElement => title
     : undefined
+  // Why: 2.0 moves status to the right-hand slot, so it has no left lane to offset.
+  const slotLayout = worktreeCardStyle === 'experimental-2'
   // Why: sidebar rows need a small surface inset while content stays aligned with the pre-inset layout.
   const { cardStyle, parentContentMarginLeft } = getWorktreeCardFrameGeometry({
     flushSurface,
     contentIndent,
-    statusLane: newCardStyle && showCombinedStatusSlot
+    statusLane: newCardStyle && showCombinedStatusSlot && !slotLayout
   })
   const detailsAndPortsContent = renderWorktreeCardIndicators(card)
   const detailsAndPorts =
@@ -160,6 +163,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleOnlyCard = !hasSecondaryCardContent
 
   return {
+    slotLayout,
     showPinnedRepoIcon,
     showInlineRepoBadge,
     showRepoBadgeInMetaRow,

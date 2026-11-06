@@ -140,6 +140,7 @@ export function renderWorktreeItemRow(
         lineageChildCount={itemRow.lineageChildCount}
         lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
         lineageCollapsed={itemRow.lineageCollapsed}
+        lineageHiddenDescendantIds={itemRow.lineageHiddenDescendantIds}
         onLineageToggle={
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }

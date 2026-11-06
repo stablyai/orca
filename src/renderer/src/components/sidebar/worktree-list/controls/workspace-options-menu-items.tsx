@@ -1,3 +1,7 @@
+import {
+  getWorktreeCardStyle,
+  isExperimentalWorktreeCardStyle
+} from '../../../../../../shared/worktree/card-style'
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -268,7 +272,9 @@ export function WorkspaceOptionsMenuItems({
   const groupBy = useAppStore((s) => s.groupBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
-  const newCardStyle = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
+  const newCardStyle = useAppStore((s) =>
+    isExperimentalWorktreeCardStyle(getWorktreeCardStyle(s.settings))
+  )
   const runtimeEnvironmentCount = useAppStore((s) => s.runtimeEnvironments.length)
   const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
   const { hostOptions } = useSidebarHostScopeOptions()

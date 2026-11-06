@@ -23,6 +23,10 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
+import {
+  hostWorktreeCardStyleUpdate,
+  readHostWorktreeCardStyle
+} from './web-worktree-card-style-sync'
 import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web-storage'
 
 export type WebSettingsApi = NonNullable<PreloadApi['settings']>
@@ -130,10 +134,16 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
-    for (const key of ['experimentalNewWorktreeCardStyle', 'compactWorktreeCards'] as const) {
-      if (typeof result.settings[key] === 'boolean') {
-        runtimeSettings[key] = result.settings[key]
-      }
+    Object.assign(
+      runtimeSettings,
+      readHostWorktreeCardStyle(
+        result.settings,
+        requestedEnvironment.id,
+        currentEnvironment?.id === requestedEnvironment.id
+      )
+    )
+    if (typeof result.settings.compactWorktreeCards === 'boolean') {
+      runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
     }
     if (typeof result.settings.minimaxGroupId === 'string') {
       runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
@@ -201,9 +211,7 @@ export async function syncRuntimeBackedSettings(
     if (visibilityDefaults) {
       runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
     }
-    if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
-      runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
-    }
+    Object.assign(runtimeUpdates, hostWorktreeCardStyleUpdate(updates, requestedEnvironment.id))
     if (typeof updates.compactWorktreeCards === 'boolean') {
       runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
     }

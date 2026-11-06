@@ -65,6 +65,8 @@ export type WorktreeRow = {
   lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  /** Set only while collapsed: every workspace folded under this one. */
+  lineageHiddenDescendantIds?: readonly string[]
   hostContextLabel?: string
   showProjectName?: boolean
 }

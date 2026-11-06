@@ -26,6 +26,8 @@ export const webRuntimeState: {
   zcodePlanSiteRuntimeValue: ZcodePlanSite | null
   worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
+  /** The paired host that advertised `worktreeCardStyle`; older hosts reject the unknown key. */
+  worktreeCardStyleRuntimeEnvironmentId: string | null
   activeClient: WebRuntimeClient | null
   activeClientEnvironmentId: string | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
@@ -35,6 +37,7 @@ export const webRuntimeState: {
   zcodePlanSiteRuntimeValue: null,
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,
   worktreeVisibilityDefaultsRuntimeValue: null,
+  worktreeCardStyleRuntimeEnvironmentId: null,
   activeClient: null,
   activeClientEnvironmentId: null,
   cachedDetectedWorktrees: null

@@ -1,3 +1,7 @@
+import {
+  getWorktreeCardStyle,
+  isExperimentalWorktreeCardStyle
+} from '../../../../../../shared/worktree/card-style'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
@@ -77,7 +81,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     projectGrouping: props.projectGrouping
   })
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const newCardStyle = isExperimentalWorktreeCardStyle(getWorktreeCardStyle(settings))
   const {
     handleOpenRepoSettings,
     handleOpenWorktreeVisibility,
