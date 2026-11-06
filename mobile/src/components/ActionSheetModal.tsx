@@ -20,6 +20,8 @@ export type ActionSheetAction = {
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
+  /** Caps the label. Absent keeps the full label. */
+  lines?: number
   onPress: () => void
 }
 
@@ -46,20 +48,29 @@ function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon):
 type ContentProps = {
   title?: string
   message?: string
+  /** Title clamp. Other sheets stay on one line. */
+  titleLines?: number
   /** Drawn between the header and the actions. */
   children?: ReactNode
   actions: ActionSheetAction[]
   onClose?: () => void
 }
 
-export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+export function ActionSheetContent({
+  title,
+  message,
+  titleLines = 1,
+  children,
+  actions,
+  onClose
+}: ContentProps) {
   useMobileColorScheme()
   return (
     <>
       {(title || message) && (
         <View style={styles.header}>
           {title ? (
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={styles.title} numberOfLines={titleLines}>
               {title}
             </Text>
           ) : null}
@@ -85,6 +96,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
                   />
                 )
               }
+              titleLines={action.lines}
               accessory={
                 action.loading ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />

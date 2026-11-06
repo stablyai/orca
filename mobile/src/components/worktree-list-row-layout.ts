@@ -12,3 +12,8 @@ export const WORKTREE_ROW_LAYOUT = {
   /** Where the row's text starts. */
   textInset: ROW_ACCENT_WIDTH + spacing.lg + INDICATOR_WIDTH + spacing.sm
 } as const
+
+// Match desktop formatBranchName by hiding refs/heads/ prefix.
+export function displayBranch(branch: string): string {
+  return branch.replace(/^refs\/heads\//, '')
+}
