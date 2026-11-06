@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { Pressable, Text, View } from 'react-native'
-import { Moon, Pin, PinOff } from 'lucide-react-native'
+import { Edit3, Moon, Pin, PinOff } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { useWorkspaceServer } from '../transport/workspace-server'
@@ -11,11 +12,12 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
-import { isWorktreePinned } from '../worktree/workspace-list-sections'
+import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
+import { WorkspaceRenameSheet } from './workspace-rename-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -33,6 +35,13 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     state
   } = controller
   const actionTarget = state.actionTarget
+  // Tied to the menu's row, so a menu closed elsewhere never reopens on the rename sheet.
+  const [renameTarget, setRenameTarget] = useState<Worktree | null>(null)
+  const closeActionSheet = () => {
+    setRenameTarget(null)
+    state.setConfirmDelete(null)
+    state.setActionTarget(null)
+  }
   // A server row's screens are offered by what that server supports, not the desktop.
   const actionServer = useWorkspaceServer({
     client,
@@ -47,13 +56,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
 
       {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
       <BottomDrawerModalHost>
-        <BottomDrawer
-          visible={actionTarget != null}
-          onClose={() => {
-            state.setConfirmDelete(null)
-            state.setActionTarget(null)
-          }}
-        >
+        <BottomDrawer visible={actionTarget != null} onClose={closeActionSheet}>
           {state.confirmDelete ? (
             <View>
               <View style={styles.confirmContent}>
@@ -102,6 +105,12 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                 </Pressable>
               </View>
             </View>
+          ) : actionTarget && renameTarget === actionTarget ? (
+            <WorkspaceRenameSheet
+              row={actionTarget}
+              rename={actions.renameWorktree}
+              onClose={closeActionSheet}
+            />
           ) : (
             <ActionSheetContent
               actions={
@@ -117,6 +126,12 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                         navigate: actions.navigateFromHostList,
                         onDone: () => state.setActionTarget(null)
                       }),
+                      {
+                        id: 'rename',
+                        label: t('hostScreen.hostScreenOverlays.rename', 'Rename'),
+                        icon: Edit3,
+                        onPress: () => setRenameTarget(actionTarget)
+                      },
                       // Server sleep is not offered yet; the desktop would sleep its own id.
                       ...(actionServer.server
                         ? []

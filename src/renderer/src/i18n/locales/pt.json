@@ -1799,7 +1799,9 @@
         "cb4d287238": "Nome do servidor",
         "3affe7de3a": "Cole uma URL de pareamento de um servidor Orca que este navegador possa acessar.",
         "e3bcd082ac": "Conectar ao Orca",
-        "mobileScopeRejected": "Este código QR concede acesso limitado (mobile). Para usar o app web completo, abra o link de acesso do navegador em Configurações → Ambientes de Execução → Compartilhar este servidor Orca → Novo Link."
+        "mobileScopeRejected": "Este código QR concede acesso limitado (mobile). Para usar o app web completo, abra o link de acesso do navegador em Configurações → Ambientes de Execução → Compartilhar este servidor Orca → Novo Link.",
+        "replaceSavedServer": "Este link conecta a um servidor diferente de \"{{name}}\" ({{endpoint}}). Conecte-se apenas se confiar no endpoint abaixo.",
+        "keepSavedServer": "Manter servidor salvo"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "O Histórico de Sessões do Agente não está disponível para este host de execução.",
@@ -6507,7 +6509,7 @@
             "agentsRead": "Receber avisos quando o status de um agente mudar"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
-          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede e executar outros programas.",
+          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
           "uiWarning": "Executa o código do publicador dentro do Orca para desenhar sua visualização. O Orca mostra o que ele pode acessar e pergunta antes de ativá-lo."
         },
         "SparsePresetSettingsSection": {
@@ -14904,7 +14906,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Precisa de revisão",
         "7698af5263": "Meus",
         "94f0339621": "Atribuído a mim",
         "c2268a9982": "Todos",
@@ -15004,6 +15005,8 @@
         "loadGitHubWorkFailed": "Falha ao carregar o trabalho do GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Minhas tarefas",
         "startWorkspaceFromMr": "Iniciar espaço de trabalho a partir da MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espaço de trabalho a partir da issue {{number}}",
@@ -18273,6 +18276,8 @@
               "25349b66fc": "Novo Arquivo Markdown",
               "784812ca24": "Abra uma aba de navegador no espaço de trabalho ativo.",
               "892bfa9339": "Nova Aba do Navegador",
+              "splitChatRight": "Dividir Chat à Direita",
+              "splitChatDown": "Dividir Chat para Baixo",
               "verbs": {
                 "newBrowser": "novo navegador",
                 "newBrowserTab": "nova aba do navegador",
@@ -18286,6 +18291,10 @@
                 "newTerminal": "novo terminal",
                 "newTerminalTab": "nova aba de terminal",
                 "newShell": "nova shell",
+                "splitChatRight": "dividir chat à direita",
+                "splitChatDown": "dividir chat para baixo",
+                "chatPaneRight": "painel de chat à direita",
+                "chatPaneBelow": "painel de chat abaixo",
                 "terminalTab": "aba de terminal",
                 "createWorktree": "criar worktree",
                 "addWorktree": "adicionar worktree",
@@ -18295,18 +18304,8 @@
                 "removeWorktree": "remover worktree",
                 "trashWorktree": "descartar worktree",
                 "addQuickCommand": "adicionar comando rápido",
-                "newQuickCommand": "novo comando rápido",
-                "splitChatRight": "dividir chat à direita",
-                "newChatRight": "novo chat à direita",
-                "chatPaneRight": "painel de chat à direita",
-                "splitChatDown": "dividir chat para baixo",
-                "newChatBelow": "novo chat abaixo",
-                "chatPaneBelow": "painel de chat abaixo"
-              },
-              "splitChatRight": "Dividir Chat à Direita",
-              "splitChatRightDescription": "Abra um novo chat em um painel dividido à direita.",
-              "splitChatDown": "Dividir Chat para Baixo",
-              "splitChatDownDescription": "Abra um novo chat em um painel dividido abaixo."
+                "newQuickCommand": "novo comando rápido"
+              }
             }
           },
           "palette": {
@@ -20082,6 +20081,9 @@
       "composer": {
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
+        "previewQueue": "Colocar na fila",
+        "previewSteer": "Orientar",
+        "previewSteerQueued": "Orientar o próximo",
         "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",

@@ -37,6 +37,8 @@ export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 
 export type MobileNativeChatSendIntent = {
   alternate?: true
   goal?: true
+  /** Continues this usage-limit cut; the host refuses it once the chat has moved on. */
+  usageLimitContinuationOfTurnItemId?: string
   onCreated?: (clientMessageId: string) => void
 }
 

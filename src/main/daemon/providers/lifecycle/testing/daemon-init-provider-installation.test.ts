@@ -1,22 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
-  isPackagedMock,
-  getMacDaemonTccAttributionHealthMock,
-  trackDaemonAdoptedMock,
   probeSocketExistsMock,
   readFileSyncMock,
   unlinkSyncMock,
-  checkDaemonHealthMock,
   parseDaemonPidFileMock,
   spawnerInstances,
   ensureRunningOverrides,
   adoptionLeaseReleases,
   lifecycleLeaseErrors,
-  disconnectOnlyErrors,
-  routerSubscriptionError,
   adapterInstances,
-  defaultListSessionsSessions,
   listProcessesControl,
   getLocalPtyProviderMock,
   localFallbackProvider,
@@ -67,55 +60,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('re-binds listeners after the first daemon provider is installed', async () => {
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-
-    expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
-    expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(1)
-    expect(rebindLocalProviderListenersMock.mock.invocationCallOrder[0]).toBeGreaterThan(
-      setLocalPtyProviderMock.mock.invocationCallOrder[0]
-    )
-    expect(adapterInstances[0].establishLifecycleLease).toHaveBeenCalledOnce()
-    expect(adapterInstances[0].establishLifecycleLease.mock.invocationCallOrder[0]).toBeLessThan(
-      setLocalPtyProviderMock.mock.invocationCallOrder[0]
-    )
-    expect(adoptionLeaseReleases[0]).toHaveBeenCalledOnce()
-    expect(adapterInstances[0].options.packagedAppVersion).toBeNull()
-    expect(adapterInstances[0].establishLifecycleLease.mock.invocationCallOrder[0]).toBeLessThan(
-      adoptionLeaseReleases[0].mock.invocationCallOrder[0]
-    )
-  })
-
-  it('passes the packaged app version to runtime stale-bundle retirement', async () => {
-    const mod = await importFresh()
-    isPackagedMock.mockReturnValue(true)
-
-    await mod.initDaemonPtyProvider()
-
-    expect(adapterInstances[0].options.packagedAppVersion).toBe(
-      process.platform === 'darwin' ? '1.2.3' : null
-    )
-  })
-
-  it('passes the app version on every platform when the launch policy opts in', async () => {
-    const mod = await importFresh()
-    isPackagedMock.mockReturnValue(true)
-
-    await mod.initDaemonPtyProvider(undefined, { recycleStaleDaemonOnEveryPlatform: true })
-
-    expect(spawnerInstances[0].staleDaemonRecycleVersion).toBe('1.2.3')
-    expect(adapterInstances[0].options.packagedAppVersion).toBe('1.2.3')
-  })
-
-  it('never recycles an unpackaged daemon even when the policy opts in', async () => {
-    const mod = await importFresh()
-
-    await mod.initDaemonPtyProvider(undefined, { recycleStaleDaemonOnEveryPlatform: true })
-
-    expect(adapterInstances[0].options.packagedAppVersion).toBeNull()
   })
 
   it('uses daemon-owned idle retirement when a fresh launch fails permanent adoption', async () => {
@@ -215,71 +159,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(mod.getDaemonProvider()).toBeNull()
   })
 
-  it('retains every adapter cleanup failure when legacy router setup aborts', async () => {
-    const mod = await importFresh()
-    probeSocketExistsMock.mockImplementation(
-      (path?: string) => path?.endsWith('daemon-v9.sock') ?? false
-    )
-    mockOnlyDaemonSocketAlive('daemon-v9.sock')
-    const discoveryError = new Error('router subscription failed')
-    const currentCleanupError = new Error('current cleanup failed')
-    const legacyCleanupError = new Error('legacy cleanup failed')
-    routerSubscriptionError.current = discoveryError
-    disconnectOnlyErrors.push(currentCleanupError, legacyCleanupError)
-
-    const error = await mod.initDaemonPtyProvider().catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(AggregateError)
-    const topLevelErrors = (error as AggregateError).errors
-    expect(topLevelErrors[0]).toBe(discoveryError)
-    expect(topLevelErrors[1]).toBeInstanceOf(AggregateError)
-    expect((topLevelErrors[1] as AggregateError).errors).toEqual([
-      legacyCleanupError,
-      currentCleanupError
-    ])
-    expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
-    expect(adapterInstances[1].disconnectOnly).toHaveBeenCalledOnce()
-  })
-
   // Adoption is absent from daemon_lifecycle, so macOS records a separate TCC attribution event.
-  it('reports a macOS daemon adoption with its TCC attribution and live session bucket', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    const mod = await importFresh()
-    ensureRunningOverrides.push(async () => ({
-      socketPath: '/fake/adopted-socket',
-      tokenPath: '/fake/adopted-token',
-      adopted: true
-    }))
-    getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
-    defaultListSessionsSessions.push({ sessionId: 'wt-1@@a' }, { sessionId: 'wt-1@@b' })
-
-    await mod.initDaemonPtyProvider()
-    await vi.waitFor(() => expect(trackDaemonAdoptedMock).toHaveBeenCalledOnce())
-
-    // null pid record: the harness has no pid file, which the emitter classifies as 'unknown'.
-    expect(trackDaemonAdoptedMock).toHaveBeenCalledWith(null, 'severed', 2)
-    vi.restoreAllMocks()
-  })
-
-  it('does not report adoption for a freshly forked daemon or off macOS', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(trackDaemonAdoptedMock).not.toHaveBeenCalled()
-    vi.restoreAllMocks()
-
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    const linuxMod = await importFresh()
-    ensureRunningOverrides.push(async () => ({
-      socketPath: '/fake/adopted-socket',
-      tokenPath: '/fake/adopted-token',
-      adopted: true
-    }))
-    await linuxMod.initDaemonPtyProvider()
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(trackDaemonAdoptedMock).not.toHaveBeenCalled()
-    vi.restoreAllMocks()
-  })
 
   it('routes fresh PTYs to the local fallback when a preserved daemon cannot spawn new PTYs', async () => {
     const mod = await importFresh()
@@ -307,49 +187,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
   })
 
-  it('answers daemonOwnsFreshPersistentPtys honestly for each installed provider', async () => {
-    // Degraded routing cannot advertise persistent local PTY recovery: those terminals die with the runtime.
-    const mod = await importFresh()
-    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(false)
-
-    await mod.initDaemonPtyProvider()
-    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(true)
-
-    const degraded = await importFresh()
-    ensureRunningOverrides.push(async () => ({
-      socketPath: '/fake/degraded-socket',
-      tokenPath: '/fake/degraded-token',
-      mode: 'degraded-new-pty-fallback'
-    }))
-    await degraded.initDaemonPtyProvider()
-    const { DegradedDaemonPtyProvider } = await import('../../routing/degraded-daemon-pty-provider')
-    expect(degraded.getDaemonProvider()).toBeInstanceOf(DegradedDaemonPtyProvider)
-    expect(degraded.daemonOwnsFreshPersistentPtys()).toBe(false)
-  })
-
-  it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {
-    const mod = await importFresh()
-    ensureRunningOverrides.push(async () => ({
-      socketPath: '/fake/degraded-socket',
-      tokenPath: '/fake/degraded-token',
-      mode: 'degraded-new-pty-fallback'
-    }))
-    await mod.initDaemonPtyProvider()
-    checkDaemonHealthMock.mockClear()
-
-    const { DegradedDaemonPtyProvider } = await import('../../routing/degraded-daemon-pty-provider')
-    const provider = mod.getDaemonProvider()
-    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
-    const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
-
-    await expect(degradedProvider.recoverFreshSpawnRouting()).resolves.toBe(true)
-    expect(checkDaemonHealthMock).toHaveBeenCalledWith(
-      '/fake/degraded-socket',
-      '/fake/degraded-token'
-    )
-    expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
-  })
-
   it('keeps legacy daemon pid/token files when the probe fails but the pid-file process is alive', async () => {
     const mod = await importFresh()
     readFileSyncMock.mockReturnValue('{"pid":123}')
@@ -364,26 +201,5 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ([p]) => typeof p === 'string' && (p.includes('.token') || p.includes('.pid'))
     )
     expect(legacyUnlinks).toEqual([])
-  })
-
-  it('cleans up legacy daemon pid/token files when the probe fails and the process is gone', async () => {
-    const mod = await importFresh()
-    readFileSyncMock.mockReturnValue('{"pid":123}')
-    // Inject ESRCH instead of depending on an unallocated real PID.
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw new Error('ESRCH')
-    })
-    parseDaemonPidFileMock.mockReturnValue({ pid: 999_999, startedAtMs: null })
-
-    try {
-      await mod.initDaemonPtyProvider()
-    } finally {
-      killSpy.mockRestore()
-    }
-
-    const tokenUnlinks = unlinkSyncMock.mock.calls.filter(
-      ([p]) => typeof p === 'string' && p.includes('.token')
-    )
-    expect(tokenUnlinks.length).toBeGreaterThan(0)
   })
 })

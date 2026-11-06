@@ -30,6 +30,38 @@ describe('AI Vault tab title sync', () => {
     stop()
   })
 
+  it('asks once for a sleeping title saved before titles carried a kind', async () => {
+    const store = makeState({
+      executionHostId: 'ssh:dev-box',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore',
+      sleeping: true,
+      aiVaultTitle: { agent: 'codex', sessionId: 'codex-session', title: 'Login cleanup' }
+    })
+    const resolveSessionTitles = vi.fn(async () => ({
+      titles: [
+        {
+          agent: 'codex' as const,
+          sessionId: 'codex-session',
+          title: 'Login cleanup',
+          kind: 'named' as const
+        }
+      ]
+    }))
+    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
+
+    await vi.waitFor(() =>
+      expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.kind).toBe('named')
+    )
+    const tab = store.getState().tabsByWorktree['worktree-1'][0] as TerminalTab
+    expect(resolveTerminalTabTitle({ ...tab, quickCommandLabel: 'Codex High' }, false)).toBe(
+      'Login cleanup'
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(resolveSessionTitles).toHaveBeenCalledTimes(1)
+    stop()
+  })
+
   it('drops a client result that returns after the paired host started naming the tab', async () => {
     const store = makeState({
       executionHostId: 'runtime:server-1',

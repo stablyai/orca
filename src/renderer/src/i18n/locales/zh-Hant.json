@@ -1110,7 +1110,9 @@
         "cb4d287238": "伺服器名稱",
         "3affe7de3a": "貼上來自該瀏覽器可以存取的 Orca 伺服器的配對 URL。",
         "e3bcd082ac": "連線到 Orca",
-        "mobileScopeRejected": "此 QR Code 僅授予受限（行動版）存取權限。若要使用完整網頁應用程式，請從設定 → 執行環境 → 分享此 Orca 伺服器 → 新連結開啟瀏覽器存取連結。"
+        "mobileScopeRejected": "此 QR Code 僅授予受限（行動版）存取權限。若要使用完整網頁應用程式，請從設定 → 執行環境 → 分享此 Orca 伺服器 → 新連結開啟瀏覽器存取連結。",
+        "replaceSavedServer": "此連結會連線到與「{{name}}」({{endpoint}}) 不同的伺服器。只有在你信任下方端點時才連線。",
+        "keepSavedServer": "保留已儲存的伺服器"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "此執行主機不支援代理程式工作階段歷史記錄。",
@@ -2971,7 +2973,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "待審查",
         "7698af5263": "我的",
         "94f0339621": "指派給我",
         "c2268a9982": "全部",
@@ -3066,6 +3067,8 @@
         "loadGitHubWorkFailed": "無法載入 GitHub 工作項目。",
         "gitlabViewIssues": "議題",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "所有人",
+        "gitlabInvolvementReviewing": "審閱中",
         "gitlabViewTodos": "我的待辦事項",
         "startWorkspaceFromMr": "從 MR {{number}} 啟動工作區",
         "startWorkspaceFromIssue": "從議題 {{number}} 啟動工作區",
@@ -11731,7 +11734,7 @@
             "terminalRun": "在你的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
-          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路並執行其他程式。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理）。",
           "uiWarning": "在 Orca 內執行發布者的程式碼來繪製其畫面。Orca 會顯示它能存取的內容，並在啟用前先詢問你。"
         },
         "PluginConsentProvenance": {
@@ -16916,6 +16919,8 @@
               "25349b66fc": "新的 Markdown 檔案",
               "784812ca24": "在使用中的工作區中開啟瀏覽器分頁。",
               "892bfa9339": "新瀏覽器分頁",
+              "splitChatRight": "向右分割聊天",
+              "splitChatDown": "向下分割聊天",
               "verbs": {
                 "newBrowser": "新瀏覽器",
                 "newBrowserTab": "新的瀏覽器分頁",
@@ -16929,6 +16934,10 @@
                 "newTerminal": "新終端機",
                 "newTerminalTab": "新的終端機分頁",
                 "newShell": "新 shell",
+                "splitChatRight": "向右分割聊天",
+                "splitChatDown": "向下分割聊天",
+                "chatPaneRight": "聊天窗格右側",
+                "chatPaneBelow": "下面的聊天窗格",
                 "terminalTab": "終端機分頁",
                 "createWorktree": "建立工作樹",
                 "addWorktree": "新增工作樹",
@@ -16938,18 +16947,8 @@
                 "removeWorktree": "刪除工作樹",
                 "trashWorktree": "將工作樹移至垃圾桶",
                 "addQuickCommand": "新增快速命令",
-                "newQuickCommand": "新的快速命令",
-                "splitChatRight": "向右分割聊天",
-                "newChatRight": "在右側新增聊天",
-                "chatPaneRight": "聊天窗格右側",
-                "splitChatDown": "向下分割聊天",
-                "newChatBelow": "在下方新增聊天",
-                "chatPaneBelow": "下面的聊天窗格"
-              },
-              "splitChatRight": "向右分割聊天",
-              "splitChatRightDescription": "在右側的分割窗格中開啟新聊天。",
-              "splitChatDown": "向下分割聊天",
-              "splitChatDownDescription": "在下方的分割窗格中開啟新聊天。"
+                "newQuickCommand": "新的快速命令"
+              }
             }
           },
           "palette": {
@@ -18905,6 +18904,8 @@
         "providerExitedRejection": "{{agent}} 在傳送此訊息前已停止。",
         "providerExitedAnswer": "{{agent}} 已停止，因此您的回答未傳送。傳送訊息以繼續。",
         "modelUnavailable": "{{agent}} 無法使用 {{detail}}。請選擇其他模型並重新傳送。",
+        "modelUnavailableUpdate": "{{agent}} 無法使用 {{detail}}。請將 {{agent}} 更新到 {{minimumVersion}} 或更新版本，以便重新啟動後繼續使用；或選擇其他模型並重新傳送。",
+        "modelNotSelected": "{{agent}} 沒有選擇模型。請檢查模型選擇和 {{agent}} 登入狀態，然後重新傳送。",
         "providerRejected": "{{agent}} 未接受此訊息。",
         "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
         "attachmentEmpty": "此訊息中的一張圖片為空，因此訊息未傳送。",
@@ -19108,6 +19109,9 @@
       "composer": {
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
+        "previewQueue": "加入佇列",
+        "previewSteer": "引導",
+        "previewSteerQueued": "引導下一則",
         "alternateQueueHint": "{{shortcut}} 加入佇列",
         "noPty": "沒有作用中的終端機，請切回終端機以重新連線。",
         "locked": "輸入正被另一台裝置佔用。",

@@ -330,6 +330,18 @@ jobs:
           owner: stablyai
           repositories: orca-daily
 
+      # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+      - name: Gate the update manifest on the minimum macOS
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          gh release upload "$TAG" dist/*-mac.yml --repo "$DAILY_REPO" --clobber
+
       # Verify latest-mac.yml before exposing its release to prevent picker downloads returning 404.
       - name: Verify update manifest published
         if: steps.freshness.outputs.should_build == 'true'

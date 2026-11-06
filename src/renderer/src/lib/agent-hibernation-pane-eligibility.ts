@@ -11,6 +11,7 @@ import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isLiveResumeAnchorForCompletedAgent } from '../../../shared/agent-session/lifecycle/live-resume-anchor-record'
 import { agentTurnEndedUncleanly } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+import type { RuntimeTerminalAttention } from '../../../shared/runtime-terminal-contracts'
 
 export type EligiblePane = {
   paneKey: string
@@ -64,10 +65,11 @@ export function getEligiblePane(args: {
   livePtyIds: Set<string>
   sleepingAgentSessionsByPaneKey: AgentHibernationPlannerSnapshot['sleepingAgentSessionsByPaneKey']
   lastTerminalInputAtByPaneKey: AgentHibernationPlannerSnapshot['lastTerminalInputAtByPaneKey']
+  attentionByPtyId: Record<string, RuntimeTerminalAttention | undefined>
   foregroundTerminalLastSeenAtByTabId: AgentHibernationPlannerSnapshot['foregroundTerminalLastSeenAtByTabId']
   ptyBindingFirstSeenAtByPaneKey: Record<string, number | undefined>
   boundaryResolvedAtByPaneKey: Record<string, number | undefined>
-  mobileLockedPtyIds: Set<string>
+  inUsePtyIds: Set<string>
   now: number
   idleMs: number
 }): EligiblePane | null {
@@ -81,7 +83,7 @@ export function getEligiblePane(args: {
     foregroundTerminalLastSeenAtByTabId,
     ptyBindingFirstSeenAtByPaneKey,
     boundaryResolvedAtByPaneKey,
-    mobileLockedPtyIds
+    inUsePtyIds
   } = args
   const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
   // Every resumable agent has a live anchor after completion; it is not a sleep capture and must not block hibernation.
@@ -124,22 +126,23 @@ export function getEligiblePane(args: {
   if (args.now - effectiveIdleStart < args.idleMs) {
     return null
   }
-  const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
-  // Killing the PTY loses drafts/queued input typed during working too; input-after-done alone misses them.
-  if (
-    typeof inputAt === 'number' &&
-    Number.isFinite(inputAt) &&
-    lastInputBlocksHibernation(entry, inputAt)
-  ) {
-    return null
-  }
   const livePane = getPaneLivePtyId(entry, layout)
   if (!livePane) {
     return null
   }
   const { leafId, ptyId } = livePane
   const runtimePtyId = toRuntimePtyId(ptyId)
-  if (!livePtyIds.has(runtimePtyId) || mobileLockedPtyIds.has(runtimePtyId)) {
+  const attention = args.attentionByPtyId[runtimePtyId]
+  if (!livePtyIds.has(runtimePtyId) || inUsePtyIds.has(runtimePtyId) || attention?.shownRemotely) {
+    return null
+  }
+  // Input from a paired client or phone reaches the host, not this window's own input stamps.
+  const inputAt = latestFinite(
+    lastTerminalInputAtByPaneKey[entry.paneKey],
+    attention?.lastInputAt ?? undefined
+  )
+  // Killing the PTY loses drafts/queued input typed during working too; input-after-done alone misses them.
+  if (inputAt !== null && lastInputBlocksHibernation(entry, inputAt)) {
     return null
   }
   return {
@@ -155,6 +158,13 @@ export function getEligiblePane(args: {
     state: entry.state,
     stateStartedAt: entry.stateStartedAt,
     effectiveIdleStart,
-    inputAt: typeof inputAt === 'number' && Number.isFinite(inputAt) ? inputAt : 0
+    inputAt: inputAt ?? 0
   }
+}
+
+function latestFinite(...values: (number | undefined)[]): number | null {
+  const finite = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value)
+  )
+  return finite.length > 0 ? Math.max(...finite) : null
 }

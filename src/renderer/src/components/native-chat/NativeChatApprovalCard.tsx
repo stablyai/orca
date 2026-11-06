@@ -1,6 +1,8 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { useRef } from 'react'
-import { ShieldQuestion, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { approvalDetailPreview } from '../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
@@ -37,6 +39,7 @@ export function NativeChatApprovalCard({
   shouldFocus = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
@@ -96,6 +99,7 @@ export function NativeChatApprovalCard({
             </div>
             {hasContext ? (
               <div
+                ref={contentRef}
                 data-native-chat-approval-content="true"
                 tabIndex={0}
                 className="min-h-0 max-h-72 shrink space-y-2 overflow-auto text-sm text-muted-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -140,13 +144,10 @@ export function NativeChatApprovalCard({
                     ) : null}
                   </div>
                 ) : approval.detail ? (
-                  <div
-                    data-native-chat-approval-detail="true"
-                    data-native-chat-code-content
-                    className="whitespace-pre-wrap break-words font-mono text-chat-code"
-                  >
-                    {approval.detail}
-                  </div>
+                  <NativeChatApprovalDetail
+                    detail={approval.detail}
+                    scrollContainerRef={contentRef}
+                  />
                 ) : null}
                 {newerSubject ? (
                   <p data-native-chat-approval-needs-newer-orca="true" className="break-words">
@@ -180,5 +181,64 @@ export function NativeChatApprovalCard({
         </div>
       </div>
     </SecuritySurface>
+  )
+}
+
+function NativeChatApprovalDetail({
+  detail,
+  scrollContainerRef
+}: {
+  detail: string
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+}): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const preview = approvalDetailPreview(detail)
+  const hasMore = preview !== detail
+  const textClassName = 'whitespace-pre-wrap break-words font-mono text-chat-code'
+  return (
+    <Collapsible
+      open={expanded}
+      onOpenChange={(open) => {
+        const scroller = scrollContainerRef.current
+        const trigger = triggerRef.current
+        if (!open && scroller && trigger) {
+          const rowBottom =
+            trigger.getBoundingClientRect().bottom -
+            scroller.getBoundingClientRect().top -
+            scroller.clientTop +
+            scroller.scrollTop
+          scroller.scrollTop = Math.max(0, rowBottom - scroller.clientHeight)
+        }
+        setExpanded(open)
+      }}
+    >
+      <div className="space-y-2">
+        {hasMore ? (
+          <CollapsibleTrigger ref={triggerRef} variant="row">
+            {translate('components.native-chat.notices.details', 'Details')}
+            <ChevronDown className="size-4 group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+        ) : null}
+        {!expanded ? (
+          <div
+            data-native-chat-approval-detail="true"
+            data-native-chat-code-content
+            className={textClassName}
+          >
+            {preview}
+          </div>
+        ) : null}
+        <CollapsibleContent>
+          <div
+            data-native-chat-approval-detail="true"
+            data-native-chat-code-content
+            className={textClassName}
+          >
+            {detail}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   )
 }

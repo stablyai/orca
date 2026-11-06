@@ -2,10 +2,13 @@ import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-sco
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { getOptionalWorktreeSelector } from '../selectors'
+import { callerOrcaClient } from './worktree-parent-fields'
 
 export type CreateParentSelector = {
   parentWorktree?: string
   parentWorkspace?: string
+  /** active/current against a server: the parent is on this machine, not the server. */
+  onCallerMachine?: true
 }
 
 const CREATE_PARENT_CONFLICT_MESSAGE = 'Choose either one parent selector or --no-parent.'
@@ -47,6 +50,15 @@ export async function resolveCreateParentSelector(
     return { parentWorkspace }
   }
 
+  if (client.isRemote && (rawParentWorktree === 'active' || rawParentWorktree === 'current')) {
+    const callerParent = await getOptionalWorktreeSelector(
+      flags,
+      'parent-worktree',
+      cwd,
+      callerOrcaClient(client)
+    )
+    return { parentWorktree: callerParent, onCallerMachine: true }
+  }
   const parentWorktree = await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
   const resolvedParentWorkspace = parentWorktree
     ? getWorkspaceKeyParentSelector(parentWorktree)

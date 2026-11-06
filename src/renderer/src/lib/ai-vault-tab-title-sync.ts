@@ -1,4 +1,5 @@
 import type {
+  AiVaultSessionTitle,
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
@@ -58,15 +59,23 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
   const lastSettledAttemptAt = new Map<string, number>()
   const dirty = new Set<string>()
 
-  const writeTitle = (request: AiVaultTitleRequest, title: string | null): void => {
+  const writeTitle = (
+    request: AiVaultTitleRequest,
+    title: Pick<AiVaultSessionTitle, 'title' | 'kind'> | null
+  ): void => {
     writing = true
     try {
-      dependencies
-        .getState()
-        .setAiVaultTabTitle(
-          request.tabId,
-          title ? { agent: request.agent, sessionId: request.providerSession.id, title } : null
-        )
+      dependencies.getState().setAiVaultTabTitle(
+        request.tabId,
+        title
+          ? {
+              agent: request.agent,
+              sessionId: request.providerSession.id,
+              title: title.title,
+              ...(title.kind ? { kind: title.kind } : {})
+            }
+          : null
+      )
     } finally {
       writing = false
     }
@@ -87,13 +96,13 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     if (stopped) {
       return
     }
-    const titleByIdentity = new Map<string, string>()
+    const titleByIdentity = new Map<string, Pick<AiVaultSessionTitle, 'title' | 'kind'>>()
     for (const title of result.titles) {
       if (title.title.trim()) {
-        titleByIdentity.set(
-          `${first.executionHostId}\0${title.agent}\0${title.sessionId}`,
-          title.title.trim()
-        )
+        titleByIdentity.set(`${first.executionHostId}\0${title.agent}\0${title.sessionId}`, {
+          title: title.title.trim(),
+          kind: title.kind
+        })
       }
     }
     const currentByTabId = new Map(
@@ -156,6 +165,8 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         !identityMatches ||
         !stored?.title.trim() ||
         (request.refresh && last === undefined) ||
+        // Titles saved before they carried a kind are asked for once, so a sleeping session's name can outrank its quick-command label.
+        (!stored?.kind && last === undefined) ||
         (request.refresh &&
           (dirty.has(aiVaultTitleRequestKey(request)) ||
             now - last! >=

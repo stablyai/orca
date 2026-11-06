@@ -17,7 +17,7 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
-import { attachMutationRecovery } from './client-error-recovery'
+import { attachMutationRecovery, isRequestUnsent } from './client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
@@ -197,7 +197,8 @@ export class RuntimeClient {
         options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
-      throw recover(error, metadata.runtimeId ?? null)
+      // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
+      throw isRequestUnsent(error) ? error : recover(error, metadata.runtimeId ?? null)
     }
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)

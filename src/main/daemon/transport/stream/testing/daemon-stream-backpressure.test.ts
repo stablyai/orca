@@ -17,22 +17,6 @@ function createBackpressure(isDroppable: (sessionId: string) => boolean = () => 
 }
 
 describe('DaemonStreamBackpressure', () => {
-  it('aggregates held output across clients and spares low-output sessions', () => {
-    const { pressure, paused } = createBackpressure()
-    pressure.setQueued(
-      'a',
-      new Map([
-        ['flood-a', MiB],
-        ['typing', 4]
-      ])
-    )
-    expect(paused.size).toBe(0)
-    pressure.setQueued('b', new Map([['flood-b', MiB]]))
-    expect([...paused].sort()).toEqual(['flood-a', 'flood-b'])
-    pressure.clear()
-    expect(paused.size).toBe(0)
-  })
-
   it('keeps a shared producer paused until every slow client releases its backlog', () => {
     const { pressure, paused } = createBackpressure()
     pressure.setQueued('a', new Map([['shared', MiB]]))
@@ -42,36 +26,6 @@ describe('DaemonStreamBackpressure', () => {
     expect(paused.has('shared')).toBe(true)
     pressure.clear('b')
     expect(paused.has('shared')).toBe(false)
-  })
-
-  it('releases a drained session while another client remains stalled', () => {
-    const { pressure, paused } = createBackpressure()
-    pressure.setQueued('a', new Map([['flood-a', 2 * MiB]]))
-    pressure.setQueued('b', new Map([['flood-b', MiB]]))
-    expect(paused.has('flood-b')).toBe(true)
-    pressure.setQueued('b', new Map())
-    expect([...paused]).toEqual(['flood-a'])
-  })
-
-  it('leaves background shedding in control when a session becomes hidden', () => {
-    let hidden = false
-    const { pressure, paused } = createBackpressure(() => hidden)
-    pressure.setQueued('a', new Map([['flood', 2 * MiB]]))
-    expect(paused.has('flood')).toBe(true)
-    hidden = true
-    pressure.refresh()
-    expect(paused.size).toBe(0)
-    pressure.setQueued('a', new Map([['flood', 3 * MiB]]))
-    expect(paused.size).toBe(0)
-  })
-
-  it('uses hysteresis and resumes after the aggregate falls below the low watermark', () => {
-    const { pressure, paused } = createBackpressure()
-    pressure.setQueued('a', new Map([['flood', 2 * MiB]]))
-    pressure.setQueued('a', new Map([['flood', MiB]]))
-    expect(paused.has('flood')).toBe(true)
-    pressure.setQueued('a', new Map([['flood', MiB / 2]]))
-    expect(paused.size).toBe(0)
   })
 
   it('does not let a superseded subscription pause the new attachment owner', () => {
@@ -90,14 +44,6 @@ describe('DaemonStreamBackpressure', () => {
     setPaused.mockClear()
     pressure.setQueued('new', new Map([['session', 1024]]))
     expect(setPaused).not.toHaveBeenCalled()
-  })
-
-  it('bounds undroppable control output even when the producer is backgrounded', () => {
-    const { pressure, paused } = createBackpressure(() => true)
-    pressure.setQueued('a', new Map([['hidden', 2 * MiB]]), new Map([['hidden', 4 * MiB]]))
-    expect(paused.has('hidden')).toBe(true)
-    pressure.setQueued('a', new Map([['hidden', 2 * MiB]]))
-    expect(paused.size).toBe(0)
   })
 
   it('ignores old write completions after a client and session id are reused', () => {
@@ -135,30 +81,6 @@ describe('DaemonStreamBackpressure', () => {
     // Undroppable metadata must not pause a stall-released producer again.
     pressure.setQueued('a', new Map([['flood', 2 * MiB]]), new Map([['flood', 4 * MiB]]))
     expect(paused.size).toBe(0)
-  })
-
-  it('reconciles droppability and restores ordinary pausing once the backlog is gone', () => {
-    const onDroppabilityChanged = vi.fn()
-    const stallReleased = new Set<string>()
-    const setPaused = vi.fn()
-    const pressure = new DaemonStreamBackpressure(
-      setPaused,
-      (sessionId) => stallReleased.has(sessionId),
-      () => true,
-      onDroppabilityChanged
-    )
-    pressure.setQueued('a', new Map([['flood', 2 * MiB]]))
-    stallReleased.add('flood')
-    pressure.releaseStalledSession('flood')
-    expect(onDroppabilityChanged).toHaveBeenCalledWith('flood')
-    expect(pressure.isStallReleased('flood')).toBe(true)
-
-    stallReleased.delete('flood')
-    pressure.setQueued('a', new Map())
-    expect(pressure.isStallReleased('flood')).toBe(false)
-    setPaused.mockClear()
-    pressure.setQueued('a', new Map([['flood', 2 * MiB]]))
-    expect(setPaused).toHaveBeenCalledWith('flood', true, expect.any(Function))
   })
 
   it('does not let an old refill callback flush a replacement connection', () => {

@@ -14,6 +14,15 @@ export function getHostHeaderDetail(
       isWarning: true
     }
   }
+  if (row.health === 'blocked' && row.blockedReason === 'server-replaced') {
+    return {
+      text: translate(
+        'auto.components.sidebar.WorktreeList.hostServerReplaced',
+        'Different server: forget it, then connect'
+      ),
+      isWarning: true
+    }
+  }
   // Warn compactly when compatibility blocks a host.
   if (row.health === 'blocked') {
     return {

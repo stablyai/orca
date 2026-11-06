@@ -1138,7 +1138,9 @@
         "cb4d287238": "Sunucu adı",
         "3affe7de3a": "Bu tarayıcının ulaşabildiği bir Orca sunucusundan eşleştirme URL'si yapıştırın.",
         "e3bcd082ac": "Orca'ya Bağlan",
-        "mobileScopeRejected": "Bu QR kodu sınırlı (mobil) erişim sağlar. Tam web uygulamasını kullanmak için Ayarlar → Çalışma Zamanı Ortamları → Bu Orca Sunucusunu Paylaş → Yeni Bağlantı üzerinden tarayıcı erişim bağlantısını açın."
+        "mobileScopeRejected": "Bu QR kodu sınırlı (mobil) erişim sağlar. Tam web uygulamasını kullanmak için Ayarlar → Çalışma Zamanı Ortamları → Bu Orca Sunucusunu Paylaş → Yeni Bağlantı üzerinden tarayıcı erişim bağlantısını açın.",
+        "replaceSavedServer": "Bu bağlantı \"{{name}}\" ({{endpoint}}) dışında farklı bir sunucuya bağlanır. Yalnızca aşağıdaki uç noktaya güveniyorsanız bağlanın.",
+        "keepSavedServer": "Kayıtlı sunucuyu koru"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Bu çalıştırma sunucusu için Ajan Oturum Geçmişi kullanılamıyor.",
@@ -3012,7 +3014,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "İnceleme gerekiyor",
         "7698af5263": "Benimkiler",
         "94f0339621": "Bana atananlar",
         "c2268a9982": "Tümü",
@@ -3108,6 +3109,8 @@
         "loadGitHubWorkFailed": "GitHub işleri yüklenemedi.",
         "gitlabViewIssues": "Sorunlar",
         "gitlabViewMrs": "MR'ler",
+        "gitlabInvolvementEveryone": "Herkes",
+        "gitlabInvolvementReviewing": "İncelemelerim",
         "gitlabViewTodos": "Yapılacaklarım",
         "startWorkspaceFromMr": "MR {{number}} üzerinden çalışma alanı başlat",
         "startWorkspaceFromIssue": "Sorun {{number}} üzerinden çalışma alanı başlat",
@@ -11894,7 +11897,7 @@
             "terminalRun": "Terminallerinizde komut çalıştırma (SSH dahil)"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir ve başka programlar çalıştırabilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayımcının kodunu Orca içinde çalıştırır. Orca neye erişebildiğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
@@ -17130,6 +17133,8 @@
               "25349b66fc": "Yeni Markdown Dosyası",
               "784812ca24": "Aktif çalışma alanında bir tarayıcı sekmesi açın.",
               "892bfa9339": "Yeni Tarayıcı Sekmesi",
+              "splitChatRight": "Sohbeti Sağa Böl",
+              "splitChatDown": "Sohbeti Aşağı Böl",
               "verbs": {
                 "newBrowser": "yeni tarayıcı",
                 "newBrowserTab": "yeni tarayıcı sekmesi",
@@ -17143,6 +17148,10 @@
                 "newTerminal": "yeni terminal",
                 "newTerminalTab": "yeni terminal sekmesi",
                 "newShell": "yeni shell",
+                "splitChatRight": "sohbeti sağa böl",
+                "splitChatDown": "sohbeti aşağı böl",
+                "chatPaneRight": "sohbet paneli sağda",
+                "chatPaneBelow": "sohbet paneli altta",
                 "terminalTab": "terminal sekmesi",
                 "createWorktree": "worktree oluştur",
                 "addWorktree": "worktree ekle",
@@ -17152,18 +17161,8 @@
                 "removeWorktree": "worktree kaldır",
                 "trashWorktree": "worktree'yi çöpe at",
                 "addQuickCommand": "hızlı komut ekle",
-                "newQuickCommand": "yeni hızlı komut",
-                "splitChatRight": "sohbeti sağa böl",
-                "newChatRight": "sağda yeni sohbet",
-                "chatPaneRight": "sohbet paneli sağda",
-                "splitChatDown": "sohbeti aşağı böl",
-                "newChatBelow": "altta yeni sohbet",
-                "chatPaneBelow": "sohbet paneli altta"
-              },
-              "splitChatRight": "Sohbeti Sağa Böl",
-              "splitChatRightDescription": "Sağda ayrı bir bölmede yeni bir sohbet açın.",
-              "splitChatDown": "Sohbeti Aşağı Böl",
-              "splitChatDownDescription": "Altta ayrı bir bölmede yeni bir sohbet açın."
+                "newQuickCommand": "yeni hızlı komut"
+              }
             }
           },
           "palette": {
@@ -19354,6 +19353,9 @@
       "composer": {
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
+        "previewQueue": "Sıraya al",
+        "previewSteer": "Yönlendir",
+        "previewSteerQueued": "Sıradakini yönlendir",
         "alternateQueueHint": "Sıraya almak için {{shortcut}}",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",

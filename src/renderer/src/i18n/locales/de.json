@@ -1160,7 +1160,9 @@
         "cb4d287238": "Servername",
         "3affe7de3a": "Eine Kopplungs-URL von einem Orca-Server einfügen, den dieser Browser erreichen kann.",
         "e3bcd082ac": "Mit Orca verbinden",
-        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen."
+        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen.",
+        "replaceSavedServer": "Dieser Link verbindet mit einem anderen Server als „{{name}}“ ({{endpoint}}). Verbinde dich nur, wenn du dem Endpunkt unten vertraust.",
+        "keepSavedServer": "Gespeicherten Server behalten"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Der Agenten-Sitzungsverlauf ist für diesen Ausführungshost nicht verfügbar.",
@@ -3034,7 +3036,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Review erforderlich",
         "7698af5263": "Eigene",
         "94f0339621": "Mir zugewiesen",
         "c2268a9982": "Alle",
@@ -3130,6 +3131,8 @@
         "loadGitHubWorkFailed": "GitHub-Aufgaben konnten nicht geladen werden.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Alle Personen",
+        "gitlabInvolvementReviewing": "Als Reviewer",
         "gitlabViewTodos": "Meine Aufgaben",
         "startWorkspaceFromMr": "Arbeitsbereich aus MR {{number}} starten",
         "startWorkspaceFromIssue": "Arbeitsbereich aus Issue {{number}} starten",
@@ -11908,7 +11911,7 @@
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
-          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen und andere Programme ausführen.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
           "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
         },
         "PluginConsentProvenance": {
@@ -17144,6 +17147,8 @@
               "25349b66fc": "Markdown-Datei erstellen",
               "784812ca24": "Einen Browser-Tab im aktiven Arbeitsbereich öffnen.",
               "892bfa9339": "Neuen Browser-Tab öffnen",
+              "splitChatRight": "Chat nach rechts teilen",
+              "splitChatDown": "Chat nach unten teilen",
               "verbs": {
                 "newBrowser": "Neuen Browser öffnen",
                 "newBrowserTab": "Neuen Browser-Tab öffnen",
@@ -17157,6 +17162,10 @@
                 "newTerminal": "Neues Terminal öffnen",
                 "newTerminalTab": "Neuen Terminal-Tab öffnen",
                 "newShell": "Neue Shell öffnen",
+                "splitChatRight": "Chat nach rechts teilen",
+                "splitChatDown": "Chat nach unten teilen",
+                "chatPaneRight": "Chat-Bereich rechts",
+                "chatPaneBelow": "Chat-Bereich darunter",
                 "terminalTab": "Terminal-Tab",
                 "createWorktree": "Worktree erstellen",
                 "addWorktree": "Worktree hinzufügen",
@@ -17166,18 +17175,8 @@
                 "removeWorktree": "Worktree entfernen",
                 "trashWorktree": "Worktree in den Papierkorb verschieben",
                 "addQuickCommand": "Schnellbefehl hinzufügen",
-                "newQuickCommand": "Neuen Schnellbefehl erstellen",
-                "splitChatRight": "Chat nach rechts teilen",
-                "newChatRight": "Neuen Chat rechts öffnen",
-                "chatPaneRight": "Chat-Bereich rechts",
-                "splitChatDown": "Chat nach unten teilen",
-                "newChatBelow": "Neuen Chat darunter öffnen",
-                "chatPaneBelow": "Chat-Bereich darunter"
-              },
-              "splitChatRight": "Chat nach rechts teilen",
-              "splitChatRightDescription": "Einen neuen Chat in einem geteilten Bereich auf der rechten Seite öffnen.",
-              "splitChatDown": "Chat nach unten teilen",
-              "splitChatDownDescription": "Einen neuen Chat in einem geteilten Bereich darunter öffnen."
+                "newQuickCommand": "Neuen Schnellbefehl erstellen"
+              }
             }
           },
           "palette": {
@@ -19367,6 +19366,9 @@
       "composer": {
         "send": "Senden",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
+        "previewQueue": "Einreihen",
+        "previewSteer": "Steuern",
+        "previewSteerQueued": "Wartende steuern",
         "alternateQueueHint": "{{shortcut}} zum Einreihen",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",
         "locked": "Die Eingabe wird von einem anderen Gerät gesteuert.",

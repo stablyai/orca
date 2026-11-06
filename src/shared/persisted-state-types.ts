@@ -84,6 +84,9 @@ export type PersistedState = {
   worktreeIdentityAliases?: Record<string, string[]>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
+  /** Parents in other stores, as saved: entries this build can't read are kept, never trusted.
+   * Separate so older builds' same-store cleanup never reads them; read through validCrossStoreLineage. */
+  crossStoreLineageByChildKey?: Record<string, unknown>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {
