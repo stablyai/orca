@@ -83,6 +83,7 @@ function seed(title: string) {
 }
 
 function render(gitBranch: string, sheetRequest: PrTabSheetRequest | null) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: carries every MobilePrTab member the sheets and Create read.
   const tab = {
     client: {},
     worktreeId: 'wt-1',
@@ -102,7 +103,11 @@ function render(gitBranch: string, sheetRequest: PrTabSheetRequest | null) {
 }
 
 function createRequest(id: number): PrTabSheetRequest {
-  return { kind: 'createPr', scope: 'branch', id } as unknown as PrTabSheetRequest
+  return {
+    kind: 'createPr',
+    scope: { client: null, worktreeId: 'wt-1', branch: 'feature/a', resource: null },
+    id
+  }
 }
 
 async function settle() {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import { GitMerge } from 'lucide-react-native'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -22,7 +22,6 @@ import {
 } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
-import { prSidebarResourceKey } from '../../session/mobile-pr-sidebar-state'
 
 type PrEditKept = { key: string; base: string; text: string }
 
@@ -32,7 +31,8 @@ export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
   const t = useMobileTranslation()
   // Each sheet unmounts on Cancel; typed text waits here for the next open.
   const [createKept, setCreateKept] = useState<PrCreateKept | null>(null)
-  const [editKept, setEditKept] = useState<PrEditKept | null>(null)
+  const [titleKept, setTitleKept] = useState<PrEditKept | null>(null)
+  const [bodyKept, setBodyKept] = useState<PrEditKept | null>(null)
   return (
     <>
       <KeyedBottomDrawer
@@ -60,8 +60,8 @@ export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
                   tab={tab}
                   request={request}
                   field="title"
-                  kept={editKept}
-                  onKeep={setEditKept}
+                  kept={titleKept}
+                  onKeep={setTitleKept}
                 />
               )
             case 'editDescription':
@@ -70,8 +70,8 @@ export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
                   tab={tab}
                   request={request}
                   field="body"
-                  kept={editKept}
-                  onKeep={setEditKept}
+                  kept={bodyKept}
+                  onKeep={setBodyKept}
                 />
               )
             case 'createPr':
@@ -198,11 +198,31 @@ function PrEditTextSheet({
   const details = livePrDetails(data?.details ?? null)
   const current =
     field === 'title' ? (details?.item.title ?? data?.pr.title ?? '') : (details?.body ?? '')
-  const keepKey = data ? `${prSidebarResourceKey(data.pr)}\u0000${field}` : null
+  const keepKey = request.scope.resource
   // An edit typed against text the PR still has comes back; once the PR text changes it would revert someone's edit.
   const [base] = useState(current)
   const [draft, setDraft] = useState(() =>
     kept && kept.key === keepKey && kept.base === current ? kept.text : current
+  )
+  // Closing keeps a changed, unsaved draft for the next open, and drops this PR's kept one otherwise.
+  const savedRef = useRef(false)
+  const closeRef = useRef({ keepKey, base, draft, kept, onKeep })
+  useLayoutEffect(() => {
+    closeRef.current = { keepKey, base, draft, kept, onKeep }
+  })
+  useEffect(
+    () => () => {
+      const close = closeRef.current
+      if (!close.keepKey) {
+        return
+      }
+      if (!savedRef.current && close.draft !== close.base) {
+        close.onKeep({ key: close.keepKey, base: close.base, text: close.draft })
+      } else if (close.kept?.key === close.keepKey) {
+        close.onKeep(null)
+      }
+    },
+    []
   )
   const { textAction } = tab
   const save = async () => {
@@ -210,9 +230,7 @@ function PrEditTextSheet({
       return
     }
     if (await textAction.save(field, draft, current)) {
-      if (kept?.key === keepKey) {
-        onKeep(null)
-      }
+      savedRef.current = true
       tab.closeSheetIf(request)
     }
   }
@@ -243,9 +261,6 @@ function PrEditTextSheet({
           onChangeText={(value) => {
             textAction.touch()
             setDraft(value)
-            if (keepKey) {
-              onKeep({ key: keepKey, base, text: value })
-            }
           }}
           editable={!textAction.saving}
           autoFocus

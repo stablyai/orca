@@ -54,8 +54,8 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
     setHeld(loaded)
   }
   const data = loaded ?? (reloading && held ? held : live)
-  // Held content takes typing but not writes: the tab's actions have no PR to write to until it loads again.
-  const holding = data !== live
+  // While the tab has no PR its actions have none to write to, so held content takes typing but not writes.
+  const holding = live === null && data !== null
   const details = livePrDetails(data?.details ?? null)
   const now = useNow(60_000)
   const groups = useMemo(() => groupPRComments(details?.comments ?? []), [details])
@@ -101,8 +101,8 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
         ? {
             reply: holding ? refuseWrite : commentActions.reply,
             toggleResolve: holding ? refuseWrite : commentActions.toggleResolve,
-            editComment: holding ? refuseWrite : commentActions.editComment,
-            deleteComment: holding ? refuseWrite : commentActions.deleteComment,
+            editComment: commentActions.editComment,
+            deleteComment: commentActions.deleteComment,
             isReplyBusy: commentActions.isReplyBusy,
             isResolveBusy: commentActions.isResolveBusy,
             isEditBusy: commentActions.isEditBusy,
