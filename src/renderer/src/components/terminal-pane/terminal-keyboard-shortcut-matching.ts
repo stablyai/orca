@@ -70,7 +70,12 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
-export type SearchState = { query: string; caseSensitive: boolean; regex: boolean }
+export type SearchState = {
+  query: string
+  caseSensitive: boolean
+  regex: boolean
+  wholeWord?: boolean
+}
 export type SearchNavigationDirection = 'next' | 'previous'
 
 export function matchSearchNavigate(
