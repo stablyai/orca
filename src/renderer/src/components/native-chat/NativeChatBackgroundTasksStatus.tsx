@@ -9,6 +9,7 @@ import type { AgentChildWorkView } from '../../../../shared/agent-status/child-w
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 import { useNow } from '@/hooks/use-now'
 import {
   backgroundTasksHeaderText,
@@ -72,29 +73,52 @@ function BackgroundTaskRow(props: {
   supportsTaskStop: boolean
   stoppingTaskIds: ReadonlySet<string>
   onStop: (taskId: string) => void
+  onShowAgent?: (providerId: string) => void
 }): React.JSX.Element {
   const { row, now } = props
   const Icon = KIND_ICONS[row.kind]
   const meta = backgroundTaskRowMeta(row, now)
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
+  // Only an agent's activity streams into the conversation, filed under the provider's id.
+  const shownId = row.kind === 'agent' && props.onShowAgent ? row.providerId : undefined
+  const content = (
+    <>
+      <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
+      {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
+      <AgentChildRowContent
+        row={row}
+        now={now}
+        leadClassName="font-medium text-foreground"
+        trailClassName="text-muted-foreground"
+        separator=" · "
+        dotTitle={null}
+      />
+      {meta ? (
+        <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
+          {meta}
+        </span>
+      ) : null}
+    </>
+  )
   return (
     <>
       <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
-        <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
-        {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
-        <AgentChildRowContent
-          row={row}
-          now={now}
-          leadClassName="font-medium text-foreground"
-          trailClassName="text-muted-foreground"
-          separator=" · "
-          dotTitle={null}
-        />
-        {meta ? (
-          <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
-            {meta}
-          </span>
-        ) : null}
+        {shownId !== undefined ? (
+          <button
+            type="button"
+            className="-mx-1 flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={translate(
+              'components.native-chat.backgroundTasks.showAgent',
+              'Show {{value0}} in the conversation',
+              { value0: agentChildRowName(row) }
+            )}
+            onClick={() => props.onShowAgent?.(shownId)}
+          >
+            {content}
+          </button>
+        ) : (
+          content
+        )}
         {stopId !== null ? (
           <Button
             type="button"
@@ -120,6 +144,7 @@ function BackgroundTaskRow(props: {
                 supportsTaskStop={props.supportsTaskStop}
                 stoppingTaskIds={props.stoppingTaskIds}
                 onStop={props.onStop}
+                onShowAgent={props.onShowAgent}
               />
             ))}
           </ul>
@@ -150,6 +175,8 @@ export function NativeChatBackgroundTasksStatus(props: {
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
   onStop: (taskId?: string) => void
+  /** Open a listed agent's activity where it sits in the conversation. */
+  onShowAgent?: (providerId: string) => void
 }): React.JSX.Element {
   const expanded = props.expanded
   const taskListId = useId()
@@ -255,6 +282,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                           supportsTaskStop={props.supportsTaskStop}
                           stoppingTaskIds={props.stoppingTaskIds}
                           onStop={props.onStop}
+                          onShowAgent={props.onShowAgent}
                         />
                       ))}
                     </ul>

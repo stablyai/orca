@@ -29,12 +29,16 @@ export function useNativeChatTranscriptRowKeys(
     committed.current = assigned
   }, [assigned])
   // A work run can absorb its previous head when an older page lands.
-  const encodedKeys = JSON.stringify(
-    slots.map((slot) =>
-      slot.kind === 'message'
-        ? (assigned.keyById.get(slot.message.id) ?? nativeChatSlotKey(slot))
-        : nativeChatSlotKey(slot)
-    )
+  const encodedKeys = useMemo(
+    () =>
+      JSON.stringify(
+        slots.map((slot) =>
+          slot.kind === 'message'
+            ? (assigned.keyById.get(slot.message.id) ?? nativeChatSlotKey(slot))
+            : nativeChatSlotKey(slot)
+        )
+      ),
+    [slots, assigned]
   )
   const itemKeys = useMemo<string[]>(() => JSON.parse(encodedKeys), [encodedKeys])
   const previousFirst = committed.current?.rows[0]
