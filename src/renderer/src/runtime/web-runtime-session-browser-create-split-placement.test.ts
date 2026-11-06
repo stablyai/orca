@@ -66,7 +66,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

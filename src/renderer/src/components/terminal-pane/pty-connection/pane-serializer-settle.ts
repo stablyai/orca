@@ -8,7 +8,7 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-pas
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
-import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
+import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from './pty-connect-limits'
 

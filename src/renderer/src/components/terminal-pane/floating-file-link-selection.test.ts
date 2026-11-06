@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener
-} from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-routing'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 
 import { buildFileLinkActions, handleTerminalFileLink } from './terminal-file-link-actions'

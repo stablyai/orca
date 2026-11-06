@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

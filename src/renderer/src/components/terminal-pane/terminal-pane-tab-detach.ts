@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'

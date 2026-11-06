@@ -1,7 +1,7 @@
 import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { buildHttpLinkActions } from '@/lib/http-link-destinations'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import { buildHttpLinkActions } from '@/lib/browser/navigation/http-link-destinations'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,

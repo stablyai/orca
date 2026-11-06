@@ -37,7 +37,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import {
   ENV,
   HOST_PARENT_TAB_ID,

@@ -20,7 +20,7 @@ import {
   antigravityChatSignInBlocked,
   useAntigravityChatSignIn
 } from '../../../provider-accounts/AntigravityChatSignInRow'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { formatTimeAgo } from '../../../status-bar/tooltip'
 
 function formatUsageReading(usage: ProviderRateLimits): string {

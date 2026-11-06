@@ -12,7 +12,7 @@ import {
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
 import { applyOpenFileToState } from '@/store/slices/editor/actions/open-file-apply'
-import { buildEditorSessionData } from './workspace-session'
+import { buildEditorSessionData } from './workspace/persistence/workspace-session'
 import { restorableEditorFile } from '@/store/slices/editor/tabs/editor-tab-layout-owner'
 import { isSameOwnedDocument } from '@/store/slices/editor/file-ids/same-owned-editor-document'
 import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from './open-editor-move-owner'

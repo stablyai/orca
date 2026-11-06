@@ -44,7 +44,7 @@ vi.mock('@/store/selectors', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 

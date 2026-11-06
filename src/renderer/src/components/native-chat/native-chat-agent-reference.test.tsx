@@ -43,7 +43,9 @@ vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatTypedCommand: vi.fn(),
   submitNativeChatPrompt: vi.fn()
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 afterEach(() => {
   cleanup()
   crewRows.length = 0

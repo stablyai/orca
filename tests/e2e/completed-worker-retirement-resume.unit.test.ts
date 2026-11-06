@@ -21,9 +21,9 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '@/hooks/legacy-worker-terminal-recovery-event'
 import { useAppStore } from '@/store'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
 const ORIGINAL_TAB_ID = '1c897bc8-973b-47b4-9449-ac5fc6b726c3'

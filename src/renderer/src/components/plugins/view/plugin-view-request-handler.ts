@@ -8,7 +8,7 @@ import {
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { detectLanguage } from '@/lib/language-detect'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'

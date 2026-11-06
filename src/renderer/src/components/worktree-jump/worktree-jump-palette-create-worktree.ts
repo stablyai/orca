@@ -1,5 +1,5 @@
-import { worktreeMatchesGitHubNumber } from '@/lib/github-work-item-workspace-attachment'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { worktreeMatchesGitHubNumber } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
   parseGitHubIssueOrPRLink,
@@ -11,15 +11,15 @@ import {
 } from '../../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-palette-create-worktree-input'
-import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
+import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import { getRepoMapFromState } from '@/store/selectors'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
 import { buildLinearIssueComposerData } from '@/lib/linear-linked-work-item'
-import { isWorktreePaletteCreateActivationAllowed } from '@/lib/worktree-palette-create-action'
+import { isWorktreePaletteCreateActivationAllowed } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export function createWorktreeJumpPaletteWorktreeHandler({
   workspaces,

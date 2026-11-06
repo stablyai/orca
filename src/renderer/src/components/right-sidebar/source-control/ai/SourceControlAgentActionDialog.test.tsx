@@ -57,7 +57,7 @@ vi.mock('@/components/ui/select', () => ({
 vi.mock('../../../source-control/SourceControlActionVariableChips', () => ({
   SourceControlActionVariableChips: () => React.createElement('div')
 }))
-vi.mock('@/lib/source-control-agent-action-launch-check', () => ({
+vi.mock('@/lib/source-control/ai/source-control-agent-action-launch-check', () => ({
   checkSourceControlAgentActionLaunch: mocks.checkSourceControlAgentActionLaunch
 }))
 vi.mock('sonner', () => ({

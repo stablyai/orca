@@ -9,10 +9,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'

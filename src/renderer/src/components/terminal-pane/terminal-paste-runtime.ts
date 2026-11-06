@@ -4,8 +4,8 @@ import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import type { PtyTransport } from './pty-transport-types'
 
 type TerminalPasteRuntimeTransport = {
