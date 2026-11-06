@@ -24,10 +24,9 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsPaneSearchEntries,
   getAccountsZcodePlanSearchEntries
 } from './accounts-search'
-import { getAccountsOllamaSearchEntries } from './ollama-cloud-accounts-search'
+import { getAccountsOllamaSearchEntries } from '../ollama-cloud-accounts-search'
 import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
@@ -46,7 +45,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 // Resolve imports to new layout paths + add Ollama section (needs its own module path matching new dir structure)
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
-import { OllamaCloudAccountsSection } from './OllamaCloudAccountsSection'
+import { OllamaCloudAccountsSection } from '../OllamaCloudAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,

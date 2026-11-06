@@ -11,7 +11,7 @@ import {
 import {
   usageCredentialAccessAfterError,
   type UsageCredentialAccess
-} from './usage-credential-host'
+} from './accounts/usage/usage-credential-host'
 
 const LOCAL_OWNER: RuntimeClientTarget = { kind: 'local' }
 

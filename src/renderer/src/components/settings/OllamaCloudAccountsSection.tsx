@@ -3,7 +3,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -15,9 +15,9 @@ import {
   usageCredentialUnreadableNotice,
   ollamaCloudKeyDescription,
   type UsageCredentialHost
-} from './usage-credential-host'
+} from './accounts/usage/usage-credential-host'
 import { useOllamaCloudCredentials } from './use-ollama-cloud-credentials'
-import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
+import { UnsealedCredentialNotice } from '../provider-accounts/UnsealedCredentialNotice'
 
 const SEARCH_KEYWORDS = ['ollama', 'cloud', 'usage', 'credits', 'rate limit']
 

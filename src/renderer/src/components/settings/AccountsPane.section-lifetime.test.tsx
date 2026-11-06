@@ -2,8 +2,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { AccountsPane } from './AccountsPane'
-import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
+import { AccountsPane } from './accounts/AccountsPane'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './host-scope/settings-host-scope'
 
 const fake = vi.hoisted(() => ({
   query: '',

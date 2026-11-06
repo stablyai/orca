@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
-import { getAccountsOllamaSearchEntries } from './ollama-cloud-accounts-search'
+import { getAccountsOllamaSearchEntries } from '../ollama-cloud-accounts-search'
 
 export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
   {
