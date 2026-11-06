@@ -92,6 +92,32 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
   )
 }
 
+export type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>
+
+/** Whether `acpModelListingForRelease` needs the installed version. */
+export function acpListingDependsOnRelease(discovery: AcpModelDiscovery): boolean {
+  return discovery.kind === 'command' && discovery.supportsVersion !== undefined
+}
+
+/** How the installed release lists; null when only its chats can. */
+export function acpModelListingForRelease(
+  discovery: AcpModelDiscovery,
+  version: string | null
+): AcpModelListing | null {
+  if (discovery.kind === 'unavailable') {
+    return null
+  }
+  if (discovery.kind !== 'command' || !discovery.supportsVersion) {
+    return discovery
+  }
+  if (version !== null && discovery.supportsVersion(version)) {
+    return discovery
+  }
+  return discovery.otherReleasesListInSession
+    ? { kind: 'session', listingNamesConfiguredModel: discovery.listingNamesConfiguredModel }
+    : null
+}
+
 export type AcpLaunchSpec = {
   agent: TuiAgent
   command: string
@@ -232,7 +258,9 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   command: 'omp',
   // Full access approves permission requests individually.
   args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
-  env: {},
+  // Answering forms marks the session as having a UI, so `pty: true` bash would open a TUI
+  // overlay ACP cannot draw and fail; OMP's own headless modes set this too.
+  env: { PI_NO_PTY: '1' },
   dialect: OMP_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>

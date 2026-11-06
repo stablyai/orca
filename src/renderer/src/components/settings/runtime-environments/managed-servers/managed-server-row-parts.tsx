@@ -193,21 +193,37 @@ function ConfirmStrip({
   )
 }
 
-export function managedServerHasConfirmation(lifecycle: ManagedServerLifecycle): boolean {
+/**
+ * Forget unlinks without contacting the host, so it is offered only when the host can't be asked:
+ * it failed to answer, or it now runs a different server that refuses this computer's pairing.
+ */
+export function managedServerForgettable(
+  lifecycle: Pick<ManagedServerLifecycle, 'statusError'>,
+  serverReplaced: boolean
+): boolean {
+  return lifecycle.statusError !== null || serverReplaced
+}
+
+export function managedServerHasConfirmation(
+  lifecycle: ManagedServerLifecycle,
+  forgettable: boolean
+): boolean {
   return (
     lifecycle.confirmingForceUpdate !== null ||
     lifecycle.confirmingStop ||
-    (lifecycle.statusError !== null && lifecycle.confirmingForget) ||
+    (forgettable && lifecycle.confirmingForget) ||
     (lifecycle.recovery !== null && lifecycle.confirmingRestore)
   )
 }
 
 export function ManagedServerConfirmations({
-  lifecycle
+  lifecycle,
+  forgettable
 }: {
   lifecycle: ManagedServerLifecycle
+  forgettable: boolean
 }): React.JSX.Element | null {
-  const { recovery, statusError, busy, run } = lifecycle
+  const { recovery, busy, run } = lifecycle
   const disabled = busy !== null
   const forceUpdate = lifecycle.confirmingForceUpdate
   if (forceUpdate) {
@@ -247,8 +263,8 @@ export function ManagedServerConfirmations({
       />
     )
   }
-  // Only once the host failed to answer: a reachable host is stopped, not forgotten.
-  if (statusError && lifecycle.confirmingForget) {
+  // A host that answers with its paired server is stopped, not forgotten.
+  if (forgettable && lifecycle.confirmingForget) {
     return (
       <ConfirmStrip
         message={translate(
@@ -294,11 +310,13 @@ export function ManagedServerConfirmations({
 }
 
 export function ManagedServerMenuItems({
-  lifecycle
+  lifecycle,
+  forgettable
 }: {
   lifecycle: ManagedServerLifecycle
+  forgettable: boolean
 }): React.JSX.Element {
-  const { status, statusError, recovery, busy, run } = lifecycle
+  const { status, recovery, busy, run } = lifecycle
   const disabled = busy !== null
   return (
     <>
@@ -338,7 +356,7 @@ export function ManagedServerMenuItems({
         <ServerOff />
         {translate('auto.components.settings.managedServers.row.stop', 'Stop…')}
       </DropdownMenuItem>
-      {statusError ? (
+      {forgettable ? (
         <DropdownMenuItem
           variant="destructive"
           disabled={disabled}

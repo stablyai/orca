@@ -2,7 +2,7 @@
 // field Session History, tabs and phones read, and the status feed carries it to every client.
 
 import { defineMethod } from '../core'
-import { requireInstalledStructuredHost } from './structured-agent-session-gate'
+import { requireRenameStructuredHost } from './structured-agent-session-gate'
 import { RenameParams } from './structured-agent-session-schemas'
 
 export const STRUCTURED_AGENT_SESSION_RENAME_METHODS = [
@@ -11,7 +11,7 @@ export const STRUCTURED_AGENT_SESSION_RENAME_METHODS = [
     permission: 'workspace',
     params: RenameParams,
     handler: async (params, ctx) => {
-      const host = await requireInstalledStructuredHost(ctx, params.sessionId)
+      const host = await requireRenameStructuredHost(ctx, params.sessionId)
       const result = await host.setUserConversationName(
         params.sessionId,
         params.name,

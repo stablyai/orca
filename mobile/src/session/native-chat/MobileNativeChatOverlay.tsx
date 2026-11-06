@@ -230,6 +230,7 @@ export function MobileNativeChatOverlay({
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
       onOpenUrlInOrca={onOpenUrlInOrca}
+      rewind={controller.nativeChatRewind}
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>
         <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>

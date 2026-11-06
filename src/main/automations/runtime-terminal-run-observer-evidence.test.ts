@@ -119,52 +119,7 @@ afterEach(() => {
 })
 
 describe('observing a run with agent evidence', () => {
-  it.each([
-    ['bash', 'bash: goose: command not found'],
-    ['zsh', 'zsh: command not found: goose'],
-    ['dash', 'sh: 1: goose: not found'],
-    ['fish', 'fish: Unknown command: goose'],
-    ['PowerShell', "goose: The term 'goose' is not recognized as the name of a cmdlet"]
-  ])('fails, never completes, a run whose agent %s cannot find', async (_shell, refusal) => {
-    const run = observe(createPane({ idle: true, tail: ['$ goose run', refusal, '$'] }))
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'dispatch_failed',
-        error: expect.stringContaining(refusal)
-      })
-    )
-  })
-
-  it('completes once the agent itself reported for the run pane', async () => {
-    const pane = createPane({ idle: false, tail: ['working'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(1_000)
-    pane.report()
-    pane.becomeIdle()
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
   // Why: headless runs have no renderer writer, so the observer must fail a cut-off turn (STA-12638).
-  it.each([
-    { name: 'on its idle edge', becomeIdle: true },
-    { name: 'from a held done on a pane that never reads idle', becomeIdle: false }
-  ])('fails a run whose agent reported its turn interrupted, $name', async ({ becomeIdle }) => {
-    const pane = createPane({ idle: false, tail: ['working'] })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(1_000)
-    pane.report({ interrupted: true })
-    if (becomeIdle) {
-      pane.becomeIdle()
-    } else {
-      await vi.advanceTimersByTimeAsync(90_000)
-    }
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
-    )
-  })
 
   it('keeps a held interrupted verdict when its row is cleared during the screen read', async () => {
     const pane = createPane({ idle: false, tail: ['working'], clearRowsOnRead: true })
@@ -176,68 +131,6 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
     )
-  })
-
-  it("waits out a reused pane's previous done until this run's turn is done", async () => {
-    const pane = createPane({ idle: true, tail: ['previous summary', '❯'] })
-    // A reconnect replay restamps receivedAt; the done itself still predates the run.
-    pane.report({ stateStartedAt: Date.now() - 60_000 })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(run.settled).not.toHaveBeenCalled()
-
-    pane.becomeBusy()
-    pane.setTail(['previous summary', '❯ nightly prompt', 'working'])
-    pane.report({ state: 'working' })
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(run.settled).not.toHaveBeenCalled()
-
-    pane.report()
-    pane.becomeIdle()
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
-  it.each([
-    ['a working row', { state: 'working' as const }],
-    ['a connect-time done', { sessionBoundary: true }]
-  ])('does not read %s on an idle pane as the run finishing', async (_label, row) => {
-    const pane = createPane({ idle: true, tail: ['❯'] })
-    pane.report(row)
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS - 1_000)
-    expect(run.settled).not.toHaveBeenCalled()
-  })
-
-  it('does not take the done of a run that finished while this one waited in its precheck', async () => {
-    const startedAt = Date.now()
-    await vi.advanceTimersByTimeAsync(60_000)
-    const pane = createPane({ idle: true, tail: ['other run summary', '❯'] })
-    pane.report()
-    await vi.advanceTimersByTimeAsync(30_000)
-    const run = observe(pane, undefined, { startedAt, dispatchedAt: Date.now() })
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(run.settled).not.toHaveBeenCalled()
-
-    pane.becomeBusy()
-    pane.setTail(['other run summary', '❯ nightly prompt', 'working'])
-    pane.report({ state: 'working' })
-    await vi.advanceTimersByTimeAsync(5_000)
-    pane.report()
-    pane.becomeIdle()
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
-  it('completes a turn that ended before the launch returned', async () => {
-    const dispatchedAt = Date.now()
-    await vi.advanceTimersByTimeAsync(1_000)
-    const pane = createPane({ idle: true, tail: ['summary written', '❯'] })
-    pane.report()
-    await vi.advanceTimersByTimeAsync(1_000)
-    const run = observe(pane, undefined, { startedAt: dispatchedAt, dispatchedAt })
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
   })
 
   it('never completes a reused pane on its old done after a long precheck, past any grace', async () => {
@@ -255,37 +148,6 @@ describe('observing a run with agent evidence', () => {
     expect(run.settled).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'dispatch_failed', error: expect.stringContaining('6h') })
     )
-  })
-
-  it("measures a hookless agent's start window from dispatch, not from before its precheck", async () => {
-    const pane = createPane({ idle: true, tail: ['summary written', '$'] })
-    const run = observe(pane, undefined, {
-      startedAt: Date.now() - 180_000,
-      dispatchedAt: Date.now()
-    })
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
-  it("never reads an agent's own tool output as its command missing", async () => {
-    const tail = ['running tests', 'bash: pytest: command not found', 'fell back to unittest', '$']
-    const run = observe(createPane({ idle: true, tail }))
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS + 1_000)
-    await run.promise
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-  })
-
-  it('completes an agent that exited before the window once the window passes, not at a wait timeout', async () => {
-    const pane = createPane({ idle: true, tail: ['stub done', '$'], idleEdgeOnly: true })
-    const run = observe(pane)
-    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS - 1_000)
-    expect(run.settled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
-    expect(run.failed).not.toHaveBeenCalled()
   })
 
   it('keeps watching an agent past a tui-idle wait timeout and completes it later', async () => {

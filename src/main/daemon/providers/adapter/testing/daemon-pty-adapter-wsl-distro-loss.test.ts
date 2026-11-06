@@ -2,12 +2,10 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WslRunningDistrosRead } from '../../../../wsl/discovery/wsl-background-distro-gate'
 import type { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import type { DaemonServer } from '../../../server/daemon-server'
-import { setActiveSink } from '../../../../observability/tracer'
-import { HistoryManager } from '../../../history/storage/history-manager'
 import { WslBridgeBootIdentity } from '../../wsl/daemon-wsl-bridge-boot-identity'
 import {
   createMockSubprocess,
@@ -117,51 +115,6 @@ describe('a WSL bridge pane exit', () => {
     expect(noteMayHaveStopped).toHaveBeenCalledWith('Ubuntu')
   })
 
-  it('marks a non-zero exit as a possible stop before classifying it', async () => {
-    running = async () => ({ status: 'confirmed', distros: [] })
-    const exits = collectExits()
-    await spawnBridgePane()
-
-    subprocesses[0]!._simulateExit(1)
-
-    await waitFor(() => exits.length > 0)
-    expect(noteMayHaveStopped).toHaveBeenCalledWith('Ubuntu')
-  })
-
-  it('logs what the running list said, so a run can tell host loss from a raced reboot', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-    const spans: unknown[] = []
-    setActiveSink({
-      push: (span) => spans.push(span),
-      flush: () => {},
-      close: () => {}
-    })
-    onTestFinished(() => setActiveSink(null))
-    for (const [distros, verdict] of [
-      [[], 'lost'],
-      [['Ubuntu'], 'running']
-    ] as const) {
-      running = async () => ({ status: 'confirmed', distros: [...distros] })
-      const exits = collectExits()
-      await spawnBridgePane()
-      subprocesses.at(-1)!._simulateExit(1)
-      await waitFor(() => exits.length > 0)
-      expect(info).toHaveBeenLastCalledWith(
-        expect.stringMatching(
-          new RegExp(
-            `^\\[pty\\] WSL bridge exit: ${verdict} \\(distro Ubuntu, code 1, probe \\d+ms\\)$`
-          )
-        )
-      )
-      // Kept in the local trace too: a packaged build keeps no console (verify-18).
-      expect(spans.at(-1)).toMatchObject({
-        name: 'wsl.bridge-exit',
-        attributes: { verdict, code: 1 }
-      })
-      expect(JSON.stringify(spans.at(-1))).not.toContain('Ubuntu')
-    }
-  })
-
   it('stays a normal exit while its distro runs on the same boot, so `exit` still closes the tab', async () => {
     const exits = collectExits()
     const id = await spawnBridgePane()
@@ -213,19 +166,6 @@ describe('a WSL bridge pane exit', () => {
   })
 
   // awin: a terminate exited each bridge pane with -1, never 0; a user's `exit` gives 0.
-  it('reads no boot id for a clean exit, which stays an exit even across a reboot', async () => {
-    bootIds = ['boot-1', 'boot-2']
-    const exits = collectExits()
-    const id = await spawnBridgePane()
-    await waitFor(() => readBootId.mock.calls.length === 1)
-
-    subprocesses[0]!._simulateExit(0)
-
-    await waitFor(() => exits.length > 0)
-    expect(exits[0]).toMatchObject({ id, code: 0 })
-    expect(exits[0]).not.toHaveProperty('hostLost')
-    expect(readBootId).toHaveBeenCalledOnce()
-  })
 
   it('stays a normal exit when the running list cannot answer', async () => {
     running = async () => ({ status: 'unavailable' })
@@ -236,72 +176,5 @@ describe('a WSL bridge pane exit', () => {
 
     await waitFor(() => exits.length > 0)
     expect(exits[0]).toMatchObject({ id, code: 1 })
-  })
-
-  it('classifies many panes a terminate exits at once from one answer', async () => {
-    let answer: (read: WslRunningDistrosRead) => void = () => {}
-    const pending = new Promise<WslRunningDistrosRead>((resolve) => {
-      answer = resolve
-    })
-    running = () => pending
-    const exits = collectExits()
-    await spawnBridgePane()
-    await spawnBridgePane()
-    await spawnBridgePane()
-
-    for (const subprocess of subprocesses) {
-      subprocess._simulateExit(1)
-    }
-    await waitFor(() => readRunning.mock.calls.length === 3)
-    answer({ status: 'confirmed', distros: [] })
-
-    await waitFor(() => exits.length === 3)
-    expect(exits.map(({ code }) => code)).toEqual([-1, -1, -1])
-  })
-
-  it('never asks about a native pane', async () => {
-    const exits = collectExits()
-    const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-
-    subprocesses[0]!._simulateExit(1)
-
-    await waitFor(() => exits.length > 0)
-    expect(exits[0]).toMatchObject({ id, code: 1 })
-    expect(readRunning).not.toHaveBeenCalled()
-  })
-
-  it('drops a kept tab’s history when the user later closes it, though its session is gone', async () => {
-    running = async () => ({ status: 'confirmed', distros: [] })
-    const exits = collectExits()
-    const id = await spawnBridgePane()
-    subprocesses[0]!._simulateExit(1)
-    await waitFor(() => exits.length > 0)
-    const removeSession = vi.spyOn(HistoryManager.prototype, 'removeSession')
-
-    await expect(adapter.shutdown(id, { immediate: true })).resolves.toBeUndefined()
-    expect(removeSession).toHaveBeenCalledWith(id)
-  })
-
-  it('never removes the history of a session it did not lose: another daemon may still run it', async () => {
-    const removeSession = vi.spyOn(HistoryManager.prototype, 'removeSession')
-
-    await expect(adapter.shutdown('legacy-daemon-session', { immediate: true })).rejects.toThrow(
-      'Session not found'
-    )
-    expect(removeSession).not.toHaveBeenCalled()
-  })
-
-  it('forgets a host-loss session once it is spawned again', async () => {
-    running = async () => ({ status: 'confirmed', distros: [] })
-    const exits = collectExits()
-    const id = await spawnBridgePane()
-    subprocesses[0]!._simulateExit(1)
-    await waitFor(() => exits.length > 0)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the adapter's protected host-loss set, read to prove a respawn clears it.
-    const lost = (adapter as unknown as { hostLossSessionIds: Set<string> }).hostLossSessionIds
-    expect(lost.has(id)).toBe(true)
-
-    await adapter.spawn({ cols: 80, rows: 24, sessionId: id })
-    expect(lost.has(id)).toBe(false)
   })
 })

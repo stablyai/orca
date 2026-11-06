@@ -132,7 +132,7 @@ export function registerCreateSelectionAdmissionTests(): void {
         expect(provisional.result.current).toMatchObject({
           starting: false,
           transportEnabled: true,
-          lifecycle: null
+          lifecycle: 'visibility-unknown'
         })
         expect(structuredAgentSessionSendOut(launch.sessionId)).toBe(false)
         const readOwner = getStructuredAgentSessionReadOwner(launch.sessionId, target)

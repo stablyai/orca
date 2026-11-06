@@ -225,7 +225,8 @@
       "clipboardRejected": "無法將文字複製到剪貼簿。",
       "copyFailed": "複製失敗",
       "copyMessage": "複製訊息",
-      "selectText": "選取文字"
+      "selectText": "選取文字",
+      "rewind": "回溯到此處"
     },
     "nativeChatImageViewer": {
       "closeImage": "關閉圖片",
@@ -594,6 +595,25 @@
       "attachmentsUnsupported": "在設定目標之前刪除附件。",
       "pause": "暫停",
       "resume": "繼續"
+    },
+    "rewind": {
+      "title": "回溯到此處？",
+      "confirmation": "要丟棄此訊息及其之後的所有內容嗎？該訊息會返回到輸入框，以便您編輯並重新傳送。磁碟上的檔案變更會保留。",
+      "confirm": "回溯",
+      "unsupported": "此聊天無法返回到更早的訊息。",
+      "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
+      "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+      "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
+      "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
+      "historyLimit": "此對話過長，無法回溯。未做任何更改。",
+      "providerRefused": "代理程式無法返回到此訊息。",
+      "proofMismatch": "代理程式的歷史記錄與此聊天不符。請在繼續前檢查對話。",
+      "outcomeUnknown": "Orca 無法確認對話是否已返回到更早的訊息。它會在傳送您的下一則訊息前進行檢查。",
+      "refused": "Orca 無法返回到此訊息。請在繼續前檢查對話。",
+      "unavailable": "請等待聊天完成連線。",
+      "outcomeUnknownReturned": "Orca 無法確認對話是否已返回到此訊息。您的訊息已回到輸入框中，Orca 會在傳送您的下一則訊息前檢查對話。",
+      "timeout": "返回到此訊息後聊天未更新。請重新開啟以檢視最新內容。",
+      "pending": "請等待對話回溯到更早的訊息。"
     }
   },
   "common": {
@@ -794,8 +814,8 @@
       "pairingInvalid": "配對已失效",
       "pairingTemporarilyUnavailable": "配對暫時無法使用",
       "repairHint": "點一下以重新與電腦配對",
+      "sameNetworkOnlyHint": "僅能在同一 Wi-Fi 或 Tailscale 下連線。若要隨時隨地連線，請在電腦上登入並重新配對",
       "unlockHint": "解鎖手機後，點一下以重試",
-      "updateDesktopHint": "更新桌面版 Orca 並登入，即可隨時隨地連線",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 個使用中"
     },
     "hostDiagnosticsLink": {

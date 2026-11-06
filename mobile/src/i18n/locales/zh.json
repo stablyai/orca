@@ -225,7 +225,8 @@
       "clipboardRejected": "剪贴板拒绝接收该文本。",
       "copyFailed": "复制失败",
       "copyMessage": "复制消息",
-      "selectText": "选择文本"
+      "selectText": "选择文本",
+      "rewind": "回溯到此处"
     },
     "nativeChatImageViewer": {
       "closeImage": "关闭图片",
@@ -594,6 +595,25 @@
       "attachmentsUnsupported": "在设定目标之前删除附件。",
       "pause": "暂停",
       "resume": "继续"
+    },
+    "rewind": {
+      "title": "回溯到此处？",
+      "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便您编辑并重新发送。磁盘上的文件更改会保留。",
+      "confirm": "回溯",
+      "unsupported": "此聊天无法返回到更早的消息。",
+      "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
+      "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+      "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
+      "invalidTarget": "对话无法返回到此消息。未做任何更改。",
+      "historyLimit": "此对话过长，无法回溯。未做任何更改。",
+      "providerRefused": "智能体无法返回到此消息。",
+      "proofMismatch": "智能体的历史记录与此聊天不匹配。请在继续前检查对话。",
+      "outcomeUnknown": "Orca 无法确认对话是否已返回到更早的消息。它会在发送您的下一条消息前进行检查。",
+      "refused": "Orca 无法返回到此消息。请在继续前检查对话。",
+      "unavailable": "请等待聊天完成连接。",
+      "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。您的消息已回到输入框中，Orca 会在发送您的下一条消息前检查对话。",
+      "timeout": "返回到此消息后聊天未更新。请重新打开以查看最新内容。",
+      "pending": "请等待对话回溯到更早的消息。"
     }
   },
   "common": {
@@ -794,8 +814,8 @@
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
       "repairHint": "轻点以重新与桌面配对",
+      "sameNetworkOnlyHint": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对",
       "unlockHint": "解锁手机后，轻点重试",
-      "updateDesktopHint": "更新桌面端 Orca 并登录，即可随时随地连接",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃"
     },
     "hostDiagnosticsLink": {
