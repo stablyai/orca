@@ -22,21 +22,28 @@ vi.mock('../theme/use-mobile-color-scheme', () => ({
   useMobileColorScheme: () => 'dark'
 }))
 
-import { MobileTerminalPasswordMaskOverlay } from './MobileTerminalPasswordMaskOverlay'
+import {
+  MobileTerminalPasswordMaskOverlay,
+  MobileTerminalPasswordMaskToggle
+} from './MobileTerminalPasswordMaskOverlay'
 
 describe('MobileTerminalPasswordMaskOverlay', () => {
-  it('renders the show/hide toggle button and masks typed characters with asterisks when masked=true', () => {
+  it('masks typed characters with COMPOSER_TEXT_SIZE asterisks and renders a separate trailing toggle cleanly', () => {
     const onToggleMask = vi.fn()
     let tree!: TestRenderer.ReactTestRenderer
     act(() => {
       tree = TestRenderer.create(
-        <MobileTerminalPasswordMaskOverlay value="oiu" masked onToggleMask={onToggleMask} />
+        <>
+          <MobileTerminalPasswordMaskOverlay value="oiu" masked />
+          <MobileTerminalPasswordMaskToggle masked onToggleMask={onToggleMask} />
+        </>
       )
     })
 
     const texts = tree.root.findAllByType('Text' as never)
     expect(texts).toHaveLength(1)
     expect(texts[0]?.props.children).toBe('***')
+    expect(texts[0]?.props.style?.fontSize).toBe(16)
 
     const button = tree.root.findByType('Pressable' as never)
     expect(button.props.accessibilityLabel).toBe('Show input')
@@ -47,12 +54,15 @@ describe('MobileTerminalPasswordMaskOverlay', () => {
     expect(onToggleMask).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the show/hide toggle button visible without rendering the asterisk overlay when masked=false', () => {
+  it('omits the asterisk overlay when masked=false while keeping the trailing toggle button accessible', () => {
     const onToggleMask = vi.fn()
     let tree!: TestRenderer.ReactTestRenderer
     act(() => {
       tree = TestRenderer.create(
-        <MobileTerminalPasswordMaskOverlay value="oiu" masked={false} onToggleMask={onToggleMask} />
+        <>
+          <MobileTerminalPasswordMaskOverlay value="oiu" masked={false} />
+          <MobileTerminalPasswordMaskToggle masked={false} onToggleMask={onToggleMask} />
+        </>
       )
     })
 

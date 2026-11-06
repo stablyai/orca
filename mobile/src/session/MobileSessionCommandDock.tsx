@@ -8,7 +8,10 @@ import {
   resolveTerminalInputMaskedState
 } from '../terminal/terminal-password-prompt'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
-import { MobileTerminalPasswordMaskOverlay } from './MobileTerminalPasswordMaskOverlay'
+import {
+  MobileTerminalPasswordMaskOverlay,
+  MobileTerminalPasswordMaskToggle
+} from './MobileTerminalPasswordMaskOverlay'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
@@ -102,14 +105,19 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           controller={controller}
           keysInRail={rail.keysInRail}
           inputMasked={inputMasked}
-          onToggleMask={toggleInputMask}
           trailing={
-            <MobileTerminalLiveInputStatus
-              dictation={dictation}
-              dictationMode={dictationMode}
-              heard={liveDictationText}
-              isAttaching={isAttaching}
-            />
+            <>
+              <MobileTerminalPasswordMaskToggle
+                masked={inputMasked}
+                onToggleMask={toggleInputMask}
+              />
+              <MobileTerminalLiveInputStatus
+                dictation={dictation}
+                dictationMode={dictationMode}
+                heard={liveDictationText}
+                isAttaching={isAttaching}
+              />
+            </>
           }
         />
         <MobileTerminalInputActions
@@ -138,13 +146,11 @@ function LiveInputField({
   controller,
   keysInRail,
   inputMasked,
-  onToggleMask,
   trailing
 }: {
   controller: MobileSessionController
   keysInRail: boolean
   inputMasked: boolean
-  onToggleMask: () => void
   trailing: ReactNode
 }) {
   const t = useMobileTranslation()
@@ -159,17 +165,16 @@ function LiveInputField({
     dockKeys
   } = controller
   const text = useLiveInputCaptureText(liveInputCapture)
+  const showMaskOverlay = inputMasked && text.length > 0
   return (
     <TextField
       inputRef={bindLiveInputField}
       monospace
-      hiddenText={inputMasked && text.length > 0}
+      hiddenText={showMaskOverlay}
       inputOverlay={
-        <MobileTerminalPasswordMaskOverlay
-          value={text}
-          masked={inputMasked}
-          onToggleMask={onToggleMask}
-        />
+        showMaskOverlay ? (
+          <MobileTerminalPasswordMaskOverlay value={text} masked={inputMasked} />
+        ) : undefined
       }
       style={dockStyles.liveField}
       leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
