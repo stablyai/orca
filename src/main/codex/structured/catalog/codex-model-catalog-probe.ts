@@ -13,6 +13,7 @@ import { isMissingProviderExecutable } from '../../../provider-process/provider-
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
+import { codexProjectConfigIsolationArgs } from './codex-project-config-isolation'
 import { applyCodexConfiguredLaunchDefaults } from '../launch/codex-configured-launch-defaults'
 import {
   resolveCodexStructuredInvocation,
@@ -75,11 +76,16 @@ export function createCodexModelCatalogProbe(
       ...prefixArgs,
       ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : [])
     ]
-    const args = [...userArgs, ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
-    assertStructuredAgentResolutionCurrent(operation)
     // A command line that may name files relative to the chat's folder runs there; the listing
-    // still asks for `cwd`'s config so the project's settings never narrow the account's list.
+    // still asks for `cwd`'s config, and that folder's own project config is never loaded, so the
+    // project's settings never replace the account's list.
     const listIn = catalogListingDirectory(command, userArgs, cwd, launchDirectory)
+    const args = [
+      ...userArgs,
+      ...(listIn && listIn !== cwd ? await codexProjectConfigIsolationArgs(listIn) : []),
+      ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+    ]
+    assertStructuredAgentResolutionCurrent(operation)
     // The listing runs from the account folder; relative PATH entries still mean the chat's folder.
     const env = {
       ...(launchDirectory

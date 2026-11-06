@@ -61,6 +61,12 @@ describe('codex model catalog probe', () => {
     }
     expect(invocations.map((invocation) => invocation.cwd)).toEqual(listedIn)
     expect(invocations[0]?.args.slice(0, prefixArgs.length)).toEqual(prefixArgs)
+    // A listing in the chat's folder never loads that folder's (or a parent's) project config.
+    expect(
+      invocations[0]?.args.includes(
+        'projects={"/chat-a"={trust_level="untrusted"},"/"={trust_level="untrusted"}}'
+      )
+    ).toBe(listedIn[0] === '/chat-a')
     expect(identities[0]).toMatchObject({ cwd: listedIn[0] })
     expect(JSON.stringify(identities[0]) === JSON.stringify(identities[1])).toBe(
       listedIn[0] === listedIn[1]

@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   ompSettingsMayPickModel,
   openCodeAgentFileMayPickModel,
@@ -194,10 +195,11 @@ export async function workspaceMayOverrideDefaultModel(input: {
   workspacePath: string
   accountHomePath: string | null
 }): Promise<boolean> {
-  if (!agentReadsProjectModelConfig(input.agent)) {
+  // Claude and Codex pickers follow the account wherever the chat runs.
+  if (!agentReadsProjectModelConfig(input.agent) || independentAgentModelCatalog(input.agent)) {
     return false
   }
-  // Unknown project layers may override defaults anywhere; Claude and Codex are never asked.
+  // Unknown project layers may override defaults anywhere.
   const layers = PROJECT_MODEL_LAYERS[input.agent]
   if (!layers) {
     return true
