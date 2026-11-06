@@ -1,3 +1,7 @@
+import {
+  resolveZcodeCliInvocation,
+  zcodeDesktopTerminalRefusal
+} from '../zcode/zcode-cli-invocation'
 // orca skills loads detection outside Electron; exclude integration-client dependencies.
 import {
   getTuiAgentDetectionProbeCommands,
@@ -34,14 +38,24 @@ export async function detectInstalledAgents(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions
 ): Promise<string[]> {
-  const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
+  const wslTarget = getPreflightWslTarget(context)
+  const runtime = wslTarget ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
   const probeCommands = getTuiAgentDetectionProbeCommands(commands, runtime)
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     commands,
     await detectAgentCommandsOnHost(probeCommands, { context }),
     runtime
   )
+  if (wslTarget || !detected.includes('zcode')) {
+    return detected
+  }
+  const invocation = resolveZcodeCliInvocation({
+    pathEnv: process.env.PATH ?? process.env.Path
+  })
+  return zcodeDesktopTerminalRefusal(invocation)
+    ? detected.filter((agent) => agent !== 'zcode')
+    : detected
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
