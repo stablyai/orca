@@ -37,7 +37,18 @@ import {
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { stageNativeChatDraftFile } from './native-chat-draft-attachment-staging'
+import {
+  captureNativeChatStagedInput,
+  hasNativeChatStagedFiles,
+  stageNativeChatDraftFile
+} from './native-chat-draft-attachment-staging'
+import {
+  holdBrowserAttachmentFiles,
+  readBrowserAttachmentFile
+} from '@/lib/browser-attachment-files'
+import { leasedHostLaunchSources } from '@/lib/agent-session/launch/structured-agent-session-host-launch-sources'
+import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 
 vi.mock(
   '@/lib/agent-session/launch/structured-agent-session-host-launch-opening-edit',
@@ -109,8 +120,11 @@ async function parkedPairedLaunch() {
         body: structuredAgentSessionSendBody(TEXT, [IMAGE], SKILLS)
       },
       stagedSources: [IMAGE.path],
-      prepareFirstMessage: async () => {
-        throw new Error('Attach the file again.')
+      sources: {
+        prepare: async () => {
+          throw new Error('Attach the file again.')
+        },
+        release: () => {}
       },
       accept: {
         presentation: 'focused',
@@ -168,7 +182,10 @@ it('saves an edited opening whose image is gone under the same message and launc
   )
   expect(replaceHeldHostLaunchOpening).toHaveBeenCalledExactlyOnceWith('workspace-1', SESSION_ID, {
     body: edited,
-    staged: { paths: ['/client/new.png'], prepare: expect.any(Function) }
+    staged: {
+      paths: ['/client/new.png'],
+      sources: expect.objectContaining({ release: expect.any(Function) })
+    }
   })
   expect(view.result.current.openingEdit).toBeNull()
   expect(readNativeChatComposerDraft(scope)).toMatchObject({ text: '', images: [] })
@@ -205,4 +222,122 @@ it('cancels an edit leaving the launch parked with Retry and the chat draft as i
   expect(savedFirstTurn()).toMatchObject({ phase: 'editing', staged: [IMAGE.path] })
   expect(host.release).not.toHaveBeenCalled()
   expect(readNativeChatComposerDraft(DRAFT_A)).toMatchObject({ text: 'Also run lint', images: [] })
+})
+
+it('gives back the edited opening, never the original, when the host then refuses it', async () => {
+  const { launch, view, scope } = await parkedPairedLaunch()
+  act(() => {
+    stageNativeChatDraftFile(scope, '/client/replacement.png')
+    updateNativeChatComposerDraft(
+      scope,
+      { text: 'Edited request $audit', images: [{ id: 'new', path: '/client/replacement.png' }] },
+      'immediate'
+    )
+  })
+  act(() => view.result.current.openingEdit!.editSession.save())
+  await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+  const edited = structuredAgentSessionSendBody(
+    'Edited request $audit',
+    [{ path: '/host/store/replacement.png', previewUri: '' }],
+    SKILLS
+  )
+  expect(host.release.mock.calls[0]![0]).toMatchObject({
+    operationId: OPERATION_ID,
+    firstMessage: { clientMessageId: MESSAGE_ID, body: edited }
+  })
+
+  // The chat already exists on the host: the edited message comes back whole, beside A.
+  parkedRead.resolve({ state: 'failed', code: 'agent_launch_session_already_exists' })
+  await launch.launchResult.catch(() => undefined)
+  await act(async () => {})
+  const back = readNativeChatComposerDraft(DRAFT_A)
+  expect(back.text).toContain('Also run lint')
+  expect(back.text).toContain('Edited request $audit')
+  expect(back.text).not.toContain('fix this')
+  expect(back.images.map(({ path }) => path)).toEqual(['/host/store/replacement.png'])
+  expect(windowCalls()).not.toContain('agentSession.send')
+  expect(windowCalls()).not.toContain('agentSession.create')
+})
+
+it.each([3, 30])(
+  'holds no replacement File or edit scope once %i edited openings are released and received',
+  async (count) => {
+    const held: { token: string; scope: string }[] = []
+    for (let cycle = 0; cycle < count; cycle++) {
+      if (cycle > 0) {
+        cleanup()
+        resetStructuredAgentLaunchRegistryForTests()
+        resetStructuredAgentLaunchPersistenceForTests()
+        parkedRead = deferred<AgentLaunchReleasePhaseStatusResult>()
+        host.status.mockReset()
+        host.release.mockClear()
+        host.status.mockResolvedValueOnce(AWAITING).mockReturnValueOnce(parkedRead.promise)
+      }
+      const { launch, view, scope } = await parkedPairedLaunch()
+      const [token] = holdBrowserAttachmentFiles([
+        new File([new Uint8Array(1024)], `new-${cycle}.png`, { type: 'image/png' })
+      ])
+      act(() => {
+        stageNativeChatDraftFile(scope, token!)
+        updateNativeChatComposerDraft(
+          scope,
+          { images: [{ id: 'added', path: token! }] },
+          'immediate'
+        )
+      })
+      act(() => view.result.current.openingEdit!.editSession.save())
+      await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+      parkedRead.resolve(CHAT_STARTED)
+      await expect(launch.launchResult).resolves.toMatchObject({ sessionId: SESSION_ID })
+      view.unmount()
+      held.push({ token: token!, scope })
+    }
+    // Each edit's file went to the host with its submitted first turn; nothing keeps it after.
+    expect(held.filter(({ token }) => readBrowserAttachmentFile(token) !== null)).toEqual([])
+    expect(held.filter(({ scope }) => hasNativeChatStagedFiles(scope))).toEqual([])
+  }
+)
+
+it('gives a file not yet sent back with its message, still usable from the chat draft', async () => {
+  host.status.mockReset()
+  host.status.mockResolvedValue({ state: 'failed', code: 'agent_launch_tab_closed' })
+  const source = 'pending-worktree-creation:creation-file'
+  const [token] = holdBrowserAttachmentFiles([
+    new File(['bytes'], 'held.png', { type: 'image/png' })
+  ])
+  stageNativeChatDraftFile(source, token!)
+  const image = { path: token!, previewUri: '' }
+  const lease = captureNativeChatStagedInput(source, { text: TEXT, attachments: [image] })
+  const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+    requestId: newAgentLaunchRequestId(),
+    executionHostId: 'runtime:server-1',
+    prompt: TEXT,
+    promptAttachments: [image],
+    hostLaunch: {
+      operationId: OPERATION_ID,
+      sessionId: SESSION_ID,
+      protocol: 'release',
+      opening: {
+        clientMessageId: MESSAGE_ID,
+        body: structuredAgentSessionSendBody(TEXT, [image], SKILLS)
+      },
+      stagedSources: [token!],
+      sources: leasedHostLaunchSources(lease, SESSION_ID),
+      accept: {
+        presentation: 'focused',
+        setupReceipt: { required: true, runId: 'setup-run-1' },
+        terminalAlternative: { kind: 'none' }
+      }
+    }
+  })
+  await launch.launchResult.catch(() => undefined)
+  // The launch ended before the file was sent: it comes back with the text, and the chat's draft
+  // now holds the file the composer can send.
+  const back = readNativeChatComposerDraft(DRAFT_A)
+  expect(back.text).toContain(TEXT)
+  expect(back.images.map(({ path }) => path)).toEqual([token])
+  expect(readBrowserAttachmentFile(token!)).not.toBeNull()
+  expect(hasNativeChatStagedFiles(DRAFT_A)).toBe(true)
+  expect(hasNativeChatStagedFiles(source)).toBe(false)
+  expect(host.release).not.toHaveBeenCalled()
 })

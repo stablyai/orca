@@ -3,7 +3,11 @@
  *  body; nothing about the launch starts again. */
 
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
-import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
+import {
+  hostLaunchOpeningInput,
+  type HostLaunchSources
+} from './structured-agent-session-host-launch-sources'
+import { showHeldStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 import {
   resumeHostLaunchPreparation,
   saveHostLaunchFirstTurn
@@ -16,10 +20,8 @@ type FirstMessageBody = StructuredAgentSessionFirstMessage['body']
  *  the files the host must still receive, with how to put them there under the launch. */
 export type HeldHostLaunchOpeningEdit = {
   body: FirstMessageBody
-  staged?: {
-    paths: readonly string[]
-    prepare: NonNullable<StructuredHostLaunch['prepareFirstMessage']>
-  }
+  /** Its own lease on them, which the launch owns from a successful replacement on. */
+  staged?: { paths: readonly string[]; sources: HostLaunchSources }
 }
 
 /** The opening of a held launch whose files could not reach its host, while its first turn is
@@ -66,19 +68,22 @@ export function replaceHeldHostLaunchOpening(
     return false
   }
   const { staged: _owed, ...choices } = firstTurn
-  const { stagedSources: _held, prepareFirstMessage: _preparing, ...launch } = hostLaunch
+  const { stagedSources: _held, sources: replaced, ...launch } = hostLaunch
   const paths = edit.staged?.paths.length ? [...edit.staged.paths] : undefined
   intent.hostLaunch = {
     ...launch,
-    ...(paths && edit.staged
-      ? { stagedSources: paths, prepareFirstMessage: edit.staged.prepare }
-      : {})
+    ...(paths ? { stagedSources: paths } : {}),
+    ...(edit.staged ? { sources: edit.staged.sources } : {})
   }
   saveHostLaunchFirstTurn(
     intent,
     { ...choices, ...(paths ? { staged: paths } : {}) },
     { clientMessageId: intent.opening.clientMessageId, body: edit.body }
   )
+  // The new files are held before the old ones go; an upload of the old ones still on its way
+  // finds them released and is prepared again from the edited opening.
+  replaced?.release()
+  showHeldStructuredLaunchPrompt(sessionId, hostLaunchOpeningInput(edit.body))
   resumeHostLaunchPreparation(worktreeId, sessionId)
   return true
 }

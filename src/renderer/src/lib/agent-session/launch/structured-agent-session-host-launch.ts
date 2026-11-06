@@ -36,7 +36,7 @@ import type { StructuredAgentLaunchReceipt } from './structured-agent-session-la
 import type { HostLaunchFirstTurn } from './structured-agent-session-launch-record'
 import { recordHostLaunchFirstTurnBaseline } from './structured-agent-session-host-launch-release'
 import { awaitHostLaunchAnswer } from './structured-agent-session-host-launch-answer'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { HostLaunchSources } from './structured-agent-session-host-launch-sources'
 
 export type StructuredHostLaunch = {
   /** Minted once per user action and reused by every retry of it, so the host runs it at most once. */
@@ -45,11 +45,9 @@ export type StructuredHostLaunch = {
   /** The opening's client files the host must receive before release, as the staging owner holds
    *  them. The opening itself is the launch's own (`intent.opening`). */
   stagedSources?: readonly string[]
-  /** Uploads those files under this launch and answers the host-readable body; in memory only. */
-  prepareFirstMessage?: (
-    launchOperationId: string,
-    target: RuntimeClientTarget
-  ) => Promise<StructuredAgentSessionFirstMessage['body']>
+  /** Holds those files until no operation needs them, and uploads them under this launch for the
+   *  opening as it is when released; in memory only. */
+  sources?: HostLaunchSources
   /** Prepared, then released with the first turn's final choices once the host's Setup succeeded;
    *  absent, accepted whole. Kept for the launch, and saved as `firstTurn` being present. */
   protocol?: 'release'
@@ -131,13 +129,12 @@ function notStartedFailure(
     : undefined
 }
 
-function markUnknown(state: ObservedHostLaunch): Error {
-  // Text accept carried is possibly the host's now: a copy goes back to the composer, and nothing
-  // sends it again. A prepared launch's opening is not, and a live launch may still need it whole:
-  // it stays, with its first turn, until the same launch says what became of it.
-  if (state.intent.hostLaunch?.protocol === 'release') {
-    holdStructuredLaunchPromptsForLaunch(state.intent.sessionId)
-  } else {
+/** Whether anything ran is not known. `ended`: the host said no launch remains that could take the
+ *  opening, so the composer gets it back (which proves nothing about an earlier effect); else a
+ *  prepared launch's opening stays whole, with its first turn, for the same launch to take. Text
+ *  accept carried is possibly the host's already: a copy goes back and nothing sends it again. */
+function markUnknown(state: ObservedHostLaunch, ended = false): Error {
+  if (ended || state.intent.hostLaunch?.protocol !== 'release') {
     releaseHostLaunchMessage(state.intent, false)
   }
   state.visibilityUnknown = true
@@ -176,8 +173,10 @@ export async function observeStructuredHostLaunch(
   throwIfCancelled: () => void
 ): Promise<StructuredAgentLaunchReceipt> {
   const { intent } = state
-  // The held message waits with the host's Setup, not on its send's own deadline.
+  // The held message waits with the host's Setup, not on its send's own deadline, and the launch's
+  // opening is its only body.
   prepareLegacyStructuredLaunchPrompts(intent.sessionId)
+  holdStructuredLaunchPromptsForLaunch(intent.sessionId)
   recordHostLaunchFirstTurnBaseline(intent)
   if (hostLaunch.accept) {
     await requireHostPermission(intent)
@@ -188,8 +187,8 @@ export async function observeStructuredHostLaunch(
     intent.hostLaunch = accepted
   })
   throwIfCancelled()
-  if (answer.state === 'unknown') {
-    throw markUnknown(state)
+  if (answer.state === 'unread' || answer.state === 'unknown') {
+    throw markUnknown(state, answer.state === 'unknown')
   }
   if (answer.state === 'failed') {
     releaseHostLaunchMessage(intent, false)

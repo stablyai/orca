@@ -10,25 +10,19 @@ import {
   nativeChatStagedInputPaths,
   type captureNativeChatStagedInput
 } from '@/components/native-chat/native-chat-draft-attachment-staging'
-import {
-  structuredAgentSessionSendBody,
-  type StructuredAgentSessionAttachment
-} from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionAttachment } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type HostLaunchHeldMessage = {
   text: string
   attachments: readonly StructuredAgentSessionAttachment[]
   skills?: readonly AgentJournalSkillRef[]
-  /** Its client files the host must receive first, and how they are put there under a launch. */
+  /** Its client files the host must receive first, and the creation's lease on them, which the
+   *  launch takes over. */
   staged?: {
     paths: readonly string[]
-    prepare: (
-      launchOperationId: string,
-      target: RuntimeClientTarget
-    ) => Promise<StructuredAgentSessionFirstMessage['body']>
+    lease: ReturnType<typeof captureNativeChatStagedInput>
   }
 }
 
@@ -57,23 +51,9 @@ export function creationHeldMessage(args: {
     creationHostTarget(args.request)?.kind === 'environment'
       ? nativeChatStagedInputPaths(args.sourceScope, input)
       : []
-  const prepare = async (
-    launchOperationId: string,
-    target: RuntimeClientTarget
-  ): Promise<StructuredAgentSessionFirstMessage['body']> => {
-    const prepared = await args.staged.prepare(
-      { ...input, ...(skills ? { skills } : {}) },
-      {
-        sessionId: sessionId ?? '',
-        runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
-        launchOperationId
-      }
-    )
-    return structuredAgentSessionSendBody(prepared.text, prepared.attachments, prepared.skills)
-  }
   return {
     ...input,
     ...(skills ? { skills } : {}),
-    ...(sessionId && paths.length ? { staged: { paths, prepare } } : {})
+    ...(sessionId && paths.length ? { staged: { paths, lease: args.staged } } : {})
   }
 }

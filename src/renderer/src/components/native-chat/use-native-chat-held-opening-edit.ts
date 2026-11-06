@@ -14,8 +14,8 @@ import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { HeldHostLaunchOpeningEdit } from '@/lib/agent-session/launch/structured-agent-session-host-launch-opening-edit'
+import { leasedHostLaunchSources } from '@/lib/agent-session/launch/structured-agent-session-host-launch-sources'
 import {
   captureNativeChatEditDraftDestination,
   readNativeChatComposerDraft,
@@ -102,11 +102,7 @@ function openingEditInput(edit: OpeningEdit) {
 }
 
 /** As a creation stages its held message: client files go to a paired host under the launch. */
-function stagedOpening(
-  edit: OpeningEdit,
-  input: EditInput,
-  skills: readonly AgentJournalSkillRef[] | undefined
-) {
+function stagedOpening(edit: OpeningEdit, input: EditInput) {
   const scopeKey = edit.draft.scopeKey
   if (getStructuredLaunchStateBySessionId(edit.sessionId)?.intent.target.kind !== 'environment') {
     return undefined
@@ -121,22 +117,11 @@ function stagedOpening(
   if (paths.length === 0) {
     return undefined
   }
-  const lease = captureNativeChatStagedInput(scopeKey, input)
-  const prepare: NonNullable<HeldHostLaunchOpeningEdit['staged']>['prepare'] = async (
-    launchOperationId,
-    target
-  ) => {
-    const prepared = await lease.prepare(
-      { ...input, ...(skills ? { skills } : {}) },
-      {
-        sessionId: edit.sessionId,
-        runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
-        launchOperationId
-      }
-    )
-    return structuredAgentSessionSendBody(prepared.text, prepared.attachments, prepared.skills)
+  // The launch owns this lease once the replacement lands, until its files are no longer needed.
+  return {
+    paths,
+    sources: leasedHostLaunchSources(captureNativeChatStagedInput(scopeKey, input), edit.sessionId)
   }
-  return { paths, prepare, release: () => lease.release() }
 }
 
 export type NativeChatHeldOpeningEditing = {
@@ -216,13 +201,14 @@ export function useNativeChatHeldOpeningEdit(
     } catch {
       return
     }
-    const staged = stagedOpening(edit, input, skills)
+    const staged = stagedOpening(edit, input)
     const replaced = replaceHeldHostLaunchOpening(worktreeId, sessionId, {
       body,
-      ...(staged ? { staged: { paths: staged.paths, prepare: staged.prepare } } : {})
+      ...(staged ? { staged } : {})
     })
+    // Only a refused save's own new lease ends here; the launch keeps whatever it held.
     if (!replaced) {
-      staged?.release()
+      staged?.sources.release()
     }
     setEdit(null)
   }, [edit, sessionId, worktreeId])

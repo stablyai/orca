@@ -3,7 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
@@ -17,14 +20,83 @@ import {
 import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-reload'
 import type { WorktreePurgeTarget } from '../../worktree-helpers'
 import { settleStructuredLaunchesForFolderCatalog } from '@/lib/agent-session/launch/structured-agent-session-launch-restore'
-import { cancelStructuredLaunchesForWorktrees } from './purged-structured-launch-retirement'
+import {
+  addTargetLaunchRemoval,
+  cancelStructuredLaunchesForWorktrees
+} from './purged-structured-launch-retirement'
 import { makeWorktree } from '../../store-test-helpers'
+import type * as HostOwnershipModule from '../listing/worktree-host-ownership'
+import type * as RetirementModule from './purged-structured-launch-retirement'
+
+/** Work at the purge's own boundaries: listing matches attributing publishers, and each keyed
+ *  lookup, host check or scan of the membership the whole removal hands its launch retirement. */
+const work = vi.hoisted(() => {
+  const counts = { listingMatches: 0, lookups: 0, hostChecks: 0, scans: 0 }
+  class CountedHosts<T> extends Set<T> {
+    override has(value: T): boolean {
+      counts.hostChecks++
+      return super.has(value)
+    }
+  }
+  class CountedRemoval<K, V> extends Map<K, V> {
+    override get(key: K): V | undefined {
+      counts.lookups++
+      return super.get(key)
+    }
+    override forEach(...args: Parameters<Map<K, V>['forEach']>): void {
+      counts.scans++
+      super.forEach(...args)
+    }
+    override entries(): MapIterator<[K, V]> {
+      counts.scans++
+      return super.entries()
+    }
+    override keys(): MapIterator<K> {
+      counts.scans++
+      return super.keys()
+    }
+    override values(): MapIterator<V> {
+      counts.scans++
+      return super.values()
+    }
+    override [Symbol.iterator](): MapIterator<[K, V]> {
+      counts.scans++
+      return super.entries()
+    }
+  }
+  const counted = <K, V extends { hosts: Set<string> }>(removal: Map<K, V>) =>
+    new CountedRemoval(
+      [...removal].map(([id, entry]) => [id, { ...entry, hosts: new CountedHosts(entry.hosts) }])
+    ) as unknown as Map<K, V>
+  return { counts, counted }
+})
+vi.mock('../listing/worktree-host-ownership', async (original) => {
+  const actual = await original<typeof HostOwnershipModule>()
+  return {
+    ...actual,
+    worktreeMatchesHost: (...args: Parameters<typeof actual.worktreeMatchesHost>) => {
+      work.counts.listingMatches++
+      return actual.worktreeMatchesHost(...args)
+    }
+  }
+})
+vi.mock('./purged-structured-launch-retirement', async (original) => {
+  const actual = await original<typeof RetirementModule>()
+  return {
+    ...actual,
+    retirePurgedLaunches: (
+      retirement: Parameters<typeof actual.retirePurgedLaunches>[0]
+    ): Set<string> =>
+      actual.retirePurgedLaunches({ ...retirement, removal: work.counted(retirement.removal) })
+  }
+})
 
 const LAUNCHES = 'orca:structuredAgentLaunches:v1'
 const TOMBSTONES = 'orca:structuredAgentLaunchCancelledSessions:v1'
 const ENV_1 = 'runtime:env-1' as ExecutionHostId
 const ENV_2 = 'runtime:env-2' as ExecutionHostId
 const initialState = useAppStore.getState()
+const dropping = (targets: WorktreePurgeTarget[]) => addTargetLaunchRemoval(new Map(), targets)
 
 /** A saved host launch whose chat never showed, as this window writes it. */
 const row = (sessionId: string, executionHostId: ExecutionHostId, worktreeId: string) => ({
@@ -194,7 +266,7 @@ describe('removing a paired host with many saved launches', () => {
     const saves = countSaves(() =>
       expect(() =>
         batchStructuredAgentLaunchRecordWrites(() => {
-          cancelStructuredLaunchesForWorktrees(new Set(['repo-1::/never-loaded-0']))
+          cancelStructuredLaunchesForWorktrees(dropping([{ id: 'repo-1::/never-loaded-0' }]))
           throw new Error('interrupted')
         })
       ).toThrow('interrupted')
@@ -228,13 +300,7 @@ describe('ending launches for dropped workspaces', () => {
       reloadWith(kept.map((id, index) => row(`kept-${count}-${index}`, ENV_2, id)))
       const unrelated = countedTargets(workspaces(count, 'gone'), ENV_1)
       const saves = countSaves(() =>
-        expect(
-          cancelStructuredLaunchesForWorktrees(
-            new Set(workspaces(count, 'gone')),
-            undefined,
-            unrelated.targets
-          )
-        ).toEqual(new Set())
+        expect(cancelStructuredLaunchesForWorktrees(dropping(unrelated.targets))).toEqual(new Set())
       )
       expect(unrelated.reads.count).toBe(count)
       expect(saves.mutations).toEqual([])
@@ -249,9 +315,9 @@ describe('ending launches for dropped workspaces', () => {
       }
       const matched = countedTargets(kept, ENV_2)
       const ended = countSaves(() =>
-        expect(
-          cancelStructuredLaunchesForWorktrees(new Set(kept), undefined, matched.targets)
-        ).toEqual(new Set(sessions))
+        expect(cancelStructuredLaunchesForWorktrees(dropping(matched.targets))).toEqual(
+          new Set(sessions)
+        )
       )
       expect(matched.reads.count).toBe(count)
       expect(ended.mutations).toEqual([TOMBSTONES, LAUNCHES])
@@ -267,19 +333,16 @@ describe('ending launches for dropped workspaces', () => {
     reloadWith([row('same-workspace', ENV_2, 'repo-1::/shared')])
     // Another host dropping the same workspace id ends nothing.
     expect(
-      cancelStructuredLaunchesForWorktrees(new Set(['repo-1::/shared']), undefined, [
-        { id: 'repo-1::/shared', hostId: ENV_1 }
-      ])
+      cancelStructuredLaunchesForWorktrees(dropping([{ id: 'repo-1::/shared', hostId: ENV_1 }]))
     ).toEqual(new Set())
     // A drop that names no host ends it, as does one with no host evidence at all.
     expect(
-      cancelStructuredLaunchesForWorktrees(new Set(['repo-1::/shared']), undefined, [
-        { id: 'repo-1::/shared', hostId: ENV_1 },
-        { id: 'repo-1::/shared' }
-      ])
+      cancelStructuredLaunchesForWorktrees(
+        dropping([{ id: 'repo-1::/shared', hostId: ENV_1 }, { id: 'repo-1::/shared' }])
+      )
     ).toEqual(new Set(['same-workspace']))
     reloadWith([row('no-evidence', ENV_2, 'repo-1::/shared')])
-    expect(cancelStructuredLaunchesForWorktrees(new Set(['repo-1::/shared']))).toEqual(
+    expect(cancelStructuredLaunchesForWorktrees(dropping([{ id: 'repo-1::/shared' }]))).toEqual(
       new Set(['no-evidence'])
     )
   })
@@ -318,4 +381,132 @@ describe('ending launches for dropped workspaces', () => {
       expect(countSaves(catalog).mutations).toEqual([])
     }
   )
+})
+
+describe("one removal of many hosts' copies of the same workspace id", () => {
+  const SAME = 'repo-1::/same-path'
+  const ALIAS = 'repo-1::/through-proxy'
+  const EXCLUSIVE = 'repo-1::/exclusive'
+  const SHARED_PROXY = 'repo-1::/shared-proxy'
+  const SSH = 'ssh:box' as ExecutionHostId
+  const PROXY = 'runtime:proxy' as ExecutionHostId
+
+  /** Targets whose own fields count each read. */
+  function countedTarget(id: string, hostId?: ExecutionHostId) {
+    // Branded as a host target as the public purge takes it; without a host it reads as a raw id.
+    const target = { reads: 0 } as HostWorktreeTarget & { reads: number }
+    Object.defineProperty(target, 'id', {
+      get: () => (target.reads++, id),
+      enumerable: true
+    })
+    Object.defineProperty(target, 'hostId', {
+      get: () => (target.reads++, hostId),
+      enumerable: true
+    })
+    return target
+  }
+
+  it.each([3, 30])('classifies each target, publisher and launch once at %i hosts', (count) => {
+    const gone = Array.from(
+      { length: count },
+      (_, index) => `runtime:gone-${index}` as ExecutionHostId
+    )
+    const rows = [
+      ...gone.map((host, index) => row(`gone-${index}`, host, SAME)),
+      row('kept', ENV_2, SAME),
+      // An unstamped row no single repo owner claims stays a survivor, launch and all.
+      row('legacy-local', 'local' as ExecutionHostId, SAME),
+      // An SSH copy reached through a paired runtime: either spelling of its host is the purged copy.
+      row('alias-ssh', SSH, ALIAS),
+      row('alias-proxy', PROXY, ALIAS),
+      row('alias-kept', ENV_2, ALIAS),
+      // The runtime an SSH copy was reached through still publishes the id, so it is no alias.
+      row('proxied-ssh', 'ssh:box-2' as ExecutionHostId, SHARED_PROXY),
+      row('proxy-kept', 'runtime:proxy-2' as ExecutionHostId, SHARED_PROXY),
+      // A workspace only env-1 publishes goes whole; a host launch elsewhere waits on its own host.
+      row('exclusive-own', ENV_1, EXCLUSIVE),
+      row('exclusive-other', ENV_2, EXCLUSIVE),
+      row('only', ENV_1, 'repo-1::/only')
+    ]
+    reloadWith(rows)
+    expect(restorePersistedStructuredLaunchState(SAME, 'gone-0')).toBeDefined()
+    const publishers = [
+      ...[...gone, ENV_2].map((hostId) =>
+        makeWorktree({ id: SAME, repoId: 'repo-1', hostId, path: '/same-path' })
+      ),
+      makeWorktree({ id: SAME, repoId: 'repo-1', path: '/same-path' }),
+      makeWorktree({
+        id: ALIAS,
+        repoId: 'repo-1',
+        hostId: SSH,
+        runtimeOwnerEnvironmentId: 'proxy'
+      }),
+      makeWorktree({ id: ALIAS, repoId: 'repo-1', hostId: ENV_2 }),
+      makeWorktree({
+        id: SHARED_PROXY,
+        repoId: 'repo-1',
+        hostId: 'ssh:box-2' as ExecutionHostId,
+        runtimeOwnerEnvironmentId: 'proxy-2'
+      }),
+      makeWorktree({
+        id: SHARED_PROXY,
+        repoId: 'repo-1',
+        hostId: 'runtime:proxy-2' as ExecutionHostId
+      }),
+      makeWorktree({ id: EXCLUSIVE, repoId: 'repo-1', hostId: ENV_1 })
+    ]
+    useAppStore.setState({ worktreesByRepo: { 'repo-1': publishers } })
+    const targets = [
+      ...gone.map((hostId) => countedTarget(SAME, hostId)),
+      countedTarget(ALIAS, PROXY),
+      countedTarget(SHARED_PROXY, 'ssh:box-2' as ExecutionHostId),
+      countedTarget(EXCLUSIVE, ENV_1),
+      countedTarget('repo-1::/only')
+    ]
+    Object.assign(work.counts, { listingMatches: 0, lookups: 0, hostChecks: 0, scans: 0 })
+    const purge = () => useAppStore.getState().purgeWorktreeTerminalState(targets)
+    const saves = countSaves(purge)
+
+    expect(readStructuredAgentLaunchRecords().map(({ sessionId }) => sessionId)).toEqual([
+      'kept',
+      'legacy-local',
+      'alias-kept',
+      'proxy-kept',
+      'exclusive-other'
+    ])
+    expect(getStructuredLaunchStateBySessionId('gone-0')).toBeUndefined()
+    for (const sessionId of [
+      ...gone.map((_, index) => `gone-${index}`),
+      'alias-ssh',
+      'alias-proxy',
+      'proxied-ssh',
+      'exclusive-own',
+      'only'
+    ]) {
+      expect(hasStructuredAgentSessionLaunchCancellationTombstone('', sessionId)).toBe(true)
+    }
+    expect(saves.mutations).toEqual([TOMBSTONES, LAUNCHES])
+    expect(saves.tombstoneRows).toBe(count + 5)
+    expect(saves.launchRows).toBe(5)
+
+    // Target normalization: fixed linear passes, field reads per target: slice filter 1; edit
+    // flush twin collection 3 and closed-file split 3; purge twin collection 3, full/twin split 2,
+    // full ids 1, launch membership 2, visit recency 3, host keys 2. At most 20, whatever N.
+    for (const target of targets) {
+      expect(target.reads).toBeLessThanOrEqual(20)
+    }
+    // Publisher attribution: a row names its host by runtime owner, stamp or, unstamped, as local
+    // or the repo's only owner, so each listing derivation (the edit flush and the purge) tries
+    // at most 2 purged hosts per publisher row: at most 2 x 2 x P listing matches.
+    expect(work.counts.listingMatches).toBeLessThanOrEqual(4 * publishers.length)
+    // Launch membership: one keyed lookup per live launch and per saved row still standing, each
+    // with at most one host check, and no scan of the membership: the live launch's own row was
+    // already ended by the live pass.
+    expect(work.counts.lookups).toBe(1 + rows.length - 1)
+    expect(work.counts.hostChecks).toBeLessThanOrEqual(work.counts.lookups)
+    expect(work.counts.scans).toBe(0)
+
+    // The same removal again ends and saves nothing.
+    expect(countSaves(purge).mutations).toEqual([])
+  })
 })

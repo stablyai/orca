@@ -2,7 +2,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -12,7 +11,6 @@ import {
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
 import type * as launchModule from './agent-session/launch/structured-agent-session-launch-create-call'
-import type * as routingModule from '@/store/slices/project-group-owner-routing'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
@@ -42,22 +40,8 @@ const mocks = vi.hoisted(() => ({
   hostLaunch: vi.fn((_method: string, _params: unknown): Promise<unknown> => new Promise(() => {})),
   // Each paired host's folder catalog reply, by environment id.
   folders: new Map<string, () => Promise<{ folderWorkspaces: FolderWorkspace[] }>>(),
-  rpc: [] as string[],
-  // Host ownership decisions the launch recovery makes as catalogs settle.
-  ownerChecks: 0
+  rpc: [] as string[]
 }))
-vi.mock('@/store/slices/project-group-owner-routing', async (original) => {
-  const routing = await original<typeof routingModule>()
-  return {
-    ...routing,
-    catalogOwnsHost: (...args: Parameters<typeof routing.catalogOwnsHost>) => {
-      if (new Error('caller').stack?.includes('structured-agent-session-launch-restore')) {
-        mocks.ownerChecks++
-      }
-      return routing.catalogOwnsHost(...args)
-    }
-  }
-})
 vi.mock('./agent-session/launch/structured-agent-session-launch-create-call', async (original) => ({
   ...(await original<typeof launchModule>()),
   launchStructuredAgentSession: mocks.createSession
@@ -140,6 +124,17 @@ const chatTabs = (sessionId: string, key = KEY) =>
     (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
   )
 const launchRpcs = () => mocks.rpc.filter((method) => /^agent(Session)?\./.test(method))
+
+/** The chat's tab goes without its launch ending, as a store rewrite would drop it. */
+function loseChat(sessionId: string, key: typeof KEY): void {
+  useAppStore.setState((state) => ({
+    unifiedTabsByWorktree: {
+      ...state.unifiedTabsByWorktree,
+      [key]: state.unifiedTabsByWorktree[key]!.filter((tab) => tab.entityId !== sessionId)
+    }
+  }))
+  expect(chatTabs(sessionId, key)).toEqual([])
+}
 
 /** Each paired host's catalog answers with these folders; `null` fails the read. */
 function hostFolders(byEnvironment: Record<string, FolderWorkspace[] | null>): void {
@@ -309,17 +304,10 @@ describe('a held host launch in a folder whose startup read failed', () => {
     expect(launchRpcs()).toEqual([])
     expect(mocks.createSession).not.toHaveBeenCalled()
 
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // A tab lost without its launch ending comes back with the next catalog, once.
-      useAppStore.setState((state) => ({
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [KEY]: state.unifiedTabsByWorktree[KEY]!.filter((tab) => tab.entityId !== 'codex-folder')
-        }
-      }))
-      await refreshHostFolders()
-      expect(chatTabs('codex-folder')).toHaveLength(1)
-    }
+    // A tab lost without its launch ending comes back with the next catalog, once.
+    loseChat('codex-folder', KEY)
+    await refreshHostFolders()
+    expect(chatTabs('codex-folder')).toHaveLength(1)
 
     // Retry reads the host's record of this same launch, whatever it says; it starts nothing.
     mocks.hostLaunch.mockImplementation(async () => ({ state: 'unknown' }))
@@ -451,7 +439,11 @@ describe('folder catalogs settling over many held launches', () => {
     draws: number
     storageWrites: number
     rpc: number
-    ownerChecks: number
+    /** Saved-launch debt read, by host: each of its workspace buckets read, or its whole debt
+     *  read or walked (a walk counts every bucket it passes). */
+    debt: Record<string, number>
+    /** Walks of every host's debt at once. */
+    allDebtWalks: number
   }
 
   /** `count` held launches, each in its own env-1 folder among as many unrelated ones; counts
@@ -484,6 +476,64 @@ describe('folder catalogs settling over many held launches', () => {
     return measureWork(settle)
   }
 
+  /** Counts debt reads wherever recovery keeps it: a bucket is an array of saved rows, a host's
+   *  debt a map of such buckets, recognized by the rows themselves rather than by any caller. */
+  function countDebtReads(work: Work): () => void {
+    const hostOf = new Map<object, string>(
+      readStructuredAgentLaunchRecords().map((record) => [record, record.executionHostId])
+    )
+    const proto = Map.prototype
+    const { get, values, entries, keys, forEach } = proto
+    const bucketHost = (value: unknown): string | undefined =>
+      Array.isArray(value) ? hostOf.get(value[0] as object) : undefined
+    const debtHost = (value: unknown): string | undefined =>
+      value instanceof Map && value.size > 0
+        ? bucketHost(values.call(value).next().value)
+        : undefined
+    const read = (host: string, buckets = 1): void => {
+      work.debt[host] = (work.debt[host] ?? 0) + buckets
+    }
+    const walked = (map: Map<unknown, unknown>): void => {
+      const host = debtHost(map)
+      if (host) {
+        read(host, map.size)
+      } else if (map.size > 0 && debtHost(values.call(map).next().value)) {
+        work.allDebtWalks++
+      }
+    }
+    const spies = [
+      vi.spyOn(proto, 'get').mockImplementation(function (this: Map<unknown, unknown>, key) {
+        const value = get.call(this, key)
+        const host = bucketHost(value) ?? debtHost(value)
+        if (host) {
+          read(host)
+        }
+        return value
+      }),
+      ...(['entries', 'keys', 'values', Symbol.iterator] as const).map((name) => {
+        const original = { entries, keys, values, [Symbol.iterator]: entries }[name] as (
+          this: Map<unknown, unknown>
+        ) => MapIterator<[unknown, unknown]>
+        return vi.spyOn(proto, name as 'entries').mockImplementation(function (
+          this: Map<unknown, unknown>
+        ) {
+          walked(this)
+          return original.call(this)
+        })
+      }),
+      vi.spyOn(proto, 'forEach').mockImplementation(function (
+        this: Map<unknown, unknown>,
+        ...args
+      ) {
+        walked(this)
+        forEach.apply(this, args)
+      })
+    ]
+    return () => spies.forEach((spy) => spy.mockRestore())
+  }
+
+  const uncounted = new WeakMap<object, Record<PropertyKey, unknown>>()
+
   async function measureWork(settle: () => Promise<void>): Promise<Work> {
     const work: Work = {
       rowReads: 0,
@@ -492,16 +542,22 @@ describe('folder catalogs settling over many held launches', () => {
       draws: 0,
       storageWrites: 0,
       rpc: 0,
-      ownerChecks: 0
+      debt: {},
+      allDebtWalks: 0
     }
     const counted = <T extends object>(entry: T, key: keyof T, count: () => void): void => {
-      const value = entry[key]
+      // An earlier measurement's getter must not count this one's setup read.
+      const stored = uncounted.get(entry)
+      const value =
+        stored && key in stored ? (stored[key as PropertyKey] as T[keyof T]) : entry[key]
+      uncounted.set(entry, { ...stored, [key]: value })
       Object.defineProperty(entry, key, {
         configurable: true,
         enumerable: true,
         get: () => (count(), value)
       })
     }
+    const stopDebtReads = countDebtReads(work)
     for (const record of readStructuredAgentLaunchRecords()) {
       counted(record, 'surfaceAddress', () => work.rowReads++)
     }
@@ -516,32 +572,38 @@ describe('folder catalogs settling over many held launches', () => {
     })
     const writes = [vi.spyOn(localStorage, 'setItem'), vi.spyOn(localStorage, 'removeItem')]
     const rpcBefore = mocks.rpc.length
-    mocks.ownerChecks = 0
     try {
       await settle()
       work.storageWrites = writes
         .flatMap((spy) => spy.mock.calls)
         .filter(([key]) => key.startsWith('orca:structuredAgentLaunch')).length
     } finally {
+      stopDebtReads()
       writes.forEach((spy) => spy.mockRestore())
       useAppStore.setState({ allWorktrees, createUnifiedTab })
     }
     work.rpc = mocks.rpc
       .slice(rpcBefore)
       .filter((method) => method !== 'folderWorkspace.list').length
-    work.ownerChecks = mocks.ownerChecks
     return work
   }
 
+  // A settling catalog reads its own hosts' debt: each such host's whole debt twice (ending
+  // unlisted folders, then drawing listed ones), a walk of its B buckets and each listed bucket
+  // once: at most 2 + 2B per host. Every other host's debt goes unread.
+  const ownDebtBound = (buckets: number): number => 2 + 2 * buckets
+
   it('does nothing for drawn chats as the same catalog settles again', async () => {
-    const small = await settleCost(3, refreshHostFolders)
-    const large = await settleCost(30, refreshHostFolders)
-    for (const work of [small, large]) {
+    for (const count of [3, 30]) {
+      const work = await settleCost(count, refreshHostFolders)
       expect(work).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+      expect(work).toMatchObject({ allDebtWalks: 0, debt: { 'runtime:env-1': expect.any(Number) } })
+      expect(Object.keys(work.debt)).toEqual(['runtime:env-1'])
+      expect(work.debt['runtime:env-1']).toBeLessThanOrEqual(ownDebtBound(count))
+      // Each saved row and tab read a bounded number of times: linear, never rows times tabs.
+      expect(work.rowReads).toBeLessThanOrEqual(2 * count)
+      expect(work.tabProbes).toBeLessThanOrEqual(2 * count)
     }
-    // Each saved row and tab read a bounded number of times: linear, never rows times tabs.
-    expect(large.rowReads).toBeLessThanOrEqual(2 * 30)
-    expect(large.tabProbes).toBeLessThanOrEqual(2 * 30)
   })
 
   it('leaves the folder launches unvisited as unrelated repo listings settle', async () => {
@@ -551,21 +613,23 @@ describe('folder catalogs settling over many held launches', () => {
       }
       await settled()
     }
-    const small = await settleCost(3, listings(3))
-    const large = await settleCost(30, listings(30))
-    for (const work of [small, large]) {
-      expect(work).toMatchObject({
+    for (const count of [3, 30]) {
+      expect(await settleCost(count, listings(count))).toMatchObject({
         rowReads: 0,
         catalogBuilds: 0,
         draws: 0,
         storageWrites: 0,
-        rpc: 0
+        rpc: 0,
+        debt: {},
+        allDebtWalks: 0
       })
     }
   })
 
-  it("has each paired host's catalog settle only its own host's launches", async () => {
-    const allHostsCost = async (count: number): Promise<Work> => {
+  it("has each catalog settle only its own hosts' launches", async () => {
+    const LOCAL_FOLDER = 'folder-local'
+    const SSH_FOLDER = 'folder-ssh'
+    const allHostsCost = async (count: number) => {
       main.close()
       resetStructuredAgentLaunchRegistryForTests()
       resetStructuredAgentLaunchPersistenceForTests()
@@ -574,12 +638,23 @@ describe('folder catalogs settling over many held launches', () => {
       const hosts = Array.from({ length: count }, (_, index) => `env-${index + 1}`)
       api.api = {
         ...api.api,
-        runtimeEnvironments: { list: async () => hosts.map((id) => ({ id })) }
+        runtimeEnvironments: { list: async () => hosts.map((id) => ({ id })) },
+        // The local catalog lists this window's folder and one on an SSH host.
+        folderWorkspaces: {
+          list: vi.fn(async () => [
+            { ...folder(LOCAL_FOLDER), executionHostId: 'local' },
+            { ...folder(SSH_FOLDER), connectionId: 'box' }
+          ])
+        }
       }
-      // One held launch per host, in a folder only that host lists.
-      await reloadWithUnreadablePartition(
-        hosts.map((env) => heldRow(`codex-${env}`, `folder-${env}`, `runtime:${env}`))
-      )
+      // One held launch per paired host, in a folder only that host lists; the local partition's
+      // own and SSH launches; and one on a runtime host no catalog answers for.
+      await reloadWithUnreadablePartition([
+        ...hosts.map((env) => heldRow(`codex-${env}`, `folder-${env}`, `runtime:${env}`)),
+        heldRow('codex-local', LOCAL_FOLDER, 'local'),
+        heldRow('codex-ssh', SSH_FOLDER, 'ssh:box'),
+        heldRow('codex-stray', 'folder-stray', 'runtime:stray')
+      ])
       hostFolders(
         Object.fromEntries(
           hosts.map((env) => [
@@ -592,26 +667,52 @@ describe('folder catalogs settling over many held launches', () => {
       const shown = () =>
         hosts.filter((env) => chatTabs(`codex-${env}`, folderWorkspaceKey(`folder-${env}`)).length)
       expect(shown()).toEqual(hosts)
-      const work = await measureWork(loadAllHostFolders)
-      expect(shown()).toEqual(hosts)
-      expect(readStructuredAgentLaunchRecords()).toHaveLength(count)
+      const debtHosts = [...hosts.map((env) => `runtime:${env}`), 'local', 'ssh:box']
 
-      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // A tab lost without its launch ending still comes back with its host's next catalog.
-        const lost = folderWorkspaceKey(`folder-${hosts.at(-1)}`)
-        useAppStore.setState((state) => ({
-          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [lost]: [] }
-        }))
-        await loadAllHostFolders()
-        expect(shown()).toEqual(hosts)
+      // Every catalog again, unchanged: each reads only its own hosts' debt; the host no catalog
+      // answers for is never read.
+      const all = await measureWork(loadAllHostFolders)
+      expect(all).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+      expect(all.allDebtWalks).toBe(0)
+      expect(Object.keys(all.debt).sort()).toEqual([...debtHosts].sort())
+      for (const host of debtHosts) {
+        expect(all.debt[host]).toBeLessThanOrEqual(ownDebtBound(1))
       }
-      return work
+
+      // One paired host's catalog reads its own debt alone.
+      const one = await measureWork(() => refreshHostFolders(hosts.at(-1)))
+      expect(one).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+      expect(Object.keys(one.debt)).toEqual([`runtime:${hosts.at(-1)}`])
+      // Its one saved row read at most twice (shown check), whatever the other hosts hold.
+      expect(one.rowReads).toBeLessThanOrEqual(2)
+      expect(one.debt[`runtime:${hosts.at(-1)}`]).toBeLessThanOrEqual(ownDebtBound(1))
+
+      // The local catalog reads its partition, this window's and SSH hosts' debt, and no paired host's.
+      const local = await measureWork(async () => {
+        await useAppStore.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
+        await settled()
+      })
+      expect(local).toMatchObject({ storageWrites: 0, rpc: 0, allDebtWalks: 0 })
+      expect(Object.keys(local.debt).sort()).toEqual(['local', 'ssh:box'])
+      // Each of its 2 rows read twice to see whether it shows and twice more to try drawing it
+      // if not (the SSH host is not connected here), never another host's.
+      expect(local.rowReads).toBeLessThanOrEqual(2 * 4)
+      for (const host of ['local', 'ssh:box']) {
+        expect(local.debt[host]).toBeLessThanOrEqual(ownDebtBound(1))
+      }
+      expect(readStructuredAgentLaunchRecords()).toHaveLength(count + 3)
+
+      // A tab lost without its launch ending still comes back with its host's next catalog.
+      const lost = hosts.at(-1)!
+      loseChat(`codex-${lost}`, folderWorkspaceKey(`folder-${lost}`))
+      const redraw = await measureWork(loadAllHostFolders)
+      expect(shown()).toEqual(hosts)
+      expect(redraw).toMatchObject({ draws: 1, rpc: 0 })
+      return { all, one, local }
     }
     for (const count of [3, 30]) {
       const work = await allHostsCost(count)
-      expect(work).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
-      // Every catalog visits its own host's launches alone, never every host's.
-      expect(work.ownerChecks).toBeLessThanOrEqual(count)
+      console.log('folder catalog debt reads', JSON.stringify({ count, ...work }))
     }
   })
 })

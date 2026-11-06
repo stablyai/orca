@@ -83,119 +83,116 @@ export function retirePurgedTabLaunches(
   }
 }
 
-/** Which hosts dropped each workspace id; `true` when a target named no host, so any host's did. */
-type DroppedWorkspaces = ReadonlyMap<string, true | ReadonlySet<ExecutionHostId>>
+/** Which launches under one dropped workspace end. */
+type WorkspaceLaunchRemoval = {
+  /** A target named no host, so every host's launch ends. */
+  anyHost: boolean
+  /** Ordinary launches on any host; a host launch waits on its own host, so only `hosts` end it. */
+  ordinaryOnAnyHost: boolean
+  /** Hosts whose launches of either kind end, their aliases included. */
+  hosts: Set<ExecutionHostId>
+}
 
-function droppedWorkspaces(
-  droppedBy: readonly WorktreePurgeTarget[] | undefined
-): DroppedWorkspaces | undefined {
-  if (!droppedBy) {
-    return undefined
+/** A whole removal's launch membership by workspace id, built once from its targets and
+ *  publishers so each launch row answers with one keyed lookup. */
+export type LaunchRemoval = Map<string, WorkspaceLaunchRemoval>
+
+/** A purge's launch retirement: its membership, then each part's tab retirement once every
+ *  part's cancellations are known. */
+export type PurgedLaunchRetirement = {
+  removal: LaunchRemoval
+  retireTabs: ((cancelledSessionIds: ReadonlySet<string>) => void)[]
+}
+
+export function createPurgedLaunchRetirement(): PurgedLaunchRetirement {
+  return { removal: new Map(), retireTabs: [] }
+}
+
+function workspaceRemoval(removal: LaunchRemoval, worktreeId: string): WorkspaceLaunchRemoval {
+  let entry = removal.get(worktreeId)
+  if (!entry) {
+    entry = { anyHost: false, ordinaryOnAnyHost: false, hosts: new Set() }
+    removal.set(worktreeId, entry)
   }
-  const dropped = new Map<string, true | Set<ExecutionHostId>>()
-  for (const { id, hostId } of droppedBy) {
-    const hosts = dropped.get(id)
-    if (hosts === true) {
-      continue
+  return entry
+}
+
+/** Whole-workspace drops: with `launchHostId`, only that host's copy went, so only its launches
+ *  end; otherwise a target naming a host ends ordinary launches anywhere but host launches only
+ *  on that host, and one naming none ends every launch. */
+export function addTargetLaunchRemoval(
+  removal: LaunchRemoval,
+  targets: readonly WorktreePurgeTarget[],
+  launchHostId?: ExecutionHostId
+): LaunchRemoval {
+  for (const { id, hostId } of targets) {
+    const entry = workspaceRemoval(removal, id)
+    if (launchHostId) {
+      entry.hosts.add(launchHostId)
+    } else if (hostId) {
+      entry.ordinaryOnAnyHost = true
+      entry.hosts.add(hostId)
+    } else {
+      entry.anyHost = true
     }
-    dropped.set(id, hostId ? (hosts ?? new Set<ExecutionHostId>()).add(hostId) : true)
   }
-  return dropped
+  return removal
 }
 
-/** A host launch waits on its own host: another host dropping the same workspace id ends nothing. */
-function hostLaunchDropped(
-  dropped: DroppedWorkspaces | undefined,
-  worktreeId: string,
-  executionHostId: ExecutionHostId
-): boolean {
-  const hosts = dropped?.get(worktreeId)
-  return !dropped || hosts === true || !!hosts?.has(executionHostId)
+/** One removed copy's launches under ids a twin still publishes: only these hosts' end. */
+export function addHostLaunchRemoval(
+  removal: LaunchRemoval,
+  launchHostsById: ReadonlyMap<string, readonly ExecutionHostId[]>
+): LaunchRemoval {
+  for (const [worktreeId, hosts] of launchHostsById) {
+    const entry = workspaceRemoval(removal, worktreeId)
+    for (const hostId of hosts) {
+      entry.hosts.add(hostId)
+    }
+  }
+  return removal
 }
 
-type OwnedByHost = (worktreeId: string, executionHostId: ExecutionHostId) => boolean
-
-/** One part of a purge: the workspaces it drops, whose launches in them end, and its own tab
- *  retirement once every part's cancellations are known. */
-export type PurgedLaunchScope = {
-  worktreeIds: ReadonlySet<string>
-  /** Only launches on this host end; absent, any host's. */
-  ownedByHost?: OwnedByHost
-  /** The host each id was dropped by, when the purge knows it. */
-  droppedBy?: readonly WorktreePurgeTarget[]
-  retireTabs?: (cancelledSessionIds: ReadonlySet<string>) => void
-}
-
-/** Cancels provisional structured-chat launches in these worktrees, on the given host only.
- *  `droppedBy` names the host each id was dropped by, when the purge knows it. */
-export function cancelStructuredLaunchesForWorktrees(
-  worktreeIdSet: ReadonlySet<string>,
-  ownedByHost?: OwnedByHost,
-  droppedBy?: readonly WorktreePurgeTarget[]
-): Set<string> {
-  return retirePurgedLaunchScopes([{ worktreeIds: worktreeIdSet, ownedByHost, droppedBy }])
+/** Cancels provisional structured-chat launches the removal names. */
+export function cancelStructuredLaunchesForWorktrees(removal: LaunchRemoval): Set<string> {
+  return retirePurgedLaunches({ removal, retireTabs: [] })
 }
 
 /** Ends a whole purge's launches at once: one pass over live and saved launches for all its
  *  parts, then each part's tabs, with each changed journal saved once at the end. */
-export function retirePurgedLaunchScopes(scopes: readonly PurgedLaunchScope[]): Set<string> {
+export function retirePurgedLaunches(retirement: PurgedLaunchRetirement): Set<string> {
   const cancelledSessionIds = new Set<string>()
   batchStructuredAgentLaunchRecordWrites(() => {
-    cancelLaunchesIn(scopesByWorkspace(scopes), cancelledSessionIds)
-    for (const scope of scopes) {
-      scope.retireTabs?.(cancelledSessionIds)
+    cancelLaunchesIn(retirement.removal, cancelledSessionIds)
+    for (const retireTabs of retirement.retireTabs) {
+      retireTabs(cancelledSessionIds)
     }
   })
   return cancelledSessionIds
 }
 
-type WorkspaceScope = { ownedByHost?: OwnedByHost; dropped?: DroppedWorkspaces }
-
-function scopesByWorkspace(
-  scopes: readonly PurgedLaunchScope[]
-): ReadonlyMap<string, WorkspaceScope[]> {
-  const byWorkspace = new Map<string, WorkspaceScope[]>()
-  for (const scope of scopes) {
-    const entry = { ownedByHost: scope.ownedByHost, dropped: droppedWorkspaces(scope.droppedBy) }
-    for (const worktreeId of scope.worktreeIds) {
-      const inWorkspace = byWorkspace.get(worktreeId)
-      if (inWorkspace) {
-        inWorkspace.push(entry)
-      } else {
-        byWorkspace.set(worktreeId, [entry])
-      }
-    }
-  }
-  return byWorkspace
-}
-
 function launchDropped(
-  byWorkspace: ReadonlyMap<string, readonly WorkspaceScope[]>,
+  removal: LaunchRemoval,
   worktreeId: string,
   executionHostId: ExecutionHostId,
   hostLaunch: boolean
 ): boolean {
-  return !!byWorkspace
-    .get(worktreeId)
-    ?.some(
-      ({ ownedByHost, dropped }) =>
-        (!ownedByHost || ownedByHost(worktreeId, executionHostId)) &&
-        (!hostLaunch || hostLaunchDropped(dropped, worktreeId, executionHostId))
-    )
+  const entry = removal.get(worktreeId)
+  return (
+    !!entry &&
+    (entry.anyHost || (!hostLaunch && entry.ordinaryOnAnyHost) || entry.hosts.has(executionHostId))
+  )
 }
 
-function cancelLaunchesIn(
-  byWorkspace: ReadonlyMap<string, readonly WorkspaceScope[]>,
-  cancelledSessionIds: Set<string>
-): void {
-  if (byWorkspace.size === 0) {
+function cancelLaunchesIn(removal: LaunchRemoval, cancelledSessionIds: Set<string>): void {
+  if (removal.size === 0) {
     return
   }
   for (const launch of structuredLaunchStates()) {
     const worktreeId = launch.intent.worktreeId
     if (
       launchDropped(
-        byWorkspace,
+        removal,
         worktreeId,
         launch.intent.executionHostId,
         !!launch.intent.hostLaunch
@@ -227,7 +224,7 @@ function cancelLaunchesIn(
       worktreeId &&
       (record.executionHostId === 'local' || hostLaunch) &&
       !cancelledSessionIds.has(record.sessionId) &&
-      launchDropped(byWorkspace, worktreeId, record.executionHostId, hostLaunch)
+      launchDropped(removal, worktreeId, record.executionHostId, hostLaunch)
     ) {
       markStructuredAgentSessionLaunchCancelledSilently(
         worktreeId,

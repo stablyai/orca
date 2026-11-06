@@ -13,7 +13,14 @@ import type {
 } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+
+/** Puts the opening's files on the host under the launch; answers its host-readable body. */
+export type HostLaunchPrepare = (
+  launchOperationId: string,
+  target: RuntimeClientTarget
+) => Promise<StructuredAgentSessionFirstMessage['body']>
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 
 export const OPERATION_ID = `${Date.now()}-000000000000000000000000000000ac`
@@ -164,7 +171,8 @@ export const SKILLS = [{ name: 'audit', path: '/skills/audit/SKILL.md' }]
 /** A held message with a client file staged for the host, uploaded when release needs it. */
 export function startRichReleaseLaunch(
   text: string,
-  prepareFirstMessage: NonNullable<StructuredHostLaunch['prepareFirstMessage']>
+  prepareFirstMessage: HostLaunchPrepare,
+  release: () => void = () => {}
 ) {
   return startStructuredAgentLaunch('workspace-1', 'codex', {
     requestId: newAgentLaunchRequestId(),
@@ -182,7 +190,11 @@ export function startRichReleaseLaunch(
         body: structuredAgentSessionSendBody(text, [IMAGE], SKILLS)
       },
       stagedSources: [IMAGE.path],
-      prepareFirstMessage,
+      sources: {
+        prepare: (_opening, launchOperationId, target) =>
+          prepareFirstMessage(launchOperationId, target),
+        release
+      },
       accept: {
         presentation: 'focused',
         setupReceipt: { required: true, runId: 'setup-run-1' },

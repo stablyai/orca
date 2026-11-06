@@ -36,7 +36,6 @@ import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contr
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
 import {
   AWAITING,
   CHAT_STARTED,
@@ -57,7 +56,8 @@ import {
   startHostLaunch,
   startReleaseLaunch,
   startRichReleaseLaunch,
-  windowCalls
+  windowCalls,
+  type HostLaunchPrepare
 } from './structured-agent-session-host-launch.test-fixture'
 
 let restore: (() => void) | undefined
@@ -435,7 +435,7 @@ describe('a chat whose host takes its first turn after Setup', () => {
       SKILLS
     )
     const prepareFirstMessage = vi
-      .fn<NonNullable<StructuredHostLaunch['prepareFirstMessage']>>()
+      .fn<HostLaunchPrepare>()
       .mockRejectedValueOnce(new Error('Attach the file again.'))
       .mockResolvedValueOnce(onHost)
     // Ready for its input; then, while parked, a read that only ends with the launch.

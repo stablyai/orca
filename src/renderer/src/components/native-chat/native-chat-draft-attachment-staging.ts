@@ -205,18 +205,27 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       (held) => paths.length === held.size && paths.every((path) => held.has(path))
     ) ?? new Set(paths)
   files?.leases.add(lease)
-  return {
-    release: (input?: NativeChatStagedInput): void => {
-      if (files) {
-        const owner = currentFiles(files)
-        const released = input ? inputPaths(owner, input) : [...lease]
-        released.forEach((path) => lease.delete(path))
-        if (!lease.size) {
-          owner.leases.delete(lease)
-          owner.heldInputs.delete(lease)
-        }
-        pruneFiles(owner)
+  const release = (input?: NativeChatStagedInput): void => {
+    if (files) {
+      const owner = currentFiles(files)
+      const released = input ? inputPaths(owner, input) : [...lease]
+      released.forEach((path) => lease.delete(path))
+      if (!lease.size) {
+        owner.leases.delete(lease)
+        owner.heldInputs.delete(lease)
       }
+      pruneFiles(owner)
+    }
+  }
+  return {
+    release,
+    /** Hands the leased files to `scope`'s draft, which owns them from now; none is released. */
+    transfer: (scope: string): void => {
+      const owner = files && currentFiles(files)
+      if (owner && scopeFiles(scope) !== owner) {
+        lease.forEach((path) => owner.paths.delete(path) && stageNativeChatDraftFile(scope, path))
+      }
+      release()
     },
     /** `launchOperationId`: the prepared launch that founds a chat not yet on its host. */
     prepare: async <T extends NativeChatStagedInput>(

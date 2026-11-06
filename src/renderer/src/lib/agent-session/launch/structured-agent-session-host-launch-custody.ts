@@ -4,11 +4,17 @@
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { handBackStructuredAgentSessionMessage } from '@/components/native-chat/structured-agent-session-message-hand-back'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import {
   hasStagedStructuredLaunchPrompt,
+  settleHeldStructuredLaunchPrompts,
   settleHostCarriedStructuredLaunchPrompts,
   takeBackLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
+import {
+  handHostLaunchSourcesTo,
+  retireHostLaunchSources
+} from './structured-agent-session-host-launch-sources'
 import { notifyStructuredLaunchIntentChanged } from './structured-agent-session-launch-registry'
 
 /** The host has the text: founded as its chat's first message, delivered to its terminal, or
@@ -24,28 +30,36 @@ export function hostLaunchMessageAcknowledged(
     : prompt?.outcome === 'handed-to-terminal'
 }
 
-/** Settles the held message once: let go when the host acknowledged it, else back to the chat's
- *  composer beside whatever was typed there, and never sent again from here. Text staged in this
- *  window settles with its send; a launch restored after a reload has only its saved copy, which
- *  is kept until the composer durably holds it. */
+/** Settles the held opening once, from its current canonical form: let go when the host
+ *  acknowledged it, else back to the chat's composer beside whatever was typed there, never sent
+ *  again from here. Only a durable return ends this window's hold on it (and on its client
+ *  files); one that could not be saved keeps the opening, its row and its files for a later try. */
 export function releaseHostLaunchMessage(
   intent: StructuredAgentSessionLaunchIntent,
   acknowledged: boolean
 ): void {
-  const saved = intent.hostLaunch ? intent.opening : undefined
-  let settled = true
+  const opening = intent.hostLaunch ? intent.opening : undefined
   if (acknowledged) {
+    settleHeldStructuredLaunchPrompts(intent.sessionId, true)
     settleHostCarriedStructuredLaunchPrompts(intent.sessionId)
+    retireHostLaunchSources(intent)
+  } else if (opening) {
+    if (
+      !handBackStructuredAgentSessionMessage(
+        intent.sessionId,
+        opening.clientMessageId,
+        opening.body
+      )
+    ) {
+      return
+    }
+    settleHeldStructuredLaunchPrompts(intent.sessionId, false)
+    // Files not yet on the host go with the message: its draft keeps them from now.
+    handHostLaunchSourcesTo(intent, structuredAgentSessionDraftScopeKey(intent.sessionId))
   } else if (hasStagedStructuredLaunchPrompt(intent.sessionId)) {
-    settled = takeBackLegacyStructuredLaunchPrompts(intent.sessionId)
-  } else if (saved) {
-    settled = handBackStructuredAgentSessionMessage(
-      intent.sessionId,
-      saved.clientMessageId,
-      saved.body
-    )
+    takeBackLegacyStructuredLaunchPrompts(intent.sessionId)
   }
-  if (saved && settled) {
+  if (opening) {
     delete intent.opening
     // Its own row saved again without it, and only that row: a later reload has nothing left to
     // give back.

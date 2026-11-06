@@ -236,85 +236,119 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
-  it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = {
-      configureNotificationDismissalStore: () => {},
-      getRuntimeId: () => 'test-runtime'
-    } as unknown as OrcaRuntimeService
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      methods: [],
-      userDataPath,
-      enableWebSocket: false
-    })
-    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
-    const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
-    const ws = new FakeWebSocket()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
-    server['mobileSocketWiring'] = {
-      dispose: () => {},
-      getConnectionId: () => 'conn-test'
-    } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
-    let activeDispatches = 0
-    ;(
-      server as unknown as {
-        dispatcher: {
-          dispatchStreaming: (
-            request: unknown,
-            reply: unknown,
+  // Admission precedes keepalive allocation, so a socket offered N long polls holds at most
+  // min(N, 16) dispatches and keepalive timers under the default cap, whatever the poll speed.
+  it.each([3, 30])(
+    'shares one socket close listener and bounded keepalives across %i offered long polls',
+    async (offered) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = {
+        configureNotificationDismissalStore: () => {},
+        getRuntimeId: () => 'test-runtime'
+      } as unknown as OrcaRuntimeService
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        methods: [],
+        userDataPath,
+        enableWebSocket: false,
+        keepaliveIntervalMs: 20
+      })
+      server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+      const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
+      const ws = new FakeWebSocket()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
+      server['mobileSocketWiring'] = {
+        dispose: () => {},
+        getConnectionId: () => 'conn-test'
+      } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
+      let activeDispatches = 0
+      ;(
+        server as unknown as {
+          dispatcher: {
+            dispatchStreaming: (
+              request: unknown,
+              reply: unknown,
+              context: { signal?: AbortSignal }
+            ) => Promise<void>
+          }
+        }
+      ).dispatcher = {
+        dispatchStreaming: vi.fn(
+          async (
+            _request: unknown,
+            _reply: unknown,
             context: { signal?: AbortSignal }
-          ) => Promise<void>
-        }
+          ): Promise<void> => {
+            activeDispatches += 1
+            await new Promise<void>((resolve) => {
+              context.signal?.addEventListener(
+                'abort',
+                () => {
+                  activeDispatches -= 1
+                  resolve()
+                },
+                { once: true }
+              )
+            })
+          }
+        )
+      } as never
+      const timers = new Set<unknown>()
+      const { setInterval: realSet, clearInterval: realClear } = globalThis
+      const set = vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+        ...args: Parameters<typeof setInterval>
+      ) => {
+        const timer = realSet(...args)
+        timers.add(timer)
+        return timer
+      }) as typeof setInterval)
+      const clear = vi.spyOn(globalThis, 'clearInterval').mockImplementation((timer) => {
+        timers.delete(timer)
+        realClear(timer)
+      })
+      const replies: Record<string, unknown>[] = []
+      const send = (requestId: string, method: string, params?: unknown) =>
+        server['handleWebSocketMessage'](
+          JSON.stringify({ id: requestId, method, params, deviceToken: entry.token }),
+          (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+          () => {},
+          undefined,
+          ws as unknown as WebSocket
+        )
+      const admitted = Math.min(offered, 16)
+      try {
+        const pending = [
+          ...Array.from({ length: offered }, (_entry, index) =>
+            send(`req_${index}`, 'agent.launchStatus', {
+              operationId: `op-${index}`,
+              waitMs: 20_000
+            })
+          ),
+          // An ordinary request on the same socket shares its close listener, with no keepalive.
+          send('req_status', 'status.get')
+        ]
+
+        await waitFor(() => activeDispatches === admitted + 1)
+        expect(timers.size).toBe(admitted)
+        expect(ws.listenerCount('close')).toBe(1)
+        expect(ws.listenerCount('error')).toBe(1)
+        expect(replies.filter((reply) => reply.ok === false)).toHaveLength(offered - admitted)
+
+        ws.readyState = 3
+        ws.emit('close')
+        await Promise.all(pending)
+
+        expect(activeDispatches).toBe(0)
+        expect(timers.size).toBe(0)
+        expect(ws.listenerCount('close')).toBe(0)
+        expect(ws.listenerCount('error')).toBe(0)
+      } finally {
+        set.mockRestore()
+        clear.mockRestore()
+        await server.stop()
       }
-    ).dispatcher = {
-      dispatchStreaming: vi.fn(
-        async (
-          _request: unknown,
-          _reply: unknown,
-          context: { signal?: AbortSignal }
-        ): Promise<void> => {
-          activeDispatches += 1
-          await new Promise<void>((resolve) => {
-            context.signal?.addEventListener(
-              'abort',
-              () => {
-                activeDispatches -= 1
-                resolve()
-              },
-              { once: true }
-            )
-          })
-        }
-      )
-    } as never
-
-    const pending = Array.from({ length: 12 }, (_entry, index) =>
-      server['handleWebSocketMessage'](
-        JSON.stringify({
-          id: `req_${index}`,
-          method: 'status.get',
-          deviceToken: entry.token
-        }),
-        () => {},
-        () => {},
-        undefined,
-        ws as unknown as WebSocket
-      )
-    )
-
-    await waitFor(() => activeDispatches === 12)
-    expect(ws.listenerCount('close')).toBe(1)
-    expect(ws.listenerCount('error')).toBe(1)
-
-    ws.readyState = 3
-    ws.emit('close')
-    await Promise.all(pending)
-
-    expect(activeDispatches).toBe(0)
-    expect(ws.listenerCount('close')).toBe(0)
-    expect(ws.listenerCount('error')).toBe(0)
-  })
+    }
+  )
 
   it('keeps a WebSocket long poll observed by keepalives naming it, until its reply', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

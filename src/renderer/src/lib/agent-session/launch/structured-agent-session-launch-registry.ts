@@ -30,6 +30,11 @@ import {
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 import { hostLaunchAwaitsItsTab } from './structured-agent-session-host-launch-retention'
 import { hostLaunchOwesOpening } from './structured-agent-session-launch-opening'
+import {
+  endHostLaunchObservation,
+  resetHostLaunchObserversForTests
+} from './structured-agent-session-host-launch-observer'
+import { retireHostLaunchSources } from './structured-agent-session-host-launch-sources'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -66,6 +71,7 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   }
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
+  resetHostLaunchObserversForTests()
   resetStructuredAgentLaunchCancellationForTests()
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
@@ -146,6 +152,9 @@ export function deleteStructuredLaunchStateIfCurrent(
   ) {
     return false
   }
+  // Its observation's waits detach first, then the files nothing here can send any more go.
+  endHostLaunchObservation(state.intent.sessionId)
+  retireHostLaunchSources(state.intent)
   structuredLaunchesBySessionId.delete(state.intent.sessionId)
   deleteStructuredAgentLaunchRecord(state.intent.sessionId)
   return true

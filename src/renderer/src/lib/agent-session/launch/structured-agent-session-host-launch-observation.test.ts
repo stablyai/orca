@@ -21,8 +21,9 @@ import { restorePersistedStructuredLaunchState } from './structured-agent-sessio
 import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
-import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
 import { resumeHostLaunchPreparation } from './structured-agent-session-host-launch-release'
+import { currentHostLaunchObserver } from './structured-agent-session-host-launch-observer'
+import { PromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
 import {
   editableHostLaunchOpening,
   replaceHeldHostLaunchOpening
@@ -45,11 +46,12 @@ import {
   savedFirstTurn,
   seedCatalog,
   startRichReleaseLaunch,
-  windowCalls
+  windowCalls,
+  type HostLaunchPrepare
 } from './structured-agent-session-host-launch.test-fixture'
 
 type Body = StructuredAgentSessionFirstMessage['body']
-type Prepare = NonNullable<StructuredHostLaunch['prepareFirstMessage']>
+type Prepare = HostLaunchPrepare
 
 const TEXT = 'fix this $audit'
 const ON_HOST = structuredAgentSessionSendBody(
@@ -145,22 +147,49 @@ describe('a prepared launch whose reads go unanswered', () => {
     }
   )
 
-  it('starts nothing when a restarted host cannot say, and keeps the input', async () => {
-    host.status.mockResolvedValueOnce(AWAITING).mockResolvedValue({ state: 'unknown' })
-    host.release.mockRejectedValue(lost())
-    startRichReleaseLaunch(TEXT, vi.fn<Prepare>().mockResolvedValue(ON_HOST))
-    await vi.advanceTimersByTimeAsync(2_500)
-    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
-    const released = host.release.mock.calls.length
+  it.each([
+    ['cannot say what became of it', { state: 'unknown' }],
+    ['no longer has it', { state: 'absent' }]
+  ] as const)(
+    'gives the whole input back, and starts nothing, when the host %s after taking it',
+    async (_case, answer) => {
+      host.status.mockResolvedValueOnce(AWAITING).mockResolvedValue(answer)
+      host.release.mockRejectedValue(lost())
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      startRichReleaseLaunch(TEXT, vi.fn<Prepare>().mockResolvedValue(ON_HOST))
+      await vi.waitFor(() => expect(host.release).toHaveBeenCalled())
+      // Nothing can be saved for now: the input stays the launch's, saved as it last could be.
+      const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError')
+      })
+      await vi.advanceTimersByTimeAsync(2_500)
+      await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+      full.mockRestore()
+      expect(getStructuredLaunchStateBySessionId(SESSION_ID)?.intent.opening?.clientMessageId).toBe(
+        MESSAGE_ID
+      )
+      expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
+      const released = host.release.mock.calls.length
 
-    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
-    await vi.advanceTimersByTimeAsync(2_500)
-    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
-    expect(host.release).toHaveBeenCalledTimes(released)
-    expect(host.prepare).toHaveBeenCalledOnce()
-    expect(windowCalls()).not.toContain('agentSession.create')
-    expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
-  })
+      // Read again after a reload: the same answer gives the whole input back, durably, once.
+      reload()
+      expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+      await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+      expect(draft(SESSION_ID).match(/fix this \$audit/g)).toHaveLength(1)
+      expect(draft(SESSION_ID)).toContain('Also run lint')
+      // Whether anything ran is still not known: the chat says so, and nothing starts again.
+      expect(lifecycle()).toBe('visibility-unknown')
+      expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+      await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+      expect(draft(SESSION_ID).match(/fix this \$audit/g)).toHaveLength(1)
+      expect(host.release).toHaveBeenCalledTimes(released)
+      expect(host.prepare).toHaveBeenCalledOnce()
+      expect(host.accept).not.toHaveBeenCalled()
+      expect(windowCalls()).not.toContain('agentSession.create')
+      expect(windowCalls()).not.toContain('agentSession.send')
+      warn.mockRestore()
+    }
+  )
 
   it('reads the launch before giving anything back when its release is refused', async () => {
     host.status
@@ -234,7 +263,10 @@ describe('editing a held opening whose file could not reach the host', () => {
     // Edited while the old file is still on its way: only the edit is ever released.
     replaceHeldHostLaunchOpening('workspace-1', SESSION_ID, {
       body: fresh,
-      staged: { paths: ['/client/other.png'], prepare: () => replacement.promise }
+      staged: {
+        paths: ['/client/other.png'],
+        sources: { prepare: () => replacement.promise, release: () => {} }
+      }
     })
     expect(savedFirstTurn()).toMatchObject({ phase: 'editing', staged: ['/client/other.png'] })
     stale.resolve(ON_HOST)
@@ -304,6 +336,8 @@ describe('a parked launch’s observer', () => {
           reads.at(-1)!.resolve({ state: 'running' })
           await vi.waitFor(() => expect(reads).toHaveLength(index + 3))
         }
+        // Measured on the Retry promises the parked preparation actually made.
+        expect(counts.length).toBeGreaterThan(0)
         expect(Math.max(...counts)).toBe(1)
         // Each Retry fails again while the last read is still open: that read is waited on again.
         for (let index = 0; index < count; index++) {
@@ -324,6 +358,57 @@ describe('a parked launch’s observer', () => {
         reads.at(-1)!.resolve(CHAT_STARTED)
         await expect(launch.launchResult).resolves.toMatchObject({ sessionId: SESSION_ID })
         expect(host.prepare).toHaveBeenCalledOnce()
+      } finally {
+        spy.mockRestore()
+      }
+    }
+  )
+
+  it.each([3, 30])(
+    'detaches every wait it owns when the chat is closed after %i failed Retries',
+    async (count) => {
+      const reads = heldReads()
+      const owners = new Set<PromiseSettlementWaiters<unknown>>()
+      const wait = PromiseSettlementWaiters.prototype.wait
+      const spy = vi.spyOn(PromiseSettlementWaiters.prototype, 'wait').mockImplementation(function (
+        this: PromiseSettlementWaiters<unknown>,
+        ...args
+      ) {
+        owners.add(this)
+        return wait.apply(this, args)
+      })
+      const prepare = vi.fn<Prepare>().mockRejectedValue(new Error('File not found'))
+      try {
+        const launch = startRichReleaseLaunch(TEXT, prepare)
+        await vi.waitFor(() => expect(reads).toHaveLength(1))
+        reads[0]!.resolve(AWAITING)
+        await vi.waitFor(() => expect(reads).toHaveLength(2))
+        for (let index = 0; index < count; index++) {
+          expect(resumeHostLaunchPreparation('workspace-1', SESSION_ID)).toBe(true)
+          await vi.waitFor(() => expect(prepare).toHaveBeenCalledTimes(index + 2))
+        }
+        await vi.advanceTimersByTimeAsync(0)
+        const waiting = () => [...owners].reduce((sum, owner) => sum + owner.waiterCount, 0)
+        expect(waiting()).toBeGreaterThan(0)
+        expect(currentHostLaunchObserver(SESSION_ID)?.resume).toBeDefined()
+
+        // Closed while its one status read is still on its way.
+        cancelStructuredAgentLaunch('workspace-1', SESSION_ID)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(waiting()).toBe(0)
+        expect(currentHostLaunchObserver(SESSION_ID)).toBeUndefined()
+        expect(resumeHostLaunchPreparation('workspace-1', SESSION_ID)).toBe(false)
+        expect(reads).toHaveLength(2)
+
+        // That read answers later: nothing is released, waited on or brought back.
+        reads[1]!.resolve(AWAITING)
+        await launch.launchResult.catch(() => undefined)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(reads).toHaveLength(2)
+        expect(waiting()).toBe(0)
+        expect(host.release).not.toHaveBeenCalled()
+        expect(savedRow()).toBeUndefined()
+        expect(getStructuredLaunchStateBySessionId(SESSION_ID)).toBeUndefined()
       } finally {
         spy.mockRestore()
       }

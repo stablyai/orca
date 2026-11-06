@@ -11,10 +11,6 @@ import {
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
 import type * as launchModule from './agent-session/launch/structured-agent-session-launch-create-call'
-import type * as recordModule from './agent-session/launch/structured-agent-session-launch-record'
-import type * as terminalSurfaceModule from '../../../shared/workspace-layout/terminal-surface-id'
-import { structuredAgentLaunchRecordFor } from './agent-session/launch/structured-agent-session-launch-record'
-import { restorePersistedStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-reload'
 import {
   getStructuredAgentSessionLaunchFailure,
   getStructuredAgentSessionLaunchLifecycle,
@@ -47,25 +43,6 @@ const mocks = vi.hoisted(() => ({
   // Every method this window asked a host.
   rpc: [] as string[]
 }))
-// Reads a host terminal adoption makes of a workspace's terminal tabs.
-const scans = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../shared/workspace-layout/terminal-surface-id', async (original) => {
-  const surface = await original<typeof terminalSurfaceModule>()
-  return {
-    ...surface,
-    toHostSessionTabId: (id: string) => {
-      if (new Error('caller').stack?.includes('structured-agent-session-host-launch-terminal')) {
-        scans.count++
-      }
-      return surface.toHostSessionTabId(id)
-    }
-  }
-})
-// Counts each launch row this window prepares for saving, by the launch it describes.
-vi.mock('./agent-session/launch/structured-agent-session-launch-record', async (original) => {
-  const record = await original<typeof recordModule>()
-  return { ...record, structuredAgentLaunchRecordFor: vi.fn(record.structuredAgentLaunchRecordFor) }
-})
 vi.mock('./agent-session/launch/structured-agent-session-launch-create-call', async (original) => ({
   ...(await original<typeof launchModule>()),
   launchStructuredAgentSession: mocks.createSession
@@ -268,120 +245,6 @@ describe('restoring held host launches at startup', () => {
       expect(useAppStore.getState().tabsByWorktree[worktree.id]?.map((tab) => tab.id)).toEqual([
         TERMINAL_TAB
       ])
-    }
-  )
-
-  it.each([3, 30])(
-    "puts host terminals in their chats' places beside %i held launches, touching only theirs",
-    async (count) => {
-      const held = (sessionId: string, worktreeId = worktree.id) =>
-        row(sessionId, 'local', {
-          lifecycle: 'pending',
-          hostLaunchOperationId: `host-op-${sessionId}`,
-          surfaceAddress: { worktreeId, precedingTabIds: [] },
-          firstMessage: {
-            clientMessageId: `held-${sessionId}`,
-            body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: HELD }] }
-          }
-        })
-      const others = Array.from({ length: count - 1 }, (_, index) => `codex-other-${index}`)
-      // The drawn terminal lands right after its chat, the last one, as the host draws it.
-      const ours = ['codex-unnamed', 'codex-never', 'codex-drawn'] as const
-      localStorage.setItem(
-        LAUNCHES,
-        JSON.stringify([
-          ...ours.map((sessionId) => held(sessionId)),
-          ...others.map((sessionId, index) => held(sessionId, `${worktree.id}-elsewhere-${index}`))
-        ])
-      )
-      resetStructuredAgentLaunchPersistenceForTests()
-      restoreStructuredLaunchSurfaces()
-      await main.settle()
-      // The other launches are held live in their own workspaces, still waiting on their hosts.
-      for (const [index, sessionId] of others.entries()) {
-        expect(
-          restorePersistedStructuredLaunchState(`${worktree.id}-elsewhere-${index}`, sessionId)
-        ).toBeDefined()
-      }
-      const drawnTab = '6ba7b810-9dad-41d1-80b4-00c04fd430c8'
-      const terminalOf = new Map([
-        ['host-op-codex-drawn', drawnTab],
-        ['host-op-codex-never', '6ba7b811-9dad-41d1-80b4-00c04fd430c8']
-      ])
-      hostReplies(async (params) =>
-        terminalAnswer('handed-to-terminal', terminalOf.get(params.operationId ?? '') ?? null)
-      )
-      const prepared = vi.mocked(structuredAgentLaunchRecordFor)
-      const preparedFor = (sessionIds: readonly string[]) =>
-        prepared.mock.calls.filter(([intent]) => sessionIds.includes(intent.sessionId)).length
-      const saves = vi.spyOn(localStorage, 'setItem')
-      const notShown = (sessionId: string) =>
-        getStructuredAgentSessionLaunchFailure(worktree.id, sessionId)?.causeText?.includes(
-          "couldn't show it here"
-        )
-
-      // No pane named: the chat stays, saying so, and only its own launch is saved.
-      prepared.mockClear()
-      expect(retryStructuredAgentSessionLaunch(worktree.id, 'codex-unnamed')).toBe(true)
-      await vi.waitFor(() => expect(notShown('codex-unnamed')).toBe(true))
-      await main.settle()
-      expect(preparedFor(others)).toBe(0)
-      // One save per change of its own: retried, answered, message handed over, failed, explained.
-      expect(preparedFor(['codex-unnamed'])).toBeLessThanOrEqual(5)
-      expect(saves.mock.calls.filter(([key]) => key === LAUNCHES).length).toBeLessThanOrEqual(5)
-      expect(chatTabs('codex-unnamed')).toHaveLength(1)
-
-      // Two chats wait for terminals not drawn yet, each with one store watch and one deadline.
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
-      const subscribe = useAppStore.subscribe
-      const watches = { live: 0 }
-      useAppStore.subscribe = (listener) => {
-        watches.live++
-        const stop = subscribe(listener)
-        return () => {
-          watches.live--
-          stop()
-        }
-      }
-      try {
-        prepared.mockClear()
-        for (const sessionId of ['codex-drawn', 'codex-never']) {
-          expect(retryStructuredAgentSessionLaunch(worktree.id, sessionId)).toBe(true)
-        }
-        await vi.waitFor(() => expect(watches.live).toBe(2))
-        // Other workspaces' tab writes, as many as there are launches, look at no tab here.
-        scans.count = 0
-        for (let index = 0; index < count; index++) {
-          useAppStore.setState((state) => ({
-            unifiedTabsByWorktree: {
-              ...state.unifiedTabsByWorktree,
-              [`${worktree.id}-elsewhere-${index}`]: []
-            }
-          }))
-        }
-        expect(scans.count).toBe(0)
-        // Its own terminal drawn: that chat gives way and its watch ends; the other keeps waiting.
-        useAppStore.getState().createTab(worktree.id, undefined, undefined, { id: drawnTab })
-        await vi.waitFor(async () => {
-          await main.settle()
-          expect(chatTabs('codex-drawn')).toEqual([])
-        })
-        // Waiting chats read this workspace's few terminals per write to it, never per launch.
-        expect(scans.count).toBeLessThanOrEqual(12)
-        expect(watches.live).toBe(1)
-        // The other's deadline passes: its watch ends and the chat says where its terminal went.
-        await vi.advanceTimersByTimeAsync(10_000)
-        await vi.waitFor(() => expect(notShown('codex-never')).toBe(true))
-        expect(watches.live).toBe(0)
-        expect(vi.getTimerCount()).toBe(0)
-        await main.settle()
-        expect(preparedFor(others)).toBe(0)
-      } finally {
-        useAppStore.subscribe = subscribe
-        vi.useRealTimers()
-      }
-      expect(acceptCalls()).toEqual([])
-      expect(mocks.rpc).not.toContain('agentSession.send')
     }
   )
 

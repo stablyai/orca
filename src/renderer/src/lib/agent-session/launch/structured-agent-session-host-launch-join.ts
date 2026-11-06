@@ -28,6 +28,11 @@ export function joinHeldHostLaunch(
   ) {
     return undefined
   }
+  // The held launch keeps the lease it took first; a re-delivery's own lease on the same files ends.
+  const redelivered = options.hostLaunch?.sources
+  if (redelivered && redelivered !== held.intent.hostLaunch?.sources) {
+    redelivered.release()
+  }
   if (held.visibilityUnknown || held.callers.outcome === 'failed') {
     readAgain(held)
   }

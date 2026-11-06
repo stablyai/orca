@@ -14,6 +14,8 @@ import { useAppStore } from '@/store/index'
 import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
+import { groupHoldingTab } from './structured-agent-session-launch-tab-index'
 import {
   declinedTerminalCanOpen,
   openDeclinedStructuredLaunchTerminal,
@@ -129,6 +131,9 @@ export function declinedChat(
   }
 }
 
+/** Waits, after main answers its move, until `placed()` holds as this window draws it. */
+export type AwaitDrawnPlacement = (placed: () => boolean) => Promise<unknown>
+
 /** The terminal that answers a declined chat takes the chat's place; text left in the chat keeps
  *  the chat open beside it. */
 export async function replaceDeclinedChat(
@@ -137,7 +142,8 @@ export async function replaceDeclinedChat(
   tab: OpenedAgentSessionTab,
   { source, launchState, attempt, scopeKey, typed }: DeclinedChat,
   terminalTabId: string | undefined,
-  settlement: StructuredAgentLaunchSettlement
+  settlement: StructuredAgentLaunchSettlement,
+  awaitDrawn?: AwaitDrawnPlacement
 ): Promise<StructuredAgentLaunchSettlement> {
   const state = useAppStore.getState()
   let current = source()
@@ -182,7 +188,7 @@ export async function replaceDeclinedChat(
   const replacementEntityId = replacement.entityId
   // Switch point: main places and pins the tab in one step; a pin sent alone would re-sort it.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    await placeReplacementThroughMain(worktreeId, replacement, current)
+    await placeReplacementThroughMain(worktreeId, replacement, current, awaitDrawn)
   } else {
     placeReplacementAfterSource(worktreeId, replacement, current)
   }
@@ -250,11 +256,14 @@ function placeReplacementAfterSource(worktreeId: string, replacement: Tab, sourc
   insertUnifiedTabAfterAnchor(worktreeId, replacement.id, source.id)
 }
 
-/** One main move puts the terminal after the chat with the chat's pin; resolves once drawn. */
+/** One main move puts the terminal after the chat with the chat's pin. Resolves once main's answer
+ *  arrives, or, given `awaitDrawn`, once this window draws the terminal there: a tab the window
+ *  still holds as it drew it shows main's order only when that hold ends. */
 function placeReplacementThroughMain(
   worktreeId: string,
   replacement: Tab,
-  source: Tab
+  source: Tab,
+  awaitDrawn?: AwaitDrawnPlacement
 ): Promise<void> {
   const state = useAppStore.getState()
   const rows = new Set((state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
@@ -276,7 +285,23 @@ function placeReplacementThroughMain(
         index: (order?.indexOf(source.id) ?? -1) + 1,
         isPinned: Boolean(source.isPinned)
       },
-      { apply: () => resolve(), asToday: placeHere, refused: () => resolve() }
+      {
+        apply: (_result, origin) => {
+          if (!awaitDrawn || !layoutFramesFlowing(origin.framesKey)) {
+            resolve()
+            return
+          }
+          void awaitDrawn(() => {
+            const slot = groupHoldingTab(
+              useAppStore.getState().groupsByWorktree[worktreeId],
+              source.id
+            )
+            return slot?.group.tabOrder[slot.position + 1] === replacement.id
+          }).then(() => resolve())
+        },
+        asToday: placeHere,
+        refused: () => resolve()
+      }
     )
     if (!sent) {
       placeHere()

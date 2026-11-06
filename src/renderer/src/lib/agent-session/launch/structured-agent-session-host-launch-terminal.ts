@@ -2,60 +2,80 @@
  *  terminal once this window draws it, in the place a declined chat's terminal takes. */
 
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  HOST_TERMINAL_SURFACE_SEPARATOR,
-  toHostSessionTabId
-} from '../../../../../shared/workspace-layout/terminal-surface-id'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
 import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'
 import {
   declinedChat,
   replaceDeclinedChat,
+  type DeclinedChat,
   type DeclinedChatCaller
 } from './structured-agent-session-action-launch'
 import { StructuredHostLaunchTerminalError } from './structured-agent-session-host-launch'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+import {
+  getStructuredLaunchStateBySessionId,
+  subscribeStructuredAgentLaunchStatus,
+  type StructuredLaunchState
+} from './structured-agent-session-launch-registry'
 import { findStructuredLaunchTab } from './structured-agent-session-launch-surface'
+import {
+  workspaceTabIdShown,
+  workspaceTerminalForHostTab
+} from './structured-agent-session-launch-tab-index'
 
-// The host's reveal reaches this window a moment after its answer; past this the chat stays and
-// says the terminal opened where it could not be shown.
+// The host's reveal reaches this window a moment after its answer, and main's move of it a moment
+// after that; past this the chat stays and says the terminal opened where it could not be shown.
 const HOST_TERMINAL_DRAWN_WITHIN_MS = 10_000
 
-function drawnTerminalTabId(worktreeId: string, hostTabId: string): string | undefined {
-  // A paired host's terminal is drawn under a mirrored id that decodes to the host's tab.
-  const isHostTab = (id: string): boolean =>
-    toHostSessionTabId(id).split(HOST_TERMINAL_SURFACE_SEPARATOR)[0] === hostTabId
-  return (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) =>
-      candidate.contentType === 'terminal' &&
-      (isHostTab(candidate.id) || isHostTab(candidate.entityId))
-  )?.id
-}
-
-function awaitDrawnTerminalTab(worktreeId: string, hostTabId: string): Promise<string | undefined> {
-  const drawn = drawnTerminalTabId(worktreeId, hostTabId)
-  if (drawn) {
-    return Promise.resolve(drawn)
-  }
+/** Resolves with `found()` once it is defined, checked as this workspace's tabs or groups or any
+ *  launch's status change; undefined once the chat is closed, its launch replaced or cancelled, or
+ *  `deadline` passes. Every exit ends its watches and timer. */
+function awaitWhileChatHeld<T>(
+  args: DeclinedChatCaller,
+  worktreeId: string,
+  tab: OpenedAgentSessionTab,
+  { launchState, attempt }: DeclinedChat,
+  deadline: number,
+  found: () => T | undefined
+): Promise<T | undefined> {
   return new Promise((resolve) => {
-    let unsubscribe = (): void => {}
-    const timer = setTimeout(() => {
-      unsubscribe()
-      resolve(undefined)
-    }, HOST_TERMINAL_DRAWN_WITHIN_MS)
-    // Only this workspace's tab list can draw it: other writes leave that list's identity alone.
-    unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (state.unifiedTabsByWorktree[worktreeId] === previous.unifiedTabsByWorktree[worktreeId]) {
-        return
-      }
-      const id = drawnTerminalTabId(worktreeId, hostTabId)
-      if (id) {
+    let done = false
+    const stops: (() => void)[] = []
+    const finish = (value: T | undefined): void => {
+      if (!done) {
+        done = true
         clearTimeout(timer)
-        unsubscribe()
-        resolve(id)
+        stops.forEach((stop) => stop())
+        resolve(value)
       }
-    })
+    }
+    const check = (): void => {
+      const held =
+        getStructuredLaunchStateBySessionId(tab.entityId) === launchState &&
+        launchState?.callers === attempt &&
+        !launchState?.cancelled &&
+        !args.hooks.signal?.aborted &&
+        workspaceTabIdShown(useAppStore.getState().unifiedTabsByWorktree[worktreeId], tab.id)
+      const value = held ? found() : undefined
+      if (!held || value !== undefined) {
+        finish(value)
+      }
+    }
+    const timer = setTimeout(() => finish(undefined), Math.max(0, deadline - Date.now()))
+    // Only this workspace's lists can show it: other writes leave their identity alone.
+    stops.push(
+      useAppStore.subscribe((state, previous) => {
+        if (
+          state.unifiedTabsByWorktree[worktreeId] !== previous.unifiedTabsByWorktree[worktreeId] ||
+          state.groupsByWorktree[worktreeId] !== previous.groupsByWorktree[worktreeId]
+        ) {
+          check()
+        }
+      }),
+      subscribeStructuredAgentLaunchStatus(check)
+    )
+    // Registered first, so a change made before this check is not missed.
+    check()
   })
 }
 
@@ -78,7 +98,15 @@ export async function adoptHostLaunchedTerminal(
   }
   const { outcome } = settlement.error.result
   const pane = outcome.kind === 'terminal' && outcome.paneKey ? parsePaneKey(outcome.paneKey) : null
-  const terminalTabId = pane ? await awaitDrawnTerminalTab(worktreeId, pane.tabId) : undefined
+  const deadline = Date.now() + HOST_TERMINAL_DRAWN_WITHIN_MS
+  const terminalTabId = pane
+    ? await awaitWhileChatHeld(args, worktreeId, tab, chat, deadline, () =>
+        workspaceTerminalForHostTab(
+          useAppStore.getState().unifiedTabsByWorktree[worktreeId],
+          pane.tabId
+        )
+      )
+    : undefined
   // A held message the host gave no receipt for, and the composer could not take back, is still
   // only in the launch: the chat keeps it beside the terminal.
   const owed = chat.launchState?.intent.opening !== undefined
@@ -88,7 +116,10 @@ export async function adoptHostLaunchedTerminal(
     tab,
     owed ? { ...chat, typed: true } : chat,
     terminalTabId,
-    settlement
+    settlement,
+    // Placed by main is not yet drawn here: the chat gives way once this window shows the move.
+    (placed) =>
+      awaitWhileChatHeld(args, worktreeId, tab, chat, deadline, () => placed() || undefined)
   )
 }
 

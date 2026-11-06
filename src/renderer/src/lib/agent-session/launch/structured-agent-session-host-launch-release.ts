@@ -7,7 +7,14 @@
  *  prepared or read twice. */
 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { restoreNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import {
+  restoredHostLaunchSources,
+  retireHostLaunchSources
+} from './structured-agent-session-host-launch-sources'
+import {
+  currentHostLaunchObserver,
+  type HostLaunchObserver
+} from './structured-agent-session-host-launch-observer'
 import { nativeChatAttachFailedNotice } from '@/components/native-chat/native-chat-attachment-upload'
 import { translate } from '@/i18n/i18n'
 import { joinSentences } from '../../../../../shared/sentence-joining'
@@ -17,7 +24,6 @@ import type {
   AgentLaunchReleaseResult
 } from '../../../../../shared/rpc-contract/agent-launch-release-params'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import { captureStructuredLaunchFirstTurn } from './structured-agent-session-launch-create-message'
 import type { HostLaunchFirstTurn } from './structured-agent-session-launch-record'
@@ -29,7 +35,6 @@ import {
 } from './structured-agent-session-launch-registry'
 
 type ReleasedChoices = Omit<Extract<HostLaunchFirstTurn, { phase: 'submitted' }>, 'phase'>
-type FirstMessageBody = StructuredAgentSessionFirstMessage['body']
 
 /** The held message's files could not reach the host (a source gone, a host refusing the upload):
  *  nothing is released and nothing is given back. The input stays held and saved as it was, under
@@ -44,26 +49,29 @@ export class HostLaunchInputUnavailableError extends Error {
   }
 }
 
-// One waiting preparation per held launch; it ends with its launch's read.
-const parkedPreparations = new Map<string, () => void>()
-
-/** An explicit Retry of a held launch whose message's files could not reach its host: prepares
- *  them again, under the same launch. */
+/** An explicit Retry of a held launch whose message's files could not reach its host: its current
+ *  observation prepares them again, under the same launch. */
 export function resumeHostLaunchPreparation(worktreeId: string, sessionId: string): boolean {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (state?.intent.worktreeId !== worktreeId || state.cancelled) {
+  const observer = currentHostLaunchObserver(sessionId)
+  const resume = observer?.resume
+  if (state?.intent.worktreeId !== worktreeId || state.cancelled || !observer || !resume) {
     return false
   }
-  const resume = parkedPreparations.get(sessionId)
-  forgetHostLaunchPreparation(sessionId)
-  resume?.()
-  return resume !== undefined
+  delete observer.resume
+  forgetParkedHostLaunchFailure(state.intent)
+  resume()
+  return true
 }
 
-export function forgetHostLaunchPreparation(sessionId: string): void {
-  parkedPreparations.delete(sessionId)
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (state?.parkedFailure) {
+/** Clears the shown parked failure unless a newer observation of the launch is parked itself. */
+export function forgetParkedHostLaunchFailure(intent: StructuredAgentSessionLaunchIntent): void {
+  const state = getStructuredLaunchStateBySessionId(intent.sessionId)
+  if (
+    state?.intent === intent &&
+    state.parkedFailure &&
+    !currentHostLaunchObserver(intent.sessionId)?.resume
+  ) {
     delete state.parkedFailure
     publishStructuredLaunchStatus()
   }
@@ -76,7 +84,10 @@ function parkPreparation(
   cause: string
 ): Promise<void> {
   const resumed = Promise.withResolvers<void>()
-  parkedPreparations.set(intent.sessionId, resumed.resolve)
+  const observer = currentHostLaunchObserver(intent.sessionId)
+  if (observer) {
+    observer.resume = resumed.resolve
+  }
   const state = getStructuredLaunchStateBySessionId(intent.sessionId)
   if (state?.intent === intent) {
     const names = staged.map((path) => path.split(/[\\/]/).findLast(Boolean) ?? path)
@@ -100,9 +111,12 @@ function parkPreparation(
 
 /** The launch this window still holds for the intent; any other has been retired or replaced, and
  *  its own cancellation check ends the read. */
-function heldLaunchState(intent: StructuredAgentSessionLaunchIntent): StructuredLaunchState {
+function heldLaunchState(
+  intent: StructuredAgentSessionLaunchIntent,
+  observer: HostLaunchObserver
+): StructuredLaunchState {
   const state = getStructuredLaunchStateBySessionId(intent.sessionId)
-  if (!state || state.intent !== intent || state.cancelled) {
+  if (!state || state.intent !== intent || state.cancelled || observer.signal.aborted) {
     throw new Error('host launch no longer held')
   }
   return state
@@ -157,34 +171,6 @@ export function recordHostLaunchFirstTurnBaseline(
   })
 }
 
-/** A reloaded launch's files, held again only by the paths its record listed. */
-async function prepareSavedSources(
-  intent: StructuredAgentSessionLaunchIntent,
-  body: FirstMessageBody,
-  staged: readonly string[],
-  launchOperationId: string
-): Promise<FirstMessageBody> {
-  const input = {
-    text: body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n'),
-    attachments: body.blocks.flatMap((block) =>
-      block.type === 'image-ref' && block.path ? [{ path: block.path, previewUri: '' }] : []
-    ),
-    ...(body.skills ? { skills: body.skills } : {})
-  }
-  const held = restoreNativeChatStagedInput(`host-launch:${intent.sessionId}`, staged, input)
-  try {
-    const prepared = await held.prepare(input, {
-      sessionId: intent.sessionId,
-      runtimeEnvironmentId:
-        intent.target.kind === 'environment' ? intent.target.environmentId : null,
-      launchOperationId
-    })
-    return structuredAgentSessionSendBody(prepared.text, prepared.attachments, prepared.skills)
-  } finally {
-    held.release()
-  }
-}
-
 /** The held message as the host reads it: its client files uploaded under this launch and every
  *  reference rewritten to the host's paths. One already host-readable is returned as it is. */
 async function hostReadableFirstMessage(
@@ -198,10 +184,14 @@ async function hostReadableFirstMessage(
   if (!hostLaunch || !message || !staged?.length) {
     return message
   }
+  // A reloaded launch holds its files again only by the paths its record listed.
+  const sources = (hostLaunch.sources ??= restoredHostLaunchSources(
+    intent.sessionId,
+    staged,
+    message.body
+  ))
   try {
-    const body = hostLaunch.prepareFirstMessage
-      ? await hostLaunch.prepareFirstMessage(operationId, intent.target)
-      : await prepareSavedSources(intent, message.body, staged, operationId)
+    const body = await sources.prepare(message.body, operationId, intent.target)
     return { clientMessageId: message.clientMessageId, body }
   } catch (error) {
     const cause = error instanceof Error ? error.message : String(error)
@@ -214,7 +204,8 @@ async function hostReadableFirstMessage(
  *  sending happen in one synchronous step. */
 export async function releaseHostLaunchFirstTurn(
   intent: StructuredAgentSessionLaunchIntent,
-  operationId: string
+  operationId: string,
+  observer: HostLaunchObserver
 ): Promise<AgentLaunchReleaseResult> {
   let firstTurn = intent.hostLaunch?.firstTurn
   if (!firstTurn) {
@@ -227,7 +218,7 @@ export async function releaseHostLaunchFirstTurn(
     // An opening edited while its files were on their way is prepared again; the obsolete one is
     // never released.
     do {
-      heldLaunchState(intent)
+      heldLaunchState(intent, observer)
       preparedFrom = intent.opening
       try {
         firstMessage = await hostReadableFirstMessage(intent, operationId)
@@ -238,8 +229,10 @@ export async function releaseHostLaunchFirstTurn(
       }
     } while (intent.opening !== preparedFrom)
     // No await from here to the request: a pick processed during the upload governs this turn.
-    firstTurn = { phase: 'submitted', ...readFirstTurn(heldLaunchState(intent), true) }
+    firstTurn = { phase: 'submitted', ...readFirstTurn(heldLaunchState(intent, observer), true) }
     saveHostLaunchFirstTurn(intent, firstTurn, firstMessage)
+    // Host-readable now and never prepared again: its client files are no longer needed.
+    retireHostLaunchSources(intent)
   }
   const { phase: _submitted, ...choices } = firstTurn
   const message = intent.opening

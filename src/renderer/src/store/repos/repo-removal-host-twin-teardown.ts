@@ -3,13 +3,15 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { buildTerminalTabRetirementPlans } from '../slices/terminal-tab-retirement'
-import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardown/purged-structured-launch-retirement'
-import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-worktree-purge'
+import {
+  addHostLaunchRemoval,
+  cancelStructuredLaunchesForWorktrees
+} from '../slices/worktrees/teardown/purged-structured-launch-retirement'
+import { collectHostTwinPurge } from '../slices/worktrees/teardown/host-twin-worktree-purge'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import {
   collectRemovedHostTwinState,
   isRuntimeHost,
-  removedHostCanonicalizer,
   type RemovedHostTwinState
 } from './repo-removal-host-twin-attribution'
 
@@ -21,6 +23,8 @@ export type RemovedHostTwins = {
     hostId: ExecutionHostId
     /** This host's own twin ids with their survivors. */
     twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>
+    /** Per twin id, the hosts this copy's launches may name. */
+    launchHosts: ReadonlyMap<string, readonly ExecutionHostId[]>
     removed: RemovedHostTwinState
   }[]
 }
@@ -31,17 +35,16 @@ export function collectRemovedHostTwins(
   worktreeIds: readonly string[],
   hostId: ExecutionHostId
 ): RemovedHostTwins {
-  const scopes = [
-    ...collectHostTwinPurgeScopes(
-      state,
-      worktreeIds.map((id) => ({ id, hostId }))
-    )
-  ]
+  const { scopes, launchHosts } = collectHostTwinPurge(
+    state,
+    worktreeIds.map((id) => ({ id, hostId }))
+  )
   return {
-    twinHostIds: new Map(scopes.flatMap(([, twins]) => [...twins])),
-    byHost: scopes.map(([attributedHostId, twins]) => ({
+    twinHostIds: new Map([...scopes.values()].flatMap((twins) => [...twins])),
+    byHost: [...scopes].map(([attributedHostId, twins]) => ({
       hostId: attributedHostId,
       twinHostIds: twins,
+      launchHosts: launchHosts.get(attributedHostId) ?? new Map(),
       removed: collectRemovedHostTwinState(state, new Set(twins.keys()), attributedHostId, twins)
     }))
   }
@@ -64,8 +67,6 @@ export function closeRemovedHostTwinState(
   for (const hostId of new Set([...twins.byHost, ...preCall.byHost].map((entry) => entry.hostId))) {
     const current = twins.byHost.find((entry) => entry.hostId === hostId)
     const removed = current?.removed
-    // Why this host's ids only: another attributed host's survivor may be this host.
-    const hostTwinIds = current?.twinHostIds ?? new Map<string, readonly ExecutionHostId[]>()
     // Why: a host frame during the call can drop a tab without closeTab's agent and cache cleanup.
     const terminalTabIds = new Set([
       ...(removed?.terminalTabIds ?? []),
@@ -124,15 +125,9 @@ export function closeRemovedHostTwinState(
       codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
     }))
     // Why: a pending chat's tab can already be gone, so its launch is cancelled through the registry.
+    // Why this host's ids only: another attributed host's survivor may be this host.
     cancelStructuredLaunchesForWorktrees(
-      new Set(hostTwinIds.keys()),
-      (worktreeId, launchHostId) =>
-        removedHostCanonicalizer(
-          get(),
-          worktreeId,
-          hostId,
-          hostTwinIds.get(worktreeId) ?? []
-        )(launchHostId) === hostId
+      addHostLaunchRemoval(new Map(), current?.launchHosts ?? new Map())
     )
     for (const fileId of removed?.fileIds ?? []) {
       // Why: a file a listing refresh already dropped would make closeFile reset the focused surface.

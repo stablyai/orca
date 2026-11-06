@@ -348,7 +348,7 @@ describe('a rich opening its host never acknowledged', () => {
         protocol: 'release',
         opening: { clientMessageId: MESSAGE_ID, body: CLIENT },
         stagedSources: ['/client/shot.png'],
-        prepareFirstMessage: async () => ON_HOST,
+        sources: { prepare: async () => ON_HOST, release: () => {} },
         accept: {
           presentation: 'focused',
           setupReceipt: { required: true, runId: 'setup-run-1' },

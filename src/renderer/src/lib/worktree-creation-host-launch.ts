@@ -47,6 +47,7 @@ import type { StructuredAgentSessionAttachment } from '../../../shared/agent-ses
 import { AgentLaunchSetupReceipt } from '../../../shared/rpc-contract/agent-launch-accept-params'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { leasedHostLaunchSources } from '@/lib/agent-session/launch/structured-agent-session-host-launch-sources'
 
 type HostLaunchIdentity = NonNullable<PendingWorktreeCreation['hostLaunch']>
 
@@ -167,8 +168,12 @@ export function worktreeHostLaunch(args: {
     ...(body.blocks.length > 0
       ? { opening: { clientMessageId: identity.clientMessageId, body } }
       : {}),
+    // The launch owns the creation's lease on those files from here until none is needed.
     ...(staged?.paths.length
-      ? { stagedSources: staged.paths, prepareFirstMessage: staged.prepare }
+      ? {
+          stagedSources: staged.paths,
+          sources: leasedHostLaunchSources(staged.lease, identity.sessionId)
+        }
       : {}),
     accept: {
       ...(text && !release ? { prompt: { text, clientMessageId: identity.clientMessageId } } : {}),

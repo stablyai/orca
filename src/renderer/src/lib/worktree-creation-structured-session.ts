@@ -236,7 +236,8 @@ export async function launchStructuredWorktreeSession(
       // Keep the pending chat until the layout owner's answering frame provides its replacement; a
       // host launch's input stays with the creation until then, in view or not.
       primaryTabId = await tabOpen.promise
-      if (primaryTabId !== null) {
+      // A host launch that took the lease releases it once its opening no longer needs the files.
+      if (primaryTabId !== null && !plan.hostLaunch?.sources) {
         void launch.promptDeliveryResult?.then(() => prepareInput.release())
       }
       if (abandoned.signal.aborted || isCancelled()) {

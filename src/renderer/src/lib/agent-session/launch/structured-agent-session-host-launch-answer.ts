@@ -18,10 +18,15 @@ import {
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
 import {
-  forgetHostLaunchPreparation,
+  forgetParkedHostLaunchFailure,
   HostLaunchInputUnavailableError,
   releaseHostLaunchFirstTurn
 } from './structured-agent-session-host-launch-release'
+import {
+  beginHostLaunchObservation,
+  endHostLaunchObservation,
+  type HostLaunchObserver
+} from './structured-agent-session-host-launch-observer'
 
 // Refusals of the request itself: the host never ran it, and resending cannot change that.
 const HOST_LAUNCH_REQUEST_REFUSALS = [
@@ -35,13 +40,42 @@ const HOST_LAUNCH_RETRY_DELAYS_MS: readonly number[] = [100, 400, 1500]
 // A status read holds its reply up to the host's limit; the request outlives it by a margin only.
 const HOST_LAUNCH_STATUS_TIMEOUT_MS = AGENT_LAUNCH_STATUS_MAX_WAIT_MS + 5_000
 
-export type HostLaunchAnswer = Extract<
-  AgentLaunchReleasePhaseStatusResult,
-  { state: 'succeeded' | 'failed' | 'unknown' }
->
+/** The host's settled answer, or `unread`: no answer could be read, which says nothing about the
+ *  launch. The host's own `unknown` (or a launch it no longer has after taking it) says no launch
+ *  remains that could take the first turn, though not whether anything ran. */
+export type HostLaunchAnswer =
+  | Extract<AgentLaunchReleasePhaseStatusResult, { state: 'succeeded' | 'failed' | 'unknown' }>
+  | { state: 'unread' }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/** The observation ended (Close, retirement or a newer one): it stops, leaving the launch's input. */
+export class HostLaunchObservationEndedError extends Error {
+  constructor() {
+    super('host launch observation ended')
+    this.name = 'HostLaunchObservationEndedError'
+  }
+}
+
+/** Waits on a request through the observer, which detaches the wait when it ends; the request
+ *  itself still finishes under its own deadline. */
+function owned<T>(request: Promise<T>, observer: HostLaunchObserver): Promise<T> {
+  return new PromiseSettlementWaiters(request).wait({
+    signal: observer.signal,
+    createAbortError: () => new HostLaunchObservationEndedError()
+  })
+}
+
+function delay(ms: number, observer: HostLaunchObserver): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ended = (): void => {
+      clearTimeout(timer)
+      reject(new HostLaunchObservationEndedError())
+    }
+    const timer = setTimeout(() => {
+      observer.signal.removeEventListener('abort', ended)
+      resolve()
+    }, ms)
+    observer.signal.addEventListener('abort', ended, { once: true })
+  })
 }
 
 function acceptHostLaunch(
@@ -111,24 +145,12 @@ async function readWhileParked(
   intent: StructuredAgentSessionLaunchIntent,
   operationId: string,
   resumed: Promise<void>,
-  outstanding: { read?: StatusRead }
+  outstanding: Outstanding
 ): Promise<AgentLaunchReleasePhaseStatusResult | 'resumed'> {
-  let read = outstanding.read
-  if (!read) {
-    const owned: StatusRead = {
-      waiters: new PromiseSettlementWaiters(
-        readHostLaunchStatus(intent, operationId, false),
-        () => {
-          if (outstanding.read === owned) {
-            delete outstanding.read
-          }
-        }
-      )
-    }
-    read = owned
-    outstanding.read = owned
-  }
+  const read = statusRead(intent, operationId, outstanding, false)
   const detach = new AbortController()
+  const ended = (): void => detach.abort()
+  outstanding.observer.signal.addEventListener('abort', ended, { once: true })
   try {
     return await Promise.race([
       sharedPromiseSettlementWaiters(resumed)
@@ -136,13 +158,41 @@ async function readWhileParked(
         .then(() => 'resumed' as const),
       read.waiters.wait({ signal: detach.signal })
     ])
+  } catch (error) {
+    throw outstanding.observer.signal.aborted ? new HostLaunchObservationEndedError() : error
   } finally {
+    outstanding.observer.signal.removeEventListener('abort', ended)
     detach.abort()
   }
 }
 
+type Outstanding = { observer: HostLaunchObserver; read?: StatusRead }
+
+/** The launch's one status read: an outstanding one is waited on again, never sent again. */
+function statusRead(
+  intent: StructuredAgentSessionLaunchIntent,
+  operationId: string,
+  outstanding: Outstanding,
+  phase = true
+): StatusRead {
+  if (outstanding.read) {
+    return outstanding.read
+  }
+  const read: StatusRead = {
+    waiters: new PromiseSettlementWaiters(readHostLaunchStatus(intent, operationId, phase), () => {
+      if (outstanding.read === read) {
+        delete outstanding.read
+      }
+    })
+  }
+  outstanding.read = read
+  return read
+}
+
 /** Whether the host's answer settles the launch, as opposed to it still running or awaiting. */
-function settlesLaunch(answer: AgentLaunchReleasePhaseStatusResult): answer is HostLaunchAnswer {
+function settlesLaunch(
+  answer: AgentLaunchReleasePhaseStatusResult
+): answer is Extract<HostLaunchAnswer, AgentLaunchReleasePhaseStatusResult> {
   return answer.state === 'succeeded' || answer.state === 'failed' || answer.state === 'unknown'
 }
 
@@ -151,18 +201,24 @@ function settlesLaunch(answer: AgentLaunchReleasePhaseStatusResult): answer is H
 async function answerAfterRefusedRelease(
   intent: StructuredAgentSessionLaunchIntent,
   operationId: string,
-  code: (typeof HOST_LAUNCH_REQUEST_REFUSALS)[number]
+  code: (typeof HOST_LAUNCH_REQUEST_REFUSALS)[number],
+  outstanding: Outstanding
 ): Promise<HostLaunchAnswer> {
   try {
-    const answer = await readHostLaunchStatus(intent, operationId, false)
+    const answer = await statusRead(intent, operationId, outstanding, false).waiters.wait({
+      signal: outstanding.observer.signal
+    })
     if (settlesLaunch(answer)) {
       return answer
     }
   } catch {
+    if (outstanding.observer.signal.aborted) {
+      throw new HostLaunchObservationEndedError()
+    }
     // Unread: nothing says the launch ended.
   }
   console.warn('[native-chat] host launch release refused', code)
-  return { state: 'unknown' }
+  return { state: 'unread' }
 }
 
 /** Reads until the host settles the launch. A lost reply sends the same request again, which names
@@ -173,16 +229,19 @@ export async function awaitHostLaunchAnswer(
   throwIfCancelled: () => void,
   onAccepted: () => void
 ): Promise<HostLaunchAnswer> {
+  const observer = beginHostLaunchObservation(intent.sessionId)
   try {
-    return await readHostLaunchAnswer(intent, hostLaunch, throwIfCancelled, onAccepted)
+    return await readHostLaunchAnswer(intent, hostLaunch, observer, throwIfCancelled, onAccepted)
   } finally {
-    forgetHostLaunchPreparation(intent.sessionId)
+    endHostLaunchObservation(intent.sessionId, observer)
+    forgetParkedHostLaunchFailure(intent)
   }
 }
 
 async function readHostLaunchAnswer(
   intent: StructuredAgentSessionLaunchIntent,
   hostLaunch: StructuredHostLaunch,
+  observer: HostLaunchObserver,
   throwIfCancelled: () => void,
   onAccepted: () => void
 ): Promise<HostLaunchAnswer> {
@@ -193,20 +252,28 @@ async function readHostLaunchAnswer(
   let releasing = false
   // Set while its message's files cannot reach the host; settles on an explicit Retry.
   let parked: Promise<void> | undefined
-  const outstanding: { read?: StatusRead } = {}
+  const outstanding: Outstanding = { observer }
   for (;;) {
     throwIfCancelled()
+    if (observer.signal.aborted) {
+      throw new HostLaunchObservationEndedError()
+    }
     let answer: AgentLaunchReleasePhaseStatusResult
     const released = releasing
     try {
       const read = parked
         ? await readWhileParked(intent, hostLaunch.operationId, parked, outstanding)
         : releasing
-          ? await releaseHostLaunchFirstTurn(intent, hostLaunch.operationId)
+          ? await owned(
+              releaseHostLaunchFirstTurn(intent, hostLaunch.operationId, observer),
+              observer
+            )
           : accepted || !accept
-            ? await (outstanding.read?.waiters.wait() ??
-                readHostLaunchStatus(intent, hostLaunch.operationId))
-            : await acceptHostLaunch(intent, hostLaunch, accept)
+            ? await statusRead(intent, hostLaunch.operationId, outstanding).waiters.wait({
+                signal: observer.signal,
+                createAbortError: () => new HostLaunchObservationEndedError()
+              })
+            : await owned(acceptHostLaunch(intent, hostLaunch, accept), observer)
       if (read === 'resumed') {
         parked = undefined
         releasing = true
@@ -215,6 +282,9 @@ async function readHostLaunchAnswer(
       answer = read
     } catch (error) {
       releasing = false
+      if (error instanceof HostLaunchObservationEndedError || observer.signal.aborted) {
+        throw new HostLaunchObservationEndedError()
+      }
       if (error instanceof HostLaunchInputUnavailableError) {
         // Nothing released or given back: the same live launch waits for the input to be prepared.
         parked = error.resumed
@@ -225,14 +295,14 @@ async function readHostLaunchAnswer(
       )
       if (refusal) {
         return released
-          ? answerAfterRefusedRelease(intent, hostLaunch.operationId, refusal)
+          ? answerAfterRefusedRelease(intent, hostLaunch.operationId, refusal, outstanding)
           : { state: 'failed', code: refusal }
       }
       const wait = HOST_LAUNCH_RETRY_DELAYS_MS[misses++]
       if (wait === undefined) {
-        return { state: 'unknown' }
+        return { state: 'unread' }
       }
-      await delay(wait)
+      await delay(wait, observer)
       continue
     }
     if (answer.state !== 'absent' && !accepted) {
@@ -249,12 +319,16 @@ async function readHostLaunchAnswer(
     if (answer.state !== 'absent') {
       return answer
     }
-    // Accept never reached the host. Only the window that holds the request may send it again.
-    const wait = accept ? HOST_LAUNCH_RETRY_DELAYS_MS[misses++] : undefined
-    if (wait === undefined) {
+    // The host no longer has a launch it took, or one read again after a reload: nothing there can
+    // take its first turn, and it is never prepared or accepted again from here.
+    if (accepted) {
       return { state: 'unknown' }
     }
-    accepted = false
-    await delay(wait)
+    // Accept never reached the host. Only the window that holds the request may send it again.
+    const wait = HOST_LAUNCH_RETRY_DELAYS_MS[misses++]
+    if (wait === undefined) {
+      return { state: 'unread' }
+    }
+    await delay(wait, observer)
   }
 }

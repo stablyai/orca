@@ -19,6 +19,8 @@ export {
   discardStructuredAgentSessionChatSends,
   takeBackLegacyStructuredLaunchPrompts,
   settleHostCarriedStructuredLaunchPrompts,
+  settleHeldStructuredLaunchPrompts,
+  showHeldStructuredLaunchPrompt,
   prepareLegacyStructuredLaunchPrompts,
   holdStructuredLaunchPromptsForLaunch,
   prepareStructuredLaunchPromptForCreate,
@@ -129,6 +131,10 @@ export function settleStructuredAgentLaunchPrompt(args: {
     async (receipt) => {
       if (!prompt || prompt.discarded) {
         return { delivered: false, failureNotified: true }
+      }
+      // Its launch settles the opening; this entry never sends a copy of its own.
+      if (prompt.heldByLaunch && !prompt.delivery) {
+        return { delivered: false, unconfirmed: true as const, failureNotified: true }
       }
       if (receipt.configurationFailure) {
         const result = {

@@ -1,16 +1,6 @@
 import type { AppState } from '../../../types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreePurgeTarget } from '../../worktree-purge-target'
-import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { getProjectGroupHostId } from '../../project-group-owner-routing'
 import {
   collectRemovedHostTwinState,
   removedHostCanonicalizer,
@@ -18,86 +8,20 @@ import {
 } from '../../../repos/repo-removal-host-twin-attribution'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
-import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import { collectSurfacePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
-  retirePurgedLaunchScopes,
+  addHostLaunchRemoval,
+  createPurgedLaunchRetirement,
+  retirePurgedLaunches,
   retirePurgedTabLaunches,
-  type PurgedLaunchScope
+  type PurgedLaunchRetirement
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
-import {
-  selectDetectedWorktreesByRepo,
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
-
-type PublisherRow = {
-  id: string
-  hostId?: ExecutionHostId
-  runtimeOwnerEnvironmentId?: string
-}
-
-/** Resolve surviving publishers and purged attribution with listing rules; legacy unstamped and runtime-proxied SSH rows may be the purged copy, not twins. */
-function resolvePurgedPublishers(
-  s: AppState,
-  workspaceId: string,
-  purgedHosts: ReadonlySet<ExecutionHostId>
-): { survivors: ExecutionHostId[]; attributedHostIds: Map<ExecutionHostId, ExecutionHostId> } {
-  const scope = parseWorkspaceKey(workspaceId)
-  const attributedHostIds = new Map([...purgedHosts].map((hostId) => [hostId, hostId]))
-  if (scope?.type === 'folder') {
-    const groups = s.projectGroups ?? []
-    const hosts = (selectFolderWorkspaces(s) ?? [])
-      .filter((folder) => folder.id === scope.folderWorkspaceId)
-      .flatMap((folder) => {
-        const groupHosts = groups
-          .filter((group) => group.id === folder.projectGroupId)
-          .map(getProjectGroupHostId)
-        // Why every group host: an unstamped folder under a group two hosts publish may be either's.
-        return folder.executionHostId || folder.connectionId || groupHosts.length === 0
-          ? [getFolderWorkspaceHostId(folder, groups)]
-          : groupHosts
-      })
-    return {
-      survivors: [...new Set(hosts)].filter((hostId) => !purgedHosts.has(hostId)),
-      attributedHostIds
-    }
-  }
-  const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const rows: PublisherRow[] = [
-    ...(selectWorktreesByRepo(s)[repoId] ?? []),
-    ...(selectDetectedWorktreesByRepo(s)[repoId]?.worktrees ?? [])
-  ].filter((row) => row.id === worktreeId)
-  const survivors = new Set<ExecutionHostId>()
-  for (const row of rows) {
-    const purgedHost = [...purgedHosts].find((hostId) =>
-      worktreeMatchesHost(row, hostId, worktreeHostMatchOptions(s, repoId, hostId))
-    )
-    if (purgedHost) {
-      // Why: a copy reached through a paired runtime stamps its tabs with its own SSH host.
-      if (row.hostId && !purgedHosts.has(row.hostId)) {
-        attributedHostIds.set(purgedHost, row.hostId)
-      }
-      continue
-    }
-    survivors.add(
-      row.hostId ??
-        (row.runtimeOwnerEnvironmentId
-          ? toRuntimeExecutionHostId(row.runtimeOwnerEnvironmentId)
-          : LOCAL_EXECUTION_HOST_ID)
-    )
-  }
-  return {
-    survivors: [...survivors].filter((hostId) => !purgedHosts.has(hostId)),
-    attributedHostIds
-  }
-}
+import { createPublisherIndex, resolvePurgedPublishers } from './purged-publisher-attribution'
 
 /** Every host whose listing publishes this id; empty when no row names it. */
 export function workspacePublishingHosts(s: AppState, workspaceId: string): ExecutionHostId[] {
@@ -107,11 +31,22 @@ export function workspacePublishingHosts(s: AppState, workspaceId: string): Exec
 /** Per attributed host, its twin ids with the hosts that still publish them. */
 export type HostTwinPurgeScopes = Map<ExecutionHostId, Map<string, ExecutionHostId[]>>
 
+/** Per attributed host, its twin ids with the hosts its launches there may name. */
+export type HostTwinLaunchHosts = Map<ExecutionHostId, Map<string, ExecutionHostId[]>>
+
 /** Host targets whose id a host outside the purge still publishes. A raw id for the same id wins. */
 export function collectHostTwinPurgeScopes(
   s: AppState,
   targets: readonly WorktreePurgeTarget[]
 ): HostTwinPurgeScopes {
+  return collectHostTwinPurge(s, targets).scopes
+}
+
+/** Twin scopes and their launch hosts from one read of each target and publisher row. */
+export function collectHostTwinPurge(
+  s: AppState,
+  targets: readonly WorktreePurgeTarget[]
+): { scopes: HostTwinPurgeScopes; launchHosts: HostTwinLaunchHosts } {
   const rawIds = new Set(targets.filter((target) => !target.hostId).map((target) => target.id))
   const purgedHostsById = new Map<string, Set<ExecutionHostId>>()
   for (const { id, hostId } of targets) {
@@ -120,8 +55,15 @@ export function collectHostTwinPurgeScopes(
     }
   }
   const scopes: HostTwinPurgeScopes = new Map()
+  const launchHosts: HostTwinLaunchHosts = new Map()
+  const index = createPublisherIndex(s)
   for (const [id, purgedHosts] of purgedHostsById) {
-    const { survivors, attributedHostIds } = resolvePurgedPublishers(s, id, purgedHosts)
+    const { survivors, attributedHostIds, launchHostsFor } = resolvePurgedPublishers(
+      s,
+      id,
+      purgedHosts,
+      index
+    )
     if (survivors.length === 0) {
       continue
     }
@@ -129,9 +71,11 @@ export function collectHostTwinPurgeScopes(
       const attributedHostId = attributedHostIds.get(hostId) ?? hostId
       const scope = scopes.get(attributedHostId) ?? new Map<string, ExecutionHostId[]>()
       scopes.set(attributedHostId, scope.set(id, survivors))
+      const hosts = launchHosts.get(attributedHostId) ?? new Map<string, ExecutionHostId[]>()
+      launchHosts.set(attributedHostId, hosts.set(id, launchHostsFor(attributedHostId)))
     }
   }
-  return scopes
+  return { scopes, launchHosts }
 }
 
 /**
@@ -142,9 +86,11 @@ export function buildHostTwinPurgeState(
   s: AppState,
   hostId: ExecutionHostId,
   twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
+  /** Per twin id, the hosts this copy's launches may name. */
+  launchHosts: ReadonlyMap<string, readonly ExecutionHostId[]>,
   changedPaneKeys?: Set<string>,
   /** Given, this host's launch retirement joins the whole purge's instead of running now. */
-  launchScopes?: PurgedLaunchScope[]
+  launches?: PurgedLaunchRetirement
 ): Partial<AppState> {
   const twinIds = new Set(twinHostIds.keys())
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
@@ -171,27 +117,23 @@ export function buildHostTwinPurgeState(
   const terminalTabs: { id: string; ptyId: string | null }[] = [
     ...legacyTabsByWorktree.values()
   ].flat()
-  const launchScope: PurgedLaunchScope = {
-    worktreeIds: twinIds,
-    ownedByHost: (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId,
-    retireTabs: (cancelledSessionIds) => {
-      for (const [worktreeId, legacyTabs] of legacyTabsByWorktree) {
-        retirePurgedTabLaunches(
-          s,
-          worktreeId,
-          legacyTabs,
-          (s.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) =>
-            removed.otherTabIds.has(tab.id)
-          ),
-          cancelledSessionIds
-        )
-      }
+  const retirement = launches ?? createPurgedLaunchRetirement()
+  addHostLaunchRemoval(retirement.removal, launchHosts)
+  retirement.retireTabs.push((cancelledSessionIds) => {
+    for (const [worktreeId, legacyTabs] of legacyTabsByWorktree) {
+      retirePurgedTabLaunches(
+        s,
+        worktreeId,
+        legacyTabs,
+        (s.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) =>
+          removed.otherTabIds.has(tab.id)
+        ),
+        cancelledSessionIds
+      )
     }
-  }
-  if (launchScopes) {
-    launchScopes.push(launchScope)
-  } else {
-    retirePurgedLaunchScopes([launchScope])
+  })
+  if (!launches) {
+    retirePurgedLaunches(retirement)
   }
   // Why: a hydrated terminal can exist only as a unified tab, with no legacy row.
   for (const tabId of removed.terminalTabIds) {

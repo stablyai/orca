@@ -50,8 +50,8 @@ export type StagedStructuredLaunchPrompt = {
   settleCreate: (outcome: StagedDelivery) => void
   /** Its launch was cancelled: never sent, never given back. */
   discarded?: true
-  /** Its host launch still holds it after an unanswered read: its callers stop waiting, and only
-   *  the launch's own answer gives it back or lets it go. */
+  /** Founds a host launch's chat: the launch's opening is its only body, so this entry keeps no
+   *  text of its own and only completes its callers when the launch settles that opening. */
   heldByLaunch?: true
   recipientDiscarded?: true
   /** Settles once it is discarded, so its callers need not wait on a create that may never end. */
@@ -139,7 +139,7 @@ export function discardStructuredAgentSessionChatSends(sessionId: string): void 
 export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): boolean {
   let kept = true
   for (const prompt of staged.get(sessionId) ?? []) {
-    if (prompt.delivery || prompt.createOwned) {
+    if (prompt.delivery || prompt.createOwned || prompt.heldByLaunch) {
       continue
     }
     unstageStructuredLaunchPrompt(prompt)
@@ -164,9 +164,41 @@ export function settleHostCarriedStructuredLaunchPrompts(sessionId: string): voi
   }
 }
 
+/** A host launch takes its founding prompt's body as its opening: the entry keeps only the
+ *  callers waiting on it and the chat's reserved bubble. */
 export function holdStructuredLaunchPromptsForLaunch(sessionId: string): void {
   for (const prompt of staged.get(sessionId) ?? []) {
+    if (prompt.delivery || prompt.discarded) {
+      continue
+    }
     prompt.heldByLaunch = true
+    prompt.text = ''
+    delete prompt.attachments
+    delete prompt.skills
+    delete prompt.prepare
+  }
+}
+
+/** The held opening changed: the chat's reserved bubble shows the new one. */
+export function showHeldStructuredLaunchPrompt(sessionId: string, input: LaunchMessage): void {
+  for (const prompt of staged.get(sessionId) ?? []) {
+    if (prompt.heldByLaunch && !prompt.delivery) {
+      prompt.slot?.prepare(input)
+    }
+  }
+}
+
+/** The launch settled its opening: the host has it (`delivered`) or the composer durably holds it
+ *  again. Its founding entry's callers complete once; nothing is sent or given back from here. */
+export function settleHeldStructuredLaunchPrompts(sessionId: string, delivered: boolean): void {
+  for (const prompt of staged.get(sessionId) ?? []) {
+    if (!prompt.heldByLaunch || prompt.delivery) {
+      continue
+    }
+    const outcome = { delivered, inComposer: !delivered }
+    prompt.delivery = Promise.resolve(outcome)
+    prompt.settleCreate(outcome)
+    unstageStructuredLaunchPrompt(prompt)
   }
 }
 
