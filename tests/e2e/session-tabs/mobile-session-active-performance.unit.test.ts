@@ -12,6 +12,7 @@ import type {
 } from '../../../src/shared/runtime-session-contracts'
 import * as selection from '../../../src/main/runtime/session-tabs/mobile-session-tab-selection'
 import * as membership from '../../../src/main/runtime/session-lifecycle/projection/mobile-session-tab-merge'
+import * as mainOrder from '../../../src/main/runtime/session-tabs/main-session-tab-order'
 import { normalizeMobileSessionTabSelection } from '../../../src/main/runtime/session-tabs/mobile-session-tab-selection'
 import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import { finalizeRuntimeMobileSessionTabsResult } from '../../../src/main/runtime/session-lifecycle/projection/runtime-mobile-session-result-finalization'
@@ -85,6 +86,111 @@ afterEach(() => {
 })
 
 describe('active-tab selection performance contract', () => {
+  it('bounds saved-order publication selection at N and 10N without rematerializing navigation', () => {
+    for (const navigation of ['pending', 'null', 'activate'] as const) {
+      const measurements: number[] = []
+      for (const count of [50, 500]) {
+        const sessionIds = Array.from({ length: count }, (_, index) => `saved-scale-${index}`)
+        const rawId = (id: string) => `agent-session:${id}`
+        const savedId = (id: string) => `structured-agent-session-${id}`
+        const groupId = (index: number) => (index < count / 2 ? 'left' : 'right')
+        const saved = {
+          ...getDefaultWorkspaceSession(),
+          activeWorktreeId: WT,
+          unifiedTabs: {
+            [WT]: sessionIds.map((id, index) => ({
+              id: savedId(id),
+              entityId: id,
+              contentType: 'agent-session' as const,
+              agentSessionAgent: 'codex' as const,
+              executionHostId: 'local',
+              worktreeId: WT,
+              groupId: groupId(index),
+              label: id,
+              customLabel: null,
+              color: null,
+              sortOrder: index,
+              createdAt: 1
+            }))
+          },
+          tabGroups: {
+            [WT]: ['left', 'right'].map((id) => ({
+              id,
+              worktreeId: WT,
+              activeTabId: savedId(sessionIds[id === 'left' ? 0 : count / 2]!),
+              tabOrder: sessionIds.filter((_, index) => groupId(index) === id).map(savedId)
+            }))
+          },
+          activeGroupIdByWorktree: { [WT]: 'left' }
+        }
+        const fixture = makeRuntimeStoreWithWorkspaceSession(saved)
+        const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+        const declared = navigation === 'pending' ? 'agent-session:pending' : null
+        runtime.storeMobileSessionSnapshot(WT, {
+          worktree: WT,
+          publicationEpoch: 'headless:saved-order-scale',
+          snapshotVersion: 1,
+          activeGroupId: 'right',
+          activeTabId: null,
+          activeTabType: null,
+          tabGroups: ['left', 'right'].map((id) => ({
+            id,
+            activeTabId: id === 'right' ? declared : null,
+            tabOrder: sessionIds
+              .slice(0, -1)
+              .filter((_, index) => groupId(index) === id)
+              .map(rawId)
+          })),
+          tabs: sessionIds.slice(0, -1).map((id) => ({
+            type: 'agent-session',
+            id: rawId(id),
+            sessionId: id,
+            agent: 'codex',
+            title: 'Chat',
+            isActive: false
+          }))
+        })
+        const resolve = vi.spyOn(selection, 'resolveMobileSessionActiveTab')
+        const normalize = vi.spyOn(selection, 'normalizeMobileSessionTabSelection')
+        const restore = vi.spyOn(selection, 'restoreLegacyMobileSessionNavigation')
+        const select = vi.spyOn(selection, 'selectMobileSessionTab')
+        const order = vi.spyOn(mainOrder, 'withMainTabOrder')
+        runtime.projectStructuredAgentSessionTab({
+          workspaceId: WT,
+          sessionId: sessionIds[count - 1]!,
+          agent: 'codex',
+          activate: navigation === 'activate',
+          notify: false
+        })
+        expect(order).toHaveBeenCalledTimes(1)
+        const population =
+          resolve.mock.calls.reduce((total, [, tabs]) => total + tabs.length, 0) +
+          [normalize, restore, select].reduce(
+            (total, spy) =>
+              total + spy.mock.calls.reduce((sum, [snapshot]) => sum + snapshot.tabs.length, 0),
+            0
+          )
+        // One written resolution and one output materialization; internal selector work has its own contract.
+        expect(population).toBeGreaterThan(0)
+        expect(population).toBeLessThanOrEqual(2 * count)
+        measurements.push(population)
+        const result = runtime.mobileSessionTabsByWorktree.get(WT)!
+        expect(result.tabs).toHaveLength(count)
+        expect(result.activeGroupId).toBe('right')
+        expect(result.activeTabId).toBe(
+          navigation === 'activate' ? rawId(sessionIds[count - 1]!) : null
+        )
+        expect(result.tabGroups?.find((group) => group.id === 'right')?.activeTabId).toBe(
+          navigation === 'activate' ? rawId(sessionIds[count - 1]!) : declared
+        )
+        expect(result.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual(
+          navigation === 'activate' ? [rawId(sessionIds[count - 1]!)] : []
+        )
+        vi.restoreAllMocks()
+      }
+      expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
+    }
+  })
   it('bounds admitted placement reconciliation during supported reads at N and 10N', async () => {
     vi.useFakeTimers()
     const merge = membership.mergeMobileSessionTabGroups

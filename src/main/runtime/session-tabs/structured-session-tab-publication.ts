@@ -246,13 +246,12 @@ export function projectStructuredSessionTab(
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
-  const ordered = input.savedOrder ? withMainTabOrder(snapshot, input.savedOrder) : snapshot
-  const stored = runtime.storeMobileSessionSnapshot(
-    input.workspaceId,
-    input.activate
-      ? selectMobileSessionTab(ordered, tab)
-      : normalizeMobileSessionTabSelection(ordered)
-  )
+  const selected = input.savedOrder
+    ? withMainTabOrder(snapshot, input.savedOrder, input.activate ? tab : undefined)
+    : input.activate
+      ? selectMobileSessionTab(snapshot, tab)
+      : normalizeMobileSessionTabSelection(snapshot)
+  const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, selected)
   if (input.notify !== false) {
     emit(stored)
   }

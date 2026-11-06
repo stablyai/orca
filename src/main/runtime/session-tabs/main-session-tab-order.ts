@@ -1,22 +1,27 @@
 // Take only order/groups from main; preserve written rows and terminal/exit facts that may be newer than layout bindings.
 
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
 import {
   normalizeMobileSessionTabSelection,
   resolveMobileSessionActiveTab,
-  restoreLegacyMobileSessionNavigation
+  restoreLegacyMobileSessionNavigation,
+  selectMobileSessionTab
 } from './mobile-session-tab-selection'
 
 /** The written rows, ordered and grouped as main's layout has them. */
 export function withMainTabOrder(
   written: RuntimeMobileSessionTabsSnapshot,
-  projected: MainSessionTabRows
+  projected: MainSessionTabRows,
+  selected?: RuntimeMobileSessionSnapshotTab
 ): RuntimeMobileSessionTabsSnapshot {
   const mainGroups = projected.tabGroups ?? []
   if (mainGroups.length === 0 || written.tabs.length === 0) {
-    return written
+    return selected
+      ? selectMobileSessionTab(written, selected)
+      : normalizeMobileSessionTabSelection(written)
   }
   const writtenOrder = [...new Set(written.tabs.map(orderIdOf))]
   const writtenIds = new Set(writtenOrder)
@@ -36,7 +41,7 @@ export function withMainTabOrder(
     ...group,
     activeTabId: writtenGroups.get(group.id)?.activeTabId ?? null
   }))
-  const activeRow = resolveMobileSessionActiveTab(written, written.tabs)
+  const activeRow = selected ?? resolveMobileSessionActiveTab(written, written.tabs)
   const indexOf = (groupId: string | null): number =>
     placedGroups.findIndex((group) => group.id === groupId)
   const byRow = activeRow
@@ -67,15 +72,19 @@ export function withMainTabOrder(
     written.tabGroups !== undefined
       ? (writtenGroups.get(written.activeGroupId ?? '')?.activeTabId ?? null)
       : written.activeTabId
-  const navigation = normalizeMobileSessionTabSelection(written)
   const { tabGroupLayout: _writtenLayout, ...rest } = written
-  return restoreLegacyMobileSessionNavigation(
-    {
-      ...rest,
-      tabGroups,
-      ...(projected.tabGroupLayout ? { tabGroupLayout: projected.tabGroupLayout } : {}),
-      tabs
-    },
-    { ...navigation, tabGroups: undefined, activeTabId: activeRow?.id ?? declared }
-  )
+  const ordered = {
+    ...rest,
+    tabGroups,
+    ...(projected.tabGroupLayout ? { tabGroupLayout: projected.tabGroupLayout } : {}),
+    tabs
+  }
+  return selected
+    ? selectMobileSessionTab(ordered, selected)
+    : restoreLegacyMobileSessionNavigation(ordered, {
+        ...written,
+        tabs: [],
+        tabGroups: undefined,
+        activeTabId: activeRow?.id ?? declared
+      })
 }
