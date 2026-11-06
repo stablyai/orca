@@ -1,11 +1,12 @@
 import { createElement, useState, type ReactNode } from 'react'
+import { Goal } from 'lucide-react-native'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import { isBareStructuredAgentSessionGoalCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import { MobileNativeChatThreadGoalStrip } from '../input/MobileNativeChatThreadGoalStrip'
-import { MobileNativeChatComposerGoalChip } from './MobileNativeChatComposerGoalChip'
+import { MobileNativeChatComposerModeChip } from './MobileNativeChatComposerModeChip'
 
 type ComposerSend = (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
 
@@ -78,6 +79,14 @@ export function useMobileNativeChatComposerGoalMode(
           threadGoal
         })
       : null,
-    chip: active ? createElement(MobileNativeChatComposerGoalChip, { onExit: exit }) : null
+    chip: active
+      ? createElement(MobileNativeChatComposerModeChip, {
+          icon: Goal,
+          label: t('chat.goal.chip', 'Goal'),
+          exitLabel: t('chat.goal.exitMode', 'Exit goal mode'),
+          testID: 'native-chat-goal-chip',
+          onExit: exit
+        })
+      : null
   }
 }

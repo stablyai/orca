@@ -166,7 +166,6 @@ function mountTerminalInputSend(
         activeHandle: HANDLE,
         activeSessionTab,
         canSend: true,
-        keyboardHeight: 0,
         deviceTokenRef: { current: DEVICE_TOKEN },
         clientRef: { current: client },
         connStateRef: { current: 'connected' },

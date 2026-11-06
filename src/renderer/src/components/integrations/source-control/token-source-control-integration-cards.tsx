@@ -7,7 +7,7 @@ import {
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
 import { tokenProviderStatusLabel } from './token-source-control-status'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function AzureDevOpsIntegrationCard(): React.JSX.Element {
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('azureDevOps')

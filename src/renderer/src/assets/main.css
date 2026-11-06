@@ -1532,12 +1532,13 @@ html.notch-shell body {
 }
 
 /* #15971: the wash matches the pill's fill, so its border carries the shape. A neutral sidebar tint
-   keeps the outline visible but quieter than the pill's label (#38641). */
+   keeps the outline visible but quieter than the pill's label (#38641); app themes and the tinted
+   sidebar raise the mix when their text is too dim to clear the selected wash (hostPillOutlineMixOver). */
 @scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
   [data-variant='hostContext'] {
     border-color: color-mix(
       in srgb,
-      var(--worktree-sidebar-foreground) 40%,
+      var(--worktree-sidebar-foreground) var(--worktree-host-pill-outline-mix, 40%),
       var(--worktree-sidebar)
     );
   }

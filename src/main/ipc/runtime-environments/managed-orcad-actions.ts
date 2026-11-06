@@ -1,6 +1,7 @@
 import {
   cancelManagedOrcadStop,
   forgetManagedOrcadEnvironment,
+  forgetRedundantManagedOrcadEnvironment,
   stopManagedOrcadEnvironment
 } from '../../managed-server/lifecycle/orcad-runtime-decommission'
 import { getManagedOrcadRuntimeStatus } from '../../managed-server/lifecycle/orcad-runtime-status'
@@ -106,6 +107,17 @@ export function createManagedOrcadActions(
     cancelStop: (selector) => cancelManagedOrcadStop(userDataPath(), { selector }),
     forget: async (selector) => {
       const result = await forgetManagedOrcadEnvironment(userDataPath(), { selector }, unlinkPolicy)
+      if (result.outcome === 'forgotten') {
+        options.clearHostServerStatus(result.sshTargetId)
+      }
+      return result
+    },
+    forgetRedundant: async (selector) => {
+      const result = await forgetRedundantManagedOrcadEnvironment(
+        userDataPath(),
+        { selector },
+        unlinkPolicy
+      )
       if (result.outcome === 'forgotten') {
         options.clearHostServerStatus(result.sshTargetId)
       }

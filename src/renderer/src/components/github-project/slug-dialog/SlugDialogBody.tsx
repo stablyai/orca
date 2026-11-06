@@ -15,7 +15,7 @@ import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
 import { projectViewErrorMessage } from '../project-view-error-copy'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function SlugDialogBody({
   projectOrigin,

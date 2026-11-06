@@ -10,7 +10,7 @@ import {
   PTY_PRECONNECT_INPUT_MAX_ENTRIES,
   type PtyPreconnectInputEntry,
   type PtyPreconnectInputKind
-} from './pty-preconnect-input-buffer'
+} from './pty-transport/input/pty-preconnect-input-buffer'
 
 export type DeferredSplitPaneInputKind = PtyPreconnectInputKind
 export type DeferredSplitPaneInput = PtyPreconnectInputEntry

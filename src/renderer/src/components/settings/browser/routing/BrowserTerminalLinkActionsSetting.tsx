@@ -11,7 +11,7 @@ import { getTerminalLinkActionSearchKeywords } from '../browser-search'
 import {
   terminalLinkClickBehaviorFor,
   type TerminalLinkClickBehavior
-} from '../../../terminal-pane/terminal-link-click-behavior'
+} from '../../../terminal-pane/links/gestures/terminal-link-click-behavior'
 
 type BrowserTerminalLinkActionsSettingProps = {
   settings: Pick<

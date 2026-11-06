@@ -1,13 +1,13 @@
 import {
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 // Remote-only recovery must tolerate transient null/slow host snapshots, recover hidden bytes and remain bounded when the host never answers; inject faults at serializeBuffer.
 
@@ -103,7 +103,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -115,7 +115,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -126,7 +126,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -139,7 +139,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -371,7 +371,7 @@ type RemotePaneDrive = {
 async function connectHiddenRemoteAgentPane(
   serializeBuffer: ReturnType<typeof vi.fn>
 ): Promise<RemotePaneDrive> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
   const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer

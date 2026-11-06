@@ -8,7 +8,7 @@ import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '.
 import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agent-session-registered-agents'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
@@ -101,7 +101,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
         })
         stubRuntimeEnvironmentBridge({ call: dispatch })
         const { launchAgentInNewTab } =
-          await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+          await import('../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
         const result = launchAgentInNewTab({
           requestId: newAgentLaunchRequestId(),
           agent: 'claude',
@@ -324,7 +324,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       }))
       stubRuntimeEnvironmentBridge({ call: dispatch })
       const { launchAgentInNewTab } =
-        await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+        await import('../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
       // OpenCode has no built-in structured fallback without the owning host's catalog.
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
@@ -373,7 +373,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     stubRuntimeEnvironmentBridge({ call: dispatch })
     vi.mocked(pasteDraftWhenAgentReady).mockRejectedValueOnce(new Error('paste transport failed'))
     const { launchAgentInNewTab } =
-      await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+      await import('../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
       agent: 'claude',

@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
-      "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
+      "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -499,7 +500,7 @@
         "parakeetV2": "영어 전용. v3와 정확도는 비슷하며 속도는 더 빠릅니다. 문장 부호와 대소문자 지원.",
         "zipformerBilingual": "중국어 + 영어 혼용 지원. 지연 시간이 짧은 실시간 스트리밍.",
         "paraformerBilingual": "중국어(표준 중국어 + 방언) + 영어. 다양한 중국어 억양과 지역 방언에 강합니다.",
-        "zipformerStreamingEn": "영어 전용. 파라미터 2천만 개의 경량 모델로, 속도와 크기의 균형이 좋습니다.",
+        "zipformerStreamingEnRetired": "더 이상 제공되지 않습니다. 문장 앞부분이 누락됩니다. 삭제하여 공간을 확보하세요.",
         "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
         "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
         "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
@@ -1859,6 +1860,7 @@
         "cb55b0390f": "관리",
         "4f9313984d": "리뷰어",
         "02cbe2de44": "파이프라인",
+        "itemLoadFailed": "이 항목을 불러올 수 없습니다. 새로 고쳐 다시 시도하세요.",
         "be3d291837": "파일",
         "c996e2962c": "대화",
         "b3c156dd51": "새로고침",
@@ -3733,7 +3735,8 @@
             "chatUnavailableAfterSelection": "{{value0}} 채팅을 시작할 수 없습니다.",
             "chatCheckFailed": "채팅 가능 여부를 확인할 수 없습니다.",
             "terminalListNeedsServerUpdate": "터미널 에이전트를 나열하려면 이 서버의 Orca를 업데이트하세요",
-            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다"
+            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다",
+            "chatNotOnWindows": "Windows에서는 아직 채팅 불가"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -5517,7 +5520,6 @@
           "savedInProjectSettings": "이 <settings>프로젝트의 설정</settings>에 저장됨"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "로컬 설정 저장",
           "3933401d28": "구성",
           "31b8b01a45": "설정",
           "4a98f907ae": "다시 시도",
@@ -5532,7 +5534,15 @@
           "5bfd5c8779": "설정 스크립트 닫기",
           "detectedFromSource": "<source>{{source}}</source>에서 감지됨",
           "ignoresSharedSetup": "이 저장소는 공유 <yaml>orca.yaml</yaml> 설정 스크립트를 무시합니다. 로컬 명령을 추가하거나 설정에서 소스를 변경하세요.",
-          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요."
+          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요.",
+          "reviewSetupScript": "설정 스크립트 검토"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "설정 스크립트 검토",
+          "description": "저장하면 Orca가 {{repo}}의 워크트리를 만들 때마다 실행됩니다.",
+          "setupScript": "설정 스크립트",
+          "archiveScript": "아카이브 스크립트",
+          "save": "로컬 설정 저장"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "취소",
@@ -7611,7 +7621,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "f2f8d97bb6": "에이전트 모바일 에뮬레이터 제어",
-          "143961d031": "기본 장치",
           "8aec2f99a0": "에뮬레이터 가용성 새로 고침",
           "ae1612c58c": "가용성",
           "f9af91ea26": "새 모바일 에뮬레이터 작업을 표시하고 에이전트가 활성 에뮬레이터에 연결할 수 있도록 합니다.",
@@ -7624,9 +7633,7 @@
           "d704fb5023": "설정 필요",
           "06b06429c6": "Android SDK 및 iOS 시뮬레이터 지원을 확인 중입니다.",
           "6d1483d4a0": "1개의 에뮬레이터 장치가 감지되었습니다.",
-          "0a452d4d3b": "{{value0}} 에뮬레이터 장치가 감지되었습니다.",
-          "f62a1bb759": "Orca는 장치가 감지된 후 에뮬레이터 장치를 자동으로 선택합니다.",
-          "b2fd62ea75": "새 에뮬레이터 탭 및 에이전트 연결 명령을 위한 기본 장치입니다. 자동 선택은 이미 실행 중인 장치를 선호합니다."
+          "0a452d4d3b": "{{value0}} 에뮬레이터 장치가 감지되었습니다."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "인터페이스를 찾을 수 없습니다."
@@ -12725,7 +12732,8 @@
           "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
           "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
           "review": "검토",
-          "dismiss": "닫기"
+          "dismiss": "닫기",
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
@@ -15256,7 +15264,6 @@
                 "06e10d7356": "에뮬레이터 종료",
                 "e7a0d1897e": "홈",
                 "6bd8dff42a": "회전",
-                "3d836b879c": "에뮬레이터 선택",
                 "81b3571a07": "연결",
                 "868c0f2938": "작업 중…"
               }
@@ -16978,6 +16985,8 @@
           "noRunUsageYet": "아직 실행 사용량 없음",
           "noWorkspace": "워크스페이스 없음",
           "latestSavedOutput": "최근 저장된 출력",
+          "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+          "retryFullOutput": "다시 시도",
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
@@ -18258,6 +18267,9 @@
           "cancel": "취소",
           "add": "카탈로그 추가",
           "body": "링크가 이 카탈로그의 {{value0}}을(를) 표시하도록 요청했습니다. 신뢰할 수 있는 사람의 카탈로그만 추가하세요."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -18647,6 +18659,7 @@
         "notDoneGoalChangeIncomplete": "목표 변경을 완료하지 못했습니다. 채팅을 확인하세요."
       },
       "composer": {
+        "planMode": "계획",
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
         "previewQueue": "대기열에 추가",
@@ -19392,7 +19405,8 @@
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "worktree": "작업 트리"
-      }
+      },
+      "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요."
     },
     "tab": {
       "bar": {

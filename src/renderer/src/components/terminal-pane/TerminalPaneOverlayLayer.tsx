@@ -15,7 +15,7 @@ import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
-import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { useTerminalTabColdParking } from './parking/lifecycle/use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string

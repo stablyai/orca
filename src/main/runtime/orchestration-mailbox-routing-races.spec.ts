@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationMailboxPointerState } from './orchestration/mailbox-pointer-state'
+import { OrchestrationMailboxPointerState } from './orchestration/mailbox/terminal-pointer/mailbox-pointer-state'
 import {
   checkBoundMailbox,
   createBoundRun,

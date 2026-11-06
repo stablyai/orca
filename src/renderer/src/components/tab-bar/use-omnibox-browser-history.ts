@@ -4,7 +4,7 @@ import {
   matchBrowserHistory,
   prepareBrowserHistoryEntries,
   type PreparedBrowserHistoryEntry
-} from '@/lib/browser-history-match'
+} from '@/lib/browser/history/browser-history-match'
 import { isBrowserAddressBarQueryTooLarge } from '../browser-pane/assemble-chrome/browser-address-bar-suggestions'
 import { dropHistoryRowsCoveredByBrowserPages } from './open-tab-entry-dedupe'
 import { isTabEntryAbsolutePathLike } from './tab-create-entry-action'

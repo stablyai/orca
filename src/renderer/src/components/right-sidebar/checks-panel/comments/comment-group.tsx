@@ -25,7 +25,7 @@ import {
   getPRCommentGroupId,
   type PRCommentGroup
 } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult

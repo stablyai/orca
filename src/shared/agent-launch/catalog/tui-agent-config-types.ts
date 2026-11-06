@@ -15,6 +15,7 @@ export type DraftPasteMarkerSignal =
   | 'dsh-composer-prompt'
   | 'claude-composer-prompt'
   | 'zcode-composer-prompt'
+  | 'antigravity-composer-prompt'
 
 /** Submit signals may also ask for a grace (`readyAfterMs`); only the paste waiters honour it. */
 export type DraftPasteReadySignal = DraftPasteMarkerSignal | 'opencode-agent-row'

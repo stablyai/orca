@@ -185,6 +185,7 @@ export const AgentLaunchPicker = memo(
             <Button
               ref={trigger}
               type="button"
+              data-agent-launch-picker-trigger="true"
               aria-label={translate('agentPicker.select', 'Select agent')}
               variant="outline"
               className="w-full min-w-0"

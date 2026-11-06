@@ -63,7 +63,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-streaming-en-20m'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'bpe'
+    modelingUnit: 'bpe',
+    // The model itself loses the first words of every utterance.
+    replacedBy: 'parakeet-tdt-0.6b-v2-int8'
   },
   {
     id: 'zipformer-streaming-zh-14m',
@@ -152,4 +154,8 @@ export function getCatalogModel(id: string): SpeechModelManifest | undefined {
 
 export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {
   return manifest.provider === 'local'
+}
+
+export function replaceRetiredSpeechModelId(id: string): string {
+  return getCatalogModel(id)?.replacedBy ?? id
 }

@@ -1,7 +1,7 @@
 import type { AcpAgentConnection } from './acp-agent-connection'
 import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
-import type { AtRestCommandScan } from '../native-chat/agent-session-wire/at-rest-command-catalog'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AtRestCommandScan } from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpStructuredOptions } from './acp-structured-options'
 

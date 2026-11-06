@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { TEST_SSH_AUTHORITY, makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {

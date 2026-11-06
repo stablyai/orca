@@ -2,10 +2,14 @@ import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 
 describe('orchestration federated message targeting', () => {
   let db: OrchestrationDb | undefined

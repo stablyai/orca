@@ -10,8 +10,8 @@ import {
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
-import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,

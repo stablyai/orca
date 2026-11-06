@@ -4,7 +4,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { removeAntigravitySignInSessionFiles } from '../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
@@ -209,7 +209,8 @@ export class AcpTextTasks {
       const initialized = await waitForPromiseWithSignal(server.initialize(), taskSignal)
       const authMethodId = spec.authMethod?.({
         advertised: initialized.authMethods?.map((method) => method.id) ?? [],
-        env: launch.env
+        env: launch.env,
+        antigravityChatAuth: launch.antigravityChatAuth
       })
       if (spec.agent === 'grok' && grokTextTaskPreservesAccount(initialized, authMethodId)) {
         headless = true
@@ -239,6 +240,7 @@ export class AcpTextTasks {
             cwd,
             mcpServers: [],
             authMethodId,
+            authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
             ...(spec.agent === 'grok' ? { _meta: { yoloMode: false, autoMode: false } } : {})
           })
           .then((started) => {

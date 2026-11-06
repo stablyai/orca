@@ -27,7 +27,7 @@ vi.mock('../../../text-generation/commit-message-text-generation', async (import
 vi.mock('../../../agent-hooks/first-work-generation-target', () => ({
   resolveGenerationTarget: mocks.target
 }))
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
     deps: { adapter: { generateText: mocks.native } },
     publishConversationName: mocks.publishConversationName,

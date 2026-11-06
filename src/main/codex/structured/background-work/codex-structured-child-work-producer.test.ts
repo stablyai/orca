@@ -25,7 +25,7 @@ import type {
   AgentJournalProducerLinkage
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 
 const parent = makeStructuredAgentStatusSubject(
