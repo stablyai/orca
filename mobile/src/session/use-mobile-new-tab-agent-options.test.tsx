@@ -159,6 +159,30 @@ describe('useMobileNewTabAgentOptions', () => {
     drawer.unmount()
   })
 
+  it('reads the agents again on the next open after a failed read', async () => {
+    const host: FakeHost = {
+      agents: () => ({
+        id: '1',
+        ok: false,
+        error: { code: 'runtime_error', message: 'boom' },
+        _meta: { runtimeId: 'r' }
+      })
+    }
+    const client = createClient(host)
+    const drawer = mountDrawer(queryClient)
+    await drawer.render({ client, open: false, prefetch: true })
+    await drawer.render({ client, open: true, prefetch: true })
+    expect(drawer.state()).toBe('error')
+
+    host.agents = () => claude
+    await drawer.render({ client, open: false, prefetch: true })
+    await drawer.render({ client, open: true, prefetch: true })
+
+    expect(drawer.state()).toBe('loaded')
+    expect(drawer.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
+    drawer.unmount()
+  })
+
   it("does not offer one relayed server's agents for another's workspace with the same id", async () => {
     const drawer = mountDrawer(queryClient)
     const answered = createClient({ agents: () => claude })

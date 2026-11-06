@@ -65,8 +65,12 @@ export function useMobileNewTabAgentOptions(args: {
     const cached = queryClient.getQueryState<MobileDetectedAgents>(queryKey)
     const refreshed = refreshedThisConnection(client)
     const targetKey = hashKey(queryKey)
+    if (cached?.data?.kind !== 'detected') {
+      // No list yet, a failed read or another runtime's answer: every open asks again.
+      void queryClient.invalidateQueries({ queryKey, exact: true }, { cancelRefetch: false })
+      return
+    }
     if (
-      cached?.data?.kind !== 'detected' ||
       cached.data.detectedAgents.length === 0 ||
       cached.dataUpdatedAt >= mountedAt ||
       refreshed.has(targetKey)
@@ -96,7 +100,7 @@ export function useMobileNewTabAgentOptions(args: {
         : NO_OPTIONS,
     [detected, loadState, settings.data]
   )
-  // The sheet's state lives with the session; keep it current while closed so an open paints the list in its first frame.
+  // The sheet's state lives with the session; pushing it while closed lets a prefetched list paint with the first open.
   useEffect(() => {
     setLoadState(loadState)
   }, [loadState, setLoadState])
