@@ -120,7 +120,13 @@ export async function launchAgentSessionContinuation({
     ...(agentArgs !== undefined ? { agentArgs } : {}),
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),
+    // Qoder has no paste-ready signal; submit-after-ready can paste before its TUI composer
+    // exists. Let its prompt ride --prompt-interactive instead (the launch default).
+    ...(agent === 'qoder' || agent === 'qoder-cn'
+      ? {}
+      : {
+          promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const)
+        }),
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDeliveryUnconfirmed: () => {
