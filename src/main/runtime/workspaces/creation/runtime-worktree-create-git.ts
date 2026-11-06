@@ -8,7 +8,8 @@ import { foldGitRefNameCase } from '../../../git/repo-branch-conflict'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   computeValidatedBranchName,
-  getConfiguredBranchPrefix
+  getConfiguredBranchPrefix,
+  rewriteBranchLockSuffix
 } from '../../../ipc/worktree-branch-name'
 import { getHostedReviewForBranch } from '../../../source-control/hosted-review'
 import {
@@ -207,12 +208,16 @@ export async function getWorktreeCreateStartSuffix(
     args.repo.path,
     args.localWorktreeGitOptions
   )
+  // Branches carry the .lock rewrite, so scan by the base name a branch would get.
   return getWorktreeCreateStartingSuffix(
     sanitizedName,
-    existingNames.map((name) =>
-      branchPrefix && name.startsWith(`${branchPrefix}/`)
-        ? name.slice(branchPrefix.length + 1)
-        : name
-    )
+    existingNames.map((name) => stripBranchPrefix(name, branchPrefix)),
+    rewriteBranchLockSuffix(sanitizedName)
   )
+}
+
+function stripBranchPrefix(name: string, branchPrefix: string | null): string {
+  return branchPrefix && name.startsWith(`${branchPrefix}/`)
+    ? name.slice(branchPrefix.length + 1)
+    : name
 }

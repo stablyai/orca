@@ -9,9 +9,11 @@ export function getWorktreeCreateCandidate(value: string, suffix: number): strin
 /** Starts above the highest existing numeric suffix so probing never re-enters a range known to be taken. */
 export function getWorktreeCreateStartingSuffix(
   baseName: string,
-  existingNames: readonly string[]
+  existingNames: readonly string[],
+  branchBaseName = baseName
 ): number {
-  if (!existingNames.includes(baseName)) {
+  // Git rewrites a trailing .lock on the branch only, so the base can be taken under either name.
+  if (!existingNames.includes(baseName) && !existingNames.includes(branchBaseName)) {
     return 1
   }
   const suffixPrefix = `${baseName}-`

@@ -32,4 +32,15 @@ describe('worktree create starting suffix', () => {
       getWorktreeCreateStartingSuffix('feature', ['feature', 'feature-foo', 'feature-2-3'])
     ).toBe(1)
   })
+
+  it('finds the base under the rewritten .lock branch name', () => {
+    expect(
+      getWorktreeCreateStartingSuffix(
+        'foo.lock',
+        ['foo-lock', 'foo.lock-2', 'foo.lock-3'],
+        'foo-lock'
+      )
+    ).toBe(4)
+    expect(getWorktreeCreateStartingSuffix('foo.lock', ['foo.lock-2'], 'foo-lock')).toBe(1)
+  })
 })
