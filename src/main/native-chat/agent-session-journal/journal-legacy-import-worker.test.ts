@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { legacyImportHostExitTestEntry } from './journal-legacy-import-worker-test-fixture'
 import { EventEmitter } from 'node:events'
 import { expect, it } from 'vitest'
 import { runLegacyTranscriptImportWorker } from './journal-legacy-import-worker'
@@ -107,3 +109,27 @@ it.each(['nonzero', 'missing', 'unvalidated', 'duplicate'] as const)(
     await assertion
   }
 )
+
+it('does not keep a closing host alive while import work is pending', () => {
+  const child = spawnSync(process.execPath, [legacyImportHostExitTestEntry()], {
+    encoding: 'utf8',
+    timeout: 10_000
+  })
+  expect(child.stderr).toBe('')
+  expect(child.status).toBe(0)
+})
+
+it('rejects a completed result when cancellation carries a falsy reason', async () => {
+  const worker = new TestWorker()
+  const abort = new AbortController()
+  const pending = runLegacyTranscriptImportWorker(
+    { ...request, validateSource: false },
+    async () => {},
+    abort.signal,
+    () => worker
+  )
+  const assertion = expect(pending).rejects.toBe(false)
+  worker.emit('message', { type: 'result', result })
+  abort.abort(false)
+  await assertion
+})

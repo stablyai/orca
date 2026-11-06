@@ -45,7 +45,6 @@ export function runLegacyTranscriptImportWorker(
       reject(error)
       return
     }
-    worker.unref()
     const validationAbort = new AbortController()
     let failure: unknown
     let result: PreparedLegacyImport | undefined
@@ -66,7 +65,7 @@ export function runLegacyTranscriptImportWorker(
       abort()
     }
     worker.on('message', (message: LegacyImportWorkerMessage) => {
-      if (failure) {
+      if (failure !== undefined) {
         return
       }
       if (message?.type === 'validate-source') {
@@ -89,12 +88,12 @@ export function runLegacyTranscriptImportWorker(
           .then(
             () => {
               validationCompleted = true
-              if (!failure) {
+              if (failure === undefined) {
                 worker.postMessage({ ok: true })
               }
             },
             (error: unknown) => {
-              if (!failure) {
+              if (failure === undefined) {
                 worker.postMessage({
                   ok: false,
                   error: error instanceof Error ? error.message : String(error)
@@ -135,12 +134,13 @@ export function runLegacyTranscriptImportWorker(
       void Promise.resolve(validation).finally(() => {
         signal?.removeEventListener('abort', abort)
         worker.removeAllListeners()
-        if (failure) {
+        if (failure !== undefined) {
           reject(failure)
         } else if (result) {
           resolve(result)
         }
       })
     })
+    worker.unref()
   })
 }
