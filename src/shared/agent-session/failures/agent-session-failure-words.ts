@@ -90,11 +90,9 @@ function startRetry(
   if (retryControl) {
     return []
   }
-  return [
-    command
-      ? say('runCommandAgain', { command })
-      : say(messageSubmitted === false ? 'sendToTryAgain' : sendAgain)
-  ]
+  return command
+    ? [say('runCommandAgain', { command })]
+    : [say(messageSubmitted === false ? 'sendToTryAgain' : sendAgain)]
 }
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
@@ -155,6 +153,8 @@ const FAILURE_SENTENCES = {
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
   savedConversationMissing: (context, _fact, _surface, say) =>
     joinSentences([say('savedConversationMissing', agent(say, context)), say('startNewChat')]),
+  sideChatUnsupported: namingAgent('sideChatUnsupported'),
+  sideChatSourceUnsaved: (_context, _fact, _surface, say) => say('sideChatSourceUnsaved'),
   startFailed: couldNot('couldNotStart'),
   notSignedIn: (context, fact, surface, say) => notSignedInSentence(context, fact, say, surface),
   cliMissing: (context, _fact, _surface, say) => cliMissingSentence(context, say),

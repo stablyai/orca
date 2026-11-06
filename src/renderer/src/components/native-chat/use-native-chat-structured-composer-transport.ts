@@ -13,6 +13,7 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { useNativeChatSideChat } from './use-native-chat-side-chat'
 
 function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
   const label = structuredAgentLabel(agent)
@@ -30,7 +31,7 @@ function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: b
 }
 
 export function useNativeChatStructuredComposerTransport(args: {
-  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
+  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target' | 'tabId'>
   controller: ReturnType<typeof useStructuredAgentSession>
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
@@ -53,6 +54,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
   const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
+  const openSideChat = useNativeChatSideChat({ ...props, worktreeId })
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
     props.agent,
@@ -70,6 +72,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             : Promise.resolve(false)
       : null
     return {
+      ...(openSideChat ? { openSideChat } : {}),
       accountUsage:
         controller.accountUsage === true
           ? {
@@ -99,21 +102,26 @@ export function useNativeChatStructuredComposerTransport(args: {
               ...request
             )
         ),
-      dispatchCommand: (text: string) =>
-        dispatchStructuredAgentSessionComposerCommand(text, {
-          agent: props.agent,
-          snapshot: controller.optionSnapshot,
-          invokeAction: async (id) => {
-            setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
-            return true
+      dispatchCommand: (text, skills) =>
+        dispatchStructuredAgentSessionComposerCommand(
+          text,
+          {
+            agent: props.agent,
+            ...(openSideChat ? { openSideChat } : {}),
+            snapshot: controller.optionSnapshot,
+            invokeAction: async (id) => {
+              setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
+              return true
+            },
+            setOption: controller.setStructuredOption,
+            sessionCommands: controller.sessionCommands,
+            conversationCommands: controller.conversationCommands,
+            compactInstructions: controller.compactInstructions,
+            runConversationCommand: controller.runConversationCommand,
+            ...(changeThreadGoal ? { changeThreadGoal } : {})
           },
-          setOption: controller.setStructuredOption,
-          sessionCommands: controller.sessionCommands,
-          conversationCommands: controller.conversationCommands,
-          compactInstructions: controller.compactInstructions,
-          runConversationCommand: controller.runConversationCommand,
-          ...(changeThreadGoal ? { changeThreadGoal } : {})
-        }).then(localizeStructuredComposerOutcome),
+          skills
+        ).then(localizeStructuredComposerOutcome),
       ...(changeThreadGoal
         ? {
             threadGoal: {
@@ -155,6 +163,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     worktreeId,
     onError,
     onSubmitted,
+    openSideChat,
     captureAdmittedReveal,
     optionPickerRequest,
     props.agent,

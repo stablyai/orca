@@ -88,7 +88,8 @@ export function insertTabIdIntoOrder(
   tabs: readonly PinnedTab[],
   tabId: string,
   isPinned: boolean,
-  anchorTabId?: string
+  anchorTabId?: string,
+  requestedIndex?: number
 ): string[] {
   const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
   const order = dedupeTabOrder([...tabOrder]).filter((id) => id !== tabId)
@@ -99,6 +100,12 @@ export function insertTabIdIntoOrder(
   let index = isPinned ? pinnedPrefixEnd : order.length
   if (anchorIndex !== -1) {
     index = anchorIsPinned === isPinned ? anchorIndex + 1 : pinnedPrefixEnd
+  }
+  if (requestedIndex !== undefined) {
+    index = Math.max(
+      isPinned ? 0 : pinnedPrefixEnd,
+      Math.min(requestedIndex, isPinned ? pinnedPrefixEnd : order.length)
+    )
   }
   order.splice(index, 0, tabId)
   return order

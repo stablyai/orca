@@ -20758,6 +20758,9 @@
         "folder": "Папка",
         "mainCheckout": "Основная рабочая копия",
         "worktree": "Рабочее дерево"
+      },
+      "sideChat": {
+        "title": "Боковой чат"
       }
     },
     "tab": {
@@ -21190,7 +21193,9 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "тайм-аут",
         "idleStopSearchKeepAlive": "поддерживать активным",
-        "idleStopNever": "Никогда"
+        "idleStopNever": "Никогда",
+        "sideChatPaneCopy": "Собирает боковые чаты этой рабочей области в отдельной панели. Если выключено, новые чаты открываются рядом с исходной вкладкой; существующие панели сохраняются.",
+        "sideChatPaneTitle": "Собирать боковые чаты в одной панели"
       }
     },
     "agentChildRow": {

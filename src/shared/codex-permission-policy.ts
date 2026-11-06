@@ -13,7 +13,7 @@ export type CodexStructuredPermissionPolicy =
       approvalsReviewer: CodexApprovalsReviewer
     }
   | {
-      approvalPolicy: 'on-request'
+      approvalPolicy: 'on-request' | 'never'
       sandbox: 'read-only'
       approvalsReviewer: CodexApprovalsReviewer
     }
@@ -43,7 +43,13 @@ const AUTO_POLICY = {
 export function codexStructuredPermissionPolicy(
   mode: AgentChatPermissionMode
 ): CodexStructuredPermissionPolicy {
-  return mode === 'full-access' ? FULL_ACCESS_POLICY : mode === 'auto' ? AUTO_POLICY : ASK_POLICY
+  return mode === 'read-only'
+    ? { ...ASK_POLICY, approvalPolicy: 'never' }
+    : mode === 'full-access'
+      ? FULL_ACCESS_POLICY
+      : mode === 'auto'
+        ? AUTO_POLICY
+        : ASK_POLICY
 }
 
 /**

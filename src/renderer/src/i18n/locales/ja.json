@@ -19388,6 +19388,12 @@
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "worktree": "ワークツリー"
+      },
+      "sideChat": {
+        "new": "新しいサイドチャット",
+        "badge": "btw",
+        "failed": "サイドチャットを開けませんでした。",
+        "title": "サイドチャット"
       }
     },
     "tab": {
@@ -19804,7 +19810,9 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "タイムアウト",
         "idleStopSearchKeepAlive": "キープアライブ",
-        "idleStopNever": "しない"
+        "idleStopNever": "しない",
+        "sideChatPaneCopy": "このワークスペースのサイドチャットを分割ペインにまとめます。オフにすると、新しいサイドチャットは元のタブの隣に開き、既存のペインは維持されます。",
+        "sideChatPaneTitle": "サイドチャットを1つのペインにまとめる"
       }
     },
     "agentChildRow": {

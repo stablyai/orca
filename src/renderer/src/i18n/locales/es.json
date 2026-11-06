@@ -19896,6 +19896,12 @@
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
+      },
+      "sideChat": {
+        "new": "Nuevo chat paralelo",
+        "badge": "btw",
+        "failed": "No se pudo abrir una conversación paralela.",
+        "title": "Chat secundario"
       }
     },
     "tab": {
@@ -20280,7 +20286,9 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "tiempo de espera",
         "idleStopSearchKeepAlive": "mantener activo",
-        "idleStopNever": "Nunca"
+        "idleStopNever": "Nunca",
+        "sideChatPaneCopy": "Reúne los chats secundarios de este espacio de trabajo en un panel dividido. Al desactivarlo, los nuevos se abren junto a su pestaña de origen; los paneles existentes se conservan.",
+        "sideChatPaneTitle": "Agrupar chats secundarios en un panel"
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",

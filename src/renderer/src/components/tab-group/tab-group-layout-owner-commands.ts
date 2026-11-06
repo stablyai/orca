@@ -1,6 +1,7 @@
 // Main frames/reconnect snapshots draw moves and select them unless selection changed; divider ratios persist on release.
 
 import { useAppStore } from '@/store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import type { WindowLayoutCommand } from '@/runtime/layout-apply-send'
@@ -21,13 +22,30 @@ export type TabDrop =
   | { kind: 'move'; tabId: string; groupId: string; index?: number }
   | { kind: 'split'; tabId: string; groupId: string; direction: TabSplitDirection }
 
+/** Use the same authoritative move and mixed-version fallback as tab dragging. */
+export function moveTabInWorkspace(worktreeId: string, drop: TabDrop): boolean {
+  const state = useAppStore.getState()
+  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const activate =
+    state.groupsByWorktree[worktreeId]?.find((group) => group.id === activeGroupId)?.activeTabId ===
+    drop.tabId
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && dropTabThroughLayoutOwner(worktreeId, drop, activate)) {
+    return true
+  }
+  return moveAsToday(worktreeId, drop, activate)
+}
+
 /** Send drops to main; refusal leaves tabs in place, while false delegates skipped or paired-server drops to the caller. */
-export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): boolean {
+export function dropTabThroughLayoutOwner(
+  worktreeId: string,
+  drop: TabDrop,
+  activate = true
+): boolean {
   const command = commandFor(worktreeId, drop)
   if (!command) {
     return false
   }
-  const forget = expectSelectionAfterMove(worktreeId, drop)
+  const forget = activate ? expectSelectionAfterMove(worktreeId, drop) : () => {}
   const sent = sendLayoutCommandToOwner(worktreeId, command, {
     // Forget after the answering frame; without a stream, retain selection intent for the reconnect snapshot.
     apply: (_result, origin) => {
@@ -37,7 +55,7 @@ export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): bo
     },
     asToday: () => {
       forget()
-      moveAsToday(worktreeId, drop)
+      moveAsToday(worktreeId, drop, activate)
     },
     refused: forget
   })
@@ -106,7 +124,7 @@ function commandFor(worktreeId: string, drop: TabDrop): WindowLayoutCommand | nu
 }
 
 /** Apply the window-owned fallback and mirror it to the web runtime. */
-function moveAsToday(worktreeId: string, drop: TabDrop): boolean {
+function moveAsToday(worktreeId: string, drop: TabDrop, activate = true): boolean {
   const state = useAppStore.getState()
   const { tabId, groupId: targetGroupId } = drop
   if (drop.kind === 'reorder') {
@@ -121,12 +139,25 @@ function moveAsToday(worktreeId: string, drop: TabDrop): boolean {
     })
     return true
   }
+  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const restoreSelection = () => {
+    if (
+      !activate &&
+      activeGroupId &&
+      useAppStore
+        .getState()
+        .groupsByWorktree[worktreeId]?.some((group) => group.id === activeGroupId)
+    ) {
+      useAppStore.getState().focusGroup(worktreeId, activeGroupId)
+    }
+  }
   if (drop.kind === 'split') {
     const splitDirection = drop.direction
     const moved = state.dropUnifiedTab(tabId, { groupId: targetGroupId, splitDirection })
     if (moved) {
       mirrorWebRuntimeTabMove({ kind: 'split', worktreeId, tabId, targetGroupId, splitDirection })
     }
+    restoreSelection()
     return moved
   }
   const { index } = drop
@@ -137,6 +168,7 @@ function moveAsToday(worktreeId: string, drop: TabDrop): boolean {
   if (moved) {
     mirrorWebRuntimeTabMove({ kind: 'move-to-group', worktreeId, tabId, targetGroupId, index })
   }
+  restoreSelection()
   return moved
 }
 

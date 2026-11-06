@@ -100,12 +100,14 @@ describe('the first message owned by create', () => {
     })
     const create = deferred<unknown>()
     mocks.call.mockReturnValue(create.promise)
-    const launch = start()
+    const skills = [{ name: 'review', path: '/picked/SKILL.md' }]
+    const launch = start('use $review', skills)
     holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'picked-model')
     holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const params = createParams()
-    expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'opening text' }])
+    expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'use $review' }])
+    expect(params.firstMessage?.body.skills).toEqual(skills)
     expect(params.options).toEqual({ model: 'picked-model', effort: 'high' })
     expect(params.firstMessage?.selection).toEqual({ model: 'picked-model', effort: 'high' })
     expect(params.envelope.payloadFingerprint).toBe(

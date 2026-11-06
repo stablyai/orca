@@ -49,6 +49,7 @@ export function useNativeChatComposerCommandPicker(
     ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
     agentCommands,
+    sideChat: structuredTransport?.openSideChat !== undefined,
     commandAvailable,
     sessionSkills,
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,

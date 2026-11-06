@@ -108,6 +108,8 @@ const REASON_WORDS = {
     providerRejected: causeWords('agentRefused', 'retry'),
     providerStartFailed: { fact: 'providerStartFailed', action: 'retry' },
     savedConversationMissing: { fact: 'savedConversationMissing', action: 'goElsewhere' },
+    sideChatUnsupported: { fact: 'sideChatUnsupported', action: 'actFirst' },
+    sideChatSourceUnsaved: { fact: 'sideChatSourceUnsaved', action: 'actFirst' },
     notSignedIn: { fact: 'notSignedIn', action: 'actFirst' },
     cliMissing: { fact: 'cliMissing', action: 'actFirst' },
     historyTooLarge: { fact: 'historyTooLarge', action: 'goElsewhere' },

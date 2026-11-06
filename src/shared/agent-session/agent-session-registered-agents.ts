@@ -27,6 +27,7 @@ const capabilityFlag = z.boolean().optional().default(false)
 const registeredAgentSchema = z.object({
   agent: z.string().refine(isStructuredAgentId),
   capabilities: z.object({
+    sideChat: z.boolean().optional(),
     rewind: capabilityFlag,
     compact: capabilityFlag,
     threadGoal: capabilityFlag,

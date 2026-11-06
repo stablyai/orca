@@ -90,6 +90,18 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
     ]
   },
+  sideChatPane: {
+    targetSectionId: 'chat-side-chat-pane',
+    title: translate(
+      'components.settings.nativeChat.sideChatPaneTitle',
+      'Group side chats in one pane'
+    ),
+    description: translate(
+      'components.settings.nativeChat.sideChatPaneCopy',
+      'Collect this workspace’s side chats in a shared split pane. When off, new side chats open beside their source tab; existing panes stay in place.'
+    ),
+    keywords: [translate('components.native-chat.sideChat.badge', 'btw')]
+  },
   openedPullRequests: {
     targetSectionId: NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID,
     title: translate(

@@ -3,6 +3,7 @@ import { useCallback, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-status/title/agent-title-decoration'
+import { SideChatTabBadge, sideChatTabLabel } from './SideChatTabBadge'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
@@ -19,7 +20,7 @@ import {
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { useSortableTabRename } from './use-sortable-tab-rename'
+import { useSortableTabRename, tabRenameInputEvents } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
@@ -123,9 +124,6 @@ export default function SortableTab({
   )
   const { activityStatus, programProgress } = useTerminalTabActivity(tab)
 
-  // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
-  const shellForIcon = tab.shellOverride
-
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
   const displayTitle =
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
@@ -198,6 +196,7 @@ export default function SortableTab({
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const sideChatLabel = sideChatTabLabel(nativeChat?.sideChat)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -205,13 +204,14 @@ export default function SortableTab({
       data-testid="sortable-tab"
       data-tab-id={tab.id}
       data-tab-title={tabTitle}
+      aria-description={sideChatLabel}
       data-pinned={isPinned ? 'true' : 'false'}
       // Expose rendered selection so E2E catches visual regressions missed by store-only assertions.
       data-active={isActive ? 'true' : 'false'}
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex min-w-0 overflow-hidden items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -249,14 +249,18 @@ export default function SortableTab({
       )}
       <TerminalTabLeadingIcon
         agent={tabAgent}
+        sideChat={nativeChat?.sideChat}
         activityStatus={activityStatus}
-        shell={shellForIcon}
+        shell={tab.shellOverride}
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
         progress={programProgress}
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      {nativeChat?.sideChat && !isEditing && (
+        <SideChatTabBadge className="hidden @[128px]/chat-tab:inline-flex group-data-[side-chat-only=true]/side-chat-pane:hidden" />
       )}
       {isEditing ? (
         <Input
@@ -272,18 +276,7 @@ export default function SortableTab({
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={onRenameKeyDown}
-          // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
-          onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={(event) => {
-            // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
-            event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
-          }}
-          onClick={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          onAuxClick={(event) => event.stopPropagation()}
+          {...tabRenameInputEvents}
           className="mr-1 min-w-0 flex-1"
           spellCheck={false}
         />
@@ -292,7 +285,7 @@ export default function SortableTab({
       )}
       {tab.color && !isEditing && (
         <span
-          className="mr-1.5 size-2 rounded-full shrink-0"
+          className={`mr-1.5 size-2 rounded-full shrink-0 ${nativeChat?.sideChat ? 'hidden @[128px]/chat-tab:block' : ''}`}
           style={{ backgroundColor: tab.color }}
         />
       )}
@@ -357,6 +350,7 @@ export default function SortableTab({
         <div
           ref={renameOwnerRef}
           {...slotProps}
+          className={`${slotProps.className} @container/chat-tab`}
           onContextMenu={(event) => {
             // The hover card is portalled: React still routes its events through this slot.
             if (event.target instanceof Node && event.currentTarget.contains(event.target)) {
@@ -370,18 +364,19 @@ export default function SortableTab({
           ) : (
             <TabHoverCard
               title={displayTitle}
+              description={sideChatLabel}
               programName={
                 tabAgent
                   ? getAgentLabel(tabAgent)
-                  : shellForIcon
-                    ? basename(shellForIcon)
+                  : tab.shellOverride
+                    ? basename(tab.shellOverride)
                     : translate('tabHoverCard.terminal', 'Terminal')
               }
               icon={
                 <TerminalTabLeadingIcon
                   agent={tabAgent}
                   activityStatus={activityStatus}
-                  shell={shellForIcon}
+                  shell={tab.shellOverride}
                   showUnreadActivity={false}
                   isActive
                   progress={programProgress}

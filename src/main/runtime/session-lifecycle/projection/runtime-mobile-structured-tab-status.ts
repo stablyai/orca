@@ -1,5 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus
@@ -15,6 +16,15 @@ export function withStructuredChatStatus(
   worktreeId: string,
   getRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
 ): RuntimeMobileSessionAgentTab {
+  const host = getStructuredAgentSessionHost()
+  const record = host?.deps.store.getRecord(tab.sessionId)
+  tab = {
+    ...tab,
+    ...(record?.sideChat ? { sideChatOf: record.sideChat.sourceSessionId } : {}),
+    ...(host?.deps.agents.capabilities(tab.agent)?.sideChat === true
+      ? { sideChatSupported: true }
+      : {})
+  }
   const paneKey = structuredAgentSessionPaneKey(
     structuredAgentSessionTabId(tab.sessionId),
     tab.sessionId

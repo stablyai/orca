@@ -26,6 +26,7 @@ export type StructuredAgentLaunchOptions = StructuredLaunchPromptOptions & {
   draftFromScope?: string
   // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
+  sideChatOf?: string
   forkFrom?: StructuredAgentSessionForkSource
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId

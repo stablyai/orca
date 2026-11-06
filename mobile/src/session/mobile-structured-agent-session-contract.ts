@@ -81,6 +81,7 @@ export type StructuredMobileSession = Omit<
   }
 
 export type MobileStructuredAgentSessionArgs = {
+  openSideChat?: (question: string) => Promise<boolean>
   client: RpcClient | null
   /** The route's paired host owns follow-up behavior even when another host executes the chat. */
   pairedHostClient: RpcClient | null

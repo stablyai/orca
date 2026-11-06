@@ -190,6 +190,8 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
+  /** Saved parent relationship; independent of the tab's layout or provider liveness. */
+  sideChatOf?: string
   usageLimitContinue?: {
     turnItemId: string
     resetsAt: number

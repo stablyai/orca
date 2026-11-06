@@ -18,6 +18,8 @@ const badgeVariants = cva(
           'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 [a&]:hover:underline',
+        contextLabel:
+          'h-4 rounded border-foreground/20 bg-foreground/[0.06] px-1.5 text-3xs leading-none text-foreground/70',
         /** Workspace execution-host context, quieter and squarer than status chips. */
         hostContext:
           'h-4 rounded border-border bg-[var(--host-badge,var(--accent))] px-1.5 text-[10px] leading-none text-[var(--host-badge-foreground,var(--muted-foreground))] dark:border-border/50 dark:bg-[var(--host-badge,color-mix(in_oklab,var(--accent)_80%,transparent))]',

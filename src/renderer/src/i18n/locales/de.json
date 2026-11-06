@@ -20091,6 +20091,9 @@
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
         "worktree": "Worktree"
+      },
+      "sideChat": {
+        "title": "Nebenchat"
       }
     },
     "tab": {
@@ -20503,7 +20506,9 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "Zeitlimit",
         "idleStopSearchKeepAlive": "aktiv halten",
-        "idleStopNever": "Nie"
+        "idleStopNever": "Nie",
+        "sideChatPaneCopy": "Nebenchats dieses Arbeitsbereichs in einem geteilten Bereich sammeln. Wenn deaktiviert, öffnen neue Nebenchats neben ihrem Ursprungstab; bestehende Bereiche bleiben erhalten.",
+        "sideChatPaneTitle": "Nebenchats in einem Bereich bündeln"
       }
     },
     "agentChildRow": {

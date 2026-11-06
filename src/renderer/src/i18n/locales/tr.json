@@ -20075,6 +20075,9 @@
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "worktree": "Worktree"
+      },
+      "sideChat": {
+        "title": "Yan sohbet"
       }
     },
     "tab": {
@@ -20487,7 +20490,9 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "zaman aşımı",
         "idleStopSearchKeepAlive": "canlı tut",
-        "idleStopNever": "Asla"
+        "idleStopNever": "Asla",
+        "sideChatPaneCopy": "Bu çalışma alanının yan sohbetlerini ortak bir bölmede toplar. Kapalıyken yenileri kaynak sekmenin yanında açılır; mevcut bölmeler korunur.",
+        "sideChatPaneTitle": "Yan sohbetleri tek bölmede grupla"
       }
     },
     "agentChildRow": {

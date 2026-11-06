@@ -15,12 +15,39 @@ import {
 } from './tab-bar-item-surface'
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
 
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionConversationName
+} from '../../../../shared/agent-session/agent-session-wire'
+import type * as StatusFeedModule from '@/runtime/structured-agent-session-status-feed'
+
+const sideStatus = vi.hoisted(() => ({
+  rows: new Map<string, AgentSessionStatusSummary>(),
+  names: new Map<string, AgentSessionConversationName>(),
+  listeners: new Set<() => void>()
+}))
+function subscribeToTestStatus(listener: () => void) {
+  sideStatus.listeners.add(listener)
+  return () => sideStatus.listeners.delete(listener)
+}
+
+vi.mock('@/runtime/structured-agent-session-status-feed', async (importOriginal) => ({
+  ...(await importOriginal<typeof StatusFeedModule>()),
+  getStructuredAgentSessionStatusFeed: () => ({
+    activate: () => () => {},
+    getSnapshot: () => sideStatus.rows,
+    getNamingSnapshot: () => sideStatus.names,
+    subscribe: subscribeToTestStatus,
+    subscribeSession: (_sessionId: string, listener: () => void) => subscribeToTestStatus(listener)
+  })
+}))
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 type TabProps = {
   tab?: { id: string; title: string }
   agent?: string | null
-  nativeChat?: { sessionId: string; agent: string | undefined }
+  nativeChat?: { sessionId: string; agent: string | undefined; sideChat?: boolean }
   isActive: boolean
   isPinned: boolean
   onActivate: (id: string) => void
@@ -122,6 +149,7 @@ function buildItems({
       data: {
         id: 'session-1',
         entityId: 'session-1',
+        executionHostId: 'local',
         groupId: 'group-1',
         worktreeId: 'wt-1',
         contentType: 'agent-session',
@@ -249,6 +277,8 @@ afterEach(() => {
   act(() => root?.unmount())
   root = null
   tabRenders.length = 0
+  sideStatus.rows.clear()
+  sideStatus.listeners.clear()
   clearClientHostedBrowserRowSelection()
 })
 
@@ -269,3 +299,24 @@ describe('tab strip rows', () => {
 })
 
 /** Client-hosted rows overlay panes without changing activeTabId; suppress real-tab underlines while they are selected. */
+
+it('draws the desktop btw badge from the host relationship and retains it after remount', () => {
+  renderStrip({ sessionAgent: 'codex' })
+  expect(lastRender('session-1').nativeChat?.sideChat).toBeUndefined()
+  sideStatus.rows.set('session-1', {
+    sessionId: 'session-1',
+    workspaceId: 'wt-1',
+    agent: 'codex',
+    status: 'idle',
+    latestPrompt: '',
+    updatedAt: 1,
+    sideChatOf: 'parent-session'
+  })
+  act(() => sideStatus.listeners.forEach((listener) => listener()))
+  expect(lastRender('session-1').nativeChat?.sideChat).toBe(true)
+  expect(lastRender('session-1').tab?.title).toBe('Session')
+  act(() => root?.unmount())
+  root = null
+  renderStrip({ sessionAgent: 'codex' })
+  expect(lastRender('session-1').nativeChat?.sideChat).toBe(true)
+})

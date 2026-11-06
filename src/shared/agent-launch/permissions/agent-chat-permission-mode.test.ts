@@ -1,11 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import { agentChatPermissionModes } from './agent-chat-permission-support'
-import { newChatPermissionMode, savedChatPermissionMode } from './agent-chat-permission-mode'
+import {
+  newChatPermissionMode,
+  savedChatPermissionMode,
+  AGENT_CHAT_PERMISSION_MODES
+} from './agent-chat-permission-mode'
 
 const CLAUDE_CHAT_PERMISSION_MODES = agentChatPermissionModes('claude')!
 const CODEX_CHAT_PERMISSION_MODES = agentChatPermissionModes('codex')!
 
 describe('agent chat permission modes', () => {
+  it('orders the picker from least to most access', () => {
+    expect(AGENT_CHAT_PERMISSION_MODES).toEqual([
+      'read-only',
+      'ask',
+      'accept-edits',
+      'auto',
+      'full-access'
+    ])
+  })
+
+  it('offers Claude every mode, Codex no edits-only mode, ACP agents Ask and Full access', () => {
+    expect(agentChatPermissionModes('claude')?.modes).toEqual([
+      'ask',
+      'accept-edits',
+      'auto',
+      'full-access'
+    ])
+    expect(agentChatPermissionModes('codex')?.modes).toEqual([
+      'read-only',
+      'ask',
+      'auto',
+      'full-access'
+    ])
+    expect(agentChatPermissionModes('omp')?.modes).toEqual(['ask', 'full-access'])
+    expect(agentChatPermissionModes('pi')).toBeNull()
+  })
+
   it('seeds a new chat from the host setting, narrowed to what its agent offers', () => {
     expect(newChatPermissionMode('codex', 'accept-edits')).toBe('ask')
     expect(newChatPermissionMode('claude', 'accept-edits')).toBe('accept-edits')

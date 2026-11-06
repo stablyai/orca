@@ -19,9 +19,9 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import {
   addStructuredLaunchCaller,
+  promptOwner,
   launchPromptText,
   joinLaunchDelivery,
-  promptOwner,
   createStructuredLaunchCallerGroup,
   releaseStructuredLaunchCallerAfterUnknownOutcome,
   type StructuredAgentLaunchOptions,
@@ -200,7 +200,8 @@ function structuredAgentLaunchState(
     options.resumeFrom,
     options.hostSeedOptions,
     options.activate,
-    options.forkFrom
+    options.forkFrom,
+    options.sideChatOf
   )
   // A fork inherits its source's options.
   intent.explicitLaunchOptions =

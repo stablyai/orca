@@ -4,6 +4,10 @@ import {
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
 } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import {
+  AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY
+} from '../../../src/shared/agent-session-side-chat'
+import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
@@ -38,6 +42,8 @@ import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-i
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {
+  readOnlySideChat?: boolean
+  sideChat?: boolean
   commandsOnRequest?: boolean
   coherentModelCatalog?: boolean
   modelEffortDiscovery?: boolean
@@ -88,6 +94,8 @@ export function structuredAgentSessionHostSupport(
   capabilities: readonly string[]
 ): StructuredAgentSessionHostSupport {
   return {
+    readOnlySideChat: capabilities.includes(AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY),
+    sideChat: capabilities.includes(AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY),
     commandsOnRequest: capabilities.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
     coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
     modelEffortDiscovery: capabilities.includes(AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY),

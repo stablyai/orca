@@ -20,6 +20,7 @@ import {
 } from '../choices/agent-launch-settings'
 import { newChatPermissionModeForSettings } from './agent-chat-permission-mode'
 import {
+  agentLaunchPermissionSettings,
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
   resolveTuiAgentLaunchArgs,
@@ -28,6 +29,7 @@ import {
 import {
   agentPermissionArgs,
   applyAllAgentsPermission,
+  readLaunchPermissionChoice,
   resolveAgentPermission
 } from './tui-agent-permission-choice'
 import { agentArgsSetPermission } from './agent-permission-args'
@@ -106,6 +108,20 @@ describe('one-time move of permission flags out of Arguments', () => {
 })
 
 describe('terminal launch composes the stored choice', () => {
+  it('preserves a read-only chat choice when composing terminal launch settings', () => {
+    const options = { permissionMode: 'read-only' }
+    expect(readLaunchPermissionChoice(options)).toBe('read-only')
+    const settings = agentLaunchPermissionSettings(
+      'codex',
+      { agentPermissionDefault: 'full-access' as const },
+      options
+    )
+    expect(resolveAgentPermission('codex', settings).choice).toBe('read-only')
+    expect(resolveTuiAgentLaunchArgs('codex', settings)).toBe(
+      '-a never -s read-only -c approvals_reviewer=user'
+    )
+  })
+
   it.each([
     ['claude', '--permission-mode default', '--dangerously-skip-permissions'],
     [

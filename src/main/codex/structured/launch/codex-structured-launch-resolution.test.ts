@@ -1,3 +1,5 @@
+import { openCodexThread } from '../threads/codex-structured-thread-open'
+import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
@@ -129,3 +131,82 @@ describe('codex structured launch resolution', () => {
     ).rejects.toThrow('workspace-1 is gone')
   })
 })
+
+it.each(['fork', 'resume', 'clear'] as const)(
+  'keeps the side-chat identity on %s',
+  async (mode) => {
+    const side = record({
+      sideChat: { sourceSessionId: 'codex_parent_123', sourceProviderSessionId: 'parent-thread' },
+      providerHandleChain:
+        mode === 'resume'
+          ? [
+              {
+                linkId: 'child-link',
+                handle: codexProviderHandle('child-thread'),
+                origin: 'created',
+                mintedAtFence: 1,
+                observedAt: 1
+              }
+            ]
+          : [],
+      ...(mode === 'clear'
+        ? { providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 } }
+        : {})
+    })
+    const launch = await resolverFor(side)({ identity: IDENTITY })
+    expect(launch.sideChat).toBe(true)
+    expect(launch.resumeThreadId).toBe(mode === 'resume' ? 'child-thread' : null)
+    expect(launch.forkThreadId).toBe(mode === 'fork' ? 'parent-thread' : undefined)
+    expect(launch.supersedeIfUnsaved).toBeUndefined()
+  }
+)
+
+it.each(['created', 'resumed', 'adopted'] as const)(
+  'recovers a cleared side chat without a rollout only for a %s handle',
+  async (origin) => {
+    const launch = await resolverFor(
+      record({
+        sideChat: { sourceSessionId: 'codex_parent_123', sourceProviderSessionId: 'parent-thread' },
+        providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
+        providerHandleChain: [
+          {
+            linkId: 'cleared-child',
+            handle: codexProviderHandle('cleared-thread'),
+            origin,
+            mintedAtFence: 3,
+            observedAt: 101
+          }
+        ]
+      })
+    )({ identity: IDENTITY })
+    const noRollout = new CodexAppServerRequestError(
+      'thread/resume',
+      -32600,
+      'codex app-server thread/resume failed: no rollout found for thread id cleared-thread'
+    )
+    const request = vi.fn(async (method: string) => {
+      if (method === 'thread/resume') {
+        throw noRollout
+      }
+      return { thread: { id: 'replacement-thread' } }
+    })
+    const opened = openCodexThread({ request }, { ...launch, cwd: '/repos/workspace-1' }, 2_000)
+    if (origin === 'created') {
+      await expect(opened).resolves.toMatchObject({
+        threadId: 'replacement-thread',
+        supersededThreadId: 'cleared-thread'
+      })
+      expect(request.mock.calls.map(([method]) => method)).toEqual([
+        'thread/resume',
+        'thread/start'
+      ])
+    } else {
+      await expect(opened).rejects.toMatchObject({
+        reason: 'savedConversationMissing',
+        cause: noRollout
+      })
+      expect(request).toHaveBeenCalledOnce()
+    }
+    expect(launch.forkThreadId).toBeUndefined()
+  }
+)

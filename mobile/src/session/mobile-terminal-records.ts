@@ -73,6 +73,8 @@ type MobileSessionTabLike =
     }
   | {
       type: 'agent-session'
+      sideChatOf?: string
+      sideChatSupported?: boolean
       id: string
       title?: string
       sessionId?: string
@@ -191,6 +193,8 @@ function mobileSessionTabEqual(
         b.type === 'agent-session' &&
         a.sessionId === b.sessionId &&
         a.agent === b.agent &&
+        a.sideChatOf === b.sideChatOf &&
+        a.sideChatSupported === b.sideChatSupported &&
         JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
       )
   }

@@ -11,6 +11,7 @@ export function structuredStatusSummariesEqual(
 ): boolean {
   return (
     a.workspaceId === b.workspaceId &&
+    a.sideChatOf === b.sideChatOf &&
     a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
     a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
     a.usageLimitContinue?.state === b.usageLimitContinue?.state &&

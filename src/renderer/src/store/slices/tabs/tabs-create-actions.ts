@@ -98,7 +98,8 @@ export function createTabsCreateActions(
                 nextTabs,
                 id,
                 init?.isPinned === true,
-                placement.anchorTabId
+                placement.anchorTabId,
+                init?.index
               )
         const insertedIndex = nextOrder.indexOf(id)
         // Preview replacement may leave sortOrder gaps; renumber even on append to prevent collisions.

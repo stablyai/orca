@@ -1,10 +1,15 @@
-import type {
-  AgentSessionFailureCopyId,
-  AgentSessionFailureCopyValues
+import {
+  AGENT_SESSION_FAILURE_COPY as COPY,
+  type AgentSessionFailureCopyId,
+  type AgentSessionFailureCopyValues
 } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 
 export const START_FAILURE_COPY = {
+  sideChatUnsupported: (values) =>
+    translate('session.failure.sideChatUnsupported', COPY.sideChatUnsupported, values),
+  sideChatSourceUnsaved: (values) =>
+    translate('session.failure.sideChatSourceUnsaved', COPY.sideChatSourceUnsaved, values),
   savedConversationMissing: (values) =>
     translate(
       'session.failure.savedConversationMissing',

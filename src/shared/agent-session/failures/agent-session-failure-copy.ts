@@ -22,6 +22,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
+  sideChatUnsupported:
+    'This version of {{agent}} cannot open side chats. Update it on the host and try again.',
+  sideChatSourceUnsaved:
+    'The source chat has no saved history. Send a message there before opening a side chat.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',

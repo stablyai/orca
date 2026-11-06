@@ -19761,7 +19761,9 @@
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "thenSendAgain": "Then send your message again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
-        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}."
+        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
+        "sideChatUnsupported": "This version of {{agent}} cannot open side chats. Update it on the host and try again.",
+        "sideChatSourceUnsaved": "The source chat has no saved history. Send a message there before opening a side chat."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -20021,7 +20023,9 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "permissionReadOnly": "Read only",
+        "permissionReadOnlyDescription": "Uses a read-only sandbox without permission escalation"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -20699,6 +20703,13 @@
         "hide": "Don't show opened pull requests",
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
+      },
+      "sideChat": {
+        "new": "New side chat",
+        "badge": "btw",
+        "failed": "Could not open a side chat.",
+        "inheritPermissions": "Use main chat permissions",
+        "title": "Side chat"
       }
     },
     "tab": {
@@ -21142,7 +21153,9 @@
         "openedPullRequestsTitle": "Show pull requests the agent opens",
         "openedPullRequestsCopy": "A card under the turn that opened a pull request, with its title and changed lines.",
         "openedPullRequestsSearchPr": "PR",
-        "openedPullRequestsSearchCard": "pull request card"
+        "openedPullRequestsSearchCard": "pull request card",
+        "sideChatPaneCopy": "Collect this workspace’s side chats in a shared split pane. When off, new side chats open beside their source tab; existing panes stay in place.",
+        "sideChatPaneTitle": "Group side chats in one pane"
       }
     },
     "agentChildRow": {

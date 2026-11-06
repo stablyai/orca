@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// @vitest-environment happy-dom
 
+import { structuredComposerSendHarness as harness } from './native-chat-structured-composer-send.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
@@ -218,3 +218,59 @@ describe('complete handback acceptance', () => {
     })
   })
 })
+
+it('holds a side-chat question behind the ordinary host permission gate, preserving its draft', async () => {
+  clearNativeChatComposerDraftsForTests()
+  const { send, structuredTransport, setDraft } = harness('codex')
+  const openSideChat = vi.fn(async () => true)
+  structuredTransport.openSideChat = openSideChat
+  structuredTransport.sendBlockedReason = 'Update Orca on this host to use Ask for approval.'
+  updateNativeChatComposerDraft('tab-1:pane', { text: '/btw inspect this' }, 'immediate')
+  const before = readNativeChatComposerDraft('tab-1:pane')
+  await send('/btw inspect this', [])
+  expect(openSideChat).not.toHaveBeenCalled()
+  expect(structuredTransport.send).not.toHaveBeenCalled()
+  expect(setDraft).not.toHaveBeenCalled()
+  expect(readNativeChatComposerDraft('tab-1:pane')).toBe(before)
+
+  await send('/btw', [])
+  expect(openSideChat).toHaveBeenCalledExactlyOnceWith('')
+  structuredTransport.sendBlockedReason = undefined
+  await send('/btw inspect this', [])
+  expect(openSideChat).toHaveBeenLastCalledWith('inspect this')
+  expect(openSideChat).toHaveBeenCalledTimes(2)
+})
+
+it.each([true, false])(
+  'btw retains picked skills through command dispatch and acceptance=%s',
+  async (accepted) => {
+    clearNativeChatComposerDraftsForTests()
+    const skills = [{ name: 'review', path: '/picked/SKILL.md' }]
+    const edit = createNativeChatQueuedEditDraft(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/btw use $review' }],
+        skills
+      },
+      'tab-1:pane'
+    )
+    updateNativeChatComposerDraft(
+      'tab-1:pane',
+      readNativeChatComposerDraft(edit.scopeKey),
+      'immediate'
+    )
+    discardNativeChatQueuedEdit(edit)
+    const { send, structuredTransport, setDraft } = harness('codex')
+    const openSideChat = vi.fn(async () => accepted)
+    structuredTransport.openSideChat = openSideChat
+    await act(async () => send('/btw use $review', []))
+    expect(openSideChat).toHaveBeenCalledExactlyOnceWith('use $review', skills)
+    expect(structuredTransport.send).not.toHaveBeenCalled()
+    if (accepted) {
+      expect(setDraft).toHaveBeenCalledWith('')
+    } else {
+      expect(setDraft).not.toHaveBeenCalled()
+    }
+  }
+)

@@ -44,6 +44,7 @@ export type StructuredAgentSessionCreateIntentInput = {
   callerKey?: string
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
+  sideChatOf?: string
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
 }
 

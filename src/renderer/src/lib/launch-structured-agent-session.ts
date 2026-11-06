@@ -100,7 +100,8 @@ export function createStructuredAgentSessionLaunchIntent(
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
   activate = true,
-  forkFrom?: StructuredAgentSessionForkSource
+  forkFrom?: StructuredAgentSessionForkSource,
+  sideChatOf?: string
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -123,7 +124,8 @@ export function createStructuredAgentSessionLaunchIntent(
     sessionId,
     resumeFrom,
     hostSeedOptions,
-    forkFrom
+    forkFrom,
+    sideChatOf
   )
 }
 
@@ -134,7 +136,8 @@ function buildStructuredAgentSessionLaunchIntent(
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed,
-  forkFrom: StructuredAgentSessionForkSource | undefined
+  forkFrom: StructuredAgentSessionForkSource | undefined,
+  sideChatOf?: string
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -148,6 +151,7 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
+      ...(sideChatOf ? { sideChatOf } : {}),
       ...(forkFrom ? { forkFrom } : {}),
       randomUuid: createBrowserUuid
     }),
@@ -181,7 +185,8 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.sessionId,
       intent.params.resumeFrom,
       intent.seedOptions,
-      intent.params.forkFrom
+      intent.params.forkFrom,
+      intent.params.sideChatOf
     ),
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
@@ -196,6 +201,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  sideChatOf?: string
   forkFrom?: StructuredAgentSessionForkSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -224,6 +230,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+      ...(args.sideChatOf ? { sideChatOf: args.sideChatOf } : {}),
       ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),

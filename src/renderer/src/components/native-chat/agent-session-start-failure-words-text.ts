@@ -6,6 +6,17 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const START_FAILURE_PIECES = {
+  sideChatUnsupported: (values) =>
+    translate(
+      'components.native-chat.failureWords.sideChatUnsupported',
+      COPY.sideChatUnsupported,
+      values
+    ),
+  sideChatSourceUnsaved: () =>
+    translate(
+      'components.native-chat.failureWords.sideChatSourceUnsaved',
+      COPY.sideChatSourceUnsaved
+    ),
   savedConversationMissing: (values) =>
     translate(
       'components.native-chat.failureWords.savedConversationMissing',

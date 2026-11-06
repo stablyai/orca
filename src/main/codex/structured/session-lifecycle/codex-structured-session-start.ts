@@ -120,7 +120,9 @@ export async function openCodexStructuredSession(
   if (
     translator &&
     input.events &&
-    (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
+    (returnedTurns.length > 0 ||
+      ((launch.resumeThreadId !== null || launch.forkThreadId !== undefined) &&
+        !opened.supersededThreadId))
   ) {
     await waitForPromiseWithSignal(
       catchUpCodexThread({

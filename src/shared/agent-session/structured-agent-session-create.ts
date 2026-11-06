@@ -24,6 +24,7 @@ export type StructuredAgentSessionCreateParams = {
   agent: StructuredAgentId
   forkFrom?: StructuredAgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
+  sideChatOf?: string
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
@@ -61,6 +62,7 @@ export function structuredAgentSessionCreateParams(args: {
   agent: StructuredAgentId
   forkFrom?: StructuredAgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
+  sideChatOf?: string
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
@@ -77,6 +79,7 @@ export function structuredAgentSessionCreateParams(args: {
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.sideChatOf ? { sideChatOf: args.sideChatOf } : {}),
     ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
     ...(args.tabId ? { tabId: args.tabId } : {}),
     ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),

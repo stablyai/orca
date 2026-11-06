@@ -7,6 +7,7 @@ import type { StructuredAgentContextUsage } from '../../../../shared/agent-sessi
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
+  StructuredAgentSessionComposerOptions,
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
 } from '../../../../shared/agent-session/view/structured-agent-session-composer'
@@ -53,6 +54,7 @@ export type NativeChatOptionPickerRequest = {
 export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendRequest, 'alternate'>
 
 export type NativeChatStructuredComposerTransport = {
+  openSideChat?: StructuredAgentSessionComposerOptions['openSideChat']
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
@@ -65,9 +67,11 @@ export type NativeChatStructuredComposerTransport = {
   sendOut?: boolean
   /** Send is held for this reason, which the disabled button says. */
   sendBlockedReason?: string
-  /** What a plain send does now, and whether Cmd/Ctrl+Enter would send it the other way. */
   sendFollowUp?: NativeChatSendFollowUp
-  dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
+  dispatchCommand: (
+    text: string,
+    skills?: StructuredAgentSessionSendRequest['skills']
+  ) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null

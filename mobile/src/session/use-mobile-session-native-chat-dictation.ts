@@ -27,6 +27,7 @@ import { mobileNativeChatOverlayInputLockReason } from './native-chat/mobile-nat
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
+import { useMobileSideChat } from './mobile-native-chat-side-chat'
 
 export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
@@ -38,11 +39,8 @@ export function useMobileSessionNativeChatDictation(
     client,
     pairedHostClient,
     connState,
-    agentSessionHostSupport,
     activeHandle,
     activeSessionTabId,
-    diffComments,
-    diffCommentsRef,
     setShowDictationSetup,
     setDictationMode,
     dictationEnabled,
@@ -63,6 +61,7 @@ export function useMobileSessionNativeChatDictation(
     showToast
   })
   const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+  const { handleOpenSideChat, openCurrentSideChat } = useMobileSideChat(scope)
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
@@ -74,6 +73,7 @@ export function useMobileSessionNativeChatDictation(
     connected: connState === 'connected'
   })
   const nativeChatController = useMobileNativeChatController({
+    openSideChat: openCurrentSideChat,
     client,
     pairedHostClient,
     hostId,
@@ -85,7 +85,7 @@ export function useMobileSessionNativeChatDictation(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
-    agentSessionHostSupport,
+    agentSessionHostSupport: scope.agentSessionHostSupport,
     onSendError: nativeChatSendError.show,
     onQueuedEditNotice: showToast,
     onSendResolved: nativeChatSendError.clear
@@ -273,9 +273,10 @@ export function useMobileSessionNativeChatDictation(
   )
 
   useEffect(() => {
-    diffCommentsRef.current = diffComments
-  }, [diffComments])
+    scope.diffCommentsRef.current = scope.diffComments
+  }, [scope.diffComments, scope.diffCommentsRef])
   return {
+    handleOpenSideChat,
     nativeChatScopeKey,
     nativeChatSendError,
     nativeChatTranscriptIsLocalReadable,

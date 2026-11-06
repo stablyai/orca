@@ -288,7 +288,9 @@
       "uncommittedFiles_other": "{{count}} uncommitted"
     },
     "failure": {
-      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal."
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
+      "sideChatSourceUnsaved": "The source chat has no saved history. Send a message there before opening a side chat.",
+      "sideChatUnsupported": "This version of {{agent}} cannot open side chats. Update it on the host and try again."
     },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",

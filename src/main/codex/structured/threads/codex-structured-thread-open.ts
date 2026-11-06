@@ -34,14 +34,15 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-/** Only this thread-specific resume error proves no rollout; archived resumes report "is archived". */
+/** Only a thread-specific missing rollout proves the source history is unavailable. */
 function isCodexNoRolloutError(
   error: unknown,
-  threadId: string
+  threadId: string,
+  method: 'thread/resume' | 'thread/fork'
 ): error is CodexAppServerRequestError {
   return (
     isCodexAppServerRequestError(error) &&
-    error.method === 'thread/resume' &&
+    error.method === method &&
     error.code === -32600 &&
     error.message.endsWith(`no rollout found for thread id ${threadId}`)
   )
@@ -61,6 +62,8 @@ export async function openCodexThread(
   launch: {
     cwd: string
     resumeThreadId: string | null
+    forkThreadId?: string
+    sideChat?: boolean
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Avoid a duplicate base prompt caused by switching models on the first turn. */
@@ -89,7 +92,39 @@ export async function openCodexThread(
   }
   let supersededThreadId: string | undefined
   let opened: unknown
-  if (!resumeThreadId) {
+  if (launch.forkThreadId && !resumeThreadId) {
+    throwIfSignalAborted(signal)
+    try {
+      opened = await connection.request(
+        'thread/fork',
+        {
+          threadId: launch.forkThreadId,
+          ...threadSettings,
+          ...(launch.model ? { model: launch.model } : {}),
+          excludeTurns: true
+        },
+        { timeoutMs }
+      )
+    } catch (error) {
+      throwIfSignalAborted(signal)
+      if (!isCodexAppServerRequestError(error) || error.method !== 'thread/fork') {
+        throw error
+      }
+      const reason =
+        error.code === -32601
+          ? 'sideChatUnsupported'
+          : isCodexNoRolloutError(error, launch.forkThreadId, 'thread/fork')
+            ? 'sideChatSourceUnsaved'
+            : null
+      if (!reason) {
+        throw error
+      }
+      throw withProviderDiagnostic(
+        Object.assign(new AgentSessionAcquisitionRefusal(error.message, reason), { cause: error }),
+        providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+      )
+    }
+  } else if (!resumeThreadId) {
     opened = await startThread()
   } else {
     // Omitting model preserves the resumed thread's model, provider and effort.
@@ -121,7 +156,7 @@ export async function openCodexThread(
           providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
         )
       }
-      if (!isCodexNoRolloutError(error, resumeThreadId)) {
+      if (!isCodexNoRolloutError(error, resumeThreadId, 'thread/resume')) {
         throw error
       }
       if (!launch.supersedeIfUnsaved) {
@@ -140,6 +175,19 @@ export async function openCodexThread(
   const threadId = readCodexThreadId(opened)
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
+  }
+  if (launch.forkThreadId && threadId === launch.forkThreadId) {
+    throw new Error('codex app-server returned the source thread instead of a side chat')
+  }
+  if (launch.forkThreadId) {
+    throwIfSignalAborted(signal)
+    try {
+      await connection.request('thread/goal/clear', { threadId, origin: 'user' }, { timeoutMs })
+    } catch (error) {
+      if (!isCodexAppServerRequestError(error) || error.code !== -32601) {
+        throw error
+      }
+    }
   }
   if (supersededThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)

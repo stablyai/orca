@@ -1,3 +1,4 @@
+import { GitFork } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -14,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 
 type TerminalTabLeadingIconProps = {
   agent: TerminalAgent | null
+  sideChat?: boolean
   activityStatus: TerminalTabActivityStatus
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
@@ -24,6 +26,7 @@ type TerminalTabLeadingIconProps = {
 
 type TerminalTabAgentIdentityIconProps = {
   agent: TerminalAgent
+  sideChat?: boolean
   isActive: boolean
   className?: string
 }
@@ -31,6 +34,7 @@ type TerminalTabAgentIdentityIconProps = {
 function TerminalTabAgentIdentityIcon({
   agent,
   isActive,
+  sideChat,
   className
 }: TerminalTabAgentIdentityIconProps): React.JSX.Element {
   return (
@@ -39,13 +43,25 @@ function TerminalTabAgentIdentityIcon({
       data-agent-icon={agent}
       aria-hidden
     >
-      <AgentIcon agent={agent} size={12} />
+      <span
+        className={
+          sideChat
+            ? 'hidden @[128px]/chat-tab:inline-flex group-data-[side-chat-only=true]/side-chat-pane:inline-flex'
+            : 'inline-flex'
+        }
+      >
+        <AgentIcon agent={agent} size={12} />
+      </span>
+      {sideChat && (
+        <GitFork className="size-3 @[128px]/chat-tab:hidden group-data-[side-chat-only=true]/side-chat-pane:hidden" />
+      )}
     </span>
   )
 }
 
 export function TerminalTabLeadingIcon({
   agent,
+  sideChat,
   activityStatus,
   shell,
   showUnreadActivity,
@@ -63,7 +79,14 @@ export function TerminalTabLeadingIcon({
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         <FilledBellIcon className="size-3 text-amber-500 drop-shadow-sm" />
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {agent ? (
+          <TerminalTabAgentIdentityIcon
+            agent={agent}
+            isActive={isActive}
+            sideChat={sideChat}
+            className={sideChat ? 'hidden @[128px]/chat-tab:inline-flex' : undefined}
+          />
+        ) : null}
       </span>
     )
   }
@@ -80,14 +103,26 @@ export function TerminalTabLeadingIcon({
         {/* Why: the state glyph is self-describing and the tab title already has a tooltip; hover here stays quiet. */}
         <AgentStateDot state={dotState} size="md" title={null} progress={progress} />
         {/* Keep agent identity beside activity so parallel tabs remain distinguishable. */}
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {agent ? (
+          <TerminalTabAgentIdentityIcon
+            agent={agent}
+            isActive={isActive}
+            sideChat={sideChat}
+            className={sideChat ? 'hidden @[128px]/chat-tab:inline-flex' : undefined}
+          />
+        ) : null}
       </span>
     )
   }
 
   if (agent) {
     return (
-      <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className="mr-1 shrink-0" />
+      <TerminalTabAgentIdentityIcon
+        agent={agent}
+        isActive={isActive}
+        sideChat={sideChat}
+        className="mr-1 shrink-0"
+      />
     )
   }
 

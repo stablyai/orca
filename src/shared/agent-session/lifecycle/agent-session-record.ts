@@ -2,6 +2,10 @@ import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-
 import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+import {
+  AgentSessionSideChatSchema,
+  type AgentSessionSideChat
+} from '../../agent-session-side-chat'
 import { isAgentSessionConversationName } from '../agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -117,6 +121,7 @@ export type AgentSessionRecord = {
   /** The agent this session names, whether this build can run it or not. */
   provider: string
   providerHandleChain: AgentSessionProviderHandleLink[]
+  sideChat?: AgentSessionSideChat
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
   /** Optional host-written construction observation; checked independently of record readability. */
@@ -300,18 +305,17 @@ function isPersistedAgentSessionObservationLease(
 
 /** Stored identity is independent of registrations; availability is checked only at start. */
 export function isPersistedAgentSessionObservationRecord(
-  value: unknown
-): value is PersistedAgentSessionObservationRecord {
-  if (!isStoredRecordObject(value)) {
-    return false
-  }
-  const record = value
+  record: unknown
+): record is PersistedAgentSessionObservationRecord {
   if (
     !(
+      isStoredRecordObject(record) &&
       record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
       isAgentSessionId(record.sessionId) &&
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
+      (record.sideChat === undefined ||
+        AgentSessionSideChatSchema.safeParse(record.sideChat).success) &&
       isAgentSessionAccountHome(record.accountHome) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&

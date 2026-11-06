@@ -34,6 +34,8 @@ import { agentCliInstallationFacts } from '../../../../shared/agent-launch/catal
 
 const TYPED_START_REFUSALS = [
   'savedConversationMissing',
+  'sideChatUnsupported',
+  'sideChatSourceUnsaved',
   'notSignedIn',
   'cliMissing',
   'historyTooLarge',

@@ -56,6 +56,7 @@ export type NativeChatPickerState = {
 
 export function useNativeChatPickerState(args: {
   agent: AgentType
+  sideChat?: boolean
   terminalTabId: string
   /** A launch panel's workspace, whose skills it lists before any tab exists. */
   launchWorktreeId?: string
@@ -111,8 +112,8 @@ export function useNativeChatPickerState(args: {
     launchWorktreeId
   )
   const pickerCommands = useMemo(
-    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
-    [agent, agentCommands, discovery.skills]
+    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills, args.sideChat),
+    [agent, agentCommands, discovery.skills, args.sideChat]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`

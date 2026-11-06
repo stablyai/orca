@@ -5,7 +5,6 @@ import {
 import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
   AgentSessionLaunchTarget
@@ -18,9 +17,7 @@ import { useAppStore } from '@/store/index'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   beginHostAdmittedStructuredLaunch,
-  type DeclinedStructuredLaunchTerminalOptions,
-  type HostAdmittedStructuredLaunch,
-  type StructuredLaunchTerminal
+  type HostAdmittedStructuredLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   resolveStructuredAgentSessionOwner,
@@ -67,32 +64,11 @@ function launchHooks(args: ProvisionalLaunchArgs): StructuredAgentLaunchHooks {
   return args.activate === false ? { ...args.hooks, activate: false } : args.hooks
 }
 
-export type ProvisionalLaunchArgs = {
-  plan: AgentSessionLaunchPlan
-  hooks: StructuredAgentLaunchHooks
-  focusIntent?: NativeChatComposerFocusIntent
-  target?: AgentSessionLaunchTarget
-  targetGroupId?: string
-  afterTabId?: string
-  activate?: boolean
-  /** Identity-only resumes publish on commit; unknown outcomes keep their recovery tab. */
-  deferPublication?: true
-  /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
-  beforeOpen?: (sessionId?: string) => boolean | void
-  /** The published tab, or null when the layout owner refuses or the launch ends without a chat. */
-  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused') => void
-  /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
-  onHostDeclined?: (
-    target: RuntimeClientTarget,
-    activate?: false
-  ) => Promise<StructuredLaunchTerminal> | StructuredLaunchTerminal
-  /** What that default terminal carries from the caller, e.g. a recipe's saved CLI arguments. */
-  declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
-  /** `onHostDeclined` opens a surface of the caller's own (a shell) rather than the agent's CLI. */
-  declinedOpensCallerSurface?: true
-  /** The caller already asked the host whether another terminal runs the resumed conversation. */
-  resumeWritersChecked?: true
-}
+export type {
+  PreparedProvisionalTab,
+  ProvisionalLaunchArgs
+} from './structured-agent-session-provisional-types'
+import type { ProvisionalLaunchArgs } from './structured-agent-session-provisional-types'
 
 export function beginStructuredAgentSessionProvisionalLaunch(
   args: ProvisionalLaunchArgs
@@ -194,6 +170,49 @@ export function beginStructuredAgentSessionProvisionalLaunch(
 function beginLocalProvisionalLaunch(
   args: ProvisionalLaunchArgs
 ): LocalProvisionalLaunch | (StructuredAgentLaunchHandle & { tab: null }) | null {
+  const placement = args.prepareTab?.()
+  if (placement === null) {
+    return null
+  }
+  try {
+    const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
+    if (placement && worktreeId) {
+      const address = captureStructuredLaunchSurfaceAddress(worktreeId, placement.targetGroupId)
+      args = {
+        ...args,
+        targetGroupId: placement.targetGroupId,
+        afterTabId: undefined,
+        index: placement.index,
+        target: {
+          ...args.target,
+          surfaceAddress: {
+            ...address,
+            precedingTabIds: address.precedingTabIds.slice(
+              0,
+              placement.index === undefined ? undefined : Math.max(0, placement.index)
+            )
+          }
+        }
+      }
+    }
+    const launch = beginPreparedProvisionalLaunch(args)
+    if (placement) {
+      if (launch?.tab) {
+        afterPendingTab(launch.tab.id, placement.release)
+      } else {
+        placement.release()
+      }
+    }
+    return launch
+  } catch (error) {
+    placement?.release()
+    throw error
+  }
+}
+
+function beginPreparedProvisionalLaunch(
+  args: ProvisionalLaunchArgs
+): LocalProvisionalLaunch | (StructuredAgentLaunchHandle & { tab: null }) | null {
   if (args.deferPublication) {
     return beginDeferredPublication(args)
   }
@@ -225,6 +244,7 @@ function beginLocalProvisionalLaunch(
       agent: args.plan.agent,
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
+      ...(args.index !== undefined ? { index: args.index } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
     afterPendingTab(tab.id, (shown) => {

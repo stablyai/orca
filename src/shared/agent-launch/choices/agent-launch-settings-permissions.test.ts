@@ -26,3 +26,36 @@ it.each([
     expect(updates).not.toHaveProperty('agentNativeChatPermissionModes')
   }
 )
+
+it.each([false, true])(
+  'refuses a bulk read-only setting for agents that cannot enforce it (withoutAuto: %s)',
+  (withoutAuto) => {
+    const before = { agentPermissionDefault: 'own' as const }
+    expect(() =>
+      agentLaunchSettingsMutationUpdates(
+        before,
+        { type: 'permission', choice: 'read-only', ...(withoutAuto ? { withoutAuto: true } : {}) },
+        'linux'
+      )
+    ).toThrow()
+    expect(before).toEqual({ agentPermissionDefault: 'own' })
+  }
+)
+
+it('keeps a read-only choice scoped to the capable agent', () => {
+  const before = { agentPermissionDefault: 'own' as const }
+  expect(
+    agentLaunchSettingsMutationUpdates(
+      before,
+      { type: 'permission', choice: 'read-only', agent: 'codex' },
+      'linux'
+    )
+  ).toEqual({ agentPermissionOverrides: { codex: 'read-only' } })
+  expect(() =>
+    agentLaunchSettingsMutationUpdates(
+      before,
+      { type: 'permission', choice: 'read-only', agent: 'claude' },
+      'linux'
+    )
+  ).toThrow()
+})

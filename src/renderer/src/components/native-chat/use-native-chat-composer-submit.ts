@@ -211,7 +211,8 @@ export function useNativeChatComposerSubmit(args: {
       structuredTransport &&
       isStructuredAgentSessionHostCommand(
         resolveNativeChatPastedText(draftScopeKey, draft),
-        threadGoal !== undefined
+        threadGoal !== undefined,
+        structuredTransport.openSideChat !== undefined
       )
     )
   return { send, goalMode, messageDelivery }

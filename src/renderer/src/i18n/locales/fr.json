@@ -20117,6 +20117,12 @@
         "folder": "Dossier",
         "mainCheckout": "Copie principale",
         "worktree": "Worktree"
+      },
+      "sideChat": {
+        "new": "Nouvelle discussion annexe",
+        "badge": "btw",
+        "failed": "Impossible d’ouvrir une conversation parallèle.",
+        "title": "Discussion annexe"
       }
     },
     "tab": {
@@ -20610,7 +20616,9 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "délai",
         "idleStopSearchKeepAlive": "maintenir actif",
-        "idleStopNever": "Jamais"
+        "idleStopNever": "Jamais",
+        "sideChatPaneCopy": "Réunit les discussions annexes de cet espace de travail dans un volet partagé. Si désactivé, les nouvelles s’ouvrent à côté de leur onglet source ; les volets existants sont conservés.",
+        "sideChatPaneTitle": "Regrouper les discussions annexes dans un volet"
       }
     },
     "agentChildRow": {

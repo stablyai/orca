@@ -19,7 +19,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcAnyMethodDeclaration, RpcContext, RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
-import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { structuredSessionProjectionStub } from '../../../../structured-session-projection.test-fixture'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../creation/structured-agent-session-close-before-create'
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
@@ -130,7 +130,7 @@ export function hostStub(): StructuredAgentSessionHost {
     getConversation: vi.fn(() => null)
   }
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger, store })
+  Reflect.set(hostCalls, 'deps', structuredSessionProjectionStub(store))
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 

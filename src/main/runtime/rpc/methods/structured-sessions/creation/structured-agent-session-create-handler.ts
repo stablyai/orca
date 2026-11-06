@@ -67,6 +67,11 @@ export async function handleStructuredAgentSessionCreate(
   capture?: (surface: StructuredSessionSurface) => void
 ) {
   requireStructuredAgentAudience(ctx, params.agent)
+  if ('worktree' in params && params.sideChatOf && (params.resumeFrom || params.forkFrom)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
   if (params.envelope.expectedRuntimeFence !== null) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
@@ -110,6 +115,7 @@ async function resolveAndCommitStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+        ...(params.sideChatOf ? { sideChatOf: params.sideChatOf } : {}),
         ...(params.forkFrom ? { forkFrom: params.forkFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),

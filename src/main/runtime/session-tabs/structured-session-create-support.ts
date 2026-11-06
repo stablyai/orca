@@ -26,6 +26,7 @@ import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentS
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../agent-session/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
+import { structuredSideChatCreateIntent } from '../../native-chat/structured-side-chat-source'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentCreateSupportReply } from '../../../shared/agent-session/structured-agent-create-support-reply'
@@ -82,6 +83,14 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   async resolveStructuredAgentSessionCreateIntent(
     input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
+    // A side chat follows its source identity and pinned folder, not mutable new-chat defaults.
+    if (input.sideChatOf) {
+      return structuredSideChatCreateIntent({
+        ...input,
+        host: getStructuredAgentSessionHost(),
+        location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+      })
+    }
     if (input.resumeFrom) {
       const { providerSessionId } = input.resumeFrom
       try {

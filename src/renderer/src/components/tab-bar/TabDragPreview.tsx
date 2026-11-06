@@ -1,3 +1,4 @@
+import { SideChatTabBadge } from './SideChatTabBadge'
 import { createElement } from 'react'
 import { Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
@@ -24,11 +25,12 @@ function LeadingIcon({ drag }: { drag: TabDragItemData }): React.JSX.Element {
 // Fill DragOverlay’s source-sized wrapper so the portal ghost stays aligned with the cursor outside its strip.
 export default function TabDragPreview({ drag }: { drag: TabDragItemData }): React.JSX.Element {
   return (
-    <div className="pointer-events-none flex h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-2 text-xs text-foreground shadow-md">
+    <div className="pointer-events-none @container/chat-tab flex min-w-0 overflow-hidden h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-2 text-xs text-foreground shadow-md">
       <span className="inline-flex shrink-0">
         <LeadingIcon drag={drag} />
       </span>
-      <span className="truncate">{drag.label}</span>
+      {drag.sideChat && <SideChatTabBadge className="hidden @[128px]/chat-tab:inline-flex" />}
+      <span className="min-w-0 flex-1 truncate">{drag.label}</span>
       {drag.color ? (
         <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: drag.color }} />
       ) : null}

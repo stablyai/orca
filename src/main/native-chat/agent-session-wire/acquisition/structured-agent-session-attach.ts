@@ -3,6 +3,7 @@ import { activeProviderContext } from '../../../../shared/agent-session/agent-se
 
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'
 import type {
   StructuredAgentId,
   AgentSessionProviderHandle,
@@ -51,6 +52,9 @@ export type AgentSessionAttachParams = {
   /** Host-only create defaults; remote schemas reject these. */
   fork?: { sessionId: string; itemId: string; revalidate: () => Promise<void> }
   options?: Readonly<Record<string, string>>
+  sideChat?: AgentSessionRecord['sideChat']
+  createMessage?: StructuredAgentSessionFirstMessage
+  createOptions?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
@@ -88,6 +92,9 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     providerHandle: params.providerHandle,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    sideChat: params.sideChat,
+    createMessage: params.createMessage,
+    ...(params.createOptions ? { createOptions: params.createOptions } : {}),
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -204,6 +211,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.sideChat ? { sideChat: params.sideChat } : {}),
     ...(params.options ? { options: params.options, models: input.models } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }

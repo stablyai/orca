@@ -1,8 +1,8 @@
+import type { StructuredAgentSessionComposerOptions } from '../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
-import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
 import { useMobileNativeChatDrafts } from './composer/use-mobile-native-chat-drafts'
 import { useMobileNativeChatWorkspaceCatalog } from './composer/use-mobile-native-chat-workspace-catalog'
@@ -17,8 +17,12 @@ import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-ac
 import { useMobileNativeChatPromptController } from '../use-mobile-native-chat-prompt-controller'
 import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+
+export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
 export function useMobileNativeChatController(args: {
+  openSideChat?: StructuredAgentSessionComposerOptions['openSideChat']
   client: RpcClient | null
   /** The route's paired host; differs from `client` only when a server executes the workspace. */
   pairedHostClient: RpcClient | null
@@ -245,6 +249,7 @@ export function useMobileNativeChatController(args: {
   }, [appendComposerText, recordNativeChatSessionOptionCommand])
 
   return {
+    openSideChat: args.openSideChat,
     reportQueuedEditError: onSendError,
     chatComposerScopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     sessionViewReady,

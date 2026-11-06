@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
+  Eye,
   FilePenLine,
   Hand,
   LockKeyhole,
@@ -76,6 +77,8 @@ function permissionModeIcon(value: string): LucideIcon | undefined {
     return undefined
   }
   switch (AGENT_CHAT_PERMISSION_MODE_ICON_NAMES[value]) {
+    case 'Eye':
+      return Eye
     case 'Hand':
       return Hand
     case 'FilePenLine':

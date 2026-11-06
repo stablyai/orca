@@ -54,6 +54,7 @@ export function ChatBehaviorSetting({
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
     entries.linkPreviews,
+    entries.sideChatPane,
     entries.openedPullRequests,
     entries.shellEnvironment
   ]
@@ -178,6 +179,24 @@ export function ChatBehaviorSetting({
                   'Toggle link previews'
                 )}
                 onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.sideChatPane}
+              id={entries.sideChatPane.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.sideChatPane.title}
+                description={entries.sideChatPane.description}
+                checked={settings.nativeChatSideChatPane === true}
+                ariaLabel={entries.sideChatPane.title}
+                onChange={() =>
+                  updateSettings({
+                    nativeChatSideChatPane: settings.nativeChatSideChatPane !== true
+                  })
+                }
               />
             </SearchableSetting>
             <SearchableSetting

@@ -92,6 +92,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     | 'invokeAction'
     | 'conversationCommands'
     | 'compactInstructions'
+    | 'openSideChat'
     | 'changeThreadGoal'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
@@ -179,6 +180,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       const commandOutcome = await dispatchMobileStructuredCommand({
         text: messageText,
         hasAttachments,
+        skills: pickedSkills,
         client,
         sessionId,
         fence: currentFence,

@@ -55,16 +55,18 @@ export type MobileSessionTab =
           | 'launchDraftCreatedAt'
           | 'terminalTheme'
         >
-      > & {
+      > &
+      Partial<Pick<RuntimeMobileSessionAgentTab, 'sideChatOf' | 'sideChatSupported'>> & {
         status?: RuntimeMobileSessionTerminalClientTab['status']
         terminal: string | null
       } & MobileTerminalTabPhoneFields)
   | (Pick<
       RuntimeMobileSessionAgentTab,
       'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive'
-    > & {
-      chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
-    })
+    > &
+      Partial<Pick<RuntimeMobileSessionAgentTab, 'sideChatOf' | 'sideChatSupported'>> & {
+        chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
+      })
   | Pick<
       RuntimeMobileSessionMarkdownTab,
       | 'type'

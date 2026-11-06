@@ -153,6 +153,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   targetGroupId?: string
   /** The tab the chat opens right after, in that tab's group. */
   afterTabId?: string
+  index?: number
   activate?: boolean
 }): OpenedAgentSessionTab {
   const state = useAppStore.getState()
@@ -184,6 +185,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       label: defaultAgentChatLabel(args.agent),
       targetGroupId,
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
+      ...(args.index !== undefined ? { index: args.index } : {}),
       activate: args.activate !== false
     })
     const target = structuredAgentSessionTargetForHost(args.executionHostId)
@@ -205,6 +207,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
         ...(args.afterTabId
           ? { afterTabId: args.afterTabId }
           : slotAnchor(address, args.worktreeId)),
+        ...(args.index !== undefined ? { index: args.index } : {}),
         activate: args.activate !== false,
         drawHere
       })

@@ -20,8 +20,6 @@ import {
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/agent-session/structured-agent-session-host-capability'
 import {
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
@@ -30,45 +28,18 @@ import {
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY
+} from '../../../shared/agent-session-side-chat'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import {
-  ensureLocalRuntimeCapabilities,
-  readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
-/** Read a capability through the runtime's existing status cache. A failed/unknown
- *  probe is treated as legacy so a newer call is never made before the host has
- *  proved it understands it. */
-export async function structuredAgentSessionHostSupports(
-  target: RuntimeClientTarget,
-  capability: RuntimeCapability
-): Promise<boolean> {
-  return (await structuredAgentSessionHostCapabilityState(target, capability)) === 'supported'
-}
-
-/** The same read, keeping a failed or unanswered probe (`unknown`) apart from a host that
- *  answered without the capability, for a decision an unverified host must not pass. */
-export async function structuredAgentSessionHostCapabilityState(
-  target: RuntimeClientTarget,
-  capability: RuntimeCapability
-): Promise<StructuredAgentSessionHostCapabilityState> {
-  try {
-    if (target.kind !== 'local') {
-      const supported = await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
-      return supported ? 'supported' : 'unsupported'
-    }
-    const capabilities =
-      readLocalRuntimeCapabilitiesOrUnknown() ?? (await ensureLocalRuntimeCapabilities())
-    return capabilities?.includes(capability)
-      ? 'supported'
-      : capabilities
-        ? 'unsupported'
-        : 'unknown'
-  } catch {
-    return 'unknown'
-  }
-}
+import { structuredAgentSessionHostSupports } from './structured-agent-session-host-support'
+export {
+  structuredAgentSessionHostSupports,
+  structuredAgentSessionHostCapabilityState
+} from './structured-agent-session-host-support'
 
 export function supportsStructuredAgentSessionContinuationContext(
   target: RuntimeClientTarget
@@ -98,6 +69,18 @@ export function supportsStructuredAgentSessionCreateMessage(
   target: RuntimeClientTarget
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionReadOnlySideChat(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionSideChat(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY)
 }
 
 export function supportsStructuredAgentSessionCliSource(
