@@ -13,7 +13,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
-import type * as SecureFile from '../../../shared/secure-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/staged-file-save'
@@ -21,17 +20,6 @@ import { StagedFileSaves } from './staged-file-saves'
 
 // An append can be held open to put other ops beside it.
 const appendGate = vi.hoisted((): { hold: Promise<void> | null } => ({ hold: null }))
-const secureWrite = vi.hoisted((): { refuse: boolean } => ({ refuse: false }))
-vi.mock('../../../shared/secure-file', async (importOriginal) => {
-  const actual = await importOriginal<typeof SecureFile>()
-  return {
-    ...actual,
-    writeSecureFile: (...args: Parameters<typeof actual.writeSecureFile>) => {
-      const wrote = actual.writeSecureFile(...args)
-      return secureWrite.refuse ? false : wrote
-    }
-  }
-})
 const createGate = vi.hoisted(
   (): {
     hold: Promise<void> | null
@@ -57,18 +45,18 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       await appendGate.hold
       return actual.appendFile(...args)
     },
-    chmod: async (...args: Parameters<typeof actual.chmod>) => {
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
       createGate.entered = true
       await createGate.hold
+      await actual.writeFile(...args)
       if (createGate.failAfterCreate) {
         throw new Error('staged_save_create_failed')
       }
-      return actual.chmod(...args)
     },
     stat: async (...args: Parameters<typeof actual.stat>) => {
       const stats = await actual.stat(...args)
       if (createGate.looseDirectory && String(args[0]) === join(staging, String(PID))) {
-        return Object.assign(stats, { mode: (stats.mode & ~0o777) | 0o755 })
+        return Object.assign(stats, { mode: (Number(stats.mode) & ~0o777) | 0o755 })
       }
       return stats
     },
@@ -92,7 +80,6 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-staged-save-'))
   staging = join(root, 'profile', 'staged-saves')
   appendGate.hold = null
-  secureWrite.refuse = false
   createGate.hold = null
   createGate.entered = false
   createGate.failAfterCreate = false
@@ -151,29 +138,21 @@ describe('a staged save', () => {
     await staged.abortConnection('conn-1')
   })
 
-  it('removes the temp when owner-only permissions cannot be kept', async () => {
-    secureWrite.refuse = true
-    const staged = saves()
-
-    await expect(staged.begin('conn-1', at(join(root, 'a.txt')), 1)).rejects.toThrow(
-      'staged_save_private_file_unavailable'
-    )
-
-    expect(temps()).toEqual([])
-  })
-
-  it('refuses a staging directory whose POSIX mode does not stick', async () => {
+  it('still saves, with one warning, where the filesystem ignores the owner-only mode', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
     createGate.looseDirectory = true
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const staged = saves()
-      await expect(staged.begin('conn-1', at(join(root, 'a.txt')), 1)).rejects.toThrow(
-        'staged_save_private_directory_unavailable'
-      )
-      expect(temps()).toEqual([])
+      await staged.begin('conn-1', at(join(root, 'a.txt')), 1)
+      await staged.begin('conn-1', at(join(root, 'b.txt')), 1)
+
+      expect(temps()).toHaveLength(2)
+      expect(warn).toHaveBeenCalledTimes(1)
+      await staged.abortConnection('conn-1')
     } finally {
-      createGate.looseDirectory = false
+      warn.mockRestore()
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
