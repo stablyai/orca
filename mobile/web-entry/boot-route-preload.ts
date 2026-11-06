@@ -3,16 +3,16 @@ import { matchesRoutePattern } from '../src/mobile-web-shell/page-route-policy'
 
 type RouteComponent = ComponentType<Record<string, unknown>>
 type RouteModule = { default: RouteComponent }
-/** A layout covers every pathname under its directory; a screen matches its own pattern. */
-export type BootRouteScope = { layout: string } | { screen: string }
+type Preload = () => Promise<unknown>
 
-const bootRoutes: { scope: BootRouteScope; preload: () => Promise<unknown> }[] = []
+const layouts: Preload[] = []
+const screens: { pattern: string; preload: Preload }[] = []
 
-// A route preloaded before the first render mounts without suspending. A boot fallback would make React
-// hold the finished screen until 300 ms after that fallback showed (its Suspense reveal throttle).
+// A route loaded before its first render mounts without suspending; a boot fallback holds the screen back 300 ms.
 export function bootRoute(
   load: () => Promise<RouteModule>,
-  scope: BootRouteScope | null
+  /** 'layout', the screen's route pattern, or null for an entry the page never preloads. */
+  scope: string | null
 ): RouteModule {
   let loaded: RouteComponent | null = null
   let pending: Promise<RouteModule> | null = null
@@ -34,28 +34,23 @@ export function bootRoute(
     const [Route] = useState<RouteComponent>(() => loaded ?? Lazy)
     return createElement(Route, props)
   }
-  if (scope !== null) {
-    bootRoutes.push({ scope, preload })
+  if (scope === 'layout') {
+    layouts.push(preload)
+  } else if (scope !== null) {
+    screens.push({ pattern: scope, preload })
   }
   return { default: BootRoute }
 }
 
-function withinLayout(pathname: string, directory: string): boolean {
-  const depth = directory.split('/').length
-  return matchesRoutePattern(pathname.split('/').slice(0, depth).join('/'), directory)
-}
-
-// Settles once the pathname's layouts and screen have loaded or failed; failed ones boot through the lazy path.
+// Every page route sits under every page layout, so all layouts load. Failed preloads boot through the lazy path.
 export async function preloadBootRoutes(pathname: string): Promise<void> {
-  const screens = bootRoutes.filter(
-    ({ scope }) => 'screen' in scope && matchesRoutePattern(pathname, scope.screen)
-  )
+  const matching = screens.filter(({ pattern }) => matchesRoutePattern(pathname, pattern))
   // Expo Router prefers a fixed route over a catch-all one.
-  const fixed = screens.filter(({ scope }) => 'screen' in scope && !scope.screen.includes('[...'))
-  const layouts = bootRoutes.filter(
-    ({ scope }) => 'layout' in scope && withinLayout(pathname, scope.layout)
+  const fixed = matching.filter(
+    ({ pattern }) => !pattern.split('/').some((segment) => segment.startsWith('[...'))
   )
-  await Promise.allSettled(
-    [...layouts, ...(fixed.length > 0 ? fixed : screens)].map(({ preload }) => preload())
-  )
+  await Promise.allSettled([
+    ...layouts.map((preload) => preload()),
+    ...(fixed.length > 0 ? fixed : matching).map(({ preload }) => preload())
+  ])
 }

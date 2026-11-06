@@ -170,8 +170,7 @@ bootstrapShellPage({
         refreshPageTerminalSettings(current.storage, current.storageOversize)
       }
     })
-    // Mount with the route's chunks loaded: a boot Suspense fallback holds the finished screen back 300 ms.
-    // A boot that opens a target keeps the lazy path: its stack only moves the URL to the target when it mounts after the container.
+    // Open-target boots stay lazy: the stack moves the URL to the target only when it mounts after the container.
     const bootRoutes = session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM]
       ? null
       : preloadBootRoutes(window.location.pathname)

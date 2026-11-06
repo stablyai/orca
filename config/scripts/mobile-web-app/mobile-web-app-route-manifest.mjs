@@ -105,9 +105,8 @@ export function renderMobileWebAppRouteManifest(routes) {
     const resolved = layout
       ? `import(${JSON.stringify(module)})`
       : `import(${JSON.stringify(module)}).then(withRouteScreenPaintReport)`
-    // The page preloads the routes its first pathname needs; a layout covers its directory.
-    const screen = key && !layout ? routePathnameFromKey(key) : null
-    const scope = layout ? { layout: key.slice(1, -'/_layout.tsx'.length) } : screen && { screen }
+    // The page preloads its layouts and its first pathname's screen before mounting.
+    const scope = layout ? 'layout' : key ? routePathnameFromKey(key) : null
     return `  [${JSON.stringify(key)}]: bootRoute(() => ${resolved}, ${JSON.stringify(scope)})`
   })
   return `import { bootRoute } from "./web-entry/boot-route-preload"
