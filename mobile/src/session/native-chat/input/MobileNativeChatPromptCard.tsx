@@ -193,7 +193,11 @@ function PromptCardSlot({
               arriving && styles.arriving
             ]
       }
-      onLayout={lower && allocationHeight === null ? undefined : onLayout}
+      onLayout={(event) => {
+        if (!lower || allocationHeight !== null) {
+          onLayout(event)
+        }
+      }}
     >
       {children}
     </View>

@@ -346,6 +346,41 @@ it('reveals a fitting composer surface through menu entry and removal despite in
   expect(field.value).toBe('A separate retained draft')
 })
 
+it('keeps a deliberately offscreen field offscreen when its fitting frame still intersects', async () => {
+  viewportHeight = 219
+  extent = 900
+  const inset = document.createElement('div')
+  inset.dataset.testid = 'native-chat-composer-inset'
+  group.append(inset)
+  inset.append(field)
+  vi.mocked(group.getBoundingClientRect).mockImplementation(
+    () => new DOMRect(0, -viewport.scrollTop, 300, 900)
+  )
+  vi.spyOn(inset, 'getBoundingClientRect').mockImplementation(
+    () => new DOMRect(0, 634 + addedBeforeField - viewport.scrollTop, 300, 214)
+  )
+  vi.mocked(field.getBoundingClientRect).mockImplementation(
+    () => new DOMRect(0, 653 + addedBeforeField - viewport.scrollTop, 300, 128)
+  )
+  const lower = connect()
+  field.focus()
+  await painted()
+  userScroll(429)
+  await painted()
+  expect(inset.getBoundingClientRect().top).toBe(205)
+  expect(field.getBoundingClientRect().top).toBe(224)
+  addedBeforeField = 40
+  lower.layoutChanged()
+  await painted()
+  expect(viewport.scrollTop).toBe(429)
+  expect(document.activeElement).toBe(field)
+  expect(field.value).toBe('A separate retained draft')
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+  await painted()
+  expect(inset.getBoundingClientRect().top).toBe(5)
+  expect(inset.getBoundingClientRect().bottom).toBe(219)
+})
+
 it('keeps new Tab and tap focus reveals while later navigation cancels and editing keys do not', async () => {
   const lower = connect()
   vi.useFakeTimers()

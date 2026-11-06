@@ -45,12 +45,17 @@ export function connectMobileNativeChatLowerScroll(
   const maximum = () => Math.max(0, viewport.scrollHeight - viewport.clientHeight)
   const atBottom = () => maximum() - viewport.scrollTop <= BOTTOM_TOLERANCE
   const focused = () => focusedLowerElement(content)
-  const surfaceOf = (target: HTMLElement, bounds = viewport) =>
-    fittingComposerSurface(target, bounds)
   const recordActive = () => {
     const element = focused()
-    const surface = element && surfaceOf(element)
-    active = element && surface ? { element, ...surfaceVisibility(viewport, surface) } : null
+    const surface = element && fittingComposerSurface(element, viewport)
+    active =
+      element && surface
+        ? {
+            element,
+            visible: surfaceVisibility(viewport, element).visible,
+            clipped: surfaceVisibility(viewport, surface).clipped
+          }
+        : null
   }
   const write = (node: HTMLElement, offset: number) => {
     const next = Math.max(0, Math.min(offset, node.scrollHeight - node.clientHeight))
@@ -120,7 +125,7 @@ export function connectMobileNativeChatLowerScroll(
   const layoutChanged = () => {
     layoutPending = true
     const target = focused()
-    const surface = target && surfaceOf(target)
+    const surface = target && fittingComposerSurface(target, viewport)
     const resized =
       viewportHeight !== viewport.clientHeight || viewportWidth !== viewport.clientWidth
     viewportHeight = viewport.clientHeight
