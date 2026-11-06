@@ -41,6 +41,8 @@ const buttonVariants = cva(
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
         'icon-lg': 'size-10',
+        // As tall as the composer's round Send button, so swapping between them keeps the row's height.
+        pill: 'h-8 gap-1.5 rounded-full px-3 has-[>svg]:px-2.5 pointer-coarse:h-10',
         chip: "h-4 gap-0.5 rounded px-0.5 text-[10px] leading-none has-[>svg]:px-0.5 [&_svg:not([class*='size-'])]:size-2.5"
       }
     },

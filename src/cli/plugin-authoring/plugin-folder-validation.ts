@@ -12,7 +12,10 @@ import {
   pluginNeedsCliApproval,
   type PluginApprovalGrants
 } from '../../shared/plugins/approval/plugin-cli-approval'
-import { strictPluginArtifactErrors } from '../../shared/plugins/authoring/plugin-strict-artifact-checks'
+import {
+  strictPluginArtifactErrors,
+  strictPluginArtifactWarnings
+} from '../../shared/plugins/authoring/plugin-strict-artifact-checks'
 import { validatePluginFile } from '../../shared/plugins/installation/plugin-file-validation'
 import {
   localPluginPublisher,
@@ -40,6 +43,8 @@ export type PluginValidationReport = {
   kind: 'plugin' | 'catalog'
   valid: boolean
   errors: string[]
+  /** Handled safely at load (e.g. protected language-pack copy); never makes the file invalid. */
+  warnings?: string[]
   plugin?: PluginFolderSummary
 }
 
@@ -109,12 +114,14 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
   }
   const { manifest } = parsed
   errors.push(...(await contentErrors(root, manifest)))
+  const warnings = strictPluginArtifactWarnings(manifest, manifestTextReader(root))
   return {
     path: root,
     file,
     kind,
     valid: errors.length === 0,
     errors,
+    ...(warnings.length > 0 ? { warnings } : {}),
     plugin: {
       // Why derived: a folder loads under its declared publisher, else `local`, like dev discovery.
       pluginKey: qualifiedPluginKey(

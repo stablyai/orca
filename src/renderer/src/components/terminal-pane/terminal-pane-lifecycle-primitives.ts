@@ -5,14 +5,14 @@ import type {
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PtyPaneStartup } from './pty-connection-types'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 
 import {
   type HttpLinkSourceOwner,
   resolveLocalhostHttpLinkDisplayUrl
-} from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-routing'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/primary-selection'
 

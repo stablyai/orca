@@ -6,7 +6,7 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
 import { createRuntimeRpcAbortError } from '@/runtime/abortable-runtime-environment-call'
-import { normalizeCheckRunDetailsLogTails } from '@/lib/check-run-details-log-normalization'
+import { normalizeCheckRunDetailsLogTails } from '@/lib/source-control/checks/check-run-details-log-normalization'
 import { translate } from '@/i18n/i18n'
 import {
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE,

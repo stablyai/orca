@@ -1,10 +1,10 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isGroupAddress } from '../../../../orchestration/groups'
+import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import {
   dispatchReportMailbox,
   isDispatchReportType
-} from '../../../../orchestration/dispatch-report-mailbox'
+} from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import {
   SendParams,

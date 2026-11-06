@@ -28,7 +28,7 @@ import {
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/index'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -54,7 +54,9 @@ export function listDesktopBrowserBridgeCandidates(
   connections: Pick<SshConnectionManager, 'getState'> | null
 ): DesktopBrowserBridgeCandidate[] {
   const candidates: DesktopBrowserBridgeCandidate[] = []
-  for (const target of getSshTargetRegistryStore()?.listTargets() ?? []) {
+  // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
+  // settings; environment recipes connect runtime-owned targets that are claimed the same way.
+  for (const target of getSshTargetRegistryStore()?.getOrcadRuntimeClaims().listTargets() ?? []) {
     if (!isRemoteCliControlAllowed(target)) {
       continue
     }

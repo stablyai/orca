@@ -9,13 +9,16 @@ import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-s
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionChatProgram } from '../../../shared/agent-session/agent-session-agent-availability'
 import { chatProviderAgents } from './chat-provider-agents'
-import { resolveAgentLaunchRoute, structuredAgentLaunchSupport } from './agent-launch-routing'
+import {
+  resolveAgentLaunchRoute,
+  structuredAgentLaunchSupport
+} from './agent-session/launch/routing/agent-launch-routing'
 import {
   buildAgentLaunchRouteInput,
   resolveAgentLaunchHost,
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace
-} from './agent-launch-route-input'
+} from './agent-session/launch/routing/agent-launch-route-input'
 import {
   readHostStructuredAgentAvailability,
   subscribeHostStructuredAgentAvailability

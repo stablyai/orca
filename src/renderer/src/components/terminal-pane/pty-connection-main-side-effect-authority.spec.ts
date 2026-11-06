@@ -116,7 +116,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('./pty-connection')
         const agentTitleMocks2 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+        const { createRemoteRuntimePtyTransport } =
+          await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 

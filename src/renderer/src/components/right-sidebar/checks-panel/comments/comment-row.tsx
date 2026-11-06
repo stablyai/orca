@@ -9,7 +9,7 @@ import type {
   GitHubReactionContent,
   PRComment
 } from '../../../../../../shared/github/comment-types'
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { formatPrCommentRelativeTime } from '../../../../../../shared/source-control/review-comments/pr-comment-time'
 import { translate } from '@/i18n/i18n'

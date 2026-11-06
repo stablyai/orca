@@ -1,6 +1,6 @@
 import type { TerminalIdentityReadContext } from './terminal/query/terminal-identity-read-context'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import {
   RuntimeAgentOrchestrationProjection,

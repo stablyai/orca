@@ -11,8 +11,8 @@ import {
 import { terminalLayoutsWithFrameBindings } from './workspace-layout-frame-bindings'
 import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
 import { layoutViewAndFactsOfStore } from '@/store/workspace-layout-frame-store-view'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { splitWorkspaceSessionByHost } from '@/lib/workspace-session-host-split'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { splitWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-split'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   DesktopLayoutView,

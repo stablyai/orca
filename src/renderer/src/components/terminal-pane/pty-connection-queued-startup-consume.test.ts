@@ -51,7 +51,9 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({ scheduleTerminalWebglAtlasRecovery }))
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
+  scheduleTerminalWebglAtlasRecovery
+}))
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -74,7 +76,9 @@ vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep
+}))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
@@ -84,7 +88,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -95,7 +99,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -108,7 +112,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
 })
@@ -141,8 +145,9 @@ describe('connectPanePty queued startup consume', () => {
   it('parks an unknown owner until hydration, then retains the acquired backend on refresh', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
+    const { createRemoteRuntimePtyTransport } =
+      await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
     const { createTerminalPaneManagerOptions } = await import('./terminal-pane-manager-options')
     const { clearTerminalTabsParkedOnUnresolvedHost, getTabIdsAwaitingHostHydrationRemount } =
       await import('@/lib/parked-terminal-host-hydration')

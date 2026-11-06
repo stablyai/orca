@@ -26,7 +26,7 @@ import { translate } from '@/i18n/i18n'
 import { resolveSkillShareForInstall } from './skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
 import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function SkillInstallDialog({

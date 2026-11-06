@@ -1,5 +1,5 @@
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatFollowUpChanges } from './runtime-native-chat-follow-up-events'

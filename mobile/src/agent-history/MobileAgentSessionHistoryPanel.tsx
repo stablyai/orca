@@ -38,12 +38,8 @@ import {
   MobileOfflineState,
   MobileStateView
 } from '../components/MobileStateView'
-import {
-  AgentHistoryResumeNotice,
-  AgentHistoryResumeToast,
-  AgentHistoryScanNotices,
-  useAgentHistoryResumeToast
-} from './AgentHistoryNotices'
+import { AgentHistoryResumeNotice, AgentHistoryScanNotices } from './AgentHistoryNotices'
+import { TransientToast, useTransientToast } from '../components/TransientToast'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'
@@ -93,7 +89,7 @@ function MobileAgentSessionHistoryPanelContent({
   const insets = useSafeAreaInsets()
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
-  const { message: resumeToast, showToast: showResumeToast } = useAgentHistoryResumeToast()
+  const { message: resumeToast, showToast: showResumeToast } = useTransientToast()
   const now = useNow(30_000)
   const resumeLaunchInFlightRef = useRef(false)
   const resumeMutationRegistryRef = useRef(
@@ -409,7 +405,7 @@ function MobileAgentSessionHistoryPanelContent({
           />
         </>
       )}
-      <AgentHistoryResumeToast message={resumeToast} bottomInset={searchBarHeight} />
+      <TransientToast message={resumeToast} bottomInset={searchBarHeight} />
     </View>
   )
 }

@@ -21,7 +21,7 @@ import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../methods/terminal/terminal-subscription-stream-id'
-import { isStructuredNativeChatDefaultFor } from '../methods/structured-agent-session-policy'
+import { isStructuredNativeChatDefaultFor } from '../methods/structured-sessions/structured-agent-session-policy'
 import {
   createWebClientUrl,
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,

@@ -12,6 +12,7 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import {
+  ptyStatusEvidenceAt,
   renewRuntimeMobileAgentStatusFromPtyTitle,
   resolveRuntimeHookLiveAgentRow,
   selectRuntimeHookAgentRowForPane
@@ -262,7 +263,7 @@ export function buildRuntimeMobileAgentStatus(
             ? 'blocked'
             : 'done',
       prompt: '',
-      updatedAt: evidenceAt,
+      updatedAt: pty ? ptyStatusEvidenceAt(pty, evidenceAt) : evidenceAt,
       stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
       paneKey,
       ...(terminalHandle ? { terminalHandle } : {}),

@@ -108,14 +108,6 @@ function HostRemoveDialogBody({
     })
   }
 
-  const removeSshTarget = async (targetId: string): Promise<void> => {
-    // Main refuses a managed server's host; the error says why.
-    await window.api.ssh.removeTarget({ id: targetId })
-    // Clear deferred reconnect state so focused tabs stop retrying the removed target.
-    useAppStore.getState().clearRemovedSshTargetState(targetId)
-    dropOverridesForHost()
-  }
-
   // Reuse server Settings’ active-host switching and error handling through a preselected deep link.
   const handleRemoveRuntime = (environmentId: string): void => {
     const state = useAppStore.getState()
@@ -151,7 +143,8 @@ function HostRemoveDialogBody({
         await removeWslHost(target.environmentId)
         dropOverridesForHost()
       } else {
-        await removeSshTarget(target.targetId)
+        // Main refuses a managed server's host, and on success clears the target's live state and rename.
+        await window.api.ssh.removeTarget({ id: target.targetId })
       }
       if (mountedRef.current) {
         onOpenChange(false)

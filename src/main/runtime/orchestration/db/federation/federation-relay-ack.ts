@@ -2,7 +2,7 @@ import type {
   WorkerReportOutcome,
   FederationRelayDirection,
   FederationRelayItemRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/protocol-version'
 import { parseFederatedWorkerReportOutcome } from '../federated-worker-report-outcome'

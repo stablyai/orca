@@ -1,5 +1,5 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
-import { useCallback, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
@@ -31,7 +31,7 @@ import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-s
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import {
   pendingStructuredPromptIdentity,
-  requestMobileStructuredAgentSessionCancel
+  useMobileStructuredRequestCancel
 } from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send-with-outcome'
@@ -48,6 +48,8 @@ import {
   useMobileStructuredThreadGoalSend
 } from './use-mobile-structured-thread-goal'
 import { useMobileStructuredTranscript } from './use-mobile-structured-transcript'
+import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
+import { useMobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -69,13 +71,9 @@ export function useMobileStructuredAgentSession(
   const queueCapable = hostSupport?.queuedMessages === true
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
-  const promptCancelSupported = hostSupport?.promptCancel ?? null
-  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const hostStopsConversation = hostSupport?.conversationStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const commandPendingRef = useRef(false)
-  // Legacy hosts must join repeated Stop while the first turn cancel remains pending.
-  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
@@ -175,7 +173,7 @@ export function useMobileStructuredAgentSession(
     mutate,
     commands: sendController
   })
-  const sendWithOutcome = useMobileStructuredSendWithOutcome({
+  const sendWithOutcomeUngated = useMobileStructuredSendWithOutcome({
     agent,
     client,
     sessionId,
@@ -197,7 +195,6 @@ export function useMobileStructuredAgentSession(
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
   const { items, currentRequests, actionablePromptIds, status, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
@@ -211,6 +208,23 @@ export function useMobileStructuredAgentSession(
     }),
     [approvalPrompt, questionPrompt, queueSendsNext, turnId]
   )
+  const { rewind, sendWithOutcome } = useMobileStructuredAgentRewind({
+    ...args,
+    state,
+    stateRef,
+    options,
+    turnId,
+    backgroundTasks,
+    sendsOut,
+    commandPendingRef,
+    queuedMessages,
+    send: sendWithOutcomeUngated
+  })
+  useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
+  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
+    busy: isWorking || queueSendsNext || sendsOut.sending(),
+    send: sendWithOutcome
+  })
   const queued = useMobileStructuredQueuedMessageControls({
     ...args,
     appendComposerText: args.appendComposerText,
@@ -231,31 +245,14 @@ export function useMobileStructuredAgentSession(
     ...(onActionResolved ? { onActionResolved } : {})
   })
   // Stop preserves host-held cards under queue pause; only a later user action resumes them.
-  const requestCancel = useCallback(
-    (prompt?: { itemId: string; expectedRevision: number }): Promise<boolean> =>
-      requestMobileStructuredAgentSessionCancel({
-        client,
-        enabled,
-        hostAnswersRepeatedStops,
-        hostStopsConversation,
-        inFlight: inFlightStopsRef.current,
-        onSendError,
-        prompt,
-        promptCancelSupported,
-        sessionId,
-        stateRef
-      }),
-    [
-      client,
-      enabled,
-      hostAnswersRepeatedStops,
-      hostStopsConversation,
-      onSendError,
-      promptCancelSupported,
-      sessionId,
-      stateRef
-    ]
-  )
+  const requestCancel = useMobileStructuredRequestCancel({
+    client,
+    enabled,
+    hostSupport,
+    onSendError,
+    sessionId,
+    stateRef
+  })
 
   return {
     ...optionFields,
@@ -285,6 +282,7 @@ export function useMobileStructuredAgentSession(
     turnIndicator,
     ...turnTiming,
     sendWithOutcome,
+    holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
@@ -301,6 +299,8 @@ export function useMobileStructuredAgentSession(
       { client, sessionId, sessionKey, hostSupport, ...state },
       isWorking || queueSendsNext
     ),
-    threadGoal: goal.threadGoal
+    threadGoal: goal.threadGoal,
+    rewind,
+    usageLimit
   }
 }
