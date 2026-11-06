@@ -39,7 +39,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     }
   }
 
-  getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+  async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+    // A restored permission wait reads its screen first, so a dialog answered after the restart lifts it (#35962).
+    await this.refreshRestoredWait(handle, this.getTerminalAgentStatusPtyId(handle))
     return this.terminalAgentStatus.getStatus(handle)
   }
 
@@ -236,7 +238,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
 
   protected getFreshExplicitAgentStatusForHandle(
     handle: string,
-    paneKeyOverride?: string | null
+    ptyId: string
   ): {
     status: NonNullable<RuntimeTerminalAgentStatus['status']>
     updatedAt: number
@@ -244,8 +246,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   } | null {
     return selectFreshExplicitAgentStatus({
       handle,
-      paneKey: paneKeyOverride ?? this.getPaneKeyForTerminalHandle(handle),
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? []
+      paneKey: this.getPaneKeyForTerminalHandle(handle),
+      hookRows: this.getAgentStatusSnapshotFn?.() ?? [],
+      screenMayHoldDialog: () => this.screenMayHoldAgentDialog(ptyId)
     })
   }
 
@@ -311,7 +314,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   }
 
   protected getFreshExplicitAgentStatusForPty(handle: string, ptyId: string) {
-    const explicit = this.getFreshExplicitAgentStatusForHandle(handle)
+    const explicit = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     const floor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
     return explicit && (floor === undefined || explicit.updatedAt > floor) ? explicit : null
   }

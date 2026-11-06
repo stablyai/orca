@@ -8,6 +8,7 @@ import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/p
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
+import { isServeMintedPtySessionId } from '../../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
@@ -47,7 +48,7 @@ export class IdLabels {
     if (!id) {
       return null
     }
-    const kind = id.includes('@@') ? 'pty@@' : id.startsWith('serve-') ? 'ptyServe' : 'pty'
+    const kind = isServeMintedPtySessionId(id) ? 'ptyServe' : id.includes('@@') ? 'pty@@' : 'pty'
     return this.label(kind, id)
   }
 }

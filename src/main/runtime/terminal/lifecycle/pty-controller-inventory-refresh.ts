@@ -134,16 +134,25 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         inferredWorktreeId &&
         worktreeIdsEqual(session.worktreeId, inferredWorktreeId)
       )
+      const recordedPty = this.ptysById.get(session.id)
       // Explicit unresolved provider ownership wins unless the session id proves it predates a persisted rename.
-      const worktreeId = providerWorktree
+      const boundWorktreeId = providerWorktree
         ? providerWorktree.id
         : hasMigrationEvidence
           ? (persistedWorktree?.id ?? null)
           : (session.worktreeId ??
             persistedWorktree?.id ??
+            // A binding outside a targeted list belongs to that sibling; cwd must not re-file it (#36716).
+            persistedWorktreeId ??
             (recordedFloating ? FLOATING_TERMINAL_WORKTREE_ID : undefined) ??
             inferredWorktreeId ??
-            findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
+            (recordedPty && !recordedPty.worktreeInferredFromCwd
+              ? recordedPty.worktreeId
+              : undefined))
+      const worktreeInferredFromCwd = boundWorktreeId === undefined
+      const worktreeId = worktreeInferredFromCwd
+        ? findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId)
+        : boundWorktreeId
       const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
       const restoresExactSurface =
         persistedSurface &&
@@ -174,6 +183,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
           agentSessionOwners: session.incarnationId ? (session.agentSessionOwners ?? []) : [],
           spawnPaneKey: session.paneKey ?? null,
+          ...(worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
           ...(session.wslDistro !== undefined
             ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }
             : {}),
