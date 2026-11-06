@@ -43,6 +43,8 @@ export type RunSourceControlAgentActionStartArgs = {
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   worktreeId?: string | null
   groupId?: string | null
+  placementWorkspaceId?: string
+  initialCwd?: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
@@ -91,6 +93,8 @@ export async function runSourceControlAgentActionStart({
   repo,
   worktreeId,
   groupId,
+  placementWorkspaceId,
+  initialCwd,
   promptDelivery,
   launchPlatform,
   launchSource,
@@ -212,8 +216,9 @@ export async function runSourceControlAgentActionStart({
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
       agent: selectedAgent,
-      worktreeId,
-      groupId: groupId ?? worktreeId,
+      worktreeId: placementWorkspaceId ?? worktreeId,
+      groupId: groupId ?? placementWorkspaceId ?? worktreeId,
+      ...(initialCwd ? { initialCwd } : {}),
       prompt: trimmedCommandInput,
       agentArgs: launchAgentArgs,
       ...launchOptions,

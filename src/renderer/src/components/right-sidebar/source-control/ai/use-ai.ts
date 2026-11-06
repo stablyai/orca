@@ -1,3 +1,4 @@
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   captureSourceControlActionSelection,
@@ -56,6 +57,7 @@ export function useSourceControlAi({
   openSettingsPage,
   getStoreState = useAppStore.getState
 }: SourceControlAiControllerParams) {
+  const scope = useSourceControlScope()
   const repoHostId = activeRepo ? getRepoExecutionHostId(activeRepo) : undefined
   const savedStart = useSavedSourceControlActionStart()
   const [resolveConflictsEditor, setResolveConflictsEditor] = useState<
@@ -177,6 +179,8 @@ export function useSourceControlAi({
         recoveryContext,
         baseCommandInput: resolveConflictsPrompt,
         worktreeId: activeWorktreeId,
+        placementWorkspaceId: scope?.placementWorkspaceId,
+        initialCwd: scope ? (worktreePath ?? undefined) : undefined,
         groupId: activeGroupId,
         connectionId: activeConnectionId,
         repoId: activeRepo?.id,

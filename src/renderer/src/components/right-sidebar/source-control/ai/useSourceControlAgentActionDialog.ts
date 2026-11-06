@@ -41,6 +41,8 @@ export function useSourceControlAgentActionDialog({
   baseCommandInput,
   worktreeId,
   groupId,
+  placementWorkspaceId,
+  initialCwd,
   connectionId,
   repoId,
   promptDelivery = 'submit-after-ready',
@@ -135,6 +137,8 @@ export function useSourceControlAgentActionDialog({
     repo,
     worktreeId,
     groupId,
+    placementWorkspaceId,
+    initialCwd,
     promptDelivery,
     launchPlatform,
     // Why: an SSH host runs the plain `orca` shim; keep the previewed command

@@ -1,3 +1,5 @@
+import { basename, getRelativePathInsideRoot } from '@/lib/path'
+import { detectLanguage } from '@/lib/language-detect'
 import type { AppState } from '@/store/types'
 import {
   sourceControlScopeRuntimeEnvironmentId,
@@ -63,6 +65,30 @@ export function useSourceControlStoreActions() {
         ...options,
         ...(executionHostId ? { executionHostId } : {})
       })
+    const revealInExplorer: AppState['revealInExplorer'] = (id, path) => {
+      if (!placementWorkspaceId) {
+        state.revealInExplorer(id, path)
+        return
+      }
+      const latest = useAppStore.getState()
+      const groupId = latest.activeGroupIdByWorktree[placementWorkspaceId]
+      const root = latest.getKnownWorktreeById(id, executionHostId)?.path ?? null
+      state.openFile(
+        {
+          filePath: path,
+          relativePath: getRelativePathInsideRoot(path, root) ?? basename(path),
+          worktreeId: id,
+          language: detectLanguage(path),
+          mode: 'edit',
+          runtimeEnvironmentId
+        },
+        {
+          ...options,
+          targetGroupId: groupId,
+          preview: false
+        }
+      )
+    }
     return {
       allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
       allocatePullRequestGenerationRequestId: state.allocatePullRequestGenerationRequestId,
@@ -89,7 +115,7 @@ export function useSourceControlStoreActions() {
       pullBranch: state.pullBranch,
       pushBranch: state.pushBranch,
       rebaseFromBase: state.rebaseFromBase,
-      revealInExplorer: state.revealInExplorer,
+      revealInExplorer,
       setCommitMessageGenerationRecord: state.setCommitMessageGenerationRecord,
       setGitBranchCompareResult: state.setGitBranchCompareResult,
       setGitStatus: state.setGitStatus,

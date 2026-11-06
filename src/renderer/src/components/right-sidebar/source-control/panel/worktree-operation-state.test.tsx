@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { useSourceControlHostedReviewCreated } from '../review/use-hosted-review-created'
 import { useSourceControlStoreActions } from '../listing/use-store-actions'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -226,5 +227,63 @@ it('writes the base ref and opens aggregate diffs on the section host while the 
       executionHostId: 'ssh:box'
     }
   )
+  expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
+})
+
+it('opens a section file here and its checks in the folder overview without changing workspace', () => {
+  const openFile = vi.fn<AppState['openFile']>(() => 'file')
+  const revealInExplorer = vi.fn<AppState['revealInExplorer']>()
+  const setRightSidebarOpen = vi.fn<AppState['setRightSidebarOpen']>()
+  const setRightSidebarTab = vi.fn<AppState['setRightSidebarTab']>()
+  useAppStore.setState({
+    activeWorktreeId: 'folder:feature',
+    activeGroupIdByWorktree: { 'folder:feature': 'folder-group' },
+    openFile,
+    revealInExplorer,
+    setRightSidebarOpen,
+    setRightSidebarTab
+  })
+  const section = renderHook(
+    () => {
+      const actions = useSourceControlStoreActions()
+      const checks = useSourceControlHostedReviewCreated({
+        activeRepo: null,
+        activeWorktreeId: 'wt-child',
+        branchName: 'feature',
+        fallbackGitHubPRNumber: null,
+        linkedAzureDevOpsPR: null,
+        linkedBitbucketPR: null,
+        linkedGitHubPR: 123,
+        linkedGitLabMR: null,
+        linkedGiteaPR: null,
+        fetchHostedReviewForBranch: actions.fetchHostedReviewForBranch,
+        fetchPRForBranch: actions.fetchPRForBranch,
+        refreshActiveGitStatusAfterMutation: async () => {},
+        setRightSidebarOpen: actions.setRightSidebarOpen,
+        setRightSidebarTab: actions.setRightSidebarTab,
+        updateWorktreeMeta: actions.updateWorktreeMeta
+      })
+      return { actions, checks }
+    },
+    { wrapper: sectionWrapper('wt-child', 'ssh:box') }
+  )
+  section.result.current.actions.revealInExplorer('wt-child', '/remote/repo/a.ts')
+  expect(openFile).toHaveBeenCalledWith(
+    expect.objectContaining({
+      filePath: '/remote/repo/a.ts',
+      worktreeId: 'wt-child',
+      mode: 'edit'
+    }),
+    {
+      placementWorkspaceId: 'folder:feature',
+      executionHostId: 'ssh:box',
+      runtimeEnvironmentId: null,
+      targetGroupId: 'folder-group',
+      preview: false
+    }
+  )
+  expect(revealInExplorer).not.toHaveBeenCalled()
+  section.result.current.checks.openHostedReviewInChecks()
+  expect(setRightSidebarTab).toHaveBeenCalledWith('pr-checks')
   expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
 })

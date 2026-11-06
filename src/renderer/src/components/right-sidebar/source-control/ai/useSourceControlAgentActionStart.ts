@@ -40,6 +40,8 @@ type UseSourceControlAgentActionStartArgs = {
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   worktreeId?: string | null
   groupId?: string | null
+  placementWorkspaceId?: string
+  initialCwd?: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   /** SSH uses plain orca; omit the local Linux orca-ide rename in its preview. */
@@ -97,6 +99,8 @@ export function useSourceControlAgentActionStart({
   repo,
   worktreeId,
   groupId,
+  placementWorkspaceId,
+  initialCwd,
   promptDelivery,
   launchPlatform,
   isRemote,
@@ -202,6 +206,8 @@ export function useSourceControlAgentActionStart({
           repo,
           worktreeId,
           groupId,
+          placementWorkspaceId,
+          initialCwd,
           promptDelivery,
           launchPlatform,
           launchSource,
@@ -241,6 +247,8 @@ export function useSourceControlAgentActionStart({
       prepareRecipe,
       connectionUnavailable,
       groupId,
+      placementWorkspaceId,
+      initialCwd,
       launchSource,
       recoveryContext,
       launchPlatform,

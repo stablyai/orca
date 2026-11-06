@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
@@ -89,6 +90,9 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
 
 export async function launchSourceControlRecoveryAgentWithDefault({
   activeWorktreeId,
+  placementWorkspaceId,
+  initialCwd,
+  executionHostId,
   activeGroupId,
   activeSourceControlLaunchPlatform,
   sourceRepoConnectionId,
@@ -100,6 +104,9 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   copy
 }: {
   activeWorktreeId: string
+  placementWorkspaceId?: string
+  initialCwd?: string
+  executionHostId?: ExecutionHostId
   activeGroupId: string | null | undefined
   activeSourceControlLaunchPlatform: NodeJS.Platform | undefined
   sourceRepoConnectionId?: string | null
@@ -197,10 +204,12 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   const result = launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
     agent,
-    worktreeId: activeWorktreeId,
-    groupId: activeGroupId ?? activeWorktreeId,
+    worktreeId: placementWorkspaceId ?? activeWorktreeId,
+    groupId: activeGroupId ?? placementWorkspaceId ?? activeWorktreeId,
+    ...(initialCwd ? { initialCwd } : {}),
     prompt: commandInput,
     ...projection,
+    ...(executionHostId ? { selectedExecutionHostId: executionHostId } : {}),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'

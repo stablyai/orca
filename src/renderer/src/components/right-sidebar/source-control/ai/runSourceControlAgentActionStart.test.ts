@@ -72,6 +72,43 @@ describe('runSourceControlAgentActionStart', () => {
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
   })
 
+  it.each(['resolveConflicts', 'fixCommitFailure', 'fixPushFailure'] as const)(
+    'keeps %s in the folder group with the child cwd and recovery scope',
+    async (actionId) => {
+      mocks.launchAgentInNewTab.mockReturnValue({
+        surface: { kind: 'local-terminal', tabId: 'agent' }
+      })
+      const recoveryContext = {
+        target: { kind: 'local' as const },
+        worktreeId: 'child',
+        worktreePath: '/folder/repo',
+        connectionId: 'box'
+      }
+      await expect(
+        runSourceControlAgentActionStart(
+          buildArgs({
+            actionId,
+            worktreeId: 'child',
+            groupId: 'folder-group',
+            placementWorkspaceId: 'folder:feature',
+            initialCwd: '/folder/repo',
+            recoveryContext,
+            launchChoice: { agent: 'codex', route: 'terminal-tui', executionHostId: 'ssh:box' }
+          })
+        )
+      ).resolves.toBe(true)
+      expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: 'folder:feature',
+          groupId: 'folder-group',
+          initialCwd: '/folder/repo',
+          selectedExecutionHostId: 'ssh:box'
+        })
+      )
+      expect(mocks.mutationInFlight).toHaveBeenCalledWith(recoveryContext)
+    }
+  )
+
   it('notifies onLaunchAccepted as soon as the agent tab is created, before prompt delivery', async () => {
     let resolveDelivery: (value: {
       delivered: boolean

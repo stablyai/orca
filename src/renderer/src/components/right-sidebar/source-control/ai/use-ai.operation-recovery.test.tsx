@@ -69,6 +69,37 @@ describe('AI operation recovery composer', () => {
     useAppStore.setState(initialState, true)
   })
 
+  it('launches a section recovery in its folder with the child working directory', async () => {
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(path.resolve('tmp')), defaultTuiAgent: 'codex' }
+    })
+    await expect(
+      launchSourceControlRecoveryAgentWithDefault({
+        activeWorktreeId: 'wt-1',
+        activeGroupId: 'folder-group',
+        activeSourceControlLaunchPlatform: 'linux',
+        sourceRepoConnectionId: null,
+        placementWorkspaceId: 'folder:feature',
+        initialCwd: '/folder/repo',
+        executionHostId: 'local',
+        actionId: 'fixCommitFailure',
+        basePrompt: 'fix this commit',
+        getLaunchActionRecipe: () => sourceControlActionRecipeEntry({ agentId: null }),
+        getStoreState: useAppStore.getState,
+        copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+      })
+    ).resolves.toBe(true)
+    expect(launchAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'folder:feature',
+        groupId: 'folder-group',
+        initialCwd: '/folder/repo',
+        selectedExecutionHostId: 'local'
+      })
+    )
+    expect(detectAgents).toHaveBeenCalledOnce()
+  })
+
   it('claims recovery success only after the terminal and task handoff settle', async () => {
     vi.mocked(toast.success).mockClear()
     const completed = Promise.withResolvers<{
