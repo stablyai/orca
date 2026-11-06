@@ -10,6 +10,16 @@ export function NativeChatSignInButton({
 }: {
   failureKind: string | undefined
 }): React.JSX.Element | null {
+  return failureKind === 'modelNotSelected' || isNativeChatSignInFailureKind(failureKind) ? (
+    <EligibleNativeChatSignInButton failureKind={failureKind} />
+  ) : null
+}
+
+function EligibleNativeChatSignInButton({
+  failureKind
+}: {
+  failureKind: string | undefined
+}): React.JSX.Element | null {
   const signIn = useNativeChatSignInView()
   return signIn && isNativeChatSignInFailureKind(failureKind, signIn) ? (
     <Button
