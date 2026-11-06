@@ -89,8 +89,7 @@ export function NativeChatImageCommentsDialog({
     setError(null)
     try {
       const dataUrl = await renderImagePngDataUrl(src, size, null, (context, layout) => {
-        const ratio = layout.width / size.width
-        paintImageCommentPins(context, size, pins, ratio)
+        paintImageCommentPins(context, size, pins, layout)
       })
       await onDone(dataUrl, imageCommentsText(title, size, pins))
     } catch (cause) {

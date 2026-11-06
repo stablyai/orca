@@ -52,17 +52,17 @@ export function paintImageCommentPins(
   context: CanvasRenderingContext2D,
   size: PanZoomSize,
   pins: readonly ImageCommentPin[],
-  ratio: number
+  canvasSize: PanZoomSize
 ): void {
   context.save()
-  context.scale(ratio, ratio)
-  const unit = Math.max(1, Math.max(size.width, size.height) / 1000)
+  const ratio = Math.min(canvasSize.width / size.width, canvasSize.height / size.height)
+  const unit = Math.max(1, Math.max(size.width, size.height) / 1000) * ratio
   context.font = `bold ${13 * unit}px sans-serif`
   context.textAlign = 'center'
   context.textBaseline = 'middle'
   for (const [index, pin] of pins.entries()) {
-    const point = { x: (size.width * pin.x) / 100, y: (size.height * pin.y) / 100 }
-    const badge = imageCommentBadge(point, size, unit)
+    const point = { x: (canvasSize.width * pin.x) / 100, y: (canvasSize.height * pin.y) / 100 }
+    const badge = imageCommentBadge(point, canvasSize, unit)
     context.beginPath()
     context.moveTo(point.x, point.y)
     context.lineTo(badge.x, badge.y)
