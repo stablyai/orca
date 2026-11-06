@@ -121,3 +121,19 @@ describe('Daemon mock modified-only source routing', () => {
     expect(selectPrE2eSpecs(files, undefined, verified)).toEqual(selectPrE2eSpecs(files))
   })
 })
+
+describe('runtime host status E2E routing', () => {
+  const spec = 'tests/e2e/runtime-host-status-recovery.spec.ts'
+  it.each([
+    'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
+    'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
+    'src/renderer/src/store/slices/runtime-status-refresh.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it('does not route unit tests of those sources', () => {
+    expect(
+      selectPrE2eSpecs(['src/renderer/src/store/slices/runtime-status-refresh.test.ts'])
+    ).not.toContain(spec)
+  })
+})
