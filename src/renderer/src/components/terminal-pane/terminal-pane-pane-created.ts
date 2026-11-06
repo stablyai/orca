@@ -1,5 +1,4 @@
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
+import type { ManagedPane, PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -21,7 +20,7 @@ import {
 } from './deferred-split-pane-handoff'
 import { guardParserHandler } from './emulation/terminal-parser-handler-guard'
 import { isPaneReplaying } from './replay-guard'
-import { connectPanePty } from './pty-connection'
+import { connectPanePty } from './pty-connection/connect-pane-pty'
 import { completePaneSpawnPlacement } from './terminal-pane-spawn-placement'
 import {
   createQueuedStartupConsumer,

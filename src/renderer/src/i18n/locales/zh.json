@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
-      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}"
+      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -499,7 +500,7 @@
         "parakeetV2": "仅限英语。准确度与 v3 相近，速度更快。支持标点和大小写。",
         "zipformerBilingual": "中文 + 英文，支持语言混用。低延迟实时流式处理。",
         "paraformerBilingual": "中文（普通话 + 方言）+ 英文。擅长识别各地口音和方言。",
-        "zipformerStreamingEn": "仅限英语。2000 万参数的轻量模型，兼顾速度和体积。",
+        "zipformerStreamingEnRetired": "已不再提供：它会丢失句子开头。删除它以释放空间。",
         "zipformerStreamingZh": "仅限中文。1400 万参数的超轻量模型，适合资源有限的设备。",
         "zipformerStreamingKo": "仅限韩语。低延迟实时流式处理。",
         "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
@@ -3734,7 +3735,8 @@
             "chatNotOnHost": "此主机不支持聊天",
             "chatNotInWsl": "WSL 不支持聊天",
             "cliTag": "(CLI)",
-            "chatNotOverSsh": "SSH 连接不支持聊天"
+            "chatNotOverSsh": "SSH 连接不支持聊天",
+            "chatNotOnWindows": "Windows 暂不支持聊天"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -5518,7 +5520,6 @@
           "savedInProjectSettings": "已保存在此<settings>项目的设置</settings>中"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "保存本地设置",
           "3933401d28": "配置",
           "31b8b01a45": "设置",
           "4a98f907ae": "重试",
@@ -5533,7 +5534,15 @@
           "5bfd5c8779": "关闭安装脚本",
           "detectedFromSource": "从 <source>{{source}}</source> 已检测",
           "ignoresSharedSetup": "此仓库会忽略共享的 <yaml>orca.yaml</yaml> 设置脚本。请添加本地命令，或在“设置”中更改来源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到设置命令。保存后即可在新工作树中运行。"
+          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到设置命令。保存后即可在新工作树中运行。",
+          "reviewSetupScript": "查看设置脚本"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "查看设置脚本",
+          "description": "保存后，Orca 每次为 {{repo}} 创建工作树时都会运行此脚本。",
+          "setupScript": "设置脚本",
+          "archiveScript": "存档脚本",
+          "save": "保存本地设置"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "取消",
@@ -12723,7 +12732,8 @@
           "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
           "manyDescription": "在你审核之前不会更新。",
           "review": "审核",
-          "dismiss": "关闭"
+          "dismiss": "关闭",
+          "movedInstalled": "在你审查之前会保持关闭。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "请确认你信任此文件夹",
@@ -18257,6 +18267,9 @@
           "cancel": "取消",
           "add": "添加目录",
           "body": "有链接请求显示此目录中的 {{value0}}。请只添加你信任的人的目录。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },
@@ -19335,7 +19348,8 @@
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "worktree": "工作树"
-      }
+      },
+      "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。"
     },
     "tab": {
       "bar": {

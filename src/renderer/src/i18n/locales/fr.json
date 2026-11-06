@@ -629,7 +629,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
       "defaultSurfaceSetAllChat": "Tout mettre en Chat",
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
-      "sameAsChoice": "Identique à {{agent}} · {{choice}}"
+      "sameAsChoice": "Identique à {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat n’est pas encore disponible sous Windows : {{value0}} s’ouvre donc dans un terminal sur cet hôte. Les chats sur un hôte macOS ou Linux fonctionnent toujours."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -725,7 +726,7 @@
         "parakeetV2": "Anglais uniquement. Plus rapide que v3 avec une précision similaire. Ponctuation, majuscules et minuscules.",
         "zipformerBilingual": "Chinois + anglais avec alternance de langues. Streaming en temps réel à faible latence.",
         "paraformerBilingual": "Chinois (mandarin + dialectes) + anglais. Performant avec les accents et les variantes régionales du chinois.",
-        "zipformerStreamingEn": "Anglais uniquement. Modèle léger de 20 millions de paramètres, bon équilibre entre vitesse et taille.",
+        "zipformerStreamingEnRetired": "N’est plus proposé : il omet le début des phrases. Supprimez-le pour libérer de l’espace.",
         "zipformerStreamingZh": "Chinois uniquement. Modèle ultraléger de 14 millions de paramètres, idéal pour les appareils aux ressources limitées.",
         "zipformerStreamingKo": "Coréen uniquement. Streaming en temps réel à faible latence.",
         "parakeetJa": "Japonais uniquement. Entraîné sur plus de 35 000 heures de parole naturelle. Ponctuation incluse.",
@@ -4026,7 +4027,8 @@
             "chatNotInWsl": "Chat indisponible dans WSL",
             "agentsLoading": "Chargement des agents",
             "terminalListNeedsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de terminal",
-            "terminalListFailed": "Impossible de lister les agents de terminal de cet espace de travail"
+            "terminalListFailed": "Impossible de lister les agents de terminal de cet espace de travail",
+            "chatNotOnWindows": "Pas encore de chat sous Windows"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
@@ -6002,7 +6004,6 @@
           "savedInProjectSettings": "Enregistré dans les <settings>paramètres de ce projet</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Enregistrer le setup local",
           "3933401d28": "Configurer",
           "31b8b01a45": "Paramètres",
           "4a98f907ae": "Réessayer",
@@ -6017,7 +6018,15 @@
           "5bfd5c8779": "Ignorer les scripts de setup",
           "detectedFromSource": "Détecté dans <source>{{source}}</source>",
           "ignoresSharedSetup": "Ce dépôt ignore les scripts de setup partagés de <yaml>orca.yaml</yaml>. Ajoutez une commande locale ou changez la source dans les paramètres.",
-          "foundSetupCommandIn": "Une commande de setup a été trouvée dans <source>{{source}}</source>. Enregistrez-la pour l’exécuter pour les nouveaux worktrees."
+          "foundSetupCommandIn": "Une commande de setup a été trouvée dans <source>{{source}}</source>. Enregistrez-la pour l’exécuter pour les nouveaux worktrees.",
+          "reviewSetupScript": "Vérifier le script de setup"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Vérifier le script de setup",
+          "description": "Une fois enregistré, il s'exécute chaque fois qu'Orca crée un worktree pour {{repo}}.",
+          "setupScript": "Script de setup",
+          "archiveScript": "Script d'archivage",
+          "save": "Enregistrer le setup local"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Annuler",
@@ -13234,7 +13243,8 @@
           "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
           "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
           "review": "Vérifier",
-          "dismiss": "Ignorer"
+          "dismiss": "Ignorer",
+          "movedInstalled": "Il reste désactivé jusqu’à ce que vous l’examiniez."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Assurez-vous de faire confiance à ce dossier",
@@ -18950,6 +18960,9 @@
           "cancel": "Annuler",
           "add": "Ajouter le catalogue",
           "body": "Un lien a demandé d’afficher {{value0}} depuis ce catalogue. N’ajoutez des catalogues que de personnes de confiance."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -20121,7 +20134,8 @@
         "folder": "Dossier",
         "mainCheckout": "Copie principale",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "Le chat de cet agent n’est pas encore disponible sous Windows. Ouvrez-le plutôt dans un terminal."
     },
     "tab": {
       "bar": {

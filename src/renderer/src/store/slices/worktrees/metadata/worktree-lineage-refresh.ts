@@ -10,6 +10,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import { getRuntimeTargetHostId, type HostRoute } from '../../../../runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { toWorkspaceLineageRow } from '../../../../../../shared/worktree/worktree-lineage-workspace-row'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 import {
   lineageStoreKeyOfTarget,
@@ -98,21 +99,7 @@ export function projectWorktreeLineageToWorkspaceLineage(
     delete next[childWorkspaceKey]
     return next
   }
-  next[childWorkspaceKey] = {
-    childWorkspaceKey,
-    childInstanceId: lineage.worktreeInstanceId,
-    parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
-    parentInstanceId: lineage.parentWorktreeInstanceId,
-    origin: lineage.origin,
-    capture: lineage.capture,
-    ...(lineage.taskId ? { taskId: lineage.taskId } : {}),
-    ...(lineage.orchestrationRunId ? { orchestrationRunId: lineage.orchestrationRunId } : {}),
-    ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
-    ...(lineage.createdByTerminalHandle
-      ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
-      : {}),
-    createdAt: lineage.createdAt
-  }
+  next[childWorkspaceKey] = toWorkspaceLineageRow({ ...lineage, worktreeId })
   return next
 }
 

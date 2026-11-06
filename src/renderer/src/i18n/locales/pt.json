@@ -1595,7 +1595,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} continuam como chats, como você definiu.",
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
-      "sameAsChoice": "Igual a {{agent}} · {{choice}}"
+      "sameAsChoice": "Igual a {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -1691,7 +1692,7 @@
         "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
         "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
         "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
-        "zipformerStreamingEn": "Somente inglês. Modelo leve de 20 milhões de parâmetros, com bom equilíbrio entre velocidade e tamanho.",
+        "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
         "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
         "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
         "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
@@ -9593,7 +9594,8 @@
           "oneDescription": "Publicado por {{value0}}. Não será atualizado até você revisar.",
           "manyDescription": "Não serão atualizadas até você revisá-las.",
           "review": "Revisar",
-          "dismiss": "Dispensar"
+          "dismiss": "Dispensar",
+          "movedInstalled": "Ele fica desativado até você revisá-lo."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Confirme que você confia nesta pasta",
@@ -11720,7 +11722,6 @@
           "0f8aba944c": "Navegue até um diretório e clique em Selecionar para escolhê-lo."
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Salvar configuração local",
           "3933401d28": "Configurar",
           "31b8b01a45": "Configurações",
           "4a98f907ae": "Tentar novamente",
@@ -11735,7 +11736,15 @@
           "5bfd5c8779": "Descartar scripts de configuração",
           "detectedFromSource": "Detectado em <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositório ignora scripts de configuração compartilhados de <yaml>orca.yaml</yaml>. Adicione um comando local ou altere a origem em Configurações.",
-          "foundSetupCommandIn": "Foi encontrado um comando de configuração em <source>{{source}}</source>. Salve-o para executá-lo nas novas worktrees."
+          "foundSetupCommandIn": "Foi encontrado um comando de configuração em <source>{{source}}</source>. Salve-o para executá-lo nas novas worktrees.",
+          "reviewSetupScript": "Revisar script de configuração"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Revisar script de configuração",
+          "description": "Ao salvar, isso será executado sempre que o Orca criar uma worktree para {{repo}}.",
+          "setupScript": "Script de configuração",
+          "archiveScript": "Script de arquivamento",
+          "save": "Salvar configuração local"
         },
         "preserved": {
           "branch": {
@@ -17129,7 +17138,8 @@
             "cliTag": "(CLI)",
             "agentsLoading": "Carregando agentes",
             "terminalListNeedsServerUpdate": "Atualize o Orca neste servidor para listar os agentes de terminal",
-            "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho"
+            "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho",
+            "chatNotOnWindows": "Ainda sem chat no Windows"
           },
           "TabWorkspaceLayoutMenuSection": {
             "right": "Direita",
@@ -19937,6 +19947,9 @@
           "cancel": "Cancelar",
           "add": "Adicionar catálogo",
           "body": "Um link pediu para mostrar {{value0}} deste catálogo. Adicione catálogos apenas de pessoas em quem você confia."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -21047,7 +21060,8 @@
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal."
     },
     "tab": {
       "bar": {

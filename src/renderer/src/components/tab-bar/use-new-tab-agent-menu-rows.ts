@@ -224,10 +224,13 @@ export function useAgentMenuObservation(
     if (!roster || !['yes', 'not-yet-known', 'not-on-host'].includes(preliminary)) {
       return preliminary
     }
-    const verdict =
-      availability?.state === 'received' ? availability.byAgent.get(agent)?.state : undefined
+    const published =
+      availability?.state === 'received' ? availability.byAgent.get(agent) : undefined
+    if (published?.state === 'refused' && published.reason === 'windows') {
+      return 'windows'
+    }
     // Missing/refused published availability overrides a preliminary route that would otherwise allow launch.
-    return !verdict || verdict === 'refused' ? 'not-on-host' : preliminary
+    return !published || published.state === 'refused' ? 'not-on-host' : preliminary
   }
   const executionHostId = unresolvedTarget
     ? undefined

@@ -836,7 +836,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} ayarladığınız gibi sohbet olarak kalıyor.",
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
-      "sameAsChoice": "{{agent}} ile aynı · {{choice}}"
+      "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -931,7 +932,7 @@
         "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
         "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
         "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
-        "zipformerStreamingEn": "Yalnızca İngilizce. Hız ve boyut arasında iyi denge sunan, 20 milyon parametreli hafif model.",
+        "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
         "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
         "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
@@ -4244,7 +4245,8 @@
             "chatUnavailableAfterSelection": "{{value0}} sohbeti başlatılamadı.",
             "startChat": "{{value0}} ile sohbet başlat",
             "cliTag": "(CLI)",
-            "agentsLoading": "Ajanlar yükleniyor"
+            "agentsLoading": "Ajanlar yükleniyor",
+            "chatNotOnWindows": "Windows'ta henüz sohbet yok"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Sekme Değiştir",
@@ -6146,7 +6148,6 @@
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Yerel kurulumu kaydet",
           "3933401d28": "Yapılandır",
           "31b8b01a45": "Ayarlar",
           "4a98f907ae": "Yeniden dene",
@@ -6161,7 +6162,15 @@
           "5bfd5c8779": "Kurulum betiklerini kapat",
           "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin."
+          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
+          "reviewSetupScript": "Kurulum betiğini incele"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Kurulum betiğini incele",
+          "description": "Kaydedildiğinde, Orca {{repo}} için her worktree oluşturduğunda bu çalışır.",
+          "setupScript": "Kurulum betiği",
+          "archiveScript": "Arşiv betiği",
+          "save": "Yerel kurulumu kaydet"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "İptal",
@@ -13255,7 +13264,8 @@
           "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
           "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
           "review": "İncele",
-          "dismiss": "Kapat"
+          "dismiss": "Kapat",
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
@@ -18901,6 +18911,9 @@
           "cancel": "İptal",
           "add": "Katalog ekle",
           "body": "Bir bağlantı bu katalogdan {{value0}} öğesini göstermek istedi. Yalnızca güvendiğiniz kişilerin kataloglarını ekleyin."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -20079,7 +20092,8 @@
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın."
     },
     "tab": {
       "bar": {

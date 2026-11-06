@@ -28,6 +28,8 @@ export type CreateWorktreeCallOptions = {
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
   hostAgentLaunch?: HostAgentLaunch
   setupOnly?: boolean
+  /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
+  approvedSetupHash?: string
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
@@ -79,6 +81,9 @@ function sharedCreateFields(
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
     ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
+    ...(options?.approvedSetupHash !== undefined
+      ? { approvedSetupHash: options.approvedSetupHash }
+      : {}),
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,
     ...(request.displayName ? { displayName: request.displayName } : {}),

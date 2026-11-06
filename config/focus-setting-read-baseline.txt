@@ -170,7 +170,7 @@
 11 src/renderer/src/components/task-page/TaskPage.tsx
 3 src/renderer/src/components/task-page/use-task-page-detail-routing.ts
 2 src/renderer/src/components/task-page/use-task-page-source-availability.ts
-1 src/renderer/src/components/terminal-pane/pty-connection/agent-idle-working-handlers.ts
+1 src/renderer/src/components/terminal-pane/pty-connection/pane-connection-context.ts
 1 src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts
 1 src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.ts
 1 src/renderer/src/components/terminal-pane/links/terminal-link-open-hints.ts
