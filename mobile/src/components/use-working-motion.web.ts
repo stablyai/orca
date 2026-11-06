@@ -6,7 +6,8 @@ import type { WorkingMotion } from './use-working-motion'
 function useElementLoop(
   active: boolean,
   keyframes: Keyframe[],
-  options: KeyframeAnimationOptions
+  options: KeyframeAnimationOptions,
+  sharePhase = true
 ): (node: unknown) => void {
   const [element, setElement] = useState<HTMLElement | null>(null)
   const ref = useCallback(
@@ -18,9 +19,11 @@ function useElementLoop(
       return undefined
     }
     const animation = element.animate(keyframes, { ...options, iterations: Infinity })
-    animation.startTime = 0
+    if (sharePhase) {
+      animation.startTime = 0
+    }
     return () => animation.cancel()
-  }, [active, element, keyframes, options])
+  }, [active, element, keyframes, options, sharePhase])
   return ref
 }
 
