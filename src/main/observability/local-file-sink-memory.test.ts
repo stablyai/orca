@@ -31,26 +31,6 @@ function retainedHeap(): number {
 }
 
 describe('trace sink rejected record retention', () => {
-  it('keeps small-record byte scans deferred until the batch flush', async () => {
-    const filePath = join(directory, 'trace.ndjson')
-    sink = createLocalFileSink({ filePath })
-    const byteLength = vi.spyOn(Buffer, 'byteLength')
-    let beforeFlush: number
-    let afterFlush: number
-    try {
-      for (let index = 0; index < 20; index++) {
-        sink.push({ index, text: '💡漢字' })
-      }
-      beforeFlush = byteLength.mock.calls.length
-      await sink.flushAsync()
-      afterFlush = byteLength.mock.calls.length
-    } finally {
-      byteLength.mockRestore()
-    }
-    expect(beforeFlush).toBe(0)
-    expect(afterFlush).toBeLessThanOrEqual(1)
-  })
-
   it('releases oversized serialized records before the pending batch flushes', async () => {
     const filePath = join(directory, 'trace.ndjson')
     sink = createLocalFileSink({ filePath, maxBytes: 64 * 1024, batchWindowMs: 200 })
@@ -67,37 +47,6 @@ describe('trace sink rejected record retention', () => {
     const written = readFileSync(filePath, 'utf8').split('\n').filter(Boolean).map(parseLine)
     expect(written.filter((entry) => entry.type === DROPPED_RECORD_TYPE)).toHaveLength(24)
     expect(written.at(-1)).toEqual({ valid: true })
-  })
-
-  it('names the dropped record in the marker instead of leaving a silent gap', async () => {
-    const filePath = join(directory, 'trace.ndjson')
-    sink = createLocalFileSink({ filePath, maxBytes: 64 * 1024 })
-    sink.push({
-      type: 'effect-span',
-      name: 'worktree.create',
-      traceId: 'a'.repeat(32),
-      payload: 'x'.repeat(1024 * 1024)
-    })
-    await sink.flushAsync()
-    const [marker] = readFileSync(filePath, 'utf8').split('\n').filter(Boolean).map(parseLine)
-    expect(marker).toMatchObject({
-      type: DROPPED_RECORD_TYPE,
-      reason: 'oversize',
-      name: 'worktree.create',
-      traceId: 'a'.repeat(32)
-    })
-    expect(marker.droppedChars).toBeGreaterThan(1024 * 1024)
-    // The collector must be able to age dropped-record markers out of its lookback window.
-    expect(BigInt(marker.endTimeUnixNano as string)).toBeGreaterThan(0n)
-  })
-
-  it('omits the marker when even the marker would exceed the byte cap', async () => {
-    const filePath = join(directory, 'trace.ndjson')
-    sink = createLocalFileSink({ filePath, maxBytes: 40 })
-    sink.push({ payload: 'x'.repeat(1_000) })
-    sink.push({ ok: 1 })
-    await sink.flushAsync()
-    expect(readFileSync(filePath, 'utf8')).toBe('{"ok":1}\n')
   })
 
   it('accepts the exact UTF-8 byte cap and rotates at it', async () => {

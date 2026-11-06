@@ -9,12 +9,10 @@ vi.mock('../ipc/runtime-environments/runtime-environment-registry-root', () => (
 }))
 
 import {
-  REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE,
-  RemotePreviewPairingChangedError,
   assertRemoteChunkReadsSupported,
   readRemotePreviewRange,
   readRemotePreviewChunk,
-  statRemotePreviewFile
+  renewRemotePreviewGrant
 } from './remote-file-preview-reader'
 
 const address = {
@@ -24,37 +22,10 @@ const address = {
   expectedEnvironmentPairingRevision: 7
 }
 const ok = (result: unknown) => ({ ok: true, result })
-const fail = (code: string, message: string) => ({ ok: false, error: { code, message } })
 
 describe('remote file preview reader', () => {
   const signal = new AbortController().signal
   beforeEach(() => callRuntimeEnvironment.mockReset())
-
-  it('stats the file through its pinned pairing', async () => {
-    callRuntimeEnvironment.mockResolvedValue(
-      ok({ size: 6, isDirectory: false, mtime: 1, ctime: 2 })
-    )
-    await expect(statRemotePreviewFile(address, signal)).resolves.toEqual({
-      size: 6,
-      mtime: 1,
-      ctime: 2
-    })
-    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
-      '/user-data',
-      'env-1',
-      'files.stat',
-      { worktree: 'id:wt-1', relativePath: 'out/clip.mp4' },
-      15_000,
-      7,
-      undefined,
-      { signal }
-    )
-  })
-
-  it('refuses a directory', async () => {
-    callRuntimeEnvironment.mockResolvedValue(ok({ size: 0, isDirectory: true, mtime: 1 }))
-    await expect(statRemotePreviewFile(address, signal)).rejects.toThrow('directory')
-  })
 
   it('decodes a chunk and refuses one whose length disagrees', async () => {
     callRuntimeEnvironment.mockResolvedValueOnce(
@@ -67,20 +38,6 @@ describe('remote file preview reader', () => {
       ok({ contentBase64: 'AAE=', bytesRead: 4, eof: false })
     )
     await expect(readRemotePreviewChunk(address, 0, 4, signal)).rejects.toThrow('corrupted')
-  })
-
-  it('tells the user to update a host without range reads', async () => {
-    callRuntimeEnvironment.mockResolvedValue(fail('method_not_found', 'x'))
-    await expect(statRemotePreviewFile(address, signal)).rejects.toThrow(
-      REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE
-    )
-  })
-
-  it('reports a re-paired environment as a dead pairing, not a transient failure', async () => {
-    callRuntimeEnvironment.mockResolvedValue(fail('runtime_environment_changed', 'changed'))
-    await expect(readRemotePreviewChunk(address, 0, 1, signal)).rejects.toBeInstanceOf(
-      RemotePreviewPairingChangedError
-    )
   })
 
   it('proves chunk reads with one byte once per pairing, and re-proves after a re-pair', async () => {
@@ -108,21 +65,51 @@ describe('remote file preview reader', () => {
     expect(callRuntimeEnvironment).toHaveBeenCalledTimes(2)
   })
 
-  it('never caches a verdict no pairing revision pins', async () => {
+  // Why: a host can answer files.readChunk yet lack the grant's paging method.
+  it('pages a granted file through its grant, proven apart from workspace reads', async () => {
     callRuntimeEnvironment.mockResolvedValue(
       ok({ contentBase64: 'AA==', bytesRead: 1, eof: false })
     )
-    const unpinned = { environmentId: 'env-unpinned', worktree: 'id:wt-1', relativePath: 'a.mp4' }
-    await assertRemoteChunkReadsSupported(unpinned, signal)
-    await assertRemoteChunkReadsSupported(unpinned, signal)
+    const workspace = { ...address, environmentId: 'env-kinds' }
+    const { relativePath: _relativePath, ...base } = workspace
+    const granted = { ...base, grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
+    await assertRemoteChunkReadsSupported(workspace, signal)
+    await assertRemoteChunkReadsSupported(granted, signal)
+    expect(callRuntimeEnvironment).toHaveBeenLastCalledWith(
+      '/user-data',
+      'env-kinds',
+      'files.readTerminalArtifactChunk',
+      { worktree: 'id:wt-1', grantId: 'g-1', absolutePath: '/tmp/clip.mp4', offset: 0, length: 1 },
+      20_000,
+      7,
+      undefined,
+      { signal }
+    )
     expect(callRuntimeEnvironment).toHaveBeenCalledTimes(2)
   })
 
-  it('tells the user to update a host that answers files.stat but not files.readChunk', async () => {
-    callRuntimeEnvironment.mockResolvedValue(fail('method_not_found', 'x'))
-    await expect(
-      assertRemoteChunkReadsSupported({ ...address, environmentId: 'env-old' }, signal)
-    ).rejects.toThrow(REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE)
+  it('renews a granted file only at the path its first grant named', async () => {
+    const { relativePath: _relativePath, ...base } = address
+    const granted = { ...base, grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
+    const answer = (absolutePath: string) =>
+      ok({ openTarget: { kind: 'absolute-file', absolutePath, grantId: 'g-2' } })
+    callRuntimeEnvironment.mockResolvedValueOnce(answer('/tmp/clip.mp4'))
+    await expect(renewRemotePreviewGrant(granted, signal)).resolves.toEqual({
+      ...granted,
+      grantId: 'g-2'
+    })
+    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'files.resolveTerminalPath',
+      { worktree: 'id:wt-1', pathText: '/tmp/clip.mp4' },
+      15_000,
+      7,
+      undefined,
+      { signal }
+    )
+    callRuntimeEnvironment.mockResolvedValueOnce(answer('/tmp/other.mp4'))
+    await expect(renewRemotePreviewGrant(granted, signal)).rejects.toThrow('no longer grants')
   })
 
   it('reads a range in host-sized chunks, clipped to the file and stopping at EOF', async () => {

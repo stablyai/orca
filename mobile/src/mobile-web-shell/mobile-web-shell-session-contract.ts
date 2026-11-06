@@ -4,7 +4,7 @@ import type {
   MobileWebBundleCompatManifest,
   MobileWebBundleCompatVerdict,
   MobileWebBundleHostStatus
-} from '../transport/mobile-web-bundle-compat'
+} from '../transport/web-bundle/mobile-web-bundle-compat'
 import type {
   MobileWebShellUpdateFailureCause,
   MobileWebShellUpdateFailureFacts
@@ -18,6 +18,8 @@ export type MobileWebShellGates = {
   // Unreadable includes absent/undecodable replies; their empty capabilities must not masquerade as bundle-unavailable.
   readonly statusReadable: boolean
   readonly reachability: MobileWebShellReachability
+  // Unreachable, but still redialing within the attempts the UI calls connecting; absent reads as false.
+  readonly retrying?: boolean
   readonly hostCapabilities: readonly string[]
   readonly hostStatus: MobileWebBundleHostStatus
 }
@@ -95,10 +97,12 @@ export type MobileWebShellSessionEffect =
     }
   | { readonly kind: 'delete-cache' }
   | { readonly kind: 'remount' }
-  // Stamp expiry with its flow; the reducer ignores it once ready arrives, so the runner owns timing without deciding recovery.
+  // Stamp expiry with its flow; arming either deadline replaces the armed one, so the runner owns timing without deciding recovery.
   | { readonly kind: 'await-page-ready' }
   // A refused/uncommitted local load may report nothing; only the deadline can end it.
   | { readonly kind: 'await-document-load' }
+  // A ready page makes both deadlines moot; left armed they outlive the document they guard.
+  | { readonly kind: 'cancel-deadlines' }
   // Persist on-device evidence for Troubleshoot because release builds forward no console output.
   | { readonly kind: 'record-update-failure'; readonly failure: MobileWebShellUpdateFailureFacts }
   | { readonly kind: 'forget-update-failures' }
@@ -169,7 +173,9 @@ export type MobileWebShellSession = {
   readonly routeGrants: readonly string[]
   readonly state: MobileWebShellSessionState
   readonly retriedOnce: boolean
+  // Renderer loss and page failure each get one remount; neither spends the other's.
   readonly remountedOnce: boolean
+  readonly pageRemountedOnce: boolean
   // Reset document facts on every new document; the previous page’s ready cannot prove this one ran.
   readonly pageReady: boolean
   readonly pagePainted: boolean

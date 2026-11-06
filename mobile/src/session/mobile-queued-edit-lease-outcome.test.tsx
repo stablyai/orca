@@ -7,7 +7,7 @@ import {
 import { act } from 'react-test-renderer'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { QueuedEditHostFixtureModule } from '../../../src/shared/queued-edit-host.test-fixture'
-import type { AgentSessionQueuedMessageEditHoldResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuedMessageEditHoldResult } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { mobileQueuedEditHarness, readOrHoldReply } from './mobile-queued-edit-hook.test-fixture'
 import {
@@ -25,7 +25,7 @@ const spoken = (text: string) => (draft: string) => insertDictationText(draft, t
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
   const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
-    '../../../src/main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+    '../../../src/main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
   )
   queuedEditHost = fixtures.queuedEditHost
 })

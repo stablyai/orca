@@ -5,7 +5,7 @@ import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   CachedGeneration,
   MobileWebShellGates,
@@ -108,6 +108,8 @@ export const CACHED_BELOW_HOST_FLOOR: CachedGeneration = {
   ...CACHED,
   compat: { ...CACHED.compat, runtimeProtocolVersion: 0 }
 }
+
+export const DOCUMENT_FAILED = { type: 'shell-failed', reason: 'document-load-failed' } as const
 
 // Default result events to the current flow; stale-result tests pin their superseded flow explicitly.
 type PendingEvent<E = MobileWebShellSessionEvent> = E extends { flow: number }

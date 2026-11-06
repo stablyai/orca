@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -8,12 +8,12 @@ import {
 import { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpTimelineEvent } from './acp-timeline-event'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import {
   recordingStructuredAgentSessionLogger,
   testEventSinkLogging
-} from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const lanes: AcpStructuredLane[] = []
 afterEach(async () => {

@@ -1,22 +1,21 @@
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
-  FLOATING_TERMINAL_WORKTREE_ID,
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  addSparseWorktree,
-  addWorktree,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock,
-  join,
-  listWorktrees,
-  mkdir,
-  mkdtemp,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
@@ -29,7 +28,7 @@ import {
   makeRpcRequest,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const LOCAL_CHILD_REPO = {

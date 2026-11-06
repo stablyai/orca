@@ -4,7 +4,11 @@ import {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { startFederatedWorker } from './federated-worker-start'
 
 describe('federated worker start receipt validation', () => {
@@ -52,6 +56,7 @@ describe('federated worker start receipt validation', () => {
         }
       })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC handler returns unknown; this test pins its receipt shape.
     const result = (await startFederatedWorker({
       params: {
         task: task.id,
@@ -62,7 +67,8 @@ describe('federated worker start receipt validation', () => {
       },
       runtime,
       db,
-      runId: run.id,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
       task,
       orchestrationMutation: {
         callerFingerprint: 'caller',

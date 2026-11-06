@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
 import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
@@ -12,7 +12,7 @@ import {
 } from '@/store/repos/wsl-moved-projects'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
 import { usePairedRuntimeParkingEnvironmentIds } from '@/store/use-runtime-status-view'
-import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
+import { createTerminalWorktreeTopologyProjection } from './terminal-pane/parking/retention/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 

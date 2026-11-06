@@ -1,7 +1,11 @@
 /** Failed starts retain user-owned panes; retry-of must release the prior agent while launching in a new terminal, preventing one leaked agent per retry. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
@@ -121,16 +125,16 @@ describe('retrying a failed worker-start', () => {
     expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
   })
 
-  it('keeps a pane the user typed into', async () => {
+  it('keeps a pane the user kept open', async () => {
     h.setup()
     const failed = await failFirstStart()
-    await h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
+    await h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep: true })
 
     await retry(failed)
 
     expect(h.db.getWorkerTerminalResourceByOwner(failed.dispatchId)).toMatchObject({
-      ownership_state: 'user_owned',
-      retained_reason: 'user_takeover'
+      ownership_state: 'owned',
+      retained_reason: 'user_kept'
     })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })

@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { haveSameDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
@@ -19,6 +19,17 @@ import {
   type LocalDetectedAgentState
 } from './local-detected-agent-store-state'
 import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
+
+function haveSameCommandOverrides(
+  a: Partial<Record<string, string>> | undefined,
+  b: Partial<Record<string, string>> | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
+  return [...keys].every((key) => (a?.[key]?.trim() ?? '') === (b?.[key]?.trim() ?? ''))
+}
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
@@ -51,6 +62,10 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     ensureNativeDetectedAgents: (): Promise<TuiAgent[]> => {
       nativeInventoryRequested = true
       return actions.ensureDetectedAgents(undefined, true)
+    },
+    refreshNativeDetectedAgents: (): Promise<TuiAgent[]> => {
+      nativeInventoryRequested = true
+      return refreshLocalAgentInventory(set, get, lifecycle, undefined, false, {}, true)
     },
     ensureAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(worktreeId, false, true),
@@ -252,10 +267,22 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     }
   }
   store.subscribe((state, previous) => {
-    if (state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents) {
+    // Settings hydration is not an edit; detection already ran with the persisted overrides.
+    const overridesChanged =
+      previous.settings != null &&
+      !haveSameCommandOverrides(
+        state.settings?.agentCmdOverrides,
+        previous.settings?.agentCmdOverrides
+      )
+    if (
+      !overridesChanged &&
+      state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents
+    ) {
       return
     }
+    // Detection probes command overrides, so a changed override invalidates every local inventory.
     if (
+      overridesChanged ||
       !haveSameDisabledTuiAgents(
         state.settings?.disabledTuiAgents,
         previous.settings?.disabledTuiAgents

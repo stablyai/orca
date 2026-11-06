@@ -1,9 +1,13 @@
+import {
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 async function flushAsyncTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) {
@@ -99,7 +103,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -111,7 +115,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -122,7 +126,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -135,7 +139,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -263,7 +267,6 @@ function createManager(paneCount = 1, initialActivePaneId: number | null = null)
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),
@@ -371,7 +374,8 @@ async function connectHiddenRemoteAgentPane(
   serializeBuffer: ReturnType<typeof vi.fn>,
   serializeBufferOutcome?: ReturnType<typeof vi.fn>
 ): Promise<RemotePaneDrive> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer
   transport.serializeBufferOutcome = serializeBufferOutcome
@@ -392,7 +396,11 @@ async function connectHiddenRemoteAgentPane(
   const pane = createPane(1)
   const manager = createManager(1)
   const deps = createDeps({ isVisibleRef: { current: false } })
-  const disposable = connectPanePty(pane as never, manager as never, deps as never)
+  const disposable = connectPanePty(
+    pane as never,
+    manager as never,
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
   return {
@@ -443,6 +451,7 @@ describe('remote hidden-output restore outcomes', () => {
     storeSubscribers = []
     mockStoreState = {
       activeWorktreeId: 'wt-1',
+      unifiedTabsByWorktree: {},
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
       },

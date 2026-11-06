@@ -1,4 +1,4 @@
-import { decodeTerminalStreamJson } from '../../../../../shared/terminal-stream-protocol'
+import { decodeTerminalStreamJson } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { TerminalMultiplexSubscribeFrame } from './stream-schemas'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import { resolveMultiplexSubscribePty } from './terminal-multiplex-subscribe-resolution'

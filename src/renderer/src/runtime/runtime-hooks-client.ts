@@ -1,9 +1,10 @@
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
+import type { SetupScriptImportCandidate } from '../../../shared/workspace-setup/setup-script-imports'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { repoHooksCheckWakeParams } from '../../../shared/repo-hooks-check-wake'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
 function getHookInspectionTarget(hostId: ExecutionHostId): RuntimeClientTarget {
@@ -30,6 +31,7 @@ export type IssueCommandReadResult = {
   effectiveContent: string | null
   localFilePath: string
   source: 'local' | 'shared' | 'none'
+  localUntracked?: true
   /** A stopped WSL distro refused the read (E9); the content is unknown, not empty. */
   refusedWslDistro?: string
 }
@@ -51,7 +53,7 @@ export async function checkRuntimeHooks(
   return callRuntimeRpc<HookCheckResult>(
     target,
     'repo.hooksCheck',
-    { repo: repoId, ...(options.background ? { background: true } : {}) },
+    { repo: repoId, ...repoHooksCheckWakeParams(options.background) },
     { timeoutMs: 15_000 }
   )
 }

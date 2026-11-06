@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
@@ -11,7 +11,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   const registry = createSubscriptionRegistryDouble()
@@ -143,7 +143,13 @@ describe('terminal subscribe buffering', () => {
 
     await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
     expect(dataListener).toBeDefined()
-    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1', undefined, 'phone-1')
+    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith(
+      'pty-1',
+      undefined,
+      'phone-1',
+      false,
+      undefined
+    )
     dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
     resolveMobileSubscribe()
 

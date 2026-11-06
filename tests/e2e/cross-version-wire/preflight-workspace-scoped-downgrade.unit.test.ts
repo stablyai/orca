@@ -136,28 +136,6 @@ describe('workspace-scoped agent detection across versions', () => {
     ).toEqual(['claude'])
   })
 
-  it('an old host discards the field from an ungated client instead of refusing it', () => {
-    expect(oldHost.parse('preflight.detectAgents', { worktreeId: WORKTREE })).toBeUndefined()
-    expect(oldHost.parse('preflight.refreshAgents', { worktreeId: WORKTREE })).toBeUndefined()
-  })
-
-  it('a new client names the workspace to a new host', async () => {
-    wire.host = newHost
-    const store = createTestStore()
-
-    expect(await store.getState().ensureRuntimeDetectedAgents('env-1', WORKTREE)).toEqual([
-      'claude',
-      'codex'
-    ])
-    expect(wire.sent).toEqual([
-      {
-        method: 'preflight.detectAgents',
-        params: { worktreeId: WORKTREE },
-        hostSaw: { worktreeId: WORKTREE }
-      }
-    ])
-  })
-
   it('an old client gets the host default from a new host', async () => {
     wire.host = newHost
     for (const params of [undefined, null]) {

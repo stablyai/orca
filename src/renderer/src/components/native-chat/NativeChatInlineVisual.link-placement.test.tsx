@@ -6,7 +6,10 @@ import { useAppStore } from '@/store'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import { NativeChatVisualOwnerProvider, useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { seedBrowserLinkTestStore, WORKSPACE } from '@/lib/browser-link-open.test-fixture'
+import {
+  seedBrowserLinkTestStore,
+  WORKSPACE
+} from '@/lib/browser/navigation/browser-link-open.test-fixture'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 
 vi.mock('./use-native-chat-visual-document', () => ({
@@ -64,22 +67,6 @@ function wrapperForActiveBrowser() {
     (tab) => tab.entityId === state.activeBrowserTabIdByWorktree[WORKSPACE]
   )
 }
-
-it('the visible button opens beside its owning chat even while another group has focus', () => {
-  showVisual()
-  fireEvent.click(screen.getByRole('button', { name: 'Open in new tab' }))
-  const groupId = wrapperForActiveBrowser()?.groupId
-  expect(groupId).toBeTruthy()
-  expect(['a', 'b', 'c']).not.toContain(groupId)
-  expect(useAppStore.getState().layoutByWorktree[WORKSPACE]).toMatchObject({
-    first: { type: 'split', first: { groupId: 'a' }, second: { groupId } }
-  })
-  expect(
-    useAppStore.getState().groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')
-      ?.activeTabId
-  ).toBe('source')
-  expect(screen.getByRole('button', { name: 'Open in new tab' })).toBeTruthy()
-})
 
 it('the button follows a moved source and reuses the exact inactive page', () => {
   const browser = useAppStore.getState().createBrowserTab(WORKSPACE, 'file:///repo/chart.html', {

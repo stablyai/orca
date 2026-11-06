@@ -49,20 +49,11 @@ function ContentOnlyNote(): React.JSX.Element {
   )
 }
 
-/** A theme reserves its "Use now" line from first paint, so installing never moves the page. */
-function UseNowLine({
-  pluginKey,
-  reserved
-}: {
-  pluginKey: string | null
-  reserved: boolean
-}): React.JSX.Element | null {
-  if (!reserved) {
-    return null
-  }
+/** One-click "Use now" for an installed plugin's themes; empty (and hidden) for anything else. */
+function UseNowLine({ pluginKey }: { pluginKey: string }): React.JSX.Element {
   return (
-    <div data-use-now-line="" className="mt-3 flex min-h-7 items-center">
-      {pluginKey ? <PluginThemeUseNow pluginKey={pluginKey} /> : null}
+    <div data-use-now-line="" className="mt-3 flex items-center empty:hidden">
+      <PluginThemeUseNow pluginKey={pluginKey} />
     </div>
   )
 }
@@ -84,9 +75,6 @@ export function usePluginPageAction({
   const { plugin, listing, execution, preview, trust } = model
   const inUse = usePluginInUse(plugin?.pluginKey ?? null)
   const phase = install.phaseOf(entry.pluginKey)
-  const themed = entry.types.some(
-    (type) => type === 'app-theme' || type === 'icon-theme' || type === 'terminal-theme'
-  )
   const none: PluginPageActionParts = { header: null, status: null, body: null }
 
   if (plugin && pluginNeedsReview(plugin) && plugin.consentFingerprint) {
@@ -113,7 +101,7 @@ export function usePluginPageAction({
             size="sm"
             className="w-36"
             disabled={busy}
-            aria-label={`${enableLabel}: ${plugin.name}`}
+            aria-label={`${enableLabel}: ${name}`}
             onClick={() => decide('approve')}
           >
             {busy ? <Loader2 className="animate-spin" /> : null}
@@ -126,6 +114,7 @@ export function usePluginPageAction({
           trust={trust ?? installedPluginTrust(plugin, null)}
           capabilities={plugin.capabilities}
           shortcuts={model.shortcuts}
+          replacements={model.replacements}
           editorFileTypes={model.editorFileTypes}
           installed={plugin}
           official={plugin.official}
@@ -145,7 +134,7 @@ export function usePluginPageAction({
         <PluginInUseAction pluginKey={plugin.pluginKey} name={name} inUse={inUse} size="sm" />
       ),
       status: plugin.execution === 'data' ? <ContentOnlyNote /> : null,
-      body: <UseNowLine pluginKey={plugin.pluginKey} reserved={themed} />
+      body: <UseNowLine pluginKey={plugin.pluginKey} />
     }
   }
 
@@ -186,12 +175,7 @@ export function usePluginPageAction({
         </Button>
       ),
       status: <ContentOnlyNote />,
-      body: (
-        <>
-          <UseNowLine pluginKey={null} reserved={themed} />
-          {errorAlert}
-        </>
-      )
+      body: errorAlert
     }
   }
 
@@ -225,6 +209,7 @@ export function usePluginPageAction({
           trust={trust ?? installedPluginTrust({ panels: [], hasWorker: false }, null)}
           capabilities={model.capabilities}
           shortcuts={model.shortcuts}
+          replacements={model.replacements}
           editorFileTypes={model.editorFileTypes}
           reading={preview === null && !model.stale}
           failed={model.previewFailed}

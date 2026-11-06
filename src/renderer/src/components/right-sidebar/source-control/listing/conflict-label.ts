@@ -1,6 +1,6 @@
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { Check, FileCheck, FileX, type LucideIcon } from 'lucide-react'
-import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { translate } from '@/i18n/i18n'
 
 /** Localized short label for a merge-conflict kind, e.g. `both_modified` → "both modified". */

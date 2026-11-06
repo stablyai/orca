@@ -1,11 +1,11 @@
 import type {
   GitBranchCompareResult,
   GitBranchCompareSummary
-} from '../../../shared/git-diff-compare-types'
-import { readBranchCompareHead } from '../../../shared/git-branch-compare-head'
+} from '../../../shared/git/diff/git-diff-compare-types'
+import { readBranchCompareHead } from '../../../shared/git/branches/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../../shared/worktree/base-ref'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { resolveWorktreeBaseCommitOid } from '../worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from '../worktrees/creation/worktree-base-ref-probe'
 import { loadBranchChanges } from './branch-change-entries'
 import {
   countCompareDivergence,

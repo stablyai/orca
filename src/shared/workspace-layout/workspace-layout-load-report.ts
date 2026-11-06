@@ -1,6 +1,6 @@
 // Report stored-to-next-save differences field by field using the disk-field tables.
 
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import type { DiskTable } from './workspace-layout-disk-fields'
 import { editorFileKey } from './workspace-layout-editor-tab-file'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'

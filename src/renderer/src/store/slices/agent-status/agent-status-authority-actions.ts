@@ -77,6 +77,10 @@ export function createAgentStatusAuthorityActions(
           }
           return {
             agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
+            agentConversationsByPaneKey: removePaneKeys(
+              s.agentConversationsByPaneKey,
+              retiredPaneKeySet
+            ),
             runtimeAgentOrchestrationByPaneKey: removePaneKeys(
               s.runtimeAgentOrchestrationByPaneKey,
               retiredPaneKeySet
@@ -192,6 +196,12 @@ export function createAgentStatusAuthorityActions(
             paneKey: to,
             tabId: targetTabId
           })),
+          agentConversationsByPaneKey: movePaneKeyedRecord(
+            s.agentConversationsByPaneKey,
+            from,
+            to,
+            (identity) => ({ ...identity, paneKey: to })
+          ),
           // Bump epoch on live pane-key moves so retention/sidebar consumers observe the remap.
           ...(from in s.agentStatusByPaneKey
             ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }

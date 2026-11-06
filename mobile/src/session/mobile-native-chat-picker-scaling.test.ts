@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import capture from '../../../src/shared/__fixtures__/omp-native-commands.json'
 import * as catalog from '../../../src/shared/native-chat/input/native-chat-slash-commands'
 import type { NativeChatPickerItem } from '../../../src/shared/native-chat/input/native-chat-picker-items'
-import { deriveComposerAutocomplete } from '../../../src/shared/native-chat-composer-autocomplete'
+import { deriveComposerAutocomplete } from '../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
 import {
   mobileComposerCatalog,
   boundedMenuItems

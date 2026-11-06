@@ -1,5 +1,6 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerDispatchRow } from '../../../../orchestration/types'
+import { formatTerminalStartFailure } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import {
@@ -8,7 +9,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 type WorkerStartFailureArgs = {
@@ -74,7 +75,9 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  const reason = args.error instanceof Error ? args.error.message : String(args.error)
+  const reason =
+    formatTerminalStartFailure(args.error) ??
+    (args.error instanceof Error ? args.error.message : String(args.error))
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)

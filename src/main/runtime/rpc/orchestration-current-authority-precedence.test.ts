@@ -195,23 +195,22 @@ describe('current orchestration authority precedence', () => {
         count: 1
       }
     })
-    expect(harness.db.getMessageById(message.id)?.read).toBe(0)
+    expect(harness.db.getMessageById(message.id)?.read).toBe(1)
 
     const deliveryId = (response as { result: { deliveryId: string } }).result.deliveryId
+    // A response lost in transit replays from the request receipt when retried with the same id.
     const replayed = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
         { terminal: CURRENT_WORKER_HANDLE },
         currentEvidence('worker'),
-        'current-worker-check-replay'
+        'current-worker-check'
       )
     )
-
     expect(replayed).toMatchObject({
       ok: true,
-      result: { deliveryId, replayed: true, messages: [{ id: message.id }], count: 1 }
+      result: { deliveryId, messages: [{ id: message.id }], count: 1 }
     })
-    expect(harness.db.getMessageById(message.id)?.read).toBe(0)
 
     const acknowledged = await harness.dispatcher.dispatch(
       request(

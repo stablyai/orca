@@ -12,6 +12,17 @@ const HOST_FRAME_KINDS = [
 
 export type HostFrameKind = (typeof HOST_FRAME_KINDS)[number]['kind']
 
+// Why module-level: permission handlers outside this guard ask what a frame was born as.
+const hostFrameKinds = new WeakMap<HostFrameIdentity, HostFrameKind>()
+
+/** A frame object as Electron hands it out; identity is the object itself. */
+export type HostFrameIdentity = Pick<WebFrameMain, 'frameTreeNodeId'>
+
+/** What a frame was registered as at creation, before its content could rename it. */
+export function hostFrameKindOf(frame: HostFrameIdentity): HostFrameKind | null {
+  return hostFrameKinds.get(frame) ?? null
+}
+
 type RegisteredFrame = {
   kind: HostFrameKind
   initialSrcdocPending: boolean
@@ -30,6 +41,7 @@ export class HostFrameNavigationRegistry {
     const kind = hostFrameKindForName(frame.name)
     if (kind) {
       this.frames.set(frame, { kind, initialSrcdocPending: true })
+      hostFrameKinds.set(frame, kind)
     }
   }
 

@@ -1,5 +1,5 @@
 import type { MobileCommandMenuHostFixtureModule } from '../../../src/shared/mobile-queued-edit-host.test-fixture-contract'
-import type { AgentSessionCommandsResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionCommandsResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import {
   mobileComposerCatalog,
@@ -13,7 +13,7 @@ import { useMobileStructuredSessionCommands } from './use-mobile-structured-sess
 
 const { createMobileCommandMenuHostFixture } =
   await vi.importActual<MobileCommandMenuHostFixtureModule>(
-    '../../../src/main/native-chat/agent-session-wire/mobile-queued-edit-host.test-fixture'
+    '../../../src/main/native-chat/agent-session-wire/host/testing/mobile-queued-edit-host.test-fixture'
   )
 
 type Hook = ReturnType<typeof useMobileStructuredSessionCommands>

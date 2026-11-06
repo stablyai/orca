@@ -4,9 +4,9 @@ import { cn } from '@/lib/utils'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
-} from '@/lib/pr-comment-audience-labels'
-import type { PRCommentAudienceFilter } from '../../../../../shared/pr-comment-audience'
-import type { PRCommentGroup } from '../../../../../shared/pr-comment-groups'
+} from '@/lib/source-control/review/comments/pr-comment-audience-labels'
+import type { PRCommentAudienceFilter } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
+import type { PRCommentGroup } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

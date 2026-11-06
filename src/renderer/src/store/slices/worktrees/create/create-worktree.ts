@@ -1,5 +1,6 @@
+import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
+import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
-import { toast } from 'sonner'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -32,7 +33,7 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/worktree-runtime-capabilities'
 import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
-import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
@@ -45,19 +46,15 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
+import { buildCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
 import {
+  lostRequestedParent,
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
-  type WorktreeCreateParentPick
+  type CreateAttemptOutcome
 } from './worktree-create-parent-pick'
 
 type RuntimeTarget = RuntimeClientTarget
-
-type CreateAttemptOutcome = {
-  result: CreatedWorktreeResult
-  /** The host had no such parent, so this attempt was retried unattached. */
-  droppedParent: boolean
-}
 
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
@@ -100,25 +97,6 @@ async function runCreateAttempt(
     }
     return { result: await create(undefined), droppedParent: true }
   }
-}
-
-/** True when the create landed without the nesting the caller asked for. */
-function lostRequestedParent(
-  outcome: CreateAttemptOutcome,
-  parent: WorktreeCreateParentPick,
-  target: RuntimeTarget
-): boolean {
-  if (outcome.droppedParent) {
-    return true
-  }
-  if (parent.pickedParentWorktreeId) {
-    return !outcome.result.lineage
-  }
-  // Why local-only: older hosts predate the top-level workspace lineage field, so its absence
-  // over RPC would warn about a nesting that actually landed.
-  return (
-    target.kind === 'local' && Boolean(parent.parentWorkspace) && !outcome.result.workspaceLineage
-  )
 }
 
 export function createCreateWorktree(
@@ -233,6 +211,10 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
+      // Refuses the whole create (older Orca, unconfirmed parent) rather than create it unnested.
+      const crossStoreParent = parent.crossStoreParentRow
+        ? await buildCrossStoreParentRef(get(), target, parent.crossStoreParentRow)
+        : undefined
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -264,6 +246,7 @@ export function createCreateWorktree(
                 ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
+              crossStoreParent,
               manualOrder
             },
             target,
@@ -278,9 +261,8 @@ export function createCreateWorktree(
             holdCreatedSidebarWorkspace({ worktree: created })
           }
           const { result } = outcome
-          if (result.warning) {
-            toast.warning(result.warning)
-          }
+          showWorktreeCreateWarningToast(result.warning)
+          reviewSetupTrustMismatch(get, repoId, creationHostId, result)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId

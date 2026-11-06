@@ -187,3 +187,9 @@ export function subscribeAntigravityChatSignIns(listener: () => void): () => voi
     unsubscribe()
   }
 }
+
+export function readAntigravityChatSignInSnapshot(
+  owner: RuntimeClientTarget
+): RevisionedHostSnapshot<AntigravityChatSignInStatus> {
+  return signIns.read(owner)
+}

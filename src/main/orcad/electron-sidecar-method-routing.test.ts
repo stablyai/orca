@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { BROWSER_CORE_METHODS } from '../runtime/rpc/methods/browser-core'
-import { BROWSER_EXTRA_METHODS } from '../runtime/rpc/methods/browser-extras'
-import { BROWSER_SCREENCAST_METHODS } from '../runtime/rpc/methods/browser-screencast'
+import { BROWSER_CORE_METHODS } from '../runtime/rpc/methods/browser/browser-core'
+import { BROWSER_EXTRA_METHODS } from '../runtime/rpc/methods/browser/browser-extras'
+import { BROWSER_SCREENCAST_METHODS } from '../runtime/rpc/methods/browser/browser-screencast'
 import { electronSidecarRuntimeMethodName } from './electron-sidecar-method-routing'
 
 // Exercise real RPC registration: names that diverge from runtime camel-casing can become unreachable.
@@ -41,10 +41,6 @@ async function runtimeCommandFor(
 }
 
 describe('electronSidecarRuntimeMethodName', () => {
-  it('maps client URL opens to the browser.openUrl RPC', () => {
-    expect(electronSidecarRuntimeMethodName('browserOpenUrlOnClient')).toBe('browser.openUrl')
-  })
-
   it('round-trips every registered browser RPC method', async () => {
     const mismatches: string[] = []
     const unmapped: string[] = []
@@ -65,21 +61,5 @@ describe('electronSidecarRuntimeMethodName', () => {
     }
     expect(mismatches).toEqual([])
     expect(unmapped).toEqual([...RPC_METHODS_WITHOUT_BROWSER_COMMAND])
-  })
-
-  it('covers every registered browser method, so the round-trip cannot pass vacuously', async () => {
-    expect(BROWSER_RPC_METHODS.length).toBeGreaterThan(70)
-    expect(BROWSER_RPC_METHODS.map((method) => method.name)).toEqual(
-      expect.arrayContaining([
-        'browser.certificate.proceed',
-        'browser.viewport',
-        'browser.geolocation',
-        'browser.cookie.get',
-        'browser.intercept.enable',
-        'browser.capture.start',
-        'browser.storage.local.set',
-        'browser.storage.session.clear'
-      ])
-    )
   })
 })

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { NativeChatMessage, NativeChatTextBlock } from '../native-chat-types'
 import {
   nativeChatTurnAnswerRows,
   nativeChatTurnFold,
+  nativeChatTurnFoldRow,
   type NativeChatTurnFoldRow
 } from './native-chat-turn-fold'
 
@@ -14,6 +16,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     outlivesTurn: false,
     reportsFailure: false,
     explainsTurn: false,
+    sendsBack: false,
     ...overrides
   }
 }
@@ -33,34 +36,79 @@ const FAILURE = row({ role: 'system', reportsFailure: true })
 const SETTLED = new Set(['turn-1'])
 const NONE = new Set<string>()
 
+function message(
+  id: string,
+  role: NativeChatMessage['role'],
+  text: string,
+  presentation?: NativeChatTextBlock['presentation']
+): NativeChatMessage {
+  return {
+    id,
+    role,
+    blocks: [{ type: 'text', text, presentation }],
+    timestamp: 1,
+    source: 'transcript'
+  }
+}
+
+const PROMPT = message('prompt', 'user', 'Propose the change.')
+const PREAMBLE = message('preamble', 'assistant', 'I will inspect the files.')
+const PLAN = message('plan', 'system', '# Proposed change', 'plan-document')
+const ANSWER = message('answer', 'assistant', 'The final reply, completed after the checklist.')
+const WORK: NativeChatMessage = {
+  id: 'work',
+  role: 'assistant',
+  timestamp: 1,
+  source: 'transcript',
+  blocks: [{ type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'completed' }]
+}
+
+describe('rendered plans in collapsed turns', () => {
+  it.each([
+    {
+      name: 'native proposal after work',
+      messages: [PROMPT, PREAMBLE, WORK, PLAN],
+      folded: [2],
+      answers: [1]
+    },
+    {
+      name: 'named reply updated before a checklist row',
+      messages: [PROMPT, ANSWER, PLAN],
+      folded: [],
+      answers: [1]
+    },
+    {
+      name: 'checklist followed by a separate reply',
+      messages: [PROMPT, PLAN, ANSWER],
+      folded: [],
+      answers: [2]
+    },
+    { name: 'plan as the only outcome', messages: [PROMPT, PLAN], folded: [], answers: [] },
+    {
+      name: 'plan before a hook sends the answer back',
+      messages: [
+        PROMPT,
+        PREAMBLE,
+        PLAN,
+        message('hook', 'system', 'Continue the work.', 'hook-sent-back'),
+        WORK,
+        ANSWER
+      ],
+      folded: [4],
+      answers: [1, 5]
+    }
+  ])('keeps the plan and existing answers visible: $name', ({ messages, folded, answers }) => {
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
+    expect([...result.foldedRows]).toEqual(folded)
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual(answers)
+  })
+})
+
 describe('nativeChatTurnAnswerRows', () => {
-  it('names the last assistant row that renders prose, not the first', () => {
-    expect(nativeChatTurnAnswerRows(TURN).get('turn-1')).toBe(4)
-  })
-
-  it('ignores rows that render no prose, so a trailing tool run is not the answer', () => {
-    const rows = [row({ role: 'user' }), row(), row({ rendersProse: false })]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(1)
-  })
-
   it('ignores reasoning and system rows, which are never the agent answering', () => {
     const rows = [row({ role: 'user' }), row(), row({ role: 'reasoning' }), row({ role: 'system' })]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(1)
-  })
-
-  it('names a failure report as the answer when nothing the agent said comes after it', () => {
-    const rows = [row({ role: 'user' }), row(), FAILURE]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(2)
-  })
-
-  it('names the later prose as the answer when the agent recovered from a failure', () => {
-    const rows = [row({ role: 'user' }), FAILURE, row()]
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(2)
-  })
-
-  it('reports no answer for a turn that only ran tools', () => {
-    const rows = [row({ role: 'user' }), row({ rendersProse: false })]
-    expect(nativeChatTurnAnswerRows(rows).has('turn-1')).toBe(false)
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
   })
 })
 
@@ -215,6 +263,6 @@ describe('nativeChatTurnFold', () => {
       expandedTurnKeys: NONE
     })
     expect([...foldedRows]).toEqual([1])
-    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(3)
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([3])
   })
 })

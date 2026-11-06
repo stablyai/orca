@@ -6,7 +6,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import SyncDatabase from '../../sqlite/sync-database'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
@@ -404,8 +408,13 @@ describe('#11745 H2 — revoked principal on an unclaimed adopted Run', () => {
     await legacyClaimsAdoptedRun(harness, 'v-h2')
     await currentCoordinatorTakesOver(harness, 'v-h2')
     // The new owner's pane rebinds elsewhere, leaving the adopted Run unclaimed + principal revoked.
-    harness.db.createRun({
+    const elsewhere = harness.db.createRun({
       objective: 'elsewhere',
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
+    harness.db.bindRun({
+      runId: elsewhere.id,
       coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
       coordinatorPaneKey: CURRENT_COORDINATOR_PANE
     })
@@ -750,7 +759,7 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
     expect(db.getCurrentRunForPane(`tab:${leaf(3)}`)).toBeUndefined()
   })
 
-  it('unbinds the equivalent pane when a reminted key binds a new Run', () => {
+  it('unbinds the equivalent pane when a reminted key run-uses a new Run', () => {
     const db = paneDb()
     const first = db.createRun({
       objective: 'first',
@@ -759,6 +768,11 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
     })
     const second = db.createRun({
       objective: 'second',
+      coordinatorHandle: 'term_a',
+      coordinatorPaneKey: `tab_two:${leaf(4)}`
+    })
+    db.bindRun({
+      runId: second.id,
       coordinatorHandle: 'term_a',
       coordinatorPaneKey: `tab_two:${leaf(4)}`
     })

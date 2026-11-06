@@ -1,10 +1,12 @@
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -175,7 +177,9 @@ export function selectEditorExternalWatchTargets(
     activeWorktreeId: state.activeWorktreeId,
     lastVisitedAtByWorktreeId: state.lastVisitedAtByWorktreeId,
     openFiles: state.openFiles,
-    exists: (id) => resolveEditorExternalWatchTargetRows(state, id, null) !== null
+    exists: (id) =>
+      getIndexedWorktreesById(selectWorktreesByRepo(state), id).length > 0 ||
+      selectFolderWorkspaces(state).some((workspace) => folderWorkspaceKey(workspace.id) === id)
   })
   // Key watchers by workspace and execution host, matching reads/saves: same id may be open locally, over SSH and in a runtime.
   for (const file of state.openFiles) {

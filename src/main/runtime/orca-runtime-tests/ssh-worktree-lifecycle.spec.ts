@@ -1,15 +1,17 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
-  OrcaRuntimeService,
-  addWorktree,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock,
-  getBranchConflictKind,
-  gitRunner,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import type { WorkspaceLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
@@ -17,7 +19,7 @@ import {
   createFolderWorkspaceRuntimeStore,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
@@ -26,7 +28,7 @@ describe('OrcaRuntimeService', () => {
     computeWorktreePathMock.mockReturnValue(process.cwd())
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
@@ -97,7 +99,9 @@ describe('OrcaRuntimeService', () => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
-      setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => lineage)
+      setFolderParentLineage: vi.fn(
+        (_target: HostWorktreeTarget, lineage: WorkspaceLineage) => lineage
+      )
     }
     computeWorktreePathMock.mockReturnValue(created.path)
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
@@ -142,7 +146,7 @@ describe('OrcaRuntimeService', () => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
-      setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => {
+      setFolderParentLineage: vi.fn((_target: HostWorktreeTarget, lineage: WorkspaceLineage) => {
         workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
         return lineage
       })
@@ -178,7 +182,8 @@ describe('OrcaRuntimeService', () => {
       capture: { source: 'env-workspace', confidence: 'inferred' }
     })
     expect(result.worktree.workspaceLineage).toBe(result.workspaceLineage)
-    expect(runtimeStore.setWorkspaceLineage).toHaveBeenCalledWith(
+    expect(runtimeStore.setFolderParentLineage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: childId }),
       expect.objectContaining({
         childWorkspaceKey: `worktree:${childId}`,
         parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY

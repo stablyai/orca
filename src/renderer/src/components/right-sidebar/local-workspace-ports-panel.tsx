@@ -13,8 +13,8 @@ import {
   resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
-} from '@/lib/workspace-port-actions'
-import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+} from '@/lib/workspace-ports/workspace-port-actions'
+import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'

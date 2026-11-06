@@ -11,13 +11,13 @@ import {
   beginHugeRepoWarningProbe,
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
-} from '@/lib/source-control-huge-repo-warning-dismissals'
+} from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import type { PullRequestGenerationContext } from '@/store/slices/pull-request-generation'
-import { refreshGitStatusForWorktree } from '../../git-status-refresh'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 export type SourceControlStatusRefresh = {
   refreshActiveGitStatus: (signal?: AbortSignal) => Promise<void>

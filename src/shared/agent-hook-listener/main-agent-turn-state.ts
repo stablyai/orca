@@ -1,5 +1,5 @@
-import type { AgentStatusState } from '../agent-status-types'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {

@@ -1,4 +1,4 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
@@ -23,6 +23,8 @@ export type TerminalWebViewTransport = {
   post: (command: TerminalWebViewCommand & { id: number }) => void
   // Native recovery must ping the exact retained document because iOS can lose its JS state; embedded pages have no separate process.
   pingsOnForegroundRecovery: () => boolean
+  // False for an in-process document: no bridge hop to batch writes for.
+  coalesce?: boolean
 }
 
 export function useTerminalWebViewController(
@@ -44,13 +46,14 @@ export function useTerminalWebViewController(
     onHaptic,
     onTerminalInput,
     onTerminalQueryReply,
+    onTerminalInteraction,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
     onTextScaleChange,
     onCellBoxChange
   } = props
-  const { pingsOnForegroundRecovery, post } = transport
+  const { coalesce, pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
@@ -91,10 +94,11 @@ export function useTerminalWebViewController(
     [pendingMessages, sendToDocument]
   )
 
-  // Coalesce busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
+  // Native coalesces busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
   const writeCoalescer = useMemo(
-    () => createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data })),
-    [postMessage]
+    () =>
+      createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data }), { coalesce }),
+    [coalesce, postMessage]
   )
 
   useEffect(() => {
@@ -173,6 +177,7 @@ export function useTerminalWebViewController(
           onKeyboardAvoidanceMetrics,
           onHaptic,
           onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
           onTerminalTap: interactionActive ? onTerminalTap : undefined,
           onFileTap: interactionActive ? onFileTap : undefined,
           onOpenUrl: interactionActive ? onOpenUrl : undefined,
@@ -194,6 +199,7 @@ export function useTerminalWebViewController(
       onHaptic,
       onTerminalInput,
       onTerminalQueryReply,
+      onTerminalInteraction,
       onTerminalTap,
       onFileTap,
       onOpenUrl,

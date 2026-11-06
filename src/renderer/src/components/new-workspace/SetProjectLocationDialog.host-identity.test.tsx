@@ -33,7 +33,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/components/sidebar/CreateProjectLocationField', () => ({
+vi.mock('@/components/sidebar/project-admission/create/CreateProjectLocationField', () => ({
   CreateProjectParentBrowser: () => null
 }))
 

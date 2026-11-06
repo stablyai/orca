@@ -1,9 +1,9 @@
 // Derive recall from the visible conversation at keypress so reloads, remounts and other clients’ sends need no separate history.
 
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import { stripSentImagePromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatCommandMarker } from './native-chat-command-marker'
 import { compareMessages, orderMessages } from './native-chat-session-assembler'
 

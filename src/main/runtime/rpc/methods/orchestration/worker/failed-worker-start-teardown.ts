@@ -2,7 +2,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   discardStructuredWorkerSession,
   releaseStructuredWorkerSession
-} from '../../orchestration-structured-worker-session'
+} from '../structured-workers/orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
 
 /** Best-effort structured cleanup hides durable/live chat tabs without replacing the original error.
@@ -13,8 +13,8 @@ export async function tearDownFailedWorkerStart(args: {
   dispatchId: string
 }): Promise<void> {
   const { runtime, structuredSession } = args
-  releaseStructuredWorkerSession(args.dispatchId, runtime)
   if (structuredSession) {
+    releaseStructuredWorkerSession(structuredSession.identity.sessionId, runtime)
     await discardStructuredWorkerSession(structuredSession.identity.sessionId, runtime)
   }
 }

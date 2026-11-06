@@ -1,7 +1,5 @@
-import { StyleSheet } from 'react-native'
-import { colors, getMobileColorScheme, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, getMobileColorScheme, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
@@ -12,11 +10,6 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   keyInput: {
     width: '100%',
     height: 56,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     // Keep 22px key capture above input floor; binding seam would lower it to 16px merely to satisfy census (C7 ruling 12).
     fontSize: 22,
@@ -26,12 +19,12 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   backButton: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
   backButtonPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   backSpacer: {
     width: 30
@@ -44,31 +37,9 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     textAlign: 'center'
   },
   group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 1
-  },
-  rowHint: {
-    fontSize: 12,
-    color: colors.textMuted
   },
   shortcutForm: {
     paddingTop: spacing.sm
@@ -94,8 +65,8 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     minWidth: 48,
     height: 48,
     paddingHorizontal: spacing.md,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
+    borderRadius: radii.control,
+    backgroundColor: colors.sheetGroup,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     alignItems: 'center',
@@ -140,8 +111,8 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   chip: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
+    borderRadius: radii.pill,
+    backgroundColor: colors.sheetGroup,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -151,7 +122,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary
   },
   chipPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   chipText: {
     color: colors.textSecondary,
@@ -208,13 +179,13 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   },
   keyCell: {
     height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
+    borderRadius: radii.control,
+    backgroundColor: colors.sheetGroup,
     alignItems: 'center',
     justifyContent: 'center'
   },
   keyCellPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   keyCellSelected: {
     backgroundColor: colors.textPrimary
@@ -237,17 +208,6 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     fontWeight: '500',
     color: colors.textSecondary
   },
-  fieldInput: {
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -262,11 +222,11 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     marginTop: spacing.md,
     backgroundColor: colors.textPrimary,
     paddingVertical: spacing.md,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   saveButtonDisabled: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   saveButtonText: {
     color: colors.bgBase,

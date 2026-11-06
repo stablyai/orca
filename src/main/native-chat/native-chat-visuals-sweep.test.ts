@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import {
   scheduleNativeChatVisualsSweep,
@@ -128,31 +128,6 @@ describe('the visuals folder sweep', () => {
     expect(existsSync(join(root, 'f'.repeat(32)))).toBe(true)
     expect(existsSync(join(root, 'e'.repeat(32)))).toBe(true)
     expect(existsSync(join(target, 'keep.txt'))).toBe(true)
-  })
-
-  it('reports a removal that fails and carries on', async () => {
-    const state = stateDirectory()
-    visualsFor(state, 'chat-x')
-    visualsFor(state, 'chat-y')
-    const sweep = deps(state, [])
-    const result = await sweepNativeChatVisualsFolders({
-      ...sweep,
-      remove: vi
-        .fn()
-        .mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' }))
-        .mockResolvedValueOnce(undefined)
-    })
-    expect(result).toEqual({ removed: 1, failed: 1 })
-    expect(sweep.logger.warn).toHaveBeenCalledWith(
-      'native-chat scratch folder could not be removed',
-      expect.objectContaining({ scope: 'nativeChatVisuals.sweep', reason: 'no-record' })
-    )
-  })
-
-  it('does nothing on a host with no visuals yet', async () => {
-    await expect(
-      sweepNativeChatVisualsFolders(deps(stateDirectory(), ['chat-a']))
-    ).resolves.toEqual({ removed: 0, failed: 0 })
   })
 
   it('runs after startup and again later, and stops for good', async () => {

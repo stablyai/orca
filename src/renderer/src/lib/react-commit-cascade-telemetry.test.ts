@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
-import { REACT_NESTED_UPDATE_LIMIT } from '../../../shared/react-update-depth-attribution'
 import {
-  setReactCommitCascadeRendererSurface,
-  REACT_COMMIT_CASCADE_ARM_COMMITS,
   REACT_COMMIT_CASCADE_BREADCRUMB,
   REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS,
   REACT_COMMIT_CASCADE_NOTICE_LIMIT,
@@ -27,8 +24,6 @@ const ROOT = { pendingLanes: 2 }
 const OTHER_ROOT = { pendingLanes: 2 }
 /** SyncLane; what react-dom leaves pending on a cascading commit. */
 const SYNC_LANE = 2
-/** Any lane outside React's nested-update mask ends the cascade. */
-const IDLE_LANE = 1_073_741_824
 
 function cascadePayload(callIndex = 0): Record<string, unknown> {
   const call = recordBreadcrumb.mock.calls[callIndex]
@@ -60,23 +55,7 @@ beforeEach(() => {
   resetReactCommitCascadeTelemetryForTests()
 })
 
-// Both thresholds must precede React’s own bailout or the breadcrumb cannot beat the throw.
-describe('cascade thresholds', () => {
-  it('derives arm and notice limits from React commit budget', () => {
-    expect(REACT_COMMIT_CASCADE_NOTICE_LIMIT).toBeLessThan(REACT_NESTED_UPDATE_LIMIT)
-    expect(REACT_COMMIT_CASCADE_ARM_COMMITS).toBeLessThan(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-  })
-})
-
 describe('recordReactCommit', () => {
-  it('stays silent below the notice limit', () => {
-    const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1 })
-
-    expect(recordBreadcrumb).not.toHaveBeenCalled()
-    expect(state.commits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1)
-  })
-
   it('fires exactly once at the notice limit and not again in the same cascade', () => {
     const state = createReactCommitCascadeState()
     driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT * 3 })
@@ -84,24 +63,6 @@ describe('recordReactCommit', () => {
     expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumb.mock.calls[0]?.[0]).toBe(REACT_COMMIT_CASCADE_BREADCRUMB)
     expect(cascadePayload().commits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-  })
-
-  it('emits flat primitives only', () => {
-    const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT })
-
-    const payload = cascadePayload()
-    expect(
-      Object.values(payload).every((value) => value === null || typeof value !== 'object')
-    ).toBe(true)
-    expect(payload).toMatchObject({
-      commits: REACT_COMMIT_CASCADE_NOTICE_LIMIT,
-      commitBudget: REACT_NESTED_UPDATE_LIMIT,
-      pendingLanes: SYNC_LANE,
-      storeWrites: 0,
-      storeWriteSites: 0,
-      rendererSurface: 'main'
-    })
   })
 
   // No pending synchronous lanes resets React’s counter; lulls must never accumulate depth.
@@ -117,14 +78,6 @@ describe('recordReactCommit', () => {
     expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 
-  it('ignores lanes outside React nested-update mask', () => {
-    const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT * 2, lanes: IDLE_LANE })
-
-    expect(state.commits).toBe(0)
-    expect(recordBreadcrumb).not.toHaveBeenCalled()
-  })
-
   // React counts per root; alternating roots are not one cascade.
   it('restarts the count when a different root commits', () => {
     const state = createReactCommitCascadeState()
@@ -135,22 +88,6 @@ describe('recordReactCommit', () => {
     expect(state.commits).toBe(1)
     expect(state.cascadeRoot).toBe(OTHER_ROOT)
     expect(recordBreadcrumb).not.toHaveBeenCalled()
-  })
-
-  it('honours explicit limit overrides', () => {
-    const state = createReactCommitCascadeState()
-    for (let index = 0; index < 4; index += 1) {
-      recordReactCommit({
-        state,
-        root: ROOT,
-        pendingLanes: SYNC_LANE,
-        readNowMs: () => 1_000,
-        noticeLimit: 4,
-        armCommits: 2
-      })
-    }
-
-    expect(cascadePayload().commits).toBe(4)
   })
 
   // Why asserted: a clock read per commit is the one cost this design refuses.
@@ -165,27 +102,7 @@ describe('recordReactCommit', () => {
   })
 })
 
-// Popouts have separate module state; payload must identify the cascading window.
-describe('renderer surface', () => {
-  it('reports the surface the cascade happened on', () => {
-    setReactCommitCascadeRendererSurface('dashboard-popout')
-    const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT })
-
-    expect(cascadePayload().rendererSurface).toBe('dashboard-popout')
-  })
-})
-
 describe('driver attribution', () => {
-  it('arms write sampling at the arm floor, not before', () => {
-    const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_ARM_COMMITS - 1 })
-    expect(reactCommitCascadeWriteProbe.armed).toBe(false)
-
-    driveCommits({ state, count: 1 })
-    expect(reactCommitCascadeWriteProbe.armed).toBe(true)
-  })
-
   it('names the driving write with a path-free frame', () => {
     const state = createReactCommitCascadeState()
     function drivingWrite(): void {

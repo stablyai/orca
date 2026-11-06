@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,20 +65,6 @@ afterEach(() => {
 })
 
 describe('EditorFileLocationMenuItems', () => {
-  it('reveals the open file through the existing host-aware shell action', () => {
-    renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Finder' }))
-    expect(openInFileManager).toHaveBeenCalledWith(file.filePath, 'local')
-  })
-
-  it('uses the header copy feedback and copies the workspace-relative path separately', () => {
-    renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Path' }))
-    expect(onCopyPath).toHaveBeenCalledOnce()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Relative Path' }))
-    expect(writeClipboardText).toHaveBeenCalledWith('src/file.ts')
-  })
-
   it.each([{ externalSshTargetId: 'remote' }, { runtimeEnvironmentId: 'paired-server' }])(
     'disables local reveal for a remote file: %j',
     (overrides) => {

@@ -217,7 +217,7 @@ export function createRepoAddActions(
             revealOnboardingFolderWithAgentLaunch
           } = await import('@/lib/onboarding-folder-agent-launch')
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
-          const launch = resolveDismissedOnboardingFolderAgentLaunch({
+          const launch = await resolveDismissedOnboardingFolderAgentLaunch({
             worktreeId: folderWorktree.id,
             store: get(),
             onboarding: onboardingBeforeAdd,

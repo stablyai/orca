@@ -1,10 +1,13 @@
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import { useMobileAsyncQuestionHides } from './native-chat/input/use-mobile-native-chat-prompt-dismiss'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
+import type { MobileNativeChatController } from './native-chat/mobile-native-chat-controller-contract'
 import type { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatAskDismiss } from './native-chat/input/use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatPromptCards } from './native-chat/input/use-mobile-native-chat-prompt-cards'
 import { useMobileNativeChatPrompts } from './native-chat/input/use-mobile-native-chat-prompts'
-import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import type { useMobileNativeChatSession } from './native-chat/use-mobile-native-chat-session'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 
@@ -17,6 +20,7 @@ export function useMobileNativeChatPromptController({
   scopeKey,
   sessionId,
   streamIdentity,
+  asyncSourceScope,
   visible,
   terminal,
   onSendResolved
@@ -31,6 +35,7 @@ export function useMobileNativeChatPromptController({
   scopeKey: string | null
   sessionId: string | null
   streamIdentity: string
+  asyncSourceScope: string
   visible: boolean
   /** Terminal-bridge writes; a structured chat answers through its own session. */
   terminal: Pick<
@@ -49,36 +54,55 @@ export function useMobileNativeChatPromptController({
   | 'collapseNativeChatPrompt'
   | 'nativeChatCollapsedPrompt'
   | 'nativeChatAsk'
+  | 'nativeChatAskPending'
+  | 'nativeChatAskSendSource'
   | 'nativeChatAskKey'
   | 'dismissNativeChatAsk'
   | 'collapseNativeChatAsk'
   | 'handleNativeChatAnswerAsk'
   | 'handleNativeChatCancelAsk'
 > & { hasPromptCard: boolean } {
+  const asyncHides = useMobileAsyncQuestionHides(scopeKey, asyncSourceScope, streamIdentity)
   const {
     permission: legacyNativeChatPermission,
     waitStartedAt: nativeChatPromptStartedAt,
     ask: nativeChatAskPrompt,
-    structuredAnswer
+    structuredAnswer,
+    answerPending
   } = useMobileNativeChatPrompts({
     enabled,
     structured,
     status,
     messages: session.messages,
-    transcriptLoading: session.transcriptLoading
+    transcriptLoading: session.transcriptLoading,
+    asyncSourceScope,
+    hiddenAsyncIds: asyncHides.hidden
   })
   // A never-read transcript cannot prove that a dismissed prompt cleared.
   const nativeChatTranscriptSettled =
     session.status === 'ready' || (session.status === 'error' && session.messages.length > 0)
   const askDismissal = useMobileNativeChatAskDismiss({
     ask: nativeChatAskPrompt,
+    dismissAsync: asyncHides.capture(nativeChatAskPrompt?.occurrenceIds ?? []),
     startedAt: nativeChatPromptStartedAt,
     scopeKey,
-    sessionKey: sessionId,
+    sessionKey: nativeChatAskPrompt?.replyAsMessage ? streamIdentity : sessionId,
     observing: visible && (nativeChatAskPrompt != null || nativeChatTranscriptSettled)
   })
   const answerAsk = useNativeChatAcceptedAction(
-    structuredAnswer ?? terminal.answerAsk,
+    async (
+      prompt: AskPrompt,
+      selections: AskAnswerSelection[],
+      onCreated?: (id: string) => void
+    ) => {
+      const hide = asyncHides.capture(prompt.occurrenceIds ?? [])
+      const accepted = await (structuredAnswer ?? terminal.answerAsk)(prompt, selections, onCreated)
+      // Only terminal writes acknowledge delivery; structured admission leaves retirement to rows.
+      if (accepted && prompt.replyAsMessage && !structuredAnswer) {
+        hide()
+      }
+      return accepted
+    },
     onSendResolved
   )
   const cancelAsk = useNativeChatAcceptedAction(terminal.cancelAsk, onSendResolved)
@@ -99,6 +123,10 @@ export function useMobileNativeChatPromptController({
     hasPromptCard: (legacyNativeChatPermission ?? nativeChatAskPrompt) != null,
     ...promptCards,
     nativeChatAsk: askDismissal.showAsk || askDismissal.collapsedAsk ? nativeChatAskPrompt : null,
+    nativeChatAskPending: answerPending,
+    nativeChatAskSendSource: structured
+      ? { messages: session.messages, submissions: structured.submissions }
+      : undefined,
     nativeChatAskKey: askDismissal.askKey,
     dismissNativeChatAsk: askDismissal.dismissAsk,
     collapseNativeChatAsk: askDismissal.collapseAsk,

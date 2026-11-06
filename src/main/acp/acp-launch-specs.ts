@@ -1,4 +1,8 @@
-import type { AcpHistoryTurnIdentity } from './acp-history-replay'
+import {
+  resolveAntigravityChatAuthConfig,
+  type AntigravityChatAuthConfig
+} from '../../shared/antigravity-chat-auth-config'
+import type { AcpHistoryTurnIdentity } from './history/acp-history-replay'
 import { join } from 'node:path'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
@@ -8,9 +12,9 @@ import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
+import type { AgentChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
 import { compareAppVersions } from '../../shared/app-version'
 import type { ManagedRuntime } from '../node-runtime/managed-runtime-release'
@@ -19,7 +23,7 @@ import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
 } from '../opencode/opencode-model-catalog-listing'
-import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
+import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
@@ -92,23 +96,54 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
   )
 }
 
+export type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>
+
+/** Whether `acpModelListingForRelease` needs the installed version. */
+export function acpListingDependsOnRelease(discovery: AcpModelDiscovery): boolean {
+  return discovery.kind === 'command' && discovery.supportsVersion !== undefined
+}
+
+/** How the installed release lists; null when only its chats can. */
+export function acpModelListingForRelease(
+  discovery: AcpModelDiscovery,
+  version: string | null
+): AcpModelListing | null {
+  if (discovery.kind === 'unavailable') {
+    return null
+  }
+  if (discovery.kind !== 'command' || !discovery.supportsVersion) {
+    return discovery
+  }
+  if (version !== null && discovery.supportsVersion(version)) {
+    return discovery
+  }
+  return discovery.otherReleasesListInSession
+    ? { kind: 'session', listingNamesConfiguredModel: discovery.listingNamesConfiguredModel }
+    : null
+}
+
 export type AcpLaunchSpec = {
   agent: TuiAgent
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
-  args(input: { fullAccess: boolean; pluginDir: string | null }): string[]
+  /** `model` is the chat's saved model, passed only to specs that launch with it. */
+  args(input: { fullAccess: boolean; pluginDir: string | null; model?: string }): string[]
+  /** The ACP model option cannot name every selection the CLI resolves, so the launch line carries it. */
+  launchesWithModel?: true
   /** Applied after the account and user environment. */
   env: Readonly<Record<string, string>>
   /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
   scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
   dialect: AcpDialect
   loginCommand: readonly string[]
-  /** Selects an advertised method using the execution host's environment; undefined leaves it signed out. */
+  /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {
     advertised: readonly string[]
+    antigravityChatAuth?: AntigravityChatAuthConfig
     env: Readonly<Record<string, string>>
   }): string | undefined
+  authMethodUnavailableMessage?: string
   /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
   account: AcpAccountBinding
@@ -124,6 +159,8 @@ export type AcpLaunchSpec = {
   }
   /** Enables /compact as a prompt command. */
   compaction?: true
+  /** The agent's `/compact` honours text after the command; others would silently drop it. */
+  compactionInstructions?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */
   assertCopyLaunchArgs?: (args: readonly string[], prefixArgs?: readonly string[]) => void
   /** How the agent names each turn its reopen replays, when a reopened chat catches up on the
@@ -185,7 +222,7 @@ function openCodeLaunchSpec(
     ...row,
     // No bypass flag; full access approves permission requests individually.
     args: () => ['acp'],
-    // Disable unsupported question forms: 1.x waits forever; 2.x drops them.
+    // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,
@@ -229,8 +266,16 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'omp',
   command: 'omp',
   // Full access approves permission requests individually.
-  args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
-  env: {},
+  args: ({ pluginDir, model }) => [
+    'acp',
+    ...(pluginDir ? ['--plugin-dir', pluginDir] : []),
+    ...(model ? ['--model', model] : [])
+  ],
+  // ACP takes listed provider/id values only; the CLI also resolves roles, fallbacks and :level.
+  launchesWithModel: true,
+  // Answering forms marks the session as having a UI, so `pty: true` bash would open a TUI
+  // overlay ACP cannot draw and fail; OMP's own headless modes set this too.
+  env: { PI_NO_PTY: '1' },
   dialect: OMP_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
@@ -247,6 +292,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   visualsSkill: loadOmpVisualsSkill,
   compaction: true,
+  compactionInstructions: true,
   transcriptImport: OMP_TRANSCRIPT_IMPORT,
   sessionHistory: OMP_SESSION_HISTORY
 }
@@ -269,8 +315,10 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('antigravity')?.loginCommand ?? [],
-  authMethod: ({ advertised }) =>
-    advertised.includes('oauth-personal') ? 'oauth-personal' : undefined,
+  authMethod: ({ antigravityChatAuth }) =>
+    resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
+  authMethodUnavailableMessage:
+    'Antigravity does not support the selected account type. Update Antigravity or change the account type in Settings.',
   signIn: {
     read: readAntigravitySignInLine,
     answered: answerAntigravityChatAuth

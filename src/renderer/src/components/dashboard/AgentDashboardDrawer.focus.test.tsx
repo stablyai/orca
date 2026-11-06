@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   openPopout: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({

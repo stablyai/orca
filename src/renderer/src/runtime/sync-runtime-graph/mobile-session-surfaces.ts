@@ -1,13 +1,12 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import type { AppState } from '@/store/types'
-import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isNativeChatTabWideFallbackSafe,
-  nativeChatLaunchAgentForLeaf,
   resolveNativeChatActiveLayoutLeafId
 } from '../../components/native-chat/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
@@ -126,5 +125,3 @@ export function isUnifiedTabActiveInActiveGroup(
     (group) => group.id === inputs.activeGroupId && group.activeTabId === unifiedTabId
   )
 }
-
-export { isClaudeManagementTitle, isTerminalLeafId, makePaneKey, nativeChatLaunchAgentForLeaf }

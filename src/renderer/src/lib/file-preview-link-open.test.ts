@@ -11,7 +11,7 @@ import {
   createBrowserLinkTestStore,
   WORKSPACE,
   type BrowserLinkTestStore
-} from './browser-link-open.test-fixture'
+} from './browser/navigation/browser-link-open.test-fixture'
 import { openFileInBrowserTab } from './file-preview'
 import { captureLinkOpenIntent } from './link-open-intent'
 import {
@@ -19,8 +19,8 @@ import {
   ensureDocPreviewGrant,
   releaseDocPreviewGrant
 } from './doc-preview-grants'
-import type { BrowserOpenOutcome } from './browser-link-destination'
-import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/terminal-file-link-browser-open'
+import type { BrowserOpenOutcome } from './browser/navigation/browser-link-destination'
+import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/links/files/terminal-file-link-browser-open'
 import {
   detectedListingFixture,
   terminalTabFixture
@@ -319,10 +319,8 @@ it('a folder workspace uses its own layout and activates its browser without Git
       result: expect.objectContaining({ worktreeId: folder })
     })
   )
-  expect(['left', 'right']).not.toContain(store.getState().activeGroupIdByWorktree[folder])
-  expect(store.getState().layoutByWorktree[folder]).toMatchObject({
-    first: { type: 'split', first: { groupId: 'left' } }
-  })
+  expect(store.getState().activeGroupIdByWorktree[folder]).toBe('right')
+  expect(store.getState().groupsByWorktree[folder]).toHaveLength(2)
 })
 
 it.each([false, true])(

@@ -1,6 +1,9 @@
 import { compareAppVersions } from '../../../shared/app-version'
 import { pluginUpdateGrowsAccess } from '../../../shared/plugins/approval/plugin-update-access-growth'
-import type { PluginAutoUpdateState } from '../../../shared/plugins/catalog/plugin-update-policy'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateHold
+} from '../../../shared/plugins/catalog/plugin-update-policy'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
@@ -52,6 +55,7 @@ export class PluginAutoUpdater {
     now?: () => number
   }
   private state: PluginAutoUpdateState = { updated: {}, needsReview: {} }
+  private held: Record<string, PluginUpdateHold> = {}
   private running: Promise<void> | null = null
   private timer: ReturnType<typeof setInterval> | null = null
 
@@ -61,6 +65,11 @@ export class PluginAutoUpdater {
 
   getState(): PluginAutoUpdateState {
     return this.state
+  }
+
+  /** Updates the last pass left uninstalled for review, and why; installed ones are not here. */
+  getHeldForReview(): Readonly<Record<string, PluginUpdateHold>> {
+    return this.held
   }
 
   /** One pass; concurrent callers share it. */
@@ -115,6 +124,7 @@ export class PluginAutoUpdater {
       }))
     const updatedNow: PluginAutoUpdateState['updated'] = {}
     const needsReview: PluginAutoUpdateState['needsReview'] = {}
+    const held: Record<string, PluginUpdateHold> = {}
     for (const plugin of this.options.pluginService.getDiscovered()) {
       if (isInvalidDiscoveredPlugin(plugin) || !this.options.isEnabled()) {
         continue
@@ -127,6 +137,9 @@ export class PluginAutoUpdater {
           console.info(`[plugins] auto-updated ${plugin.pluginKey} to ${verdict.version}`)
         } else if (verdict?.kind === 'needs-review') {
           needsReview[plugin.pluginKey] = verdict.version
+          if (verdict.held) {
+            held[plugin.pluginKey] = { version: verdict.version, reason: verdict.held }
+          }
           console.info(`[plugins] update ${verdict.version} of ${plugin.pluginKey} needs review`)
         }
       } catch (error) {
@@ -138,6 +151,7 @@ export class PluginAutoUpdater {
       delete updated[key]
     }
     this.state = { updated, needsReview }
+    this.held = held
     this.options.onChanged(this.state, updatedNow)
   }
 
@@ -146,7 +160,11 @@ export class PluginAutoUpdater {
     now: number,
     refreshKillList: () => Promise<void>,
     readInstallLock: () => Promise<PluginLockfile>
-  ): Promise<{ kind: 'updated' | 'needs-review'; version: string } | null> {
+  ): Promise<{
+    kind: 'updated' | 'needs-review'
+    version: string
+    held?: PluginUpdateHold['reason']
+  } | null> {
     const { pluginService, installer } = this.options
     // Why approved only: a disabled or never-approved plugin is the user's to update.
     if (!readApprovedPredecessor(pluginService.options, plugin)) {
@@ -186,11 +204,11 @@ export class PluginAutoUpdater {
     ) {
       return null
     }
-    if (
-      preview.repositoryMoved ||
-      pluginUpdateGrowsAccess(await readPreviewAccessGrowth(plugin, preview))
-    ) {
-      return { kind: 'needs-review', version: preview.manifest.version }
+    if (preview.repositoryMoved) {
+      return { kind: 'needs-review', version: preview.manifest.version, held: 'repository' }
+    }
+    if (pluginUpdateGrowsAccess(await readPreviewAccessGrowth(plugin, preview))) {
+      return { kind: 'needs-review', version: preview.manifest.version, held: 'access' }
     }
     // Why fail closed: without a current kill list a takedown could not stop this install.
     await refreshKillList()

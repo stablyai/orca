@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const storage = vi.hoisted(() => new Map<string, string>())
 const asyncStorageMock = vi.hoisted(() => ({
@@ -32,6 +32,10 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStor
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-secure-store', () => secureStoreMock)
+vi.mock('./host-path-memory', () => ({
+  lastGoodPathWasDirectHere: async () => true,
+  recordHostGoodPath: async () => {}
+}))
 vi.mock('./rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./rpc-client')>()),
   connect: (...args: unknown[]) => connectMock(...args)

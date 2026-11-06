@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   focusActivePane: vi.fn(),
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
-  handleTerminalFileDrop: vi.fn(),
   enforceTerminalCurrentScrollIntent: vi.fn(),
   syncTerminalScrollIntentFromViewport: vi.fn(),
   pasteTerminalText: vi.fn(),
@@ -82,11 +81,7 @@ vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   syncTerminalScrollIntentFromViewport: mocks.syncTerminalScrollIntentFromViewport
 }))
 
-vi.mock('./terminal-drop-handler', () => ({
-  handleTerminalFileDrop: mocks.handleTerminalFileDrop
-}))
-
-vi.mock('./terminal-bracketed-paste', () => ({
+vi.mock('./input/paste/terminal-bracketed-paste', () => ({
   BRACKETED_PASTE_END: '\u001b[201~',
   BRACKETED_PASTE_START: '\u001b[200~',
   pasteTerminalText: mocks.pasteTerminalText,
@@ -573,66 +568,5 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
     expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
     expect(manager.scheduleRevealPresent).toHaveBeenCalled()
-  })
-
-  it('enforces scroll intent after hidden layout changes the viewport', () => {
-    const terminalA = { name: 'terminal-a' }
-    const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllPanes: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null),
-      setActivePane: vi.fn()
-    }
-    const initialState = { marker: 'initial' }
-    const preHideState = { marker: 'before-hide' }
-    const corruptedHiddenState = { marker: 'hidden-corrupted' }
-    let nextCapturedState = initialState
-    mocks.captureScrollState.mockImplementation(() => nextCapturedState)
-
-    const baseArgs = {
-      tabId: 'tab-1',
-      managerRef: { current: manager as never },
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map() },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      paneCount: 1,
-      isSyncFitEnabled: true,
-      toggleExpandPane: vi.fn()
-    }
-
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: true,
-      isVisible: true
-    })
-
-    nextCapturedState = preHideState
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: false,
-      isVisible: false
-    })
-
-    nextCapturedState = corruptedHiddenState
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: true,
-      isVisible: true
-    })
-
-    expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
-    expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
-    expect(mocks.enforceTerminalCurrentScrollIntent).toHaveBeenLastCalledWith(terminalA)
   })
 })

@@ -1,9 +1,9 @@
-import * as selectionOperations from '../../../src/shared/structured-agent-session-selection-operations'
+import * as selectionOperations from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import { createElement, StrictMode, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { OptionsParams } from '../../../src/shared/rpc-contract/structured-agent-session-params'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
@@ -35,7 +35,7 @@ it('keeps actual phone operations and correlated acceptance through a stable-cli
   const stale = deferred<AgentSessionOptionsResult>()
   let oldReads = 0
   const physical = optionsClient(() =>
-    ++oldReads === 1 ? Promise.resolve(OPTIONS) : stale.promise
+    ++oldReads === 1 ? Promise.resolve({ ...OPTIONS, acceptsImages: true }) : stale.promise
   )
   const currentReads: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
   const next = optionsClient(() => {
@@ -77,8 +77,11 @@ it('keeps actual phone operations and correlated acceptance through a stable-cli
     await client.migrateTo(next.client, 'relay')
   })
   await settle()
-  await act(async () => stale.resolve({ ...OPTIONS, conversationCommands: ['compact'] }))
+  await act(async () =>
+    stale.resolve({ ...OPTIONS, acceptsImages: false, conversationCommands: ['compact'] })
+  )
   expect(view.current().conversationCommands).toEqual([])
+  expect(view.current().acceptsImages).toBe(true)
   expect(currentValueOf(view.current().optionSnapshot, 'model')).toBe('gpt-fast')
   expect(view.current().sendSelection()).toMatchObject({ selection: { model: 'gpt-fast' } })
   await act(async () =>
@@ -215,6 +218,33 @@ it('reads the new physical path after an idle connected-to-connected migration w
   expect(next.methods('agentSession.setOption')).toHaveLength(0)
   await view.unmount()
   client.close()
+})
+
+it('coalesces a burst of turns into one running and one trailing options read', async () => {
+  const reads: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
+  const rpc = optionsClient(() => {
+    const read = deferred<AgentSessionOptionsResult>()
+    reads.push(read)
+    return read.promise
+  })
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const view = await mountOptions({ ...BASE, client: rpc.client, mutate })
+  expect(reads).toHaveLength(1)
+  await act(async () => reads[0].resolve(OPTIONS))
+  await settle()
+  for (let turn = 1; turn <= 10; turn++) {
+    await view.rerender({ turnId: `turn-${turn}` })
+  }
+  expect(reads).toHaveLength(2)
+  await act(async () => reads[1].resolve({ ...OPTIONS, conversationCommands: ['clear'] }))
+  await settle()
+  expect(view.current().conversationCommands).toEqual([])
+  expect(reads).toHaveLength(3)
+  await act(async () => reads[2].resolve({ ...OPTIONS, conversationCommands: ['compact'] }))
+  await settle()
+  expect(reads).toHaveLength(3)
+  expect(view.current().conversationCommands).toEqual(['compact'])
+  await view.unmount()
 })
 
 it.each(['current', 'failed-then-wake', 'true-end'] as const)(
@@ -358,67 +388,44 @@ it.each([false, true])(
   }
 )
 
-it('bounds real phone permission projection work with 10 and 100 retained operations', async () => {
-  const measurements: number[] = []
-  for (const count of [10, 100]) {
-    const factory = vi.spyOn(selectionOperations, 'createStructuredSessionSelectionController')
-    const blocked = deferred<AgentSessionOptionsResult>()
-    let reads = 0
-    const rpc = optionsClient(() =>
-      ++reads === 1
-        ? Promise.resolve({ ...OPTIONS, current: { ...OPTIONS.current, permissionMode: 'ask' } })
-        : blocked.promise
-    )
-    const replies = Array.from({ length: count }, () => deferred<ReturnType<typeof accepted>>())
-    const { calls, mutate } = recordingMutate((index) => replies[index].promise)
-    const view = await mountOptions({ ...BASE, client: rpc.client, mutate })
-    const result = factory.mock.results.at(-1)!
-    if (result.type !== 'return') {
-      throw new Error('real hook did not construct its owner')
-    }
-    const controller = result.value
-    const issue = vi.spyOn(controller, 'issue')
-    let visits = 0
-    for (let index = 0; index < count; index++) {
-      const before = visits
-      act(() => {
-        void view.current().setStructuredOption('permissionMode', index % 2 ? 'ask' : 'full-access')
-      })
-      expect(visits - before).toBeLessThanOrEqual(40)
-      const issued = issue.mock.results.at(-1)!
-      if (issued.type !== 'return') {
-        throw new Error('permission not admitted')
-      }
-      const operation = issued.value
-      for (const key of ['identity', 'key', 'transmitted', 'outcome'] as const) {
-        let value = operation[key]
-        Object.defineProperty(operation, key, {
-          configurable: true,
-          get() {
-            visits++
-            return value
-          },
-          set(next) {
-            value = next
-          }
-        })
-      }
-    }
-    const issueVisits = visits
-    expect(issueVisits).toBeLessThanOrEqual(40 * count)
-    visits = 0
-    for (let index = count - 1; index >= 0; index--) {
-      const before = visits
-      await act(async () => replies[index].resolve(acceptedWrite(calls[index])))
-      expect(view.current().pendingOptionId).toBeNull()
-      expect(visits - before).toBeLessThanOrEqual(40)
-    }
-    expect(calls).toHaveLength(count)
-    expect(visits).toBeLessThanOrEqual(40 * count)
-    measurements.push(issueVisits + visits)
-    await view.unmount()
-    issue.mockRestore()
-    factory.mockRestore()
+it('drops a desktop-created draft observation on phone session switches and ignores retired reads', async () => {
+  const stale = deferred<AgentSessionOptionsResult>()
+  const unknown: AgentSessionOptionsResult = {
+    models: [],
+    modelsKnown: false,
+    sessionNeverStarted: true,
+    current: { defaulted: [], acceptedInputSources: {} }
   }
-  expect(measurements[1]).toBeLessThanOrEqual(measurements[0] * 11)
+  let reads = 0
+  const physical = optionsClient(
+    () =>
+      ++reads === 1
+        ? Promise.resolve(unknown)
+        : reads === 2
+          ? stale.promise
+          : Promise.resolve({ ...unknown, sessionNeverStarted: false }),
+    async () => ({
+      origin: 'probe',
+      models: OPTIONS.models,
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true
+    })
+  )
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const view = await mountOptions({
+    ...BASE,
+    client: physical.client,
+    mutate,
+    coherentCatalog: true,
+    sendSelection: true
+  })
+  expect(currentValueOf(view.current().optionSnapshot, 'model')).toBe('gpt-live')
+  expect(currentValueOf(view.current().optionSnapshot, 'effort')).toBe('medium')
+  expect(view.current().sendSelection()).toMatchObject({ selection: {} })
+  await view.rerender({ optionStamp: 'pending' })
+  await view.rerender({ sessionId: 'started-other-chat' })
+  await act(async () => stale.resolve(unknown))
+  await settle()
+  expect(currentValueOf(view.current().optionSnapshot, 'model')).toBeUndefined()
+  await view.unmount()
 })

@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_FAILURE_COPY as COPY,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 type AvailabilityCopyId = Extract<
   AgentSessionFailureCopyId,
@@ -20,6 +20,8 @@ type AvailabilityCopyId = Extract<
   | 'cliMissingInWslDistro'
   | 'cliTooOld'
   | 'modelUnavailable'
+  | 'modelUnavailableUpdate'
+  | 'modelNotSelected'
 >
 
 export const AVAILABILITY_PIECES: Record<
@@ -80,6 +82,18 @@ export const AVAILABILITY_PIECES: Record<
     translate(
       'components.native-chat.failureWords.modelUnavailable',
       COPY.modelUnavailable,
+      values
+    ),
+  modelNotSelected: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelNotSelected',
+      COPY.modelNotSelected,
+      values
+    ),
+  modelUnavailableUpdate: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailableUpdate',
+      COPY.modelUnavailableUpdate,
       values
     ),
   cliMissing: (values) =>

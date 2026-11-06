@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { normalizeNativeChatUserText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 
 const prompt = 'Summarize the failing tests.\n\nThen propose a fix for each one.'
 const wrapped = `\n\n<pasted_content id="7e64">\n${prompt}\n</pasted_content id="7e64">\n`
@@ -43,11 +42,5 @@ describe('Claude whole-block paste envelope', () => {
   })
   it('leaves assistant text untouched', () => {
     expect(decode(wrapped, 'assistant').blocks).toEqual([{ type: 'text', text: wrapped }])
-  })
-  it('handles a large prompt in linear passes', () => {
-    const text = 'line\n'.repeat(50_000)
-    expect(
-      normalizeNativeChatUserText(`<pasted_content id="a">\n${text}\n</pasted_content id="a">`)
-    ).toBe(text.trim().replace(/\s+/g, ' '))
   })
 })

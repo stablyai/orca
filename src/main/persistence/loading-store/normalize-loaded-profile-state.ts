@@ -1,12 +1,14 @@
 import { normalizePersistedMobileClientTabSelections } from '../../runtime/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
-import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
-import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeFolderWorkspaceDiffComments } from '../../workspaces/catalog/folder-workspace-diff-comments'
+import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../shared/orcad-migration/orcad-migration-evicted-receipts'
 import { normalizeOrcadMigrationImportReceipts } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
+import { dropInferredParentsOverFolderParents } from './folder-parent-lineage-persistence'
+import { normalizeCrossStoreLineageByChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
@@ -41,6 +43,11 @@ export function normalizeLoadedProfileState(
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
   // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
+  const workspaceLineageByChildKey = normalizeWorkspaceLineageByChildKey(
+    parsed.workspaceLineageByChildKey
+  )
+  const worktreeLineageById = { ...parsed.worktreeLineageById }
+  dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
 
   return {
     ...defaults,
@@ -60,12 +67,13 @@ export function normalizeLoadedProfileState(
     ...(parsed.worktreeMetaByIdentity === undefined
       ? {}
       : { worktreeMetaByIdentity: hydrateWorktreeMetaAliasProjection(parsed) }),
-    worktreeLineageById: parsed.worktreeLineageById ?? {},
+    worktreeLineageById,
     mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
       parsed.mobileClientTabSelectionsByDeviceId
     ),
-    workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
-      parsed.workspaceLineageByChildKey
+    workspaceLineageByChildKey,
+    crossStoreLineageByChildKey: normalizeCrossStoreLineageByChildKey(
+      parsed.crossStoreLineageByChildKey
     ),
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
     ui: normalizeLoadedUiState(

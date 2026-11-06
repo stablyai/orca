@@ -1,4 +1,4 @@
-import type { PublicKnownRuntimeEnvironment } from './runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from './remote-runtime/host-catalog/runtime-environments'
 import type { OrcadTerminalCensus } from './orcad-terminal-census'
 import type { OrcadMigrationBlocker } from './orcad-migration/orcad-migration-preflight'
 import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration/orcad-migration-source-cutover'

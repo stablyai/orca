@@ -3,23 +3,26 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { isHibernationDoneRecord } from '../../../../shared/hibernation-done-record'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type * as dependencies from '../../orca-runtime-create-terminal-dependencies'
+import type { PaneStartArgsOf } from './runtime-pane-admission'
+import type { TerminalCreateOptions } from './terminal-create-options'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import {
   PaneResumeOutcomes,
   PaneStartStatuses,
   paneStartFailure,
   type PaneFactSources
 } from '../../pane-start-statuses'
-import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../layout/runtime-layout-apply'
 import {
   runLayoutPaneStarts,
   startsPanes,
   stopReplacedTerminals
 } from '../recovery/layout-command-pane-starts'
-import { allocateTerminalPaneIdentity } from '../../runtime-terminal-pane-identity'
+import { allocateTerminalPaneIdentity } from '../identity/runtime-terminal-pane-identity'
 import { OrcaRuntimeWithCreateTerminal } from './terminal-create'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
 import { PaneOwnerContentionError } from '../../../ipc/pty/pane/pane-spawn-operation'
+import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 
 export type FailedStartPane = { tabId: string; leafId: string }
 
@@ -115,7 +118,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     )
   }
 
-  protected paneStartStatusArgs: dependencies.PaneStartArgsOf = (opts) => {
+  protected paneStartStatusArgs: PaneStartArgsOf = (opts) => {
     const sink = this.paneStartStatuses
     return sink
       ? {
@@ -132,9 +135,9 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
   // Not async: with the switch off this adds no await to every create.
   override createTerminal(
     worktreeSelector?: string,
-    opts: dependencies.TerminalCreateOptions = {},
-    created?: dependencies.Worktree
-  ): Promise<dependencies.RuntimeTerminalCreate> {
+    opts: TerminalCreateOptions = {},
+    ...evidence: TerminalWorkspaceCreationEvidence
+  ): Promise<RuntimeTerminalCreate> {
     // Keep main-owned failed panes visible regardless of which start step failed.
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
@@ -146,19 +149,19 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
         (pane) =>
           opts.startFailure
             ? Promise.reject(opts.startFailure)
-            : super.createTerminal(worktreeSelector, { ...opts, ...pane }, created),
-        (pane, error) => this.keepFailedStartPane(worktreeSelector, created, pane, opts, error)
+            : super.createTerminal(worktreeSelector, { ...opts, ...pane }, ...evidence),
+        (pane, error) => this.keepFailedStartPane(worktreeSelector, pane, opts, error, ...evidence)
       )
     }
-    return super.createTerminal(worktreeSelector, opts, created)
+    return super.createTerminal(worktreeSelector, opts, ...evidence)
   }
 
   /** Start the window's saved first pane under its ids; host_not_owned preserves window starts when the switch is off or main does not own the tab. */
   startWindowTabTerminal(
     worktreeId: string,
     pane: { tabId: string; leafId: string },
-    opts: Omit<dependencies.TerminalCreateOptions, 'tabId' | 'leafId' | 'presentation'>
-  ): Promise<dependencies.RuntimeTerminalCreate> {
+    opts: Omit<TerminalCreateOptions, 'tabId' | 'leafId' | 'presentation'>
+  ): Promise<RuntimeTerminalCreate> {
     if (
       !ORCA_LAYOUT_OWNER_IS_MAIN ||
       !mainOwnsTabLayout(this.getWorkspaceSessionHostIdsForTab(worktreeId, pane.tabId))
@@ -185,19 +188,23 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
   /** Through main's create rules, so a pane the user closed meanwhile is refused, not restored. */
   private async keepFailedStartPane(
     worktreeSelector: string,
-    created: dependencies.Worktree | undefined,
     pane: FailedStartPane,
-    { title, wslUserAct }: dependencies.TerminalCreateOptions,
-    error: unknown
+    { title, wslUserAct }: TerminalCreateOptions,
+    error: unknown,
+    ...evidence: TerminalWorkspaceCreationEvidence
   ): Promise<void> {
     if (error instanceof PaneOwnerContentionError) {
       // Another owner's terminal runs in the pane; the window attaches to it.
       return
     }
-    // The failed start's own act: a user's start may wake the distro; background stays held.
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created, {
-      wslUserAct: wslUserAct === true
-    })
+    // The failed start retains both its captured owner and the same user's act.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      worktreeSelector,
+      evidence[0],
+      { wslUserAct: wslUserAct === true },
+      evidence[1],
+      evidence[2]
+    )
     const create = { type: 'createTerminalTab' as const, workspace: workspace.id, ...pane }
     const reply = await this.applyLayoutCommand(title ? { ...create, title } : create)
     // `tab_exists`: the start wrote this pane before failing and kept it.

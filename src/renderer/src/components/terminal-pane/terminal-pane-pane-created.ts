@@ -1,28 +1,26 @@
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
+import type { ManagedPane, PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createOsc52OscHandler } from '../../../../shared/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
   showOsc52ClipboardCopyRetryToast,
   showOsc52ClipboardFailedToast
-} from './osc52-clipboard-toast'
-import { parseOsc7 } from './parse-osc7'
+} from './clipboard/osc52-clipboard-toast'
+import { parseOsc7 } from './emulation/parse-osc7'
 import { mergePaneCwdFromOsc7, settlePaneCwdDeferredSpawn } from './resolve-split-cwd'
 import {
-  appendDeferredSplitPaneInput,
+  deferredSplitPaneConnectionInput,
   beginDeferredSplitPaneHandoff,
   claimDeferredSplitPaneHandoff,
   clearDeferredSplitPaneHandoff,
   discardDeferredSplitPaneHandoffForKey,
   type DeferredSplitPaneHandoffHandle
 } from './deferred-split-pane-handoff'
-import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
-import { guardParserHandler } from './terminal-parser-handler-guard'
+import { guardParserHandler } from './emulation/terminal-parser-handler-guard'
 import { isPaneReplaying } from './replay-guard'
-import { connectPanePty } from './pty-connection'
+import { connectPanePty } from './pty-connection/connect-pane-pty'
 import { completePaneSpawnPlacement } from './terminal-pane-spawn-placement'
 import {
   createQueuedStartupConsumer,
@@ -30,8 +28,8 @@ import {
   clearQueuedInitialCwdAfterFirstPane
 } from './terminal-pane-lifecycle-primitives'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
-import { installTerminalPaneInputHandling } from './terminal-pane-pane-input'
-import { installTerminalPaneLinkHandling } from './terminal-pane-pane-links'
+import { installTerminalPaneInputHandling } from './input/terminal-pane-pane-input'
+import { installTerminalPaneLinkHandling } from './links/terminal-pane-pane-links'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
 export type PaneCreatedSetupContext = TerminalPaneManagerOptionsContext
@@ -198,13 +196,10 @@ export function createTerminalPaneCreatedHandler(
           }
         : {}),
       ...(handoffForInput
-        ? {
-            onPreconnectInput: (input: PtyPreconnectInputEntry) =>
-              appendDeferredSplitPaneInput(handoffForInput, input)
-          }
-        : {}),
-      ...(claimedDeferredSplitHandoff?.preconnectInput.length
-        ? { preconnectInput: claimedDeferredSplitHandoff.preconnectInput }
+        ? deferredSplitPaneConnectionInput(
+            handoffForInput,
+            claimedDeferredSplitHandoff?.preconnectInput
+          )
         : {}),
       ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
       ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),

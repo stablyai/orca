@@ -5,11 +5,11 @@ import {
   inheritedObjectStore,
   pathApiForGitPath,
   type GitObjectsDirectory
-} from '../../shared/git-object-quarantine'
+} from '../../shared/git/objects/git-object-quarantine'
 import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { parseWslPath } from '../wsl'
-import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
-import { readRepoCommonDirFromGit } from './worktree-list-reader'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { usesHostGitForWslLinkedWorktree } from './command-runner/wsl-linked-worktree-git-routing'
+import { readRepoCommonDirFromGit } from './worktrees/catalog/worktree-list-reader'
 
 export type LocalGitObjectQuarantine = {
   /** `env` is a full process env for `gitExecFileAsync`, or undefined to run unquarantined. */

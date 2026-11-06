@@ -3,7 +3,7 @@
 import type { JSONContent } from '@tiptap/react'
 import { promptTextContent, appendPromptDocumentText } from './native-chat-prompt-document-text'
 import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
-import { isLoneStructuredAgentSessionConversationCommand } from '../../../../shared/structured-agent-session-composer'
+import { isLoneStructuredAgentSessionConversationCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { basename } from '@/lib/path'
 import type {
   NativeChatComposerDraft,
@@ -118,5 +118,40 @@ export function withNativeChatComposerDraftAddition(
     images,
     document,
     pastedTextFiles: { ...draft.pastedTextFiles, ...addition.pastedTextFiles }
+  }
+}
+
+/** Independent contributions share resources, not submission identity. Evaluate membership at the actual write base. */
+export function withIndependentNativeChatComposerDraft(
+  base: NativeChatComposerDraft,
+  contribution: NativeChatComposerDraftAddition
+): NativeChatComposerDraft {
+  const held = new Set(base.images.map((image) => image.id))
+  const returned = contribution.text ?? ''
+  const kept = base.text.trimEnd()
+  const replaces = kept === '' || isLoneStructuredAgentSessionConversationCommand(kept)
+  const text = returned.trim() === '' ? base.text : replaces ? returned : `${kept}\n\n${returned}`
+  const document =
+    text === base.text
+      ? base.document
+      : replaces
+        ? (contribution.document ?? promptTextContent(returned))
+        : {
+            type: 'doc',
+            content: [
+              ...(appendPromptDocumentText(
+                base.document ?? promptTextContent(base.text),
+                base.text,
+                kept
+              )?.content ?? []),
+              { type: 'paragraph' },
+              ...((contribution.document ?? promptTextContent(returned)).content ?? [])
+            ]
+          }
+  return {
+    text,
+    document,
+    images: [...base.images, ...(contribution.images ?? []).filter((image) => !held.has(image.id))],
+    pastedTextFiles: { ...base.pastedTextFiles, ...contribution.pastedTextFiles }
   }
 }

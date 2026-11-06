@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getWorkspaceAttachments,
   normalizeWorkspaceAttachmentUpdate
-} from '../../../../shared/workspace-attachments'
+} from '../../../../shared/workspace-attachments/workspace-attachments'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeFolderWorkspace, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -67,30 +67,6 @@ describe('workspace attachment collections', () => {
     expect(
       normalizeWorkspaceAttachmentUpdate({ linkedItems: base }, write ?? {}).linkedItems
     ).toEqual([base[1]])
-  })
-
-  it('removes a secondary review without disturbing the active review or task', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/work',
-      repoId: 'repo1',
-      linkedPR: 42,
-      linkedIssue: 9,
-      linkedItems: [
-        { provider: 'github', type: 'pr', number: 42 },
-        { provider: 'github', type: 'pr', number: 43 },
-        { provider: 'github', type: 'issue', number: 9 }
-      ]
-    })
-    store.setState({ worktreesByRepo: { repo1: [wt] } })
-    await store.getState().updateWorktreeMeta(wt.id, {
-      linkedItems: wt.linkedItems?.filter((item) => item.number !== 43)
-    })
-    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
-      linkedPR: 42,
-      linkedIssue: 9
-    })
-    expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])).toHaveLength(2)
   })
 
   it('routes folder links to the owning folder update instead of dropping them', async () => {

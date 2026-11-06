@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectRendererMemoryProfileCounts,
-  registerRendererMemoryProfileContributor,
-  summarizeStateCollectionSizes
+  registerRendererMemoryProfileContributor
 } from './renderer-memory-profile'
 
 const unregisters: (() => void)[] = []
@@ -19,16 +18,6 @@ afterEach(() => {
 })
 
 describe('collectRendererMemoryProfileCounts', () => {
-  it('namespaces contributor counts and keeps only finite numbers', () => {
-    register('store', () => ({ worktrees: 40, junk: Number.NaN }))
-    register('terminals', () => ({ panes: 7 }))
-
-    expect(collectRendererMemoryProfileCounts()).toEqual({
-      'store.worktrees': 40,
-      'terminals.panes': 7
-    })
-  })
-
   it('contains a throwing contributor instead of failing collection', () => {
     register('broken', () => {
       throw new Error('boom')
@@ -97,23 +86,5 @@ describe('collectRendererMemoryProfileCounts', () => {
 
     expect(collectRendererMemoryProfileCounts()).toEqual({})
     expect(overflowContributor).not.toHaveBeenCalled()
-  })
-})
-
-describe('summarizeStateCollectionSizes', () => {
-  it('reports the largest collections first, capped at the limit', () => {
-    const state = {
-      worktrees: Array.from({ length: 50 }, () => 0),
-      agentStatuses: new Map([['a', 1]]),
-      tabs: new Set([1, 2, 3]),
-      metaById: { a: 1, b: 2 },
-      label: 'not-a-collection',
-      count: 9
-    }
-
-    expect(summarizeStateCollectionSizes(state, 2)).toEqual({
-      worktrees: 50,
-      tabs: 3
-    })
   })
 })

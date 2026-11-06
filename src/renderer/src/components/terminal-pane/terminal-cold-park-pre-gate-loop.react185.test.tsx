@@ -1,10 +1,11 @@
 /** @vitest-environment happy-dom */
+import type * as ParkedWatcherRegistryModule from './parking/output-watchers/terminal-parked-watcher-registry'
 import { act, StrictMode } from 'react'
 import type * as ReactModule from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -61,14 +62,13 @@ vi.mock('./TerminalOverlaySlot', () => ({
   }
 }))
 
-vi.mock('./terminal-parked-tab-watchers', async () => {
+vi.mock('./parking/output-watchers/terminal-parked-tab-watchers', async () => {
   const { useAppStore } = await import('../../store')
   return {
     canWatcherCoverParkedTerminalTab: () => {
       harness.coverageCalls += 1
       return harness.coverageCalls % 2 === 1
     },
-    disposeParkedTerminalWatchersForWorktree: () => {},
     syncParkedTerminalTabWatchers: (args: {
       worktreeId: string
       parkedTabIds: ReadonlySet<string>
@@ -102,7 +102,12 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
   }
 })
 
-vi.mock('./terminal-parking-e2e-overrides', () => ({
+vi.mock('./parking/output-watchers/terminal-parked-watcher-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+  disposeParkedTerminalWatchersForWorktree: () => {}
+}))
+
+vi.mock('./parking/instrumentation/terminal-parking-e2e-overrides', () => ({
   getTerminalParkingPolicyOverrides: () => ({ coldParkDelayMs: 0, hotRetainMs: 0 })
 }))
 

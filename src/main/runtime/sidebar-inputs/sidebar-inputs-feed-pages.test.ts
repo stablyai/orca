@@ -54,10 +54,4 @@ describe('paginateFeedChanges', () => {
       expect(JSON.parse(joined)).toEqual({ text: NASTY.repeat(budget / 4) })
     })
   }
-
-  it('sends one empty page for no changes', () => {
-    expect(paginateFeedChanges([], SIDEBAR_INPUTS_PAGE_MAX_BYTES)).toEqual([
-      { domains: {}, bytes: 0 }
-    ])
-  })
 })

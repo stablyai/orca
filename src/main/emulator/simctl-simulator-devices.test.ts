@@ -35,18 +35,25 @@ describe('listSimulatorDevices', () => {
     platformMock.mockReturnValue('darwin')
   })
 
-  it('parses simctl devices on macOS', async () => {
+  it('keeps lastBootedAt as usage evidence only when lastUsedAt is absent', async () => {
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(
         null,
         JSON.stringify({
           devices: {
-            'com.apple.CoreSimulator.SimRuntime.iOS-18-0': [
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-0': [
               {
-                name: 'iPhone 17 Pro',
-                udid: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
+                udid: 'booted-before',
+                name: 'iPhone',
                 state: 'Shutdown',
-                isAvailable: true
+                lastBootedAt: '2026-10-29T10:00:00Z'
+              },
+              {
+                udid: 'used-after',
+                name: 'iPhone',
+                state: 'Shutdown',
+                lastBootedAt: '2026-10-29T10:00:00Z',
+                lastUsedAt: '2026-10-30T11:00:00Z'
               }
             ]
           }
@@ -54,29 +61,11 @@ describe('listSimulatorDevices', () => {
         ''
       )
     })
-
-    await expect(listSimulatorDevices()).resolves.toEqual([
-      {
-        name: 'iPhone 17 Pro',
-        udid: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
-        state: 'Shutdown',
-        runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-18-0',
-        isAvailable: true
-      }
+    const devices = await listSimulatorDevices()
+    expect(devices.map((device) => device.lastUsedAt)).toEqual([
+      '2026-10-29T10:00:00Z',
+      '2026-10-30T11:00:00Z'
     ])
-    expect(execFileMock).toHaveBeenCalledWith(
-      'xcrun',
-      ['simctl', 'list', 'devices', '-j'],
-      { timeout: 15_000 },
-      expect.any(Function)
-    )
-  })
-
-  it('returns no devices on non-macOS hosts', async () => {
-    platformMock.mockReturnValue('linux')
-
-    await expect(listSimulatorDevices()).resolves.toEqual([])
-    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('normalizes missing simctl errors for UI and CLI callers', async () => {

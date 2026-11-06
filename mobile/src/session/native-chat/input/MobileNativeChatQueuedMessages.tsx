@@ -1,6 +1,7 @@
+import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
@@ -9,12 +10,13 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
-import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
-import type { MobileQueuedMessageInlineEditor } from '../../use-mobile-structured-queued-edit'
+import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
 import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
 
 // Use NUL-prefixed header keys because message ids cannot contain NUL.
 // Resume and Clear all share one key: a Resume would send the cards a Clear is deleting.
@@ -33,6 +35,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   pause?: AgentSessionQueuePause | null
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
+  /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
+  agentWorking?: boolean
 }
 
 export function MobileNativeChatQueuedMessages({
@@ -45,9 +49,12 @@ export function MobileNativeChatQueuedMessages({
   onMove,
   pause,
   onResume,
-  steerHeld = false
+  steerHeld = false,
+  agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
+  const lowerRegion = useMobileNativeChatLowerRegion()
+  useLayoutEffect(() => lowerRegion?.layoutChanged())
   const t = useMobileTranslation()
   // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -133,9 +140,9 @@ export function MobileNativeChatQueuedMessages({
   const attentionCaption = !expanded ? cards.find((card) => card.needsAttention)?.caption : null
   const headerCountStyle = [styles.headerCount, attentionCaption && styles.captionReturned]
   return (
-    <View style={[styles.list, editor && styles.inlineList]}>
+    <MobileNativeChatQueueFrame editing={editor !== undefined}>
       {}
-      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
+      <MobileNativeChatQueueFrame box editing={editor !== undefined}>
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
@@ -186,7 +193,7 @@ export function MobileNativeChatQueuedMessages({
         {expanded ? (
           <MobileQueuedMessageScrollList
             messageIds={cards.map((card) => card.messageId)}
-            newestIsPersons={!cards.at(-1)?.attribution}
+            newestIsPersons={!cards.at(-1)?.from}
             inlineEditorActive={editor !== undefined}
           >
             {(reveal, drag) => {
@@ -199,6 +206,7 @@ export function MobileNativeChatQueuedMessages({
                   busy={busyIds.has(card.messageId)}
                   editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
                   steerHeld={steerHeld}
+                  agentWorking={agentWorking}
                   onSend={() => void run(card.messageId, onSend)}
                   onDelete={() => void run(card.messageId, onDelete)}
                   onMore={() => setMenuFor(card.messageId)}
@@ -221,7 +229,7 @@ export function MobileNativeChatQueuedMessages({
             }}
           </MobileQueuedMessageScrollList>
         ) : null}
-      </View>
+      </MobileNativeChatQueueFrame>
       <ActionSheetModal
         visible={menuCard !== undefined}
         title={menuCard?.line}
@@ -241,6 +249,6 @@ export function MobileNativeChatQueuedMessages({
         ]}
         onClose={() => setMenuFor(null)}
       />
-    </View>
+    </MobileNativeChatQueueFrame>
   )
 }

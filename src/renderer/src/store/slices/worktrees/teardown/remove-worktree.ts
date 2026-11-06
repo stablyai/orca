@@ -1,11 +1,10 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId, type WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/runtime-client-target'
-import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
@@ -26,7 +25,7 @@ import {
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
 } from '../../../../../../shared/worktree/removal'
-import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
@@ -36,10 +35,13 @@ import {
   isRuntimeSelectorNotFoundError
 } from '../listing/runtime-worktree-rpc-errors'
 import { recordRemovedWorktreeSnapshotPrune } from './removed-worktree-snapshot-prune'
-import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
+import { clearSessionCommitDraftForWorktree } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import { dispatchWorktreeRemoval } from './dispatch-worktree-removal'
 import { tearDownRemovedWorktreeRendererState } from './removed-worktree-renderer-teardown'
-import { captureWorktreeStateBeforeRemoval } from './worktree-state-before-removal'
+import {
+  captureWorktreeStateBeforeRemoval,
+  retireWorktreeDraftOwners
+} from './worktree-state-before-removal'
 import { resolveWorktreeRemovalPreference } from './worktree-removal-preference'
 import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
 
@@ -102,7 +104,7 @@ export function createRemoveWorktree(
         worktreeId,
         requiredExecutionHostId
       )
-      const beforeRemoval = captureWorktreeStateBeforeRemoval(get(), worktreeId, hostId)
+      let beforeRemoval = captureWorktreeStateBeforeRemoval(get(), worktreeId, hostId)
       if (!policy.forgetLocalOnly) {
         removalGenerationGuard?.assertCurrent()
       }
@@ -163,6 +165,8 @@ export function createRemoveWorktree(
           throw error
         }
       }
+
+      beforeRemoval = retireWorktreeDraftOwners(beforeRemoval)
 
       if (!snapshotPruneHandledByLocalMain) {
         await recordRemovedWorktreeSnapshotPrune({

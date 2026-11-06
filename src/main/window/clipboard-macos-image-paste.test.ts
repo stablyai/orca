@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
@@ -35,7 +35,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FsPromises>()
   return { ...fs, default: { ...fs, writeFile: mocks.writeFile } }
 })
-vi.mock('../persistence', () => ({ Store: vi.fn() }))
+vi.mock('../persistence/loading-store/store', () => ({ Store: vi.fn() }))
 vi.mock('./clipboard-remote-file-copy', () => ({
   cleanupExpiredRemoteClipboardFiles: vi.fn(),
   scheduleLegacyRemoteClipboardFileCleanup: vi.fn()
@@ -46,7 +46,7 @@ vi.mock('./native-chat-paste-files', () => ({
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
-import { Store } from '../persistence'
+import { Store } from '../persistence/loading-store/store'
 import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId

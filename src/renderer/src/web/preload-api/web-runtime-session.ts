@@ -1,7 +1,7 @@
 import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
 import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
 import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
@@ -13,10 +13,11 @@ import {
   getPreferredWebRuntimeConnection,
   readStoredWebRuntimeEnvironment,
   replaceStoredTokenWithDeviceKey,
-  updateStoredEnvironmentRuntimeId
+  updateStoredEnvironmentRuntimeId,
+  type StoredWebRuntimeEnvironment
 } from '../web-runtime-environment'
 import { webRuntimeCredentialFor } from './web-runtime-credentials'
-import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
+
 import { translate } from '@/i18n/i18n'
 
 export const webRuntimeState: {
@@ -29,7 +30,7 @@ export const webRuntimeState: {
   activeClientEnvironmentId: string | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
 } = {
-  activeEnvironment: readStoredWebRuntimeEnvironment(),
+  activeEnvironment: null,
   zcodePlanSiteRuntimeOwner: null,
   zcodePlanSiteRuntimeValue: null,
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,

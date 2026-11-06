@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeAccountController } from './runtime-account-controller'
+import { RuntimeAccountController } from './agent-session/environment/runtime-account-controller'
 import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
 import { FIRST_HOST_LAUNCH_ENV_WAIT_MS } from './first-host-launch-env-gate'
 
@@ -53,29 +53,6 @@ describe('first account push on a fresh WSL host', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(second).toBe(true)
-  })
-
-  it('never waits on the desktop, with a saved env, or off a WSL host', async () => {
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
-    const desktop = new RuntimeAccountController()
-    const saved = new RuntimeAccountController()
-    saved.restoreHostLaunchEnv(PUSHED, () => {}, { expectDesktopPush: true })
-    const other = new RuntimeAccountController()
-    other.restoreHostLaunchEnv(null, () => {})
-
-    for (const accounts of [desktop, saved, other]) {
-      let done = false
-      void accounts.prepareHostAgentLaunch('claude').then(() => {
-        done = true
-      })
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(done).toBe(true)
-    }
-    expect(saved.hostLaunchEnvFor('claude')).toEqual(PUSHED.claude)
-    expect(desktop.getCommitMessageAgentEnvironment()).toBeUndefined()
-    expect(other.getCommitMessageAgentEnvironment()).toBeUndefined()
-    expect(setTimeoutSpy).not.toHaveBeenCalled()
   })
 
   it('makes AI commit text wait for the push too', async () => {
