@@ -12,6 +12,7 @@ import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
 } from '../../shared/antigravity-chat-auth-config'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -70,13 +71,16 @@ export type AcpStructuredLaunchPartDeps = {
   dataDirectory: string
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
+export type AcpLaunchSettings = StructuredAgentCommandSettings &
+  Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>
+
 export type AcpLaunchInvocationDeps = {
   operation?: StructuredAgentResolutionOperation
   /** Reread per acquisition. */
   resolveEnvironment: () => Promise<Record<string, string>>
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   /** Reread per acquisition; absent uses the stock command. */
-  resolveCommandSettings?: () => StructuredAgentCommandSettings
+  resolveCommandSettings?: () => AcpLaunchSettings
   /** Optional environment refresh after a missing-program lookup. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   /** Resolves relative PATH entries against the launch directory. */

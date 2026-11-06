@@ -13,7 +13,10 @@ import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-ag
 import { ANTIGRAVITY_LAUNCH_SPEC, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpPrivateTempConnect } from '../acp/acp-private-temp'
 import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
-import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
+import {
+  resolveAcpLaunchInvocation,
+  type AcpLaunchSettings
+} from '../acp/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
@@ -55,7 +58,11 @@ type Flow = {
 }
 
 export type AntigravityChatSignInHost = {
-  launchSources(signal: AbortSignal): ReturnType<typeof structuredAgentHostLaunchSources>
+  launchSources(signal: AbortSignal): Promise<
+    Awaited<ReturnType<typeof structuredAgentHostLaunchSources>> & {
+      commandSettings: AcpLaunchSettings
+    }
+  >
   /** Rejects when a chat is not proven stopped. */
   stopLiveChats(): Promise<void>
   connect?: ConnectAcpAgent<AcpAgentConnection>
