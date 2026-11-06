@@ -76,7 +76,7 @@ const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
       type="button"
       draggable={false}
       className={cn(
-        'worktree-agent-row-hover flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        'worktree-agent-row-hover flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         focused && 'bg-worktree-sidebar-accent'
       )}
       onClick={handleClick}
@@ -123,7 +123,7 @@ export function SlotAgentLinesHeader({
     <button
       type="button"
       draggable={false}
-      className="worktree-agent-row-hover mt-[3px] flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 text-left text-2xs leading-none font-medium text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+      className="worktree-agent-row-hover mt-[3px] flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none font-medium text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
       aria-expanded={true}
       aria-label={translate(
         'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
@@ -134,7 +134,7 @@ export function SlotAgentLinesHeader({
       onMouseDown={stopPropagation}
       onPointerDown={stopPropagation}
     >
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate pl-0.5">{label}</span>
       <ChevronDown className="size-3 shrink-0" aria-hidden />
     </button>
   )
