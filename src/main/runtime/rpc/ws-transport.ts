@@ -1,5 +1,6 @@
 // WebSocket transport letting mobile clients reach the Orca runtime over LAN (ws://); auth is per-device tokens, and E2EE runs above this layer.
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
+import type { Socket } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { answerWithoutWebClient, createStaticWebClientHandler } from './static-web-client-handler'
@@ -14,6 +15,8 @@ import {
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
 import { assertPortNotShadowingListener } from './shadowed-port-probe'
 import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { classifyNetworkSource, type NetworkSourceClass } from './network-source-class'
+import { UnauthenticatedSourceCap } from './ws-unauthenticated-source-cap'
 
 export const WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
 // Allow many remote-desktop streams so stale ones cannot starve control RPCs.
@@ -66,6 +69,12 @@ export class WebSocketTransport implements RpcTransport {
   private wsClientIds = new Map<WebSocket, string>()
   private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
+  private readonly sourceCap = new UnauthenticatedSourceCap()
+  // Captured at upgrade: a closed socket no longer reports its peer.
+  private readonly peers = new WeakMap<
+    WebSocket,
+    { socket: Socket; sourceClass: NetworkSourceClass | null }
+  >()
 
   constructor({
     host,
@@ -111,6 +120,14 @@ export class WebSocketTransport implements RpcTransport {
   setClientId(ws: WebSocket, clientId: string): void {
     this.wsClientIds.set(ws, clientId)
     clearNodeWebSocketPreAuthTimer(ws, this.preAuthTimers)
+    const peer = this.peers.get(ws)
+    if (peer) {
+      this.sourceCap.noteAuthenticated(peer.socket)
+    }
+  }
+
+  sourceClassOf(ws: WebSocket): NetworkSourceClass | null {
+    return this.peers.get(ws)?.sourceClass ?? null
   }
 
   terminateClientConnections(clientId: string): number {
@@ -208,13 +225,22 @@ export class WebSocketTransport implements RpcTransport {
 
     // Post-upgrade WS cap cannot bound raw TCP descriptors.
     httpServer.maxConnections = WEBSOCKET_TRANSPORT_MAX_TCP_CONNECTIONS
+    httpServer.on('connection', (socket) => {
+      if (!this.sourceCap.admit(socket)) {
+        socket.destroy()
+      }
+    })
 
     const wss = new WebSocketServer({
       server: httpServer,
       maxPayload: WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES
     })
 
-    wss.on('connection', (ws) => {
+    wss.on('connection', (ws, request) => {
+      this.peers.set(ws, {
+        socket: request.socket,
+        sourceClass: classifyNetworkSource(request.socket.remoteAddress)
+      })
       if (wss.clients.size > WEBSOCKET_TRANSPORT_MAX_CONNECTIONS) {
         rejectNodeWebSocketOverCapacity(ws)
         return

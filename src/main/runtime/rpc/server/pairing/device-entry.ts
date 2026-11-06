@@ -4,6 +4,7 @@ import type { MobilePushRegistration } from '../../../../../shared/mobile-push-c
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
 import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { NetworkSourceClass } from '../../network-source-class'
 
 export type DeviceEntry = {
   deviceId: string
@@ -13,6 +14,8 @@ export type DeviceEntry = {
   scope: DeviceScope
   pairedAt: number
   lastSeenAt: number
+  // Where its latest direct (non-Relay) connection came from; absent until one after this field shipped.
+  lastSourceClass?: NetworkSourceClass
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
   // STA-2370: local-only grants prove no off-host reach for listener binding.

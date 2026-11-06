@@ -36,6 +36,7 @@ import {
   DEFAULT_WS_PORT
 } from './runtime-rpc-pairing-types'
 import { DeclaredDesktopClients } from '../../declared-desktop-clients'
+import { AuthenticatedSourceRecorder } from './network-source-policy-store'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -82,6 +83,7 @@ export class RuntimeRpcState {
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
   protected readonly declaredDesktopClients = new DeclaredDesktopClients()
+  protected readonly authenticatedSourceRecorder: AuthenticatedSourceRecorder
   // Why: lets an automatic mint install a provider whose launch-time construction failed.
   protected mobileRelayPairingProviderInstaller: (() => Promise<unknown>) | null = null
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
@@ -150,6 +152,7 @@ export class RuntimeRpcState {
     this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
+    this.authenticatedSourceRecorder = new AuthenticatedSourceRecorder(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)
   }
 
