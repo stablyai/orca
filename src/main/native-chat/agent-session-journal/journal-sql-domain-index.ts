@@ -5,10 +5,16 @@ import {
   type JournalInputCard,
   type JournalInputContext
 } from './journal-input-lineage'
-import { mergeInputPlaces, type InputPlaceQuery } from './journal-input-place-index'
+import {
+  mergeInputPlaces,
+  type InputPlaceQuery,
+  type JournalInputPlaceEntry
+} from './journal-input-place-index'
 import {
   compareJournalSqlPlaces,
   journalSqlCardFlags,
+  journalSqlEntryCard,
+  journalSqlEntryFlags,
   journalSqlPlaceSummary
 } from './journal-sql-place-index'
 import type { JournalSqlScope } from './journal-sql-scope'
@@ -41,6 +47,24 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
     handoff: boolean
   ): void {
     this.change(card, source, actionable, handoff, false)
+  }
+
+  importEntry(introduced: number, entry: JournalInputPlaceEntry): void {
+    const card = journalSqlEntryCard(entry)
+    this.scope.db
+      .prepare(`INSERT INTO journal_proj_domains
+        (session_id, generation, index_id, id, introduced, domain, sequence, position,
+         head, command, waiting, handoff, card_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(
+        ...this.prefix,
+        entry.id,
+        introduced,
+        entry.domain ?? '',
+        entry.sequence,
+        entry.position,
+        ...journalSqlEntryFlags(entry),
+        card ? this.scope.encode(card, `domains:${this.indexId}`, entry.id) : null
+      )
   }
 
   setPosition(card: QueuedMessageRow, source: JournalInputCard): void {

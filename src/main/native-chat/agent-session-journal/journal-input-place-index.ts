@@ -8,14 +8,14 @@ export type InputPlaceQuery = {
   handoff?: QueuedMessageRow
   position: number
 }
-type Entry = InputPlaceQuery & {
+export type JournalInputPlaceEntry = InputPlaceQuery & {
   id: string
   sequence: number
   domain: string | undefined
   tie?: number
 }
 type Node = {
-  entry: Entry
+  entry: JournalInputPlaceEntry
   height: number
   result: InputPlaceQuery
   left?: Node
@@ -34,7 +34,7 @@ export function mergeInputPlaces(a: InputPlaceQuery, b: InputPlaceQuery): InputP
   }
 }
 const height = (node?: Node) => node?.height ?? 0
-const compare = (a: Entry, b: Entry) =>
+const compare = (a: JournalInputPlaceEntry, b: JournalInputPlaceEntry) =>
   a.sequence - b.sequence || (a.tie ?? 0) - (b.tie ?? 0) || a.id.localeCompare(b.id)
 function update(node: Node): Node {
   node.height = 1 + Math.max(height(node.left), height(node.right))
@@ -74,7 +74,11 @@ function balance(node: Node): Node {
   }
   return node
 }
-function put(node: Node | undefined, entry: Entry, remove: boolean): Node | undefined {
+function put(
+  node: Node | undefined,
+  entry: JournalInputPlaceEntry,
+  remove: boolean
+): Node | undefined {
   if (!node) {
     return remove ? undefined : { entry, height: 1, result: entry }
   }
@@ -108,9 +112,14 @@ export class JournalInputPlaceIndex {
   private epochs = new Map<string, Node>()
   private all: Node | undefined
   private undomained = 0
-  private entries = new Map<string, Entry>()
+  private entries = new Map<string, JournalInputPlaceEntry>()
 
   constructor(_epoch: string) {}
+
+  /** An actual open's export reads the entries as restore left them. */
+  exportEntries(): IterableIterator<JournalInputPlaceEntry> {
+    return this.entries.values()
+  }
 
   clear(): void {
     this.epochs = new Map()
@@ -129,7 +138,7 @@ export class JournalInputPlaceIndex {
     if (card.state === 'withdrawn') {
       return
     }
-    const entry: Entry = {
+    const entry: JournalInputPlaceEntry = {
       id: card.messageId,
       sequence: coordinate?.sequence ?? 0,
       domain: coordinate?.epoch ?? '',
@@ -158,7 +167,7 @@ export class JournalInputPlaceIndex {
       return
     }
     this.delete(id)
-    const entry: Entry = { id, sequence, domain, position, tie }
+    const entry: JournalInputPlaceEntry = { id, sequence, domain, position, tie }
     this.entries.set(id, entry)
     this.change(entry, false)
   }
@@ -171,7 +180,7 @@ export class JournalInputPlaceIndex {
     }
   }
 
-  private change(entry: Entry, remove: boolean): void {
+  private change(entry: JournalInputPlaceEntry, remove: boolean): void {
     const epoch = entry.domain
     if (epoch !== undefined) {
       const root = put(this.epochs.get(epoch), entry, remove)

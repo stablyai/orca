@@ -29,8 +29,9 @@ import {
 
 export class JournalInputCardIndex {
   private readonly facts: JournalInputCardFacts
-  private index: JournalInputPlaceStorage | undefined
-  private currentCoordinates: JournalInputPlaceStorage | undefined
+  // Empty until the first ensure indexes the queue; created eagerly so every storage has its place.
+  private readonly index: JournalInputPlaceStorage
+  private readonly currentCoordinates: JournalInputPlaceStorage
   private readonly domains: JournalInputDomainStorage
   private readonly released: JournalInputReleasedStorage
   private readonly positions: JournalInputPlaceStorage
@@ -69,13 +70,11 @@ export class JournalInputCardIndex {
   // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
   constructor(
     private readonly lineage: JournalInputLineageOwner,
-    private readonly indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+    indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
   ) {
     this.facts = indexes.cardFacts()
-    if (this.facts.initialized) {
-      this.index = indexes.place('card-introductions')
-      this.currentCoordinates = indexes.place('card-coordinates')
-    }
+    this.index = indexes.place('card-introductions')
+    this.currentCoordinates = indexes.place('card-coordinates')
     this.domains = indexes.domain('cards')
     this.released = indexes.released('cards')
     this.positions = indexes.place('card-positions')
@@ -89,7 +88,7 @@ export class JournalInputCardIndex {
     return this.facts.failed
   }
   command(): QueuedMessageRow | undefined {
-    return this.facts.failed ? undefined : this.currentCoordinates?.allCommand()
+    return this.facts.failed ? undefined : this.currentCoordinates.allCommand()
   }
   releaseHistory(): void {
     this.facts.history = false
@@ -102,7 +101,7 @@ export class JournalInputCardIndex {
     }
   }
   head(): QueuedMessageRow | undefined {
-    return this.index?.allPlaces().head
+    return this.index.allPlaces().head
   }
   paused(card: QueuedMessageRow): boolean {
     return (
@@ -124,14 +123,14 @@ export class JournalInputCardIndex {
 
   queryCurrent(place: JournalInputPlace): Pick<InputPlaceQuery, 'command'> {
     return {
-      command: this.facts.failed ? undefined : queryCurrentPlace(place, this.currentCoordinates!)
+      command: this.facts.failed ? undefined : queryCurrentPlace(place, this.currentCoordinates)
     }
   }
 
   query(place: JournalInputPlace): InputPlaceQuery {
     const current =
       place.context.basis === 'observed'
-        ? this.index!.query('introduction', place.context.cut)
+        ? this.index.query('introduction', place.context.cut)
         : this.domains.query(place.context, place.original)
     return gatePlaces(mergeInputPlaces(current, this.released.query(place)), this.facts.failed)
   }
@@ -159,8 +158,6 @@ export class JournalInputCardIndex {
       this.facts.pauses = journalInputCardPauses(state.epoch, pauseInputs)
       if (first) {
         this.facts.initialized = true
-        this.index = this.indexes.place('card-introductions')
-        this.currentCoordinates = this.indexes.place('card-coordinates')
         for (const card of this.facts.overlayCards()) {
           if (!state.queue.cards.has(card.messageId)) {
             this.indexCard(state, card)
@@ -248,12 +245,12 @@ export class JournalInputCardIndex {
       card,
       (card.state === 'waiting' && card.holdReason === null) || card.state === 'returned'
     )
-    this.currentCoordinates!.set(card, actionable, handoff)
+    this.currentCoordinates.set(card, actionable, handoff)
     if (released) {
-      this.index!.delete(card.messageId)
+      this.index.delete(card.messageId)
       this.released.add(card, lineage)
     } else {
-      this.index!.set(card, actionable, handoff, {
+      this.index.set(card, actionable, handoff, {
         epoch: 'introduction',
         sequence: lineage.introduced
       })
@@ -279,7 +276,7 @@ export class JournalInputCardIndex {
     if (!prior || prior.released) {
       return
     }
-    this.index!.delete(id)
+    this.index.delete(id)
     this.domains.delete(prior.card, prior.source)
     const source = {
       introduced: prior.source.introduced,

@@ -1,4 +1,5 @@
 import type { JournalInputReleasedStorage } from './journal-index-storage'
+import type { JournalInputReleasedPositions } from './journal-input-released-positions'
 import type { JournalIndexedInputCard } from './journal-input-domain-index'
 import type { JournalInputCard } from './journal-input-lineage'
 import type { JournalInputPlace } from './journal-input-order-state'
@@ -21,6 +22,37 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
 
   private get prefix(): [string, string, string] {
     return [...this.scope.prefix, this.indexId]
+  }
+
+  /** Releases since the latest pause share its generation; earlier ones keep an older one. */
+  importState(state: ReturnType<JournalInputReleasedPositions['exportState']>): void {
+    for (const { introduced, entry } of state.domains.exportEntries()) {
+      this.domains.importEntry(introduced, entry)
+    }
+    for (const { introduced, entry } of state.fallback.exportEntries()) {
+      this.fallback.importEntry(introduced, entry)
+    }
+    const paused = state.floor !== -Infinity
+    const releases = [...state.releases]
+    if (!paused && releases.length === 0) {
+      return
+    }
+    this.scope.db
+      .prepare(`INSERT INTO journal_proj_release_state
+        (session_id, generation, index_id, floor, pause_gen) VALUES (?, ?, ?, ?, ?)`)
+      .run(...this.prefix, paused ? state.floor : null, Number(paused))
+    const insert = this.scope.db.prepare(`INSERT INTO journal_proj_releases
+      (session_id, generation, index_id, id, introduced, position, pause_gen)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    for (const entry of releases) {
+      insert.run(
+        ...this.prefix,
+        entry.id,
+        entry.sequence,
+        entry.position,
+        Number(paused && state.sincePause.has(entry.id))
+      )
+    }
   }
 
   pause(cut: number): void {

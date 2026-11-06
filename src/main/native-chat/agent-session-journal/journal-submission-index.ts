@@ -18,6 +18,10 @@ export class JournalSubmissionIndex {
     this.listed = undefined
     return true
   }
+  exportEntries(): IterableIterator<[string, AgentJournalSubmission]> {
+    return this.entries.entries()
+  }
+
   list(): readonly AgentJournalSubmission[] {
     return (this.listed ??= [...this.entries.values()])
   }

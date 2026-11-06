@@ -6,7 +6,8 @@ import {
 import {
   JournalInputPlaceIndex,
   mergeInputPlaces,
-  type InputPlaceQuery
+  type InputPlaceQuery,
+  type JournalInputPlaceEntry
 } from './journal-input-place-index'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
@@ -21,7 +22,7 @@ export type JournalIndexedInputCard = {
   releasedAt?: number
 }
 
-type Node = { index: JournalInputPlaceStorage; left?: Node; right?: Node }
+type Node = { index: JournalInputPlaceIndex; left?: Node; right?: Node }
 const LIMIT = Number.MAX_SAFE_INTEGER
 
 /** A fixed-width introduction prefix, with coordinate summaries on each of its 53 levels. */
@@ -30,6 +31,29 @@ export class JournalInputDomainIndex {
 
   clear(): void {
     this.root = { index: new JournalInputPlaceIndex('') }
+  }
+
+  /** Each entry with its introduction, which is the low bound of the leaf that holds it. */
+  *exportEntries(): Generator<{ introduced: number; entry: JournalInputPlaceEntry }> {
+    const pending: { node: Node; low: number; high: number }[] = [
+      { node: this.root, low: 0, high: LIMIT }
+    ]
+    while (pending.length > 0) {
+      const { node, low, high } = pending.pop()!
+      if (high - low <= 1) {
+        for (const entry of node.index.exportEntries()) {
+          yield { introduced: low, entry }
+        }
+        continue
+      }
+      const mid = low + Math.floor((high - low) / 2)
+      if (node.right) {
+        pending.push({ node: node.right, low: mid, high })
+      }
+      if (node.left) {
+        pending.push({ node: node.left, low, high: mid })
+      }
+    }
   }
 
   set(

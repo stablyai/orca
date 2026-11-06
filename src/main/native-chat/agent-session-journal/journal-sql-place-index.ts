@@ -1,7 +1,11 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
-import { mergeInputPlaces, type InputPlaceQuery } from './journal-input-place-index'
+import {
+  mergeInputPlaces,
+  type InputPlaceQuery,
+  type JournalInputPlaceEntry
+} from './journal-input-place-index'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 
@@ -36,6 +40,19 @@ export function journalSqlCardFlags(
     Number(actionable),
     Number(handoff)
   ]
+}
+
+export function journalSqlEntryFlags(entry: InputPlaceQuery): [number, number, number, number] {
+  return [
+    Number(!!entry.head),
+    Number(!!entry.command),
+    Number(!!entry.waiting),
+    Number(!!entry.handoff)
+  ]
+}
+
+export function journalSqlEntryCard(entry: InputPlaceQuery): QueuedMessageRow | undefined {
+  return entry.head ?? entry.waiting ?? entry.handoff ?? entry.command
 }
 
 /** Admission summaries fetch live flags and seek positions separately from card bodies. */
@@ -77,6 +94,25 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
         flags.some(Boolean)
           ? this.scope.encode(card, `places:${this.indexId}`, card.messageId)
           : null
+      )
+  }
+
+  /** An actual open's export writes each restored entry as the memory index holds it. */
+  importEntry(entry: JournalInputPlaceEntry): void {
+    const card = journalSqlEntryCard(entry)
+    this.scope.db
+      .prepare(`INSERT INTO journal_proj_places
+        (session_id, generation, index_id, id, domain, sequence, tie, position,
+         head, command, waiting, handoff, card_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(
+        ...this.prefix,
+        entry.id,
+        entry.domain ?? null,
+        entry.sequence,
+        entry.tie ?? 0,
+        entry.position,
+        ...journalSqlEntryFlags(entry),
+        card ? this.scope.encode(card, `places:${this.indexId}`, entry.id) : null
       )
   }
 

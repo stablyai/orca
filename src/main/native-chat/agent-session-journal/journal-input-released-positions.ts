@@ -1,4 +1,3 @@
-import type { JournalInputDomainStorage, JournalInputPlaceStorage } from './journal-index-storage'
 import type { JournalInputCard } from './journal-input-lineage'
 import type { JournalInputPlace } from './journal-input-order-state'
 import type { QueuedMessageRow } from './queued-message-table'
@@ -6,17 +5,39 @@ import { JournalInputDomainIndex, type JournalIndexedInputCard } from './journal
 import {
   JournalInputPlaceIndex,
   mergeInputPlaces,
-  type InputPlaceQuery
+  type InputPlaceQuery,
+  type JournalInputPlaceEntry
 } from './journal-input-place-index'
 
 /** Nonselectable native positions outlive the corresponding live card membership. */
 export class JournalInputReleasedPositions {
-  private readonly domains: JournalInputDomainStorage = new JournalInputDomainIndex()
-  private readonly fallbackDomains: JournalInputDomainStorage = new JournalInputDomainIndex()
-  private readonly releases: JournalInputPlaceStorage = new JournalInputPlaceIndex('introduction')
-  private readonly sincePause: JournalInputPlaceStorage = new JournalInputPlaceIndex('introduction')
+  private readonly domains = new JournalInputDomainIndex()
+  private readonly fallbackDomains = new JournalInputDomainIndex()
+  private readonly releases = new JournalInputPlaceIndex('introduction')
+  private readonly sincePause = new JournalInputPlaceIndex('introduction')
   private count = 0
   private floor = -Infinity
+
+  /** Restored releases and which of them came after the latest pause, for an actual open's export. */
+  exportState(): {
+    floor: number
+    domains: JournalInputDomainIndex
+    fallback: JournalInputDomainIndex
+    releases: Iterable<JournalInputPlaceEntry>
+    sincePause: ReadonlySet<string>
+  } {
+    const since = new Set<string>()
+    for (const entry of this.sincePause.exportEntries()) {
+      since.add(entry.id)
+    }
+    return {
+      floor: this.floor,
+      domains: this.domains,
+      fallback: this.fallbackDomains,
+      releases: this.releases.exportEntries(),
+      sincePause: since
+    }
+  }
 
   pause(cut: number): void {
     this.floor = cut

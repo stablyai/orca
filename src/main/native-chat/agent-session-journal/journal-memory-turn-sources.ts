@@ -10,6 +10,10 @@ export class MemoryJournalTurnSources implements JournalTurnSourceStorage {
   private root: TurnSourceNode | undefined
   private readonly sources = new Map<string, TurnSource>()
 
+  exportSources(): IterableIterator<[string, TurnSource]> {
+    return this.sources.entries()
+  }
+
   get(itemId: string): TurnSource | undefined {
     return this.sources.get(itemId)
   }

@@ -241,6 +241,10 @@ export class JournalQueuedMessages {
     return this.plan(witness ? [{ messageId: witness.messageId }] : [])
   }
 
+  rederiveLegacyWitnesses(): void {
+    this.legacy.rederiveWitnesses()
+  }
+
   importAtOpen(): Promise<void> {
     return this.legacy.importAtOpen()
   }
