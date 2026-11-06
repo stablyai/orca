@@ -6,7 +6,8 @@ import { none } from 'stream-chain/defs.js'
 export function createJsonTokenReader(
   consume: (token: Token) => void,
   batchCodeUnits = 64 * 1024,
-  retainScalar?: () => boolean
+  retainScalar?: () => boolean,
+  maxScalarCodeUnits = Infinity
 ): {
   write: (text: string) => void
   end: () => void
@@ -33,6 +34,9 @@ export function createJsonTokenReader(
       value = ''
     } else if (token.name === 'stringChunk' || token.name === 'numberChunk') {
       if (retained) {
+        if (value.length + token.value.length > maxScalarCodeUnits) {
+          throw new RangeError('JSON scalar exceeds the retained size limit')
+        }
         value += token.value
       }
     } else if (token.name === 'endString' || token.name === 'endNumber') {

@@ -582,4 +582,63 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
   })
+
+  it('discovers large Codex catalogs without allowing oversized model metadata', async () => {
+    const child = createMockDiscoveryChild()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this protocol fake supplies the piped streams consumed by discovery.
+    spawnMock.mockReturnValue(child as never)
+    const pending = discoverCommitMessageModelsLocal('codex', undefined)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    const catalog = Buffer.from(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'new-model',
+            display_name: 'New model 新 🌊',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }],
+            default_reasoning_level: 'high',
+            visibility: 'list',
+            model_messages: { instructions_template: 'x'.repeat(5 * 1024 * 1024) }
+          },
+          { slug: 'hidden-model', display_name: 'Hidden model', visibility: 'hide' }
+        ]
+      })
+    )
+    for (let offset = 0; offset < catalog.length; offset += 65537) {
+      child.stdout.emit('data', catalog.subarray(offset, offset + 65537))
+    }
+    child.emit('close', 0)
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      catalogOrigin: 'probe',
+      defaultModelId: 'new-model',
+      models: [
+        {
+          id: 'new-model',
+          label: 'New model 新 🌊',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' }
+          ],
+          defaultThinkingLevel: 'high'
+        }
+      ]
+    })
+    const oversizedChild = createMockDiscoveryChild()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this protocol fake supplies the piped streams consumed by discovery.
+    spawnMock.mockReset().mockReturnValue(oversizedChild as never)
+    const rejected = discoverCommitMessageModelsLocal('codex', undefined)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    oversizedChild.stdout.emit(
+      'data',
+      Buffer.from('{"models":[{"slug":"new-model","display_name":"')
+    )
+    oversizedChild.stdout.emit('data', Buffer.from('x'.repeat(4 * 1024 * 1024 + 1)))
+    await expect(rejected).resolves.toMatchObject({
+      success: false,
+      error: 'Codex returned too much model data.'
+    })
+    await expectChildTerminated(oversizedChild)
+    oversizedChild.emit('close', 1)
+  })
 })
