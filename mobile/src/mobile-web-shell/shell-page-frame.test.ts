@@ -8,7 +8,13 @@ const READY: MobileWebShellSessionState = {
   sessionId: 'session-a',
   buildId: 'build-a',
   totalBytes: 1,
-  elapsedMs: 1
+  elapsedMs: 1,
+  compat: {
+    schemaVersion: 1,
+    runtimeProtocolVersion: 1,
+    minCompatibleRuntimeProtocolVersion: 1,
+    pageVersion: 1
+  }
 }
 
 function frame(patch: { state?: MobileWebShellSessionState; pagePainted?: boolean }) {

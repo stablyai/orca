@@ -197,7 +197,13 @@ function readyState(sessionId: string): MobileWebShellSessionState {
     sessionId,
     buildId: 'build-a',
     totalBytes: 4096,
-    elapsedMs: 11
+    elapsedMs: 11,
+    compat: {
+      schemaVersion: 1,
+      runtimeProtocolVersion: 1,
+      minCompatibleRuntimeProtocolVersion: 1,
+      pageVersion: 1
+    }
   }
 }
 
