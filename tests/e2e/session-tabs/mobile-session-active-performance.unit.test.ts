@@ -91,7 +91,7 @@ describe('active-tab selection performance contract', () => {
     const measurements: number[] = []
     for (const count of [50, 500]) {
       const { runtime, getSession, setSession } = createRuntimeFixture()
-      const savedGroups = frame(count).tabGroups!
+      const savedGroups = frame(count).tabGroups!.map((group) => ({ ...group, worktreeId: WT }))
       savedGroups[0]!.tabOrder.push('serve-tab')
       setSession({ ...getSession(), tabGroups: { [WT]: savedGroups } })
       runtime.syncWindowGraph(1, {
