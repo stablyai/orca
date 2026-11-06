@@ -143,8 +143,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     return
   }
   const close = child.close
-  const expected = exit.expected && close?.failure?.kind !== 'hostFault'
-  const failure = close?.failure?.kind === 'hostFault' ? close.failure : exit.failure
+  const failedClose =
+    close?.failure?.kind === 'hostFault' || close?.failure?.kind === 'pluginInputRequired'
+  const stoppedPlugin = exit.failure?.kind === 'pluginInputRequired' && close?.cause === 'user-stop'
+  const expected = (exit.expected || stoppedPlugin) && !failedClose
+  const failure = failedClose ? close?.failure : exit.failure
   // Use the first death observation when settling the running turn.
   const observation = child.exitObservation?.()
   const observedAt = observation?.observedAt ?? exit.observedAt ?? context.now()
@@ -236,12 +239,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       (!expected || (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
     // Fold Stop before fallback turn-end classification.
     await close?.recorded
-    const generation = child.generation ?? 'unknown'
     // Proven exit can refine earlier unverifiable rows.
     const watched = { ownerFence: child.fence, observedAt }
     settlement = {
       ownerFence: child.fence,
-      settlementId: `${expected ? 'expected-close:' : PROVIDER_EXIT_ROW_PREFIX}${sessionId}:${child.fence}:${generation}`,
+      settlementId: `${expected ? 'expected-close:' : PROVIDER_EXIT_ROW_PREFIX}${sessionId}:${child.fence}:${child.generation ?? 'unknown'}`,
       pendingSubmissionReason: expected
         ? 'provider_closed_before_acknowledgement'
         : 'provider_exited_before_acknowledgement',

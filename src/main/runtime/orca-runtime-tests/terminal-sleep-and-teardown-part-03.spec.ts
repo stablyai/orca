@@ -16,8 +16,8 @@ describe('OrcaRuntimeService', () => {
       stopAndWait,
       getForegroundProcess: async () => null,
       listProcesses: async () => [
-        { id: 'pty-run', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
-        { id: 'pty-user', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+        { id: 'pty-run', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' },
+        { id: 'pty-user', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }
       ]
     })
 
@@ -142,10 +142,10 @@ describe('OrcaRuntimeService', () => {
     const stopped: string[] = []
     const processLists = [
       [
-        { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
-        { id: 'pty-shell', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+        { id: 'pty-1', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' },
+        { id: 'pty-shell', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }
       ],
-      [{ id: 'pty-shell', cwd: TEST_WORKTREE_PATH, title: 'Shell' }]
+      [{ id: 'pty-shell', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }]
     ]
     runtime.setPtyController({
       write: () => true,
