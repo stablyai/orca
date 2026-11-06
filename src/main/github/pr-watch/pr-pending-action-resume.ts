@@ -5,6 +5,7 @@
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { pushedPullRequestHead, type PushRemote } from './pr-chat-action-recorder'
+import { PRPendingActionDrain } from './pr-pending-action-drain'
 import type { PRPendingActionResumeDeps, PRVerifiedAction } from './pr-pending-action-types'
 import {
   deferPRPendingAction,
@@ -24,8 +25,6 @@ import {
   type PRWatchWorkspace
 } from './pr-watch-types'
 
-/** At most this many rows run at once. */
-const BATCH_LIMIT = 20
 const PUSH_READ_INTERVAL_MS = 20_000
 // After the verify deadline, one or two reads decide a late push.
 const LATE_PUSH_WINDOW_MS = 40_000
@@ -51,42 +50,42 @@ type PendingPush = {
 }
 
 export class PRPendingActionResume {
-  private readonly inFlight = new Set<string>()
   private readonly pushes = new Set<PendingPush>()
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
-  private drainTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly passes: PRPendingActionDrain<PRPendingActionRow>
   private stopped = false
 
-  constructor(private readonly deps: PRPendingActionResumeDeps) {}
+  constructor(private readonly deps: PRPendingActionResumeDeps) {
+    this.passes = new PRPendingActionDrain({
+      readDue: (limit, running) =>
+        this.stopped || deps.database.readOnly || deps.database.isClosed
+          ? null
+          : limit > 0
+            ? readDuePRPendingActions(deps.database.db, deps.now(), limit, running)
+            : [],
+      keyOf: prPendingActionKey,
+      start: (row) => void this.process(row),
+      nextAt: () => nextPRPendingActionAt(deps.database.db, deps.now()),
+      now: deps.now
+    })
+  }
 
   clear(): void {
     this.stopped = true
     this.timers.forEach((timer) => clearTimeout(timer))
     this.timers.clear()
-    clearTimeout(this.drainTimer ?? undefined)
+    this.passes.stop()
     this.pushes.forEach((push) => push.finish(null))
     this.pushes.clear()
   }
 
   /** Starts due rows up to the running limit; the next pass is timed to the earliest backoff. */
   drain(): void {
-    const { database, now } = this.deps
-    if (this.stopped || database.readOnly || database.isClosed) {
-      return
-    }
-    const room = BATCH_LIMIT - this.inFlight.size
-    const due =
-      room > 0 ? readDuePRPendingActions(database.db, now(), room, [...this.inFlight]) : []
-    due.forEach((row) => void this.process(row))
-    const next = nextPRPendingActionAt(database.db, now())
-    clearTimeout(this.drainTimer ?? undefined)
-    this.drainTimer =
-      next === null ? null : this.later(() => this.drain(), Math.max(1_000, next - now()))
+    this.passes.run()
   }
 
+  /** Runs a row `drain` reserved. */
   private async process(row: PRPendingActionRow): Promise<void> {
-    const key = prPendingActionKey(row)
-    this.inFlight.add(key)
     try {
       if (!this.deps.chatExists(row.chatId) || this.expired(row)) {
         return this.settle(row, openPRPendingObligations(row), [])
@@ -111,8 +110,7 @@ export class PRPendingActionResume {
       this.failed(error)
       this.retryOrExpire(row)
     } finally {
-      this.inFlight.delete(key)
-      this.drain()
+      this.passes.release(row)
     }
   }
 

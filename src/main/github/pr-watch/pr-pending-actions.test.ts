@@ -205,6 +205,36 @@ describe('pending PR actions', () => {
     expect(count('pr_chat_actions')).toBe(0)
   })
 
+  it('starts each due row once when an expired row ends inside the pass', async () => {
+    const journal = await openJournal()
+    const call = (ordinal: number, pr: number) =>
+      journal.appendItem(
+        { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal },
+        shellCall('gh pr create --fill', `https://github.com/acme/repo/pull/${pr}\n`),
+        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    await call(0, 7)
+    clock += 25 * 60 * 60_000
+    await call(1, 8)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      // A, past its expiry, ends at once; recent B's workspace is not resolvable yet.
+      const chatWorkspace = vi.fn(async () => null)
+      const resume = resumeAfterRestart({ chatWorkspace })
+      resume.drain()
+      await vi.waitFor(() => expect(count('pr_pending_actions')).toBe(1))
+      for (let pass = 0; pass < 5; pass++) {
+        resume.drain()
+      }
+      await Promise.resolve()
+      expect(chatWorkspace).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(1)
+      resume.clear()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('captures nothing from an imported transcript', async () => {
     const journal = await openJournal()
     await journal.replaceEpochItems('legacy_import', 0, [
