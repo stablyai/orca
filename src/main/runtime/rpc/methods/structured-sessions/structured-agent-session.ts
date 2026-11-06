@@ -21,12 +21,12 @@ import {
   requireInstalledStructuredHost as requireInstalledHost,
   requireStructuredCapability,
   requireStructuredCleanupHost,
-  requireStructuredCreateSupportAdmission,
   requireStructuredSessionHost as requireSessionHost,
   structuredCallerFor as callerFor
 } from './creation/structured-agent-session-gate'
 import {
   handleStructuredAgentSessionCreate,
+  handleStructuredAgentSessionCreateSupport,
   attachClientSuppliedLocation
 } from './creation/structured-agent-session-create-handler'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './conversation/structured-agent-session-hold'
@@ -49,7 +49,6 @@ import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './conversation/str
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './history/structured-agent-session-conversation-outline'
 import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './history/structured-agent-session-item'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './catalog/structured-agent-session-options-read'
-import '../structured-agent-session-schemas'
 import {
   AttachParams,
   CancelParams,
@@ -63,6 +62,9 @@ import {
   SubscribeParams,
   UnsubscribeParams
 } from '../../../../../shared/rpc-contract/structured-agent-session-params'
+import '../../../../../shared/rpc-contract/structured-agent-session-continue-params'
+import '../../../../../shared/rpc-contract/structured-agent-session-rename-params'
+import '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import { sendStructuredAgentSessionForClient } from './conversation/structured-agent-session-send-compatibility'
 import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
 import { runConversationCommandForClient } from '../structured-agent-session-conversation-command'
@@ -97,26 +99,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.createSupport',
     permission: 'workspace',
     params: CreateSupportParams,
-    handler: async (params, ctx) => {
-      requireStructuredCreateSupportAdmission(ctx, params.agent)
-      const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
-        params.worktree,
-        params.agent
-      )
-      if (support.supported && params.resumeFrom) {
-        // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
-        await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
-          params.agent,
-          params.resumeFrom.providerSessionId,
-          params.resumeFrom.closingPaneKeys
-        )
-      }
-      // Optional: older clients ignore it, and a client seeds its picker with what create will use.
-      const seedOptions = support.supported
-        ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
-        : undefined
-      return seedOptions ? { ...support, seedOptions } : support
-    }
+    handler: handleStructuredAgentSessionCreateSupport
   }),
   defineMethod({
     name: 'agentSession.create',

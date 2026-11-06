@@ -9,11 +9,13 @@ import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredHost as requireHost,
   requireStructuredAgentAudience,
+  requireStructuredCreateSupportAdmission,
   structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
 import type { AgentSessionAttachParams } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import type {
   AttachParams,
+  CreateSupportParams,
   CreateParams
 } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
 import {
@@ -147,4 +149,28 @@ async function resolveAndCommitStructuredAgentSessionCreate(
     }),
     ctx
   )
+}
+
+export async function handleStructuredAgentSessionCreateSupport(
+  params: z.infer<typeof CreateSupportParams>,
+  ctx: RpcContext
+) {
+  requireStructuredCreateSupportAdmission(ctx, params.agent)
+  const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
+    params.worktree,
+    params.agent
+  )
+  if (support.supported && params.resumeFrom) {
+    // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
+    await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+      params.agent,
+      params.resumeFrom.providerSessionId,
+      params.resumeFrom.closingPaneKeys
+    )
+  }
+  // Optional: older clients ignore it, and a client seeds its picker with what create will use.
+  const seedOptions = support.supported
+    ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
+    : undefined
+  return seedOptions ? { ...support, seedOptions } : support
 }
