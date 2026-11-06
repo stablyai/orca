@@ -40,6 +40,7 @@ import {
   pullRequestDraftGitExec,
   type RuntimeCommitMessageSettingsOverride
 } from './runtime-git-generation-context'
+import { discoverModelsWithHostCache } from './runtime-model-discovery-cache'
 
 export class RuntimeGitGenerationCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -257,12 +258,14 @@ export class RuntimeGitGenerationCommands {
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    const localOptions = localGitOptionsForTarget(target)
-    return localOptions.wslDistro
-      ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-          cwd: target.worktree.path,
-          wslDistro: localOptions.wslDistro
-        })
-      : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
+    const { wslDistro } = localGitOptionsForTarget(target)
+    const wsl = wslDistro ? { cwd: target.worktree.path, wslDistro } : null
+    return discoverModelsWithHostCache(
+      { agentId: typedAgentId, agentCommandOverride, env: localEnv.env, wsl },
+      () =>
+        wsl
+          ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, wsl)
+          : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
+    )
   }
 }
