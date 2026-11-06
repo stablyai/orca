@@ -114,6 +114,6 @@ it('selects the created commit through the filter reload when showing all branch
     await controller.settledResult()
   })
   await act(async () => root.unmount())
-  expect(useAppStore.getState().gitGraphFiltersByWorktree[workspaceId]).toBe('all')
+  expect(useAppStore.getState().gitGraphFiltersByWorktree?.[workspaceId]).toBe('all')
   expect(controller.view.getState().selectedId).toBe('ccccccc')
 })
