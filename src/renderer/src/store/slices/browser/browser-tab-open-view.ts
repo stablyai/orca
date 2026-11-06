@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/constants'
 import type { AppState } from '../../types'
 import { ownsGlobalSelection } from '../../global-selection-owner'
-import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
+import { workspaceEditorFiles } from '../editor/tabs/workspace-editor-files'
 
 // The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and
 // the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
@@ -25,9 +25,9 @@ export function browserTabOpenView(
   const nextTabBarOrder = (() => {
     const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
     const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-    const editorIds = (s.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter((tab) => isEditorTabContentType(tab.contentType))
-      .map((tab) => tab.id)
+    const editorIds = workspaceEditorFiles(s.openFiles, s.unifiedTabsByWorktree[worktreeId]).map(
+      (file) => file.id
+    )
     const ids = [...terminalIds, ...editorIds, ...existingTabs.map((tab) => tab.id)]
     const allExistingIds = new Set(ids)
     const base = currentOrder.filter((entryId) => allExistingIds.has(entryId))

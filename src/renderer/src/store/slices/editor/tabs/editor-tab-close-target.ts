@@ -1,7 +1,7 @@
 import type { OpenFile } from '../types/open-file'
 import type { AppState } from '../../../types'
 import type { Tab } from '../../../../../../shared/tab-types'
-import { isLastEditorBufferView } from '../buffers/editor-buffer-views'
+import { editorBufferIdOfView, editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
 import { needsSavePromptOnClose } from '../buffers/editor-buffer-close-rule'
 import {
   editorContentIsReferenced,
@@ -25,19 +25,22 @@ export function editorTabNeedsSavePrompt(state: AppState, tab: Tab): boolean {
   )
 }
 
-/** Reserve one final placement per dirty record after all selected siblings close. */
+/** Reserve one final placement when the batch removes a dirty buffer's last editable views. */
 export function editorTabsNeedingSavePrompt(state: AppState, tabs: readonly Tab[]): Set<string> {
   const selected = new Set(tabs.map((tab) => tab.id))
-  const lastByFile = new Map(tabs.map((tab) => [tab.entityId, tab]))
+  const lastByBuffer = new Map(tabs.map((tab) => [editorBufferIdOfView(state, tab.entityId), tab]))
   const references = editorPlacementIndex(state.unifiedTabsByWorktree).tabIdsByEntityId
   const prompts = new Set<string>()
   const files = openFileIndex(state.openFiles)
-  for (const [fileId, tab] of lastByFile) {
+  for (const tab of lastByBuffer.values()) {
+    const siblings = editorBufferSiblingViewIds(state, tab.entityId)
     if (
-      files.get(fileId)?.isDirty &&
-      isLastEditorBufferView(state, fileId) &&
-      !hasPendingEntityTab(null, fileId) &&
-      [...(references.get(fileId) ?? [])].every((id) => selected.has(id))
+      siblings.some((id) => files.get(id)?.isDirty) &&
+      siblings.every(
+        (fileId) =>
+          !hasPendingEntityTab(null, fileId) &&
+          [...(references.get(fileId) ?? [])].every((id) => selected.has(id))
+      )
     ) {
       prompts.add(tab.id)
     }

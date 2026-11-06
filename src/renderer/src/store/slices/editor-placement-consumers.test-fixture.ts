@@ -90,8 +90,8 @@ export function seedEditorPlacementConsumers(
       ...(ownerPlacement ? { [EDITOR_OWNER]: { type: 'leaf' as const, groupId: 'y-group' } } : {})
     },
     tabBarOrderByWorktree: {
-      [EDITOR_PLACEMENT]: ['x-source-tab', 'x-other-tab'],
-      [EDITOR_OWNER]: owned.map((tab) => tab.id)
+      [EDITOR_PLACEMENT]: [file.id],
+      [EDITOR_OWNER]: owned.map((tab) => tab.entityId)
     }
   })
   return file
