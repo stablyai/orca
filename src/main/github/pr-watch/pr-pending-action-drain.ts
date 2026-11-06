@@ -3,6 +3,8 @@
 
 /** At most this many rows run at once. */
 const RUNNING_LIMIT = 20
+/** A row whose end saved nothing (a failing database) waits this long before it runs again. */
+const PARK_MS = 30_000
 
 export class PRPendingActionDrain<Row> {
   private readonly started = new Set<string>()
@@ -10,6 +12,8 @@ export class PRPendingActionDrain<Row> {
   private running = false
   private again = false
   private queued = false
+  private readonly parked = new Set<string>()
+  private parkedUntil: number | null = null
 
   /** `readDue` returns null when nothing may run now; `nextAt` is the next backoff. */
   constructor(
@@ -22,10 +26,19 @@ export class PRPendingActionDrain<Row> {
     }
   ) {}
 
-  /** A started row ended: free its slot and wake a pass. */
-  release(row: Row): void {
-    this.started.delete(this.deps.keyOf(row))
-    this.wake()
+  /** A started row ended: free its slot and wake a pass. An end that saved nothing keeps the row
+   *  reserved until the wake timer, so a persistent failure backs off instead of spinning. */
+  release(row: Row, progressed: boolean): void {
+    if (progressed) {
+      this.started.delete(this.deps.keyOf(row))
+      this.wake()
+      return
+    }
+    this.parked.add(this.deps.keyOf(row))
+    this.parkedUntil ??= this.deps.now() + PARK_MS
+    if (!this.running) {
+      this.schedule(this.deps.nextAt())
+    }
   }
 
   private pass(): boolean {
@@ -71,16 +84,23 @@ export class PRPendingActionDrain<Row> {
   }
 
   stop(): void {
-    this.schedule(null)
-  }
-
-  private schedule(at: number | null): void {
     clearTimeout(this.timer ?? undefined)
     this.timer = null
+  }
+
+  private schedule(next: number | null): void {
+    clearTimeout(this.timer ?? undefined)
+    this.timer = null
+    const at = next === null ? this.parkedUntil : Math.min(next, this.parkedUntil ?? next)
     if (at !== null) {
       this.timer = setTimeout(
         () => {
           this.timer = null
+          if (this.parkedUntil !== null && this.deps.now() >= this.parkedUntil) {
+            this.parked.forEach((key) => this.started.delete(key))
+            this.parked.clear()
+            this.parkedUntil = null
+          }
           this.run()
         },
         Math.max(1_000, at - this.deps.now())

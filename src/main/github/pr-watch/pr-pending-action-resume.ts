@@ -53,6 +53,8 @@ export class PRPendingActionResume {
   private readonly pushes = new Set<PendingPush>()
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
   private readonly passes: PRPendingActionDrain<PRPendingActionRow>
+  // Rows whose settle or defer committed this run; only those may wake another pass at once.
+  private readonly committed = new WeakSet<PRPendingActionRow>()
   private stopped = false
 
   constructor(private readonly deps: PRPendingActionResumeDeps) {
@@ -64,7 +66,8 @@ export class PRPendingActionResume {
             ? readDuePRPendingActions(deps.database.db, deps.now(), limit, running)
             : [],
       keyOf: prPendingActionKey,
-      start: (row) => void this.process(row),
+      // A failing database fails the defer too: the row parks and the error is logged.
+      start: (row) => void this.process(row).catch(this.failed),
       nextAt: () => nextPRPendingActionAt(deps.database.db, deps.now()),
       now: deps.now
     })
@@ -110,7 +113,7 @@ export class PRPendingActionResume {
       this.failed(error)
       this.retryOrExpire(row)
     } finally {
-      this.passes.release(row)
+      this.passes.release(row, this.committed.has(row))
     }
   }
 
@@ -129,6 +132,7 @@ export class PRPendingActionResume {
       return
     }
     this.deps.settle(row, indices, this.expired(row) ? [] : verified)
+    this.committed.add(row)
     indices.forEach((index) => (row.obligations[index].done = true))
   }
 
@@ -144,6 +148,7 @@ export class PRPendingActionResume {
     }
     const delay = Math.min(RETRY_BASE_MS * 2 ** row.attempts, RETRY_MAX_MS)
     database.transaction((db) => deferPRPendingAction(db, row, now() + delay))
+    this.committed.add(row)
   }
 
   private async verify(
