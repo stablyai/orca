@@ -79,7 +79,8 @@ export function MobileDiffReviewRangeSheet({
                 .commentOnGitHub({ item, startLine: range.startLine, line: range.line, body })
                 .then((posted) => {
                   if (posted.ok) {
-                    // Only this sheet; one opened since keeps its own draft.
+                    controller.clearSavedNote(body)
+                    // Only this sheet; text typed since stays.
                     controller.closeSheet('range', range)
                   } else {
                     setPostError(posted.error)
