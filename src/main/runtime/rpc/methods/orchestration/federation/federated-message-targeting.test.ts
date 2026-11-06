@@ -14,6 +14,72 @@ describe('orchestration federated message targeting', () => {
   afterEach(() => {
     runtime?.stopOrchestrationFederationRelay()
     db?.close()
+    vi.useRealTimers()
+  })
+
+  it('persists scheduled waits on the execution host and relays their status to the Run home', async () => {
+    vi.useFakeTimers({ now: Date.parse('2026-11-03T12:00:00Z') })
+    ;({ db, runtime } = attachedRemoteWorker())
+    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    const until = '2026-11-03T13:00:00.000Z'
+    await expect(
+      dispatcher.dispatch(
+        request('scheduled_wait', 'orchestration.send', {
+          from: 'term_remote_worker',
+          type: 'status',
+          subject: 'Waiting',
+          body: 'Next scheduled sweep',
+          payload: JSON.stringify({ dispatchId: 'ctx_remote_targeting', waitUntil: until })
+        })
+      )
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        scheduledWait: { dispatchId: 'ctx_remote_targeting', until, reason: 'Next scheduled sweep' }
+      }
+    })
+    expect(
+      db.db
+        .prepare('SELECT until_ms FROM worker_scheduled_waits WHERE dispatch_id = ?')
+        .get('ctx_remote_targeting')
+    ).toEqual({ until_ms: Date.parse(until) })
+    expect(
+      db.listFederationRelay({
+        dispatchId: 'ctx_remote_targeting',
+        direction: 'to_home',
+        afterSequence: 0
+      })
+    ).toHaveLength(1)
+    db.createRun({
+      objective: 'Other coordinator',
+      coordinatorHandle: 'term_other',
+      coordinatorPaneKey: 'tab_other:leaf_other'
+    })
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_other' ? 'tab_other:leaf_other' : 'tab_worker:leaf_worker'
+    )
+    await expect(
+      dispatcher.dispatch({
+        ...request('spoofed_status', 'orchestration.send', {
+          from: 'term_remote_worker',
+          type: 'status',
+          subject: 'Pretend progress'
+        }),
+        orchestrationCompatibilityEvidence: { terminalHandle: 'term_other' }
+      })
+    ).resolves.toMatchObject({ ok: true })
+    expect(db.db.prepare('SELECT dispatch_id FROM worker_scheduled_waits').all()).toEqual([
+      { dispatch_id: 'ctx_remote_targeting' }
+    ])
+    await dispatcher.dispatch(
+      request('resumed_status', 'orchestration.send', {
+        from: 'term_remote_worker',
+        type: 'status',
+        subject: 'Resumed',
+        body: 'Checking now'
+      })
+    )
+    expect(db.db.prepare('SELECT * FROM worker_scheduled_waits').all()).toEqual([])
   })
 
   it('rejects explicit send and ask targets without enqueueing a relay', async () => {

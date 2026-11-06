@@ -84,6 +84,26 @@ its chat after it reports: they want to watch it or talk to it. To keep one alre
 started, run
 `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
 
+## Scheduled waits
+
+For a long-lived task that deliberately rests until an automation or scheduled wake,
+report before ending the turn:
+
+```text
+ORCA orchestration send --type status --subject "Waiting for next check" --wait-until 4h --body "Next scheduled PR check" --from <worker_handle> --dispatch-id <dispatch_id>
+```
+
+`--wait-until` accepts a future ISO timestamp with timezone or a duration (`30s`,
+`5m`, `4h`, `1d`). The body is the required reason. Confirm the receipt includes
+`scheduledWait` before relying on it. The wait persists across Orca restarts and
+suppresses only a clean idle-stop escalation for that exact Dispatch until its
+deadline. Errors, approval prompts, and process exits still report. A missed
+deadline without progress reports once. A new turn or later status without
+`--wait-until` clears the wait; declare it again before resting another time.
+This records a deadline; it does not create a wake automation. Keep the Task open
+and use `worker_done` only when the assigned work has finished. `--keep-open`
+alone does not declare a scheduled wait.
+
 ## Task spec
 
 Make each spec self-contained: the target, the change, constraints, what the

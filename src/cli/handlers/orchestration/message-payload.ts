@@ -1,5 +1,6 @@
 import { getOptionalJsonFlag, getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
+import { parseScheduledWaitUntil } from '../../../shared/orchestration-scheduled-wait'
 
 export function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
@@ -11,13 +12,15 @@ export function getOptionalStructuredMessagePayload(
   const filesModified = getOptionalStringFlag(flags, 'files-modified')
   const reportPath = getOptionalStringFlag(flags, 'report-path')
   const phase = getOptionalStringFlag(flags, 'phase')
+  const waitUntil = getOptionalStringFlag(flags, 'wait-until')
   const hasStructuredPayload =
     taskId !== undefined ||
     dispatchId !== undefined ||
     outcome !== undefined ||
     filesModified !== undefined ||
     reportPath !== undefined ||
-    phase !== undefined
+    phase !== undefined ||
+    waitUntil !== undefined
   if (!hasStructuredPayload) {
     return rawPayload
   }
@@ -55,6 +58,25 @@ export function getOptionalStructuredMessagePayload(
   }
   if (phase) {
     payload.phase = phase
+  }
+  if (waitUntil) {
+    if (
+      (getOptionalStringFlag(flags, 'type') ?? 'status') !== 'status' ||
+      !getOptionalStringFlag(flags, 'body')?.trim()
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--wait-until requires a status message and a nonempty --body explaining the reason.'
+      )
+    }
+    try {
+      payload.waitUntil = parseScheduledWaitUntil(waitUntil)
+    } catch (error) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        error instanceof Error ? error.message : 'Invalid wait deadline.'
+      )
+    }
   }
   return JSON.stringify(payload)
 }

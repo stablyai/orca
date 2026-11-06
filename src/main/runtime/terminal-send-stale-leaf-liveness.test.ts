@@ -419,6 +419,8 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      nextWorkerScheduledWaitAtMs: () => null,
+      clearWorkerScheduledWaitForPane: () => {},
       crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.

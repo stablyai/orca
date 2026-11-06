@@ -44,6 +44,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM worker_terminal_resources;
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
+    DELETE FROM worker_scheduled_waits;
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
@@ -77,6 +78,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM worker_terminal_resources;
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
+    DELETE FROM worker_scheduled_waits;
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;

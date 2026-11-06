@@ -1,3 +1,8 @@
+import {
+  isWorkerMessageProgressCaller,
+  type MessageProgressCaller
+} from './send-lifecycle-admission'
+import { scheduledWaitFromMessage } from '../../../../orchestration/scheduled-wait-message'
 import type { MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerDispatchState } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -28,6 +33,7 @@ export async function sendRemoteMessage(args: {
   from: string
   senderPaneKey: string
   remoteAttachment: RemoteAttachment
+  progressCaller?: MessageProgressCaller
   processIncarnation?: string | null
   signal?: AbortSignal
 }) {
@@ -44,6 +50,7 @@ export async function sendRemoteMessage(args: {
     })
   })
 
+  const scheduledWait = scheduledWaitFromMessage(params)
   const type = (params.type ?? 'status') as MessageType
   const payload = parseRemoteWorkerPayload(params.payload)
   if (
@@ -73,6 +80,14 @@ export async function sendRemoteMessage(args: {
     dispatchId: remoteAttachment.dispatch_id,
     direction: 'to_home',
     kind: type,
+    scheduledWait: scheduledWait ? { ...scheduledWait, from } : undefined,
+    clearScheduledWait:
+      type !== 'heartbeat' &&
+      !scheduledWait &&
+      args.progressCaller &&
+      isWorkerMessageProgressCaller(runtime, { from, senderPaneKey, caller: args.progressCaller })
+        ? true
+        : undefined,
     payload: JSON.stringify({
       from,
       subject: params.subject,
@@ -103,6 +118,9 @@ export async function sendRemoteMessage(args: {
     )
   }
   return {
+    ...(scheduledWait
+      ? { scheduledWait: { dispatchId: remoteAttachment.dispatch_id, ...scheduledWait } }
+      : {}),
     relay: {
       messageId: relay.message_id,
       sequence: relay.sequence,

@@ -1,3 +1,4 @@
+import type { WorkerScheduledWaitMethods } from './worker-scheduled-waits'
 import type { AttemptObservationStoreMethods } from './attempt-observation-store'
 import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-run-store'
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
@@ -134,4 +135,5 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
   CoordinatorRunStoreMethods &
-  OrchestrationResetMethods
+  OrchestrationResetMethods &
+  WorkerScheduledWaitMethods

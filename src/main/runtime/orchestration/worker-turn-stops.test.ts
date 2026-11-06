@@ -406,13 +406,19 @@ describe('remote worker turn stops', () => {
     const target = { kind: 'remote' as const, attachment }
     reportWorkerTurnStop(db, target, stop, deps)
     reportWorkerTurnStop(db, target, stop, deps)
-    const [first, second] = enqueueFederationRelay.mock.calls.map(([params]) => params)
-    expect(first).toMatchObject({
+    const relays = db.listFederationRelay({
       dispatchId: 'dsp_remote',
+      direction: 'to_home',
+      afterSequence: 0
+    })
+    expect(relays).toHaveLength(1)
+    const [first] = relays
+    expect(first).toMatchObject({
+      dispatch_id: 'dsp_remote',
       direction: 'to_home',
       kind: 'escalation'
     })
-    expect(first.messageId).toBe(second.messageId)
+    expect(first.message_id).toMatch(/^msg_stop_/)
     const relayed = JSON.parse(first.payload)
     expect(relayed).toMatchObject({ type: 'escalation', priority: 'high' })
     expect(JSON.parse(relayed.payload)).toMatchObject({ stopReason: 'finished' })

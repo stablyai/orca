@@ -68,7 +68,8 @@ export async function askRemoteRunHome(args: {
           options
         })
       }),
-      remoteQuestion: true
+      remoteQuestion: true,
+      clearScheduledWait: true
     }).message_id
   if (!resume && args.params.wait === false) {
     return askedQuestionReceipt(questionId, args.recordMutationReceipt)

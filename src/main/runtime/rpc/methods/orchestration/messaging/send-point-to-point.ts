@@ -1,3 +1,9 @@
+import {
+  clearWorkerWaitOnMessageProgress,
+  type MessageProgressCaller
+} from './send-lifecycle-admission'
+import { scheduledWaitFromMessage } from '../../../../orchestration/scheduled-wait-message'
+import { recordWorkerScheduledWait } from '../../../../orchestration/db/worker-scheduled-waits'
 import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
@@ -29,6 +35,7 @@ export function sendPointToPointMessage(args: {
   senderPaneKey: string | undefined
   legacyCoordinatorRunId: string | undefined
   resolveProcessIncarnation: () => string | undefined
+  progressCaller: MessageProgressCaller
   revalidateLegacyCoordinator: (() => string) | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   markWorkerDoneMutationEffectFree: (() => void) | undefined
@@ -45,6 +52,7 @@ export function sendPointToPointMessage(args: {
     senderPaneKey,
     legacyCoordinatorRunId,
     resolveProcessIncarnation,
+    progressCaller,
     revalidateLegacyCoordinator,
     recordMutationReceipt,
     markWorkerDoneMutationEffectFree,
@@ -52,6 +60,7 @@ export function sendPointToPointMessage(args: {
   } = args
   revalidateLegacyCoordinator?.()
   const messageType = (params.type ?? 'status') as MessageType
+  const scheduledWait = scheduledWaitFromMessage(params)
   const processIncarnation = isDispatchMutationMessageType(messageType)
     ? resolveProcessIncarnation()
     : undefined
@@ -140,7 +149,27 @@ export function sendPointToPointMessage(args: {
         runtime.notifyMessageArrived(msg.to_handle, msg.type)
       )
     }
-    const receipt = withSendWarnings({ message: exposeMessage(msg) })
+    if (scheduledWait && dispatch) {
+      recordWorkerScheduledWait(db, {
+        dispatchId: dispatch.id,
+        ...scheduledWait,
+        messageId: msg.id,
+        from
+      })
+    } else {
+      clearWorkerWaitOnMessageProgress(runtime, db, {
+        from,
+        senderPaneKey,
+        caller: progressCaller,
+        resolveProcessIncarnation
+      })
+    }
+    const receipt = withSendWarnings({
+      message: exposeMessage(msg),
+      ...(scheduledWait && dispatch
+        ? { scheduledWait: { dispatchId: dispatch.id, ...scheduledWait } }
+        : {})
+    })
     return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(msg.to_handle, msg.type)
     )
@@ -150,7 +179,7 @@ export function sendPointToPointMessage(args: {
     markWorkerDoneMutationEffectFree?.()
   }
   const committed =
-    messageType === 'worker_done'
+    messageType === 'worker_done' || scheduledWait
       ? db.commitWorkerDoneMessageMutation(commitMessage)
       : commitMessage()
   committed.nudge()

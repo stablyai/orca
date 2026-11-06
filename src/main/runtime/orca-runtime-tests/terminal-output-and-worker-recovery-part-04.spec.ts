@@ -280,6 +280,8 @@ describe('OrcaRuntimeService', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      nextWorkerScheduledWaitAtMs: () => null,
+      clearWorkerScheduledWaitForPane: () => {},
       crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       reconcileMissingWorkerTerminal: vi.fn(),
