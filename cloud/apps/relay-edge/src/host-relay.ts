@@ -38,9 +38,14 @@ import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { controlErrorCode, edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
 import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
 
+// Longer than one database operation can take (connect 2 s + query 5 s, edge-database.ts).
+const ASSIGNMENT_CHECK_DEADLINE_MS = 8_000
+
 type ControlAttachment = {
   k: 'control'
-  phase: 'hello' | 'proof' | 'active'
+  // 'checking': the hello arrived and the assignment check is in flight. Its deadline closes
+  // 4429 (transient), never 4401, so a slow database cannot look like a bad credential.
+  phase: 'hello' | 'checking' | 'proof' | 'active'
   claims: EdgeClaims
   origin: string
   caps: string[]
@@ -165,6 +170,8 @@ export class HostRelay extends DurableObject<Env> {
     }
     const { type, ...body } = parsed
     if (a.phase === 'hello') return this.onHostHello(ws, a, type, body)
+    // The client waits for the challenge; nothing else is valid until then.
+    if (a.phase === 'checking') return
     if (a.phase === 'proof') return this.onHostProof(ws, a, type, body)
     if (type === 'pong') {
       a.lastPongAt = Date.now()
@@ -279,6 +286,10 @@ export class HostRelay extends DurableObject<Env> {
       this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host key binding mismatch')
       return
     }
+    // The first frame arrived in time: from here a slow check is the relay's problem (4429).
+    a.phase = 'checking'
+    a.deadline = Date.now() + ASSIGNMENT_CHECK_DEADLINE_MS
+    this.attach(ws, a)
     // The director's assignment row must place this host on the edge at the epoch the desktop was
     // given, as a cell checks its own id. A database failure is transient (4429), never a 4409.
     let assignmentValid: boolean
@@ -293,7 +304,7 @@ export class HostRelay extends DurableObject<Env> {
       return
     }
     const current = this.attachment(ws)
-    if (!current || current.k !== 'control' || current.phase !== 'hello') return
+    if (!current || current.k !== 'control' || current.phase !== 'checking') return
     const rebind = await this.canRebind(ws, current.claims, hello.data.previousGeneration, hello.data.controlResumeSecret)
     const issuedAt = Date.now()
     const expiresAt = issuedAt + 10_000
@@ -694,7 +705,8 @@ export class HostRelay extends DurableObject<Env> {
         continue
       }
       if (now >= a.deadline) {
-        this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, a.phase === 'proof' ? 'invalid host proof' : 'first frame timeout')
+        if (a.phase === 'checking') this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'relay temporarily unavailable')
+        else this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, a.phase === 'proof' ? 'invalid host proof' : 'first frame timeout')
         await this.onSocketGone(ws, 1006, '')
       }
     }

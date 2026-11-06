@@ -38,6 +38,32 @@
     "ORPHAN_GRACE_MS": "30000"
   },
   "env": {
+    // R6/R8 staging: staging Cloud SQL through Hyperdrive over a Workers VPC tunnel. workers.dev
+    // only; test JWKS inline (synthetic hosts), debug routes on. Not for real clients.
+    "staging": {
+      "name": "orca-relay-edge-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "durable_objects": {
+        "bindings": [
+          { "name": "HOST_RELAY", "class_name": "HostRelay" },
+          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+        ],
+        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
+      },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "176d8b75917642b0b7725e15745338ed" }],
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_staging" }],
+      "vars": {
+        "EDGE_BACKEND": "postgres",
+        "EDGE_CELL_ID": "edge",
+        "RELAY_JWT_AUDIENCE": "orca-relay",
+        "PING_INTERVAL_MS": "45000",
+        "SILENCE_TIMEOUT_MS": "75000",
+        "ORPHAN_GRACE_MS": "30000",
+        "SPIKE_DEBUG": "1",
+        "EDGE_VERSION": "staging-v1"
+      }
+    },
     // Cloudflare de-risk spike: workers.dev only, no custom domains or routes, test keys only.
     // RELAY_JWKS (public test key) and SPIKE_RESUME_TOKEN_HASHES are set with `wrangler secret put`.
     "spike": {

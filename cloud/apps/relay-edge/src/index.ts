@@ -59,6 +59,28 @@ export default {
         const cf = (request as Request & { cf?: { colo?: string; country?: string } }).cf
         return Response.json({ colo: cf?.colo ?? 'local', country: cf?.country ?? null, version: env.EDGE_VERSION ?? 'dev', now: Date.now() })
       }
+      // R6: per-operation database latency from this colo (fresh client per op, as the backend does).
+      if (url.pathname === '/__spike/db' && env.HYPERDRIVE) {
+        // Query strings are rejected above, so the count is fixed.
+        const cf = (request as Request & { cf?: { colo?: string } }).cf
+        const n = 6
+        const { Client } = await import('pg')
+        const ms: number[] = []
+        for (let i = 0; i < n; i++) {
+          const started = Date.now()
+          const client = new Client({ connectionString: env.HYPERDRIVE.connectionString, connectionTimeoutMillis: 5000 })
+          try {
+            await client.connect()
+            await client.query('SELECT 1')
+            ms.push(Date.now() - started)
+          } catch {
+            ms.push(-1)
+          } finally {
+            await client.end().catch(() => {})
+          }
+        }
+        return Response.json({ colo: cf?.colo ?? 'local', ms })
+      }
       const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
       if (info) return forward(env, request, info[1], { 'x-edge-kind': 'info' })
     }
