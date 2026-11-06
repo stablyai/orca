@@ -41,6 +41,7 @@ import type {
 
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, followUps, host } = context
+  const resolveAccountHome = deps.launchAccountHome
   const providerInvocation = {
     resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
     resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -62,7 +63,11 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         CODEX_STRUCTURED_AGENT,
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
+          isNeverSent: (record) => host()?.sessionNeverSent(record.sessionId) ?? false,
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          ...(resolveAccountHome
+            ? { resolveAccountHome: (record) => resolveAccountHome(record, 'launch') }
+            : {}),
           ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
         })
       ),
