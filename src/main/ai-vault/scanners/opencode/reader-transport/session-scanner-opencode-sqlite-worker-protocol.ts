@@ -53,6 +53,7 @@ export type OpenCodeNativeChatReadRequest = {
 export type OpenCodeForkCoverageRequest = {
   id: number
   kind: 'fork-coverage'
+  sourceSessionId: string
   dbPath: string
   sessionId: string
 }

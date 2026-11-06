@@ -1,9 +1,10 @@
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { StructuredAgentSessionConversationCopyInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { NativeCopyCoverage } from '../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from './acp-fork-support'
 import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -30,11 +31,10 @@ export async function copyAcpConversation(
     AcpStructuredSessionAdapterDeps,
     'spec' | 'readLaunch' | 'resolveLaunchArgs' | 'connect' | 'logger' | 'dataDirectory'
   >,
-  input: {
-    identity: AgentSessionJournalIdentity
-    providerSessionId: string
-    accountHome: AgentSessionAccountHome
-  },
+  input: Pick<
+    StructuredAgentSessionConversationCopyInput,
+    'identity' | 'providerSessionId' | 'accountHome' | 'checkpoint'
+  >,
   options: {
     timeoutMs?: number
     signal?: AbortSignal
@@ -45,6 +45,8 @@ export async function copyAcpConversation(
   const timeout = AbortSignal.timeout(options.timeoutMs ?? ACP_CONVERSATION_COPY_TIMEOUT_MS)
   const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout
   let connection: AcpStructuredConnection | null = null
+  let result: AiVaultConversationCopy
+  let launchEnv: Record<string, string>
   try {
     signal.throwIfAborted()
     deps.spec.assertCopyLaunchArgs?.(
@@ -52,6 +54,7 @@ export async function copyAcpConversation(
     )
     signal.throwIfAborted()
     const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
+    launchEnv = launch.env
     signal.throwIfAborted()
     deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
     await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
@@ -93,17 +96,8 @@ export async function copyAcpConversation(
     if (deps.spec.agent === 'omp' && !filePath) {
       throw new Error('OMP did not save the copied conversation in its pinned session directory.')
     }
-    const dbPath = deps.spec.transcriptImport?.conversationStore({
-      accountHome: input.accountHome,
-      launchEnv: launch.env
-    })
-    const ids =
-      (deps.spec.agent === 'opencode' || deps.spec.agent === 'opencode2') && dbPath
-        ? await readOpenCodeForkCoverageViaWorker({ dbPath, sessionId }, signal)
-        : null
-    return {
+    result = {
       sessionId,
-      ...(ids ? { coverage: { unit: 'acp-user-message' as const, ids } } : {}),
       ...(filePath ? { filePath } : {})
     }
   } catch (error) {
@@ -127,6 +121,35 @@ export async function copyAcpConversation(
       })
     }
   }
+  if (input.checkpoint && (deps.spec.agent === 'opencode' || deps.spec.agent === 'opencode2')) {
+    try {
+      const dbPath = deps.spec.transcriptImport?.conversationStore({
+        accountHome: input.accountHome,
+        launchEnv
+      })
+      if (!dbPath) {
+        throw new Error('OpenCode conversation store is unavailable')
+      }
+      const ids = await readOpenCodeForkCoverageViaWorker(
+        {
+          dbPath,
+          sessionId: result.sessionId,
+          sourceSessionId: input.providerSessionId
+        },
+        signal
+      )
+      if (ids) {
+        return { ...result, coverage: { unit: 'acp-user-message', ids } }
+      }
+    } catch {
+      throw agentSessionRefusalError(
+        'agent_session_identity_required',
+        { reason: 'transcriptUnreadable' },
+        `${name} could not read the copied chat. Check that its conversation store is available, then try again.`
+      )
+    }
+  }
+  return result
 }
 
 async function forkAdvertised(

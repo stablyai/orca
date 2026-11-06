@@ -304,7 +304,7 @@ export async function readOpenCodeTranscriptSignalViaWorker(
 }
 
 export async function readOpenCodeForkCoverageViaWorker(
-  args: { dbPath: string; sessionId: string },
+  args: { dbPath: string; sessionId: string; sourceSessionId: string },
   signal?: AbortSignal
 ): Promise<string[] | null> {
   const wsl = openCodeWslPath(args.dbPath)

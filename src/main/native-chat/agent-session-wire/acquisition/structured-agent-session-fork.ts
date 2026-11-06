@@ -12,7 +12,10 @@ import { structuredAgentSessionForkBoundary } from './structured-agent-session-f
 import { acpAgentName } from '../../../acp/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
@@ -184,6 +187,9 @@ export async function prepareStructuredAgentSessionFork(input: {
       accountHome: record.accountHome
     })
     .catch((error: unknown) => {
+      if (isAgentSessionRefusalError(error)) {
+        throw error
+      }
       host.deps.logger.warn('native conversation copy failed', {
         scope: 'chat-fork',
         sessionId: record.sessionId,

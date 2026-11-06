@@ -17,7 +17,7 @@ import type {
 const MAX_PAGE_BYTES = 16 * 1024 * 1024
 const MAX_SCAN_ROWS = 10_000
 
-function sessionExists(db: SyncDatabase, sessionId: string): boolean {
+export function hasOpenCode2Session(db: SyncDatabase, sessionId: string): boolean {
   return (
     tableExists(db, 'session_v2') &&
     tableExists(db, 'session_message') &&
@@ -32,7 +32,7 @@ export function readOpenCode2TranscriptSignal(
   db: SyncDatabase,
   sessionId: string
 ): OpenCodeTranscriptSignal | null {
-  if (!sessionExists(db, sessionId)) {
+  if (!hasOpenCode2Session(db, sessionId)) {
     return null
   }
   const row = asRecord(
@@ -186,7 +186,7 @@ export function readOpenCode2TranscriptPage(
     beforeMessageRowId?: number
   }
 ): OpenCodeTranscriptPage | null {
-  if (!sessionExists(db, args.sessionId)) {
+  if (!hasOpenCode2Session(db, args.sessionId)) {
     return null
   }
   const limit = openCodeTranscriptPageLimit(args.limit)
@@ -253,34 +253,4 @@ export function readOpenCode2TranscriptPage(
     beforeMessageRowId: scannedRows ? cursor : null,
     forkTip: forkTip.toReversed()
   }
-}
-
-/** Fork-event identities distinguish copied roots from a CLI write made before this read. */
-export function readOpenCode2ForkCoverage(db: SyncDatabase, sessionId: string): string[] | null {
-  if (!sessionExists(db, sessionId)) {
-    return null
-  }
-  const event = asRecord(
-    db
-      .prepare(
-        "SELECT id FROM event WHERE aggregate_id = ? AND type = 'session.forked' ORDER BY seq LIMIT 1"
-      )
-      .get(sessionId)
-  )
-  if (typeof event?.id !== 'string' || !event.id.startsWith('evt_')) {
-    throw new Error('OpenCode did not record the copied conversation')
-  }
-  const prefix = event.id.replace(/^evt_/, 'msg_')
-  return db
-    .prepare(
-      "SELECT id FROM session_message WHERE session_id = ? AND type = 'user' AND id = ? || '_' || seq ORDER BY seq"
-    )
-    .all(sessionId, prefix)
-    .map((value) => {
-      const row = asRecord(value)
-      if (typeof row?.id !== 'string') {
-        throw new Error('OpenCode copied message identity is invalid')
-      }
-      return row.id
-    })
 }
