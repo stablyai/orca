@@ -1,3 +1,8 @@
+import {
+  useCodexChildRowOpening,
+  viewCodexChildFromRow
+} from '@/lib/agent-session/navigation/codex-child-row-view'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/class-names'
 import {
@@ -132,6 +137,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const t = useTranslate()
   useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
+  const openingChild = useCodexChildRowOpening(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -145,7 +151,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      void viewCodexChildFromRow(agent, () =>
+        onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      )
       void viewClaudeAgentFromRow(agent)
     },
     [onActivate, agent]
@@ -267,6 +275,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
+      aria-busy={openingChild || undefined}
       aria-description={
         opensClaudeParentConversation(agent)
           ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
@@ -312,13 +321,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               className="inline-flex shrink-0 items-center justify-center"
               aria-label={dotTooltipLabel}
             >
-              <AgentStateDot
-                state={dotState}
-                size={stateDotSize}
-                title={null}
-                progress={presentation.progress}
-                unread={isUnvisited}
-              />
+              {openingChild ? (
+                <LoadingSpinner className="size-3" />
+              ) : (
+                <AgentStateDot
+                  state={dotState}
+                  size={stateDotSize}
+                  title={null}
+                  progress={presentation.progress}
+                  unread={isUnvisited}
+                />
+              )}
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

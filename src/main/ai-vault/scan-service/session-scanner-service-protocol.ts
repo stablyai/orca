@@ -47,7 +47,8 @@ const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceO
 ])
 
 export type AiVaultServiceSubagentRequest = {
-  agent: 'claude' | 'omp'
+  sessionsRoot?: string
+  agent: 'claude' | 'omp' | 'codex'
   parentFilePath: string
 }
 

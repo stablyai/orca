@@ -1,3 +1,8 @@
+import {
+  useCodexChildRowOpening,
+  viewCodexChildFromRow
+} from '@/lib/agent-session/navigation/codex-child-row-view'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import {
@@ -133,6 +138,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
 }: CompactAgentRowProps) {
   const t = useTranslate()
   const view = useClaudeAgentRowView(agent)
+  const openingChild = useCodexChildRowOpening(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -176,7 +182,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       // Child agents activate their spawning parent pane because they have no pane of their own.
-      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      void viewCodexChildFromRow(agent, () =>
+        onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      )
       void viewClaudeAgentFromRow(agent)
     },
     [agent, onActivate]
@@ -262,6 +270,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         </>
       )}
+      {openingChild ? <LoadingSpinner className="size-3 shrink-0" /> : null}
       {showModel && model && (
         <span
           className={cn(
@@ -321,6 +330,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
+      aria-busy={openingChild || undefined}
       aria-description={parentConversationDescription}
       data-agent-send-target={sendTargetStatus}
       role={agent.lineage ? 'treeitem' : undefined}
